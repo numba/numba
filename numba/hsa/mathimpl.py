@@ -69,9 +69,13 @@ _supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan',
               'isnan', 'isinf',
               'ceil', 'floor',
               'fabs',
-              'sqrt', 'exp', #'expm1' - is expm1 present in the lib?
-              'log', # 'log10', 'log1p', - are log10 and log1p present in the lib?
+              'sqrt', 'exp',
+              'log',
+              'copysign', 'pow', 'fmod',
+              # list of functions not found in the hsa math library (check this!)
+              # 'expm1', 'log10', 'log1p', 'atan2'
               ]
+
 for name in _supported:
     sigs = function_descriptors.get(name)
     if sigs is None:

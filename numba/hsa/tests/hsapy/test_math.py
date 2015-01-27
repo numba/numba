@@ -41,6 +41,34 @@ class TestMath(unittest.TestCase):
                                            dtype.__name__))
 
 
+    def _generic_test_binary(self, math_fn, npy_fn,
+                             cases=None,
+                             span=(-1., 1., 1., -1.), count=128,
+                             types=(np.float32, np.float64)):
+
+        @hsa.jit
+        def fn(dst, src1, src2):
+            i = hsa.get_global_id(0)
+            if i < dst.size:
+                dst[i] = math_fn(src1[i], src2[i])
+
+        for dtype in types:
+            if cases is None:
+                src1 = np.linspace(span[0], span[1], count, dtype=dtype)
+                src2 = np.linspace(span[2], span[3], count, dtype=dtype) 
+            else:
+                src1 = np.array(cases[0], dtype=dtype)
+                src2 = np.array(cases[1], dtype=dtype)
+
+            dst = np.zeros_like(src1)
+            fn[dst.size, 1](dst, src1, src2)
+            np.testing.assert_allclose(dst, npy_fn(src1, src2),
+                                       rtol=self._get_tol(dtype),
+                                       err_msg='{0} ({1})'.format(
+                                           math_fn.__name__,
+                                           dtype.__name__))
+
+
     def test_trig(self):
         funcs = [math.sin, math.cos, math.tan]
 
@@ -120,6 +148,25 @@ class TestMath(unittest.TestCase):
         for fn in funcs:
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(0.1, 2500))
+
+
+    def test_binaries(self):
+        funcs = [math.copysign, math.fmod]
+        for fn in funcs:
+            self._generic_test_binary(fn, getattr(np, fn.__name__))
+
+
+    def test_pow(self):
+        funcs = [(math.pow, np.power)]
+        for fn, npy_fn in funcs:
+            self._generic_test_binary(fn, npy_fn)
+
+    """
+    def test_atan2(self):
+        funcs = [(math.atan2, np.arctan2)]
+        for fn, npy_fn in funcs:
+            self._generic_test_binary(fn, npy_fn)
+    """
 
 
 if __name__ == '__main__':
