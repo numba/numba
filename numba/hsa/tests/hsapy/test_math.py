@@ -94,6 +94,12 @@ class TestMath(unittest.TestCase):
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(-16, 16), count=129)
 
+    def test_fabs(self):
+        funcs = [math.fabs]
+        for fn in funcs:
+            self._generic_test_unary(fn, getattr(np, fn.__name__),
+                                     span=(-63.3, 63.3))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -27,6 +27,7 @@ function_descriptors = {
     'floor': (_unary_f_f, _unary_d_d),
 
     'fabs': (_unary_f_f, _unary_d_d),
+
     'sqrt': (_unary_f_f, _unary_d_d),
     'exp': (_unary_f_f, _unary_d_d),
     'expm1': (_unary_f_f, _unary_d_d),
@@ -66,7 +67,8 @@ def _mk_fn_decl(name, decl_sig):
 _supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan',
               'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
               'isnan', 'isinf',
-              'ceil', 'floor']
+              'ceil', 'floor',
+              'fabs']
 for name in _supported:
     sigs = function_descriptors.get(name)
     if sigs is None:
