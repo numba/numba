@@ -70,6 +70,7 @@ _supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan',
               'ceil', 'floor',
               'fabs',
               'sqrt', 'exp', #'expm1' - is expm1 present in the lib?
+              'log', # 'log10', 'log1p', - are log10 and log1p present in the lib?
               ]
 for name in _supported:
     sigs = function_descriptors.get(name)

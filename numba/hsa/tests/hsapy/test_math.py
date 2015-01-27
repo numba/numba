@@ -100,17 +100,26 @@ class TestMath(unittest.TestCase):
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(-63.3, 63.3))
 
+
     def test_unary_exp(self):
         funcs = [math.exp] #, math.expm1]
         for fn in funcs:
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(-30, 30))
 
-    def test_unary_sqrt(self):
+
+    def test_sqrt(self):
         funcs = [math.sqrt]
         for fn in funcs:
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(0, 1000))
+
+
+    def test_log(self):
+        funcs = [math.log] #, math.log10] #, math.log1p]
+        for fn in funcs:
+            self._generic_test_unary(fn, getattr(np, fn.__name__),
+                                     span=(0.1, 2500))
 
 
 if __name__ == '__main__':
