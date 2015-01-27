@@ -67,7 +67,7 @@ def _mk_fn_decl(name, decl_sig):
     return core
 
 
-for name in ['sin', 'cos', 'tan']:
+for name in ['sin', 'cos', 'tan', 'asin', 'acos', 'atan']:
     sigs = function_descriptors.get(name)
     if sigs is None:
         warnings.warn("HSA - failed to register '{0}'".format(name))
@@ -81,11 +81,4 @@ for name in ['sin', 'cos', 'tan']:
 
     for sig in sigs:
         fn = _mk_fn_decl(name, sig)
-        print("registering '{0}' for signature '{1}' - fn is '{2}'"
-              .format(name, str(sig), str(fn)))
         register(implement(key, *sig.args)(fn))
-    
-
-
-
-    
