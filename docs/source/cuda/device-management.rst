@@ -33,10 +33,21 @@ Users can then create a new context with another device.
     cuda.select_device(1)  # assuming we have 2 GPUs
 
 
-.. autofunction:: numba.cuda.select_device
+.. function:: numba.cuda.select_device(device_id)
+
+   Create a new CUDA context for the selected *device_id*.  *device_id*
+   should be the number of the device (starting from 0; the device order
+   is determined by the CUDA libraries).  The context is associated with
+   the current thread.  Numba currently allows only one context per thread.
+
+   If successful, this function returns a device instance.
+
+   .. XXX document device instances?
 
 
-.. autofunction:: numba.cuda.close
+.. function:: numba.cuda.close
+
+   Explicitly close all contexts in the current thread.
 
    .. note::
       Compiled functions are associated with the CUDA context.

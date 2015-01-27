@@ -4,6 +4,12 @@
 Supported Python features
 =========================
 
+Apart from the :ref:`pysupported-language` part below, which applies to both
+:term:`object mode` and :term:`nopython mode`, this page only lists the
+features supported in :term:`nopython mode`.
+
+.. _pysupported-language:
+
 Language
 ========
 
