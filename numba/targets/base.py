@@ -431,8 +431,13 @@ class BaseContext(object):
                       for i, v in enumerate(val)]
             return Constant.struct(consts)
 
+        elif isinstance(ty, types.Record):
+            consts = [self.get_constant(types.int8, b)
+                      for b in bytearray(val.tostring())]
+            return Constant.array(consts[0].type, consts)
+
         else:
-            raise NotImplementedError(ty)
+            raise NotImplementedError("%s as constant unsupported" % ty)
 
     def get_constant(self, ty, val):
         assert not self.is_struct_type(ty)
@@ -1030,12 +1035,11 @@ class BaseContext(object):
 
         # Handle data
         if self.is_struct_type(typ.dtype):
-            # FIXME
-            raise TypeError("Do not support structure dtype as constant "
-                            "array, yet.")
-
-        values = [self.get_constant(typ.dtype, flat[i])
-                  for i in range(flat.size)]
+            values = [self.get_constant_struct(builder, typ.dtype, flat[i])
+                      for i in range(flat.size)]
+        else:
+            values = [self.get_constant(typ.dtype, flat[i])
+                      for i in range(flat.size)]
 
         lldtype = values[0].type
         consts = Constant.array(lldtype, values)
