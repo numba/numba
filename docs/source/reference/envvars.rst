@@ -100,7 +100,8 @@ Compilation options
 .. envvar:: NUMBA_ENABLE_AVX
 
    If set to non-zero, enable AVX optimizations in LLVM.  This is disabled
-   by default as it can pessimize generated code.
+   by default on Sandy Bridge and Ivy Bridge architectures as it can sometimes
+   result in slower code on those platforms.
 
 .. envvar:: NUMBA_COMPATIBILITY_MODE
 
