@@ -102,6 +102,13 @@ JIT functions
 
       .. seealso:: :ref:`architecture`
 
+   .. method:: recompile()
+
+      Recompile all existing signatures.  This can be useful for example if
+      a global or closure variable was frozen by your function and its value
+      in Python has changed.  Since compiling isn't cheap, this is mainly
+      for testing and interactive use.
+
 
 Vectorized functions (ufuncs)
 -----------------------------

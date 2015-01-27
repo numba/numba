@@ -124,6 +124,11 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     return 0;
 }
 
+static void
+Dispatcher_clear(DispatcherObject *self)
+{
+    dispatcher_clear(self->dispatcher);
+}
 
 static
 PyObject*
@@ -605,6 +610,7 @@ CLEANUP:
 }
 
 static PyMethodDef Dispatcher_methods[] = {
+    { "_clear", (PyCFunction)Dispatcher_clear, METH_NOARGS, NULL },
     { "_insert", (PyCFunction)Dispatcher_Insert, METH_VARARGS,
       "insert new definition"},
     { NULL },

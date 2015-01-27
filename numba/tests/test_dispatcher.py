@@ -147,6 +147,38 @@ class TestDispatcher(TestCase):
             jit("(intc,)", forceobj=True)(add)
         self.assertIn(tmpl % 1, str(cm.exception))
 
+    def test_recompile(self):
+        closure = 1
+        @jit
+        def foo(x):
+            return x + closure
+        self.assertPreciseEqual(foo(1), 2)
+        self.assertPreciseEqual(foo(1.5), 2.5)
+        self.assertEqual(len(foo.signatures), 2)
+        closure = 2
+        self.assertPreciseEqual(foo(1), 2)
+        # Recompiling takes the new closure into account.
+        foo.recompile()
+        # Everything was recompiled
+        self.assertEqual(len(foo.signatures), 2)
+        self.assertPreciseEqual(foo(1), 3)
+        self.assertPreciseEqual(foo(1.5), 3.5)
+
+    def test_recompile_signatures(self):
+        # Same as above, but with an explicit signature on @jit.
+        closure = 1
+        @jit("int32(int32)")
+        def foo(x):
+            return x + closure
+        self.assertPreciseEqual(foo(1), 2)
+        self.assertPreciseEqual(foo(1.5), 2)
+        closure = 2
+        self.assertPreciseEqual(foo(1), 2)
+        # Recompiling takes the new closure into account.
+        foo.recompile()
+        self.assertPreciseEqual(foo(1), 3)
+        self.assertPreciseEqual(foo(1.5), 3)
+
 
 if __name__ == '__main__':
     unittest.main()
