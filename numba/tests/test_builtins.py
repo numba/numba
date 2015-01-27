@@ -233,6 +233,14 @@ class TestBuiltins(TestCase):
         cfunc = cr.entry_point
         for x in [-1, 0, 1]:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
+        cr = compile_isolated(pyfunc, (types.float64,), flags=flags)
+        cfunc = cr.entry_point
+        for x in [0.0, -0.0, 1.5, float('inf'), float('nan')]:
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
+        cr = compile_isolated(pyfunc, (types.complex128,), flags=flags)
+        cfunc = cr.entry_point
+        for x in [complex(0, float('inf')), complex(0, float('nan'))]:
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_bool_npm(self):
         self.test_bool(flags=no_pyobj_flags)

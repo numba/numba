@@ -17,7 +17,12 @@ def add(x, y):
     return x + y
 
 
+def addsub(x, y, z):
+    return x - y + z
+
+
 class TestDispatcher(TestCase):
+
     def test_numba_interface(self):
         """
         Check that vectorize can accept a decorated object.
@@ -31,7 +36,6 @@ class TestDispatcher(TestCase):
 
         # Just make sure this doesn't crash
         foo()
-
 
     def test_inspect_types(self):
         @jit
@@ -103,6 +107,45 @@ class TestDispatcher(TestCase):
         for t in threads:
             t.join()
         self.assertFalse(errors)
+
+    def test_named_args(self):
+        """
+        Test passing named arguments to a dispatcher.
+        """
+        def check(*args, **kwargs):
+            result = f(*args, **kwargs)
+            self.assertEqual(result, addsub(*args, **kwargs))
+        f = jit(addsub)
+        check(3, z=10, y=4)
+        check(3, 4, 10)
+        check(x=3, y=4, z=10)
+        # All calls above fall under the same specialization
+        self.assertEqual(len(f.overloads), 1)
+        # Errors
+        with self.assertRaises(TypeError) as cm:
+            f(3, 4, y=6, z=7)
+        self.assertIn("too many arguments: expected 3, got 4",
+                      str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(3, 4, y=6)
+        self.assertIn("missing argument 'z'", str(cm.exception))
+
+    def test_signature_mismatch(self):
+        tmpl = "Signature mismatch: %d argument types given, but function takes 2 arguments"
+        with self.assertRaises(TypeError) as cm:
+            jit("()")(add)
+        self.assertIn(tmpl % 0, str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            jit("(intc,)")(add)
+        self.assertIn(tmpl % 1, str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            jit("(intc,intc,intc)")(add)
+        self.assertIn(tmpl % 3, str(cm.exception))
+        # With forceobj=True, an empty tuple is accepted
+        jit("()", forceobj=True)(add)
+        with self.assertRaises(TypeError) as cm:
+            jit("(intc,)", forceobj=True)(add)
+        self.assertIn(tmpl % 1, str(cm.exception))
 
     def test_recompile(self):
         closure = 1

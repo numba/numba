@@ -6,7 +6,6 @@ from collections import deque
 from . import devices, driver
 from numba.targets.arrayobj import make_array_ctype
 from numba.targets.registry import CPUTarget
-from numba import types
 
 
 def _calc_array_sizeof(ndim):
@@ -30,11 +29,6 @@ class ArrayHeaderManager(object):
     When run out of preallocated space, it automatically fallback to regular
     allocation.
     """
-
-    # Caches associated contexts
-    #    There is one array header manager per context.
-    context_map = {}
-
     # The number of preallocated array head
     maxsize = 2 ** 10
 
@@ -46,13 +40,11 @@ class ArrayHeaderManager(object):
     num_stages = 5
 
     def __new__(cls, context):
-        key = context.handle.value
-        mm = cls.context_map.get(key)
+        mm = context.extras.get(cls)
         if mm is None:
             mm = object.__new__(cls)
             mm.init(context)
-            cls.context_map[key] = mm
-
+            context.extras[cls] = mm
         return mm
 
     def init(self, context):

@@ -1,6 +1,8 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
+
 import numpy as np
+
+import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.tests import usecases
@@ -102,6 +104,9 @@ def fancy_index_usecase(a, index):
 
 def boolean_indexing_usecase(a, mask):
     return a[mask]
+
+def empty_tuple_usecase(a):
+    return a[()]
 
 
 def slicing_1d_usecase_set(a, b, start, stop, step):
@@ -528,9 +533,6 @@ class TestIndexing(TestCase):
         self.assertEqual(pyfunc(a, 9, 9), cfunc(a, 9, 9))
         self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
 
-    def test_2d_float_indexing_npm(self):
-        self.test_2d_float_indexing(flags=Noflags)
-
     def test_ellipse(self, flags=enable_pyobj_flags):
         pyfunc = ellipse_usecase
         arraytype = types.Array(types.int32, 2, 'C')
@@ -594,6 +596,18 @@ class TestIndexing(TestCase):
     def test_boolean_indexing_npm(self):
         with self.assertTypingError():
             self.test_boolean_indexing(flags=Noflags)
+
+    def test_empty_tuple_indexing(self, flags=enable_pyobj_flags):
+        pyfunc = empty_tuple_usecase
+        arraytype = types.Array(types.int32, 0, 'C')
+        cr = compile_isolated(pyfunc, (arraytype,), flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(1, dtype='i4').reshape(())
+        self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_empty_tuple_indexing_npm(self):
+        self.test_empty_tuple_indexing(flags=Noflags)
 
     def test_conversion_setitem(self, flags=enable_pyobj_flags):
         """ this used to work, and was used in one of the tutorials """

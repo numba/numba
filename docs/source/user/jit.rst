@@ -60,7 +60,9 @@ fine-grained control over types chosen by the compiler (for example,
 to use single-precision floats).
 
 If you omit the return type, e.g. by writing ``(int32, int32)`` instead of
-``int32(int32, int32)``, Numba will try to infer it for you.
+``int32(int32, int32)``, Numba will try to infer it for you.  Function
+signatures can also be strings; see the :func:`numba.jit` documentation for
+more details.
 
 Of course, the compiled function gives the expected results::
 
@@ -147,7 +149,7 @@ Numba from falling back, and instead raise an error, pass ``nopython=True``.
 
 Whenever Numba optimizes Python code to native code that only works on
 native types and variables (rather than Python objects), it is not necessary
-anymore to hold Python's :py:term:`global interpreter lock`.
+anymore to hold Python's :py:term:`global interpreter lock` (GIL).
 Numba will release the GIL when entering such a compiled function if you
 passed ``nogil=True``.
 
@@ -163,4 +165,5 @@ or another one), allowing you to take advantage of multi-core systems.
 This will not be possible if the function is compiled in :term:`object mode`.
 
 When using ``nogil=True``, you'll have to be wary of the usual pitfalls
-of multi-threaded programming (consistency, synchronization, etc.).
+of multi-threaded programming (consistency, synchronization, race conditions,
+etc.).

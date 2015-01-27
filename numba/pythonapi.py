@@ -126,6 +126,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyErr_SetObject")
         return self.builder.call(fn, (exctype, excval))
 
+    def err_write_unraisable(self, obj):
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="PyErr_WriteUnraisable")
+        return self.builder.call(fn, (obj,))
+
     def raise_native_error(self, msg):
         cstr = self.context.insert_const_string(self.module, msg)
         self.err_set_string(self.native_error_type, cstr)
@@ -168,12 +173,23 @@ class PythonAPI(object):
     #
 
     def dict_getitem_string(self, dic, name):
-        """Returns a borrowed reference
+        """Lookup name inside dict
+
+        Returns a borrowed reference
         """
         fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
         fn = self._get_function(fnty, name="PyDict_GetItemString")
         cstr = self.context.insert_const_string(self.module, name)
         return self.builder.call(fn, [dic, cstr])
+
+    def dict_getitem(self, dic, name):
+        """Lookup name inside dict
+
+        Returns a borrowed reference
+        """
+        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyDict_GetItem")
+        return self.builder.call(fn, [dic, name])
 
     def dict_new(self, presize=0):
         if presize == 0:
@@ -612,16 +628,31 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_GetAttrString")
         return self.builder.call(fn, [obj, cstr])
 
+    def object_getattr(self, obj, attr):
+        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_GetAttr")
+        return self.builder.call(fn, [obj, attr])
+
     def object_setattr_string(self, obj, attr, val):
         cstr = self.context.insert_const_string(self.module, attr)
         fnty = Type.function(Type.int(), [self.pyobj, self.cstring, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetAttrString")
         return self.builder.call(fn, [obj, cstr, val])
 
+    def object_setattr(self, obj, attr, val):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_SetAttr")
+        return self.builder.call(fn, [obj, attr, val])
+
     def object_delattr_string(self, obj, attr):
         # PyObject_DelAttrString() is actually a C macro calling
         # PyObject_SetAttrString() with value == NULL.
         return self.object_setattr_string(obj, attr, self.get_null_object())
+
+    def object_delattr(self, obj, attr):
+        # PyObject_DelAttr() is actually a C macro calling
+        # PyObject_SetAttr() with value == NULL.
+        return self.object_setattr(obj, attr, self.get_null_object())
 
     def object_getitem(self, obj, key):
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
@@ -650,6 +681,15 @@ class PythonAPI(object):
             fname = "PyString_FromStringAndSize"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string, size])
+
+    def string_from_string(self, string):
+        fnty = Type.function(self.pyobj, [self.cstring])
+        if PYVERSION >= (3, 0):
+            fname = "PyUnicode_FromString"
+        else:
+            fname = "PyString_FromString"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [string])
 
     def bytes_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])

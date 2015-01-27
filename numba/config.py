@@ -1,13 +1,19 @@
 from __future__ import print_function, division, absolute_import
+
 import struct
 import sys
 import os
 import re
 import warnings
 
+import llvmlite.binding as ll
+
+
 IS_WIN32 = sys.platform.startswith('win32')
 MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
+
+_cpu_name = ll.get_host_cpu_name()
 
 
 class NumbaWarning(Warning):
@@ -103,5 +109,6 @@ def _force_cc(text):
 FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _force_cc, None)
 
 # x86-64 specific
-# Enable AVX on supported platforms.
-ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, 0)
+# Enable AVX on supported platforms where it won't degrade performance.
+ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int,
+                      _cpu_name not in ('corei7-avx', 'core-avx-i'))

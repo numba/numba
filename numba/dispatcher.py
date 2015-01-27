@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+
 import contextlib
 import functools
 import inspect
@@ -21,7 +22,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
     def __init__(self, arg_count, py_func):
         self._tm = default_type_manager
-        _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(), arg_count)
+        #_dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(), arg_count)
 
         # A mapping of signatures to entry points
         self.overloads = {}
@@ -36,6 +37,10 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
 
+        self._pysig = utils.pysignature(self.py_func)
+        _argnames = tuple(self._pysig.parameters)
+        _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(),
+                                        arg_count, _argnames)
 
         self.doc = py_func.__doc__
         self._compile_lock = utils.NonReentrantLock()
@@ -108,8 +113,16 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         Get a typing.ConcreteTemplate for this dispatcher and the given *args*
         and *kws*.  This allows to resolve the return type.
         """
+        # Fold keyword arguments
         if kws:
-            raise TypeError("kwargs not supported")
+            ba = self._pysig.bind(*args, **kws)
+            if ba.kwargs:
+                # There's a remaining keyword argument, e.g. if omitting
+                # some argument with a default value before it.
+                raise NotImplementedError("unhandled keyword argument: %s"
+                                          % list(ba.kwargs))
+            args = ba.args
+            kws = {}
         # Ensure an overload is available, but avoid compiler re-entrance
         if self._can_compile and not self.is_compiling:
             self.compile(tuple(args))
@@ -121,7 +134,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # so avoid keeping a reference to `cfunc`.
         call_template = typing.make_concrete_template(
             name, key=func_name, signatures=self.nopython_signatures)
-        return call_template
+        return call_template, args, kws
 
     def get_overload(self, sig):
         args, return_type = sigutils.normalize_signature(sig)

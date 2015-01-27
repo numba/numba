@@ -354,26 +354,23 @@ class CmpOpIsNot(CmpOpIdentity):
 def normalize_index(index):
     if isinstance(index, types.UniTuple):
         if index.dtype in types.integer_domain:
-            return types.UniTuple(types.intp, len(index))
+            idxtype = types.intp if index.dtype.signed else types.uintp
+            return types.UniTuple(idxtype, len(index))
         elif index.dtype == types.slice3_type:
             return index
 
     elif isinstance(index, types.Tuple):
         for ty in index:
-            if (ty not in types.integer_domain and
-                        ty not in types.real_domain and
-                        ty != types.slice3_type):
-                return
+            if (ty not in types.integer_domain and ty != types.slice3_type):
+                raise TypeError('Type %s of index %s is unsupported for indexing'
+                                 % (ty, index))
         return index
 
     elif index == types.slice3_type:
         return types.slice3_type
 
-    # elif index == types.slice2_type:
-    #     return types.slice2_type
-
-    else:
-        return types.intp
+    elif isinstance(index, types.Integer):
+        return types.intp if index.signed else types.uintp
 
 
 @builtin
@@ -397,7 +394,7 @@ class GetItemArray(AbstractTemplate):
             return
 
         idx = normalize_index(idx)
-        if not idx:
+        if idx is None:
             return
 
         if idx == types.slice3_type: #(types.slice2_type, types.slice3_type):
@@ -415,7 +412,7 @@ class GetItemArray(AbstractTemplate):
                 res = ary.copy(ndim=ndim, layout='A')
             else:
                 res = ary.dtype
-        elif idx == types.intp:
+        elif isinstance(idx, types.Integer):
             if ary.ndim != 1:
                 return
             res = ary.dtype
@@ -485,8 +482,16 @@ def generic_homog(self, args, kws):
     assert not kws
     return signature(self.this.dtype, recvr=self.this)
 
+def generic_expand(self, args, kws):
+    if isinstance(self.this.dtype, types.Integer):
+        # Expand to a machine int, not larger (like Numpy)
+        if self.this.dtype.signed:
+            return signature(max(types.intp, self.this.dtype), recvr=self.this)
+        else:
+            return signature(max(types.uintp, self.this.dtype), recvr=self.this)
+    return signature(self.this.dtype, recvr=self.this)
 
-def generic_hetero(self, args, kws):
+def generic_hetero_real(self, args, kws):
     assert not args
     assert not kws
     if self.this.dtype in types.integer_domain:
@@ -508,14 +513,18 @@ def install_array_method(name, generic):
     setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
 
 # Functions that return the same type as the array
-for fName in ["sum", "prod", "min", "max"]:
-    install_array_method(fName, generic_homog)
+for fname in ["min", "max"]:
+    install_array_method(fname, generic_homog)
+
+# Functions that return a machine-width type, to avoid overflows
+for fname in ["sum", "prod"]:
+    install_array_method(fname, generic_expand)
 
 # Functions that require integer arrays get promoted to float64 return
 for fName in ["mean", "var", "std"]:
-    install_array_method(fName, generic_hetero)
+    install_array_method(fName, generic_hetero_real)
 
-# Functions that return an index (int64)
+# Functions that return an index (intp)
 install_array_method("argmin", generic_index)
 install_array_method("argmax", generic_index)
 

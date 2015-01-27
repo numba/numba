@@ -31,6 +31,14 @@ def ptx_grid2d(context, builder, sig, args):
 
 
 @register
+@implement('ptx.grid.3d', types.intp)
+def ptx_grid3d(context, builder, sig, args):
+    assert len(args) == 1
+    r1, r2, r3 = nvvmutils.get_global_id(builder, dim=3)
+    return cgutils.pack_array(builder, [r1, r2, r3])
+
+
+@register
 @implement('ptx.gridsize.1d', types.intp)
 def ptx_gridsize1d(context, builder, sig, args):
     assert len(args) == 1
@@ -54,6 +62,25 @@ def ptx_gridsize2d(context, builder, sig, args):
     r1 = builder.mul(ntidx, nctaidx)
     r2 = builder.mul(ntidy, nctaidy)
     return cgutils.pack_array(builder, [r1, r2])
+
+
+@register
+@implement('ptx.gridsize.3d', types.intp)
+def ptx_gridsize3d(context, builder, sig, args):
+    assert len(args) == 1
+    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
+    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
+
+    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
+    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
+
+    ntidz = nvvmutils.call_sreg(builder, "ntid.z")
+    nctaidz = nvvmutils.call_sreg(builder, "nctaid.z")
+
+    r1 = builder.mul(ntidx, nctaidx)
+    r2 = builder.mul(ntidy, nctaidy)
+    r3 = builder.mul(ntidz, nctaidz)
+    return cgutils.pack_array(builder, [r1, r2, r3])
 
 
 # -----------------------------------------------------------------------------
@@ -127,12 +154,25 @@ def ptx_cmem_arylike(context, builder, sig, args):
     return ary._getvalue()
 
 
+_unique_smem_id = 0
+
+
+def _get_unique_smem_id(name):
+    """Due to bug with NVVM invalid internalizing of shared memory in the
+    PTX output.  We can't mark shared memory to be internal. We have to
+    ensure unique name is generated for shared memory symbol.
+    """
+    global _unique_smem_id
+    _unique_smem_id += 1
+    return "{0}_{1}".format(name, _unique_smem_id)
+
+
 @register
 @implement('ptx.smem.alloc', types.intp, types.Any)
 def ptx_smem_alloc_intp(context, builder, sig, args):
     length, dtype = args
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
-                          symbol_name='_cudapy_smem',
+                          symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
@@ -142,7 +182,7 @@ def ptx_smem_alloc_intp(context, builder, sig, args):
 def ptx_smem_alloc_array(context, builder, sig, args):
     shape, dtype = args
     return _generic_array(context, builder, shape=shape, dtype=dtype,
-                          symbol_name='_cudapy_smem',
+                          symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
@@ -292,7 +332,9 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
             ## Comment out the following line to workaround a NVVM bug
             ## which generates a invalid symbol name when the linkage
             ## is internal and in some situation.
+            ## See _get_unique_smem_id()
             # gvmem.linkage = lc.LINKAGE_INTERNAL
+
             gvmem.initializer = lc.Constant.undef(laryty)
 
         if dtype not in types.number_domain:

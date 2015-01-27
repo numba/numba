@@ -6,7 +6,6 @@ import llvmlite.llvmpy.core as lc
 from llvmlite import binding as ll
 
 from numba import types, cgutils, config
-from numba import _dynfunc
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
@@ -22,6 +21,10 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
     # Store
     if out.byref:
         retval = builder.load(retval)
+
+    if not cgutils.is_struct(retval.type):
+        retval = context.get_value_as_argument(builder, signature.return_type,
+                                               retval)
 
     store(retval)
 
@@ -88,10 +91,19 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
         return elems
 
     def store(retval):
-        # Unbox
-        retval = pyapi.to_native_value(retval, signature.return_type)
-        # Store
-        out.store_direct(retval, builder.load(store_offset))
+        is_error = cgutils.is_null(builder, retval)
+        with cgutils.ifelse(builder, is_error) as (if_error, if_ok):
+            with if_error:
+                msg = context.insert_const_string(pyapi.module,
+                                                  "object mode ufunc")
+                msgobj = pyapi.string_from_string(msg)
+                pyapi.err_write_unraisable(msgobj)
+                pyapi.decref(msgobj)
+            with if_ok:
+                # Unbox
+                retval = pyapi.to_native_value(retval, signature.return_type)
+                # Store
+                out.store_direct(retval, builder.load(store_offset))
 
     return _build_ufunc_loop_body_objmode(load, store, context, func, builder,
                                           arrays, out, offsets, store_offset,
@@ -116,8 +128,6 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
     """
     Wrap the scalar function with a loop that iterates over the arguments
     """
-    module = func.module
-
     byte_t = Type.int(8)
     byte_ptr_t = Type.pointer(byte_t)
     byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
@@ -272,7 +282,8 @@ class UArrayArg(object):
 
 
 class _GufuncWrapper(object):
-    def __init__(self, library, context, func, signature, sin, sout, fndesc):
+    def __init__(self, library, context, func, signature, sin, sout, fndesc,
+                 env):
         self.library = library
         self.context = context
         self.func = func
@@ -281,11 +292,9 @@ class _GufuncWrapper(object):
         self.sout = sout
         self.fndesc = fndesc
         self.is_objectmode = self.signature.return_type == types.pyobject
-        self.env = None
+        self.env = env
 
     def build(self):
-        module = self.func.module
-
         byte_t = Type.int(8)
         byte_ptr_t = Type.pointer(byte_t)
         byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
@@ -396,10 +405,7 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         return innercall, error
 
     def gen_prologue(self, builder):
-        # Create an environment object for the function
-        moduledict = self.fndesc.lookup_module().__dict__
-        self.env = _dynfunc.Environment(globals=moduledict)
-
+        #  Get an environment object for the function
         ll_intp = self.context.get_value_type(types.intp)
         ll_pyobj = self.context.get_value_type(types.pyobject)
         self.envptr = Constant.int(ll_intp, id(self.env)).inttoptr(ll_pyobj)
@@ -413,11 +419,13 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         self.pyapi.gil_release(self.gil)
 
 
-def build_gufunc_wrapper(library, context, func, signature, sin, sout, fndesc):
+def build_gufunc_wrapper(library, context, func, signature, sin, sout, fndesc,
+                         env):
     wrapcls = (_GufuncObjectWrapper
                if signature.return_type == types.pyobject
                else _GufuncWrapper)
-    return wrapcls(library, context, func, signature, sin, sout, fndesc).build()
+    return wrapcls(library, context, func, signature, sin, sout, fndesc,
+                   env).build()
 
 
 def _prepare_call_to_object_mode(context, builder, func, signature, args,

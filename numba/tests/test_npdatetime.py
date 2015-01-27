@@ -176,6 +176,7 @@ TD = np.timedelta64
 DT = np.datetime64
 
 
+@skip_on_numpy_16
 class TestMiscCompiling(TestCase):
 
     def test_jit_explicit_signature(self):

@@ -20,7 +20,8 @@ JIT functions
      type and argument types. This can be given in intuitive form
      (for example ``numba.void(numba.int32, numba.double)``).
    * A string representation of one of the above, for example
-     ``"void(int32, double)"``.
+     ``"void(int32, double)"``.  All type names used in the string are assumed
+     to be defined in the ``numba.types`` module.
 
    *nopython* and *nojit* are boolean flags.  *locals* is a mapping of
    local variable names to :ref:`numba-types`.
@@ -51,7 +52,9 @@ JIT functions
    useful for testing purposes.
 
    If true, *nogil* tries to release the :py:term:`global interpreter lock`
-   inside the compiled function.
+   inside the compiled function.  The GIL will only be released if Numba can
+   compile the function in :term:`object mode`, otherwise a compilation
+   warning will be printed.
 
    The *locals* dictionary may be used to force the :ref:`numba-types`
    of particular local variables, for example if you want to force the
@@ -110,7 +113,7 @@ JIT functions
 Vectorized functions (ufuncs)
 -----------------------------
 
-.. decorator:: numba.vectorize(signatures, *, nopython=True, forceobj=False, locals={})
+.. decorator:: numba.vectorize(signatures, *, identity=None, nopython=True, forceobj=False, locals={})
 
    Compile the decorated function on-the-fly and wrap it as a
    `Numpy ufunc`_.  The optional *nopython*, *forceobj* and
@@ -118,6 +121,14 @@ Vectorized functions (ufuncs)
 
    *signatures* is a mandatory list of signatures expressed in the same
    form as in the :func:`numba.jit` *signature* argument.
+
+   *identity* is the identity (or unit) value of the function being
+   implemented.  Possible values are 0, 1, :const:`None`, and the string
+   ``"reorderable"``.  The default is :const:`None`.  Both :const:`None` and
+   ``"reorderable"`` mean the function has no identity value;
+   ``"reorderable"`` additionally specifies that reductions along multiple
+   axes can be reordered.  (Note that ``"reorderable"`` is only supported in
+   Numpy 1.7 or later.)
 
    If there are several *signatures*, they must be ordered from the more
    specific to the least specific.  Otherwise, Numpy's type-based
@@ -135,7 +146,7 @@ Vectorized functions (ufuncs)
       def f(x): ...
 
 
-.. decorator:: numba.guvectorize(signatures, layout, *, nopython=True, forceobj=False, locals={})
+.. decorator:: numba.guvectorize(signatures, layout, *, identity=None, nopython=True, forceobj=False, locals={})
 
    Generalized version of :func:`numba.vectorize`.  While
    :func:`numba.vectorize` will produce a simple ufunc whose core

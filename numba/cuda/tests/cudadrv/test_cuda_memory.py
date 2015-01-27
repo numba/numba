@@ -1,14 +1,16 @@
 import ctypes
 import numpy
-from numba.cuda.cudadrv import driver, drvapi
+from numba.cuda.cudadrv import driver, drvapi, devices
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.utils import IS_PY3
 
 
 class TestCudaMemory(CUDATestCase):
     def setUp(self):
-        self.device = driver.driver.get_device()
-        self.context = self.device.get_or_create_context()
+        self.context = devices.get_context()
+
+    def tearDown(self):
+        del self.context
 
     def _template(self, obj):
         self.assertTrue(driver.is_device_memory(obj))
@@ -39,8 +41,10 @@ class TestCudaMemory(CUDATestCase):
 
 class TestCudaMemoryFunctions(CUDATestCase):
     def setUp(self):
-        device = driver.driver.get_device()
-        self.context = device.get_or_create_context()
+        self.context = devices.get_context()
+
+    def tearDown(self):
+        del self.context
 
     def test_memcpy(self):
         hstary = numpy.arange(100, dtype=numpy.uint32)
