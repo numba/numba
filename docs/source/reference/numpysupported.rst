@@ -51,8 +51,10 @@ The following scalar types and features are not supported:
 * **Half-precision and extended-precision** real and complex numbers
 
 The operations supported on scalar Numpy numbers are the same as on the
-equivalent built-in types such as ``int`` or ``float``.  Structured
-scalars support attribute getting and setting.
+equivalent built-in types such as ``int`` or ``float``.  You can use
+a type's constructor to convert from a different type or width.
+
+Structured scalars support attribute getting and setting.
 
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
