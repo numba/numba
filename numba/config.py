@@ -71,7 +71,9 @@ DUMP_FUNC_OPT = _readenv("NUMBA_DUMP_FUNC_OPT", int, DEBUG)
 DUMP_OPTIMIZED = _readenv("NUMBA_DUMP_OPTIMIZED", int, DEBUG)
 
 # Force disable loop vectorize
-LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int, 1)
+# Loop vectorizer is disabled on 32-bit win32 due to a bug (#649)
+LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int,
+                          not (IS_WIN32 and IS_32BITS))
 
 # Force dump of generated assembly
 DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
