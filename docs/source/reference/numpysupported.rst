@@ -28,6 +28,9 @@ NumPy support in Numba comes in many forms:
 .. _ufuncs: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 .. _gufuncs: http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
 
+The following sections focus on the Numpy features supported in
+:term:`nopython mode`, unless otherwise stated.
+
 
 Scalar types
 ============

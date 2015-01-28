@@ -283,6 +283,22 @@ class Kind(Type):
         return self.of
 
 
+class VarArg(Type):
+    """
+    Special type representing a variable number of arguments at the
+    end of a function's signature.  Only used for signature matching,
+    not for actual values.
+    """
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        super(VarArg, self).__init__("*%s" % dtype)
+
+    @property
+    def key(self):
+        return self.dtype
+
+
 class Module(Type):
     def __init__(self, pymod):
         self.pymod = pymod
@@ -491,6 +507,22 @@ class NumpyNdEnumerateType(IteratorType):
     @property
     def key(self):
         return self.array_type
+
+
+class NumpyNdIndexType(IteratorType):
+    """
+    Type class for `np.ndindex()` objects.
+    """
+
+    def __init__(self, ndim):
+        self.ndim = ndim
+        self.yield_type = UniTuple(intp, self.ndim)
+        name = "ndindex(dims={ndim})".format(ndim=ndim)
+        super(NumpyNdIndexType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.ndim
 
 
 class EnumerateType(IteratorType):
@@ -852,7 +884,6 @@ def is_int_tuple(x):
 pyobject = Opaque('pyobject')
 none = NoneType('none')
 Any = Phantom('any')
-VarArg = Phantom('...')
 string = Opaque('str')
 
 # No operation is defined on voidptr

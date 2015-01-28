@@ -67,27 +67,27 @@ class Overloads(object):
                 return ver
 
             # As generic type
-            nargs_matches = len(ver.signature.args) == len(sig.args)
-            varargs_matches = (ver.signature.args and
-                               ver.signature.args[-1] == types.VarArg)
-            if nargs_matches or varargs_matches:
-                match = True
-                for formal, actual in zip(ver.signature.args, sig.args):
-                    if formal == types.VarArg:
-                        # vararg argument matches everything
-                        break
-
-                    match = self._match(formal, actual)
-                    if not match:
-                        break
-
-                if match:
-                    return ver
+            if self._match_arglist(ver.signature.args, sig.args):
+                return ver
 
         raise NotImplementedError(self, sig)
 
-    @staticmethod
-    def _match(formal, actual):
+    def _match_arglist(self, formal_args, actual_args):
+        if formal_args and isinstance(formal_args[-1], types.VarArg):
+            formal_args = (
+                formal_args[:-1] +
+                (formal_args[-1].dtype,) * (len(actual_args) - len(formal_args) + 1))
+
+        if len(formal_args) != len(actual_args):
+            return False
+
+        for formal, actual in zip(formal_args, actual_args):
+            if not self._match(formal, actual):
+                return False
+
+        return True
+
+    def _match(self, formal, actual):
         if formal == actual:
             # formal argument matches actual arguments
             return True

@@ -1220,7 +1220,7 @@ for tp in types.number_domain:
 #-------------------------------------------------------------------------------
 
 @builtin
-@implement(max, types.VarArg)
+@implement(max, types.VarArg(types.Any))
 def max_impl(context, builder, sig, args):
     argtys = sig.args
     for a in argtys:
@@ -1245,7 +1245,7 @@ def max_impl(context, builder, sig, args):
 
 
 @builtin
-@implement(min, types.VarArg)
+@implement(min, types.VarArg(types.Any))
 def min_impl(context, builder, sig, args):
     argtys = sig.args
     for a in argtys:
@@ -1313,7 +1313,7 @@ def float_impl(context, builder, sig, args):
 
 
 @builtin
-@implement(complex, types.VarArg)
+@implement(complex, types.VarArg(types.Any))
 def complex_impl(context, builder, sig, args):
     complex_type = sig.return_type
     float_type = complex_type.underlying_float
