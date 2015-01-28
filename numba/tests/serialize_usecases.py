@@ -76,7 +76,7 @@ def _get_dyn_func(**jit_args):
         def dyn_func(x):
             res = 0
             for i in range(x):
-                res += i
+                res += x
             return res
         """
     ns = {}

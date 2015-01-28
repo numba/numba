@@ -84,11 +84,11 @@ class TestDispatcherPickling(TestCase):
 
     def test_call_dyn_func(self):
         # Check serializing a dynamically-created function
-        self.run_with_protocols(self.check_call, dyn_func, 6, (4,))
+        self.run_with_protocols(self.check_call, dyn_func, 36, (6,))
 
     def test_call_dyn_func_objmode(self):
         # Same with an object mode function
-        self.run_with_protocols(self.check_call, dyn_func_objmode, 6, (4,))
+        self.run_with_protocols(self.check_call, dyn_func_objmode, 36, (6,))
 
     def test_other_process(self):
         """
