@@ -245,8 +245,15 @@ for func in ['argmin', 'argmax']:
 # Numpy scalar constructors
 
 # Register numpy.int8, etc. as convertors to the equivalent Numba types
-for nb_type in types.number_domain:
-    np_type = getattr(numpy, str(nb_type))
+np_types = set(getattr(numpy, str(nb_type)) for nb_type in types.number_domain)
+# Those may or may not be aliases (depending on the Numpy build / version)
+np_types.add(numpy.intc)
+np_types.add(numpy.intp)
+np_types.add(numpy.uintc)
+np_types.add(numpy.uintp)
+
+for np_type in np_types:
+    nb_type = getattr(types, np_type.__name__)
 
     class Caster(AbstractTemplate):
         key = np_type
