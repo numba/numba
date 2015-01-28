@@ -64,16 +64,14 @@ def _mk_fn_decl(name, decl_sig):
     core.__name__ = name
     return core
 
-_supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+_supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2',
               'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
               'isnan', 'isinf',
               'ceil', 'floor',
               'fabs',
-              'sqrt', 'exp',
-              'log',
-              'copysign', 'pow', 'fmod',
-              # list of functions not found in the hsa math library (check this!)
-              # 'expm1', 'log10', 'log1p', 'atan2'
+              'sqrt', 'exp', 'expm1',
+              'log', 'log10', 'log1p',
+              'copysign', 'pow', 'fmod'
               ]
 
 for name in _supported:

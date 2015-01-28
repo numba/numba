@@ -57,7 +57,7 @@ def _encode(ch):
     Anything not valid as Python identifier is encoded as '%N' where N
     is a decimal number of the character code point.
     """
-    if ch.isalpha() or ch in '_':
+    if ch.isalnum() or ch in '_':
         out = ch
     else:
         out = "%%%d" % ord(ch)

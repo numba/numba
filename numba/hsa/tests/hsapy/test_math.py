@@ -130,7 +130,7 @@ class TestMath(unittest.TestCase):
 
 
     def test_unary_exp(self):
-        funcs = [math.exp] #, math.expm1]
+        funcs = [math.exp, math.expm1]
         for fn in funcs:
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(-30, 30))
@@ -144,7 +144,7 @@ class TestMath(unittest.TestCase):
 
 
     def test_log(self):
-        funcs = [math.log] #, math.log10] #, math.log1p]
+        funcs = [math.log, math.log10, math.log1p]
         for fn in funcs:
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(0.1, 2500))
@@ -161,12 +161,11 @@ class TestMath(unittest.TestCase):
         for fn, npy_fn in funcs:
             self._generic_test_binary(fn, npy_fn)
 
-    """
+
     def test_atan2(self):
         funcs = [(math.atan2, np.arctan2)]
         for fn, npy_fn in funcs:
             self._generic_test_binary(fn, npy_fn)
-    """
 
 
 if __name__ == '__main__':
