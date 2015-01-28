@@ -307,12 +307,14 @@ float Numba_roundf_even(float y) {
 
 static
 uint64_t Numba_fptoui(double x) {
-    return (uint64_t)x;
+    /* First cast to signed int of the full width to make sure sign extension
+       happens (this can make a difference on some platforms...). */
+    return (uint64_t) (int64_t) x;
 }
 
 static
 uint64_t Numba_fptouif(float x) {
-    return (uint64_t)x;
+    return (uint64_t) (int64_t) x;
 }
 
 static
