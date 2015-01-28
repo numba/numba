@@ -128,8 +128,16 @@ class TestNumberCtor(TestCase):
     def check_type_converter(self, tp, np_type, values):
         pyfunc = converter(tp)
         cfunc = jit(nopython=True)(pyfunc)
+        if issubclass(np_type, np.integer):
+            # Converting from a Python int to a small Numpy int on 32-bit
+            # builds can raise "OverflowError: Python int too large to
+            # convert to C long".  Work around by going through a large
+            # Numpy int first.
+            np_converter = lambda x: np_type(np.int64(x))
+        else:
+            np_converter = np_type
         for val in values:
-            expected = np_type(val)
+            expected = np_converter(val)
             got = cfunc(val)
             self.assertPreciseEqual(got, expected)
 

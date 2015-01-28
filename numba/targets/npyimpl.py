@@ -37,6 +37,10 @@ def caster(restype, constructor):
 for tp in types.number_domain:
     register(caster(tp, getattr(numpy, str(tp))))
 
+register(caster(types.intc, numpy.intc))
+register(caster(types.uintc, numpy.uintc))
+register(caster(types.intp, numpy.intp))
+register(caster(types.uintp, numpy.uintp))
 
 ########################################################################
 
