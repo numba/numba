@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-import contextlib
 import functools
 import inspect
 import sys
@@ -150,16 +149,19 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         sig = tuple([self.typeof_pyval(a) for a in args])
         return self.compile(sig)
 
-    def _get_library(self, signature):
-        return self._compileinfos[signature].library
+    def inspect_llvm(self, signature=None):
+        if signature is not None:
+            lib = self._compileinfos[signature].library
+            return lib.get_llvm_str()
 
-    def inspect_llvm(self, signature):
-        cg = self._get_library(signature) 
-        return cg.get_llvm_str()
+        return {sig: self.inspect_llvm(sig) for sig in self.signatures}
 
-    def inspect_asm(self, signature):
-        cg = self._get_library(signature) 
-        return cg.get_asm_str()
+    def inspect_asm(self, signature=None):
+        if signature is not None:
+            lib = self._compileinfos[signature].library
+            return lib.get_llvm_str()
+
+        return {sig: self.inspect_llvm(sig) for sig in self.signatures}
 
     def inspect_types(self, file=None):
         if file is None:
