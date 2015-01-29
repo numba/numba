@@ -53,7 +53,7 @@ for ty in types.real_domain:
 
 
 @register
-@implement(types.print_type, types.VarArg)
+@implement(types.print_type, types.VarArg(types.Any))
 def print_varargs(context, builder, sig, args):
     mod = cgutils.get_module(builder)
     vprint = nvvmutils.declare_vprint(mod)

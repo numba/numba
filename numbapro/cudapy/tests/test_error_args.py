@@ -13,7 +13,8 @@ class TestErrorArgs(unittest.TestCase):
         try:
             cu_discriminant = vectorize(sig, target='gpu')(discriminant)
         except TypeError as e:
-            self.assertTrue("Mismatch number of argument types" in str(e))
+            self.assertIn("Signature mismatch: 2 argument types given, "
+                          "but function takes 3 arguments", str(e))
         else:
             raise AssertionError("Excepting an expection")
 
