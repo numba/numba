@@ -11,6 +11,9 @@ dispatcher_t *
 dispatcher_new(void *tm, int argct);
 
 void
+dispatcher_clear(dispatcher_t *obj);
+
+void
 dispatcher_del(dispatcher_t *obj);
 
 void

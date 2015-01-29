@@ -39,7 +39,7 @@ class threadIdx(Stub):
 
 
 class blockIdx(Stub):
-    '''blockIdx.{x, y}
+    '''blockIdx.{x, y, z}
     '''
     _description_ = '<blockIdx.{x,y,z}>'
 
@@ -57,7 +57,7 @@ class blockDim(Stub):
 
 
 class gridDim(Stub):
-    '''gridDim.{x, y}
+    '''gridDim.{x, y, z}
     '''
     _description_ = '<gridDim.{x,y,z}>'
     x = macro.Macro('nctaid.x', SREG_SIGNATURE)
@@ -76,7 +76,7 @@ def _ptx_grid2d(): pass
 def grid_expand(ndim):
     """grid(ndim)
 
-    ndim: [int] 1 or 2
+    ndim: [int] 1, 2 or 3
 
         if ndim == 1:
             return cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
@@ -84,6 +84,11 @@ def grid_expand(ndim):
             x = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
             y = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
             return x, y
+        elif ndim == 3:
+            x = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+            y = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
+            z = cuda.threadIdx.z + cuda.blockIdx.z * cuda.blockDim.z
+            return x, y, z
     """
     if ndim == 1:
         fname = "ptx.grid.1d"
@@ -91,8 +96,11 @@ def grid_expand(ndim):
     elif ndim == 2:
         fname = "ptx.grid.2d"
         restype = types.UniTuple(types.int32, 2)
+    elif ndim == 3:
+        fname = "ptx.grid.3d"
+        restype = types.UniTuple(types.int32, 3)
     else:
-        raise ValueError('argument can only be 1 or 2')
+        raise ValueError('argument can only be 1, 2, 3')
 
     return ir.Intrinsic(fname, typing.signature(restype, types.intp),
                         args=[ndim])
@@ -106,7 +114,7 @@ grid = macro.Macro('ptx.grid', grid_expand, callable=True)
 def gridsize_expand(ndim):
     """gridsize(ndim)
 
-    ndim: [int] 1 or 2
+    ndim: [int] 1, 2 or 3
 
         if ndim == 1:
             return cuda.blockDim.x * cuda.gridDim.x
@@ -114,6 +122,11 @@ def gridsize_expand(ndim):
             x = cuda.blockDim.x * cuda.gridDim.x
             y = cuda.blockDim.y * cuda.gridDim.y
             return x, y
+        elif ndim == 3:
+            x = cuda.blockDim.x * cuda.gridDim.x
+            y = cuda.blockDim.y * cuda.gridDim.y
+            z = cuda.blockDim.z * cuda.gridDim.z
+            return x, y, z
     """
     if ndim == 1:
         fname = "ptx.gridsize.1d"
@@ -121,8 +134,11 @@ def gridsize_expand(ndim):
     elif ndim == 2:
         fname = "ptx.gridsize.2d"
         restype = types.UniTuple(types.int32, 2)
+    elif ndim == 3:
+        fname = "ptx.gridsize.3d"
+        restype = types.UniTuple(types.int32, 3)
     else:
-        raise ValueError('argument can only be 1 or 2')
+        raise ValueError('argument can only be 1, 2 or 3')
 
     return ir.Intrinsic(fname, typing.signature(restype, types.intp),
                         args=[ndim])

@@ -10,26 +10,9 @@ from numba.compiler import compile_isolated
 from .support import TestCase
 
 
-def array_sum(arr):
-    return arr.sum()
-
-
-def array_sum_global(arr):
-    return np.sum(arr)
-
-
-def array_prod(arr):
-    return arr.prod()
-
-
-def array_prod_global(arr):
-    return np.prod(arr)
-
-
 def array_flat(arr, out):
     for i, v in enumerate(arr.flat):
         out[i] = v
-
 
 def array_flat_sum(arr):
     s = 0
@@ -37,65 +20,78 @@ def array_flat_sum(arr):
         s = s + (i + 1) * v
     return s
 
-
 def array_ndenumerate_sum(arr):
     s = 0
     for (i, j), v in np.ndenumerate(arr):
         s = s + (i + 1) * (j + 1) * v
     return s
 
+def np_ndindex(x, y):
+    s = 0
+    n = 0
+    for i, j in np.ndindex(x, y):
+        s = s + (i + 1) * (j + 1)
+    return s
+
+def np_ndindex_array(arr):
+    s = 0
+    n = 0
+    for indices in np.ndindex(arr.shape):
+        for i, j in enumerate(indices):
+            s = s + (i + 1) * (j + 1)
+    return s
+
+
+def array_sum(arr):
+    return arr.sum()
+
+def array_sum_global(arr):
+    return np.sum(arr)
+
+def array_prod(arr):
+    return arr.prod()
+
+def array_prod_global(arr):
+    return np.prod(arr)
 
 def array_mean(arr):
     return arr.mean()
 
-
 def array_mean_global(arr):
     return np.mean(arr)
-
 
 def array_var(arr):
     return arr.var()
 
-
 def array_var_global(arr):
     return np.var(arr)
-
 
 def array_std(arr):
     return arr.std()
 
-
 def array_std_global(arr):
     return np.std(arr)
-
 
 def array_min(arr):
     return arr.min()
 
-
 def array_min_global(arr):
     return np.min(arr)
-
 
 def array_max(arr):
     return arr.max()
 
-
 def array_max_global(arr):
     return np.max(arr)
-
 
 def array_argmin(arr):
     return arr.argmin()
 
-
 def array_argmin_global(arr):
     return np.argmin(arr)
 
-
 def array_argmax(arr):
     return arr.argmax()
-
 
 def array_argmax_global(arr):
     return np.argmax(arr)
@@ -293,6 +289,24 @@ class TestArrayMethods(TestCase):
         self.check_array_flat_sum(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='A')
         self.check_array_flat_sum(arr, arrty)
+
+    def test_np_ndindex(self):
+        func = np_ndindex
+        cres = compile_isolated(func, [types.int32, types.int32])
+        cfunc = cres.entry_point
+        self.assertPreciseEqual(cfunc(3, 4), func(3, 4))
+        self.assertPreciseEqual(cfunc(3, 0), func(3, 0))
+        self.assertPreciseEqual(cfunc(0, 3), func(0, 3))
+        self.assertPreciseEqual(cfunc(0, 0), func(0, 0))
+
+    def test_np_ndindex_array(self):
+        func = np_ndindex_array
+        arr = np.arange(12, dtype=np.int32)
+        self.check_array_unary(arr, typeof(arr), func)
+        arr = arr.reshape((4, 3))
+        self.check_array_unary(arr, typeof(arr), func)
+        arr = arr.reshape((2, 2, 3))
+        self.check_array_unary(arr, typeof(arr), func)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)

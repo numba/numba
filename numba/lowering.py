@@ -8,7 +8,7 @@ from llvmlite.llvmpy.core import Type, Builder
 
 
 from numba import (_dynfunc, errcode, ir, types, cgutils, utils, config,
-                   cffi_support, typing)
+                   cffi_support, typing, six)
 
 
 class LoweringError(Exception):
@@ -30,6 +30,7 @@ def default_mangler(name, argtypes):
 # A dummy module for dynamically-generated functions
 _dynamic_modname = '<dynamic>'
 _dynamic_module = ModuleType(_dynamic_modname)
+_dynamic_module.__builtins__ = six.moves.builtins
 
 
 class FunctionDescriptor(object):

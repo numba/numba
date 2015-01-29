@@ -99,7 +99,7 @@ def make_zip_cls(zip_type):
     return Zip
 
 @builtin
-@implement(zip, types.VarArg)
+@implement(zip, types.VarArg(types.Any))
 def make_zip_object(context, builder, sig, args):
     zip_type = sig.return_type
 

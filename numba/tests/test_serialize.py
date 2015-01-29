@@ -1,73 +1,14 @@
 from __future__ import print_function, absolute_import, division
 
-import math
 import pickle
 import subprocess
 import sys
 
 from numba import unittest_support as unittest
-from numba import jit, types
 from numba.targets import registry
 from numba.typeinfer import TypingError
 from .support import TestCase
-
-
-@jit((types.int32, types.int32))
-def add_with_sig(a, b):
-    return a + b
-
-@jit
-def add_without_sig(a, b):
-    return a + b
-
-@jit(nopython=True)
-def add_nopython(a, b):
-    return a + b
-
-@jit(nopython=True)
-def add_nopython_fail(a, b):
-    print(a.__class__)
-    return a + b
-
-def closure(a):
-    @jit(nopython=True)
-    def inner(b, c):
-        return a + b + c
-    return inner
-
-K = 3.0
-
-from math import sqrt
-
-def closure_with_globals(x):
-    @jit(nopython=True)
-    def inner(y):
-        # Exercise a builtin function and a module-level constant
-        k = max(K, K + 1)
-        # Exercise two functions from another module, one accessed with
-        # dotted notation, one imported explicitly.
-        return math.hypot(x, y) + sqrt(k)
-    return inner
-
-@jit(nopython=True)
-def other_function(x, y):
-    return math.hypot(x, y)
-
-def closure_calling_other_function(x):
-    @jit(nopython=True)
-    def inner(y, z):
-        return other_function(x, y) + z
-    return inner
-
-def closure_calling_other_closure(x):
-    @jit(nopython=True)
-    def other_inner(y):
-        return math.hypot(x, y)
-
-    @jit(nopython=True)
-    def inner(y):
-        return other_inner(y) + x
-    return inner
+from .serialize_usecases import *
 
 
 class TestDispatcherPickling(TestCase):
@@ -116,13 +57,22 @@ class TestDispatcherPickling(TestCase):
         # Compilation fails
         self.run_with_protocols(self.check_call, add_nopython_fail, TypingError, (1, 2))
 
+    def test_call_objmode_with_global(self):
+        self.run_with_protocols(self.check_call, get_global_objmode, 7.5, (2.5,))
+
     def test_call_closure(self):
         inner = closure(1)
         self.run_with_protocols(self.check_call, inner, 6, (2, 3))
 
-    def test_call_closure_with_globals(self):
-        inner = closure_with_globals(3.0)
+    def check_call_closure_with_globals(self, **jit_args):
+        inner = closure_with_globals(3.0, **jit_args)
         self.run_with_protocols(self.check_call, inner, 7.0, (4.0,))
+
+    def test_call_closure_with_globals_nopython(self):
+        self.check_call_closure_with_globals(nopython=True)
+
+    def test_call_closure_with_globals_objmode(self):
+        self.check_call_closure_with_globals(forceobj=True)
 
     def test_call_closure_calling_other_function(self):
         inner = closure_calling_other_function(3.0)
@@ -131,6 +81,14 @@ class TestDispatcherPickling(TestCase):
     def test_call_closure_calling_other_closure(self):
         inner = closure_calling_other_closure(3.0)
         self.run_with_protocols(self.check_call, inner, 8.0, (4.0,))
+
+    def test_call_dyn_func(self):
+        # Check serializing a dynamically-created function
+        self.run_with_protocols(self.check_call, dyn_func, 36, (6,))
+
+    def test_call_dyn_func_objmode(self):
+        # Same with an object mode function
+        self.run_with_protocols(self.check_call, dyn_func_objmode, 36, (6,))
 
     def test_other_process(self):
         """
