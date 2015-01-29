@@ -154,14 +154,14 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             lib = self._compileinfos[signature].library
             return lib.get_llvm_str()
 
-        return {sig: self.inspect_llvm(sig) for sig in self.signatures}
+        return dict((sig, self.inspect_llvm(sig)) for sig in self.signatures)
 
     def inspect_asm(self, signature=None):
         if signature is not None:
             lib = self._compileinfos[signature].library
             return lib.get_llvm_str()
 
-        return {sig: self.inspect_llvm(sig) for sig in self.signatures}
+        return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 
     def inspect_types(self, file=None):
         if file is None:
