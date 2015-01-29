@@ -1,3 +1,59 @@
+
+Version 0.17.0
+--------------
+
+The major focus in this release has been a rewrite of the documentation.
+The new documentation is better structured and has more detailed coverage
+of Numba features and APIs.  It can be found online at
+http://numba.pydata.org/numba-doc/dev/index.html
+
+Features:
+
+* Issue #895: LLVM can now inline nested function calls in ``nopython`` mode.
+* Issue #863: CUDA kernels can now infer the types of their arguments
+  ("autojit"-like).
+* Issue #833: Support numpy.{min,max,argmin,argmax,sum,mean,var,std}
+  in ``nopython`` mode.
+* Issue #905: Add a ``nogil`` argument to the ``@jit`` decorator, to
+  release the GIL in ``nopython`` mode.
+* Issue #829: Add a ``identity`` argument to ``@vectorize`` and
+  ``@guvectorize``, to set the identity value of the ufunc.
+* Issue #843: Allow indexing 0-d arrays with the empty tuple.
+* Issue #933: Allow named arguments, not only positional arguments, when
+  calling a Numba-compiled function.
+* Issue #902: Support numpy.ndenumerate() in ``nopython`` mode.
+* Issue #950: AVX is now enabled by default except on Sandy Bridge and
+  Ivy Bridge CPUs, where it can produce slower code than SSE.
+* Issue #956: Support constant arrays of structured type.
+* Issue #959: Indexing arrays with floating-point numbers isn't allowed
+  anymore.
+* Issue #955: Add support for 3D CUDA grids and thread blocks.
+* Issue #902: Support numpy.ndindex() in ``nopython`` mode.
+* Issue #951: Numpy number types (``numpy.int8``, etc.) can be used as
+  constructors for type conversion in ``nopython`` mode.
+
+Fixes:
+
+* Issue #889: Fix ``NUMBA_DUMP_ASSEMBLY`` for the CUDA backend.
+* Issue #903: Fix calling of stdcall functions with ctypes under Windows.
+* Issue #908: Allow lazy-compiling from several threads at once.
+* Issue #868: Wrong error message when multiplying a scalar by a non-scalar.
+* Issue #917: Allow vectorizing with datetime64 and timedelta64 in the
+  signature (only with unit-less values, though, because of a Numpy limitation).
+* Issue #431: Allow overloading of cuda device function.
+* Issue #917: Print out errors occurred in object mode ufuncs.
+* Issue #923: Numba-compiled ufuncs now inherit the name and doc of the
+  original Python function.
+* Issue #928: Fix boolean return value in nested calls.
+* Issue #915: ``@jit`` called with an explicit signature with a mismatching
+  type of arguments now raises an error.
+* Issue #784: Fix the truth value of NaNs.
+* Issue #953: Fix using shared memory in more than one function (kernel or
+  device).
+* Issue #970: Fix an uncommon double to uint64 conversion bug on CentOS5
+  32-bit (C compiler issue).
+
+
 Version 0.16.0
 --------------
 
