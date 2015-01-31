@@ -1,11 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
-import numpy
 import threading
 
 from numba import unittest_support as unittest
-from numba.special import typeof
-from numba import utils, vectorize, types, jit
+from numba import utils, vectorize, jit
 from .support import TestCase
 
 
@@ -92,9 +90,11 @@ class TestDispatcher(TestCase):
         produce errors (see issue #908).
         """
         errors = []
+
         @jit
         def foo(x):
             return x + 1
+
         def wrapper():
             try:
                 self.assertEqual(foo(1), 2)
@@ -149,6 +149,7 @@ class TestDispatcher(TestCase):
 
     def test_recompile(self):
         closure = 1
+
         @jit
         def foo(x):
             return x + closure
@@ -167,6 +168,7 @@ class TestDispatcher(TestCase):
     def test_recompile_signatures(self):
         # Same as above, but with an explicit signature on @jit.
         closure = 1
+
         @jit("int32(int32)")
         def foo(x):
             return x + closure
@@ -178,6 +180,55 @@ class TestDispatcher(TestCase):
         foo.recompile()
         self.assertPreciseEqual(foo(1), 3)
         self.assertPreciseEqual(foo(1.5), 3)
+
+    def test_inspect_llvm(self):
+
+        # Create a jited function
+        @jit
+        def foo(explicit_arg1, explicit_arg2):
+            return explicit_arg1 + explicit_arg2
+
+        # Call it in a way to create 3 signatures
+        foo(1, 1)
+        foo(1.0, 1)
+        foo(1.0, 1.0)
+
+        # base call to get all llvm in a dict
+        llvms = foo.inspect_llvm()
+        self.assertEqual(len(llvms), 3)
+
+        # make sure the function name shows up in the llvm
+        for llvm_bc in llvms.values():
+            # Look for the function name
+            self.assertTrue("foo" in llvm_bc)
+
+            # Look for the argument names
+            self.assertTrue("explicit_arg1" in llvm_bc)
+            self.assertTrue("explicit_arg2" in llvm_bc)
+
+    def test_inspect_asm(self):
+        # Create a jited function
+        @jit
+        def foo(explicit_arg1, explicit_arg2):
+            return explicit_arg1 + explicit_arg2
+
+        # Call it in a way to create 3 signatures
+        foo(1, 1)
+        foo(1.0, 1)
+        foo(1.0, 1.0)
+
+        # base call to get all llvm in a dict
+        asms = foo.inspect_asm()
+        self.assertEqual(len(asms), 3)
+
+        # make sure the function name shows up in the llvm
+        for asm in asms.values():
+            # Look for the function name
+            self.assertTrue("foo" in asm)
+
+            # Look for the argument names
+            self.assertTrue("explicit_arg1" in asm)
+            self.assertTrue("explicit_arg2" in asm)
 
 
 if __name__ == '__main__':
