@@ -147,12 +147,10 @@ class PythonAPI(object):
         """
         Get a Python object through its C-accessible *name*.
         (e.g. "PyExc_ValueError").
+        Use this if *name* really points to a (static) PyObject.
+        If it points to a PyObject*, use _get_object() instead.
         """
-        try:
-            gv = self.module.get_global_variable_named(name)
-        except LLVMException:
-            gv = self.module.add_global_variable(self.pyobj.pointee, name)
-        return gv
+        return self.context.get_c_value(self.builder, self.pyobj.pointee, name)
 
     @property
     def native_error_type(self):
@@ -730,11 +728,8 @@ class PythonAPI(object):
     # ------ utils -----
 
     def _get_object(self, name):
-        try:
-            gv = self.module.get_global_variable_named(name)
-        except LLVMException:
-            gv = self.module.add_global_variable(self.pyobj, name)
-        return self.builder.load(gv)
+        return self.builder.load(
+            self.context.get_c_value(self.builder, self.pyobj, name))
 
     def _get_function(self, fnty, name):
         return self.module.get_or_insert_function(fnty, name=name)

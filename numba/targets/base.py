@@ -7,7 +7,7 @@ import numpy
 
 from llvmlite import ir as llvmir
 import llvmlite.llvmpy.core as lc
-from llvmlite.llvmpy.core import Type, Constant
+from llvmlite.llvmpy.core import Type, Constant, LLVMException
 
 import numba
 from numba import types, utils, cgutils, typing, numpy_support, errcode
@@ -858,6 +858,18 @@ class BaseContext(object):
             imag_istrue = self.is_true(builder, typ.underlying_float, cmplx.imag)
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
+
+    def get_c_value(self, builder, typ, name):
+        """
+        Get a global value through its C-accessible *name*, with the given
+        LLVM type.
+        """
+        module = builder.function.module
+        try:
+            gv = module.get_global_variable_named(name)
+        except LLVMException:
+            gv = module.add_global_variable(typ, name)
+        return gv
 
     def call_function(self, builder, callee, resty, argtys, args, env=None):
         """

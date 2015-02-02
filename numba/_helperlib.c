@@ -30,8 +30,8 @@
 
 /* unsigned int is sufficient on modern machines as we only need 32 bits */
 typedef struct {
-    unsigned int mt[MT_N];
     int index;
+    unsigned int mt[MT_N];
 } rnd_state_t;
 
 static rnd_state_t py_random_state;
