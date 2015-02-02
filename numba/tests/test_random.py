@@ -54,8 +54,8 @@ class TestInternals(TestCase):
         for i in [0, 1, 125, 2**32 - 5]:
             r.seed(i)
             st = r.get_state()
-            ints = list(r[1])
-            index = r[2]
+            ints = list(st[1])
+            index = st[2]
             assert index == N  # sanity check
             _helperlib.rnd_init(ptr, i)
             self.assertEqual(_helperlib.rnd_get_state(ptr), (index, ints))
@@ -67,7 +67,7 @@ class TestInternals(TestCase):
         self.check_shuffle(py_state_ptr)
 
     def test_init(self):
-        self.check_shuffle(py_state_ptr)
+        self.check_init(py_state_ptr)
 
 
 if __name__ == "__main__":
