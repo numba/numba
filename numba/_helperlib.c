@@ -17,6 +17,146 @@
     #define NPY_ARRAY_BEHAVED NPY_BEHAVED
 #endif
 
+/*
+ * PRNG support.
+ */
+
+/* Magic Mersenne Twister constants */
+#define MT_N 624
+#define MT_M 397
+#define MT_MATRIX_A 0x9908b0dfU
+#define MT_UPPER_MASK 0x80000000U
+#define MT_LOWER_MASK 0x7fffffffU
+
+/* unsigned int is sufficient on modern machines as we only need 32 bits */
+typedef struct {
+    unsigned int mt[MT_N];
+    int index;
+} rnd_state_t;
+
+static rnd_state_t py_random_state;
+static rnd_state_t np_random_state;
+
+/* Some code portions below from CPython's _randommodule.c, some others
+   from Numpy's and Jean-Sebastien Roy's randomkit.c. */
+
+static void
+Numba_rnd_shuffle(rnd_state_t *state)
+{
+    int i;
+    unsigned int y;
+
+    for (i = 0; i < MT_N - MT_M; i++) {
+        y = (state->mt[i] & MT_UPPER_MASK) | (state->mt[i+1] & MT_LOWER_MASK);
+        state->mt[i] = state->mt[i+MT_M] ^ (y >> 1) ^ (-(y & 1) & MT_MATRIX_A);
+    }
+    for (; i < MT_N - 1; i++) {
+        y = (state->mt[i] & MT_UPPER_MASK) | (state->mt[i+1] & MT_LOWER_MASK);
+        state->mt[i] = state->mt[i+(MT_M-MT_N)] ^ (y >> 1) ^ (-(y & 1) & MT_MATRIX_A);
+    }
+    y = (state->mt[MT_N - 1] & MT_UPPER_MASK) | (state->mt[0] & MT_LOWER_MASK);
+    state->mt[MT_N - 1] = state->mt[MT_M - 1] ^ (y >> 1) ^ (-(y & 1) & MT_MATRIX_A);
+}
+
+/* Initialize mt[] with an integer seed */
+static void
+Numba_rnd_init(rnd_state_t *state, unsigned int seed)
+{
+    unsigned int pos;
+    seed &= 0xffffffffU;
+
+    /* Knuth's PRNG as used in the Mersenne Twister reference implementation */
+    for (pos = 0; pos < MT_N; pos++) {
+        state->mt[pos] = seed;
+        seed = (1812433253U * (seed ^ (seed >> 30)) + pos + 1) & 0xffffffffU;
+    }
+    state->index = MT_N;
+}
+
+static PyObject *
+rnd_shuffle(PyObject *self, PyObject *arg)
+{
+    rnd_state_t *state = (rnd_state_t *) PyLong_AsVoidPtr(arg);
+    if (state == NULL && PyErr_Occurred())
+        return NULL;
+    Numba_rnd_shuffle(state);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+rnd_set_state(PyObject *self, PyObject *args)
+{
+    int i, index;
+    rnd_state_t *state;
+    PyObject *statearg, *tuplearg, *intlist;
+
+    if (!PyArg_ParseTuple(args, "OO!:rnd_set_state",
+                          &statearg, &PyTuple_Type, &tuplearg))
+        return NULL;
+    state = (rnd_state_t *) PyLong_AsVoidPtr(statearg);
+    if (state == NULL && PyErr_Occurred())
+        return NULL;
+    if (!PyArg_ParseTuple(tuplearg, "iO!", &index, &PyList_Type, &intlist))
+        return NULL;
+    if (PyList_GET_SIZE(intlist) != MT_N) {
+        PyErr_SetString(PyExc_ValueError, "list object has wrong size");
+        return NULL;
+    }
+    state->index = index;
+    for (i = 0; i < MT_N; i++) {
+        PyObject *v = PyList_GET_ITEM(intlist, i);
+        int x = PyLong_AsUnsignedLong(v);
+        if (x == (unsigned long) -1 && PyErr_Occurred())
+            return NULL;
+        state->mt[i] = x;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+rnd_get_state(PyObject *self, PyObject *arg)
+{
+    PyObject *intlist;
+    int i;
+
+    rnd_state_t *state = (rnd_state_t *) PyLong_AsVoidPtr(arg);
+    if (state == NULL && PyErr_Occurred())
+        return NULL;
+
+    intlist = PyList_New(MT_N);
+    if (intlist == NULL)
+        return NULL;
+    for (i = 0; i < MT_N; i++) {
+        PyObject *v = PyLong_FromUnsignedLong(state->mt[i]);
+        if (v == NULL) {
+            Py_DECREF(intlist);
+            return NULL;
+        }
+        PyList_SET_ITEM(intlist, i, v);
+    }
+    return Py_BuildValue("iN", state->index, intlist);
+}
+
+static PyObject *
+rnd_init(PyObject *self, PyObject *args)
+{
+    unsigned int seed;
+    rnd_state_t *state;
+    PyObject *statearg;
+
+    if (!PyArg_ParseTuple(args, "OI:rnd_init", &statearg, &seed))
+        return NULL;
+    state = (rnd_state_t *) PyLong_AsVoidPtr(statearg);
+    if (state == NULL && PyErr_Occurred())
+        return NULL;
+    Numba_rnd_init(state, seed);
+    Py_RETURN_NONE;
+}
+
+
+/*
+ * Other helpers.
+ */
 
 /* provide 64-bit division function to 32-bit platforms */
 static
@@ -355,15 +495,19 @@ build_c_helpers_dict(void)
     if (dct == NULL)
         goto error;
 
-#define declmethod(func) do {                          \
-    PyObject *val = PyLong_FromVoidPtr(&Numba_##func); \
-    if (val == NULL) goto error;                       \
-    if (PyDict_SetItemString(dct, #func, val)) {       \
-        Py_DECREF(val);                                \
+#define _declpointer(name, value) do {                 \
+    PyObject *o = PyLong_FromVoidPtr(value);           \
+    if (o == NULL) goto error;                         \
+    if (PyDict_SetItemString(dct, name, o)) {          \
+        Py_DECREF(o);                                  \
         goto error;                                    \
     }                                                  \
-    Py_DECREF(val);                                    \
+    Py_DECREF(o);                                      \
 } while (0)
+
+#define declmethod(func) _declpointer(#func, &Numba_##func)
+
+#define declpointer(ptr) _declpointer(#ptr, &ptr)
 
     declmethod(sdiv);
     declmethod(srem);
@@ -386,6 +530,12 @@ build_c_helpers_dict(void)
     declmethod(fptouif);
     declmethod(gil_ensure);
     declmethod(gil_release);
+    declmethod(rnd_shuffle);
+    declmethod(rnd_init);
+
+    declpointer(py_random_state);
+    declpointer(np_random_state);
+
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.inc"
@@ -400,6 +550,10 @@ error:
 }
 
 static PyMethodDef ext_methods[] = {
+    { "rnd_get_state", (PyCFunction) rnd_get_state, METH_O, NULL },
+    { "rnd_init", (PyCFunction) rnd_init, METH_VARARGS, NULL },
+    { "rnd_set_state", (PyCFunction) rnd_set_state, METH_VARARGS, NULL },
+    { "rnd_shuffle", (PyCFunction) rnd_shuffle, METH_O, NULL },
     { NULL },
 };
 
