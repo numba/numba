@@ -168,6 +168,11 @@ def handle_array(dmm, ty):
     return ArrayModel(dmm, ty)
 
 
+@register_default(types.Optional)
+def handle_optional(dmm, ty):
+    return OptionalModel(dmm, ty)
+
+
 # ============== Define Data Models ==============
 
 class DataModel(object):
@@ -448,73 +453,39 @@ class UniTupleModel(DataModel):
         return value
 
 
-class ArrayModel(DataModel):
-    def __init__(self, dmm, fe_type):
-        super(ArrayModel, self).__init__(dmm)
+class StructModel(DataModel):
+    def __init__(self, dmm, fe_type, members):
+        super(StructModel, self).__init__(dmm)
         self.fe_type = fe_type
-        self._ndim = self.fe_type.ndim
-        self._obj_model = self._dmm.lookup(types.pyobject)
-        self._intp_model = self._dmm.lookup(types.intp)
-        self._dataptr_model = self._dmm.lookup(types.CPointer(fe_type.dtype))
-        self._shape_model = self._dmm.lookup(types.UniTuple(types.intp,
-                                                            self._ndim))
-        self._strides_model = self._shape_model
+        self._members = tuple(members)
+        self._models = tuple([self._dmm.lookup(t) for t in self._members])
 
     def get_value_type(self):
-        elems = [
-            self._obj_model.get_data_type(),
-            self._intp_model.get_data_type(),
-            self._intp_model.get_data_type(),
-            self._dataptr_model.get_data_type(),
-            self._shape_model.get_data_type(),
-            self._strides_model.get_data_type(),
-        ]
+        elems = [t.get_data_type() for t in self._models]
         return ir.LiteralStructType(elems)
 
     def get_argument_type(self):
-        return (self._obj_model.get_argument_type(),
-                self._intp_model.get_argument_type(),
-                self._intp_model.get_argument_type(),
-                self._dataptr_model.get_argument_type(),
-                self._shape_model.get_argument_type(),
-                self._strides_model.get_argument_type(),)
+        return tuple([t.get_argument_type() for t in self._models])
 
     def get_return_type(self):
         return self.get_value_type()
 
     def as_argument(self, builder, value):
-        base = builder.extract_value(value, [0])
-        i1 = builder.extract_value(value, [1])
-        i2 = builder.extract_value(value, [2])
-        data = builder.extract_value(value, [3])
-        shapes = builder.extract_value(value, [4])
-        strides = builder.extract_value(value, [5])
-        base = self._obj_model.data_to_argument(builder, base)
-        i1 = self._intp_model.data_to_argument(builder, i1)
-        i2 = self._intp_model.data_to_argument(builder, i2)
-        data = self._dataptr_model.data_to_argument(builder, data)
-        shapes = self._shape_model.data_to_argument(builder, shapes)
-        strides = self._shape_model.data_to_argument(builder, strides)
-        return base, i1, i2, data, shapes, strides
+        extracted = []
+        for i, dm in enumerate(self._models):
+            v = builder.extract_value(value, [i])
+            extracted.append(dm.data_to_argument(builder, v))
+        return tuple(extracted)
 
     def reverse_as_argument(self, builder, value):
-        base, i1, i2, data, shapes, strides = value
+        assert len(value) == len(self._models)
+        struct = ir.Constant(self.get_value_type(), ir.Undefined)
 
-        base = self._obj_model.argument_to_data(builder, base)
-        i1 = self._intp_model.argument_to_data(builder, i1)
-        i2 = self._intp_model.argument_to_data(builder, i2)
-        data = self._dataptr_model.argument_to_data(builder, data)
-        shapes = self._shape_model.argument_to_data(builder, shapes)
-        strides = self._shape_model.argument_to_data(builder, strides)
+        for i, (dm, val) in enumerate(zip(self._models, value)):
+            v = dm.argument_to_data(builder, val)
+            struct = builder.insert_value(struct, v, [i])
 
-        val = ir.Constant(self.get_value_type(), ir.Undefined)
-        val = builder.insert_value(val, base, [0])
-        val = builder.insert_value(val, i1, [1])
-        val = builder.insert_value(val, i2, [2])
-        val = builder.insert_value(val, data, [3])
-        val = builder.insert_value(val, shapes, [4])
-        val = builder.insert_value(val, strides, [5])
-        return val
+        return struct
 
     def as_return(self, builder, value):
         return value
@@ -522,3 +493,35 @@ class ArrayModel(DataModel):
     def reverse_as_return(self, builder, value):
         return value
 
+
+class ArrayModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        ndim = fe_type.ndim
+        members = [
+            types.pyobject,
+            types.intp,
+            types.intp,
+            types.CPointer(fe_type.dtype),
+            types.UniTuple(types.intp, ndim),
+            types.UniTuple(types.intp, ndim),
+        ]
+        super(ArrayModel, self).__init__(dmm, fe_type, members)
+
+
+class OptionalModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            types.boolean,
+            fe_type.type,
+        ]
+        self._value_model = dmm.lookup(fe_type.type)
+        super(OptionalModel, self).__init__(dmm, fe_type, members)
+
+    def get_return_type(self):
+        return self._value_model.get_return_type()
+
+    def as_return(self, builder, value):
+        return NotImplemented
+
+    def reverse_as_return(self, builder, value):
+        return self._value_model.reverse_as_return(builder, value)
