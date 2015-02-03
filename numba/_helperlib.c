@@ -75,6 +75,37 @@ Numba_rnd_init(rnd_state_t *state, unsigned int seed)
     state->index = MT_N;
 }
 
+/* Random-initialize the given state (for use at startup) */
+static int
+_rnd_random_seed(rnd_state_t *state)
+{
+    PyObject *timemod, *timeobj;
+    timemod = PyImport_ImportModuleNoBlock("time");
+    double time;
+    unsigned int seed, rshift;
+
+    if (!timemod)
+        return -1;
+    timeobj = PyObject_CallMethod(timemod, "time", NULL);
+    Py_DECREF(timemod);
+    time = PyFloat_AsDouble(timeobj);
+    Py_DECREF(timeobj);
+    if (time == -1 && PyErr_Occurred())
+        return -1;
+    /* Mix in seconds and nanoseconds */
+    seed = (unsigned) time ^ (unsigned) (time * 1e9);
+#ifndef _WIN32
+    seed ^= getpid();
+#endif
+    /* Address space randomization bits: take MSBs of various pointers */
+    rshift = sizeof(void *)  * 8 - 32;
+    seed ^= (Py_uintptr_t) &timemod >> rshift;
+    seed += (Py_uintptr_t) &PyObject_CallMethod >> rshift;
+    Numba_rnd_init(state, seed);
+    return 0;
+}
+
+/* Python-exposed helpers */
 static PyObject *
 rnd_shuffle(PyObject *self, PyObject *arg)
 {
@@ -154,7 +185,6 @@ rnd_init(PyObject *self, PyObject *args)
     Numba_rnd_init(state, seed);
     Py_RETURN_NONE;
 }
-
 
 /*
  * Other helpers.
@@ -573,6 +603,9 @@ MOD_INIT(_helperlib) {
     PyModule_AddIntConstant(m, "long_max", LONG_MAX);
     PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));
     PyModule_AddIntConstant(m, "py_gil_state_size", sizeof(PyGILState_STATE));
+
+    _rnd_random_seed(&py_random_state);
+    _rnd_random_seed(&np_random_state);
 
     return MOD_SUCCESS_VAL(m);
 }

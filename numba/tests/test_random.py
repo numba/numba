@@ -1,6 +1,8 @@
 from __future__ import print_function
 
 import random
+import subprocess
+import sys
 
 import numpy as np
 
@@ -164,6 +166,32 @@ class TestRandom(TestCase):
 
     def test_random_gauss(self):
         self.check_gauss(random_gauss, py_state_ptr)
+
+    def check_startup_randomness(self, func_name, func_args):
+        """
+        Check that the state is properly randomized at startup.
+        """
+        code = """if 1:
+            from numba.tests import test_random
+            func = getattr(test_random, %(func_name)r)
+            print(func(*%(func_args)r))
+            """ % (locals())
+        numbers = set()
+        for i in range(3):
+            popen = subprocess.Popen([sys.executable, "-c", code],
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out, err = popen.communicate()
+            if popen.returncode != 0:
+                raise AssertionError("process failed with code %s: stderr follows\n%s\n"
+                                     % (popen.returncode, err.decode()))
+            numbers.add(float(out.strip()))
+        self.assertEqual(len(numbers), 3, numbers)
+
+    def test_random_random_startup(self):
+        self.check_startup_randomness("random_random", ())
+
+    def test_random_gauss_startup(self):
+        self.check_startup_randomness("random_gauss", (1.0, 1.0))
 
 
 if __name__ == "__main__":
