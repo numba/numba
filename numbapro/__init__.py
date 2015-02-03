@@ -10,7 +10,7 @@ from numba import *
 
 # Numba version checking
 m = re.match(r"(\d+)\.(\d+)\.(\d+).*", numba.__version__)
-NUMBA_VERSION_REQ = (0, 16, 0)
+NUMBA_VERSION_REQ = (0, 17, 0)
 if m is None or tuple(map(int, m.groups())) < NUMBA_VERSION_REQ:
     warnings.showwarning(
         "Numba version too old; expecting %d.%d.%d" % NUMBA_VERSION_REQ,
