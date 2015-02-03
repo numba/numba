@@ -29,12 +29,41 @@ def random_random():
 def random_getrandbits(b):
     return random.getrandbits(b)
 
+@jit(nopython=True)
+def random_gauss(mu, sigma):
+    return random.gauss(mu, sigma)
+
 
 def _copy_py_state(r, ptr):
+    """
+    Copy state of Python state *r* to Numba state *ptr*.
+    """
     mt = r.getstate()[1]
     ints, index = mt[:-1], mt[-1]
     _helperlib.rnd_set_state(ptr, (index, list(ints)))
     return ints, index
+
+def _copy_np_state(r, ptr):
+    """
+    Copy state of Numpy state *r* to Numba state *ptr*.
+    """
+    ints, index = r.get_state()[1:3]
+    _helperlib.rnd_set_state(ptr, (index, [int(x) for x in ints]))
+    return ints, index
+
+def sync_to_numpy(r):
+    _ver, mt_st, _gauss_next = r.getstate()
+    mt_pos = mt_st[-1]
+    mt_ints = mt_st[:-1]
+    assert len(mt_ints) == 624
+
+    np_st = ('MT19937', np.array(mt_ints, dtype='uint32'), mt_pos)
+    if _gauss_next is None:
+        np_st += (0, 0.0)
+    else:
+        np_st += (1, _gauss_next)
+
+    np.random.set_state(np_st)
 
 
 class TestInternals(TestCase):
@@ -111,6 +140,7 @@ class TestRandom(TestCase):
         """
         Check a getrandbits()-like function.
         """
+        # Our implementation follows CPython's for bits <= 64.
         r = random.Random()
         _copy_py_state(r, ptr)
         for nbits in range(1, 65):
@@ -120,6 +150,20 @@ class TestRandom(TestCase):
 
     def test_random_getrandbits(self):
         self.check_getrandbits(random_getrandbits, py_state_ptr)
+
+    def check_gauss(self, func, ptr):
+        """
+        Check a gauss()-like function.
+        """
+        # Our implementation follows Numpy's.
+        r = np.random.RandomState()
+        _copy_np_state(r, ptr)
+        for mu, sigma in [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)]:
+            for i in range(N // 2 + 10):
+                self.assertPreciseEqual(func(mu, sigma), r.normal(mu, sigma))
+
+    def test_random_gauss(self):
+        self.check_gauss(random_gauss, py_state_ptr)
 
 
 if __name__ == "__main__":

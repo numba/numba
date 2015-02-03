@@ -21,6 +21,11 @@ builtin_attr = registry.register_attr
 class Random_getrandbits(ConcreteTemplate):
     cases = [signature(types.uint64, types.uint32)]
 
+@registry.resolves_global(random.gauss, typing_key="random.gauss")
+class Random_gauss(ConcreteTemplate):
+    # Should we have another case for float32?
+    cases = [signature(types.float64, types.float64, types.float64)]
+
 @registry.resolves_global(random.random, typing_key="random.random")
 class Random_random(ConcreteTemplate):
     cases = [signature(types.float64)]

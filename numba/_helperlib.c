@@ -32,6 +32,8 @@
 typedef struct {
     int index;
     unsigned int mt[MT_N];
+    int has_gauss;
+    double gauss;
 } rnd_state_t;
 
 static rnd_state_t py_random_state;

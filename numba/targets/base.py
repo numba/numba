@@ -493,6 +493,10 @@ class BaseContext(object):
             return _wrap_impl(imp, self, sig)
 
     def get_function(self, fn, sig):
+        """
+        Return the implementation of function *fn* for signature *sig*.
+        The return value is a callable with the signature (builder, args).
+        """
         if isinstance(fn, types.Function):
             key = fn.template.key
 
