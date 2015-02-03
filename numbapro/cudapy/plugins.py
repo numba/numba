@@ -47,7 +47,7 @@ CUDAKernel.occupancy = property(occupancy)
 
 # Extend CUDAKernelBase class
 
-def forall(self, ntasks, tpb=128, stream=0, sharedmem=0):
+def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
     """
     Returns a configured kernel for 1D kernel of given number of tasks
     ``ntasks``.
@@ -66,7 +66,7 @@ def _compute_thread_per_block(kernel, tpb):
 
     else:
         try:
-            tpb = kernel.autotune.best(tpb)
+            tpb = kernel.autotune.best()
         except CompilationInfoUnavailable:
             tpb = 128
 
