@@ -11,7 +11,7 @@ class Enum(object):
         return v
 
 
-enum = Enum().get
+enum = Enum(1).get
 
 FIRST_ERROR = RUNTIME_ERROR = enum()
 ASSERTION_ERROR = enum()

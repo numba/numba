@@ -7,7 +7,9 @@ import sys
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import jit, _helperlib
+from numba import jit, _helperlib, types
+from numba.compiler import compile_isolated
+from numba.pythonapi import NativeError
 from .support import TestCase
 
 
@@ -36,9 +38,22 @@ def random_gauss(mu, sigma):
     return random.gauss(mu, sigma)
 
 
+def random_randint(a, b):
+    return random.randint(a, b)
+
+def random_randrange1(a):
+    return random.randrange(a)
+
+def random_randrange2(a, b):
+    return random.randrange(a, b)
+
+def random_randrange3(a, b, c):
+    return random.randrange(a, b, c)
+
+
 def _copy_py_state(r, ptr):
     """
-    Copy state of Python state *r* to Numba state *ptr*.
+    Copy state of Python random *r* to Numba state *ptr*.
     """
     mt = r.getstate()[1]
     ints, index = mt[:-1], mt[-1]
@@ -47,7 +62,7 @@ def _copy_py_state(r, ptr):
 
 def _copy_np_state(r, ptr):
     """
-    Copy state of Numpy state *r* to Numba state *ptr*.
+    Copy state of Numpy random *r* to Numba state *ptr*.
     """
     ints, index = r.get_state()[1:3]
     _helperlib.rnd_set_state(ptr, (index, [int(x) for x in ints]))
@@ -167,10 +182,80 @@ class TestRandom(TestCase):
     def test_random_gauss(self):
         self.check_gauss(random_gauss, py_state_ptr)
 
+    def check_randrange(self, func1, func2, func3, ptr, max_width):
+        """
+        Check a randrange()-like function.
+        """
+        # Sanity check
+        ints = []
+        for i in range(10):
+            ints.append(func1(500000000))
+            ints.append(func2(5, 500000000))
+            ints.append(func3(5, 500000000, 3))
+        self.assertEqual(len(ints), len(set(ints)), ints)
+        # Our implementation follows Python 3's.
+        if sys.version_info >= (3,):
+            r = random.Random()
+            _copy_py_state(r, ptr)
+            for width in [1, 5, 5000, 2**62 + 2**61]:
+                if width > max_width:
+                    continue
+                for i in range(10):
+                    self.assertPreciseEqual(func1(width), r.randrange(width))
+                self.assertPreciseEqual(func2(-2, 2 + width),
+                                        r.randrange(-2, 2 + width))
+                self.assertPreciseEqual(func3(-2, 2 + width, 6),
+                                        r.randrange(-2, 2 + width, 6))
+                self.assertPreciseEqual(func3(2 + width, 2, -3),
+                                        r.randrange(2 + width, 2, -3))
+        # Empty ranges
+        self.assertRaises(NativeError, func1, 0)
+        self.assertRaises(NativeError, func1, -5)
+        self.assertRaises(NativeError, func2, 5, 5)
+        self.assertRaises(NativeError, func2, 5, 2)
+        self.assertRaises(NativeError, func3, 5, 7, -1)
+        self.assertRaises(NativeError, func3, 7, 5, 1)
+
+    def test_random_randrange(self):
+        for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
+            cr1 = compile_isolated(random_randrange1, (tp,))
+            cr2 = compile_isolated(random_randrange2, (tp, tp))
+            cr3 = compile_isolated(random_randrange3, (tp, tp, tp))
+            self.check_randrange(cr1.entry_point, cr2.entry_point,
+                                 cr3.entry_point, py_state_ptr, max_width)
+
+    def check_randint(self, func, ptr, max_width):
+        """
+        Check a randint()-like function.
+        """
+        # Sanity check
+        ints = []
+        for i in range(10):
+            ints.append(func(5, 500000000))
+        self.assertEqual(len(ints), len(set(ints)), ints)
+        # Our implementation follows Python 3's.
+        if sys.version_info >= (3,):
+            r = random.Random()
+            _copy_py_state(r, ptr)
+            for args in [(1, 5), (13, 5000), (20, 2**62 + 2**61)]:
+                if args[1] > max_width:
+                    continue
+                for i in range(10):
+                    self.assertPreciseEqual(func(*args), r.randint(*args))
+        # Empty ranges
+        self.assertRaises(NativeError, func, 5, 4)
+        self.assertRaises(NativeError, func, 5, 2)
+
+    def test_random_randint(self):
+        for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
+            cr = compile_isolated(random_randint, (tp, tp))
+            self.check_randint(cr.entry_point, py_state_ptr, max_width)
+
     def check_startup_randomness(self, func_name, func_args):
         """
         Check that the state is properly randomized at startup.
         """
+        return
         code = """if 1:
             from numba.tests import test_random
             func = getattr(test_random, %(func_name)r)

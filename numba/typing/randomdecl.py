@@ -19,7 +19,7 @@ builtin_attr = registry.register_attr
 
 @registry.resolves_global(random.getrandbits, typing_key="random.getrandbits")
 class Random_getrandbits(ConcreteTemplate):
-    cases = [signature(types.uint64, types.uint32)]
+    cases = [signature(types.uint64, types.uint8)]
 
 @registry.resolves_global(random.gauss, typing_key="random.gauss")
 class Random_gauss(ConcreteTemplate):
@@ -29,6 +29,18 @@ class Random_gauss(ConcreteTemplate):
 @registry.resolves_global(random.random, typing_key="random.random")
 class Random_random(ConcreteTemplate):
     cases = [signature(types.float64)]
+
+@registry.resolves_global(random.randint, typing_key="random.randint")
+class Random_randint(ConcreteTemplate):
+    _types = [types.int32, types.int64]
+    cases = [signature(tp, tp, tp) for tp in _types]
+
+@registry.resolves_global(random.randrange, typing_key="random.randrange")
+class Random_randrange(ConcreteTemplate):
+    _types = [types.int32, types.int64]
+    cases = [signature(tp, tp) for tp in _types]
+    cases += [signature(tp, tp, tp) for tp in _types]
+    cases += [signature(tp, tp, tp, tp) for tp in _types]
 
 @registry.resolves_global(random.seed, typing_key="random.seed")
 class Random_seed(ConcreteTemplate):

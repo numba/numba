@@ -11,10 +11,7 @@ from llvmlite import ir
 
 from numba.targets.imputils import implement, Registry
 from numba.typing import signature
-from numba import _helperlib, types, cgutils, utils
-
-
-# TODO: auto-seeding at startup
+from numba import _helperlib, cgutils, errcode, types, utils
 
 
 registry = Registry()
@@ -89,6 +86,34 @@ def get_next_double(context, builder, state_ptr):
     return builder.fdiv(
         builder.fadd(b, builder.fmul(a, ir.Constant(double, 67108864.0))),
         ir.Constant(double, 9007199254740992.0))
+
+def get_next_int(context, builder, state_ptr, nbits):
+    """
+    Get the next integer with width *nbits*.
+    """
+    c32 = ir.Constant(nbits.type, 32)
+    def get_shifted_int(nbits):
+        shift = builder.sub(c32, nbits)
+        y = get_next_int32(context, builder, state_ptr)
+        return builder.lshr(y, builder.zext(shift, y.type))
+
+    ret = cgutils.alloca_once_value(builder, ir.Constant(int64_t, 0))
+
+    is_32b = builder.icmp_unsigned('<=', nbits, c32)
+    with cgutils.ifelse(builder, is_32b) as (ifsmall, iflarge):
+        with ifsmall:
+            low = get_shifted_int(nbits)
+            builder.store(builder.zext(low, int64_t), ret)
+        with iflarge:
+            # XXX This assumes nbits <= 64
+            low = get_next_int32(context, builder, state_ptr)
+            high = get_shifted_int(builder.sub(nbits, c32))
+            total = builder.add(
+                builder.zext(low, int64_t),
+                builder.shl(builder.zext(high, int64_t), ir.Constant(int64_t, 32)))
+            builder.store(total, ret)
+
+    return builder.load(ret)
 
 
 def get_py_state_ptr(context, builder):
@@ -181,32 +206,85 @@ def gauss_impl(context, builder, sig, args):
     return builder.fadd(mu,
                         builder.fmul(sigma, builder.load(ret)))
 
-
 @register
-@implement("random.getrandbits", types.uint32)
+@implement("random.getrandbits", types.Kind(types.Integer))
 def getrandbits_impl(context, builder, sig, args):
     nbits, = args
     state_ptr = get_py_state_ptr(context, builder)
+    return get_next_int(context, builder, state_ptr, nbits)
 
-    def get_shifted_int(nbits):
-        shift = builder.sub(const_int(32), nbits)
-        y = get_next_int32(context, builder, state_ptr)
-        return builder.lshr(y, shift)
 
-    ret = cgutils.alloca_once_value(builder, ir.Constant(int64_t, 0))
+def _randrange_impl(context, builder, start, stop, step):
+    state_ptr = get_py_state_ptr(context, builder)
 
-    is_32b = builder.icmp_unsigned('<=', nbits, const_int(32))
-    with cgutils.ifelse(builder, is_32b) as (ifsmall, iflarge):
-        with ifsmall:
-            low = get_shifted_int(nbits)
-            builder.store(builder.zext(low, int64_t), ret)
-        with iflarge:
-            # XXX This assumes nbits <= 64
-            low = get_next_int32(context, builder, state_ptr)
-            high = get_shifted_int(builder.sub(nbits, const_int(32)))
-            total = builder.add(
-                builder.zext(low, int64_t),
-                builder.shl(builder.zext(high, int64_t), ir.Constant(int64_t, 32)))
-            builder.store(total, ret)
+    ty = stop.type
+    zero = ir.Constant(ty, 0)
+    one = ir.Constant(ty, 1)
+    nptr = cgutils.alloca_once(builder, ty, name="n")
+    # n = stop - start
+    builder.store(builder.sub(stop, start), nptr)
 
-    return builder.load(ret)
+    with cgutils.ifthen(builder, builder.icmp_signed('<', step, zero)):
+        # n = (n + step + 1) // step
+        w = builder.add(builder.add(builder.load(nptr), step), one)
+        n = builder.sdiv(w, step)
+        builder.store(n, nptr)
+    with cgutils.ifthen(builder, builder.icmp_signed('>', step, one)):
+        # n = (n + step - 1) // step
+        w = builder.sub(builder.add(builder.load(nptr), step), one)
+        n = builder.sdiv(w, step)
+        builder.store(n, nptr)
+
+    n = builder.load(nptr)
+    with cgutils.if_unlikely(builder, builder.icmp_signed('<=', n, zero)):
+        # n <= 0 => ValueError
+        context.return_errcode(builder, errcode.RUNTIME_ERROR)
+
+    fnty = ir.FunctionType(ty, [ty, cgutils.true_bit.type])
+    fn = builder.function.module.get_or_insert_function(fnty, "llvm.ctlz.%s" % ty)
+    nbits = builder.trunc(builder.call(fn, [n, cgutils.true_bit]), int32_t)
+    nbits = builder.sub(ir.Constant(int32_t, ty.width), nbits)
+
+    bbwhile = cgutils.append_basic_block(builder, "while")
+    bbend = cgutils.append_basic_block(builder, "while.end")
+    builder.branch(bbwhile)
+
+    builder.position_at_end(bbwhile)
+    r = get_next_int(context, builder, state_ptr, nbits)
+    r = builder.trunc(r, ty)
+    too_large = builder.icmp_signed('>=', r, n)
+    builder.cbranch(too_large, bbwhile, bbend)
+
+    builder.position_at_end(bbend)
+    return builder.add(start, builder.mul(r, step))
+
+
+@register
+@implement("random.randrange", types.Kind(types.Integer))
+def randrange_impl_1(context, builder, sig, args):
+    stop, = args
+    start = ir.Constant(stop.type, 0)
+    step = ir.Constant(stop.type, 1)
+    return _randrange_impl(context, builder, start, stop, step)
+
+@register
+@implement("random.randrange", types.Kind(types.Integer), types.Kind(types.Integer))
+def randrange_impl_2(context, builder, sig, args):
+    start, stop = args
+    step = ir.Constant(start.type, 1)
+    return _randrange_impl(context, builder, start, stop, step)
+
+@register
+@implement("random.randrange", types.Kind(types.Integer),
+           types.Kind(types.Integer), types.Kind(types.Integer))
+def randrange_impl_3(context, builder, sig, args):
+    start, stop, step = args
+    return _randrange_impl(context, builder, start, stop, step)
+
+@register
+@implement("random.randint", types.Kind(types.Integer), types.Kind(types.Integer))
+def randint_impl(context, builder, sig, args):
+    start, stop = args
+    step = ir.Constant(start.type, 1)
+    stop = builder.add(stop, step)
+    return _randrange_impl(context, builder, start, stop, step)
