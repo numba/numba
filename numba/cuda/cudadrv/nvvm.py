@@ -353,6 +353,36 @@ done:
 }
 """
 
+ir_numba_atomic_double_max = """
+define internal double @___numba_atomic_double_max(double* %ptr, double %val) alwaysinline {
+entry:
+    %ptrval = load volatile double* %ptr
+    ; Check if val is a NaN and return *ptr early if so
+    %valnan = fcmp uno double %val, %val
+    br i1 %valnan, label %done, label %lt_check
+
+lt_check:
+    %dold = phi double [ %ptrval, %entry ], [ %dcas, %attempt ]
+    ; Continue attempts if dold < val or dold is NaN (using ult semantics)
+    %lt = fcmp ult double %dold, %val
+    br i1 %lt, label %attempt, label %done
+
+attempt:
+    ; Attempt to swap in the larger value
+    %iold = bitcast double %dold to i64
+    %iptr = bitcast double* %ptr to i64*
+    %ival = bitcast double %val to i64
+    %cas = cmpxchg volatile i64* %iptr, i64 %iold, i64 %ival monotonic
+    %dcas = bitcast i64 %cas to double
+    br label %lt_check
+
+done:
+    ; Return max
+    %ret = phi double [ %ptrval, %entry ], [ %dold, %lt_check ]
+    ret double %ret
+}
+"""
+
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
@@ -366,7 +396,9 @@ def llvm_to_ptx(llvmir, **opts):
         ('declare i32 @___numba_cas_hack(i32*, i32, i32)',
             ir_numba_cas_hack),
         ('declare double @___numba_atomic_double_add(double*, double)',
-            ir_numba_atomic_double_add)]
+            ir_numba_atomic_double_add),
+        ('declare double @___numba_atomic_double_max(double*, double)',
+            ir_numba_atomic_double_max)]
 
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)

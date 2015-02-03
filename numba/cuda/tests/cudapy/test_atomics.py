@@ -121,6 +121,37 @@ def atomic_add_double_3(ary):
     ary[tx, ty] = sm[tx, ty]
 
 
+def atomic_max_double(res, ary):
+    tx = cuda.threadIdx.x
+    bx = cuda.blockIdx.x
+    cuda.atomic.max(res, 0, ary[tx, bx])
+
+
+def atomic_max_double_normalizedindex(res, ary):
+    tx = cuda.threadIdx.x
+    bx = cuda.blockIdx.x
+    cuda.atomic.max(res, 0, ary[tx, uint64(bx)])
+
+
+def atomic_max_double_oneindex(res, ary):
+    tx = cuda.threadIdx.x
+    cuda.atomic.max(res, 0, ary[tx])
+
+
+def atomic_max_double_shared(res, ary):
+    tid = cuda.threadIdx.x
+    smary = cuda.shared.array(32, float64)
+    smary[tid] = ary[tid]
+    smres = cuda.shared.array(1, float64)
+    if tid == 0:
+        smres[0] = res[0]
+    cuda.syncthreads()
+    cuda.atomic.max(smres, 0, smary[tid])
+    cuda.syncthreads()
+    if tid == 0:
+        res[0] = smres[0]
+
+
 class TestCudaAtomics(unittest.TestCase):
     def test_atomic_add(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
@@ -230,6 +261,61 @@ class TestCudaAtomics(unittest.TestCase):
 
         np.testing.assert_equal(ary, orig + 1)
 
+    def test_atomic_max_double(self):
+        vals = np.random.randint(0, 65535, size=(32, 32)).astype(np.float64)
+        res = np.zeros(1, np.float64)
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max_double)
+        cuda_func[32, 32](res, vals)
+
+        gold = np.max(vals)
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_max_double_normalizedindex(self):
+        vals = np.random.randint(0, 65535, size=(32, 32)).astype(np.float64)
+        res = np.zeros(1, np.float64)
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(
+            atomic_max_double_normalizedindex)
+        cuda_func[32, 32](res, vals)
+
+        gold = np.max(vals)
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_max_double_oneindex(self):
+        vals = np.random.randint(0, 128, size=32).astype(np.float64)
+        res = np.zeros(1, np.float64)
+        cuda_func = cuda.jit('void(float64[:], float64[:])')(
+            atomic_max_double_oneindex)
+        cuda_func[1, 32](res, vals)
+
+        gold = np.max(vals)
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_max_nan_location(self):
+        vals = np.random.randint(0, 128, size=(1,1)).astype(np.float64)
+        gold = vals.copy().reshape(1)
+        res = np.zeros(1, np.float64) + np.nan
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max_double)
+        cuda_func[1, 1](res, vals)
+
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_max_nan_val(self):
+        res = np.random.randint(0, 128, size=1).astype(np.float64)
+        gold = res.copy()
+        vals = np.zeros((1, 1), np.float64) + np.nan
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max_double)
+        cuda_func[1, 1](res, vals)
+
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_max_double_shared(self):
+        vals = np.random.randint(0, 32, size=32).astype(np.float64)
+        res = np.zeros(1, np.float64)
+        cuda_func = cuda.jit('void(float64[:], float64[:])')(atomic_max_double_shared)
+        cuda_func[1, 32](res, vals)
+
+        gold = np.max(vals)
+        np.testing.assert_equal(res, gold)
 
 if __name__ == '__main__':
     unittest.main()

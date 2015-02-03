@@ -295,3 +295,11 @@ class atomic(Stub):
         Perform atomic ary[idx] += val
         """
 
+    class max(Stub):
+        """max(ary, idx, val)
+
+        Perform atomic ary[idx] = max(ary[idx], val). NaN is treated as a
+        missing value, so max(NaN, n) == max(n, NaN) == n. Note that this
+        differs from Python and Numpy behaviour, where max(a, b) is always
+        a when either a or b is a NaN.
+        """
