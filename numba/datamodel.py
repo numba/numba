@@ -24,6 +24,9 @@ class DataModelManager(object):
         handler = self._handlers[type(fetype)]
         return handler(self, fetype)
 
+    def __getitem__(self, fetype):
+        return self.lookup(fetype)
+
 
 class FunctionInfo(object):
     def __init__(self, dmm, fe_ret, fe_args):
@@ -35,6 +38,7 @@ class FunctionInfo(object):
         self._dm_args = [self._dmm.lookup(ty) for ty in fe_args]
         argtys = [bt.get_argument_type() for bt in self._dm_args]
         self._be_args, self._posmap = zip(*_flatten(argtys))
+        self._be_ret = self._dm_ret.get_return_type()
 
     def as_arguments(self, builder, values):
         if len(values) != self._nargs:
@@ -51,7 +55,6 @@ class FunctionInfo(object):
             raise TypeError("invalid number of args")
 
         valtree = _unflatten(self._posmap, args)
-
         values = [dm.reverse_as_argument(builder, val)
                   for dm, val in zip(self._dm_args, valtree)]
 
@@ -61,38 +64,29 @@ class FunctionInfo(object):
     def argument_types(self):
         return tuple(self._be_args)
 
+    @property
+    def return_type(self):
+        return self._be_ret
+
 
 def _unflatten(posmap, flatiter):
-    if 0 == len(posmap):
-        raise StopIteration
-
     poss = deque(posmap)
     vals = deque(flatiter)
 
-    assert len(vals) == len(poss)
-
-    depth = len(poss[0])
-    last = None
+    res = []
     while poss:
-        cur = poss[0]
-        # Depth increased
-        if len(cur) > depth:
-            ret = tuple(_unflatten(poss, vals))
-            yield ret
-            # skip processed data in the recursive call
-            for _ in range(len(ret)):
-                vals.popleft()
-                poss.popleft()
-        # Depth decreased
-        elif len(cur) < depth:
-            raise StopIteration
-        # Depth unchanged but new sequence
-        elif last is not None and last[:-1] != cur[:-1]:
-            raise StopIteration
-        # Depth unchanged and continue sequence
-        else:
-            yield vals.popleft()
-            last = poss.popleft()
+        assert len(poss) == len(vals)
+        cur = poss.popleft()
+        ptr = res
+        for loc in cur[:-1]:
+            if loc >= len(ptr):
+                ptr.append([])
+            ptr = ptr[loc]
+
+        assert len(ptr) == cur[-1]
+        ptr.append(vals.popleft())
+
+    return res
 
 
 def _flatten(iterable, indices=(0,)):
@@ -125,6 +119,18 @@ register_default = functools.partial(register, defaultDataModelManager)
 @register_default(types.Integer)
 def handle_integers(dmm, ty):
     return IntegerModel(dmm, ty)
+
+
+@register_default(types.Boolean)
+def handle_boolean(dmm, ty):
+    return BooleanModel(dmm)
+
+
+@register_default(types.Opaque)
+@register_default(types.NoneType)
+@register_default(types.Function)
+def handle_opaque(dmm, ty):
+    return OpaqueModel(dmm, ty)
 
 
 @register_default(types.Float)
@@ -226,6 +232,38 @@ class DataModel(object):
         return self.as_data(builder, self.reverse_as_argument(builder, value))
 
 
+class BooleanModel(DataModel):
+    def get_value_type(self):
+        return ir.IntType(1)
+
+    def get_data_type(self):
+        return ir.IntType(8)
+
+    def get_return_type(self):
+        return self.get_data_type()
+
+    def get_argument_type(self):
+        return self.get_data_type()
+
+    def as_data(self, builder, value):
+        return builder.zext(value, self.get_data_type())
+
+    def as_argument(self, builder, value):
+        return self.as_data(builder, value)
+
+    def as_return(self, builder, value):
+        return self.as_data(builder, value)
+
+    def reverse_as_data(self, builder, value):
+        return builder.trunc(value, self.get_value_type())
+
+    def reverse_as_argument(self, builder, value):
+        return self.reverse_as_data(builder, value)
+
+    def reverse_as_return(self, builder, value):
+        return self.reverse_as_data(builder, value)
+
+
 class PrimitiveModel(DataModel):
     """A primitive type can be represented natively in the target in all
     usage contexts.
@@ -258,6 +296,20 @@ class PrimitiveModel(DataModel):
 
     def _compared_fields(self):
         return (self.be_type,)
+
+
+class OpaqueModel(PrimitiveModel):
+    """
+    Passed as opaque pointers
+    """
+
+    def __init__(self, dmm, fe_type):
+        self.fe_type = fe_type
+        be_type = ir.IntType(8).as_pointer()
+        super(OpaqueModel, self).__init__(dmm, be_type)
+
+    def _compared_fields(self):
+        return (self.fe_type,)
 
 
 class IntegerModel(PrimitiveModel):
@@ -401,6 +453,8 @@ class ArrayModel(DataModel):
         super(ArrayModel, self).__init__(dmm)
         self.fe_type = fe_type
         self._ndim = self.fe_type.ndim
+        self._obj_model = self._dmm.lookup(types.pyobject)
+        self._intp_model = self._dmm.lookup(types.intp)
         self._dataptr_model = self._dmm.lookup(types.CPointer(fe_type.dtype))
         self._shape_model = self._dmm.lookup(types.UniTuple(types.intp,
                                                             self._ndim))
@@ -408,6 +462,9 @@ class ArrayModel(DataModel):
 
     def get_value_type(self):
         elems = [
+            self._obj_model.get_data_type(),
+            self._intp_model.get_data_type(),
+            self._intp_model.get_data_type(),
             self._dataptr_model.get_data_type(),
             self._shape_model.get_data_type(),
             self._strides_model.get_data_type(),
@@ -415,7 +472,10 @@ class ArrayModel(DataModel):
         return ir.LiteralStructType(elems)
 
     def get_argument_type(self):
-        return (self._dataptr_model.get_argument_type(),
+        return (self._obj_model.get_argument_type(),
+                self._intp_model.get_argument_type(),
+                self._intp_model.get_argument_type(),
+                self._dataptr_model.get_argument_type(),
                 self._shape_model.get_argument_type(),
                 self._strides_model.get_argument_type(),)
 
@@ -423,25 +483,37 @@ class ArrayModel(DataModel):
         return self.get_value_type()
 
     def as_argument(self, builder, value):
-        data = builder.extract_value(value, [0])
-        shapes = builder.extract_value(value, [1])
-        strides = builder.extract_value(value, [2])
+        base = builder.extract_value(value, [0])
+        i1 = builder.extract_value(value, [1])
+        i2 = builder.extract_value(value, [2])
+        data = builder.extract_value(value, [3])
+        shapes = builder.extract_value(value, [4])
+        strides = builder.extract_value(value, [5])
+        base = self._obj_model.data_to_argument(builder, base)
+        i1 = self._intp_model.data_to_argument(builder, i1)
+        i2 = self._intp_model.data_to_argument(builder, i2)
         data = self._dataptr_model.data_to_argument(builder, data)
         shapes = self._shape_model.data_to_argument(builder, shapes)
         strides = self._shape_model.data_to_argument(builder, strides)
-        return data, shapes, strides
+        return base, i1, i2, data, shapes, strides
 
     def reverse_as_argument(self, builder, value):
-        data, shapes, strides = value
+        base, i1, i2, data, shapes, strides = value
 
+        base = self._obj_model.argument_to_data(builder, base)
+        i1 = self._intp_model.argument_to_data(builder, i1)
+        i2 = self._intp_model.argument_to_data(builder, i2)
         data = self._dataptr_model.argument_to_data(builder, data)
         shapes = self._shape_model.argument_to_data(builder, shapes)
         strides = self._shape_model.argument_to_data(builder, strides)
 
         val = ir.Constant(self.get_value_type(), ir.Undefined)
-        val = builder.insert_value(val, data, [0])
-        val = builder.insert_value(val, shapes, [1])
-        val = builder.insert_value(val, strides, [2])
+        val = builder.insert_value(val, base, [0])
+        val = builder.insert_value(val, i1, [1])
+        val = builder.insert_value(val, i2, [2])
+        val = builder.insert_value(val, data, [3])
+        val = builder.insert_value(val, shapes, [4])
+        val = builder.insert_value(val, strides, [5])
         return val
 
     def as_return(self, builder, value):
