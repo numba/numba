@@ -297,3 +297,23 @@ def uniform_impl(context, builder, sig, args):
     width = builder.fsub(b, a)
     r = get_next_double(context, builder, state_ptr)
     return builder.fadd(a, builder.fmul(width, r))
+
+@register
+@implement("random.triangular", types.Kind(types.Float), types.Kind(types.Float))
+def triangular_impl_2(context, builder, sig, args):
+    fltty = sig.return_type
+    low, high = args
+    state_ptr = get_py_state_ptr(context, builder)
+    randval = get_next_double(context, builder, state_ptr)
+
+    def triangular_impl(randval, low, high):
+        u = randval
+        c = 0.5
+        if u > c:
+            u = 1.0 - u
+            low, high = high, low
+        return low + (high - low) * math.sqrt(u * c)
+
+    return context.compile_internal(builder, triangular_impl,
+                                    signature(*(fltty,) * 4),
+                                    (randval, low, high))

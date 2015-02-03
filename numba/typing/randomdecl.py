@@ -48,6 +48,11 @@ class Random_randrange(ConcreteTemplate):
 class Random_seed(ConcreteTemplate):
     cases = [signature(types.void, types.uint32)]
 
+@registry.resolves_global(random.triangular, typing_key="random.triangular")
+class Random_triangular(ConcreteTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
+    cases += [signature(tp, tp, tp, tp) for tp in _float_types]
+
 @registry.resolves_global(random.uniform, typing_key="random.uniform")
 class Random_uniform(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
