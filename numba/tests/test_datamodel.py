@@ -124,6 +124,11 @@ def test_factory(name, fetype, support_as_data=True):
     glbls[name] = testcls
 
 
+
+test_factory("TestBool", types.boolean)
+test_factory("TestPyObject", types.pyobject)
+
+
 for bits in [8, 16, 32, 64]:
     # signed
     test_factory("TestInt{0}".format(bits),
@@ -149,11 +154,8 @@ test_factory("Test2DArrayOfInt32", types.Array(types.complex128, 2, 'C'),
 
 
 class TestFunctionInfo(unittest.TestCase):
-    def test_as_arguments(self):
+    def _test_as_arguments(self, fe_args):
         dmm = datamodel.defaultDataModelManager
-        fe_args = [types.int32,
-                   types.Array(types.int32, 1, 'C'),
-                   types.complex64]
         fe_ret = types.int32
         fi = datamodel.FunctionInfo(dmm, fe_ret, fe_args)
 
@@ -181,6 +183,16 @@ class TestFunctionInfo(unittest.TestCase):
         builder.ret_void()
 
         ll.parse_assembly(str(module))
+
+    def test_int32_array_complex(self):
+        fe_args = [types.int32,
+                   types.Array(types.int32, 1, 'C'),
+                   types.complex64]
+        self._test_as_arguments(fe_args)
+
+    def test_two_arrays(self):
+        fe_args = [types.Array(types.int32, 1, 'C')] * 2
+        self._test_as_arguments(fe_args)
 
 
 if __name__ == '__main__':
