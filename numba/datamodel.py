@@ -37,12 +37,18 @@ class FunctionInfo(object):
         self._dm_ret = self._dmm.lookup(fe_ret)
         self._dm_args = [self._dmm.lookup(ty) for ty in fe_args]
         argtys = [bt.get_argument_type() for bt in self._dm_args]
-        self._be_args, self._posmap = zip(*_flatten(argtys))
+        if len(argtys):
+            self._be_args, self._posmap = zip(*_flatten(argtys))
+        else:
+            self._be_args = self._posmap = ()
         self._be_ret = self._dm_ret.get_return_type()
 
     def as_arguments(self, builder, values):
         if len(values) != self._nargs:
             raise TypeError("invalid number of args")
+
+        if not values:
+            return ()
 
         args = [dm.as_argument(builder, val)
                 for dm, val in zip(self._dm_args, values)]
@@ -53,6 +59,9 @@ class FunctionInfo(object):
     def reverse_as_arguments(self, builder, args):
         if len(args) != len(self._posmap):
             raise TypeError("invalid number of args")
+
+        if not args:
+            return ()
 
         valtree = _unflatten(self._posmap, args)
         values = [dm.reverse_as_argument(builder, val)
@@ -473,8 +482,8 @@ class StructModel(DataModel):
     def as_argument(self, builder, value):
         extracted = []
         for i, dm in enumerate(self._models):
-            v = builder.extract_value(value, [i])
-            extracted.append(dm.data_to_argument(builder, v))
+            extracted.append(dm.as_argument(builder,
+                                            self.get(builder, value, i)))
         return tuple(extracted)
 
     def reverse_as_argument(self, builder, value):
@@ -482,8 +491,8 @@ class StructModel(DataModel):
         struct = ir.Constant(self.get_value_type(), ir.Undefined)
 
         for i, (dm, val) in enumerate(zip(self._models, value)):
-            v = dm.argument_to_data(builder, val)
-            struct = builder.insert_value(struct, v, [i])
+            v = dm.reverse_as_argument(builder, val)
+            struct = self.set(builder, struct, v, i)
 
         return struct
 
@@ -492,6 +501,14 @@ class StructModel(DataModel):
 
     def reverse_as_return(self, builder, value):
         return value
+
+    def get(self, builder, val, pos):
+        dm = self._models[pos]
+        return dm.reverse_as_data(builder, builder.extract_value(val, [pos]))
+
+    def set(self, builder, val, field, pos):
+        dm = self._models[pos]
+        return builder.insert_value(val, dm.as_data(builder, field), [pos])
 
 
 class ArrayModel(StructModel):
