@@ -52,6 +52,14 @@ def random_randrange3(a, b, c):
 
 
 @jit(nopython=True)
+def random_triangular2(a, b):
+    return random.triangular(a, b)
+
+@jit(nopython=True)
+def random_triangular3(a, b, c):
+    return random.triangular(a, b, c)
+
+@jit(nopython=True)
 def random_uniform(a, b):
     return random.uniform(a, b)
 
@@ -268,6 +276,20 @@ class TestRandom(TestCase):
 
     def test_random_uniform(self):
         self.check_uniform(random_uniform, py_state_ptr)
+
+    def check_triangular(self, func2, func3, ptr):
+        """
+        Check a triangular()-like function.
+        """
+        # Our implementation follows Python 3's.
+        r = random.Random()
+        _copy_py_state(r, ptr)
+        for args in [(1.5, 3.5), (-2.5, 1.5), (1.5, 1.5)]:
+            self.assertPreciseEqual(func2(*args), r.triangular(*args))
+
+    def test_random_triangular(self):
+        self.check_triangular(random_triangular2, random_triangular3,
+                              py_state_ptr)
 
     def check_startup_randomness(self, func_name, func_args):
         """

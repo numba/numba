@@ -306,7 +306,7 @@ def triangular_impl_2(context, builder, sig, args):
     state_ptr = get_py_state_ptr(context, builder)
     randval = get_next_double(context, builder, state_ptr)
 
-    def triangular_impl(randval, low, high):
+    def triangular_impl_2(randval, low, high):
         u = randval
         c = 0.5
         if u > c:
@@ -314,6 +314,30 @@ def triangular_impl_2(context, builder, sig, args):
             low, high = high, low
         return low + (high - low) * math.sqrt(u * c)
 
-    return context.compile_internal(builder, triangular_impl,
+    return context.compile_internal(builder, triangular_impl_2,
                                     signature(*(fltty,) * 4),
                                     (randval, low, high))
+
+@register
+@implement("random.triangular", types.Kind(types.Float),
+           types.Kind(types.Float), types.Kind(types.Float))
+def triangular_impl_3(context, builder, sig, args):
+    fltty = sig.return_type
+    low, high, mode = args
+    state_ptr = get_py_state_ptr(context, builder)
+    randval = get_next_double(context, builder, state_ptr)
+
+    def triangular_impl_3(randval, low, high, mode):
+        if high == low:
+            return low
+        u = randval
+        c = (mode - low) / (high - low)
+        if u > c:
+            u = 1.0 - u
+            c = 1.0 - c
+            low, high = high, low
+        return low + (high - low) * math.sqrt(u * c)
+
+    return context.compile_internal(builder, triangular_impl_3,
+                                    signature(*(fltty,) * 5),
+                                    (randval, low, high, mode))
