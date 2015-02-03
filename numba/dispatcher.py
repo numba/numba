@@ -166,7 +166,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
     def inspect_asm(self, signature=None):
         if signature is not None:
             lib = self._compileinfos[signature].library
-            return lib.get_llvm_str()
+            return lib.get_asm_str()
 
         return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 

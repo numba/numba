@@ -182,7 +182,6 @@ class TestDispatcher(TestCase):
         self.assertPreciseEqual(foo(1.5), 3)
 
     def test_inspect_llvm(self):
-
         # Create a jited function
         @jit
         def foo(explicit_arg1, explicit_arg2):
@@ -200,11 +199,11 @@ class TestDispatcher(TestCase):
         # make sure the function name shows up in the llvm
         for llvm_bc in llvms.values():
             # Look for the function name
-            self.assertTrue("foo" in llvm_bc)
+            self.assertIn("foo", llvm_bc)
 
             # Look for the argument names
-            self.assertTrue("explicit_arg1" in llvm_bc)
-            self.assertTrue("explicit_arg2" in llvm_bc)
+            self.assertIn("explicit_arg1", llvm_bc)
+            self.assertIn("explicit_arg2", llvm_bc)
 
     def test_inspect_asm(self):
         # Create a jited function
@@ -225,11 +224,6 @@ class TestDispatcher(TestCase):
         for asm in asms.values():
             # Look for the function name
             self.assertTrue("foo" in asm)
-
-            # Look for the argument names
-            self.assertTrue("explicit_arg1" in asm)
-            self.assertTrue("explicit_arg2" in asm)
-
 
 if __name__ == '__main__':
     unittest.main()
