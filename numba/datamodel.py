@@ -172,6 +172,11 @@ def handle_unituple(dmm, ty):
     return UniTupleModel(dmm, ty)
 
 
+@register_default(types.Tuple)
+def handle_tuple(dmm, ty):
+    return TupleModel(dmm, ty)
+
+
 @register_default(types.Array)
 def handle_array(dmm, ty):
     return ArrayModel(dmm, ty)
@@ -470,6 +475,10 @@ class StructModel(DataModel):
         self._models = tuple([self._dmm.lookup(t) for t in self._members])
 
     def get_value_type(self):
+        elems = [t.get_value_type() for t in self._models]
+        return ir.LiteralStructType(elems)
+
+    def get_data_type(self):
         elems = [t.get_data_type() for t in self._models]
         return ir.LiteralStructType(elems)
 
@@ -477,38 +486,66 @@ class StructModel(DataModel):
         return tuple([t.get_argument_type() for t in self._models])
 
     def get_return_type(self):
-        return self.get_value_type()
+        return self.get_data_type()
 
-    def as_argument(self, builder, value):
+    def _as(self, methname, builder, value):
         extracted = []
         for i, dm in enumerate(self._models):
-            extracted.append(dm.as_argument(builder,
-                                            self.get(builder, value, i)))
+            extracted.append(getattr(dm, methname)(builder,
+                                                   self.get(builder, value, i)))
         return tuple(extracted)
 
-    def reverse_as_argument(self, builder, value):
+    def _reverse_as(self, methname, builder, value):
         assert len(value) == len(self._models)
         struct = ir.Constant(self.get_value_type(), ir.Undefined)
 
         for i, (dm, val) in enumerate(zip(self._models, value)):
-            v = dm.reverse_as_argument(builder, val)
+            v = getattr(dm, methname)(builder, val)
             struct = self.set(builder, struct, v, i)
 
         return struct
 
+    def as_data(self, builder, value):
+        elems = self._as("as_data", builder, value)
+        struct = ir.Constant(self.get_data_type(), ir.Undefined)
+        for i, el in enumerate(elems):
+            struct = builder.insert_value(struct, el, [i])
+        return struct
+
+    def reverse_as_data(self, builder, value):
+        vals = [builder.extract_value(value, [i])
+                for i in range(len(self._members))]
+        return self._reverse_as("reverse_as_data", builder, vals)
+
+    def as_argument(self, builder, value):
+        return self._as("as_argument", builder, value)
+
+    def reverse_as_argument(self, builder, value):
+        return self._reverse_as("reverse_as_argument", builder, value)
+
     def as_return(self, builder, value):
-        return value
+        elems = self._as("as_data", builder, value)
+        struct = ir.Constant(self.get_data_type(), ir.Undefined)
+        for i, el in enumerate(elems):
+            struct = builder.insert_value(struct, el, [i])
+        return struct
 
     def reverse_as_return(self, builder, value):
-        return value
+        vals = [builder.extract_value(value, [i])
+                for i in range(len(self._members))]
+        return self._reverse_as("reverse_as_data", builder, vals)
 
     def get(self, builder, val, pos):
-        dm = self._models[pos]
-        return dm.reverse_as_data(builder, builder.extract_value(val, [pos]))
+        return builder.extract_value(val, [pos])
 
     def set(self, builder, val, field, pos):
-        dm = self._models[pos]
-        return builder.insert_value(val, dm.as_data(builder, field), [pos])
+        return builder.insert_value(val, field, [pos])
+
+
+class TupleModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = list(fe_type)
+        super(TupleModel, self).__init__(dmm, fe_type, members)
 
 
 class ArrayModel(StructModel):
@@ -523,6 +560,12 @@ class ArrayModel(StructModel):
             types.UniTuple(types.intp, ndim),
         ]
         super(ArrayModel, self).__init__(dmm, fe_type, members)
+
+    def as_data(self, builder, value):
+        return NotImplemented
+
+    def reverse_as_data(self, builder, value):
+        return NotImplemented
 
 
 class OptionalModel(StructModel):
