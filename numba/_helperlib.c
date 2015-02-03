@@ -604,8 +604,9 @@ MOD_INIT(_helperlib) {
     PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));
     PyModule_AddIntConstant(m, "py_gil_state_size", sizeof(PyGILState_STATE));
 
-    _rnd_random_seed(&py_random_state);
-    _rnd_random_seed(&np_random_state);
+    if (_rnd_random_seed(&py_random_state) ||
+        _rnd_random_seed(&np_random_state))
+        return MOD_ERROR_VAL;
 
     return MOD_SUCCESS_VAL(m);
 }
