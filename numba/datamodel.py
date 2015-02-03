@@ -57,6 +57,10 @@ class FunctionInfo(object):
 
         return values
 
+    @property
+    def argument_types(self):
+        return tuple(self._be_args)
+
 
 def _unflatten(posmap, flatiter):
     if 0 == len(posmap):

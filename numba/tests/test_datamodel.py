@@ -170,6 +170,8 @@ class TestFunctionInfo(unittest.TestCase):
         asargs = fi.reverse_as_arguments(builder, values)
 
         self.assertEqual(len(asargs), len(fe_args))
+        valtys = tuple([v.type for v in values])
+        self.assertEqual(valtys, fi.argument_types)
 
         expect_types = [a.type for a in args]
         got_types = [a.type for a in asargs]
