@@ -1,3 +1,10 @@
+Version (0.17.1)
+================
+
+* Depends on numba 0.17.0
+* Warns about incompatible numba version at import time
+* Fixes some CUDA library APIs on windows
+
 Version (0.17.0)
 ================
 
