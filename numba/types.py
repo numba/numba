@@ -154,6 +154,9 @@ class OpaqueType(Type):
         super(OpaqueType, self).__init__(name)
 
 
+class Boolean(Type):
+    pass
+
 @utils.total_ordering
 class Integer(Type):
     def __init__(self, *args, **kws):
@@ -890,7 +893,7 @@ string = Opaque('str')
 # Can only pass it around
 voidptr = Opaque('void*')
 
-boolean = bool_ = Type('bool')
+boolean = bool_ = Boolean('bool')
 
 byte = uint8 = Integer('uint8')
 uint16 = Integer('uint16')

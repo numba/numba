@@ -16,6 +16,7 @@ from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry, type_registry)
 from . import arrayobj, builtins, iterators, rangeobj, optional
+from numba import datamodel
 try:
     from . import npdatetime
 except NotImplementedError:
@@ -126,6 +127,8 @@ class BaseContext(object):
     implement_powi_as_math_call = False
     implement_pow_as_math_call = False
 
+    data_model_manager = datamodel.defaultDataModelManager
+
     def __init__(self, typing_context):
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
@@ -147,6 +150,12 @@ class BaseContext(object):
         For subclasses to add initializer
         """
         pass
+
+    def get_datamodel(self, fetype):
+        return self.data_model_manager.lookup(fetype)
+
+    def get_function_info(self, fe_ret, fe_args):
+        return datamodel.FunctionInfo(self.data_model_manager, fe_ret, fe_args)
 
     @property
     def target_data(self):
@@ -263,21 +272,10 @@ class BaseContext(object):
         return func.args[1:]
 
     def get_argument_type(self, ty):
-        if ty == types.boolean:
-            return self.get_data_type(ty)
-        elif self.is_struct_type(ty):
-            return Type.pointer(self.get_value_type(ty))
-        else:
-            return self.get_value_type(ty)
+        return self.data_model_manager[ty].get_argument_type()
 
     def get_return_type(self, ty):
-        if isinstance(ty, types.Optional):
-            return self.get_return_type(ty.type)
-        elif self.is_struct_type(ty):
-            return self.get_argument_type(ty)
-        else:
-            argty = self.get_argument_type(ty)
-            return Type.pointer(argty)
+        return self.data_model_manager[ty].get_return_type().as_pointer()
 
     def get_data_type(self, ty):
         """
@@ -293,6 +291,8 @@ class BaseContext(object):
             pass
         else:
             return fac(self, ty)
+
+        return self.data_model_manager[ty].get_data_type()
 
         if (isinstance(ty, types.Dummy) or
                 isinstance(ty, types.Module) or
@@ -351,16 +351,7 @@ class BaseContext(object):
             return LTYPEMAP[ty]
 
     def get_value_type(self, ty):
-        if ty == types.boolean:
-            return Type.int(1)
-        dataty = self.get_data_type(ty)
-
-        if isinstance(ty, types.Record):
-            # Record data are passed by refrence
-            memory = dataty.elements[0]
-            return Type.struct([Type.pointer(memory)])
-
-        return dataty
+        return self.data_model_manager[ty].get_value_type()
 
     def pack_value(self, builder, ty, value, ptr):
         """Pack data for array storage
@@ -572,6 +563,7 @@ class BaseContext(object):
         """
         Argument representation to local value representation
         """
+        raise NotImplementedError
         if ty == types.boolean:
             return builder.trunc(val, self.get_value_type(ty))
         elif cgutils.is_struct_ptr(val.type):
@@ -583,7 +575,8 @@ class BaseContext(object):
         Return value representation to local value representation
         """
         # Same as get_argument_value
-        return self.get_argument_value(builder, ty, val)
+        return self.data_model_manager[ty].reverse_as_return(builder, val)
+        # return self.get_argument_value(builder, ty, val)
 
     def get_return_value(self, builder, ty, val):
         """
@@ -608,21 +601,8 @@ class BaseContext(object):
     def get_value_as_argument(self, builder, ty, val):
         """Prepare local value representation as argument type representation
         """
-        argty = self.get_argument_type(ty)
-        if argty == val.type:
-            return val
-
-        elif self.is_struct_type(ty):
-            # Arguments are passed by pointer
-            assert argty.pointee == val.type
-            tmp = cgutils.alloca_once(builder, val.type)
-            builder.store(val, tmp)
-            return tmp
-
-        elif ty == types.boolean:
-            return builder.zext(val, argty)
-
-        raise NotImplementedError("value %s -> arg %s" % (val.type, argty))
+        raise NotImplementedError
+        return val
 
     def return_optional_value(self, builder, retty, valty, value):
         if valty == types.none:
@@ -679,7 +659,8 @@ class BaseContext(object):
         """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
-        return self.get_argument_value(builder, ty.first_type, pair.first)
+        return self.data_model_manager[ty.first_type].reverse_as_data(builder,
+            pair.first)
 
     def pair_second(self, builder, val, ty):
         """
@@ -687,7 +668,9 @@ class BaseContext(object):
         """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
-        return self.get_argument_value(builder, ty.second_type, pair.second)
+        return self.data_model_manager[ty.second_type].reverse_as_data(builder,
+            pair.second)
+
 
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
