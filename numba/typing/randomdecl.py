@@ -17,14 +17,17 @@ builtin_attr = registry.register_attr
 # methods of a private object.  We have to be careful to use a well-known
 # object (e.g. the string "random.seed") as a key, not the bound method itself.
 
+_int_types = [types.int32, types.int64]
+# Should we support float32?
+_float_types = [types.float64]
+
 @registry.resolves_global(random.getrandbits, typing_key="random.getrandbits")
 class Random_getrandbits(ConcreteTemplate):
     cases = [signature(types.uint64, types.uint8)]
 
 @registry.resolves_global(random.gauss, typing_key="random.gauss")
 class Random_gauss(ConcreteTemplate):
-    # Should we have another case for float32?
-    cases = [signature(types.float64, types.float64, types.float64)]
+    cases = [signature(tp, tp, tp) for tp in _float_types]
 
 @registry.resolves_global(random.random, typing_key="random.random")
 class Random_random(ConcreteTemplate):
@@ -33,15 +36,18 @@ class Random_random(ConcreteTemplate):
 @registry.resolves_global(random.randint, typing_key="random.randint")
 class Random_randint(ConcreteTemplate):
     _types = [types.int32, types.int64]
-    cases = [signature(tp, tp, tp) for tp in _types]
+    cases = [signature(tp, tp, tp) for tp in _int_types]
 
 @registry.resolves_global(random.randrange, typing_key="random.randrange")
 class Random_randrange(ConcreteTemplate):
-    _types = [types.int32, types.int64]
-    cases = [signature(tp, tp) for tp in _types]
-    cases += [signature(tp, tp, tp) for tp in _types]
-    cases += [signature(tp, tp, tp, tp) for tp in _types]
+    cases = [signature(tp, tp) for tp in _int_types]
+    cases += [signature(tp, tp, tp) for tp in _int_types]
+    cases += [signature(tp, tp, tp, tp) for tp in _int_types]
 
 @registry.resolves_global(random.seed, typing_key="random.seed")
 class Random_seed(ConcreteTemplate):
     cases = [signature(types.void, types.uint32)]
+
+@registry.resolves_global(random.uniform, typing_key="random.uniform")
+class Random_uniform(ConcreteTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]

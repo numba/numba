@@ -288,3 +288,12 @@ def randint_impl(context, builder, sig, args):
     step = ir.Constant(start.type, 1)
     stop = builder.add(stop, step)
     return _randrange_impl(context, builder, start, stop, step)
+
+@register
+@implement("random.uniform", types.Kind(types.Float), types.Kind(types.Float))
+def uniform_impl(context, builder, sig, args):
+    state_ptr = get_py_state_ptr(context, builder)
+    a, b = args
+    width = builder.fsub(b, a)
+    r = get_next_double(context, builder, state_ptr)
+    return builder.fadd(a, builder.fmul(width, r))

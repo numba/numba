@@ -51,6 +51,11 @@ def random_randrange3(a, b, c):
     return random.randrange(a, b, c)
 
 
+@jit(nopython=True)
+def random_uniform(a, b):
+    return random.uniform(a, b)
+
+
 def _copy_py_state(r, ptr):
     """
     Copy state of Python random *r* to Numba state *ptr*.
@@ -251,11 +256,23 @@ class TestRandom(TestCase):
             cr = compile_isolated(random_randint, (tp, tp))
             self.check_randint(cr.entry_point, py_state_ptr, max_width)
 
+    def check_uniform(self, func, ptr):
+        """
+        Check a uniform()-like function.
+        """
+        # Our implementation follows Python 3's.
+        r = random.Random()
+        _copy_py_state(r, ptr)
+        for args in [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)]:
+            self.assertPreciseEqual(func(*args), r.uniform(*args))
+
+    def test_random_uniform(self):
+        self.check_uniform(random_uniform, py_state_ptr)
+
     def check_startup_randomness(self, func_name, func_args):
         """
         Check that the state is properly randomized at startup.
         """
-        return
         code = """if 1:
             from numba.tests import test_random
             func = getattr(test_random, %(func_name)r)
