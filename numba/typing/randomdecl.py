@@ -21,33 +21,11 @@ _int_types = [types.int32, types.int64]
 # Should we support float32?
 _float_types = [types.float64]
 
-@registry.resolves_global(random.betavariate, typing_key="random.betavariate")
-class Random_betavariate(ConcreteTemplate):
-    cases = [signature(tp, tp, tp) for tp in _float_types]
-
-@registry.resolves_global(random.expovariate, typing_key="random.expovariate")
-class Random_expovariate(ConcreteTemplate):
-    cases = [signature(tp, tp) for tp in _float_types]
-
-@registry.resolves_global(random.gammavariate, typing_key="random.gammavariate")
-class Random_gammavariate(ConcreteTemplate):
-    cases = [signature(tp, tp, tp) for tp in _float_types]
-
-@registry.resolves_global(random.gauss, typing_key="random.gauss")
-class Random_gauss(ConcreteTemplate):
-    cases = [signature(tp, tp, tp) for tp in _float_types]
+# Basics
 
 @registry.resolves_global(random.getrandbits, typing_key="random.getrandbits")
 class Random_getrandbits(ConcreteTemplate):
     cases = [signature(types.uint64, types.uint8)]
-
-@registry.resolves_global(random.lognormvariate, typing_key="random.lognormvariate")
-class Random_lognormvariate(ConcreteTemplate):
-    cases = [signature(tp, tp, tp) for tp in _float_types]
-
-@registry.resolves_global(random.normalvariate, typing_key="random.normalvariate")
-class Random_normalvariate(ConcreteTemplate):
-    cases = [signature(tp, tp, tp) for tp in _float_types]
 
 @registry.resolves_global(random.random, typing_key="random.random")
 class Random_random(ConcreteTemplate):
@@ -68,11 +46,24 @@ class Random_randrange(ConcreteTemplate):
 class Random_seed(ConcreteTemplate):
     cases = [signature(types.void, types.uint32)]
 
+# Distributions
+
+@registry.resolves_global(random.betavariate, typing_key="random.betavariate")
+@registry.resolves_global(random.gammavariate, typing_key="random.gammavariate")
+@registry.resolves_global(random.gauss, typing_key="random.gauss")
+@registry.resolves_global(random.lognormvariate, typing_key="random.lognormvariate")
+@registry.resolves_global(random.normalvariate, typing_key="random.normalvariate")
+@registry.resolves_global(random.uniform, typing_key="random.uniform")
+@registry.resolves_global(random.weibullvariate, typing_key="random.weibullvariate")
+class Random_binary_distribution(ConcreteTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
+
+@registry.resolves_global(random.expovariate, typing_key="random.expovariate")
+@registry.resolves_global(random.paretovariate, typing_key="random.paretovariate")
+class Random_unary_distribution(ConcreteTemplate):
+    cases = [signature(tp, tp) for tp in _float_types]
+
 @registry.resolves_global(random.triangular, typing_key="random.triangular")
 class Random_triangular(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
     cases += [signature(tp, tp, tp, tp) for tp in _float_types]
-
-@registry.resolves_global(random.uniform, typing_key="random.uniform")
-class Random_uniform(ConcreteTemplate):
-    cases = [signature(tp, tp, tp) for tp in _float_types]

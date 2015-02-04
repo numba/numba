@@ -474,3 +474,36 @@ def lognormvariate_impl(context, builder, sig, args):
 
     return context.compile_internal(builder, lognormvariate_impl,
                                     sig, args)
+
+
+@register
+@implement("random.paretovariate",
+           types.Kind(types.Float))
+def paretovariate_impl(context, builder, sig, args):
+    _random = random.random
+
+    def paretovariate_impl(alpha):
+        """Pareto distribution.  Taken from CPython."""
+        # Jain, pg. 495
+        u = 1.0 - _random()
+        return 1.0 / u ** (1.0/alpha)
+
+    return context.compile_internal(builder, paretovariate_impl,
+                                    sig, args)
+
+
+@register
+@implement("random.weibullvariate",
+           types.Kind(types.Float), types.Kind(types.Float))
+def weibullvariate_impl(context, builder, sig, args):
+    _random = random.random
+    _log = math.log
+
+    def weibullvariate_impl(alpha, beta):
+        """Weibull distribution.  Taken from CPython."""
+        # Jain, pg. 499; bug fix courtesy Bill Arms
+        u = 1.0 - _random()
+        return alpha * (-_log(u)) ** (1.0/beta)
+
+    return context.compile_internal(builder, weibullvariate_impl,
+                                    sig, args)

@@ -58,6 +58,14 @@ def random_lognormvariate(mu, sigma):
 def random_normalvariate(mu, sigma):
     return random.normalvariate(mu, sigma)
 
+@jit(nopython=True)
+def random_paretovariate(alpha):
+    return random.paretovariate(alpha)
+
+@jit(nopython=True)
+def random_weibullvariate(alpha, beta):
+    return random.weibullvariate(alpha, beta)
+
 
 def random_randint(a, b):
     return random.randint(a, b)
@@ -122,7 +130,7 @@ class TestInternals(TestCase):
     Test low-level internals of the implementation.
     """
 
-    def check_get_set_state(self, ptr):
+    def _check_get_set_state(self, ptr):
         state = _helperlib.rnd_get_state(ptr)
         i, ints = state
         self.assertIsInstance(i, int)
@@ -134,7 +142,7 @@ class TestInternals(TestCase):
         _helperlib.rnd_set_state(ptr, (j, ints))
         self.assertEqual(_helperlib.rnd_get_state(ptr), (j, ints))
 
-    def check_shuffle(self, ptr):
+    def _check_shuffle(self, ptr):
         # We test shuffling against CPython
         r = random.Random()
         ints, index = _copy_py_state(r, ptr)
@@ -147,7 +155,7 @@ class TestInternals(TestCase):
         ints, index = mt[:-1], mt[-1]
         self.assertEqual(_helperlib.rnd_get_state(ptr)[1], list(ints))
 
-    def check_init(self, ptr):
+    def _check_init(self, ptr):
         # We use the same integer seeding as Numpy
         # (CPython is different: it treats the integer as a byte array)
         r = np.random.RandomState()
@@ -161,18 +169,18 @@ class TestInternals(TestCase):
             self.assertEqual(_helperlib.rnd_get_state(ptr), (index, ints))
 
     def test_get_set_state(self):
-        self.check_get_set_state(py_state_ptr)
+        self._check_get_set_state(py_state_ptr)
 
     def test_shuffle(self):
-        self.check_shuffle(py_state_ptr)
+        self._check_shuffle(py_state_ptr)
 
     def test_init(self):
-        self.check_init(py_state_ptr)
+        self._check_init(py_state_ptr)
 
 
 class TestRandom(TestCase):
 
-    def check_random(self, func):
+    def _check_random(self, func):
         """
         Check a random()-like function.
         """
@@ -185,9 +193,9 @@ class TestRandom(TestCase):
                 self.assertPreciseEqual(func(), r.uniform(0.0, 1.0))
 
     def test_random_random(self):
-        self.check_random(random_random)
+        self._check_random(random_random)
 
-    def check_getrandbits(self, func, ptr):
+    def _check_getrandbits(self, func, ptr):
         """
         Check a getrandbits()-like function.
         """
@@ -200,9 +208,9 @@ class TestRandom(TestCase):
             self.assertPreciseEqual(expected, got)
 
     def test_random_getrandbits(self):
-        self.check_getrandbits(random_getrandbits, py_state_ptr)
+        self._check_getrandbits(random_getrandbits, py_state_ptr)
 
-    def check_gauss(self, func, ptr):
+    def _check_gauss(self, func, ptr):
         """
         Check a gauss()-like function.
         """
@@ -214,14 +222,14 @@ class TestRandom(TestCase):
                 self.assertPreciseEqual(func(mu, sigma), r.normal(mu, sigma))
 
     def test_random_gauss(self):
-        self.check_gauss(random_gauss, py_state_ptr)
+        self._check_gauss(random_gauss, py_state_ptr)
 
     def test_random_normalvariate(self):
         # normalvariate() is really an alias to gauss() in Numba
         # (not in Python, though - they use different algorithms)
-        self.check_gauss(random_normalvariate, py_state_ptr)
+        self._check_gauss(random_normalvariate, py_state_ptr)
 
-    def check_lognormvariate(self, func, ptr):
+    def _check_lognormvariate(self, func, ptr):
         """
         Check a lognormvariate()-like function.
         """
@@ -233,9 +241,9 @@ class TestRandom(TestCase):
                 self.assertPreciseEqual(func(mu, sigma), r.lognormal(mu, sigma))
 
     def test_random_lognormvariate(self):
-        self.check_lognormvariate(random_lognormvariate, py_state_ptr)
+        self._check_lognormvariate(random_lognormvariate, py_state_ptr)
 
-    def check_randrange(self, func1, func2, func3, ptr, max_width):
+    def _check_randrange(self, func1, func2, func3, ptr, max_width):
         """
         Check a randrange()-like function.
         """
@@ -274,10 +282,10 @@ class TestRandom(TestCase):
             cr1 = compile_isolated(random_randrange1, (tp,))
             cr2 = compile_isolated(random_randrange2, (tp, tp))
             cr3 = compile_isolated(random_randrange3, (tp, tp, tp))
-            self.check_randrange(cr1.entry_point, cr2.entry_point,
+            self._check_randrange(cr1.entry_point, cr2.entry_point,
                                  cr3.entry_point, py_state_ptr, max_width)
 
-    def check_randint(self, func, ptr, max_width):
+    def _check_randint(self, func, ptr, max_width):
         """
         Check a randint()-like function.
         """
@@ -302,9 +310,9 @@ class TestRandom(TestCase):
     def test_random_randint(self):
         for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
             cr = compile_isolated(random_randint, (tp, tp))
-            self.check_randint(cr.entry_point, py_state_ptr, max_width)
+            self._check_randint(cr.entry_point, py_state_ptr, max_width)
 
-    def check_uniform(self, func, ptr):
+    def _check_uniform(self, func, ptr):
         """
         Check a uniform()-like function.
         """
@@ -315,9 +323,9 @@ class TestRandom(TestCase):
             self.assertPreciseEqual(func(*args), r.uniform(*args))
 
     def test_random_uniform(self):
-        self.check_uniform(random_uniform, py_state_ptr)
+        self._check_uniform(random_uniform, py_state_ptr)
 
-    def check_triangular(self, func2, func3, ptr):
+    def _check_triangular(self, func2, func3, ptr):
         """
         Check a triangular()-like function.
         """
@@ -328,10 +336,10 @@ class TestRandom(TestCase):
             self.assertPreciseEqual(func2(*args), r.triangular(*args))
 
     def test_random_triangular(self):
-        self.check_triangular(random_triangular2, random_triangular3,
-                              py_state_ptr)
+        self._check_triangular(random_triangular2, random_triangular3,
+                               py_state_ptr)
 
-    def check_gammavariate(self, func, ptr):
+    def _check_gammavariate(self, func, ptr):
         """
         Check a gammavariate()-like function.
         """
@@ -348,9 +356,9 @@ class TestRandom(TestCase):
         self.assertRaises(NativeError, func, 1.0, -0.5)
 
     def test_random_gammavariate(self):
-        self.check_gammavariate(random_gammavariate, py_state_ptr)
+        self._check_gammavariate(random_gammavariate, py_state_ptr)
 
-    def check_betavariate(self, func, ptr):
+    def _check_betavariate(self, func, ptr):
         """
         Check a betavariate()-like function.
         """
@@ -367,23 +375,52 @@ class TestRandom(TestCase):
         self.assertRaises(NativeError, func, 1.0, -0.5)
 
     def test_random_betavariate(self):
-        self.check_betavariate(random_betavariate, py_state_ptr)
+        self._check_betavariate(random_betavariate, py_state_ptr)
 
-    def check_expovariate(self, func, ptr):
+    def _check_unary(self, func, pyfunc, argslist):
+        for args in argslist:
+            for i in range(3):
+                self.assertPreciseEqual(func(*args), pyfunc(*args))
+
+    def _check_expovariate(self, func, ptr):
         """
         Check a expovariate()-like function.
         """
         # Our implementation follows Python's.
         r = random.Random()
         _copy_py_state(r, ptr)
-        for args in [(-0.5,), (0.5,)]:
-            for i in range(3):
-                self.assertPreciseEqual(func(*args), r.expovariate(*args))
+        self._check_unary(func, r.expovariate, [(-0.5,), (0.5,)])
 
     def test_expovariate(self):
-        self.check_expovariate(random_expovariate, py_state_ptr)
+        self._check_expovariate(random_expovariate, py_state_ptr)
 
-    def check_startup_randomness(self, func_name, func_args):
+    def _check_paretovariate(self, func, ptr):
+        """
+        Check a paretovariate()-like function.
+        """
+        # Our implementation follows Python's.
+        r = random.Random()
+        _copy_py_state(r, ptr)
+        self._check_unary(func, r.paretovariate, [(0.5,), (3.5,)])
+
+    def test_paretovariate(self):
+        self._check_paretovariate(random_paretovariate, py_state_ptr)
+
+    def _check_weibullvariate(self, func, ptr):
+        """
+        Check a weibullvariate()-like function.
+        """
+        # Our implementation follows Python's.
+        r = random.Random()
+        _copy_py_state(r, ptr)
+        args = (0.5, 2.5)
+        for i in range(3):
+            self.assertPreciseEqual(func(*args), r.weibullvariate(*args))
+
+    def test_random_weibullvariate(self):
+        self._check_weibullvariate(random_weibullvariate, py_state_ptr)
+
+    def _check_startup_randomness(self, func_name, func_args):
         """
         Check that the state is properly randomized at startup.
         """
@@ -404,10 +441,10 @@ class TestRandom(TestCase):
         self.assertEqual(len(numbers), 3, numbers)
 
     def test_random_random_startup(self):
-        self.check_startup_randomness("random_random", ())
+        self._check_startup_randomness("random_random", ())
 
     def test_random_gauss_startup(self):
-        self.check_startup_randomness("random_gauss", (1.0, 1.0))
+        self._check_startup_randomness("random_gauss", (1.0, 1.0))
 
 
 if __name__ == "__main__":
