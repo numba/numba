@@ -57,6 +57,11 @@ class Random_seed(ConcreteTemplate):
 
 # Distributions
 
+@registry.resolves_global(np.random.exponential, typing_key="np.random.exponential")
+class Numpy_exponential(ConcreteTemplate):
+    cases = [signature(tp, tp) for tp in _float_types]
+    cases += [signature(tp) for tp in _float_types]
+
 @registry.resolves_global(np.random.normal, typing_key="np.random.normal")
 class Numpy_normal(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
@@ -87,6 +92,8 @@ class Random_unary_distribution(ConcreteTemplate):
 
 @registry.resolves_global(np.random.standard_normal,
                           typing_key="np.random.standard_normal")
+@registry.resolves_global(np.random.standard_exponential,
+                          typing_key="np.random.standard_exponential")
 @registry.resolves_global(np.random.rand, typing_key="np.random.rand")
 @registry.resolves_global(np.random.randn, typing_key="np.random.randn")
 class Random_nullary_distribution(ConcreteTemplate):

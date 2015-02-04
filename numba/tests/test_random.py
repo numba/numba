@@ -447,8 +447,33 @@ class TestRandom(TestCase):
         r = self._follow_cpython(ptr)
         self._check_unary(func, r.expovariate, [(-0.5,), (0.5,)])
 
-    def test_expovariate(self):
+    def test_random_expovariate(self):
         self._check_expovariate(jit_unary("random.expovariate"), py_state_ptr)
+
+    def _check_exponential(self, func1, func0, ptr):
+        """
+        Check a exponential()-like function. Note the second argument
+        is inversed compared to expovariate().
+        """
+        r = self._follow_cpython(ptr)
+        if func1 is not None:
+            for scale in (0.5, 1.0, 1.5):
+                for i in range(3):
+                    self.assertPreciseEqual(func1(scale),
+                                            r.expovariate(1 / scale),
+                                            prec="double")
+        if func0 is not None:
+            self.assertPreciseEqual(func0(), r.expovariate(1.0))
+
+    def test_numpy_exponential(self):
+        self._check_exponential(jit_unary("np.random.exponential"),
+                                jit_nullary("np.random.exponential"),
+                                np_state_ptr)
+
+    def test_numpy_standard_exponential(self):
+        self._check_exponential(None,
+                                jit_nullary("np.random.standard_exponential"),
+                                np_state_ptr)
 
     def _check_paretovariate(self, func, ptr):
         """
@@ -458,7 +483,7 @@ class TestRandom(TestCase):
         r = self._follow_cpython(ptr)
         self._check_unary(func, r.paretovariate, [(0.5,), (3.5,)])
 
-    def test_paretovariate(self):
+    def test_random_paretovariate(self):
         self._check_paretovariate(jit_unary("random.paretovariate"), py_state_ptr)
 
     def _check_weibullvariate(self, func, ptr):

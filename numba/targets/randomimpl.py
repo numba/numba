@@ -548,6 +548,32 @@ def expovariate_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.exponential", types.Kind(types.Float))
+def exponential_impl(context, builder, sig, args):
+    _random = np.random.random
+    _log = math.log
+
+    def exponential_impl(scale):
+        return -_log(1.0 - _random()) * scale
+
+    return context.compile_internal(builder, exponential_impl,
+                                    sig, args)
+
+@register
+@implement("np.random.standard_exponential")
+@implement("np.random.exponential")
+def exponential_impl(context, builder, sig, args):
+    _random = np.random.random
+    _log = math.log
+
+    def exponential_impl():
+        return -_log(1.0 - _random())
+
+    return context.compile_internal(builder, exponential_impl,
+                                    sig, args)
+
+
+@register
 @implement("random.lognormvariate",
            types.Kind(types.Float), types.Kind(types.Float))
 def lognormvariate_impl(context, builder, sig, args):
