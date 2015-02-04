@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import
 import functools
 from collections import deque
 from llvmlite import ir
-from numba import types
+from numba import types, numpy_support
 
 
 class DataModelManager(object):
@@ -187,6 +187,15 @@ def handle_optional(dmm, ty):
     return OptionalModel(dmm, ty)
 
 
+@register_default(types.Record)
+def handle_record(dmm, ty):
+    return RecordModel(dmm, ty)
+
+
+@register_default(types.UnicodeCharSeq)
+def handle_unicode_char_seq(dmm, ty):
+    return UnicodeCharSeq(dmm, ty)
+
 # ============== Define Data Models ==============
 
 class DataModel(object):
@@ -221,6 +230,9 @@ class DataModel(object):
         return NotImplemented
 
     def reverse_as_return(self, builder, value):
+        return NotImplemented
+
+    def load_from_data_pointer(self, builder, value):
         return NotImplemented
 
     def _compared_fields(self):
@@ -585,3 +597,66 @@ class OptionalModel(StructModel):
 
     def reverse_as_return(self, builder, value):
         return self._value_model.reverse_as_return(builder, value)
+
+
+class RecordModel(DataModel):
+    def __init__(self, dmm, fe_type):
+        super(RecordModel, self).__init__(dmm)
+        self.fe_type = fe_type
+        self._models = [self._dmm.lookup(t) for _, t in fe_type.members]
+        self._be_type = ir.ArrayType(ir.IntType(8), self.fe_type.size)
+
+    def _compared_fields(self):
+        return (self.fe_type,)
+
+    def get_value_type(self):
+        """Passed around as reference to underlying data
+        """
+        return self._be_type.as_pointer()
+
+    def get_argument_type(self):
+        return self.get_value_type()
+
+    def get_return_type(self):
+        return self.get_value_type()
+
+    def get_data_type(self):
+        return self._be_type
+
+    def as_data(self, builder, value):
+        return builder.load(value)
+
+    def reverse_as_data(self, builder, value):
+        raise NotImplementedError("use load_from_data_pointer() instead")
+
+    def as_argument(self, builder, value):
+        return value
+
+    def reverse_as_argument(self, builder, value):
+        return value
+
+    def as_return(self, builder, value):
+        return value
+
+    def reverse_as_return(self, builder, value):
+        return value
+
+    def load_from_data_pointer(self, builder, ptr):
+        return builder.bitcast(ptr, self.get_value_type())
+
+
+class UnicodeCharSeq(DataModel):
+    def __init__(self, dmm, fe_type):
+        super(UnicodeCharSeq, self).__init__(dmm)
+        self.fe_type = fe_type
+        charty = ir.IntType(numpy_support.sizeof_unicode_char * 8)
+        self._be_type = ir.ArrayType(charty, fe_type.count)
+
+    def _compared_fields(self):
+        return (self.fe_type,)
+
+    def get_value_type(self):
+        return self._be_type
+
+    def get_data_type(self):
+        return self._be_type

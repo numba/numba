@@ -585,28 +585,28 @@ def is_struct_ptr(ltyp):
 
 
 def get_record_member(builder, record, offset, typ):
-    pdata = get_record_data(builder, record)
-    pval = inbound_gep(builder, pdata, 0, offset)
+    pval = inbound_gep(builder, record, 0, offset)
     assert not is_pointer(pval.type.pointee)
     return builder.bitcast(pval, Type.pointer(typ))
 
 
 def get_record_data(builder, record):
-    return builder.extract_value(record, 0)
+    raise NotImplementedError
+    # return record #return builder.extract_value(record, 0)
 
 
 def set_record_data(builder, record, buf):
-    pdata = inbound_gep(builder, record, 0, 0)
-    assert pdata.type.pointee == buf.type
-    builder.store(buf, pdata)
+    raise NotImplementedError
+
+    casted = builder.bitcast(buf, record.type.pointee)
+    builder.store(casted, record)
 
 
 def init_record_by_ptr(builder, ltyp, ptr):
+    raise NotImplementedError
     tmp = alloca_once(builder, ltyp)
-    pdata = ltyp.elements[0]
-    buf = builder.bitcast(ptr, pdata)
-    set_record_data(builder, tmp, buf)
-    return tmp
+    set_record_data(builder, tmp, ptr)
+    return builder.load(tmp)
 
 
 def is_neg_int(builder, val):

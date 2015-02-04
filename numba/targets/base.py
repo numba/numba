@@ -356,35 +356,45 @@ class BaseContext(object):
     def pack_value(self, builder, ty, value, ptr):
         """Pack data for array storage
         """
-        if isinstance(ty, types.Record):
-            pdata = cgutils.get_record_data(builder, value)
-            databuf = builder.load(pdata)
-            casted = builder.bitcast(ptr, Type.pointer(databuf.type))
-            builder.store(databuf, casted)
-            return
-
-        if ty == types.boolean:
-            value = cgutils.as_bool_byte(builder, value)
-        assert value.type == ptr.type.pointee
-        builder.store(value, ptr)
+        dataval = self.data_model_manager[ty].as_data(builder, value)
+        builder.store(dataval, ptr)
+        return
+        #
+        # if isinstance(ty, types.Record):
+        #     pdata = cgutils.get_record_data(builder, value)
+        #     databuf = builder.load(pdata)
+        #     casted = builder.bitcast(ptr, Type.pointer(databuf.type))
+        #     builder.store(databuf, casted)
+        #     return
+        #
+        # if ty == types.boolean:
+        #     value = cgutils.as_bool_byte(builder, value)
+        # assert value.type == ptr.type.pointee
+        # builder.store(value, ptr)
 
     def unpack_value(self, builder, ty, ptr):
         """Unpack data from array storage
         """
-
-        if isinstance(ty, types.Record):
-            vt = self.get_value_type(ty)
-            tmp = cgutils.alloca_once(builder, vt)
-            dataptr = cgutils.inbound_gep(builder, ptr, 0, 0)
-            builder.store(dataptr, cgutils.inbound_gep(builder, tmp, 0, 0))
-            return builder.load(tmp)
-
-        assert cgutils.is_pointer(ptr.type)
-        value = builder.load(ptr)
-        if ty == types.boolean:
-            return builder.trunc(value, Type.int(1))
+        dm = self.data_model_manager[ty]
+        val = dm.load_from_data_pointer(builder, ptr)
+        if val is NotImplemented:
+            return dm.reverse_as_data(builder, builder.load(ptr))
         else:
-            return value
+            return val
+        #
+        # if isinstance(ty, types.Record):
+        #     vt = self.get_value_type(ty)
+        #     tmp = cgutils.alloca_once(builder, vt)
+        #     dataptr = cgutils.inbound_gep(builder, ptr, 0, 0)
+        #     builder.store(dataptr, cgutils.inbound_gep(builder, tmp, 0, 0))
+        #     return builder.load(tmp)
+        #
+        # assert cgutils.is_pointer(ptr.type)
+        # value = builder.load(ptr)
+        # if ty == types.boolean:
+        #     return builder.trunc(value, Type.int(1))
+        # else:
+        #     return value
 
     def is_struct_type(self, ty):
         return cgutils.is_struct(self.get_data_type(ty))
