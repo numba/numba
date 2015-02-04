@@ -528,18 +528,28 @@ class TestRandom(TestCase):
         fixed_pareto = lambda a: pareto(a) + 1.0
         self._check_paretovariate(fixed_pareto, np_state_ptr)
 
-    def _check_weibullvariate(self, func, ptr):
+    def _check_weibullvariate(self, func2, func1, ptr):
         """
         Check a weibullvariate()-like function.
         """
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
         args = (0.5, 2.5)
-        for i in range(3):
-            self.assertPreciseEqual(func(*args), r.weibullvariate(*args))
+        if func2 is not None:
+            for i in range(3):
+                self.assertPreciseEqual(func2(*args), r.weibullvariate(*args))
+        if func1 is not None:
+            for i in range(3):
+                self.assertPreciseEqual(func1(2.5),
+                                        r.weibullvariate(1.0, 2.5))
 
     def test_random_weibullvariate(self):
-        self._check_weibullvariate(jit_binary("random.weibullvariate"), py_state_ptr)
+        self._check_weibullvariate(jit_binary("random.weibullvariate"),
+                                   None, py_state_ptr)
+
+    def test_numpy_weibull(self):
+        self._check_weibullvariate(None, jit_unary("np.random.weibull"),
+                                   np_state_ptr)
 
     def _check_shuffle(self, func, ptr):
         """

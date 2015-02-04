@@ -631,16 +631,15 @@ def paretovariate_impl(context, builder, sig, args):
 
 @register
 @implement("np.random.pareto", types.Kind(types.Float))
-def paretovariate_impl(context, builder, sig, args):
+def pareto_impl(context, builder, sig, args):
     _random = np.random.random
 
-    def paretovariate_impl(alpha):
+    def pareto_impl(alpha):
         # Same as paretovariate() - 1.
         u = 1.0 - _random()
         return 1.0 / u ** (1.0/alpha) - 1
 
-    return context.compile_internal(builder, paretovariate_impl,
-                                    sig, args)
+    return context.compile_internal(builder, pareto_impl, sig, args)
 
 
 @register
@@ -658,6 +657,19 @@ def weibullvariate_impl(context, builder, sig, args):
 
     return context.compile_internal(builder, weibullvariate_impl,
                                     sig, args)
+
+@register
+@implement("np.random.weibull", types.Kind(types.Float))
+def weibull_impl(context, builder, sig, args):
+    _random = np.random.random
+    _log = math.log
+
+    def weibull_impl(beta):
+        # Same as weibullvariate(1.0, beta)
+        u = 1.0 - _random()
+        return (-_log(u)) ** (1.0/beta)
+
+    return context.compile_internal(builder, weibull_impl, sig, args)
 
 
 @register
