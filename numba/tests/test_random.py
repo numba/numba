@@ -212,26 +212,41 @@ class TestRandom(TestCase):
     def test_random_getrandbits(self):
         self._check_getrandbits(jit_unary("random.getrandbits"), py_state_ptr)
 
-    def _check_gauss(self, func, ptr):
+    def _check_gauss(self, func2, func1, func0, ptr):
         """
         Check a gauss()-like function.
         """
         # Our implementation follows Numpy's.
         r = self._follow_numpy(ptr)
-        for mu, sigma in [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)]:
-            for i in range(N // 2 + 10):
-                self.assertPreciseEqual(func(mu, sigma), r.normal(mu, sigma))
+        if func2 is not None:
+            for mu, sigma in [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)]:
+                for i in range(N // 2 + 10):
+                    self.assertPreciseEqual(func2(mu, sigma), r.normal(mu, sigma))
+        if func1 is not None:
+            for i in range(3):
+                self.assertPreciseEqual(func1(0.5), r.normal(0.5))
+        if func0 is not None:
+            for i in range(3):
+                self.assertPreciseEqual(func0(), r.normal())
 
     def test_random_gauss(self):
-        self._check_gauss(jit_binary("random.gauss"), py_state_ptr)
+        self._check_gauss(jit_binary("random.gauss"), None, None, py_state_ptr)
 
     def test_random_normalvariate(self):
         # normalvariate() is really an alias to gauss() in Numba
         # (not in Python, though - they use different algorithms)
-        self._check_gauss(jit_binary("random.normalvariate"), py_state_ptr)
+        self._check_gauss(jit_binary("random.normalvariate"), None, None,
+                          py_state_ptr)
 
     def test_numpy_normal(self):
-        self._check_gauss(jit_binary("np.random.normal"), py_state_ptr)
+        self._check_gauss(jit_binary("np.random.normal"),
+                          jit_unary("np.random.normal"),
+                          jit_nullary("np.random.normal"),
+                          np_state_ptr)
+
+    def test_numpy_standard_normal(self):
+        self._check_gauss(None, None, jit_nullary("np.random.standard_normal"),
+                          np_state_ptr)
 
     def _check_lognormvariate(self, func, ptr):
         """

@@ -54,6 +54,11 @@ class Random_seed(ConcreteTemplate):
 # Distributions
 
 @registry.resolves_global(np.random.normal, typing_key="np.random.normal")
+class Numpy_normal(ConcreteTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
+    cases += [signature(tp, tp) for tp in _float_types]
+    cases += [signature(tp) for tp in _float_types]
+
 @registry.resolves_global(random.betavariate, typing_key="random.betavariate")
 @registry.resolves_global(random.gammavariate, typing_key="random.gammavariate")
 @registry.resolves_global(random.gauss, typing_key="random.gauss")
@@ -69,6 +74,13 @@ class Random_binary_distribution(ConcreteTemplate):
 @registry.resolves_global(random.paretovariate, typing_key="random.paretovariate")
 class Random_unary_distribution(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in _float_types]
+
+@registry.resolves_global(np.random.standard_normal,
+                          typing_key="np.random.standard_normal")
+@registry.resolves_global(np.random.rand, typing_key="np.random.rand")
+@registry.resolves_global(np.random.randn, typing_key="np.random.randn")
+class Random_nullary_distribution(ConcreteTemplate):
+    cases = [signature(tp) for tp in _float_types]
 
 @registry.resolves_global(random.triangular, typing_key="random.triangular")
 class Random_triangular(ConcreteTemplate):

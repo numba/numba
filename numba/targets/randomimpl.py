@@ -163,10 +163,23 @@ def gauss_impl(context, builder, sig, args):
     return _gauss_impl(context, builder, sig, args, state_ptr)
 
 @register
+@implement("np.random.randn")
+@implement("np.random.standard_normal")
+@implement("np.random.normal")
+@implement("np.random.normal", types.Kind(types.Float))
 @implement("np.random.normal", types.Kind(types.Float), types.Kind(types.Float))
-def gauss_impl(context, builder, sig, args):
-    state_ptr = get_py_state_ptr(context, builder)
-    return _gauss_impl(context, builder, sig, args, state_ptr)
+def np_gauss_impl(context, builder, sig, args):
+    llty = context.get_data_type(sig.return_type)
+    if len(args) == 2:
+        mu, sigma = args
+    elif len(args) == 1:
+        mu, = args
+        sigma = ir.Constant(llty, 1.0)
+    else:
+        mu = ir.Constant(llty, 0.0)
+        sigma = ir.Constant(llty, 1.0)
+    state_ptr = get_np_state_ptr(context, builder)
+    return _gauss_impl(context, builder, sig, [mu, sigma], state_ptr)
 
 def _gauss_impl(context, builder, sig, args, state_ptr):
     mu, sigma = args
