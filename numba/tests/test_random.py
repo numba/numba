@@ -372,6 +372,9 @@ class TestRandom(TestCase):
     def test_random_uniform(self):
         self._check_uniform(jit_binary("random.uniform"), py_state_ptr)
 
+    def test_numpy_uniform(self):
+        self._check_uniform(jit_binary("np.random.uniform"), np_state_ptr)
+
     def _check_triangular(self, func2, func3, ptr):
         """
         Check a triangular()-like function.

@@ -354,7 +354,15 @@ def randrange_impl_2(context, builder, sig, args):
 @register
 @implement("random.uniform", types.Kind(types.Float), types.Kind(types.Float))
 def uniform_impl(context, builder, sig, args):
-    state_ptr = get_state_ptr(context, builder, "py")
+    return uniform_impl(context, builder, sig, args, "py")
+
+@register
+@implement("np.random.uniform", types.Kind(types.Float), types.Kind(types.Float))
+def uniform_impl(context, builder, sig, args):
+    return uniform_impl(context, builder, sig, args, "np")
+
+def uniform_impl(context, builder, sig, args, state):
+    state_ptr = get_state_ptr(context, builder, state)
     a, b = args
     width = builder.fsub(b, a)
     r = get_next_double(context, builder, state_ptr)
