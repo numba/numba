@@ -85,6 +85,10 @@ def random_randrange3(a, b, c):
 
 
 @jit(nopython=True)
+def random_shuffle(a):
+    return random.shuffle(a)
+
+@jit(nopython=True)
 def random_triangular2(a, b):
     return random.triangular(a, b)
 
@@ -184,28 +188,38 @@ class TestInternals(TestCase):
 
 class TestRandom(TestCase):
 
-    def _check_random(self, func):
+    def _follow_cpython(self, ptr):
+        r = random.Random()
+        _copy_py_state(r, ptr)
+        return r
+
+    def _follow_numpy(self, ptr):
+        r = np.random.RandomState()
+        _copy_np_state(r, ptr)
+        return r
+
+    def _check_random_seed(self, seedfunc, randomfunc):
         """
-        Check a random()-like function.
+        Check seed()- and random()-like functions.
         """
+        # Our seed() mimicks Numpy's.
         r = np.random.RandomState()
         for i in [0, 1, 125, 2**32 - 1]:
             r.seed(i)
-            random_seed(i)
+            seedfunc(i)
             # Be sure to trigger a reshuffle
             for j in range(N + 10):
-                self.assertPreciseEqual(func(), r.uniform(0.0, 1.0))
+                self.assertPreciseEqual(randomfunc(), r.uniform(0.0, 1.0))
 
     def test_random_random(self):
-        self._check_random(random_random)
+        self._check_random_seed(random_seed, random_random)
 
     def _check_getrandbits(self, func, ptr):
         """
         Check a getrandbits()-like function.
         """
         # Our implementation follows CPython's for bits <= 64.
-        r = random.Random()
-        _copy_py_state(r, ptr)
+        r = self._follow_cpython(ptr)
         for nbits in range(1, 65):
             expected = r.getrandbits(nbits)
             got = func(nbits)
@@ -219,8 +233,7 @@ class TestRandom(TestCase):
         Check a gauss()-like function.
         """
         # Our implementation follows Numpy's.
-        r = np.random.RandomState()
-        _copy_np_state(r, ptr)
+        r = self._follow_numpy(ptr)
         for mu, sigma in [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)]:
             for i in range(N // 2 + 10):
                 self.assertPreciseEqual(func(mu, sigma), r.normal(mu, sigma))
@@ -238,8 +251,7 @@ class TestRandom(TestCase):
         Check a lognormvariate()-like function.
         """
         # Our implementation follows Numpy's.
-        r = np.random.RandomState()
-        _copy_np_state(r, ptr)
+        r = self._follow_numpy(ptr)
         for mu, sigma in [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)]:
             for i in range(N // 2 + 10):
                 self.assertPreciseEqual(func(mu, sigma), r.lognormal(mu, sigma))
@@ -260,8 +272,7 @@ class TestRandom(TestCase):
         self.assertEqual(len(ints), len(set(ints)), ints)
         # Our implementation follows Python 3's.
         if sys.version_info >= (3,):
-            r = random.Random()
-            _copy_py_state(r, ptr)
+            r = self._follow_cpython(ptr)
             for width in [1, 5, 5000, 2**62 + 2**61]:
                 if width > max_width:
                     continue
@@ -300,8 +311,7 @@ class TestRandom(TestCase):
         self.assertEqual(len(ints), len(set(ints)), ints)
         # Our implementation follows Python 3's.
         if sys.version_info >= (3,):
-            r = random.Random()
-            _copy_py_state(r, ptr)
+            r = self._follow_cpython(ptr)
             for args in [(1, 5), (13, 5000), (20, 2**62 + 2**61)]:
                 if args[1] > max_width:
                     continue
@@ -320,9 +330,8 @@ class TestRandom(TestCase):
         """
         Check a uniform()-like function.
         """
-        # Our implementation follows Python 3's.
-        r = random.Random()
-        _copy_py_state(r, ptr)
+        # Our implementation follows Python's.
+        r = self._follow_cpython(ptr)
         for args in [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)]:
             self.assertPreciseEqual(func(*args), r.uniform(*args))
 
@@ -334,8 +343,7 @@ class TestRandom(TestCase):
         Check a triangular()-like function.
         """
         # Our implementation follows Python's.
-        r = random.Random()
-        _copy_py_state(r, ptr)
+        r = self._follow_cpython(ptr)
         for args in [(1.5, 3.5), (-2.5, 1.5), (1.5, 1.5)]:
             self.assertPreciseEqual(func2(*args), r.triangular(*args))
 
@@ -348,8 +356,7 @@ class TestRandom(TestCase):
         Check a gammavariate()-like function.
         """
         # Our implementation follows Python's.
-        r = random.Random()
-        _copy_py_state(r, ptr)
+        r = self._follow_cpython(ptr)
         for args in [(0.5, 2.5), (1.0, 1.5), (1.5, 3.5)]:
             for i in range(3):
                 self.assertPreciseEqual(func(*args), r.gammavariate(*args))
@@ -367,8 +374,7 @@ class TestRandom(TestCase):
         Check a betavariate()-like function.
         """
         # Our implementation follows Python's.
-        r = random.Random()
-        _copy_py_state(r, ptr)
+        r = self._follow_cpython(ptr)
         args = (0.5, 2.5)
         for i in range(3):
             self.assertPreciseEqual(func(*args), r.betavariate(*args))
@@ -386,8 +392,7 @@ class TestRandom(TestCase):
         Check a vonmisesvariate()-like function.
         """
         # Our implementation follows Python's.
-        r = random.Random()
-        _copy_py_state(r, ptr)
+        r = self._follow_cpython(ptr)
         args = (0.5, 2.5)
         for i in range(3):
             self.assertPreciseEqual(func(*args), r.vonmisesvariate(*args))
@@ -405,8 +410,7 @@ class TestRandom(TestCase):
         Check a expovariate()-like function.
         """
         # Our implementation follows Python's.
-        r = random.Random()
-        _copy_py_state(r, ptr)
+        r = self._follow_cpython(ptr)
         self._check_unary(func, r.expovariate, [(-0.5,), (0.5,)])
 
     def test_expovariate(self):
@@ -417,8 +421,7 @@ class TestRandom(TestCase):
         Check a paretovariate()-like function.
         """
         # Our implementation follows Python's.
-        r = random.Random()
-        _copy_py_state(r, ptr)
+        r = self._follow_cpython(ptr)
         self._check_unary(func, r.paretovariate, [(0.5,), (3.5,)])
 
     def test_paretovariate(self):
@@ -429,14 +432,30 @@ class TestRandom(TestCase):
         Check a weibullvariate()-like function.
         """
         # Our implementation follows Python's.
-        r = random.Random()
-        _copy_py_state(r, ptr)
+        r = self._follow_cpython(ptr)
         args = (0.5, 2.5)
         for i in range(3):
             self.assertPreciseEqual(func(*args), r.weibullvariate(*args))
 
     def test_random_weibullvariate(self):
         self._check_weibullvariate(random_weibullvariate, py_state_ptr)
+
+    def _check_shuffle(self, func, ptr):
+        """
+        Check a shuffle()-like function for 1D arrays.
+        """
+        # Our implementation follows Python's.
+        r = self._follow_cpython(ptr)
+        arr = np.arange(15)
+        for i in range(3):
+            got = arr.copy()
+            expected = arr.copy()
+            func(got)
+            r.shuffle(expected)
+            self.assertTrue(np.all(got == expected), (got, expected))
+
+    def test_random_shuffle(self):
+        self._check_shuffle(random_shuffle, py_state_ptr)
 
     def _check_startup_randomness(self, func_name, func_args):
         """

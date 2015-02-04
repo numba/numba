@@ -561,3 +561,19 @@ def vonmisesvariate_impl(context, builder, sig, args):
 
     return context.compile_internal(builder, vonmisesvariate_impl,
                                     sig, args)
+
+
+@register
+@implement("random.shuffle", types.Kind(types.Array))
+def shuffle_impl(context, builder, sig, args):
+    _randrange = random.randrange
+
+    def shuffle_impl(arr):
+        i = arr.shape[0] - 1
+        while i > 0:
+            j = _randrange(i + 1)
+            arr[i], arr[j] = arr[j], arr[i]
+            i -= 1
+
+    return context.compile_internal(builder, shuffle_impl,
+                                    sig, args)

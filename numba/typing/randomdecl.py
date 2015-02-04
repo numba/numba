@@ -68,3 +68,12 @@ class Random_unary_distribution(ConcreteTemplate):
 class Random_triangular(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
     cases += [signature(tp, tp, tp, tp) for tp in _float_types]
+
+# Other
+
+@registry.resolves_global(random.shuffle, typing_key="random.shuffle")
+class Random_shuffle(AbstractTemplate):
+    def generic(self, args, kws):
+        arr, = args
+        if isinstance(arr, types.Array) and arr.ndim == 1:
+            return signature(types.void, arr)
