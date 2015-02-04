@@ -35,6 +35,10 @@ def random_betavariate(alpha, beta):
     return random.betavariate(alpha, beta)
 
 @jit(nopython=True)
+def random_expovariate(lambd):
+    return random.expovariate(lambd)
+
+@jit(nopython=True)
 def random_gammavariate(alpha, beta):
     return random.gammavariate(alpha, beta)
 
@@ -337,6 +341,20 @@ class TestRandom(TestCase):
 
     def test_random_betavariate(self):
         self.check_betavariate(random_betavariate, py_state_ptr)
+
+    def check_expovariate(self, func, ptr):
+        """
+        Check a expovariate()-like function.
+        """
+        # Our implementation follows Python's.
+        r = random.Random()
+        _copy_py_state(r, ptr)
+        for args in [(-0.5,), (0.5,)]:
+            for i in range(3):
+                self.assertPreciseEqual(func(*args), r.expovariate(*args))
+
+    def test_expovariate(self):
+        self.check_expovariate(random_expovariate, py_state_ptr)
 
     def check_startup_randomness(self, func_name, func_args):
         """

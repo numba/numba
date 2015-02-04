@@ -438,3 +438,24 @@ def betavariate_impl(context, builder, sig, args):
 
     return context.compile_internal(builder, betavariate_impl,
                                     sig, args)
+
+
+@register
+@implement("random.expovariate",
+           types.Kind(types.Float))
+def expovariate_impl(context, builder, sig, args):
+    _random = random.random
+    _log = math.log
+
+    def expovariate_impl(lambd):
+        """Exponential distribution.  Taken from CPython.
+        """
+        # lambd: rate lambd = 1/mean
+        # ('lambda' is a Python reserved word)
+
+        # we use 1-random() instead of random() to preclude the
+        # possibility of taking the log of zero.
+        return -_log(1.0 - _random()) / lambd
+
+    return context.compile_internal(builder, expovariate_impl,
+                                    sig, args)

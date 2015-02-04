@@ -25,6 +25,10 @@ _float_types = [types.float64]
 class Random_betavariate(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
 
+@registry.resolves_global(random.expovariate, typing_key="random.expovariate")
+class Random_expovariate(ConcreteTemplate):
+    cases = [signature(tp, tp) for tp in _float_types]
+
 @registry.resolves_global(random.gammavariate, typing_key="random.gammavariate")
 class Random_gammavariate(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
