@@ -59,6 +59,7 @@ random_gauss = jit_binary("random.gauss")
 random_random = jit_nullary("random.random")
 random_seed = jit_unary("random.seed")
 
+numpy_normal = jit_binary("np.random.normal")
 numpy_random = jit_nullary("np.random.random")
 numpy_seed = jit_unary("np.random.seed")
 
@@ -228,6 +229,9 @@ class TestRandom(TestCase):
         # normalvariate() is really an alias to gauss() in Numba
         # (not in Python, though - they use different algorithms)
         self._check_gauss(jit_binary("random.normalvariate"), py_state_ptr)
+
+    def test_numpy_normal(self):
+        self._check_gauss(jit_binary("np.random.normal"), py_state_ptr)
 
     def _check_lognormvariate(self, func, ptr):
         """
@@ -475,6 +479,12 @@ class TestRandom(TestCase):
 
     def test_random_gauss_startup(self):
         self._check_startup_randomness("random_gauss", (1.0, 1.0))
+
+    def test_numpy_random_startup(self):
+        self._check_startup_randomness("numpy_random", ())
+
+    def test_numpy_gauss_startup(self):
+        self._check_startup_randomness("numpy_normal", (1.0, 1.0))
 
 
 if __name__ == "__main__":

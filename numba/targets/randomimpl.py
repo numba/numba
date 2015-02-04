@@ -159,9 +159,17 @@ def random_impl(context, builder, sig, args):
 @implement("random.gauss", types.Kind(types.Float), types.Kind(types.Float))
 @implement("random.normalvariate", types.Kind(types.Float), types.Kind(types.Float))
 def gauss_impl(context, builder, sig, args):
-    mu, sigma = args
-
     state_ptr = get_py_state_ptr(context, builder)
+    return _gauss_impl(context, builder, sig, args, state_ptr)
+
+@register
+@implement("np.random.normal", types.Kind(types.Float), types.Kind(types.Float))
+def gauss_impl(context, builder, sig, args):
+    state_ptr = get_py_state_ptr(context, builder)
+    return _gauss_impl(context, builder, sig, args, state_ptr)
+
+def _gauss_impl(context, builder, sig, args, state_ptr):
+    mu, sigma = args
     # The type for all computations (either float or double)
     ty = sig.return_type
     llty = context.get_data_type(ty)
