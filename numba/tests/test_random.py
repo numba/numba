@@ -559,6 +559,28 @@ class TestRandom(TestCase):
         self._check_dist(f, functools.partial(py_f, r),
                          [(0.5, 1.5), (1.5, 0.8)])
 
+    def test_numpy_geometric(self):
+        geom = jit_unary("np.random.geometric")
+        # p out of domain
+        self.assertRaises(NativeError, geom, -1.0)
+        self.assertRaises(NativeError, geom, 0.0)
+        self.assertRaises(NativeError, geom, 1.001)
+        # Some basic checks
+        N = 200
+        r = [geom(1.0) for i in range(N)]
+        self.assertPreciseEqual(r, [1] * N)
+        r = [geom(0.9) for i in range(N)]
+        n = r.count(1)
+        self.assertGreaterEqual(n, N // 2)
+        self.assertLess(n, N)
+        self.assertFalse([i for i in r if i > 1000])  # unlikely
+        r = [geom(0.4) for i in range(N)]
+        self.assertTrue([i for i in r if i > 4])  # likely
+        r = [geom(0.01) for i in range(N)]
+        self.assertTrue([i for i in r if i > 50])  # likely
+        r = [geom(1e-15) for i in range(N)]
+        self.assertTrue([i for i in r if i > 2**32])  # likely
+
     def _check_shuffle(self, func, ptr):
         """
         Check a shuffle()-like function for 1D arrays.

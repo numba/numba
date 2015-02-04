@@ -756,6 +756,32 @@ def f_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.geometric", types.Kind(types.Float))
+def geometric_impl(context, builder, sig, args):
+    _random = np.random.random
+    intty = sig.return_type
+
+    def geometric_impl(p):
+        # Numpy's algorithm.
+        if p <= 0.0 or p > 1.0:
+            raise ValueError
+        q = 1.0 - p
+        if p >= 0.333333333333333333333333:
+            X = intty(1)
+            sum = prod = p
+            U = _random()
+            while U > sum:
+                prod *= q
+                sum += prod
+                X += 1
+            return X
+        else:
+            return math.ceil(math.log(1.0 - _random()) / math.log(q))
+
+    return context.compile_internal(builder, geometric_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange

@@ -57,6 +57,10 @@ class Random_seed(ConcreteTemplate):
 
 # Distributions
 
+@registry.resolves_global(np.random.geometric, typing_key="np.random.geometric")
+class Numpy_geometric(ConcreteTemplate):
+    cases = [signature(types.int64, tp) for tp in _float_types]
+
 @registry.resolves_global(np.random.exponential, typing_key="np.random.exponential")
 class Numpy_exponential(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in _float_types]
