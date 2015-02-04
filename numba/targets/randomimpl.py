@@ -168,8 +168,7 @@ def random_impl(context, builder, sig, args):
 @implement("random.gauss", types.Kind(types.Float), types.Kind(types.Float))
 @implement("random.normalvariate", types.Kind(types.Float), types.Kind(types.Float))
 def gauss_impl(context, builder, sig, args):
-    state_ptr = get_state_ptr(context, builder, "py")
-    return _gauss_impl(context, builder, sig, args, state_ptr)
+    return _gauss_impl(context, builder, sig, args, "py")
 
 @register
 @implement("np.random.randn")
@@ -187,14 +186,34 @@ def np_gauss_impl(context, builder, sig, args):
     else:
         mu = ir.Constant(llty, 0.0)
         sigma = ir.Constant(llty, 1.0)
-    state_ptr = get_state_ptr(context, builder, "np")
-    return _gauss_impl(context, builder, sig, [mu, sigma], state_ptr)
+    return _gauss_impl(context, builder, sig, [mu, sigma], "np")
 
-def _gauss_impl(context, builder, sig, args, state_ptr):
-    mu, sigma = args
+
+def _gauss_pair_impl(_random):
+    def compute_gauss_pair():
+        """
+        Compute a pair of numbers on the normal distribution.
+        """
+        while True:
+            x1 = 2.0 * _random() - 1.0
+            x2 = 2.0 * _random() - 1.0
+            r2 = x1*x1 + x2*x2
+            if r2 < 1.0 and r2 != 0.0:
+                break
+
+        # Box-Muller transform
+        f = math.sqrt(-2.0 * math.log(r2) / r2)
+        return f * x1, f * x2
+    return compute_gauss_pair
+
+def _gauss_impl(context, builder, sig, args, state):
     # The type for all computations (either float or double)
     ty = sig.return_type
     llty = context.get_data_type(ty)
+
+    state_ptr = get_state_ptr(context, builder, state)
+    _random = {"py": random.random,
+               "np": np.random.random}[state]
 
     ret = cgutils.alloca_once(builder, llty, name="result")
 
@@ -209,48 +228,17 @@ def _gauss_impl(context, builder, sig, args, state_ptr):
         with otherwise:
             # if not has_gauss: compute a pair of numbers using the Box-Muller
             # transform; keep one and return the other
-            zero = ir.Constant(llty, 0.0)
-            one = ir.Constant(llty, 1.0)
-            two = ir.Constant(llty, 2.0)
+            pair = context.compile_internal(builder,
+                                            _gauss_pair_impl(_random),
+                                            signature(types.UniTuple(ty, 2)),
+                                            ())
 
-            bbwhile = cgutils.append_basic_block(builder, "while")
-            bbend = cgutils.append_basic_block(builder, "while.end")
-            builder.branch(bbwhile)
-
-            # do {
-            builder.position_at_end(bbwhile)
-            #   x1 = 2.0*rk_double(state) - 1.0
-            #   x2 = 2.0*rk_double(state) - 1.0
-            x1 = builder.fsub(
-                builder.fmul(two, get_next_double(context, builder, state_ptr)),
-                one)
-            x2 = builder.fsub(
-                builder.fmul(two, get_next_double(context, builder, state_ptr)),
-                one)
-            #   r2 = x1*x1 + x2*x2
-            r2 = builder.fadd(builder.fmul(x1, x1),
-                              builder.fmul(x2, x2))
-            # } while (r2 >= 1.0 || r2 == 0.0)
-            cond_retry = builder.or_(
-                builder.fcmp_ordered('>=', r2, one),
-                builder.fcmp_ordered('==', r2, zero))
-            builder.cbranch(cond_retry, bbwhile, bbend)
-
-            # f = sqrt(-2.0*log(r2)/r2)
-            builder.position_at_end(bbend)
-            log = context.get_function(math.log, signature(ty, ty))
-            sqrt = context.get_function(math.sqrt, signature(ty, ty))
-
-            logr2 = log(builder, (r2,))
-            sqf = builder.fsub(zero,
-                               builder.fdiv(builder.fmul(two, logr2), r2))
-            f = sqrt(builder, (sqf,))
-
-            # Store f*x1, return f*x2
-            builder.store(builder.fmul(f, x1), gauss_ptr)
-            builder.store(builder.fmul(f, x2), ret)
+            first, second = cgutils.unpack_tuple(builder, pair, 2)
+            builder.store(first, gauss_ptr)
+            builder.store(second, ret)
             builder.store(const_int(1), has_gauss_ptr)
 
+    mu, sigma = args
     return builder.fadd(mu,
                         builder.fmul(sigma, builder.load(ret)))
 
@@ -596,7 +584,7 @@ def exponential_impl(context, builder, sig, args):
 @implement("np.random.lognormal")
 @implement("np.random.lognormal", types.Kind(types.Float))
 @implement("np.random.lognormal", types.Kind(types.Float), types.Kind(types.Float))
-def np_gauss_impl(context, builder, sig, args):
+def np_lognormal_impl(context, builder, sig, args):
     ty = sig.return_type
     llty = context.get_data_type(ty)
     if len(args) == 2:
