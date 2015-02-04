@@ -609,8 +609,7 @@ def _lognormvariate_impl(context, builder, sig, args, _gauss):
 
 
 @register
-@implement("random.paretovariate",
-           types.Kind(types.Float))
+@implement("random.paretovariate", types.Kind(types.Float))
 def paretovariate_impl(context, builder, sig, args):
     _random = random.random
 
@@ -619,6 +618,19 @@ def paretovariate_impl(context, builder, sig, args):
         # Jain, pg. 495
         u = 1.0 - _random()
         return 1.0 / u ** (1.0/alpha)
+
+    return context.compile_internal(builder, paretovariate_impl,
+                                    sig, args)
+
+@register
+@implement("np.random.pareto", types.Kind(types.Float))
+def paretovariate_impl(context, builder, sig, args):
+    _random = np.random.random
+
+    def paretovariate_impl(alpha):
+        # Same as paretovariate() - 1.
+        u = 1.0 - _random()
+        return 1.0 / u ** (1.0/alpha) - 1
 
     return context.compile_internal(builder, paretovariate_impl,
                                     sig, args)

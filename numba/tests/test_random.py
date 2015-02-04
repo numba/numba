@@ -501,6 +501,11 @@ class TestRandom(TestCase):
     def test_random_paretovariate(self):
         self._check_paretovariate(jit_unary("random.paretovariate"), py_state_ptr)
 
+    def test_numpy_pareto(self):
+        pareto = jit_unary("np.random.pareto")
+        fixed_pareto = lambda a: pareto(a) + 1.0
+        self._check_paretovariate(fixed_pareto, np_state_ptr)
+
     def _check_weibullvariate(self, func, ptr):
         """
         Check a weibullvariate()-like function.

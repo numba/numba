@@ -86,6 +86,7 @@ class Numpy_gamma(ConcreteTemplate):
 class Random_binary_distribution(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
 
+@registry.resolves_global(np.random.pareto, typing_key="np.random.pareto")
 @registry.resolves_global(random.expovariate, typing_key="random.expovariate")
 @registry.resolves_global(random.paretovariate, typing_key="random.paretovariate")
 class Random_unary_distribution(ConcreteTemplate):
