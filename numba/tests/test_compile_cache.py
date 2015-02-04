@@ -76,11 +76,9 @@ class TestCompileCache(unittest.TestCase):
         self.assertEqual(4, len(context.cached_internal_func))
         res2 = context.compile_internal(builder, clo12, sig, function.args)
         self.assertEqual(5, len(context.cached_internal_func))
-        self.assertIsNot(res1, res2)
         # Same cell contents as above (first parameter isn't captured)
         res3 = context.compile_internal(builder, clo22, sig, function.args)
         self.assertEqual(5, len(context.cached_internal_func))
-        self.assertIsNot(res2, res3)
 
 
 if __name__ == '__main__':
