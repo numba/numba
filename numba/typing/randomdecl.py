@@ -62,6 +62,7 @@ class Numpy_exponential(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in _float_types]
     cases += [signature(tp) for tp in _float_types]
 
+@registry.resolves_global(np.random.lognormal, typing_key="np.random.lognormal")
 @registry.resolves_global(np.random.normal, typing_key="np.random.normal")
 class Numpy_normal(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]

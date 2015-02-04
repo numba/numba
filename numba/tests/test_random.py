@@ -255,18 +255,33 @@ class TestRandom(TestCase):
         self._check_gauss(None, None, jit_nullary("np.random.standard_normal"),
                           np_state_ptr)
 
-    def _check_lognormvariate(self, func, ptr):
+    def _check_lognormvariate(self, func2, func1, func0, ptr):
         """
         Check a lognormvariate()-like function.
         """
         # Our implementation follows Numpy's.
         r = self._follow_numpy(ptr)
-        for mu, sigma in [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)]:
-            for i in range(N // 2 + 10):
-                self.assertPreciseEqual(func(mu, sigma), r.lognormal(mu, sigma))
+        if func2 is not None:
+            for mu, sigma in [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)]:
+                for i in range(N // 2 + 10):
+                    self.assertPreciseEqual(func2(mu, sigma),
+                                            r.lognormal(mu, sigma))
+        if func1 is not None:
+            for i in range(3):
+                self.assertPreciseEqual(func1(0.5), r.lognormal(0.5))
+        if func0 is not None:
+            for i in range(3):
+                self.assertPreciseEqual(func0(), r.lognormal())
 
     def test_random_lognormvariate(self):
-        self._check_lognormvariate(jit_binary("random.lognormvariate"), py_state_ptr)
+        self._check_lognormvariate(jit_binary("random.lognormvariate"),
+                                   None, None, py_state_ptr)
+
+    def test_numpy_lognormal(self):
+        self._check_lognormvariate(jit_binary("np.random.lognormal"),
+                                   jit_unary("np.random.lognormal"),
+                                   jit_nullary("np.random.lognormal"),
+                                   np_state_ptr)
 
     def _check_randrange(self, func1, func2, func3, ptr, max_width):
         """

@@ -574,10 +574,31 @@ def exponential_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.lognormal")
+@implement("np.random.lognormal", types.Kind(types.Float))
+@implement("np.random.lognormal", types.Kind(types.Float), types.Kind(types.Float))
+def np_gauss_impl(context, builder, sig, args):
+    ty = sig.return_type
+    llty = context.get_data_type(ty)
+    if len(args) == 2:
+        mu, sigma = args
+    elif len(args) == 1:
+        mu, = args
+        sigma = ir.Constant(llty, 1.0)
+    else:
+        mu = ir.Constant(llty, 0.0)
+        sigma = ir.Constant(llty, 1.0)
+    sig = signature(ty, ty, ty)
+    return _lognormvariate_impl(context, builder, sig, [mu, sigma],
+                                np.random.normal)
+
+@register
 @implement("random.lognormvariate",
            types.Kind(types.Float), types.Kind(types.Float))
 def lognormvariate_impl(context, builder, sig, args):
-    _gauss = random.gauss
+    return _lognormvariate_impl(context, builder, sig, args, random.gauss)
+
+def _lognormvariate_impl(context, builder, sig, args, _gauss):
     _exp = math.exp
 
     def lognormvariate_impl(mu, sigma):
