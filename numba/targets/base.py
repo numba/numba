@@ -1006,6 +1006,10 @@ class BaseContext(object):
         """Invoke compiler to implement a function for a nopython function
         """
         cache_key = (impl.__code__, sig)
+        if impl.__closure__:
+            # XXX This obviously won't work if a cell's value is
+            # unhashable.
+            cache_key += tuple(c.cell_contents for c in impl.__closure__)
         fndesc = self.cached_internal_func.get(cache_key)
 
         if fndesc is None:

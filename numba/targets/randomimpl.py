@@ -4,8 +4,10 @@ Implement the cmath module functions.
 
 from __future__ import print_function, absolute_import, division
 
-import random
 import math
+import random
+
+import numpy as np
 
 from llvmlite import ir
 
@@ -407,8 +409,22 @@ def triangular_impl_3(context, builder, sig, args):
 @implement("random.gammavariate",
            types.Kind(types.Float), types.Kind(types.Float))
 def gammavariate_impl(context, builder, sig, args):
+    return _gammavariate_impl(context, builder, sig, args, random.random)
 
-    _random = random.random
+@register
+@implement("np.random.gamma", types.Kind(types.Float))
+@implement("np.random.gamma", types.Kind(types.Float), types.Kind(types.Float))
+def gammavariate_impl(context, builder, sig, args):
+    ty = sig.return_type
+    if len(args) == 2:
+        alpha, beta = args
+    else:
+        alpha = args[0]
+        beta = ir.Constant(context.get_data_type(ty), 1.0)
+        sig = signature(ty, ty, ty)
+    return _gammavariate_impl(context, builder, sig, [alpha, beta], np.random.random)
+
+def _gammavariate_impl(context, builder, sig, args, _random):
     _exp = math.exp
     _log = math.log
     _sqrt = math.sqrt
@@ -483,18 +499,28 @@ def gammavariate_impl(context, builder, sig, args):
 @implement("random.betavariate",
            types.Kind(types.Float), types.Kind(types.Float))
 def betavariate_impl(context, builder, sig, args):
-    _gammavariate = random.gammavariate
+    return _betavariate_impl(context, builder, sig, args,
+                             random.gammavariate)
+
+@register
+@implement("np.random.beta",
+           types.Kind(types.Float), types.Kind(types.Float))
+def betavariate_impl(context, builder, sig, args):
+    return _betavariate_impl(context, builder, sig, args,
+                             np.random.gamma)
+
+def _betavariate_impl(context, builder, sig, args, gamma):
 
     def betavariate_impl(alpha, beta):
         """Beta distribution.  Taken from CPython.
         """
         # This version due to Janne Sinkkonen, and matches all the std
         # texts (e.g., Knuth Vol 2 Ed 3 pg 134 "the beta distribution").
-        y = _gammavariate(alpha, 1.)
+        y = gamma(alpha, 1.)
         if y == 0.0:
             return 0.0
         else:
-            return y / (y + _gammavariate(beta, 1.))
+            return y / (y + gamma(beta, 1.))
 
     return context.compile_internal(builder, betavariate_impl,
                                     sig, args)

@@ -63,6 +63,12 @@ class Numpy_normal(ConcreteTemplate):
     cases += [signature(tp, tp) for tp in _float_types]
     cases += [signature(tp) for tp in _float_types]
 
+@registry.resolves_global(np.random.gamma, typing_key="np.random.gamma")
+class Numpy_gamma(ConcreteTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
+    cases += [signature(tp, tp) for tp in _float_types]
+
+@registry.resolves_global(np.random.beta, typing_key="np.random.beta")
 @registry.resolves_global(random.betavariate, typing_key="random.betavariate")
 @registry.resolves_global(random.gammavariate, typing_key="random.gammavariate")
 @registry.resolves_global(random.gauss, typing_key="random.gauss")

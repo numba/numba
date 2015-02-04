@@ -371,7 +371,7 @@ class TestRandom(TestCase):
                                jit_ternary("random.triangular"),
                                py_state_ptr)
 
-    def _check_gammavariate(self, func, ptr):
+    def _check_gammavariate(self, func2, func1, ptr):
         """
         Check a gammavariate()-like function.
         """
@@ -379,15 +379,26 @@ class TestRandom(TestCase):
         r = self._follow_cpython(ptr)
         for args in [(0.5, 2.5), (1.0, 1.5), (1.5, 3.5)]:
             for i in range(3):
-                self.assertPreciseEqual(func(*args), r.gammavariate(*args))
+                self.assertPreciseEqual(func2(*args), r.gammavariate(*args))
+            if func1 is not None:
+                self.assertPreciseEqual(func1(1.5), r.gammavariate(1.5, 1.0))
         # Invalid inputs
-        self.assertRaises(NativeError, func, 0.0, 1.0)
-        self.assertRaises(NativeError, func, 1.0, 0.0)
-        self.assertRaises(NativeError, func, -0.5, 1.0)
-        self.assertRaises(NativeError, func, 1.0, -0.5)
+        self.assertRaises(NativeError, func2, 0.0, 1.0)
+        self.assertRaises(NativeError, func2, 1.0, 0.0)
+        self.assertRaises(NativeError, func2, -0.5, 1.0)
+        self.assertRaises(NativeError, func2, 1.0, -0.5)
+        if func1 is not None:
+            self.assertRaises(NativeError, func1, 0.0)
+            self.assertRaises(NativeError, func1, -0.5)
 
     def test_random_gammavariate(self):
-        self._check_gammavariate(jit_binary("random.gammavariate"), py_state_ptr)
+        self._check_gammavariate(jit_binary("random.gammavariate"), None,
+                                 py_state_ptr)
+
+    def test_numpy_gamma(self):
+        self._check_gammavariate(jit_binary("np.random.gamma"),
+                                 jit_unary("np.random.gamma"),
+                                 np_state_ptr)
 
     def _check_betavariate(self, func, ptr):
         """
@@ -406,6 +417,9 @@ class TestRandom(TestCase):
 
     def test_random_betavariate(self):
         self._check_betavariate(jit_binary("random.betavariate"), py_state_ptr)
+
+    def test_numpy_beta(self):
+        self._check_betavariate(jit_binary("np.random.beta"), np_state_ptr)
 
     def _check_vonmisesvariate(self, func, ptr):
         """
