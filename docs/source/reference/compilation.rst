@@ -105,16 +105,16 @@ JIT functions
    .. method:: inspect_llvm(signature=None)
 
       Return a dictionary keying compiled function signatures to the human 
-      readable llvm byte code generated for the function.  If the signature 
+      readable LLVM IR generated for the function.  If the signature 
       keyword is specified a string corresponding to that individual 
       signature is returned.  
 
    .. method:: inspect_asm(signature=None)
 
-      Return a dictionary keying compiled function signatures to the human 
-      assembler code generated for the function.  If the signature 
-      keyword is specified a string corresponding to that individual 
-      signature is returned.  
+      Return a dictionary keying compiled function signatures to the
+      human-readable native assembler code for the function.  If the 
+      signature keyword is specified a string corresponding to that 
+      individual signature is returned.  
 
    .. method:: recompile()
 
