@@ -2,6 +2,8 @@ from __future__ import absolute_import, print_function
 
 import random
 
+import numpy as np
+
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         Registry, signature)
@@ -16,6 +18,7 @@ builtin_attr = registry.register_attr
 # random.random(), random.seed() etc. are not plain functions, they are bound
 # methods of a private object.  We have to be careful to use a well-known
 # object (e.g. the string "random.seed") as a key, not the bound method itself.
+# (same for np.random.random(), etc.)
 
 _int_types = [types.int32, types.int64]
 # Should we support float32?
@@ -28,6 +31,7 @@ class Random_getrandbits(ConcreteTemplate):
     cases = [signature(types.uint64, types.uint8)]
 
 @registry.resolves_global(random.random, typing_key="random.random")
+@registry.resolves_global(np.random.random, typing_key="np.random.random")
 class Random_random(ConcreteTemplate):
     cases = [signature(types.float64)]
 
@@ -43,6 +47,7 @@ class Random_randrange(ConcreteTemplate):
     cases += [signature(tp, tp, tp, tp) for tp in _int_types]
 
 @registry.resolves_global(random.seed, typing_key="random.seed")
+@registry.resolves_global(np.random.seed, typing_key="np.random.seed")
 class Random_seed(ConcreteTemplate):
     cases = [signature(types.void, types.uint32)]
 

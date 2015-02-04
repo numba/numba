@@ -120,12 +120,23 @@ def get_py_state_ptr(context, builder):
     return context.get_c_value(builder, rnd_state_t,
                                "numba_py_random_state")
 
+def get_np_state_ptr(context, builder):
+    return context.get_c_value(builder, rnd_state_t,
+                               "numba_np_random_state")
+
 
 @register
 @implement("random.seed", types.uint32)
 def seed_impl(context, builder, sig, args):
+    return _seed_impl(context, builder, sig, args, get_py_state_ptr(context, builder))
+
+@register
+@implement("np.random.seed", types.uint32)
+def seed_impl(context, builder, sig, args):
+    return _seed_impl(context, builder, sig, args, get_np_state_ptr(context, builder))
+
+def _seed_impl(context, builder, sig, args, state_ptr):
     seed_value, = args
-    state_ptr = get_py_state_ptr(context, builder)
     fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t, int32_t))
     fn = builder.function.module.get_or_insert_function(fnty, "numba_rnd_init")
     builder.call(fn, (state_ptr, seed_value))
@@ -135,6 +146,12 @@ def seed_impl(context, builder, sig, args):
 @implement("random.random")
 def random_impl(context, builder, sig, args):
     state_ptr = get_py_state_ptr(context, builder)
+    return get_next_double(context, builder, state_ptr)
+
+@register
+@implement("np.random.random")
+def random_impl(context, builder, sig, args):
+    state_ptr = get_np_state_ptr(context, builder)
     return get_next_double(context, builder, state_ptr)
 
 
