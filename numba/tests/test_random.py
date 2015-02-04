@@ -378,13 +378,22 @@ class TestRandom(TestCase):
         """
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
-        for args in [(1.5, 3.5), (-2.5, 1.5), (1.5, 1.5)]:
-            self.assertPreciseEqual(func2(*args), r.triangular(*args))
+        if func2 is not None:
+            for args in [(1.5, 3.5), (-2.5, 1.5), (1.5, 1.5)]:
+                self.assertPreciseEqual(func2(*args), r.triangular(*args))
+        args = 1.5, 3.5, 2.2
+        for i in range(3):
+            self.assertPreciseEqual(func3(*args), r.triangular(*args))
 
     def test_random_triangular(self):
         self._check_triangular(jit_binary("random.triangular"),
                                jit_ternary("random.triangular"),
                                py_state_ptr)
+
+    def test_numpy_triangular(self):
+        triangular = jit_ternary("np.random.triangular")
+        fixed_triangular = lambda l, r, m: triangular(l, m, r)
+        self._check_triangular(None, fixed_triangular, np_state_ptr)
 
     def _check_gammavariate(self, func2, func1, ptr):
         """

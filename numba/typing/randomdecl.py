@@ -74,6 +74,10 @@ class Numpy_gamma(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
     cases += [signature(tp, tp) for tp in _float_types]
 
+@registry.resolves_global(np.random.triangular, typing_key="np.random.triangular")
+class Random_ternary_distribution(ConcreteTemplate):
+    cases = [signature(tp, tp, tp, tp) for tp in _float_types]
+
 @registry.resolves_global(np.random.beta, typing_key="np.random.beta")
 @registry.resolves_global(random.betavariate, typing_key="random.betavariate")
 @registry.resolves_global(random.gammavariate, typing_key="random.gammavariate")

@@ -384,9 +384,19 @@ def triangular_impl_2(context, builder, sig, args):
 @implement("random.triangular", types.Kind(types.Float),
            types.Kind(types.Float), types.Kind(types.Float))
 def triangular_impl_3(context, builder, sig, args):
-    fltty = sig.return_type
     low, high, mode = args
-    state_ptr = get_state_ptr(context, builder, "py")
+    return _triangular_impl_3(context, builder, sig, low, high, mode, "py")
+
+@register
+@implement("np.random.triangular", types.Kind(types.Float),
+           types.Kind(types.Float), types.Kind(types.Float))
+def triangular_impl_3(context, builder, sig, args):
+    low, mode, high = args
+    return _triangular_impl_3(context, builder, sig, low, high, mode, "np")
+
+def _triangular_impl_3(context, builder, sig, low, high, mode, state):
+    fltty = sig.return_type
+    state_ptr = get_state_ptr(context, builder, state)
     randval = get_next_double(context, builder, state_ptr)
 
     def triangular_impl_3(randval, low, high, mode):
