@@ -29,6 +29,15 @@ def random_seed(x):
 def random_random():
     return random.random()
 
+
+@jit(nopython=True)
+def random_betavariate(alpha, beta):
+    return random.betavariate(alpha, beta)
+
+@jit(nopython=True)
+def random_gammavariate(alpha, beta):
+    return random.gammavariate(alpha, beta)
+
 @jit(nopython=True)
 def random_getrandbits(b):
     return random.getrandbits(b)
@@ -281,7 +290,7 @@ class TestRandom(TestCase):
         """
         Check a triangular()-like function.
         """
-        # Our implementation follows Python 3's.
+        # Our implementation follows Python's.
         r = random.Random()
         _copy_py_state(r, ptr)
         for args in [(1.5, 3.5), (-2.5, 1.5), (1.5, 1.5)]:
@@ -290,6 +299,44 @@ class TestRandom(TestCase):
     def test_random_triangular(self):
         self.check_triangular(random_triangular2, random_triangular3,
                               py_state_ptr)
+
+    def check_gammavariate(self, func, ptr):
+        """
+        Check a gammavariate()-like function.
+        """
+        # Our implementation follows Python's.
+        r = random.Random()
+        _copy_py_state(r, ptr)
+        for args in [(0.5, 2.5), (1.0, 1.5), (1.5, 3.5)]:
+            for i in range(3):
+                self.assertPreciseEqual(func(*args), r.gammavariate(*args))
+        # Invalid inputs
+        self.assertRaises(NativeError, func, 0.0, 1.0)
+        self.assertRaises(NativeError, func, 1.0, 0.0)
+        self.assertRaises(NativeError, func, -0.5, 1.0)
+        self.assertRaises(NativeError, func, 1.0, -0.5)
+
+    def test_random_gammavariate(self):
+        self.check_gammavariate(random_gammavariate, py_state_ptr)
+
+    def check_betavariate(self, func, ptr):
+        """
+        Check a betavariate()-like function.
+        """
+        # Our implementation follows Python's.
+        r = random.Random()
+        _copy_py_state(r, ptr)
+        args = (0.5, 2.5)
+        for i in range(3):
+            self.assertPreciseEqual(func(*args), r.betavariate(*args))
+        # Invalid inputs
+        self.assertRaises(NativeError, func, 0.0, 1.0)
+        self.assertRaises(NativeError, func, 1.0, 0.0)
+        self.assertRaises(NativeError, func, -0.5, 1.0)
+        self.assertRaises(NativeError, func, 1.0, -0.5)
+
+    def test_random_betavariate(self):
+        self.check_betavariate(random_betavariate, py_state_ptr)
 
     def check_startup_randomness(self, func_name, func_args):
         """

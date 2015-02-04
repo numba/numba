@@ -341,3 +341,100 @@ def triangular_impl_3(context, builder, sig, args):
     return context.compile_internal(builder, triangular_impl_3,
                                     signature(*(fltty,) * 5),
                                     (randval, low, high, mode))
+
+
+@register
+@implement("random.gammavariate",
+           types.Kind(types.Float), types.Kind(types.Float))
+def gammavariate_impl(context, builder, sig, args):
+
+    _random = random.random
+    _exp = math.exp
+    _log = math.log
+    _sqrt = math.sqrt
+    _e = math.e
+
+    TWOPI = 2.0 * math.pi
+    LOG4 = _log(4.0)
+    SG_MAGICCONST = 1.0 + _log(4.5)
+
+    def gammavariate_impl(alpha, beta):
+        """Gamma distribution.  Taken from CPython.
+        """
+        # alpha > 0, beta > 0, mean is alpha*beta, variance is alpha*beta**2
+
+        # Warning: a few older sources define the gamma distribution in terms
+        # of alpha > -1.0
+        if alpha <= 0.0 or beta <= 0.0:
+            # XXX error propagation doesn't work for user exceptions.
+            # This will instead produce an "unknown error in native function".
+            raise ValueError#('gammavariate: alpha and beta must be > 0.0')
+
+        if alpha > 1.0:
+            # Uses R.C.H. Cheng, "The generation of Gamma
+            # variables with non-integral shape parameters",
+            # Applied Statistics, (1977), 26, No. 1, p71-74
+            ainv = _sqrt(2.0 * alpha - 1.0)
+            bbb = alpha - LOG4
+            ccc = alpha + ainv
+
+            while 1:
+                u1 = _random()
+                if not 1e-7 < u1 < .9999999:
+                    continue
+                u2 = 1.0 - _random()
+                v = _log(u1/(1.0-u1))/ainv
+                x = alpha*_exp(v)
+                z = u1*u1*u2
+                r = bbb+ccc*v-x
+                if r + SG_MAGICCONST - 4.5*z >= 0.0 or r >= _log(z):
+                    return x * beta
+
+        elif alpha == 1.0:
+            # expovariate(1)
+            u = _random()
+            while u <= 1e-7:
+                u = _random()
+            return -_log(u) * beta
+
+        else:   # alpha is between 0 and 1 (exclusive)
+            # Uses ALGORITHM GS of Statistical Computing - Kennedy & Gentle
+            while 1:
+                u = _random()
+                b = (_e + alpha)/_e
+                p = b*u
+                if p <= 1.0:
+                    x = p ** (1.0/alpha)
+                else:
+                    x = -_log((b-p)/alpha)
+                u1 = _random()
+                if p > 1.0:
+                    if u1 <= x ** (alpha - 1.0):
+                        break
+                elif u1 <= _exp(-x):
+                    break
+            return x * beta
+
+    return context.compile_internal(builder, gammavariate_impl,
+                                    sig, args)
+
+
+@register
+@implement("random.betavariate",
+           types.Kind(types.Float), types.Kind(types.Float))
+def betavariate_impl(context, builder, sig, args):
+    _gammavariate = random.gammavariate
+
+    def betavariate_impl(alpha, beta):
+        """Beta distribution.  Taken from CPython.
+        """
+        # This version due to Janne Sinkkonen, and matches all the std
+        # texts (e.g., Knuth Vol 2 Ed 3 pg 134 "the beta distribution").
+        y = _gammavariate(alpha, 1.)
+        if y == 0.0:
+            return 0.0
+        else:
+            return y / (y + _gammavariate(beta, 1.))
+
+    return context.compile_internal(builder, betavariate_impl,
+                                    sig, args)

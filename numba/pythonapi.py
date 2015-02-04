@@ -13,28 +13,6 @@ class NativeError(RuntimeError):
     pass
 
 
-@utils.runonce
-def fix_python_api():
-    """
-    Execute once to install special symbols into the LLVM symbol table
-    """
-
-    ll.add_symbol("Py_None", id(None))
-    ll.add_symbol("numba_native_error", id(NativeError))
-
-    # Add C helper functions
-    c_helpers = _helperlib.c_helpers
-    for py_name in c_helpers:
-        c_name = "numba_" + py_name
-        c_address = c_helpers[py_name]
-        ll.add_symbol(c_name, c_address)
-
-    # Add all built-in exception classes
-    for obj in utils.builtins.__dict__.values():
-        if isinstance(obj, type) and issubclass(obj, BaseException):
-            ll.add_symbol("PyExc_%s" % (obj.__name__), id(obj))
-
-
 class PythonAPI(object):
     """
     Code generation facilities to call into the CPython C API (and related
@@ -45,7 +23,6 @@ class PythonAPI(object):
         """
         Note: Maybe called multiple times when lowering a function
         """
-        fix_python_api()
         self.context = context
         self.builder = builder
 

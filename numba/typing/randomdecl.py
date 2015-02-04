@@ -21,13 +21,21 @@ _int_types = [types.int32, types.int64]
 # Should we support float32?
 _float_types = [types.float64]
 
-@registry.resolves_global(random.getrandbits, typing_key="random.getrandbits")
-class Random_getrandbits(ConcreteTemplate):
-    cases = [signature(types.uint64, types.uint8)]
+@registry.resolves_global(random.betavariate, typing_key="random.betavariate")
+class Random_betavariate(ConcreteTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
+
+@registry.resolves_global(random.gammavariate, typing_key="random.gammavariate")
+class Random_gammavariate(ConcreteTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
 
 @registry.resolves_global(random.gauss, typing_key="random.gauss")
 class Random_gauss(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
+
+@registry.resolves_global(random.getrandbits, typing_key="random.getrandbits")
+class Random_getrandbits(ConcreteTemplate):
+    cases = [signature(types.uint64, types.uint8)]
 
 @registry.resolves_global(random.random, typing_key="random.random")
 class Random_random(ConcreteTemplate):

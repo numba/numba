@@ -8,10 +8,12 @@ import numpy
 from llvmlite import ir as llvmir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
+import llvmlite.binding as ll
 
 import numba
-from numba import types, utils, cgutils, typing, numpy_support, errcode
-from numba.pythonapi import PythonAPI
+from numba import (types, utils, cgutils, typing, numpy_support, errcode,
+                   _helperlib)
+from numba.pythonapi import PythonAPI, NativeError
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry, type_registry)
@@ -104,6 +106,27 @@ class Overloads(object):
         self.versions.append(impl)
 
 
+@utils.runonce
+def _load_global_helpers():
+    """
+    Execute once to install special symbols into the LLVM symbol table.
+    """
+    ll.add_symbol("Py_None", id(None))
+    ll.add_symbol("numba_native_error", id(NativeError))
+
+    # Add C helper functions
+    c_helpers = _helperlib.c_helpers
+    for py_name in c_helpers:
+        c_name = "numba_" + py_name
+        c_address = c_helpers[py_name]
+        ll.add_symbol(c_name, c_address)
+
+    # Add all built-in exception classes
+    for obj in utils.builtins.__dict__.values():
+        if isinstance(obj, type) and issubclass(obj, BaseException):
+            ll.add_symbol("PyExc_%s" % (obj.__name__), id(obj))
+
+
 class BaseContext(object):
     """
 
@@ -127,6 +150,7 @@ class BaseContext(object):
     implement_pow_as_math_call = False
 
     def __init__(self, typing_context):
+        _load_global_helpers()
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
 
@@ -1010,6 +1034,8 @@ class BaseContext(object):
         status, res = self.call_function(builder, fn, sig.return_type,
                                          sig.args, args)
 
+        with cgutils.if_unlikely(builder, status.err):
+            self.return_errcode_propagate(builder, status.code)
         return res
 
     def get_executable(self, func, fndesc):
