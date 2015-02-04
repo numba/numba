@@ -1,5 +1,5 @@
 """
-Implement the cmath module functions.
+Implement the random and numpy.random module functions.
 """
 
 from __future__ import print_function, absolute_import, division
