@@ -50,6 +50,14 @@ def random_getrandbits(b):
 def random_gauss(mu, sigma):
     return random.gauss(mu, sigma)
 
+@jit(nopython=True)
+def random_lognormvariate(mu, sigma):
+    return random.lognormvariate(mu, sigma)
+
+@jit(nopython=True)
+def random_normalvariate(mu, sigma):
+    return random.normalvariate(mu, sigma)
+
 
 def random_randint(a, b):
     return random.randint(a, b)
@@ -207,6 +215,25 @@ class TestRandom(TestCase):
 
     def test_random_gauss(self):
         self.check_gauss(random_gauss, py_state_ptr)
+
+    def test_random_normalvariate(self):
+        # normalvariate() is really an alias to gauss() in Numba
+        # (not in Python, though - they use different algorithms)
+        self.check_gauss(random_normalvariate, py_state_ptr)
+
+    def check_lognormvariate(self, func, ptr):
+        """
+        Check a lognormvariate()-like function.
+        """
+        # Our implementation follows Numpy's.
+        r = np.random.RandomState()
+        _copy_np_state(r, ptr)
+        for mu, sigma in [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)]:
+            for i in range(N // 2 + 10):
+                self.assertPreciseEqual(func(mu, sigma), r.lognormal(mu, sigma))
+
+    def test_random_lognormvariate(self):
+        self.check_lognormvariate(random_lognormvariate, py_state_ptr)
 
     def check_randrange(self, func1, func2, func3, ptr, max_width):
         """

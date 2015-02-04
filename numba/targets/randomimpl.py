@@ -140,6 +140,7 @@ def random_impl(context, builder, sig, args):
 
 @register
 @implement("random.gauss", types.Kind(types.Float), types.Kind(types.Float))
+@implement("random.normalvariate", types.Kind(types.Float), types.Kind(types.Float))
 def gauss_impl(context, builder, sig, args):
     mu, sigma = args
 
@@ -458,4 +459,18 @@ def expovariate_impl(context, builder, sig, args):
         return -_log(1.0 - _random()) / lambd
 
     return context.compile_internal(builder, expovariate_impl,
+                                    sig, args)
+
+
+@register
+@implement("random.lognormvariate",
+           types.Kind(types.Float), types.Kind(types.Float))
+def lognormvariate_impl(context, builder, sig, args):
+    _gauss = random.gauss
+    _exp = math.exp
+
+    def lognormvariate_impl(mu, sigma):
+        return _exp(_gauss(mu, sigma))
+
+    return context.compile_internal(builder, lognormvariate_impl,
                                     sig, args)

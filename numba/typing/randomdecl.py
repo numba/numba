@@ -41,6 +41,14 @@ class Random_gauss(ConcreteTemplate):
 class Random_getrandbits(ConcreteTemplate):
     cases = [signature(types.uint64, types.uint8)]
 
+@registry.resolves_global(random.lognormvariate, typing_key="random.lognormvariate")
+class Random_lognormvariate(ConcreteTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
+
+@registry.resolves_global(random.normalvariate, typing_key="random.normalvariate")
+class Random_normalvariate(ConcreteTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
+
 @registry.resolves_global(random.random, typing_key="random.random")
 class Random_random(ConcreteTemplate):
     cases = [signature(types.float64)]
