@@ -735,6 +735,16 @@ def _vonmisesvariate_impl(context, builder, sig, args, _random):
 
 
 @register
+@implement("np.random.chisquare", types.Kind(types.Float))
+def chisquare_impl(context, builder, sig, args):
+
+    def chisquare_impl(df):
+        return 2.0 * np.random.standard_gamma(df / 2.0)
+
+    return context.compile_internal(builder, chisquare_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange

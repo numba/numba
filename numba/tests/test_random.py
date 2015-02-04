@@ -219,6 +219,12 @@ class TestRandom(TestCase):
     def test_random_getrandbits(self):
         self._check_getrandbits(jit_unary("random.getrandbits"), py_state_ptr)
 
+    def _check_dist(self, func, pyfunc, argslist, niters=3):
+        assert len(argslist)
+        for args in argslist:
+            for i in range(niters):
+                self.assertPreciseEqual(func(*args), pyfunc(*args))
+
     def _check_gauss(self, func2, func1, func0, ptr):
         """
         Check a gauss()-like function.
@@ -226,15 +232,13 @@ class TestRandom(TestCase):
         # Our implementation follows Numpy's.
         r = self._follow_numpy(ptr)
         if func2 is not None:
-            for mu, sigma in [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)]:
-                for i in range(N // 2 + 10):
-                    self.assertPreciseEqual(func2(mu, sigma), r.normal(mu, sigma))
+            self._check_dist(func2, r.normal,
+                             [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)],
+                             niters=N // 2 + 10)
         if func1 is not None:
-            for i in range(3):
-                self.assertPreciseEqual(func1(0.5), r.normal(0.5))
+            self._check_dist(func1, r.normal, [(0.5,)])
         if func0 is not None:
-            for i in range(3):
-                self.assertPreciseEqual(func0(), r.normal())
+            self._check_dist(func0, r.normal, [()])
 
     def test_random_gauss(self):
         self._check_gauss(jit_binary("random.gauss"), None, None, py_state_ptr)
@@ -262,16 +266,13 @@ class TestRandom(TestCase):
         # Our implementation follows Numpy's.
         r = self._follow_numpy(ptr)
         if func2 is not None:
-            for mu, sigma in [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)]:
-                for i in range(N // 2 + 10):
-                    self.assertPreciseEqual(func2(mu, sigma),
-                                            r.lognormal(mu, sigma))
+            self._check_dist(func2, r.lognormal,
+                             [(1.0, 1.0), (2.0, 0.5), (-2.0, 0.5)],
+                             niters=N // 2 + 10)
         if func1 is not None:
-            for i in range(3):
-                self.assertPreciseEqual(func1(0.5), r.lognormal(0.5))
+            self._check_dist(func1, r.lognormal, [(0.5,)])
         if func0 is not None:
-            for i in range(3):
-                self.assertPreciseEqual(func0(), r.lognormal())
+            self._check_dist(func0, r.lognormal, [()])
 
     def test_random_lognormvariate(self):
         self._check_lognormvariate(jit_binary("random.lognormvariate"),
@@ -298,13 +299,10 @@ class TestRandom(TestCase):
         # Our implementation follows Python 3's.
         if sys.version_info >= (3,):
             r = self._follow_cpython(ptr)
-            for width in [1, 5, 5000, 2**62 + 2**61]:
-                if width > max_width:
-                    continue
-                for i in range(10):
-                    self.assertPreciseEqual(func1(width), r.randrange(width))
-                self.assertPreciseEqual(func2(-2, 2 + width),
-                                        r.randrange(-2, 2 + width))
+            widths = [w for w in [1, 5, 5000, 2**62 + 2**61] if w < max_width]
+            for width in widths:
+                self._check_dist(func1, r.randrange, [(width,)], niters=10)
+                self._check_dist(func2, r.randrange, [(-2, 2 +width)], niters=10)
                 if func3 is not None:
                     self.assertPreciseEqual(func3(-2, 2 + width, 6),
                                             r.randrange(-2, 2 + width, 6))
@@ -349,8 +347,7 @@ class TestRandom(TestCase):
             for args in [(1, 5), (13, 5000), (20, 2**62 + 2**61)]:
                 if args[1] > max_width:
                     continue
-                for i in range(10):
-                    self.assertPreciseEqual(func(*args), r.randint(*args))
+                self._check_dist(func, r.randint, [args], niters=10)
         # Empty ranges
         self.assertRaises(NativeError, func, 5, 4)
         self.assertRaises(NativeError, func, 5, 2)
@@ -366,8 +363,8 @@ class TestRandom(TestCase):
         """
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
-        for args in [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)]:
-            self.assertPreciseEqual(func(*args), r.uniform(*args))
+        self._check_dist(func, r.uniform,
+                         [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)])
 
     def test_random_uniform(self):
         self._check_uniform(jit_binary("random.uniform"), py_state_ptr)
@@ -382,11 +379,9 @@ class TestRandom(TestCase):
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
         if func2 is not None:
-            for args in [(1.5, 3.5), (-2.5, 1.5), (1.5, 1.5)]:
-                self.assertPreciseEqual(func2(*args), r.triangular(*args))
-        args = 1.5, 3.5, 2.2
-        for i in range(3):
-            self.assertPreciseEqual(func3(*args), r.triangular(*args))
+            self._check_dist(func2, r.triangular,
+                             [(1.5, 3.5), (-2.5, 1.5), (1.5, 1.5)])
+        self._check_dist(func3, r.triangular, [(1.5, 3.5, 2.2)])
 
     def test_random_triangular(self):
         self._check_triangular(jit_binary("random.triangular"),
@@ -404,12 +399,11 @@ class TestRandom(TestCase):
         """
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
-        for args in [(0.5, 2.5), (1.0, 1.5), (1.5, 3.5)]:
-            if func2 is not None:
-                for i in range(3):
-                    self.assertPreciseEqual(func2(*args), r.gammavariate(*args))
-            if func1 is not None:
-                self.assertPreciseEqual(func1(1.5), r.gammavariate(1.5, 1.0))
+        if func2 is not None:
+            self._check_dist(func2, r.gammavariate,
+                             [(0.5, 2.5), (1.0, 1.5), (1.5, 3.5)])
+        if func1 is not None:
+            self.assertPreciseEqual(func1(1.5), r.gammavariate(1.5, 1.0))
         # Invalid inputs
         if func2 is not None:
             self.assertRaises(NativeError, func2, 0.0, 1.0)
@@ -438,9 +432,7 @@ class TestRandom(TestCase):
         """
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
-        args = (0.5, 2.5)
-        for i in range(3):
-            self.assertPreciseEqual(func(*args), r.betavariate(*args))
+        self._check_dist(func, r.betavariate, [(0.5, 2.5)])
         # Invalid inputs
         self.assertRaises(NativeError, func, 0.0, 1.0)
         self.assertRaises(NativeError, func, 1.0, 0.0)
@@ -459,9 +451,7 @@ class TestRandom(TestCase):
         """
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
-        args = (0.5, 2.5)
-        for i in range(3):
-            self.assertPreciseEqual(func(*args), r.vonmisesvariate(*args))
+        self._check_dist(func, r.vonmisesvariate, [(0.5, 2.5)])
 
     def test_random_vonmisesvariate(self):
         self._check_vonmisesvariate(jit_binary("random.vonmisesvariate"),
@@ -471,18 +461,13 @@ class TestRandom(TestCase):
         self._check_vonmisesvariate(jit_binary("np.random.vonmises"),
                                     np_state_ptr)
 
-    def _check_unary(self, func, pyfunc, argslist):
-        for args in argslist:
-            for i in range(3):
-                self.assertPreciseEqual(func(*args), pyfunc(*args))
-
     def _check_expovariate(self, func, ptr):
         """
         Check a expovariate()-like function.
         """
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
-        self._check_unary(func, r.expovariate, [(-0.5,), (0.5,)])
+        self._check_dist(func, r.expovariate, [(-0.5,), (0.5,)])
 
     def test_random_expovariate(self):
         self._check_expovariate(jit_unary("random.expovariate"), py_state_ptr)
@@ -518,7 +503,7 @@ class TestRandom(TestCase):
         """
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
-        self._check_unary(func, r.paretovariate, [(0.5,), (3.5,)])
+        self._check_dist(func, r.paretovariate, [(0.5,), (3.5,)])
 
     def test_random_paretovariate(self):
         self._check_paretovariate(jit_unary("random.paretovariate"), py_state_ptr)
@@ -534,10 +519,8 @@ class TestRandom(TestCase):
         """
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
-        args = (0.5, 2.5)
         if func2 is not None:
-            for i in range(3):
-                self.assertPreciseEqual(func2(*args), r.weibullvariate(*args))
+            self._check_dist(func2, r.weibullvariate, [(0.5, 2.5)])
         if func1 is not None:
             for i in range(3):
                 self.assertPreciseEqual(func1(2.5),
@@ -550,6 +533,14 @@ class TestRandom(TestCase):
     def test_numpy_weibull(self):
         self._check_weibullvariate(None, jit_unary("np.random.weibull"),
                                    np_state_ptr)
+
+    def test_numpy_chisquare(self):
+        chisquare = jit_unary("np.random.chisquare")
+        # Emulate chisquare() with Python's gamma distribution
+        r = self._follow_cpython(np_state_ptr)
+        def py_chisquare(df):
+            return 2.0 * r.gammavariate(df / 2.0, 1.0)
+        self._check_dist(chisquare, py_chisquare, [(1.5,), (2.5,)])
 
     def _check_shuffle(self, func, ptr):
         """
