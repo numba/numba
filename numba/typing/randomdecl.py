@@ -79,6 +79,7 @@ class Random_ternary_distribution(ConcreteTemplate):
     cases = [signature(tp, tp, tp, tp) for tp in _float_types]
 
 @registry.resolves_global(np.random.beta, typing_key="np.random.beta")
+@registry.resolves_global(np.random.f, typing_key="np.random.f")
 @registry.resolves_global(np.random.uniform, typing_key="np.random.uniform")
 @registry.resolves_global(np.random.vonmises, typing_key="np.random.vonmises")
 @registry.resolves_global(random.betavariate, typing_key="random.betavariate")

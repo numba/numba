@@ -745,6 +745,17 @@ def chisquare_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.f", types.Kind(types.Float), types.Kind(types.Float))
+def f_impl(context, builder, sig, args):
+
+    def f_impl(num, denom):
+        return ((np.random.chisquare(num) * denom) /
+                (np.random.chisquare(denom) * num))
+
+    return context.compile_internal(builder, f_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange

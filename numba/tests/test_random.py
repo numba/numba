@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import functools
 import random
 import subprocess
 import sys
@@ -101,6 +102,17 @@ def sync_to_numpy(r):
         np_st += (1, _gauss_next)
 
     np.random.set_state(np_st)
+
+
+# Pure Python equivalents of some of the Numpy distributions, using
+# Python's basic generators.
+
+def py_chisquare(r, df):
+    return 2.0 * r.gammavariate(df / 2.0, 1.0)
+
+def py_f(r, num, denom):
+    return ((py_chisquare(r, num) * denom) /
+            (py_chisquare(r, denom) * num))
 
 
 class TestInternals(TestCase):
@@ -536,11 +548,16 @@ class TestRandom(TestCase):
 
     def test_numpy_chisquare(self):
         chisquare = jit_unary("np.random.chisquare")
-        # Emulate chisquare() with Python's gamma distribution
         r = self._follow_cpython(np_state_ptr)
-        def py_chisquare(df):
-            return 2.0 * r.gammavariate(df / 2.0, 1.0)
-        self._check_dist(chisquare, py_chisquare, [(1.5,), (2.5,)])
+        self._check_dist(chisquare,
+                         functools.partial(py_chisquare, r),
+                         [(1.5,), (2.5,)])
+
+    def test_numpy_f(self):
+        f = jit_binary("np.random.f")
+        r = self._follow_cpython(np_state_ptr)
+        self._check_dist(f, functools.partial(py_f, r),
+                         [(0.5, 1.5), (1.5, 0.8)])
 
     def _check_shuffle(self, func, ptr):
         """
