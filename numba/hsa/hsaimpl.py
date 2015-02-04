@@ -21,7 +21,8 @@ register = registry.register
 # -----------------------------------------------------------------------------
 
 
-def _declare_function(context, builder, name, sig, cargs, mangler=mangle_c):
+def _declare_function(context, builder, name, sig, cargs,
+                      mangler=mangle_c):
     """Insert declaration for a opencl builtin function.
     Uses the Itanium mangler.
 
@@ -39,6 +40,9 @@ def _declare_function(context, builder, name, sig, cargs, mangler=mangle_c):
 
     cargs: sequence of str
         C type names for the arguments
+
+    mangler: a mangler function
+        function to use to mangle the symbol
 
     """
     mod = cgutils.get_module(builder)

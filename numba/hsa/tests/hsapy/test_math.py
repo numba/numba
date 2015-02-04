@@ -8,12 +8,16 @@ from numba import hsa
 
 
 class TestMath(unittest.TestCase):
-    def _get_tol(self, ty):
+    def _get_tol(self, math_fn, ty):
         """gets the tolerance for functions when the input is of type 'ty'"""
-        if ty == np.float64:
-            return 1e-15
-        else:
-            return 1e-6
+
+        low_res = {
+            (math.gamma, np.float64): 1e-14,
+            (math.lgamma, np.float64): 1e-13,
+        }
+
+        default = 1e-15 if ty == np.float64 else 1e-6
+        return low_res.get((math_fn, ty), default)
 
     def _generic_test_unary(self, math_fn, npy_fn,
                             cases=None,
@@ -35,7 +39,7 @@ class TestMath(unittest.TestCase):
             dst = np.zeros_like(src)
             fn[src.size, 1](dst, src)
             np.testing.assert_allclose(dst, npy_fn(src),
-                                       rtol=self._get_tol(dtype),
+                                       rtol=self._get_tol(math_fn, dtype),
                                        err_msg='{0} ({1})'.format(
                                            math_fn.__name__,
                                            dtype.__name__))
@@ -63,7 +67,7 @@ class TestMath(unittest.TestCase):
             dst = np.zeros_like(src1)
             fn[dst.size, 1](dst, src1, src2)
             np.testing.assert_allclose(dst, npy_fn(src1, src2),
-                                       rtol=self._get_tol(dtype),
+                                       rtol=self._get_tol(math_fn, dtype),
                                        err_msg='{0} ({1})'.format(
                                            math_fn.__name__,
                                            dtype.__name__))
@@ -166,6 +170,17 @@ class TestMath(unittest.TestCase):
         funcs = [(math.atan2, np.arctan2)]
         for fn, npy_fn in funcs:
             self._generic_test_binary(fn, npy_fn)
+
+
+    def test_erf(self):
+        funcs = [math.erf, math.erfc]
+        for fn in funcs:
+            self._generic_test_unary(fn, np.vectorize(fn))
+
+    def test_gamma(self):
+        funcs = [math.gamma, math.lgamma]
+        for fn in funcs:
+            self._generic_test_unary(fn, np.vectorize(fn), span=(1e-4, 4.0))
 
 
 if __name__ == '__main__':

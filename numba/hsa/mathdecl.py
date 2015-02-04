@@ -112,6 +112,18 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_pow(self, mod):
         return types.Function(Math_pow)
 
+    def resolve_erf(self, mod):
+        return types.Function(Math_erf)
+
+    def resolve_erfc(self, mod):
+        return types.Function(Math_erfc)
+
+    def resolve_gamma(self, mod):
+        return types.Function(Math_gamma)
+
+    def resolve_lgamma(self, mod):
+        return types.Function(Math_lgamma)
+
 
 class Math_unary(ConcreteTemplate):
     cases = [
@@ -237,6 +249,17 @@ class Math_degrees(Math_unary):
 #         signature(types.float32, types.float32, types.float32),
 #         signature(types.float64, types.float64, types.float64),
 #     ]
+class Math_erf(Math_unary):
+    key = math.erf
+
+class Math_erfc(Math_unary):
+    key = math.erfc
+
+class Math_gamma(Math_unary):
+    key = math.gamma
+
+class Math_lgamma(Math_unary):
+    key = math.lgamma
 
 
 class Math_binary(ConcreteTemplate):
@@ -317,3 +340,7 @@ builtin_global(math.radians, types.Function(Math_radians))
 builtin_global(math.copysign, types.Function(Math_copysign))
 builtin_global(math.fmod, types.Function(Math_fmod))
 builtin_global(math.pow, types.Function(Math_pow))
+builtin_global(math.erf, types.Function(Math_erf))
+builtin_global(math.erfc, types.Function(Math_erfc))
+builtin_global(math.gamma, types.Function(Math_gamma))
+builtin_global(math.lgamma, types.Function(Math_lgamma))

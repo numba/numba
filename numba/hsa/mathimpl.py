@@ -19,6 +19,7 @@ _unary_d_d = types.float64(types.float64)
 _binary_f_ff = types.float32(types.float32, types.float32)
 _binary_d_dd = types.float64(types.float64, types.float64)
 
+
 function_descriptors = {
     'isnan': (_unary_b_f, _unary_b_d),
     'isinf': (_unary_b_f, _unary_b_d),
@@ -52,12 +53,26 @@ function_descriptors = {
     'atan2': (_binary_f_ff, _binary_d_dd),
     'pow': (_binary_f_ff, _binary_d_dd),
     'fmod': (_binary_f_ff, _binary_d_dd),
+
+    'erf': (_unary_f_f, _unary_d_d),
+    'erfc': (_unary_f_f, _unary_d_d),
+    'gamma': (_unary_f_f, _unary_d_d),
+    'lgamma': (_unary_f_f, _unary_d_d),
+
+    # unsupported functions listed in the math module documentation:
+    # frexp, ldexp, trunc, modf, factorial, fsum
 }
 
 
+# some functions may be named differently by the underlying math
+# library as oposed to the Python name.
+_lib_counterpart = {
+    'gamma': 'tgamma'
+}
 def _mk_fn_decl(name, decl_sig):
+    sym = _lib_counterpart.get(name, name)
     def core(context, builder, sig, args):
-        fn = _declare_function(context, builder, name, sig, decl_sig.args,
+        fn = _declare_function(context, builder, sym, sig, decl_sig.args,
                                mangler=mangle)
         return builder.call(fn, args)
 
@@ -71,7 +86,8 @@ _supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2',
               'fabs',
               'sqrt', 'exp', 'expm1',
               'log', 'log10', 'log1p',
-              'copysign', 'pow', 'fmod'
+              'copysign', 'pow', 'fmod',
+              'erf', 'erfc',  'gamma', 'lgamma',
               ]
 
 for name in _supported:
