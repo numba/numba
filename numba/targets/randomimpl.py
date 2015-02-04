@@ -507,3 +507,57 @@ def weibullvariate_impl(context, builder, sig, args):
 
     return context.compile_internal(builder, weibullvariate_impl,
                                     sig, args)
+
+
+@register
+@implement("random.vonmisesvariate",
+           types.Kind(types.Float), types.Kind(types.Float))
+def vonmisesvariate_impl(context, builder, sig, args):
+    _random = random.random
+    _exp = math.exp
+    _sqrt = math.sqrt
+    _cos = math.cos
+    _acos = math.acos
+    _pi = math.pi
+    TWOPI = 2.0 * _pi
+
+    def vonmisesvariate_impl(mu, kappa):
+        """Circular data distribution.  Taken from CPython.
+        """
+        # mu:    mean angle (in radians between 0 and 2*pi)
+        # kappa: concentration parameter kappa (>= 0)
+        # if kappa = 0 generate uniform random angle
+
+        # Based upon an algorithm published in: Fisher, N.I.,
+        # "Statistical Analysis of Circular Data", Cambridge
+        # University Press, 1993.
+
+        # Thanks to Magnus Kessler for a correction to the
+        # implementation of step 4.
+        if kappa <= 1e-6:
+            return TWOPI * _random()
+
+        s = 0.5 / kappa
+        r = s + _sqrt(1.0 + s * s)
+
+        while 1:
+            u1 = _random()
+            z = _cos(_pi * u1)
+
+            d = z / (r + z)
+            u2 = _random()
+            if u2 < 1.0 - d * d or u2 <= (1.0 - d) * _exp(d):
+                break
+
+        q = 1.0 / r
+        f = (q + z) / (1.0 + q * z)
+        u3 = _random()
+        if u3 > 0.5:
+            theta = (mu + _acos(f)) % TWOPI
+        else:
+            theta = (mu - _acos(f)) % TWOPI
+
+        return theta
+
+    return context.compile_internal(builder, vonmisesvariate_impl,
+                                    sig, args)

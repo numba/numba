@@ -54,6 +54,7 @@ class Random_seed(ConcreteTemplate):
 @registry.resolves_global(random.lognormvariate, typing_key="random.lognormvariate")
 @registry.resolves_global(random.normalvariate, typing_key="random.normalvariate")
 @registry.resolves_global(random.uniform, typing_key="random.uniform")
+@registry.resolves_global(random.vonmisesvariate, typing_key="random.vonmisesvariate")
 @registry.resolves_global(random.weibullvariate, typing_key="random.weibullvariate")
 class Random_binary_distribution(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]

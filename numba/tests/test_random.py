@@ -63,6 +63,10 @@ def random_paretovariate(alpha):
     return random.paretovariate(alpha)
 
 @jit(nopython=True)
+def random_vonmisesvariate(mu, kappa):
+    return random.vonmisesvariate(mu, kappa)
+
+@jit(nopython=True)
 def random_weibullvariate(alpha, beta):
     return random.weibullvariate(alpha, beta)
 
@@ -376,6 +380,20 @@ class TestRandom(TestCase):
 
     def test_random_betavariate(self):
         self._check_betavariate(random_betavariate, py_state_ptr)
+
+    def _check_vonmisesvariate(self, func, ptr):
+        """
+        Check a vonmisesvariate()-like function.
+        """
+        # Our implementation follows Python's.
+        r = random.Random()
+        _copy_py_state(r, ptr)
+        args = (0.5, 2.5)
+        for i in range(3):
+            self.assertPreciseEqual(func(*args), r.vonmisesvariate(*args))
+
+    def test_random_vonmisesvariate(self):
+        self._check_vonmisesvariate(random_vonmisesvariate, py_state_ptr)
 
     def _check_unary(self, func, pyfunc, argslist):
         for args in argslist:
