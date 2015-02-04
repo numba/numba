@@ -124,16 +124,22 @@ def get_np_state_ptr(context, builder):
     return context.get_c_value(builder, rnd_state_t,
                                "numba_np_random_state")
 
+def get_state_ptr(context, builder, name):
+    return {
+        "py": get_py_state_ptr,
+        "np": get_np_state_ptr,
+        }[name](context, builder)
+
 
 @register
 @implement("random.seed", types.uint32)
 def seed_impl(context, builder, sig, args):
-    return _seed_impl(context, builder, sig, args, get_py_state_ptr(context, builder))
+    return _seed_impl(context, builder, sig, args, get_state_ptr(context, builder, "py"))
 
 @register
 @implement("np.random.seed", types.uint32)
 def seed_impl(context, builder, sig, args):
-    return _seed_impl(context, builder, sig, args, get_np_state_ptr(context, builder))
+    return _seed_impl(context, builder, sig, args, get_state_ptr(context, builder, "np"))
 
 def _seed_impl(context, builder, sig, args, state_ptr):
     seed_value, = args
@@ -145,13 +151,14 @@ def _seed_impl(context, builder, sig, args, state_ptr):
 @register
 @implement("random.random")
 def random_impl(context, builder, sig, args):
-    state_ptr = get_py_state_ptr(context, builder)
+    state_ptr = get_state_ptr(context, builder, "py")
     return get_next_double(context, builder, state_ptr)
 
 @register
+@implement("np.random.rand")
 @implement("np.random.random")
 def random_impl(context, builder, sig, args):
-    state_ptr = get_np_state_ptr(context, builder)
+    state_ptr = get_state_ptr(context, builder, "np")
     return get_next_double(context, builder, state_ptr)
 
 
@@ -159,7 +166,7 @@ def random_impl(context, builder, sig, args):
 @implement("random.gauss", types.Kind(types.Float), types.Kind(types.Float))
 @implement("random.normalvariate", types.Kind(types.Float), types.Kind(types.Float))
 def gauss_impl(context, builder, sig, args):
-    state_ptr = get_py_state_ptr(context, builder)
+    state_ptr = get_state_ptr(context, builder, "py")
     return _gauss_impl(context, builder, sig, args, state_ptr)
 
 @register
@@ -178,7 +185,7 @@ def np_gauss_impl(context, builder, sig, args):
     else:
         mu = ir.Constant(llty, 0.0)
         sigma = ir.Constant(llty, 1.0)
-    state_ptr = get_np_state_ptr(context, builder)
+    state_ptr = get_state_ptr(context, builder, "np")
     return _gauss_impl(context, builder, sig, [mu, sigma], state_ptr)
 
 def _gauss_impl(context, builder, sig, args, state_ptr):
@@ -249,13 +256,12 @@ def _gauss_impl(context, builder, sig, args, state_ptr):
 @implement("random.getrandbits", types.Kind(types.Integer))
 def getrandbits_impl(context, builder, sig, args):
     nbits, = args
-    state_ptr = get_py_state_ptr(context, builder)
+    state_ptr = get_state_ptr(context, builder, "py")
     return get_next_int(context, builder, state_ptr, nbits)
 
 
-def _randrange_impl(context, builder, start, stop, step):
-    state_ptr = get_py_state_ptr(context, builder)
-
+def _randrange_impl(context, builder, start, stop, step, state):
+    state_ptr = get_state_ptr(context, builder, state)
     ty = stop.type
     zero = ir.Constant(ty, 0)
     one = ir.Constant(ty, 1)
@@ -304,21 +310,21 @@ def randrange_impl_1(context, builder, sig, args):
     stop, = args
     start = ir.Constant(stop.type, 0)
     step = ir.Constant(stop.type, 1)
-    return _randrange_impl(context, builder, start, stop, step)
+    return _randrange_impl(context, builder, start, stop, step, "py")
 
 @register
 @implement("random.randrange", types.Kind(types.Integer), types.Kind(types.Integer))
 def randrange_impl_2(context, builder, sig, args):
     start, stop = args
     step = ir.Constant(start.type, 1)
-    return _randrange_impl(context, builder, start, stop, step)
+    return _randrange_impl(context, builder, start, stop, step, "py")
 
 @register
 @implement("random.randrange", types.Kind(types.Integer),
            types.Kind(types.Integer), types.Kind(types.Integer))
 def randrange_impl_3(context, builder, sig, args):
     start, stop, step = args
-    return _randrange_impl(context, builder, start, stop, step)
+    return _randrange_impl(context, builder, start, stop, step, "py")
 
 @register
 @implement("random.randint", types.Kind(types.Integer), types.Kind(types.Integer))
@@ -326,12 +332,27 @@ def randint_impl(context, builder, sig, args):
     start, stop = args
     step = ir.Constant(start.type, 1)
     stop = builder.add(stop, step)
-    return _randrange_impl(context, builder, start, stop, step)
+    return _randrange_impl(context, builder, start, stop, step, "py")
+
+@register
+@implement("np.random.randint", types.Kind(types.Integer))
+def randrange_impl_1(context, builder, sig, args):
+    stop, = args
+    start = ir.Constant(stop.type, 0)
+    step = ir.Constant(stop.type, 1)
+    return _randrange_impl(context, builder, start, stop, step, "np")
+
+@register
+@implement("np.random.randint", types.Kind(types.Integer), types.Kind(types.Integer))
+def randrange_impl_2(context, builder, sig, args):
+    start, stop = args
+    step = ir.Constant(start.type, 1)
+    return _randrange_impl(context, builder, start, stop, step, "np")
 
 @register
 @implement("random.uniform", types.Kind(types.Float), types.Kind(types.Float))
 def uniform_impl(context, builder, sig, args):
-    state_ptr = get_py_state_ptr(context, builder)
+    state_ptr = get_state_ptr(context, builder, "py")
     a, b = args
     width = builder.fsub(b, a)
     r = get_next_double(context, builder, state_ptr)
@@ -342,7 +363,7 @@ def uniform_impl(context, builder, sig, args):
 def triangular_impl_2(context, builder, sig, args):
     fltty = sig.return_type
     low, high = args
-    state_ptr = get_py_state_ptr(context, builder)
+    state_ptr = get_state_ptr(context, builder, "py")
     randval = get_next_double(context, builder, state_ptr)
 
     def triangular_impl_2(randval, low, high):
@@ -363,7 +384,7 @@ def triangular_impl_2(context, builder, sig, args):
 def triangular_impl_3(context, builder, sig, args):
     fltty = sig.return_type
     low, high, mode = args
-    state_ptr = get_py_state_ptr(context, builder)
+    state_ptr = get_state_ptr(context, builder, "py")
     randval = get_next_double(context, builder, state_ptr)
 
     def triangular_impl_3(randval, low, high, mode):

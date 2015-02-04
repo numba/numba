@@ -37,8 +37,12 @@ class Random_random(ConcreteTemplate):
 
 @registry.resolves_global(random.randint, typing_key="random.randint")
 class Random_randint(ConcreteTemplate):
-    _types = [types.int32, types.int64]
     cases = [signature(tp, tp, tp) for tp in _int_types]
+
+@registry.resolves_global(np.random.randint, typing_key="np.random.randint")
+class Random_randint(ConcreteTemplate):
+    cases = [signature(tp, tp) for tp in _int_types]
+    cases += [signature(tp, tp, tp) for tp in _int_types]
 
 @registry.resolves_global(random.randrange, typing_key="random.randrange")
 class Random_randrange(ConcreteTemplate):

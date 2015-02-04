@@ -20,6 +20,12 @@ py_state_ptr = _helperlib.c_helpers['py_random_state']
 np_state_ptr = _helperlib.c_helpers['np_random_state']
 
 
+def numpy_randint1(a):
+    return np.random.randint(a)
+
+def numpy_randint2(a, b):
+    return np.random.randint(a, b)
+
 def random_randint(a, b):
     return random.randint(a, b)
 
@@ -184,6 +190,7 @@ class TestRandom(TestCase):
         self._check_random_seed(numpy_seed, jit_nullary("np.random.random_sample"))
         self._check_random_seed(numpy_seed, jit_nullary("np.random.ranf"))
         self._check_random_seed(numpy_seed, jit_nullary("np.random.sample"))
+        self._check_random_seed(numpy_seed, jit_nullary("np.random.rand"))
 
     def test_independent_generators(self):
         # PRNGs for Numpy and Python are independent.
@@ -270,7 +277,8 @@ class TestRandom(TestCase):
         for i in range(10):
             ints.append(func1(500000000))
             ints.append(func2(5, 500000000))
-            ints.append(func3(5, 500000000, 3))
+            if func3 is not None:
+                ints.append(func3(5, 500000000, 3))
         self.assertEqual(len(ints), len(set(ints)), ints)
         # Our implementation follows Python 3's.
         if sys.version_info >= (3,):
@@ -282,17 +290,19 @@ class TestRandom(TestCase):
                     self.assertPreciseEqual(func1(width), r.randrange(width))
                 self.assertPreciseEqual(func2(-2, 2 + width),
                                         r.randrange(-2, 2 + width))
-                self.assertPreciseEqual(func3(-2, 2 + width, 6),
-                                        r.randrange(-2, 2 + width, 6))
-                self.assertPreciseEqual(func3(2 + width, 2, -3),
-                                        r.randrange(2 + width, 2, -3))
+                if func3 is not None:
+                    self.assertPreciseEqual(func3(-2, 2 + width, 6),
+                                            r.randrange(-2, 2 + width, 6))
+                    self.assertPreciseEqual(func3(2 + width, 2, -3),
+                                            r.randrange(2 + width, 2, -3))
         # Empty ranges
         self.assertRaises(NativeError, func1, 0)
         self.assertRaises(NativeError, func1, -5)
         self.assertRaises(NativeError, func2, 5, 5)
         self.assertRaises(NativeError, func2, 5, 2)
-        self.assertRaises(NativeError, func3, 5, 7, -1)
-        self.assertRaises(NativeError, func3, 7, 5, 1)
+        if func3 is not None:
+            self.assertRaises(NativeError, func3, 5, 7, -1)
+            self.assertRaises(NativeError, func3, 7, 5, 1)
 
     def test_random_randrange(self):
         for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
@@ -300,7 +310,14 @@ class TestRandom(TestCase):
             cr2 = compile_isolated(random_randrange2, (tp, tp))
             cr3 = compile_isolated(random_randrange3, (tp, tp, tp))
             self._check_randrange(cr1.entry_point, cr2.entry_point,
-                                 cr3.entry_point, py_state_ptr, max_width)
+                                  cr3.entry_point, py_state_ptr, max_width)
+
+    def test_numpy_randint(self):
+        for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
+            cr1 = compile_isolated(numpy_randint1, (tp,))
+            cr2 = compile_isolated(numpy_randint2, (tp, tp))
+            self._check_randrange(cr1.entry_point, cr2.entry_point,
+                                  None, np_state_ptr, max_width)
 
     def _check_randint(self, func, ptr, max_width):
         """
