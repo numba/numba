@@ -676,7 +676,15 @@ def weibullvariate_impl(context, builder, sig, args):
 @implement("random.vonmisesvariate",
            types.Kind(types.Float), types.Kind(types.Float))
 def vonmisesvariate_impl(context, builder, sig, args):
-    _random = random.random
+    return _vonmisesvariate_impl(context, builder, sig, args, random.random)
+
+@register
+@implement("np.random.vonmises",
+           types.Kind(types.Float), types.Kind(types.Float))
+def vonmisesvariate_impl(context, builder, sig, args):
+    return _vonmisesvariate_impl(context, builder, sig, args, np.random.random)
+
+def _vonmisesvariate_impl(context, builder, sig, args, _random):
     _exp = math.exp
     _sqrt = math.sqrt
     _cos = math.cos

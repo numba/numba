@@ -80,6 +80,7 @@ class Random_ternary_distribution(ConcreteTemplate):
 
 @registry.resolves_global(np.random.beta, typing_key="np.random.beta")
 @registry.resolves_global(np.random.uniform, typing_key="np.random.uniform")
+@registry.resolves_global(np.random.vonmises, typing_key="np.random.vonmises")
 @registry.resolves_global(random.betavariate, typing_key="random.betavariate")
 @registry.resolves_global(random.gammavariate, typing_key="random.gammavariate")
 @registry.resolves_global(random.gauss, typing_key="random.gauss")

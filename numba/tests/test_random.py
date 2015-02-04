@@ -464,7 +464,12 @@ class TestRandom(TestCase):
             self.assertPreciseEqual(func(*args), r.vonmisesvariate(*args))
 
     def test_random_vonmisesvariate(self):
-        self._check_vonmisesvariate(jit_binary("random.vonmisesvariate"), py_state_ptr)
+        self._check_vonmisesvariate(jit_binary("random.vonmisesvariate"),
+                                    py_state_ptr)
+
+    def test_numpy_vonmises(self):
+        self._check_vonmisesvariate(jit_binary("np.random.vonmises"),
+                                    np_state_ptr)
 
     def _check_unary(self, func, pyfunc, argslist):
         for args in argslist:
