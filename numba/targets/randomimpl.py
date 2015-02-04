@@ -412,6 +412,7 @@ def gammavariate_impl(context, builder, sig, args):
     return _gammavariate_impl(context, builder, sig, args, random.random)
 
 @register
+@implement("np.random.standard_gamma", types.Kind(types.Float))
 @implement("np.random.gamma", types.Kind(types.Float))
 @implement("np.random.gamma", types.Kind(types.Float), types.Kind(types.Float))
 def gammavariate_impl(context, builder, sig, args):

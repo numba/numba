@@ -393,15 +393,17 @@ class TestRandom(TestCase):
         # Our implementation follows Python's.
         r = self._follow_cpython(ptr)
         for args in [(0.5, 2.5), (1.0, 1.5), (1.5, 3.5)]:
-            for i in range(3):
-                self.assertPreciseEqual(func2(*args), r.gammavariate(*args))
+            if func2 is not None:
+                for i in range(3):
+                    self.assertPreciseEqual(func2(*args), r.gammavariate(*args))
             if func1 is not None:
                 self.assertPreciseEqual(func1(1.5), r.gammavariate(1.5, 1.0))
         # Invalid inputs
-        self.assertRaises(NativeError, func2, 0.0, 1.0)
-        self.assertRaises(NativeError, func2, 1.0, 0.0)
-        self.assertRaises(NativeError, func2, -0.5, 1.0)
-        self.assertRaises(NativeError, func2, 1.0, -0.5)
+        if func2 is not None:
+            self.assertRaises(NativeError, func2, 0.0, 1.0)
+            self.assertRaises(NativeError, func2, 1.0, 0.0)
+            self.assertRaises(NativeError, func2, -0.5, 1.0)
+            self.assertRaises(NativeError, func2, 1.0, -0.5)
         if func1 is not None:
             self.assertRaises(NativeError, func1, 0.0)
             self.assertRaises(NativeError, func1, -0.5)
@@ -413,6 +415,9 @@ class TestRandom(TestCase):
     def test_numpy_gamma(self):
         self._check_gammavariate(jit_binary("np.random.gamma"),
                                  jit_unary("np.random.gamma"),
+                                 np_state_ptr)
+        self._check_gammavariate(None,
+                                 jit_unary("np.random.standard_gamma"),
                                  np_state_ptr)
 
     def _check_betavariate(self, func, ptr):
