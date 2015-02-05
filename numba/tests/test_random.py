@@ -631,8 +631,21 @@ class TestRandom(TestCase):
 
     def test_numpy_logseries(self):
         r = self._follow_numpy(np_state_ptr)
-        self._check_dist(jit_unary("np.random.logseries"), r.logseries,
-                         [(0.1,), (0.99,), (0.9999,), (0.9999999999999,)])
+        logseries = jit_unary("np.random.logseries")
+        self._check_dist(logseries, r.logseries,
+                         [(0.1,), (0.99,), (0.9999,), (0.9999999999999,)],
+                         niters=50)
+        self.assertRaises(NativeError, logseries, 0.0)
+        self.assertRaises(NativeError, logseries, -0.1)
+        self.assertRaises(NativeError, logseries, 1.1)
+
+    def test_numpy_poisson(self):
+        r = self._follow_numpy(np_state_ptr)
+        poisson = jit_unary("np.random.poisson")
+        # Our implementation follows Numpy's up unless lam >= 10.
+        self._check_dist(poisson, r.poisson, [(0.0,), (0.5,), (2.0,), (9.9,)],
+                         niters=50)
+        self.assertRaises(NativeError, poisson, -0.1)
 
     def _check_shuffle(self, func, ptr):
         """

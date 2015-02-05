@@ -62,6 +62,11 @@ class Random_seed(ConcreteTemplate):
 class Numpy_geometric(ConcreteTemplate):
     cases = [signature(types.int64, tp) for tp in _float_types]
 
+@registry.resolves_global(np.random.poisson, typing_key="np.random.poisson")
+class Numpy_poisson(ConcreteTemplate):
+    cases = [signature(types.int64, tp) for tp in _float_types]
+    cases += [signature(types.int64)]
+
 @registry.resolves_global(np.random.exponential, typing_key="np.random.exponential")
 class Numpy_exponential(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in _float_types]

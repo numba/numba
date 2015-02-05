@@ -793,6 +793,7 @@ def hypergeometric_impl(context, builder, sig, args):
     _floor = math.floor
 
     def hypergeometric_impl(ngood, nbad, nsamples):
+        """Numpy's algorithm for hypergeometric()."""
         d1 = nbad + ngood - nsamples
         d2 = float(min(nbad, ngood))
 
@@ -873,6 +874,35 @@ def logseries_impl(context, builder, sig, args):
                 return 2
 
     return context.compile_internal(builder, logseries_impl, sig, args)
+
+
+@register
+@implement("np.random.poisson")
+@implement("np.random.poisson", types.Kind(types.Float))
+def poisson_impl(context, builder, sig, args):
+    _random = np.random.random
+    _exp = math.exp
+
+    def poisson_impl(lam):
+        """Numpy's algorithm for poisson() on small *lam*."""
+        if lam < 0.0:
+            raise ValueError
+        if lam == 0.0:
+            return 0
+        enlam = _exp(-lam)
+        X = 0
+        prod = 1.0
+        while 1:
+            U = _random()
+            prod *= U
+            if prod <= enlam:
+                return X
+            X += 1
+
+    if len(args) == 0:
+        sig = signature(sig.return_type, types.float64)
+        args = (ir.Constant(ir.Double, 1.0),)
+    return context.compile_internal(builder, poisson_impl, sig, args)
 
 
 @register
