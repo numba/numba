@@ -845,6 +845,37 @@ def logistic_impl(context, builder, sig, args):
     return context.compile_internal(builder, logistic_impl, sig, args)
 
 @register
+@implement("np.random.logseries", types.Kind(types.Float))
+def logseries_impl(context, builder, sig, args):
+    intty = sig.return_type
+    _random = np.random.random
+    _log = math.log
+    _exp = math.exp
+
+    def logseries_impl(p):
+        """Numpy's algorithm for logseries()."""
+        if p <= 0.0 or p > 1.0:
+            raise ValueError
+        r = _log(1.0 - p)
+
+        while 1:
+            V = _random()
+            if V >= p:
+                return 1
+            U = _random()
+            q = 1.0 - _exp(r * U)
+            if V <= q * q:
+                # XXX what if V == 0.0 ?
+                return intty(1 + _log(V) / _log(q))
+            elif V >= q:
+                return 1
+            else:
+                return 2
+
+    return context.compile_internal(builder, logseries_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange

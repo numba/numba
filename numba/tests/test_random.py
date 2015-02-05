@@ -233,8 +233,10 @@ class TestRandom(TestCase):
     def _check_dist(self, func, pyfunc, argslist, niters=3, prec='exact'):
         assert len(argslist)
         for args in argslist:
-            for i in range(niters):
-                self.assertPreciseEqual(func(*args), pyfunc(*args), prec=prec)
+            results = [func(*args) for i in range(niters)]
+            pyresults = [pyfunc(*args) for i in range(niters)]
+            self.assertPreciseEqual(results, pyresults, prec=prec,
+                                    msg="for arguments %s" % (args,))
 
     def _check_gauss(self, func2, func1, func0, ptr):
         """
@@ -626,6 +628,11 @@ class TestRandom(TestCase):
         self._check_dist(jit_unary("np.random.logistic"), r.logistic,
                          [(0.0,), (-1.5,)])
         self._check_dist(jit_nullary("np.random.logistic"), r.logistic, [()])
+
+    def test_numpy_logseries(self):
+        r = self._follow_numpy(np_state_ptr)
+        self._check_dist(jit_unary("np.random.logseries"), r.logseries,
+                         [(0.1,), (0.99,), (0.9999,), (0.9999999999999,)])
 
     def _check_shuffle(self, func, ptr):
         """

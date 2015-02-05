@@ -58,6 +58,7 @@ class Random_seed(ConcreteTemplate):
 # Distributions
 
 @registry.resolves_global(np.random.geometric, typing_key="np.random.geometric")
+@registry.resolves_global(np.random.logseries, typing_key="np.random.logseries")
 class Numpy_geometric(ConcreteTemplate):
     cases = [signature(types.int64, tp) for tp in _float_types]
 

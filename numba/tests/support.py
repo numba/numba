@@ -142,7 +142,6 @@ class TestCase(unittest.TestCase):
             failure_msg = str(exc)
             # Fall off of the 'except' scope to avoid Python 3 exception
             # chaining.
-            self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
         else:
             return
         # Decorate the failure message with more information
