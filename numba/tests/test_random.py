@@ -667,6 +667,13 @@ class TestRandom(TestCase):
         self.assertRaises(NativeError, negbin, 10, -0.1)
         self.assertRaises(NativeError, negbin, 10, 1.1)
 
+    def test_numpy_power(self):
+        r = self._follow_numpy(np_state_ptr)
+        power = jit_unary("np.random.power")
+        self._check_dist(power, r.power,
+                         [(0.1,), (0.5,), (0.9,), (6.0,)],
+                         niters=50)
+
     def _check_shuffle(self, func, ptr):
         """
         Check a shuffle()-like function for 1D arrays.

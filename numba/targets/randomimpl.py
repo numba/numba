@@ -950,6 +950,19 @@ def poisson_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.power", types.Kind(types.Float))
+def power_impl(context, builder, sig, args):
+
+    def power_impl(a):
+        if a <= 0.0:
+            raise ValueError
+        return math.pow(1 - math.exp(-np.random.standard_exponential()),
+                        1./a)
+
+    return context.compile_internal(builder, power_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange

@@ -117,6 +117,7 @@ class Random_binary_distribution(ConcreteTemplate):
 
 @registry.resolves_global(np.random.chisquare, typing_key="np.random.chisquare")
 @registry.resolves_global(np.random.pareto, typing_key="np.random.pareto")
+@registry.resolves_global(np.random.power, typing_key="np.random.power")
 @registry.resolves_global(np.random.standard_gamma, typing_key="np.random.standard_gamma")
 @registry.resolves_global(np.random.weibull, typing_key="np.random.weibull")
 @registry.resolves_global(random.expovariate, typing_key="random.expovariate")
