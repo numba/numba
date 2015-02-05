@@ -877,9 +877,48 @@ def logseries_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.negative_binomial", types.int64, types.Kind(types.Float))
+def negative_binomial_impl(context, builder, sig, args):
+    _gamma = np.random.gamma
+    _poisson = np.random.poisson
+
+    def negative_binomial_impl(n, p):
+        if n <= 0:
+            raise ValueError
+        if p < 0.0 or p > 1.0:
+            raise ValueError
+        Y = _gamma(n, (1.0 - p) / p)
+        return _poisson(Y)
+
+    return context.compile_internal(builder, negative_binomial_impl, sig, args)
+
+
+@register
 @implement("np.random.poisson")
 @implement("np.random.poisson", types.Kind(types.Float))
 def poisson_impl(context, builder, sig, args):
+    state_ptr = get_np_state_ptr(context, builder)
+
+    retptr = cgutils.alloca_once(builder, int64_t, name="ret")
+    bbcont = cgutils.append_basic_block(builder, "bbcont")
+    bbend = cgutils.append_basic_block(builder, "bbend")
+
+    if len(args) == 1:
+        lam, = args
+        big_lam = builder.fcmp_ordered('>=', lam, ir.Constant(double, 10.0))
+        with cgutils.ifthen(builder, big_lam):
+            # For lambda >= 10.0, we switch to a more accurate
+            # algorithm (see _helperlib.c).
+            fnty = ir.FunctionType(int64_t, (rnd_state_ptr_t, double))
+            fn = builder.function.module.get_or_insert_function(fnty,
+                                                                "numba_poisson_ptrs")
+            ret = builder.call(fn, (state_ptr, lam))
+            builder.store(ret, retptr)
+            builder.branch(bbend)
+
+    builder.branch(bbcont)
+    builder.position_at_end(bbcont)
+
     _random = np.random.random
     _exp = math.exp
 
@@ -901,8 +940,13 @@ def poisson_impl(context, builder, sig, args):
 
     if len(args) == 0:
         sig = signature(sig.return_type, types.float64)
-        args = (ir.Constant(ir.Double, 1.0),)
-    return context.compile_internal(builder, poisson_impl, sig, args)
+        args = (ir.Constant(double, 1.0),)
+
+    ret = context.compile_internal(builder, poisson_impl, sig, args)
+    builder.store(ret, retptr)
+    builder.branch(bbend)
+    builder.position_at_end(bbend)
+    return builder.load(retptr)
 
 
 @register

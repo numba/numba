@@ -106,7 +106,7 @@ _rnd_random_seed(rnd_state_t *state)
     return 0;
 }
 
-/* Python-exposed helpers */
+/* Python-exposed helpers for state management */
 static PyObject *
 rnd_shuffle(PyObject *self, PyObject *arg)
 {
@@ -186,6 +186,117 @@ rnd_init(PyObject *self, PyObject *args)
         return NULL;
     Numba_rnd_init(state, seed);
     Py_RETURN_NONE;
+}
+
+/* Random distribution helpers.
+ * Most code straight from Numpy's distributions.c. */
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846264338328
+#endif
+
+static unsigned int
+get_next_int32(rnd_state_t *state)
+{
+    unsigned int y;
+
+    if (state->index == MT_N) {
+        Numba_rnd_shuffle(state);
+        state->index = 0;
+    }
+    y = state->mt[state->index++];
+    /* Tempering */
+    y ^= (y >> 11);
+    y ^= (y << 7) & 0x9d2c5680U;
+    y ^= (y << 15) & 0xefc60000U;
+    y ^= (y >> 18);
+    return y;
+}
+
+static double
+get_next_double(rnd_state_t *state)
+{
+    double a = get_next_int32(state) >> 5;
+    double b = get_next_int32(state) >> 6;
+    return (a * 67108864.0 + b) / 9007199254740992.0;
+}
+
+static double
+loggam(double x)
+{
+    double x0, x2, xp, gl, gl0;
+    long k, n;
+
+    static double a[10] = {8.333333333333333e-02,-2.777777777777778e-03,
+         7.936507936507937e-04,-5.952380952380952e-04,
+         8.417508417508418e-04,-1.917526917526918e-03,
+         6.410256410256410e-03,-2.955065359477124e-02,
+         1.796443723688307e-01,-1.39243221690590e+00};
+    x0 = x;
+    n = 0;
+    if ((x == 1.0) || (x == 2.0))
+    {
+        return 0.0;
+    }
+    else if (x <= 7.0)
+    {
+        n = (long)(7 - x);
+        x0 = x + n;
+    }
+    x2 = 1.0/(x0*x0);
+    xp = 2*M_PI;
+    gl0 = a[9];
+    for (k=8; k>=0; k--)
+    {
+        gl0 *= x2;
+        gl0 += a[k];
+    }
+    gl = gl0/x0 + 0.5*log(xp) + (x0-0.5)*log(x0) - x0;
+    if (x <= 7.0)
+    {
+        for (k=1; k<=n; k++)
+        {
+            gl -= log(x0-1.0);
+            x0 -= 1.0;
+        }
+    }
+    return gl;
+}
+
+static int64_t
+Numba_poisson_ptrs(rnd_state_t *state, double lam)
+{
+    int64_t k;
+    double U, V, slam, loglam, a, b, invalpha, vr, us;
+
+    slam = sqrt(lam);
+    loglam = log(lam);
+    b = 0.931 + 2.53*slam;
+    a = -0.059 + 0.02483*b;
+    invalpha = 1.1239 + 1.1328/(b-3.4);
+    vr = 0.9277 - 3.6224/(b-2);
+
+    while (1)
+    {
+        U = get_next_double(state) - 0.5;
+        V = get_next_double(state);
+        us = 0.5 - fabs(U);
+        k = (int64_t) floor((2*a/us + b)*U + lam + 0.43);
+        if ((us >= 0.07) && (V <= vr))
+        {
+            return k;
+        }
+        if ((k < 0) ||
+            ((us < 0.013) && (V > us)))
+        {
+            continue;
+        }
+        if ((log(V) + log(invalpha) - log(a/(us*us)+b)) <=
+            (-lam + k*loglam - loggam(k+1)))
+        {
+            return k;
+        }
+    }
 }
 
 /*
@@ -566,6 +677,7 @@ build_c_helpers_dict(void)
     declmethod(gil_release);
     declmethod(rnd_shuffle);
     declmethod(rnd_init);
+    declmethod(poisson_ptrs);
 
     declpointer(py_random_state);
     declpointer(np_random_state);

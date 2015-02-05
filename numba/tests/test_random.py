@@ -174,8 +174,8 @@ class TestRandom(TestCase):
         _copy_py_state(r, ptr)
         return r
 
-    def _follow_numpy(self, ptr):
-        r = np.random.RandomState()
+    def _follow_numpy(self, ptr, seed=None):
+        r = np.random.RandomState(seed)
         _copy_np_state(r, ptr)
         return r
 
@@ -642,10 +642,30 @@ class TestRandom(TestCase):
     def test_numpy_poisson(self):
         r = self._follow_numpy(np_state_ptr)
         poisson = jit_unary("np.random.poisson")
-        # Our implementation follows Numpy's up unless lam >= 10.
-        self._check_dist(poisson, r.poisson, [(0.0,), (0.5,), (2.0,), (9.9,)],
+        # Our implementation follows Numpy's.
+        self._check_dist(poisson, r.poisson,
+                         [(0.0,), (0.5,), (2.0,), (10.0,), (900.5,)],
                          niters=50)
         self.assertRaises(NativeError, poisson, -0.1)
+
+    def test_numpy_negative_binomial(self):
+        self._follow_numpy(np_state_ptr, 0)
+        negbin = jit_binary("np.random.negative_binomial")
+        self.assertEqual([negbin(10, 0.9) for i in range(10)],
+                         [2, 3, 1, 5, 2, 1, 0, 1, 0, 0])
+        self.assertEqual([negbin(10, 0.1) for i in range(10)],
+                         [55, 71, 56, 57, 56, 56, 34, 55, 101, 67])
+        self.assertEqual([negbin(1000, 0.1) for i in range(10)],
+                         [9203, 8640, 9081, 9292, 8938,
+                          9165, 9149, 8774, 8886, 9117])
+        m = np.mean([np.random.negative_binomial(1000000000, 0.1)
+                     for i in range(50)])
+        self.assertGreater(m, 9e9 * 0.99)
+        self.assertLess(m, 9e9 * 1.01)
+        self.assertRaises(NativeError, negbin, 0, 0.5)
+        self.assertRaises(NativeError, negbin, -1, 0.5)
+        self.assertRaises(NativeError, negbin, 10, -0.1)
+        self.assertRaises(NativeError, negbin, 10, 1.1)
 
     def _check_shuffle(self, func, ptr):
         """
