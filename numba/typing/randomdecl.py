@@ -126,6 +126,8 @@ class Random_binary_distribution(ConcreteTemplate):
 class Random_unary_distribution(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in _float_types]
 
+@registry.resolves_global(np.random.standard_cauchy,
+                          typing_key="np.random.standard_cauchy")
 @registry.resolves_global(np.random.standard_normal,
                           typing_key="np.random.standard_normal")
 @registry.resolves_global(np.random.standard_exponential,

@@ -978,6 +978,17 @@ def rayleigh_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.standard_cauchy")
+def cauchy_impl(context, builder, sig, args):
+    _gauss = np.random.standard_normal
+
+    def cauchy_impl():
+        return _gauss() / _gauss()
+
+    return context.compile_internal(builder, cauchy_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange

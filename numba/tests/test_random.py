@@ -685,6 +685,11 @@ class TestRandom(TestCase):
         self.assertRaises(NativeError, rayleigh1, 0.0)
         self.assertRaises(NativeError, rayleigh1, -0.1)
 
+    def test_numpy_standard_cauchy(self):
+        r = self._follow_numpy(np_state_ptr)
+        cauchy = jit_nullary("np.random.standard_cauchy")
+        self._check_dist(cauchy, r.standard_cauchy, [()])
+
     def _check_shuffle(self, func, ptr):
         """
         Check a shuffle()-like function for 1D arrays.
