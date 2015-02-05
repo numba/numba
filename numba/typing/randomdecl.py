@@ -73,6 +73,7 @@ class Numpy_poisson(ConcreteTemplate):
     cases += [signature(types.int64)]
 
 @registry.resolves_global(np.random.exponential, typing_key="np.random.exponential")
+@registry.resolves_global(np.random.rayleigh, typing_key="np.random.rayleigh")
 class Numpy_exponential(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in _float_types]
     cases += [signature(tp) for tp in _float_types]

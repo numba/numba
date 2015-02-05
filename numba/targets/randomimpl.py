@@ -963,6 +963,21 @@ def power_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.rayleigh")
+@implement("np.random.rayleigh", types.Kind(types.Float))
+def rayleigh_impl(context, builder, sig, args):
+    _random = np.random.random
+
+    def rayleigh_impl(mode):
+        if mode <= 0.0:
+            raise ValueError
+        return mode * math.sqrt(-2.0 * math.log(1.0 - _random()))
+
+    sig, args = _fill_defaults(context, builder, sig, args, (1.0,))
+    return context.compile_internal(builder, rayleigh_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange

@@ -671,8 +671,19 @@ class TestRandom(TestCase):
         r = self._follow_numpy(np_state_ptr)
         power = jit_unary("np.random.power")
         self._check_dist(power, r.power,
-                         [(0.1,), (0.5,), (0.9,), (6.0,)],
-                         niters=50)
+                         [(0.1,), (0.5,), (0.9,), (6.0,)])
+        self.assertRaises(NativeError, power, 0.0)
+        self.assertRaises(NativeError, power, -0.1)
+
+    def test_numpy_rayleigh(self):
+        r = self._follow_numpy(np_state_ptr)
+        rayleigh1 = jit_unary("np.random.rayleigh")
+        rayleigh0 = jit_nullary("np.random.rayleigh")
+        self._check_dist(rayleigh1, r.rayleigh,
+                         [(0.1,), (0.8,), (25.,), (1e3,)])
+        self._check_dist(rayleigh0, r.rayleigh, [()])
+        self.assertRaises(NativeError, rayleigh1, 0.0)
+        self.assertRaises(NativeError, rayleigh1, -0.1)
 
     def _check_shuffle(self, func, ptr):
         """
