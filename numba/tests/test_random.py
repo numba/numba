@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import functools
+import math
 import random
 import subprocess
 import sys
@@ -43,7 +44,7 @@ def random_randrange3(a, b, c):
 def jit_with_args(name, argstring):
     s = """def func(%(argstring)s):
         return %(name)s(%(argstring)s)
-    """ % locals()
+""" % locals()
     co = compile(s, "<string>", "exec")
     ns = {}
     eval(co, globals(), ns)
@@ -231,11 +232,11 @@ class TestRandom(TestCase):
     def test_random_getrandbits(self):
         self._check_getrandbits(jit_unary("random.getrandbits"), py_state_ptr)
 
-    def _check_dist(self, func, pyfunc, argslist, niters=3):
+    def _check_dist(self, func, pyfunc, argslist, niters=3, prec='exact'):
         assert len(argslist)
         for args in argslist:
             for i in range(niters):
-                self.assertPreciseEqual(func(*args), pyfunc(*args))
+                self.assertPreciseEqual(func(*args), pyfunc(*args), prec=prec)
 
     def _check_gauss(self, func2, func1, func0, ptr):
         """
@@ -461,9 +462,16 @@ class TestRandom(TestCase):
         """
         Check a vonmisesvariate()-like function.
         """
-        # Our implementation follows Python's.
+        # Our implementation follows Python 2.7+'s.
         r = self._follow_cpython(ptr)
-        self._check_dist(func, r.vonmisesvariate, [(0.5, 2.5)])
+        if sys.version_info >= (2, 7):
+            self._check_dist(func, r.vonmisesvariate, [(0.5, 2.5)])
+        else:
+            # Sanity check
+            for i in range(10):
+                val = func(0.5, 2.5)
+                self.assertGreaterEqual(val, 0.0)
+                self.assertLess(val, 2 * math.pi)
 
     def test_random_vonmisesvariate(self):
         self._check_vonmisesvariate(jit_binary("random.vonmisesvariate"),
@@ -475,29 +483,29 @@ class TestRandom(TestCase):
 
     def _check_expovariate(self, func, ptr):
         """
-        Check a expovariate()-like function.
+        Check a expovariate()-like function.  Note the second argument
+        is inversed compared to np.random.exponential().
         """
-        # Our implementation follows Python's.
-        r = self._follow_cpython(ptr)
-        self._check_dist(func, r.expovariate, [(-0.5,), (0.5,)])
+        # Our implementation follows Numpy's (and Python 2.7+'s).
+        r = self._follow_numpy(ptr)
+        for lambd in (0.2, 0.5, 1.5):
+            for i in range(3):
+                self.assertPreciseEqual(func(lambd), r.exponential(1 / lambd),
+                                        prec='double')
 
     def test_random_expovariate(self):
         self._check_expovariate(jit_unary("random.expovariate"), py_state_ptr)
 
     def _check_exponential(self, func1, func0, ptr):
         """
-        Check a exponential()-like function. Note the second argument
-        is inversed compared to expovariate().
+        Check a exponential()-like function.
         """
-        r = self._follow_cpython(ptr)
+        # Our implementation follows Numpy's (and Python 2.7+'s).
+        r = self._follow_numpy(ptr)
         if func1 is not None:
-            for scale in (0.5, 1.0, 1.5):
-                for i in range(3):
-                    self.assertPreciseEqual(func1(scale),
-                                            r.expovariate(1 / scale),
-                                            prec="double")
+            self._check_dist(func1, r.exponential, [(0.5,), (1.0,), (1.5,)])
         if func0 is not None:
-            self.assertPreciseEqual(func0(), r.expovariate(1.0))
+            self._check_dist(func0, r.exponential, [()])
 
     def test_numpy_exponential(self):
         self._check_exponential(jit_unary("np.random.exponential"),

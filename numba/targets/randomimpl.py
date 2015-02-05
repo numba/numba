@@ -694,6 +694,8 @@ def _vonmisesvariate_impl(context, builder, sig, args, _random):
 
     def vonmisesvariate_impl(mu, kappa):
         """Circular data distribution.  Taken from CPython.
+        Note the algorithm in Python 2.6 and Numpy is different:
+        http://bugs.python.org/issue17141
         """
         # mu:    mean angle (in radians between 0 and 2*pi)
         # kappa: concentration parameter kappa (>= 0)
