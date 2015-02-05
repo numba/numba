@@ -784,6 +784,44 @@ def geometric_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.gumbel", types.Kind(types.Float), types.Kind(types.Float))
+def gumbel_impl(context, builder, sig, args):
+    _random = np.random.random
+    _log = math.log
+
+    def gumbel_impl(loc, scale):
+        U = 1.0 - _random()
+        return loc - scale * _log(-_log(U))
+
+    return context.compile_internal(builder, gumbel_impl, sig, args)
+
+
+@register
+@implement("np.random.hypergeometric", types.Kind(types.Integer),
+           types.Kind(types.Integer), types.Kind(types.Integer))
+def hypergeometric_impl(context, builder, sig, args):
+    _random = np.random.random
+    _floor = math.floor
+
+    def hypergeometric_impl(ngood, nbad, nsamples):
+        d1 = nbad + ngood - nsamples
+        d2 = float(min(nbad, ngood))
+
+        Y = d2
+        K = nsamples
+        while Y > 0.0 and K > 0:
+            Y -= _floor(_random() + Y / (d1 + K))
+            K -= 1
+        Z = int(d2 - Y)
+        if ngood > nbad:
+            return nsamples - Z
+        else:
+            return Z
+
+    return context.compile_internal(builder, hypergeometric_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange

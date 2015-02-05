@@ -72,7 +72,6 @@ numpy_random = jit_nullary("np.random.random")
 numpy_seed = jit_unary("np.random.seed")
 
 
-
 def _copy_py_state(r, ptr):
     """
     Copy state of Python random *r* to Numba state *ptr*.
@@ -103,7 +102,6 @@ def sync_to_numpy(r):
         np_st += (1, _gauss_next)
 
     np.random.set_state(np_st)
-
 
 # Pure Python equivalents of some of the Numpy distributions, using
 # Python's basic generators.
@@ -588,6 +586,30 @@ class TestRandom(TestCase):
         self.assertTrue([i for i in r if i > 50])  # likely
         r = [geom(1e-15) for i in range(N)]
         self.assertTrue([i for i in r if i > 2**32])  # likely
+
+    def test_numpy_gumbel(self):
+        gumbel = jit_binary("np.random.gumbel")
+        r = self._follow_numpy(np_state_ptr)
+        self._check_dist(gumbel, r.gumbel, [(0.0, 1.0), (-1.5, 3.5)])
+
+    def test_numpy_hypergeometric(self):
+        # Our implementation follows Numpy's up to nsamples = 10.
+        hg = jit_ternary("np.random.hypergeometric")
+        r = self._follow_numpy(np_state_ptr)
+        self._check_dist(hg, r.hypergeometric,
+                         [(1000, 5000, 10), (5000, 1000, 10)],
+                         niters=30)
+        # Sanity checks
+        r = [hg(1000, 1000, 100) for i in range(100)]
+        self.assertTrue(all(x >= 0 and x <= 100 for x in r), r)
+        self.assertGreaterEqual(np.mean(r), 40.0)
+        self.assertLessEqual(np.mean(r), 60.0)
+        r = [hg(1000, 100000, 100) for i in range(100)]
+        self.assertTrue(all(x >= 0 and x <= 100 for x in r), r)
+        self.assertLessEqual(np.mean(r), 10.0)
+        r = [hg(100000, 1000, 100) for i in range(100)]
+        self.assertTrue(all(x >= 0 and x <= 100 for x in r), r)
+        self.assertGreaterEqual(np.mean(r), 90.0)
 
     def _check_shuffle(self, func, ptr):
         """
