@@ -73,6 +73,7 @@ Numba_rnd_init(rnd_state_t *state, unsigned int seed)
         seed = (1812433253U * (seed ^ (seed >> 30)) + pos + 1) & 0xffffffffU;
     }
     state->index = MT_N;
+    state->has_gauss = 0;
 }
 
 /* Random-initialize the given state (for use at startup) */
@@ -143,6 +144,7 @@ rnd_set_state(PyObject *self, PyObject *args)
             return NULL;
         state->mt[i] = x;
     }
+    state->has_gauss = 0;
     Py_RETURN_NONE;
 }
 

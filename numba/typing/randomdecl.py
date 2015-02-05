@@ -71,6 +71,7 @@ class Numpy_hypergeometric(ConcreteTemplate):
     cases = [signature(tp, tp, tp, tp) for tp in _int_types]
 
 @registry.resolves_global(np.random.laplace, typing_key="np.random.laplace")
+@registry.resolves_global(np.random.logistic, typing_key="np.random.logistic")
 @registry.resolves_global(np.random.lognormal, typing_key="np.random.lognormal")
 @registry.resolves_global(np.random.normal, typing_key="np.random.normal")
 class Numpy_normal(ConcreteTemplate):

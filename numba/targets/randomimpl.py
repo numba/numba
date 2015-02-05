@@ -133,6 +133,18 @@ def get_state_ptr(context, builder, name):
         }[name](context, builder)
 
 
+def _fill_defaults(context, builder, sig, args, defaults):
+    """
+    Assuming a homogenous signature (same type for result and all arguments),
+    fill in the *defaults* if missing from the arguments.
+    """
+    ty = sig.return_type
+    llty = context.get_data_type(ty)
+    args = args + [ir.Constant(llty, d) for d in defaults[len(args):]]
+    sig = signature(*(ty,) * (len(args) + 1))
+    return sig, args
+
+
 @register
 @implement("random.seed", types.uint32)
 def seed_impl(context, builder, sig, args):
@@ -170,6 +182,7 @@ def random_impl(context, builder, sig, args):
 def gauss_impl(context, builder, sig, args):
     return _gauss_impl(context, builder, sig, args, "py")
 
+
 @register
 @implement("np.random.randn")
 @implement("np.random.standard_normal")
@@ -177,16 +190,8 @@ def gauss_impl(context, builder, sig, args):
 @implement("np.random.normal", types.Kind(types.Float))
 @implement("np.random.normal", types.Kind(types.Float), types.Kind(types.Float))
 def np_gauss_impl(context, builder, sig, args):
-    llty = context.get_data_type(sig.return_type)
-    if len(args) == 2:
-        mu, sigma = args
-    elif len(args) == 1:
-        mu, = args
-        sigma = ir.Constant(llty, 1.0)
-    else:
-        mu = ir.Constant(llty, 0.0)
-        sigma = ir.Constant(llty, 1.0)
-    return _gauss_impl(context, builder, sig, [mu, sigma], "np")
+    sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
+    return _gauss_impl(context, builder, sig, args, "np")
 
 
 def _gauss_pair_impl(_random):
@@ -318,7 +323,7 @@ def randrange_impl_3(context, builder, sig, args):
 
 @register
 @implement("random.randint", types.Kind(types.Integer), types.Kind(types.Integer))
-def randint_impl(context, builder, sig, args):
+def randint_impl_1(context, builder, sig, args):
     start, stop = args
     step = ir.Constant(start.type, 1)
     stop = builder.add(stop, step)
@@ -326,7 +331,7 @@ def randint_impl(context, builder, sig, args):
 
 @register
 @implement("np.random.randint", types.Kind(types.Integer))
-def randrange_impl_1(context, builder, sig, args):
+def randint_impl_2(context, builder, sig, args):
     stop, = args
     start = ir.Constant(stop.type, 0)
     step = ir.Constant(stop.type, 1)
@@ -422,14 +427,8 @@ def gammavariate_impl(context, builder, sig, args):
 @implement("np.random.gamma", types.Kind(types.Float))
 @implement("np.random.gamma", types.Kind(types.Float), types.Kind(types.Float))
 def gammavariate_impl(context, builder, sig, args):
-    ty = sig.return_type
-    if len(args) == 2:
-        alpha, beta = args
-    else:
-        alpha = args[0]
-        beta = ir.Constant(context.get_data_type(ty), 1.0)
-        sig = signature(ty, ty, ty)
-    return _gammavariate_impl(context, builder, sig, [alpha, beta], np.random.random)
+    sig, args = _fill_defaults(context, builder, sig, args, (None, 1.0))
+    return _gammavariate_impl(context, builder, sig, args, np.random.random)
 
 def _gammavariate_impl(context, builder, sig, args, _random):
     _exp = math.exp
@@ -585,18 +584,8 @@ def exponential_impl(context, builder, sig, args):
 @implement("np.random.lognormal", types.Kind(types.Float))
 @implement("np.random.lognormal", types.Kind(types.Float), types.Kind(types.Float))
 def np_lognormal_impl(context, builder, sig, args):
-    ty = sig.return_type
-    llty = context.get_data_type(ty)
-    if len(args) == 2:
-        mu, sigma = args
-    elif len(args) == 1:
-        mu, = args
-        sigma = ir.Constant(llty, 1.0)
-    else:
-        mu = ir.Constant(llty, 0.0)
-        sigma = ir.Constant(llty, 1.0)
-    sig = signature(ty, ty, ty)
-    return _lognormvariate_impl(context, builder, sig, [mu, sigma],
+    sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
+    return _lognormvariate_impl(context, builder, sig, args,
                                 np.random.normal)
 
 @register
@@ -826,16 +815,6 @@ def hypergeometric_impl(context, builder, sig, args):
 @implement("np.random.laplace", types.Kind(types.Float))
 @implement("np.random.laplace", types.Kind(types.Float), types.Kind(types.Float))
 def laplace_impl(context, builder, sig, args):
-    ty = sig.return_type
-    llty = context.get_data_type(ty)
-    if len(args) == 2:
-        loc, scale = args
-    elif len(args) == 1:
-        loc, = args
-        scale = ir.Constant(llty, 1.0)
-    else:
-        loc = ir.Constant(llty, 0.0)
-        scale = ir.Constant(llty, 1.0)
     _random = np.random.random
     _log = math.log
 
@@ -846,9 +825,24 @@ def laplace_impl(context, builder, sig, args):
         else:
             return loc - scale * _log(2.0 - U - U)
 
-    sig = signature(ty, ty, ty)
-    return context.compile_internal(builder, laplace_impl, sig, (loc, scale))
+    sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
+    return context.compile_internal(builder, laplace_impl, sig, args)
 
+
+@register
+@implement("np.random.logistic")
+@implement("np.random.logistic", types.Kind(types.Float))
+@implement("np.random.logistic", types.Kind(types.Float), types.Kind(types.Float))
+def logistic_impl(context, builder, sig, args):
+    _random = np.random.random
+    _log = math.log
+
+    def logistic_impl(loc, scale):
+        U = _random()
+        return loc + scale * _log(U / (1.0 - U))
+
+    sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
+    return context.compile_internal(builder, logistic_impl, sig, args)
 
 @register
 @implement("random.shuffle", types.Kind(types.Array))

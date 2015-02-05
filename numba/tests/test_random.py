@@ -619,6 +619,14 @@ class TestRandom(TestCase):
                          [(0.0,), (-1.5,)])
         self._check_dist(jit_nullary("np.random.laplace"), r.laplace, [()])
 
+    def test_numpy_logistic(self):
+        r = self._follow_numpy(np_state_ptr)
+        self._check_dist(jit_binary("np.random.logistic"), r.logistic,
+                         [(0.0, 1.0), (-1.5, 3.5)])
+        self._check_dist(jit_unary("np.random.logistic"), r.logistic,
+                         [(0.0,), (-1.5,)])
+        self._check_dist(jit_nullary("np.random.logistic"), r.logistic, [()])
+
     def _check_shuffle(self, func, ptr):
         """
         Check a shuffle()-like function for 1D arrays.
