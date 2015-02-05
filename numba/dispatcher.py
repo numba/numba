@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-import contextlib
 import functools
 import inspect
 import sys
@@ -60,6 +59,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         """
         overloads = self.overloads
         targetctx = self.targetctx
+
         # Early-bind utils.shutting_down() into the function's local namespace
         # (see issue #689)
         def finalizer(shutting_down=utils.shutting_down):
@@ -155,6 +155,20 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         assert not kws
         sig = tuple([self.typeof_pyval(a) for a in args])
         return self.compile(sig)
+
+    def inspect_llvm(self, signature=None):
+        if signature is not None:
+            lib = self._compileinfos[signature].library
+            return lib.get_llvm_str()
+
+        return dict((sig, self.inspect_llvm(sig)) for sig in self.signatures)
+
+    def inspect_asm(self, signature=None):
+        if signature is not None:
+            lib = self._compileinfos[signature].library
+            return lib.get_asm_str()
+
+        return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 
     def inspect_types(self, file=None):
         if file is None:
