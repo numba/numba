@@ -822,6 +822,35 @@ def hypergeometric_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.laplace")
+@implement("np.random.laplace", types.Kind(types.Float))
+@implement("np.random.laplace", types.Kind(types.Float), types.Kind(types.Float))
+def laplace_impl(context, builder, sig, args):
+    ty = sig.return_type
+    llty = context.get_data_type(ty)
+    if len(args) == 2:
+        loc, scale = args
+    elif len(args) == 1:
+        loc, = args
+        scale = ir.Constant(llty, 1.0)
+    else:
+        loc = ir.Constant(llty, 0.0)
+        scale = ir.Constant(llty, 1.0)
+    _random = np.random.random
+    _log = math.log
+
+    def laplace_impl(loc, scale):
+        U = _random()
+        if U < 0.5:
+            return loc + scale * _log(U + U)
+        else:
+            return loc - scale * _log(2.0 - U - U)
+
+    sig = signature(ty, ty, ty)
+    return context.compile_internal(builder, laplace_impl, sig, (loc, scale))
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange

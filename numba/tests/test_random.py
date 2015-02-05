@@ -611,6 +611,14 @@ class TestRandom(TestCase):
         self.assertTrue(all(x >= 0 and x <= 100 for x in r), r)
         self.assertGreaterEqual(np.mean(r), 90.0)
 
+    def test_numpy_laplace(self):
+        r = self._follow_numpy(np_state_ptr)
+        self._check_dist(jit_binary("np.random.laplace"), r.laplace,
+                         [(0.0, 1.0), (-1.5, 3.5)])
+        self._check_dist(jit_unary("np.random.laplace"), r.laplace,
+                         [(0.0,), (-1.5,)])
+        self._check_dist(jit_nullary("np.random.laplace"), r.laplace, [()])
+
     def _check_shuffle(self, func, ptr):
         """
         Check a shuffle()-like function for 1D arrays.
