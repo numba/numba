@@ -168,7 +168,11 @@ class CodeLibrary(object):
             dump("OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
 
         if config.DUMP_ASSEMBLY:
-            dump("ASSEMBLY %s" % self._name, self.get_asm_str())
+            # CUDA backend cannot return assembly this early, so don't
+            # attempt to dump assembly if nothing is produced.
+            asm = self.get_asm_str()
+            if asm:
+                dump("ASSEMBLY %s" % self._name, self.get_asm_str())
 
     def get_function(self, name):
         return self._final_module.get_function(name)
