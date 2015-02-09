@@ -98,8 +98,11 @@ _rnd_random_seed(rnd_state_t *state)
 #ifndef _WIN32
     seed ^= getpid();
 #endif
-    /* Address space randomization bits: take MSBs of various pointers */
-    rshift = sizeof(void *)  * 8 - 32;
+    /* Address space randomization bits: take MSBs of various pointers.
+     * It is counter-productive to shift by 32, since the virtual address
+     * space width is usually less than 64 bits (48 on x86-64).
+     */
+    rshift = sizeof(void *) > 4 ? 16 : 0;
     seed ^= (Py_uintptr_t) &timemod >> rshift;
     seed += (Py_uintptr_t) &PyObject_CallMethod >> rshift;
     Numba_rnd_init(state, seed);
