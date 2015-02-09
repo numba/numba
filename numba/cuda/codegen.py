@@ -23,10 +23,10 @@ class CUDACodeLibrary(CodeLibrary):
             if '.' in gv.name:
                 gv.name = gv.name.replace('.', '_')
 
-    def _dump_assembly(self):
-        # Do nothing: we can only dump assembler code when it is later
+    def get_asm_str(self):
+        # Return nothing: we can only dump assembler code when it is later
         # generated (in numba.cuda.compiler).
-        pass
+        return None
 
 
 class JITCUDACodegen(BaseCPUCodegen):
