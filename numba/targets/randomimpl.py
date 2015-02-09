@@ -995,6 +995,19 @@ def cauchy_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.standard_t", types.Kind(types.Float))
+def standard_t_impl(context, builder, sig, args):
+
+    def standard_t_impl(df):
+        N = np.random.standard_normal()
+        G = np.random.standard_gamma(df / 2.0)
+        X = math.sqrt(df / 2.0) * N / math.sqrt(G)
+        return X
+
+    return context.compile_internal(builder, standard_t_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange
@@ -1008,3 +1021,4 @@ def shuffle_impl(context, builder, sig, args):
 
     return context.compile_internal(builder, shuffle_impl,
                                     sig, args)
+

@@ -690,6 +690,16 @@ class TestRandom(TestCase):
         cauchy = jit_nullary("np.random.standard_cauchy")
         self._check_dist(cauchy, r.standard_cauchy, [()])
 
+    def test_numpy_standard_t(self):
+        # We use CPython's algorithm for the gamma dist and numpy's
+        # for the normal dist.  Standard T calls both so we can't check
+        # against either generator's output.
+        r = self._follow_cpython(np_state_ptr)
+        standard_t = jit_unary("np.random.standard_t")
+        avg = np.mean([standard_t(5) for i in range(5000)])
+        # Sanity check
+        self.assertLess(abs(avg), 0.5)
+
     def _check_shuffle(self, func, ptr):
         """
         Check a shuffle()-like function for 1D arrays.
