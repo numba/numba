@@ -63,6 +63,7 @@ class Random_seed(ConcreteTemplate):
 class Numpy_geometric(ConcreteTemplate):
     cases = [signature(types.int64, tp) for tp in _float_types]
 
+@registry.resolves_global(np.random.binomial, typing_key="np.random.binomial")
 @registry.resolves_global(np.random.negative_binomial,
                           typing_key="np.random.negative_binomial")
 class Numpy_negative_binomial(ConcreteTemplate):

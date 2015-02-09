@@ -726,6 +726,43 @@ def _vonmisesvariate_impl(context, builder, sig, args, _random):
 
 
 @register
+@implement("np.random.binomial", types.Kind(types.Integer), types.Kind(types.Float))
+def binomial_impl(context, builder, sig, args):
+    intty = sig.return_type
+    _random = np.random.random
+
+    def binomial_impl(n, p):
+        """
+        Binomial distribution.  Numpy's variant of the BINV algorithm
+        is used.
+        (Numpy uses BTPE for n*p >= 30, though)
+        """
+        if n < 0:
+            raise ValueError
+        if not (0.0 <= p <= 1.0):
+            raise ValueError
+        flipped = p > 0.5
+        if flipped:
+            p = 1.0 - p
+        q = 1.0 - p
+        qn = q ** n
+        np = n * p
+        bound = min(n, np + 10.0 * math.sqrt(np * q + 1))
+        while 1:
+            X = 0
+            U = _random()
+            px = qn
+            while X <= bound:
+                if U <= px:
+                    return n - X if flipped else X
+                U -= px
+                X += 1
+                px = ((n - X + 1) * p * px) / (X * q)
+
+    return context.compile_internal(builder, binomial_impl, sig, args)
+
+
+@register
 @implement("np.random.chisquare", types.Kind(types.Float))
 def chisquare_impl(context, builder, sig, args):
 

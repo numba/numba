@@ -554,6 +554,14 @@ class TestRandom(TestCase):
         self._check_weibullvariate(None, jit_unary("np.random.weibull"),
                                    np_state_ptr)
 
+    def test_numpy_binomial(self):
+        # We follow Numpy's algorithm up to n*p == 30
+        self._follow_numpy(np_state_ptr, 0)
+        binomial = jit_binary("np.random.binomial")
+        self.assertRaises(NativeError, binomial, -1, 0.5)
+        self.assertRaises(NativeError, binomial, 10, -0.1)
+        self.assertRaises(NativeError, binomial, 10, 1.1)
+
     def test_numpy_chisquare(self):
         chisquare = jit_unary("np.random.chisquare")
         r = self._follow_cpython(np_state_ptr)
