@@ -709,6 +709,13 @@ class TestRandom(TestCase):
         self.assertRaises(NativeError, wald, 1.0, 0.0)
         self.assertRaises(NativeError, wald, 1.0, -0.1)
 
+    def test_numpy_zipf(self):
+        r = self._follow_numpy(np_state_ptr)
+        zipf = jit_unary("np.random.zipf")
+        self._check_dist(zipf, r.zipf, [(1.5,), (2.5,)], niters=100)
+        for val in (1.0, 0.5, 0.0, -0.1):
+            self.assertRaises(NativeError, zipf, val)
+
     def _check_shuffle(self, func, ptr):
         """
         Check a shuffle()-like function for 1D arrays.

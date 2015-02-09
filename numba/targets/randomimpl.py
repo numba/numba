@@ -1030,6 +1030,28 @@ def wald_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.zipf", types.Kind(types.Float))
+def zipf_impl(context, builder, sig, args):
+    _random = np.random.random
+    intty = sig.return_type
+
+    def zipf_impl(a):
+        if a <= 1.0:
+            raise ValueError
+        am1 = a - 1.0
+        b = 2.0 ** am1
+        while 1:
+            U = 1.0 - _random()
+            V = _random()
+            X = intty(math.floor(U ** (-1.0 / am1)))
+            T = (1.0 + 1.0 / X) ** am1
+            if X >= 1 and V * X * (T - 1.0) / (b - 1.0) <= (T / b):
+                return X
+
+    return context.compile_internal(builder, zipf_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange
