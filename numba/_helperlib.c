@@ -263,9 +263,16 @@ loggam(double x)
     return gl;
 }
 
+
 static int64_t
 Numba_poisson_ptrs(rnd_state_t *state, double lam)
 {
+    /* This method is invoked only if the parameter lambda of this
+     * distribution is big enough ( >= 10 ). The algorithm used is
+     * described in "Hörmann, W. 1992. 'The Transformed Rejection
+     * Method for Generating Poisson Random Variables'.
+     * The implementation comes straight from Numpy.
+     */
     int64_t k;
     double U, V, slam, loglam, a, b, invalpha, vr, us;
 

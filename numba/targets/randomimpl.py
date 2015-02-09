@@ -923,7 +923,13 @@ def poisson_impl(context, builder, sig, args):
     _exp = math.exp
 
     def poisson_impl(lam):
-        """Numpy's algorithm for poisson() on small *lam*."""
+        """Numpy's algorithm for poisson() on small *lam*.
+
+        This method is invoked only if the parameter lambda of the
+        distribution is small ( < 10 ). The algorithm used is described
+        in "Knuth, D. 1969. 'Seminumerical Algorithms. The Art of
+        Computer Programming' vol 2.
+        """
         if lam < 0.0:
             raise ValueError
         if lam == 0.0:
