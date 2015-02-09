@@ -5,6 +5,7 @@ Implement the random and numpy.random module functions.
 from __future__ import print_function, absolute_import, division
 
 import math
+import os
 import random
 
 import numpy as np
@@ -27,6 +28,16 @@ double = ir.DoubleType()
 
 N = 624
 N_const = ir.Constant(int32_t, N)
+
+
+def random_init():
+    """
+    Initialize the random states with system entropy.
+    """
+    b = os.urandom(N * 4)
+    for n in ('py_random_state', 'np_random_state'):
+        _helperlib.rnd_seed(_helperlib.c_helpers[n], b)
+
 
 # This is the same struct as rnd_state_t in _helperlib.c.
 rnd_state_t = ir.LiteralStructType(

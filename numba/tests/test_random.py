@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import functools
 import math
+import os
 import random
 import subprocess
 import sys
@@ -154,8 +155,19 @@ class TestInternals(TestCase):
             ints = list(st[1])
             index = st[2]
             assert index == N  # sanity check
-            _helperlib.rnd_init(ptr, i)
+            _helperlib.rnd_seed(ptr, i)
             self.assertEqual(_helperlib.rnd_get_state(ptr), (index, ints))
+
+    def _check_perturb(self, ptr):
+        states = []
+        for i in range(10):
+            # Initialize with known state
+            _helperlib.rnd_seed(ptr, 0)
+            # Perturb with entropy
+            _helperlib.rnd_seed(ptr, os.urandom(512))
+            states.append(tuple(_helperlib.rnd_get_state(ptr)[1]))
+        # No two identical states
+        self.assertEqual(len(set(states)), len(states))
 
     def test_get_set_state(self):
         self._check_get_set_state(py_state_ptr)
@@ -165,6 +177,9 @@ class TestInternals(TestCase):
 
     def test_init(self):
         self._check_init(py_state_ptr)
+
+    def test_perturb(self):
+        self._check_perturb(py_state_ptr)
 
 
 class TestRandom(TestCase):

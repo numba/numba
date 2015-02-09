@@ -76,6 +76,37 @@ Numba_rnd_init(rnd_state_t *state, unsigned int seed)
     state->has_gauss = 0;
 }
 
+/* Perturb mt[] with a key array */
+static void
+rnd_init_by_array(rnd_state_t *state, unsigned int init_key[], size_t key_length)
+{
+    size_t i, j, k;
+    unsigned int *mt = state->mt;
+
+    Numba_rnd_init(state, 19650218U);
+    i = 1; j = 0;
+    k = (MT_N > key_length ? MT_N : key_length);
+    for (; k; k--) {
+        mt[i] = (mt[i] ^ ((mt[i-1] ^ (mt[i-1] >> 30)) * 1664525U))
+                 + init_key[j] + (unsigned int) j; /* non linear */
+        mt[i] &= 0xffffffffU;
+        i++; j++;
+        if (i >= MT_N) { mt[0] = mt[MT_N - 1]; i = 1; }
+        if (j >= key_length) j = 0;
+    }
+    for (k = MT_N - 1; k; k--) {
+        mt[i] = (mt[i] ^ ((mt[i-1] ^ (mt[i-1] >> 30)) * 1566083941U))
+                 - (unsigned int) i; /* non linear */
+        mt[i] &= 0xffffffffU;
+        i++;
+        if (i >= MT_N) { mt[0] = mt[MT_N - 1]; i=1; }
+    }
+
+    mt[0] = 0x80000000U; /* MSB is 1; ensuring non-zero initial array */
+    state->index = MT_N;
+    state->has_gauss = 0;
+}
+
 /* Random-initialize the given state (for use at startup) */
 static int
 _rnd_random_seed(rnd_state_t *state)
@@ -110,11 +141,18 @@ _rnd_random_seed(rnd_state_t *state)
 }
 
 /* Python-exposed helpers for state management */
+static int
+rnd_state_converter(PyObject *obj, rnd_state_t **state)
+{
+    *state = (rnd_state_t *) PyLong_AsVoidPtr(obj);
+    return (*state != NULL || !PyErr_Occurred());
+}
+
 static PyObject *
 rnd_shuffle(PyObject *self, PyObject *arg)
 {
-    rnd_state_t *state = (rnd_state_t *) PyLong_AsVoidPtr(arg);
-    if (state == NULL && PyErr_Occurred())
+    rnd_state_t *state;
+    if (!rnd_state_converter(arg, &state))
         return NULL;
     Numba_rnd_shuffle(state);
     Py_RETURN_NONE;
@@ -125,13 +163,11 @@ rnd_set_state(PyObject *self, PyObject *args)
 {
     int i, index;
     rnd_state_t *state;
-    PyObject *statearg, *tuplearg, *intlist;
+    PyObject *tuplearg, *intlist;
 
-    if (!PyArg_ParseTuple(args, "OO!:rnd_set_state",
-                          &statearg, &PyTuple_Type, &tuplearg))
-        return NULL;
-    state = (rnd_state_t *) PyLong_AsVoidPtr(statearg);
-    if (state == NULL && PyErr_Occurred())
+    if (!PyArg_ParseTuple(args, "O&O!:rnd_set_state",
+                          rnd_state_converter, &state,
+                          &PyTuple_Type, &tuplearg))
         return NULL;
     if (!PyArg_ParseTuple(tuplearg, "iO!", &index, &PyList_Type, &intlist))
         return NULL;
@@ -156,9 +192,8 @@ rnd_get_state(PyObject *self, PyObject *arg)
 {
     PyObject *intlist;
     int i;
-
-    rnd_state_t *state = (rnd_state_t *) PyLong_AsVoidPtr(arg);
-    if (state == NULL && PyErr_Occurred())
+    rnd_state_t *state;
+    if (!rnd_state_converter(arg, &state))
         return NULL;
 
     intlist = PyList_New(MT_N);
@@ -176,17 +211,47 @@ rnd_get_state(PyObject *self, PyObject *arg)
 }
 
 static PyObject *
-rnd_init(PyObject *self, PyObject *args)
+rnd_seed_with_urandom(PyObject *self, PyObject *args)
+{
+    rnd_state_t *state;
+    Py_buffer buf;
+    unsigned int *keys;
+    unsigned char *bytes;
+    size_t i, nkeys;
+
+    if (!PyArg_ParseTuple(args, "O&s*:rnd_seed",
+                          rnd_state_converter, &state, &buf)) {
+        return NULL;
+    }
+    /* Make a copy to avoid alignment issues */
+    nkeys = buf.len / sizeof(unsigned int);
+    keys = (unsigned int *) PyMem_Malloc(nkeys * sizeof(unsigned int));
+    if (keys == NULL) {
+        PyBuffer_Release(&buf);
+        return NULL;
+    }
+    bytes = (unsigned char *) buf.buf;
+    for (i = 0; i < nkeys; i++, bytes += 4) {
+        keys[i] = (bytes[3] << 24) + (bytes[2] << 16) +
+                  (bytes[1] << 8) + (bytes[0] << 0);
+    }
+    PyBuffer_Release(&buf);
+    rnd_init_by_array(state, keys, nkeys);
+    PyMem_Free(keys);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+rnd_seed(PyObject *self, PyObject *args)
 {
     unsigned int seed;
     rnd_state_t *state;
-    PyObject *statearg;
 
-    if (!PyArg_ParseTuple(args, "OI:rnd_init", &statearg, &seed))
-        return NULL;
-    state = (rnd_state_t *) PyLong_AsVoidPtr(statearg);
-    if (state == NULL && PyErr_Occurred())
-        return NULL;
+    if (!PyArg_ParseTuple(args, "O&I:rnd_seed",
+                          rnd_state_converter, &state, &seed)) {
+        PyErr_Clear();
+        return rnd_seed_with_urandom(self, args);
+    }
     Numba_rnd_init(state, seed);
     Py_RETURN_NONE;
 }
@@ -707,7 +772,7 @@ error:
 
 static PyMethodDef ext_methods[] = {
     { "rnd_get_state", (PyCFunction) rnd_get_state, METH_O, NULL },
-    { "rnd_init", (PyCFunction) rnd_init, METH_VARARGS, NULL },
+    { "rnd_seed", (PyCFunction) rnd_seed, METH_VARARGS, NULL },
     { "rnd_set_state", (PyCFunction) rnd_set_state, METH_VARARGS, NULL },
     { "rnd_shuffle", (PyCFunction) rnd_shuffle, METH_O, NULL },
     { NULL },
