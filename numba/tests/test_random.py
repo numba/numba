@@ -245,12 +245,18 @@ class TestRandom(TestCase):
     def test_random_getrandbits(self):
         self._check_getrandbits(jit_unary("random.getrandbits"), py_state_ptr)
 
-    def _check_dist(self, func, pyfunc, argslist, niters=3, prec='exact'):
+    # Explanation for the large ulps value: on 32-bit platforms, our
+    # LLVM-compiled functions use SSE but they are compared against
+    # C functions which use x87.
+    # On some distributions, the errors seem to accumulate dramatically.
+
+    def _check_dist(self, func, pyfunc, argslist, niters=3,
+                    prec='double', ulps=10):
         assert len(argslist)
         for args in argslist:
             results = [func(*args) for i in range(niters)]
             pyresults = [pyfunc(*args) for i in range(niters)]
-            self.assertPreciseEqual(results, pyresults, prec=prec,
+            self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
                                     msg="for arguments %s" % (args,))
 
     def _check_gauss(self, func2, func1, func0, ptr):

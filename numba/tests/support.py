@@ -91,7 +91,7 @@ class TestCase(unittest.TestCase):
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
-    _sequence_typesets = [(tuple,)]
+    _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
     _complex_types = (complex, np.complexfloating)
 

@@ -35,6 +35,7 @@ class TestAssertPreciseEqual(TestCase):
             self.assertPreciseEqual(right, left, **kwargs)
         assert_succeed(left, right)
         assert_succeed((left, left), (right, right))
+        assert_succeed([left, left], [right, right])
 
     def ne(self, left, right, **kwargs):
         def assert_fail(left, right):
@@ -48,6 +49,8 @@ class TestAssertPreciseEqual(TestCase):
         assert_fail(right, left)
         assert_fail((left, left), (right, right))
         assert_fail((right, right), (left, left))
+        assert_fail([left, left], [right, right])
+        assert_fail([right, right], [left, left])
 
     def test_types(self):
         # assertPreciseEqual() should test for type compatibility
@@ -99,7 +102,6 @@ class TestAssertPreciseEqual(TestCase):
                 self.ne(tp(NAN), tp(0), prec=prec)
                 self.ne(tp(NAN), tp(INF), prec=prec)
                 self.ne(tp(NAN), tp(-INF), prec=prec)
-
 
     def test_float64_values(self):
         for tp in [float, np.float64]:
