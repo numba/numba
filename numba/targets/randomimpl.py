@@ -1008,6 +1008,28 @@ def standard_t_impl(context, builder, sig, args):
 
 
 @register
+@implement("np.random.wald", types.Kind(types.Float), types.Kind(types.Float))
+def wald_impl(context, builder, sig, args):
+
+    def wald_impl(mean, scale):
+        if mean <= 0.0:
+            raise ValueError
+        if scale <= 0.0:
+            raise ValueError
+        mu_2l = mean / (2.0 * scale)
+        Y = np.random.standard_normal()
+        Y = mean * Y * Y
+        X = mean + mu_2l * (Y - math.sqrt(4 * scale * Y + Y * Y))
+        U = np.random.random()
+        if U <= mean / (mean + X):
+            return X
+        else:
+            return mean * mean / X
+
+    return context.compile_internal(builder, wald_impl, sig, args)
+
+
+@register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
     _randrange = random.randrange

@@ -700,6 +700,15 @@ class TestRandom(TestCase):
         # Sanity check
         self.assertLess(abs(avg), 0.5)
 
+    def test_numpy_wald(self):
+        r = self._follow_numpy(np_state_ptr)
+        wald = jit_binary("np.random.wald")
+        self._check_dist(wald, r.wald, [(1.0, 1.0), (2.0, 5.0)])
+        self.assertRaises(NativeError, wald, 0.0, 1.0)
+        self.assertRaises(NativeError, wald, -0.1, 1.0)
+        self.assertRaises(NativeError, wald, 1.0, 0.0)
+        self.assertRaises(NativeError, wald, 1.0, -0.1)
+
     def _check_shuffle(self, func, ptr):
         """
         Check a shuffle()-like function for 1D arrays.
