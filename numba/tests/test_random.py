@@ -251,7 +251,7 @@ class TestRandom(TestCase):
     # On some distributions, the errors seem to accumulate dramatically.
 
     def _check_dist(self, func, pyfunc, argslist, niters=3,
-                    prec='double', ulps=10):
+                    prec='double', ulps=12):
         assert len(argslist)
         for args in argslist:
             results = [func(*args) for i in range(niters)]
@@ -662,8 +662,14 @@ class TestRandom(TestCase):
         r = self._follow_numpy(np_state_ptr)
         logseries = jit_unary("np.random.logseries")
         self._check_dist(logseries, r.logseries,
-                         [(0.1,), (0.99,), (0.9999,), (0.9999999999999,)],
+                         [(0.1,), (0.99,), (0.9999,)],
                          niters=50)
+        # Numpy's logseries overflows on 32-bit builds, so instead
+        # hardcode Numpy's (correct) output on 64-bit builds.
+        r = self._follow_numpy(np_state_ptr, seed=1)
+        self.assertEqual([logseries(0.9999999999999) for i in range(10)],
+                         [2022733531, 77296, 30, 52204, 9341294, 703057324,
+                          413147702918, 1870715907, 16009330, 738])
         self.assertRaises(NativeError, logseries, 0.0)
         self.assertRaises(NativeError, logseries, -0.1)
         self.assertRaises(NativeError, logseries, 1.1)
@@ -687,7 +693,7 @@ class TestRandom(TestCase):
         self.assertEqual([negbin(1000, 0.1) for i in range(10)],
                          [9203, 8640, 9081, 9292, 8938,
                           9165, 9149, 8774, 8886, 9117])
-        m = np.mean([np.random.negative_binomial(1000000000, 0.1)
+        m = np.mean([negbin(1000000000, 0.1)
                      for i in range(50)])
         self.assertGreater(m, 9e9 * 0.99)
         self.assertLess(m, 9e9 * 1.01)

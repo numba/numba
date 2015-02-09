@@ -915,7 +915,7 @@ def logseries_impl(context, builder, sig, args):
             q = 1.0 - _exp(r * U)
             if V <= q * q:
                 # XXX what if V == 0.0 ?
-                return intty(1 + _log(V) / _log(q))
+                return intty(1.0 + _log(V) / _log(q))
             elif V >= q:
                 return 1
             else:
