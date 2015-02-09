@@ -15,7 +15,7 @@ def usecase_uint64_global():
 def usecase_uint64_constant():
     return 18446744073709551615
 
-def usecase_uint64_floor():
+def usecase_uint64_func():
     return max(18446744073709551614, 18446744073709551615)
 
 
@@ -40,7 +40,7 @@ class IntWidthTest(TestCase):
         self.test_constant_uint64(nopython=True)
 
     def test_constant_uint64_function_call(self, nopython=False):
-        pyfunc = usecase_uint64_floor
+        pyfunc = usecase_uint64_func
         self.check_nullary_func(pyfunc, nopython=nopython)
 
     def test_constant_uint64_function_call_npm(self):
