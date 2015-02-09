@@ -149,6 +149,7 @@ class Random_triangular(ConcreteTemplate):
 # Other
 
 @registry.resolves_global(random.shuffle, typing_key="random.shuffle")
+@registry.resolves_global(np.random.shuffle, typing_key="np.random.shuffle")
 class Random_shuffle(AbstractTemplate):
     def generic(self, args, kws):
         arr, = args

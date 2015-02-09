@@ -1102,8 +1102,14 @@ def zipf_impl(context, builder, sig, args):
 @register
 @implement("random.shuffle", types.Kind(types.Array))
 def shuffle_impl(context, builder, sig, args):
-    _randrange = random.randrange
+    return _shuffle_impl(context, builder, sig, args, random.randrange)
 
+@register
+@implement("np.random.shuffle", types.Kind(types.Array))
+def shuffle_impl(context, builder, sig, args):
+    return _shuffle_impl(context, builder, sig, args, np.random.randint)
+
+def _shuffle_impl(context, builder, sig, args, _randrange):
     def shuffle_impl(arr):
         i = arr.shape[0] - 1
         while i > 0:
@@ -1113,4 +1119,3 @@ def shuffle_impl(context, builder, sig, args):
 
     return context.compile_internal(builder, shuffle_impl,
                                     sig, args)
-

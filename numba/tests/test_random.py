@@ -765,6 +765,9 @@ class TestRandom(TestCase):
     def test_random_shuffle(self):
         self._check_shuffle(jit_unary("random.shuffle"), py_state_ptr)
 
+    def test_numpy_shuffle(self):
+        self._check_shuffle(jit_unary("np.random.shuffle"), np_state_ptr)
+
     def _check_startup_randomness(self, func_name, func_args):
         """
         Check that the state is properly randomized at startup.
