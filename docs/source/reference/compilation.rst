@@ -102,6 +102,20 @@ JIT functions
 
       .. seealso:: :ref:`architecture`
 
+   .. method:: inspect_llvm(signature=None)
+
+      Return a dictionary keying compiled function signatures to the human 
+      readable LLVM IR generated for the function.  If the signature 
+      keyword is specified a string corresponding to that individual 
+      signature is returned.  
+
+   .. method:: inspect_asm(signature=None)
+
+      Return a dictionary keying compiled function signatures to the
+      human-readable native assembler code for the function.  If the 
+      signature keyword is specified a string corresponding to that 
+      individual signature is returned.  
+
    .. method:: recompile()
 
       Recompile all existing signatures.  This can be useful for example if
