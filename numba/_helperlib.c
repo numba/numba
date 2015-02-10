@@ -40,6 +40,45 @@ uint64_t Numba_urem(uint64_t a, uint64_t b) {
     return a % b;
 }
 
+/* provide frexp and ldexp; these wrappers deal with special cases
+ * (zero, nan, infinity) directly, to sidestep platform differences.
+ */
+static
+double Numba_frexp(double x, int *exp)
+{
+    if (!Py_IS_FINITE(x) || !x)
+        *exp = 0;
+    else
+        x = frexp(x, exp);
+    return x;
+}
+
+static
+float Numba_frexpf(float x, int *exp)
+{
+    if (Py_IS_NAN(x) || Py_IS_INFINITY(x) || !x)
+        *exp = 0;
+    else
+        x = frexpf(x, exp);
+    return x;
+}
+
+static
+double Numba_ldexp(double x, int exp)
+{
+    if (Py_IS_FINITE(x) && x && exp)
+        x = ldexp(x, exp);
+    return x;
+}
+
+static
+float Numba_ldexpf(float x, int exp)
+{
+    if (Py_IS_FINITE(x) && x && exp)
+        x = ldexpf(x, exp);
+    return x;
+}
+
 /* provide complex power */
 static
 void Numba_cpow(Py_complex *a, Py_complex *b, Py_complex *c) {
@@ -369,6 +408,10 @@ build_c_helpers_dict(void)
     declmethod(srem);
     declmethod(udiv);
     declmethod(urem);
+    declmethod(frexp);
+    declmethod(frexpf);
+    declmethod(ldexp);
+    declmethod(ldexpf);
     declmethod(cpow);
     declmethod(complex_adaptor);
     declmethod(extract_record_data);

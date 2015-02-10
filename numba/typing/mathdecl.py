@@ -115,5 +115,19 @@ class Math_pow(ConcreteTemplate):
         signature(types.float64, types.float64, types.float64),
     ]
 
+@registry.resolves_global(math.frexp)
+class Math_frexp(ConcreteTemplate):
+    cases = [
+        signature(types.Tuple((types.float64, types.intc)), types.float64),
+        signature(types.Tuple((types.float32, types.intc)), types.float32),
+    ]
+
+@registry.resolves_global(math.ldexp)
+class Math_ldexp(ConcreteTemplate):
+    cases = [
+        signature(types.float64, types.float64, types.intc),
+        signature(types.float32, types.float32, types.intc),
+    ]
+
 
 builtin_global(math, types.Module(math))

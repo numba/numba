@@ -278,6 +278,40 @@ def copysign_f64_impl(context, builder, sig, args):
 
 
 @register
+@implement(math.frexp, types.Kind(types.Float))
+def frexp_impl(context, builder, sig, args):
+    val, = args
+    fltty = context.get_data_type(sig.args[0])
+    intty = context.get_data_type(sig.return_type[1])
+    expptr = cgutils.alloca_once(builder, intty, name='exp')
+    fnty = Type.function(fltty, (fltty, Type.pointer(intty)))
+    fname = {
+        "float": "numba_frexpf",
+        "double": "numba_frexp",
+        }[str(fltty)]
+    fn = cgutils.get_module(builder).get_or_insert_function(fnty, name=fname)
+    res = builder.call(fn, (val, expptr))
+    return cgutils.make_anonymous_struct(builder, (res, builder.load(expptr)))
+
+
+@register
+@implement(math.ldexp, types.Kind(types.Float), types.intc)
+def ldexp_impl(context, builder, sig, args):
+    val, exp = args
+    fltty, intty = map(context.get_data_type, sig.args)
+    fnty = Type.function(fltty, (fltty, intty))
+    fname = {
+        "float": "numba_ldexpf",
+        "double": "numba_ldexp",
+        }[str(fltty)]
+    fn = cgutils.get_module(builder).get_or_insert_function(fnty, name=fname)
+    return builder.call(fn, (val, exp))
+
+
+# -----------------------------------------------------------------------------
+
+
+@register
 @implement(math.atan2, types.int64, types.int64)
 def atan2_s64_impl(context, builder, sig, args):
     [y, x] = args
