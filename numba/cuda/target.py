@@ -164,7 +164,7 @@ class CUDATargetContext(BaseContext):
         name = "__conststring__.%s" % string
         charty = Type.int(8)
 
-        for gv in lmod.global_variables:
+        for gv in lmod.global_values:
             if gv.name == name and gv.type.pointee == text.type:
                 break
         else:
