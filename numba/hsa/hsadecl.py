@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 from numba import types
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                    AbstractTemplate,
                                     MacroTemplate, signature, Registry)
 from numba import hsa
 
@@ -47,17 +48,44 @@ class Hsa_barrier(ConcreteTemplate):
     cases = [signature(types.void, types.uint32)]
 
 
+# hsa.shared submodule -------------------------------------------------------
+
 class Hsa_shared_array(MacroTemplate):
     key = hsa.shared.array
 
 
 @intrinsic_attr
-class HsaSharedModuleTemplate(AttributeTemplate):
+class HsaSharedTemplate(AttributeTemplate):
     key = types.Module(hsa.shared)
 
     def resolve_array(self, mod):
         return types.Macro(Hsa_shared_array)
 
+
+# hsa.atomic submodule -------------------------------------------------------
+
+@intrinsic
+class Hsa_atomic_add(AbstractTemplate):
+    key = hsa.atomic.add
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, idx, val = args
+
+        if ary.ndim == 1:
+            return signature(ary.dtype, ary, types.intp, ary.dtype)
+        elif ary.ndim > 1:
+            return signature(ary.dtype, ary, idx, ary.dtype)
+
+@intrinsic_attr
+class HsaAtomicTemplate(AttributeTemplate):
+    key = types.Module(hsa.atomic)
+
+    def resolve_add(self, mod):
+        return types.Function(Hsa_atomic_add)
+
+
+# hsa module -----------------------------------------------------------------
 
 @intrinsic_attr
 class HsaModuleTemplate(AttributeTemplate):
@@ -81,5 +109,10 @@ class HsaModuleTemplate(AttributeTemplate):
     def resolve_shared(self, mod):
         return types.Module(hsa.shared)
 
+    def resolve_atomic(self, mod):
+        return types.Module(hsa.atomic)
+
+
+#intrinsic
 
 intrinsic_global(hsa, types.Module(hsa))

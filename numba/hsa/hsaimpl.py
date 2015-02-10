@@ -10,7 +10,7 @@ import llvmlite.binding as ll
 from numba.targets.imputils import implement, Registry
 from numba import cgutils
 from numba import types
-from numba.itanium_mangler import mangle_c
+from numba.itanium_mangler import mangle_c, mangle, mangle_type
 from . import target
 from . import stubs
 from . import hlc
@@ -51,6 +51,34 @@ def _declare_function(context, builder, name, sig, cargs,
     fnty = Type.function(llretty, llargs)
     mangled = mangler(name, cargs)
     fn = mod.get_or_insert_function(fnty, mangled)
+    fn.calling_convention = target.CC_SPIR_FUNC
+    return fn
+
+
+def _atomic_mangle(op, ty, addrspace):
+    tyletter = mangle_type(ty)
+    as_str = "AS{0}".format(addrspace)
+    tyaddrstr = "U{0}{1}".format(len(as_str), as_str)
+    mangled = "_Z{0}atomic_{1}PV{2}{3}{3}".format(7+len(op), op, tyaddrstr,
+                                                  tyletter)
+    return mangled
+
+
+def _declare_atomic(context, builder, op, llptrty, ty):
+    """Insert declaration for an atomic builtin. This is as ugly as it gets,
+    as our mangler doesn't support (yet!) the modifiers needed, I will just
+    hardcode the signature for the atomic operations here:
+    "ty"
+    """
+    mod = cgutils.get_module(builder)
+    llty = llptrty.pointee
+    # llvm return type and args are hardcoded...
+    llretty = llty
+    llargs = [llptrty, llty]
+    fnty = Type.function(llretty, llargs)
+    sym = _atomic_mangle(op, ty, llptrty.addrspace)
+
+    fn = mod.get_or_insert_function(fnty, sym)
     fn.calling_convention = target.CC_SPIR_FUNC
     return fn
 
@@ -105,6 +133,37 @@ def get_local_size_impl(context, builder, sig, args):
 
 
 @register
+@implement(stubs.atomic.add, types.Kind(types.Array), types.intp, types.Any)
+@implement(stubs.atomic.add, types.Kind(types.Array), types.Kind(types.UniTuple), types.Any)
+@implement(stubs.atomic.add, types.Kind(types.Array), types.Kind(types.Tuple), types.Any)
+def hsail_atomic_add_tuple(context, builder, sig, args):
+    aryty, indty, valty = sig.args
+    ary, inds, val = args
+    dtype = aryty.dtype
+
+    if indty == types.intp:
+        indices = [inds] #just a single integer
+        indty = [indty]
+    else:
+        indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
+        indices = [context.cast(builder, i, t, types.intp)
+                   for t, i in zip(indty, indices)]
+
+    if dtype != valty:
+        raise TypeError("expecting %s but got %s" % (dtype, valty))
+
+    if aryty.ndim != len(indty):
+        raise TypeError("indexing %d-D array with %d-D index" %
+                        (aryty.ndim, len(indty)))
+
+    lary = context.make_array(aryty)(context, builder, ary)
+    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
+
+    atomic_add = _declare_atomic(context, builder, "add", ptr.type, valty)
+    return builder.call(atomic_add, (ptr, val))
+
+
+@register
 @implement('hsail.smem.alloc', types.Kind(types.UniTuple), types.Any)
 def hsail_smem_alloc_array(context, builder, sig, args):
     shape, dtype = args
@@ -138,7 +197,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
                                         target.SPIR_GENERIC_ADDRSPACE)
 
     else:
-        raise NotImplementedError("addrspace {addrspace}".foramt(**locals()))
+        raise NotImplementedError("addrspace {addrspace}".format(**locals()))
 
     return _make_array(context, builder, dataptr, dtype, shape)
 
