@@ -271,7 +271,7 @@ class BaseContext(object):
         stringtype = GENERIC_POINTER
         text = Constant.stringz(string)
         name = ".const.%s" % string
-        for gv in mod.global_variables:
+        for gv in mod.global_values:
             if gv.name == name and gv.type.pointee == text.type:
                 break
         else:
