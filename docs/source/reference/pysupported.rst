@@ -161,6 +161,8 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.cos`
 * :func:`math.cosh`
 * :func:`math.degrees`
+* :func:`math.erf`
+* :func:`math.erfc`
 * :func:`math.exp`
 * :func:`math.expm1`
 * :func:`math.fabs`

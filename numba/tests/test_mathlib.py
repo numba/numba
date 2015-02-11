@@ -523,30 +523,24 @@ class TestMathLib(TestCase):
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erf(self, flags=enable_pyobj_flags):
         pyfunc = erf
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float64]
-        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
+        x_types = [types.float32, types.float64] * (len(x_values) // 2)
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erf_npm(self):
-        with self.assertTypingError():
-            self.test_erf(flags=no_pyobj_flags)
+        self.test_erf(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc(self, flags=enable_pyobj_flags):
         pyfunc = erfc
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float64]
-        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
+        x_types = [types.float32, types.float64] * (len(x_values) // 2)
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc_npm(self):
-        with self.assertTypingError():
-            self.test_erfc(flags=no_pyobj_flags)
+        self.test_erfc(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma(self, flags=enable_pyobj_flags):
