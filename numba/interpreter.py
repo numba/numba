@@ -24,6 +24,8 @@ class Assigner(object):
     def __init__(self):
         # { destination variable name -> source Var object }
         self.dest_to_src = {}
+        # Basically a reverse mapping of dest_to_src:
+        # { source variable name -> all destination names in dest_to_src }
         self.src_invalidate = collections.defaultdict(list)
         self.unused_dests = set()
 
@@ -34,9 +36,9 @@ class Assigner(object):
         """
         srcname = srcvar.name
         destname = destvar.name
-        if srcname in self.src_invalidate:
-            # Invalidate all previously known simplifications
-            for d in self.src_invalidate.pop(srcname):
+        if destname in self.src_invalidate:
+            # destvar will change, invalidate all previously known simplifications
+            for d in self.src_invalidate.pop(destname):
                 self.dest_to_src.pop(d)
         if srcname in self.dest_to_src:
             srcvar = self.dest_to_src[srcname]

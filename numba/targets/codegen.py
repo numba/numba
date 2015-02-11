@@ -18,6 +18,12 @@ def _is_x86(triple):
     return arch in _x86arch
 
 
+def dump(header, body):
+    print(header.center(80, '-'))
+    print(body)
+    print('=' * 80)
+
+
 class CodeLibrary(object):
     """
     An interface for bundling LLVM code together and compiling it.
@@ -135,9 +141,7 @@ class CodeLibrary(object):
         self._raise_if_finalized()
 
         if config.DUMP_FUNC_OPT:
-            print(("FUNCTION OPTIMIZED DUMP %s" % self._name).center(80, '-'))
-            print(self._final_module)
-            print('=' * 80)
+            dump("FUNCTION OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
 
         # Link libraries for shared code
         for library in self._linking_libraries:
@@ -159,12 +163,14 @@ class CodeLibrary(object):
         self._finalized = True
 
         if config.DUMP_OPTIMIZED:
-            print(("OPTIMIZED DUMP %s" % self._name).center(80, '-'))
-            print(self._final_module)
-            print('=' * 80)
+            dump("OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
 
         if config.DUMP_ASSEMBLY:
-            self._dump_assembly()
+            # CUDA backend cannot return assembly this early, so don't
+            # attempt to dump assembly if nothing is produced.
+            asm = self.get_asm_str()
+            if asm:
+                dump("ASSEMBLY %s" % self._name, self.get_asm_str())
 
     def get_function(self, name):
         return self._final_module.get_function(name)
@@ -173,13 +179,18 @@ class CodeLibrary(object):
         return self._final_module.link_in(lib._get_module_for_linking(),
                                           preserve=True)
 
-    def _dump_assembly(self):
+
+    def get_llvm_str(self):
         """
-        Internal: dump native assembler code for this library.
+        Get the human-readable form of the LLVM module.
         """
-        print(("ASSEMBLY %s" % self._name).center(80, '-'))
-        print(self._codegen._tm.emit_assembly(self._final_module))
-        print('=' * 80)
+        return str(self._final_module)
+
+    def get_asm_str(self):
+        """
+        Get the human-readable assembly.
+        """
+        return str(self._codegen._tm.emit_assembly(self._final_module))
 
 
 class AOTCodeLibrary(CodeLibrary):

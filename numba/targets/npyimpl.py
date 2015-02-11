@@ -1,3 +1,7 @@
+"""
+Implementation of functions in the Numpy package.
+"""
+
 from __future__ import print_function, division, absolute_import
 
 import numpy
@@ -18,10 +22,25 @@ registry = Registry()
 register = registry.register
 
 
-class npy:
-    """This will be used as an index of the npy_* functions"""
-    pass
+def caster(restype, constructor):
+    """
+    Implement explicit calls to Numpy type *constructor* (e.g. np.int16).
+    """
+    @implement(constructor, types.Any)
+    def _cast(context, builder, sig, args):
+        [val] = args
+        [valty] = sig.args
+        return context.cast(builder, val, valty, restype)
 
+    return _cast
+
+for tp in types.number_domain:
+    register(caster(tp, getattr(numpy, str(tp))))
+
+register(caster(types.intc, numpy.intc))
+register(caster(types.uintc, numpy.uintc))
+register(caster(types.intp, numpy.intp))
+register(caster(types.uintp, numpy.uintp))
 
 ########################################################################
 

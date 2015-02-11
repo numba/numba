@@ -173,12 +173,23 @@ class PythonAPI(object):
     #
 
     def dict_getitem_string(self, dic, name):
-        """Returns a borrowed reference
+        """Lookup name inside dict
+
+        Returns a borrowed reference
         """
         fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
         fn = self._get_function(fnty, name="PyDict_GetItemString")
         cstr = self.context.insert_const_string(self.module, name)
         return self.builder.call(fn, [dic, cstr])
+
+    def dict_getitem(self, dic, name):
+        """Lookup name inside dict
+
+        Returns a borrowed reference
+        """
+        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyDict_GetItem")
+        return self.builder.call(fn, [dic, name])
 
     def dict_new(self, presize=0):
         if presize == 0:
@@ -617,16 +628,31 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_GetAttrString")
         return self.builder.call(fn, [obj, cstr])
 
+    def object_getattr(self, obj, attr):
+        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_GetAttr")
+        return self.builder.call(fn, [obj, attr])
+
     def object_setattr_string(self, obj, attr, val):
         cstr = self.context.insert_const_string(self.module, attr)
         fnty = Type.function(Type.int(), [self.pyobj, self.cstring, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetAttrString")
         return self.builder.call(fn, [obj, cstr, val])
 
+    def object_setattr(self, obj, attr, val):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_SetAttr")
+        return self.builder.call(fn, [obj, attr, val])
+
     def object_delattr_string(self, obj, attr):
         # PyObject_DelAttrString() is actually a C macro calling
         # PyObject_SetAttrString() with value == NULL.
         return self.object_setattr_string(obj, attr, self.get_null_object())
+
+    def object_delattr(self, obj, attr):
+        # PyObject_DelAttr() is actually a C macro calling
+        # PyObject_SetAttr() with value == NULL.
+        return self.object_setattr(obj, attr, self.get_null_object())
 
     def object_getitem(self, obj, key):
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
@@ -846,7 +872,7 @@ class PythonAPI(object):
             return val
 
         elif isinstance(typ, types.Array):
-            return self.to_native_array(typ, obj)
+            return self.to_native_array(obj, typ)
 
         elif isinstance(typ, types.Optional):
             isnone = self.builder.icmp(lc.ICMP_EQ, obj, self.borrow_none())
@@ -862,6 +888,9 @@ class PythonAPI(object):
                                                             typ.type, val)
                     self.builder.store(just, ret)
             return ret
+
+        elif isinstance(typ, (types.Tuple, types.UniTuple)):
+            return self.to_native_tuple(obj, typ)
 
         raise NotImplementedError(typ)
 
@@ -919,7 +948,7 @@ class PythonAPI(object):
             return self.from_native_return(val, typ.type)
 
         elif isinstance(typ, types.Array):
-            return self.from_native_array(typ, val)
+            return self.from_native_array(val, typ)
 
         elif isinstance(typ, types.Record):
             # Note we will create a copy of the record
@@ -934,11 +963,11 @@ class PythonAPI(object):
             return self.recreate_record(ptr, size, dtypeobj)
 
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
-            return self.from_tuple(typ, val)
+            return self.from_native_tuple(val, typ)
 
         raise NotImplementedError(typ)
 
-    def to_native_array(self, typ, ary):
+    def to_native_array(self, ary, typ):
         # TODO check matching dtype.
         #      currently, mismatching dtype will still work and causes
         #      potential memory corruption
@@ -954,7 +983,7 @@ class PythonAPI(object):
             self.builder.unreachable()
         return self.builder.load(aryptr)
 
-    def from_native_array(self, typ, ary):
+    def from_native_array(self, ary, typ):
         assert assume.return_argument_array_only
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, self.builder, value=ary)
@@ -962,7 +991,24 @@ class PythonAPI(object):
         self.incref(parent)
         return parent
 
-    def from_tuple(self, typ, val):
+    def to_native_tuple(self, obj, typ):
+        """
+        Convert tuple *obj* to a native array (if homogenous) or structure.
+        """
+        n = len(typ)
+        values = []
+        for i, eltype in enumerate(typ):
+            elem = self.tuple_getitem(obj, i)
+            values.append(self.to_native_value(elem, eltype))
+        if isinstance(typ, types.UniTuple):
+            return cgutils.pack_array(self.builder, values)
+        else:
+            return cgutils.make_anonymous_struct(self.builder, values)
+
+    def from_native_tuple(self, val, typ):
+        """
+        Convert native array or structure *val* to a tuple object.
+        """
         tuple_val = self.tuple_new(typ.count)
 
         for i, dtype in enumerate(typ):

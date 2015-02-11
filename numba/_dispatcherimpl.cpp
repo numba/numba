@@ -41,8 +41,13 @@ public:
 
     int count() const { return functions.size(); }
 
-    const int argct;
+    void clear() {
+        functions.clear();
+        overloads.clear();
+    }
+
 private:
+    const int argct;
     TypeManager *tm;
     TypeTable overloads;
     Functions functions;
@@ -54,6 +59,12 @@ private:
 dispatcher_t *
 dispatcher_new(void *tm, int argct){
     return new Dispatcher(static_cast<TypeManager*>(tm), argct);
+}
+
+void
+dispatcher_clear(dispatcher_t *obj) {
+    Dispatcher *disp = static_cast<Dispatcher*>(obj);
+    disp->clear();
 }
 
 void

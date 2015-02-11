@@ -67,27 +67,27 @@ class Overloads(object):
                 return ver
 
             # As generic type
-            nargs_matches = len(ver.signature.args) == len(sig.args)
-            varargs_matches = (ver.signature.args and
-                               ver.signature.args[-1] == types.VarArg)
-            if nargs_matches or varargs_matches:
-                match = True
-                for formal, actual in zip(ver.signature.args, sig.args):
-                    if formal == types.VarArg:
-                        # vararg argument matches everything
-                        break
-
-                    match = self._match(formal, actual)
-                    if not match:
-                        break
-
-                if match:
-                    return ver
+            if self._match_arglist(ver.signature.args, sig.args):
+                return ver
 
         raise NotImplementedError(self, sig)
 
-    @staticmethod
-    def _match(formal, actual):
+    def _match_arglist(self, formal_args, actual_args):
+        if formal_args and isinstance(formal_args[-1], types.VarArg):
+            formal_args = (
+                formal_args[:-1] +
+                (formal_args[-1].dtype,) * (len(actual_args) - len(formal_args) + 1))
+
+        if len(formal_args) != len(actual_args):
+            return False
+
+        for formal, actual in zip(formal_args, actual_args):
+            if not self._match(formal, actual):
+                return False
+
+        return True
+
+    def _match(self, formal, actual):
         if formal == actual:
             # formal argument matches actual arguments
             return True
@@ -250,7 +250,7 @@ class BaseContext(object):
         stringtype = GENERIC_POINTER
         text = Constant.stringz(string)
         name = ".const.%s" % string
-        for gv in mod.global_variables:
+        for gv in mod.global_values:
             if gv.name == name and gv.type.pointee == text.type:
                 break
         else:
@@ -436,8 +436,13 @@ class BaseContext(object):
                       for i, v in enumerate(val)]
             return Constant.struct(consts)
 
+        elif isinstance(ty, types.Record):
+            consts = [self.get_constant(types.int8, b)
+                      for b in bytearray(val.tostring())]
+            return Constant.array(consts[0].type, consts)
+
         else:
-            raise NotImplementedError(ty)
+            raise NotImplementedError("%s as constant unsupported" % ty)
 
     def get_constant(self, ty, val):
         assert not self.is_struct_type(ty)
@@ -851,12 +856,11 @@ class BaseContext(object):
         if typ in types.integer_domain:
             return builder.icmp(lc.ICMP_NE, val, Constant.null(val.type))
         elif typ in types.real_domain:
-            return builder.fcmp(lc.FCMP_ONE, val, Constant.real(val.type, 0))
+            return builder.fcmp(lc.FCMP_UNE, val, Constant.real(val.type, 0))
         elif typ in types.complex_domain:
             cmplx = self.make_complex(typ)(self, builder, val)
-            fty = types.float32 if typ == types.complex64 else types.float64
-            real_istrue = self.is_true(builder, fty, cmplx.real)
-            imag_istrue = self.is_true(builder, fty, cmplx.imag)
+            real_istrue = self.is_true(builder, typ.underlying_float, cmplx.real)
+            imag_istrue = self.is_true(builder, typ.underlying_float, cmplx.imag)
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
 
@@ -1036,12 +1040,11 @@ class BaseContext(object):
 
         # Handle data
         if self.is_struct_type(typ.dtype):
-            # FIXME
-            raise TypeError("Do not support structure dtype as constant "
-                            "array, yet.")
-
-        values = [self.get_constant(typ.dtype, flat[i])
-                  for i in range(flat.size)]
+            values = [self.get_constant_struct(builder, typ.dtype, flat[i])
+                      for i in range(flat.size)]
+        else:
+            values = [self.get_constant(typ.dtype, flat[i])
+                      for i in range(flat.size)]
 
         lldtype = values[0].type
         consts = Constant.array(lldtype, values)

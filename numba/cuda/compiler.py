@@ -177,9 +177,9 @@ class CUDAKernelBase(object):
             griddim = [griddim]
         else:
             griddim = list(griddim)
-        if len(griddim) > 2:
-            raise ValueError('griddim must be a tuple/list of two ints')
-        while len(griddim) < 2:
+        if len(griddim) > 3:
+            raise ValueError('griddim must be a tuple/list of three ints')
+        while len(griddim) < 3:
             griddim.append(1)
 
         if not isinstance(blockdim, (tuple, list)):
