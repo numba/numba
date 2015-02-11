@@ -121,6 +121,10 @@ packages = [
     "numba.cuda.tests.cudapy",
     "numba.hsa",
     "numba.hsa.hsadrv",
+    "numba.hsa.hlc",
+    "numba.hsa.tests",
+    "numba.hsa.tests.hsadrv",
+    "numba.hsa.tests.hsapy",
 ]
 
 setup(name='numba',
