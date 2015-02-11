@@ -27,10 +27,6 @@ builtin_global = registry.register_global
 @registry.resolves_global(math.atanh)
 @registry.resolves_global(math.degrees)
 @registry.resolves_global(math.radians)
-@registry.resolves_global(math.erf)
-@registry.resolves_global(math.erfc)
-@registry.resolves_global(math.gamma)
-@registry.resolves_global(math.lgamma)
 class Math_unary(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64),
@@ -38,6 +34,11 @@ class Math_unary(ConcreteTemplate):
         signature(types.float32, types.float32),
         signature(types.float64, types.float64),
     ]
+
+if utils.PYVERSION > (2, 6):
+    for func in (math.erf, math.erfc, math.gamma, math.lgamma):
+        Math_unary = registry.resolves_global(func)(Math_unary)
+
 
 @registry.resolves_global(math.atan2)
 class Math_atan2(ConcreteTemplate):
