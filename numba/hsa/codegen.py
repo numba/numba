@@ -21,7 +21,7 @@ class ModuleCollection(object):
         self._modules.append(ir_module)
 
     def _load_globals(self, ir_module):
-        for gv in ir_module.global_variables:
+        for gv in ir_module.global_values:
             glbl = self._gvars.get(gv.name)
             if glbl is None:
                 self._gvars[gv.name] = gv
