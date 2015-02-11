@@ -168,11 +168,13 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.fabs`
 * :func:`math.floor`
 * :func:`math.frexp`
+* :func:`math.gamma`
 * :func:`math.hypot`
 * :func:`math.isfinite`
 * :func:`math.isinf`
 * :func:`math.isnan`
 * :func:`math.ldexp`
+* :func:`math.lgamma`
 * :func:`math.log`
 * :func:`math.log10`
 * :func:`math.log1p`

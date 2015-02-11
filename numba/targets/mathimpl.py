@@ -195,6 +195,8 @@ if utils.PYVERSION > (2, 6):
     unary_math_extern(math.expm1, "expm1f", "expm1")
     unary_math_extern(math.erf, "numba_erff", "numba_erf")
     unary_math_extern(math.erfc, "numba_erfcf", "numba_erfc")
+    unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma")
+    unary_math_extern(math.lgamma, "numba_lgammaf", "numba_lgamma")
 unary_math_extern(math.tan, "tanf", "tan")
 unary_math_extern(math.asin, "asinf", "asin")
 unary_math_extern(math.acos, "acosf", "acos")

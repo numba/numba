@@ -29,6 +29,8 @@ builtin_global = registry.register_global
 @registry.resolves_global(math.radians)
 @registry.resolves_global(math.erf)
 @registry.resolves_global(math.erfc)
+@registry.resolves_global(math.gamma)
+@registry.resolves_global(math.lgamma)
 class Math_unary(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64),

@@ -545,30 +545,27 @@ class TestMathLib(TestCase):
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma(self, flags=enable_pyobj_flags):
         pyfunc = gamma
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float64]
-        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        x_values = [1., -0.9, -0.5, 0.5]
+        x_types = [types.float32, types.float64] * (len(x_values) // 2)
+        self.run_unary(pyfunc, x_types, x_values, flags)
+        x_values = [-0.1, 0.1, 2.5, 10.1, 50., float('inf')]
+        x_types = [types.float64] * len(x_values)
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma_npm(self):
-        with self.assertTypingError():
-            self.test_gamma(flags=no_pyobj_flags)
+        self.test_gamma(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_lgamma(self, flags=enable_pyobj_flags):
         pyfunc = lgamma
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float64]
-        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        x_values = [1., -0.9, -0.1, 0.1, 200., 1e10, 1e30, float('inf')]
+        x_types = [types.float32, types.float64] * (len(x_values) // 2)
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_lgamma_npm(self):
-        with self.assertTypingError():
-            self.test_lgamma(flags=no_pyobj_flags)
+        self.test_lgamma(flags=no_pyobj_flags)
 
     def test_pow(self, flags=enable_pyobj_flags):
         pyfunc = pow
