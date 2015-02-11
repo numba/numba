@@ -872,7 +872,7 @@ class PythonAPI(object):
             return val
 
         elif isinstance(typ, types.Array):
-            return self.to_native_array(typ, obj)
+            return self.to_native_array(obj, typ)
 
         elif isinstance(typ, types.Optional):
             isnone = self.builder.icmp(lc.ICMP_EQ, obj, self.borrow_none())
@@ -888,6 +888,9 @@ class PythonAPI(object):
                                                             typ.type, val)
                     self.builder.store(just, ret)
             return ret
+
+        elif isinstance(typ, (types.Tuple, types.UniTuple)):
+            return self.to_native_tuple(obj, typ)
 
         raise NotImplementedError(typ)
 
@@ -945,7 +948,7 @@ class PythonAPI(object):
             return self.from_native_return(val, typ.type)
 
         elif isinstance(typ, types.Array):
-            return self.from_native_array(typ, val)
+            return self.from_native_array(val, typ)
 
         elif isinstance(typ, types.Record):
             # Note we will create a copy of the record
@@ -960,11 +963,11 @@ class PythonAPI(object):
             return self.recreate_record(ptr, size, dtypeobj)
 
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
-            return self.from_tuple(typ, val)
+            return self.from_native_tuple(val, typ)
 
         raise NotImplementedError(typ)
 
-    def to_native_array(self, typ, ary):
+    def to_native_array(self, ary, typ):
         # TODO check matching dtype.
         #      currently, mismatching dtype will still work and causes
         #      potential memory corruption
@@ -980,7 +983,7 @@ class PythonAPI(object):
             self.builder.unreachable()
         return self.builder.load(aryptr)
 
-    def from_native_array(self, typ, ary):
+    def from_native_array(self, ary, typ):
         assert assume.return_argument_array_only
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, self.builder, value=ary)
@@ -988,7 +991,24 @@ class PythonAPI(object):
         self.incref(parent)
         return parent
 
-    def from_tuple(self, typ, val):
+    def to_native_tuple(self, obj, typ):
+        """
+        Convert tuple *obj* to a native array (if homogenous) or structure.
+        """
+        n = len(typ)
+        values = []
+        for i, eltype in enumerate(typ):
+            elem = self.tuple_getitem(obj, i)
+            values.append(self.to_native_value(elem, eltype))
+        if isinstance(typ, types.UniTuple):
+            return cgutils.pack_array(self.builder, values)
+        else:
+            return cgutils.make_anonymous_struct(self.builder, values)
+
+    def from_native_tuple(self, val, typ):
+        """
+        Convert native array or structure *val* to a tuple object.
+        """
         tuple_val = self.tuple_new(typ.count)
 
         for i, dtype in enumerate(typ):
