@@ -367,8 +367,13 @@ class CUDAKernel(CUDAKernelBase):
                                              (code, builtinerr), tid=tid,
                                              ctaid=ctaid)
                 else:
-                    exccls = self.exceptions[code]
-                    raise exccls("tid=%s ctaid=%s" % (tid, ctaid))
+                    exccls, exc_args = self.exceptions[code]
+                    prefix = "tid=%s ctaid=%s" % (tid, ctaid)
+                    if exc_args:
+                        exc_args = ("%s: %s" % (prefix, exc_args[0]),) + exc_args[1:]
+                    else:
+                        exc_args = prefix,
+                    raise exccls(*exc_args)
 
         # retrieve auto converted arrays
         for wb in retr:

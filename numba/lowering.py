@@ -517,12 +517,9 @@ class Lower(BaseLower):
                         cgutils.get_module(self.builder), fndesc)
                 res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
 
-            elif isinstance(fnty, types.ExceptionType):
-                # Exception instances are reified after function exit
-                # in the call wrapper.
-                return self.context.get_dummy_value()
-
             else:
+                if isinstance(signature.return_type, types.Phantom):
+                    return self.context.get_dummy_value()
                 # Normal function resolution
                 impl = self.context.get_function(fnty, signature)
                 if signature.recvr:

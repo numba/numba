@@ -409,8 +409,6 @@ class BaseContext(object):
         """
         if self.is_struct_type(ty):
             return self.get_constant_struct(builder, ty, val)
-        elif ty == types.string:
-            return self.get_constant_string(builder, ty, val)
         else:
             return self.get_constant(ty, val)
 
