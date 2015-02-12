@@ -121,6 +121,24 @@ class PythonAPI(object):
             msg = self.context.insert_const_string(self.module, msg)
         return self.builder.call(fn, (exctype, msg))
 
+    def raise_object(self, exc=None):
+        """
+        Raise an arbitrary exception (type or value or None - if reraising).
+        """
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="numba_do_raise")
+        if exc is None:
+            exc = self.get_null_object()
+        return self.builder.call(fn, (exc,))
+
+    def err_set_none(self, exctype):
+        """
+        Raise an exception of type *exctype* with no value.
+        """
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="PyErr_SetNone")
+        return self.builder.call(fn, (exctype,))
+
     def err_set_object(self, exctype, excval):
         fnty = Type.function(Type.void(), [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyErr_SetObject")
@@ -135,13 +153,19 @@ class PythonAPI(object):
         cstr = self.context.insert_const_string(self.module, msg)
         self.err_set_string(self.native_error_type, cstr)
 
-    def raise_exception(self, exctype, excval):
+    def raise_exception(self, exc):
+        """
+        Raise a given exception *exc* (a type or instance).  Note this
+        is a regular object and is materialized as a pointer inside
+        the LLVM bitcode.
+        """
         # XXX This produces non-reusable bitcode: the pointer's value
         # is specific to this process execution.
-        exctypeaddr = self.context.get_constant(types.intp, id(exctype))
-        excvaladdr = self.context.get_constant(types.intp, id(excval))
-        self.err_set_object(exctypeaddr.inttoptr(self.pyobj),
-                            excvaladdr.inttoptr(self.pyobj))
+        assert isinstance(exc, BaseException) or issubclass(exc, BaseException)
+        exc_addr = self.context.get_constant(types.intp, id(exc))
+        exc = exc_addr.inttoptr(self.pyobj)
+        self.incref(exc)
+        self.raise_object(exc)
 
     def get_c_object(self, name):
         """

@@ -867,6 +867,23 @@ class NoneType(Opaque):
 
         return Optional(other)
 
+
+class ExceptionType(Phantom):
+    """
+    The type of exception classes (not instances).
+    """
+
+    def __init__(self, exc_class):
+        assert issubclass(exc_class, BaseException)
+        name = "exception(%s)" % (exc_class.__name__)
+        self.exc_class = exc_class
+        super(ExceptionType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.exc_class
+
+
 # Utils
 
 def is_int_tuple(x):
@@ -920,7 +937,6 @@ neg_type = Phantom('neg')
 print_type = Phantom('print')
 print_item_type = Phantom('print-item')
 sign_type = Phantom('sign')
-exception_type = Phantom('exception')
 
 range_iter32_type = RangeIteratorType('range_iter32', int32)
 range_iter64_type = RangeIteratorType('range_iter64', int64)

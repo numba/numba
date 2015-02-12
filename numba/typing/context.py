@@ -205,8 +205,8 @@ class BaseContext(object):
                   isinstance(val, cffi_utils.ExternCFunction)):
             return val
 
-        elif type(val) is type and issubclass(val, BaseException):
-            return types.exception_type
+        elif isinstance(val, type) and issubclass(val, BaseException):
+            return types.ExceptionType(val)
 
         else:
             try:

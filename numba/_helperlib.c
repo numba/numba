@@ -334,6 +334,77 @@ void Numba_gil_release(PyGILState_STATE *state) {
     PyGILState_Release(*state);
 }
 
+/* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
+   This *consumes* a reference count to its arguments. */
+static int
+Numba_do_raise(PyObject *exc)
+{
+    PyObject *type = NULL, *value = NULL;
+
+    /* We support the following forms of raise:
+       raise
+       raise <instance>
+       raise <type> */
+
+    if (exc == NULL) {
+        /* Reraise */
+        PyThreadState *tstate = PyThreadState_GET();
+        PyObject *tb;
+        type = tstate->exc_type;
+        value = tstate->exc_value;
+        tb = tstate->exc_traceback;
+        if (type == Py_None) {
+            PyErr_SetString(PyExc_RuntimeError,
+                            "No active exception to reraise");
+            return 0;
+        }
+        Py_XINCREF(type);
+        Py_XINCREF(value);
+        Py_XINCREF(tb);
+        PyErr_Restore(type, value, tb);
+        return 1;
+    }
+
+    if (PyExceptionClass_Check(exc)) {
+        type = exc;
+        value = PyObject_CallObject(exc, NULL);
+        if (value == NULL)
+            goto raise_error;
+        if (!PyExceptionInstance_Check(value)) {
+            PyErr_Format(PyExc_TypeError,
+                         "calling %R should have returned an instance of "
+                         "BaseException, not %R",
+                         type, Py_TYPE(value));
+            goto raise_error;
+        }
+    }
+    else if (PyExceptionInstance_Check(exc)) {
+        value = exc;
+        type = PyExceptionInstance_Class(exc);
+        Py_INCREF(type);
+    }
+    else {
+        /* Not something you can raise.  You get an exception
+           anyway, just not what you specified :-) */
+        Py_DECREF(exc);
+        PyErr_SetString(PyExc_TypeError,
+                        "exceptions must derive from BaseException");
+        goto raise_error;
+    }
+
+    PyErr_SetObject(type, value);
+    /* PyErr_SetObject incref's its arguments */
+    Py_XDECREF(value);
+    Py_XDECREF(type);
+    return 0;
+
+raise_error:
+    Py_XDECREF(value);
+    Py_XDECREF(type);
+    return 0;
+}
+
+
 /*
 Define bridge for all math functions
 */
@@ -386,6 +457,8 @@ build_c_helpers_dict(void)
     declmethod(fptouif);
     declmethod(gil_ensure);
     declmethod(gil_release);
+    declmethod(do_raise);
+
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.inc"

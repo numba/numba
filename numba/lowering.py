@@ -372,7 +372,11 @@ class Lower(BaseLower):
             return impl(self.builder, (target, value))
 
         elif isinstance(inst, ir.Raise):
-            excid = self.add_exception(inst.exception)
+            exctype = self.typeof(inst.exception.name)
+            if not isinstance(exctype, types.ExceptionType):
+                raise NotImplementedError("cannot raise value of type %s"
+                                          % (exctype,))
+            excid = self.add_exception(exctype.exc_class)
             self.context.return_user_exc(self.builder, excid)
 
         else:

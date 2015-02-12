@@ -176,7 +176,7 @@ class PyCallWrapper(object):
                                             ".user.exception.%d" % num)
             swt.add_case(Constant.int(code.type, num), bb)
             builder.position_at_end(bb)
-            api.raise_exception(exc, exc)
+            api.raise_exception(exc)
             builder.ret(api.get_null_object())
 
         builder.position_at_end(elseblk)

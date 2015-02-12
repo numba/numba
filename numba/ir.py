@@ -126,7 +126,11 @@ class Stmt(Inst):
     Base class for IR statements (instructions which can appear on their
     own in a Block).
     """
+    # Whether this statement ends its basic block (i.e. it will either jump
+    # to another block or exit the function).
     is_terminator = False
+    # Whether this statement exits the function.
+    is_exit = False
 
     def list_vars(self):
         return self._rec_list_vars(self.__dict__)
@@ -302,6 +306,7 @@ class Del(Stmt):
 
 class Raise(Stmt):
     is_terminator = True
+    is_exit = True
 
     def __init__(self, exception, loc):
         self.exception = exception
@@ -313,6 +318,7 @@ class Raise(Stmt):
 
 class Return(Stmt):
     is_terminator = True
+    is_exit = True
 
     def __init__(self, value, loc):
         self.value = value

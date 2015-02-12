@@ -130,7 +130,7 @@ class Interpreter(object):
         for offset, ir_block in self.blocks.items():
             for stmt in ir_block.body:
                 for var_name in stmt.list_vars():
-                    if stmt.is_terminator and not isinstance(stmt, ir.Return):
+                    if stmt.is_terminator and not stmt.is_exit:
                         # Move the "last use" at the beginning of successor
                         # blocks.
                         for succ, _ in cfg.successors(offset):
@@ -157,9 +157,9 @@ class Interpreter(object):
             if stmt is None:
                 ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
             else:
-                # If the variable is used in a Return statement, we
-                # don't insert anything.
-                if not isinstance(stmt, ir.Return):
+                # If the variable is used in an exiting statement
+                # (e.g. raise or return), we don't insert anything.
+                if not stmt.is_exit:
                     ir_block.insert_after(ir.Del(var_name, loc=stmt.loc), stmt)
 
     def _compute_var_disposal(self, var_name, use_map):
@@ -617,7 +617,6 @@ class Interpreter(object):
         self.used_globals[name] = value
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
-        self.constants[res] = value
 
     def op_LOAD_DEREF(self, inst, res):
         name = self.code_freevars[inst.arg]
@@ -883,5 +882,5 @@ class Interpreter(object):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
     def op_RAISE_VARARGS(self, inst, exc):
-        stmt = ir.Raise(exception=self.constants[exc], loc=self.loc)
+        stmt = ir.Raise(exception=self.get(exc), loc=self.loc)
         self.current_block.append(stmt)
