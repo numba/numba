@@ -244,16 +244,21 @@ class BaseContext(object):
         return fn
 
     def insert_const_string(self, mod, string):
+        """
+        Insert constant *string* (a str object) into module *mod*.
+        """
         stringtype = GENERIC_POINTER
-        text = Constant.stringz(string)
         name = ".const.%s" % string
-        for gv in mod.global_values:
-            if gv.name == name and gv.type.pointee == text.type:
-                break
-        else:
-            gv = cgutils.global_constant(mod, name, text)
-            gv.linkage = lc.LINKAGE_INTERNAL
+        text = cgutils.make_bytearray(string.encode("utf-8") + b"\x00")
+        gv = self.insert_unique_const(mod, name, text)
         return Constant.bitcast(gv, stringtype)
+
+    def insert_unique_const(self, mod, name, val):
+        gv = mod.get_global(name)
+        if gv is not None:
+            return gv
+        else:
+            return cgutils.global_constant(mod, name, val)
 
     def get_arguments(self, func):
         """

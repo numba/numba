@@ -371,10 +371,8 @@ Numba_do_raise(PyObject *exc)
         if (value == NULL)
             goto raise_error;
         if (!PyExceptionInstance_Check(value)) {
-            PyErr_Format(PyExc_TypeError,
-                         "calling %R should have returned an instance of "
-                         "BaseException, not %R",
-                         type, Py_TYPE(value));
+            PyErr_SetString(PyExc_TypeError,
+                            "exceptions must derive from BaseException");
             goto raise_error;
         }
     }
@@ -402,6 +400,28 @@ raise_error:
     Py_XDECREF(value);
     Py_XDECREF(type);
     return 0;
+}
+
+static PyObject *
+Numba_unpickle(const char *data, Py_ssize_t n)
+{
+    PyObject *buf, *picklemod, *obj;
+    buf = PyBytes_FromStringAndSize(data, n);
+    if (buf == NULL)
+        return NULL;
+#if PY_MAJOR_VERSION >= 3
+    picklemod = PyImport_ImportModule("pickle");
+#else
+    picklemod = PyImport_ImportModule("cPickle");
+#endif
+    if (picklemod == NULL) {
+        Py_DECREF(buf);
+        return NULL;
+    }
+    obj = PyObject_CallMethod(picklemod, "loads", "O", buf);
+    Py_DECREF(buf);
+    Py_DECREF(picklemod);
+    return obj;
 }
 
 
@@ -458,6 +478,7 @@ build_c_helpers_dict(void)
     declmethod(gil_ensure);
     declmethod(gil_release);
     declmethod(do_raise);
+    declmethod(unpickle);
 
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);

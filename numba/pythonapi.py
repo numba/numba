@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import pickle
+
 import llvmlite.binding as ll
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.llvmpy.core as lc
@@ -52,6 +54,9 @@ class PythonAPI(object):
         self.builder = builder
 
         self.module = builder.basic_block.function.module
+        # A unique mapping of serialized objects in this module
+        self.module.__serialized = {}
+
         # Initialize types
         self.pyobj = self.context.get_argument_type(types.pyobject)
         self.voidptr = Type.pointer(Type.int(8))
@@ -159,17 +164,16 @@ class PythonAPI(object):
         is a regular object and is materialized as a pointer inside
         the LLVM bitcode.
         """
-        # XXX This produces non-reusable bitcode: the pointer's value
-        # is specific to this process execution.
         if exc is None:
             # Reraise.
             self.raise_object()
         else:
             assert isinstance(exc, BaseException) or issubclass(exc, BaseException)
-            exc_addr = self.context.get_constant(types.intp, id(exc))
-            exc = exc_addr.inttoptr(self.pyobj)
-            self.incref(exc)
-            self.raise_object(exc)
+            exc = self.serialize_object(exc)
+            with cgutils.if_likely(self.builder,
+                                   cgutils.is_not_null(self.builder, exc)):
+                self.incref(exc)
+                self.raise_object(exc)
 
     def get_c_object(self, name):
         """
@@ -798,6 +802,31 @@ class PythonAPI(object):
                 self.incref(items[i])
                 self.list_setitem(seq, idx, items[i])
         return seq
+
+    def unpickle(self, arr):
+        """
+        Unpickle some data.  *arr* should be a pointer to an LLVM
+        array of int8.
+        """
+        fnty = Type.function(self.pyobj, (self.voidptr, self.py_ssize_t))
+        fn = self._get_function(fnty, name="numba_unpickle")
+        n = self.context.get_constant(types.intp, arr.type.pointee.count)
+        return self.builder.call(fn, (arr.bitcast(self.voidptr), n))
+
+    def serialize_object(self, obj):
+        """
+        Serialize the given object in the bitcode, and unserialize it
+        as a LLVM value of a PyObject *.
+        """
+        try:
+            gv = self.module.__serialized[obj]
+        except KeyError:
+            data = pickle.dumps(obj, protocol=-1)
+            name = ".const.%s" % (id(obj),)
+            bdata = cgutils.make_bytearray(data)
+            gv = self.context.insert_unique_const(self.module, name, bdata)
+            self.module.__serialized[obj] = gv
+        return self.unpickle(gv)
 
     def to_native_arg(self, obj, typ):
         if isinstance(typ, types.Record):

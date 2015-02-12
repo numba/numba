@@ -22,6 +22,8 @@ def raise_class(exc):
     def raiser(i):
         if i == 1:
             raise exc
+        elif i == 2:
+            raise ValueError
         return i
     return raiser
 
@@ -30,6 +32,8 @@ def raise_instance(exc, arg):
     def raiser(i):
         if i == 1:
             raise exc(arg)
+        elif i == 2:
+            raise ValueError(arg)
         return i
     return raiser
 
@@ -64,6 +68,9 @@ class TestRaising(TestCase):
         with self.assertRaises(MyError) as cm:
             cfunc(1)
         self.assertEqual(cm.exception.args, ())
+        with self.assertRaises(ValueError) as cm:
+            cfunc(2)
+        self.assertEqual(cm.exception.args, ())
 
     def test_raise_class_nopython(self):
         self.check_raise_class(flags=no_pyobj_flags)
@@ -79,6 +86,9 @@ class TestRaising(TestCase):
 
         with self.assertRaises(MyError) as cm:
             cfunc(1)
+        self.assertEqual(cm.exception.args, ("some message",))
+        with self.assertRaises(ValueError) as cm:
+            cfunc(2)
         self.assertEqual(cm.exception.args, ("some message",))
 
     def test_raise_instance_objmode(self):
@@ -102,6 +112,25 @@ class TestRaising(TestCase):
 
     def test_reraise_nopython(self):
         self.check_reraise(flags=no_pyobj_flags)
+
+    def check_raise_invalid_class(self, cls, flags):
+        pyfunc = raise_class(cls)
+        cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cfunc = cres.entry_point
+        with self.assertRaises(TypeError) as cm:
+            cfunc(1)
+        self.assertEqual(str(cm.exception),
+                         "exceptions must derive from BaseException")
+
+    def test_raise_invalid_class_objmode(self):
+        self.check_raise_invalid_class(int, flags=force_pyobj_flags)
+        self.check_raise_invalid_class(1, flags=force_pyobj_flags)
+
+    def test_raise_invalid_class_nopython(self):
+        with self.assertTypingError():
+            self.check_raise_invalid_class(int, flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.check_raise_invalid_class(1, flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':

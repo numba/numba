@@ -373,6 +373,7 @@ class Lower(BaseLower):
 
         elif isinstance(inst, ir.Raise):
             if inst.exception is None:
+                # Reraise
                 excid = self.add_exception(None)
             else:
                 exctype = self.typeof(inst.exception.name)

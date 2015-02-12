@@ -6,6 +6,8 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import functools
 import re
+
+from llvmlite import ir
 from llvmlite.llvmpy.core import Constant, Type
 import llvmlite.llvmpy.core as lc
 
@@ -35,6 +37,15 @@ def make_anonymous_struct(builder, values):
     for i, v in enumerate(values):
         struct_val = builder.insert_value(struct_val, v, i)
     return struct_val
+
+
+def make_bytearray(buf):
+    """
+    Make a byte array constant from *buf*.
+    """
+    b = bytearray(buf)
+    n = len(b)
+    return ir.Constant(ir.ArrayType(ir.IntType(8), n), b)
 
 
 class Structure(object):
@@ -660,7 +671,7 @@ def global_constant(builder_or_module, name, value, linkage=lc.LINKAGE_INTERNAL)
     else:
         module = get_module(builder_or_module)
     data = module.add_global_variable(value.type, name=name)
-    data.linkage = lc.LINKAGE_INTERNAL
+    data.linkage = linkage
     data.global_constant = True
     data.initializer = value
     return data
