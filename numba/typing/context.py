@@ -49,12 +49,20 @@ class BaseContext(object):
             raise NotImplementedError(type(num), num)
 
     def resolve_function_type(self, func, args, kws):
+        """
+        Resolve function type *func* for argument types *args* and *kws*.
+        A signature is returned.
+        """
         if isinstance(func, types.Function):
             return func.template(self).apply(args, kws)
 
         if isinstance(func, types.Dispatcher):
             template, args, kws = func.overloaded.get_call_template(args, kws)
             return template(self).apply(args, kws)
+
+        if isinstance(func, types.ExceptionType):
+            return_type = types.ExceptionInstance(func.exc_class)
+            return templates.signature(return_type)
 
         defns = self.functions[func]
         for defn in defns:

@@ -158,21 +158,31 @@ class PythonAPI(object):
         cstr = self.context.insert_const_string(self.module, msg)
         self.err_set_string(self.native_error_type, cstr)
 
-    def raise_exception(self, exc):
+    def raise_exception(self, exc_type, exc_args):
         """
-        Raise a given exception *exc* (a type or instance).  Note this
-        is a regular object and is materialized as a pointer inside
-        the LLVM bitcode.
+        Raise a given exception *exc_type* with arguments tuple *exc_args*.
         """
-        if exc is None:
+        if exc_type is None:
             # Reraise.
             self.raise_object()
-        else:
-            assert isinstance(exc, BaseException) or issubclass(exc, BaseException)
-            exc = self.serialize_object(exc)
+        elif exc_args is None:
+            assert issubclass(exc_type, BaseException)
+            exc = self.serialize_object(exc_type)
             with cgutils.if_likely(self.builder,
                                    cgutils.is_not_null(self.builder, exc)):
                 self.incref(exc)
+                self.raise_object(exc)
+        else:
+            assert issubclass(exc_type, BaseException)
+            exc_type = self.serialize_object(exc_type)
+            exc_args = self.serialize_object(exc_args)
+            ok = self.builder.and_(
+                cgutils.is_not_null(self.builder, exc_type),
+                cgutils.is_not_null(self.builder, exc_args))
+            with cgutils.if_likely(self.builder, ok):
+                exc = self.call(exc_type, exc_args)
+                self.decref(exc_type)
+                self.decref(exc_args)
                 self.raise_object(exc)
 
     def get_c_object(self, name):
@@ -607,7 +617,11 @@ class PythonAPI(object):
         args.append(self.context.get_constant_null(types.pyobject))
         return self.builder.call(fn, args)
 
-    def call(self, callee, args, kws):
+    def call(self, callee, args=None, kws=None):
+        if args is None:
+            args = self.get_null_object()
+        if kws is None:
+            kws = self.get_null_object()
         fnty = Type.function(self.pyobj, [self.pyobj] * 3)
         fn = self._get_function(fnty, name="PyObject_Call")
         return self.builder.call(fn, (callee, args, kws))

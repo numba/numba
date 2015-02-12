@@ -176,6 +176,7 @@ class BaseLower(object):
         self.library = library
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
+        self.interp = interp
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -215,10 +216,10 @@ class BaseLower(object):
         Called after all blocks are lowered
         """
 
-    def add_exception(self, exc):
+    def add_exception(self, exc, exc_args=None):
         assert (exc is None or issubclass(exc, BaseException)), exc
         excid = len(self.exceptions) + errcode.ERROR_COUNT
-        self.exceptions[excid] = exc
+        self.exceptions[excid] = exc, exc_args
         return excid
 
     def lower(self):
@@ -372,36 +373,38 @@ class Lower(BaseLower):
             return impl(self.builder, (target, value))
 
         elif isinstance(inst, ir.Raise):
-            if inst.exception is None:
-                # Reraise
-                excid = self.add_exception(None)
-            else:
-                exctype = self.typeof(inst.exception.name)
-                if not isinstance(exctype, types.ExceptionType):
-                    raise NotImplementedError("cannot raise value of type %s"
-                                              % (exctype,))
-                excid = self.add_exception(exctype.exc_class)
-            self.context.return_user_exc(self.builder, excid)
+            self.lower_raise(inst)
 
         else:
             raise NotImplementedError(type(inst))
 
+    def lower_raise(self, inst):
+        if inst.exception is None:
+            # Reraise
+            excid = self.add_exception(None)
+        else:
+            exctype = self.typeof(inst.exception.name)
+            if isinstance(exctype, types.ExceptionInstance):
+                # raise <instance> => find the instantiation site
+                excdef = self.interp.get_definition(inst.exception)
+                if (not isinstance(excdef, ir.Expr) or excdef.op != 'call'
+                    or excdef.kws):
+                    raise NotImplementedError("unsupported kind of raising")
+                # Try to infer the args tuple
+                args = tuple(self.interp.get_definition(arg).infer_constant()
+                             for arg in excdef.args)
+            elif isinstance(exctype, types.ExceptionType):
+                args = None
+            else:
+                raise NotImplementedError("cannot raise value of type %s"
+                                          % (exctype,))
+            excid = self.add_exception(exctype.exc_class, args)
+        self.context.return_user_exc(self.builder, excid)
+
     def lower_assign(self, ty, inst):
         value = inst.value
-        if isinstance(value, ir.Const):
-            return self.context.get_constant_generic(self.builder, ty,
-                                                     value.value)
-
-        elif isinstance(value, ir.Expr):
-            return self.lower_expr(ty, value)
-
-        elif isinstance(value, ir.Var):
-            val = self.loadvar(value.name)
-            oty = self.typeof(value.name)
-            return self.context.cast(self.builder, val, oty, ty)
-
         # In nopython mode, closure vars are frozen like globals
-        elif isinstance(value, (ir.Global, ir.FreeVar)):
+        if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
             if (isinstance(ty, types.Dummy) or
                     isinstance(ty, types.Module) or
                     isinstance(ty, types.Function) or
@@ -415,6 +418,14 @@ class Lower(BaseLower):
             else:
                 return self.context.get_constant_generic(self.builder, ty,
                                                          value.value)
+
+        elif isinstance(value, ir.Expr):
+            return self.lower_expr(ty, value)
+
+        elif isinstance(value, ir.Var):
+            val = self.loadvar(value.name)
+            oty = self.typeof(value.name)
+            return self.context.cast(self.builder, val, oty, ty)
 
         else:
             raise NotImplementedError(type(value), value)
@@ -505,6 +516,11 @@ class Lower(BaseLower):
                 func = self.context.declare_external_function(
                         cgutils.get_module(self.builder), fndesc)
                 res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
+
+            elif isinstance(fnty, types.ExceptionType):
+                # Exception instances are reified after function exit
+                # in the call wrapper.
+                return self.context.get_dummy_value()
 
             else:
                 # Normal function resolution

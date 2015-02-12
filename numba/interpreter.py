@@ -83,13 +83,13 @@ class Interpreter(object):
         self.blocks = {}
         # { name: value } of global variables used by the bytecode
         self.used_globals = {}
+        self.definitions = collections.defaultdict(list)
 
         # Temp states during interpretation
         self.current_block = None
         self.current_block_offset = None
         self.syntax_blocks = []
         self.dfainfo = None
-        self.constants = {}
 
     def _fill_global_scope(self, scope):
         """TODO
@@ -348,7 +348,7 @@ class Interpreter(object):
 
     def store(self, value, name, redefine=False):
         """
-        Store *value* (a Var instance) into the variable named *name*
+        Store *value* (a Expr or Var instance) into the variable named *name*
         (a str object).
         """
         if redefine or self.current_block_offset in self.cfa.backbone:
@@ -359,6 +359,7 @@ class Interpreter(object):
             value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
+        self.definitions[name].append(value)
 
     def get(self, name):
         """
@@ -370,6 +371,31 @@ class Interpreter(object):
         if var is None:
             var = self.current_scope.get(name)
         return var
+
+    def get_definition(self, name):
+        while True:
+            defs = self.definitions[name]
+            if len(defs) > 1:
+                raise TypeError("more than one definition for %r" % (name,))
+            expr = defs[0]
+            if isinstance(expr, ir.Var):
+                name = expr.name
+            else:
+                assert isinstance(expr, ir.Expr)
+                return expr
+
+    def get_definition(self, value):
+        while True:
+            if not isinstance(value, ir.Var):
+                return value
+            defs = self.definitions[value.name]
+            if len(defs) == 0:
+                raise KeyError("no definition for %r"
+                               % (value.name,))
+            if len(defs) > 1:
+                raise KeyError("more than one definition for %r"
+                               % (value.name,))
+            value = defs[0]
 
     # --- Block operations ---
 

@@ -875,9 +875,26 @@ class ExceptionType(Phantom):
 
     def __init__(self, exc_class):
         assert issubclass(exc_class, BaseException)
-        name = "exception(%s)" % (exc_class.__name__)
+        name = "%s" % (exc_class.__name__)
         self.exc_class = exc_class
         super(ExceptionType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.exc_class
+
+
+class ExceptionInstance(Phantom):
+    """
+    The type of exception instances.  *exc_class* should be the
+    exception class.
+    """
+
+    def __init__(self, exc_class):
+        assert issubclass(exc_class, BaseException)
+        name = "%s(...)" % (exc_class.__name__,)
+        self.exc_class = exc_class
+        super(ExceptionInstance, self).__init__(name, param=True)
 
     @property
     def key(self):
@@ -901,7 +918,7 @@ def is_int_tuple(x):
 pyobject = Opaque('pyobject')
 none = NoneType('none')
 Any = Phantom('any')
-string = Opaque('str')
+string = Dummy('str')
 
 # No operation is defined on voidptr
 # Can only pass it around

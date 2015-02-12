@@ -171,12 +171,12 @@ class PyCallWrapper(object):
         nexc = len(self.exceptions)
         elseblk = cgutils.append_basic_block(builder, ".invalid.user.exception")
         swt = builder.switch(code, elseblk, n=nexc)
-        for num, exc in self.exceptions.items():
+        for num, (exc_type, exc_args) in self.exceptions.items():
             bb = cgutils.append_basic_block(builder,
                                             ".user.exception.%d" % num)
             swt.add_case(Constant.int(code.type, num), bb)
             builder.position_at_end(bb)
-            api.raise_exception(exc)
+            api.raise_exception(exc_type, exc_args)
             builder.ret(api.get_null_object())
 
         builder.position_at_end(elseblk)

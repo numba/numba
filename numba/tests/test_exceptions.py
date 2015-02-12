@@ -95,8 +95,7 @@ class TestRaising(TestCase):
         self.check_raise_instance(flags=force_pyobj_flags)
 
     def test_raise_instance_nopython(self):
-        with self.assertTypingError():
-            self.check_raise_instance(flags=no_pyobj_flags)
+        self.check_raise_instance(flags=no_pyobj_flags)
 
     def check_reraise(self, flags):
         pyfunc = reraise
