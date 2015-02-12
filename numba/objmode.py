@@ -125,7 +125,10 @@ class PyLower(BaseLower):
             self.delvar(inst.value)
 
         elif isinstance(inst, ir.Raise):
-            exc = self.loadvar(inst.exception.name)
+            if inst.exception is not None:
+                exc = self.loadvar(inst.exception.name)
+            else:
+                exc = None
             self.pyapi.raise_object(exc)
             self.return_exception_raised()
 

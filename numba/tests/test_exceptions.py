@@ -34,6 +34,10 @@ def raise_instance(exc, arg):
     return raiser
 
 
+def reraise():
+    raise
+
+
 class TestRaising(TestCase):
 
     def test_unituple_index_error(self):
@@ -83,6 +87,22 @@ class TestRaising(TestCase):
     def test_raise_instance_nopython(self):
         with self.assertTypingError():
             self.check_raise_instance(flags=no_pyobj_flags)
+
+    def check_reraise(self, flags):
+        pyfunc = reraise
+        cres = compile_isolated(pyfunc, (), flags=flags)
+        with self.assertRaises(ZeroDivisionError):
+            try:
+                1/0
+            except ZeroDivisionError as e:
+                pyfunc()
+
+    def test_reraise_objmode(self):
+        self.check_reraise(flags=force_pyobj_flags)
+
+    def test_reraise_nopython(self):
+        with self.assertTypingError():
+            self.check_reraise(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':
