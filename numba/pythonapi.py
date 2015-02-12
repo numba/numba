@@ -161,11 +161,15 @@ class PythonAPI(object):
         """
         # XXX This produces non-reusable bitcode: the pointer's value
         # is specific to this process execution.
-        assert isinstance(exc, BaseException) or issubclass(exc, BaseException)
-        exc_addr = self.context.get_constant(types.intp, id(exc))
-        exc = exc_addr.inttoptr(self.pyobj)
-        self.incref(exc)
-        self.raise_object(exc)
+        if exc is None:
+            # Reraise.
+            self.raise_object()
+        else:
+            assert isinstance(exc, BaseException) or issubclass(exc, BaseException)
+            exc_addr = self.context.get_constant(types.intp, id(exc))
+            exc = exc_addr.inttoptr(self.pyobj)
+            self.incref(exc)
+            self.raise_object(exc)
 
     def get_c_object(self, name):
         """

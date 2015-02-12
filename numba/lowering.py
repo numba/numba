@@ -216,7 +216,7 @@ class BaseLower(object):
         """
 
     def add_exception(self, exc):
-        assert issubclass(exc, BaseException), exc
+        assert (exc is None or issubclass(exc, BaseException)), exc
         excid = len(self.exceptions) + errcode.ERROR_COUNT
         self.exceptions[excid] = exc
         return excid
@@ -372,11 +372,14 @@ class Lower(BaseLower):
             return impl(self.builder, (target, value))
 
         elif isinstance(inst, ir.Raise):
-            exctype = self.typeof(inst.exception.name)
-            if not isinstance(exctype, types.ExceptionType):
-                raise NotImplementedError("cannot raise value of type %s"
-                                          % (exctype,))
-            excid = self.add_exception(exctype.exc_class)
+            if inst.exception is None:
+                excid = self.add_exception(None)
+            else:
+                exctype = self.typeof(inst.exception.name)
+                if not isinstance(exctype, types.ExceptionType):
+                    raise NotImplementedError("cannot raise value of type %s"
+                                              % (exctype,))
+                excid = self.add_exception(exctype.exc_class)
             self.context.return_user_exc(self.builder, excid)
 
         else:

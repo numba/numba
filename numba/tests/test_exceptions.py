@@ -101,8 +101,7 @@ class TestRaising(TestCase):
         self.check_reraise(flags=force_pyobj_flags)
 
     def test_reraise_nopython(self):
-        with self.assertTypingError():
-            self.check_reraise(flags=no_pyobj_flags)
+        self.check_reraise(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':

@@ -53,8 +53,8 @@ STRUCT_TYPES = {
 Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
 
 RETCODE_OK = Constant.int_signextend(Type.int(), 0)
-RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
 RETCODE_EXC = Constant.int_signextend(Type.int(), -1)
+RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
 
 
 class Overloads(object):
@@ -885,6 +885,9 @@ class BaseContext(object):
         return retval
 
     def get_return_status(self, builder, code):
+        """
+        Given a return *code*, get a Status instance.
+        """
         norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
         none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
         exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
