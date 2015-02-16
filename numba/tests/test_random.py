@@ -241,6 +241,9 @@ class TestRandom(TestCase):
             expected = r.getrandbits(nbits)
             got = func(nbits)
             self.assertPreciseEqual(expected, got)
+        self.assertRaises(NativeError, func, 65)
+        self.assertRaises(NativeError, func, 9999999)
+        self.assertRaises(NativeError, func, -1)
 
     def test_random_getrandbits(self):
         self._check_getrandbits(jit_unary("random.getrandbits"), py_state_ptr)

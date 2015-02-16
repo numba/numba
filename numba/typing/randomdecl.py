@@ -28,7 +28,7 @@ _float_types = [types.float64]
 
 @registry.resolves_global(random.getrandbits, typing_key="random.getrandbits")
 class Random_getrandbits(ConcreteTemplate):
-    cases = [signature(types.uint64, types.uint8)]
+    cases = [signature(types.uint64, types.int32)]
 
 @registry.resolves_global(random.random, typing_key="random.random")
 @registry.resolves_global(np.random.random, typing_key="np.random.random")

@@ -262,6 +262,10 @@ def _gauss_impl(context, builder, sig, args, state):
 @implement("random.getrandbits", types.Kind(types.Integer))
 def getrandbits_impl(context, builder, sig, args):
     nbits, = args
+    too_large = builder.icmp_unsigned(">=", nbits, const_int(65))
+    too_small = builder.icmp_unsigned("==", nbits, const_int(0))
+    with cgutils.if_unlikely(builder, builder.or_(too_large, too_small)):
+        context.return_errcode(builder, errcode.OUT_OF_BOUND_ERROR)
     state_ptr = get_state_ptr(context, builder, "py")
     return get_next_int(context, builder, state_ptr, nbits)
 
