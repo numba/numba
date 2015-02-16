@@ -136,6 +136,8 @@ The following constructors are supported, only with a numeric input:
 Modules
 =======
 
+.. _numpy-random:
+
 ``random``
 ----------
 
@@ -144,7 +146,7 @@ Numba supports top-level functions from the
 module, but does not allow you to create individual RandomState instances.
 The same algorithms are used as for :ref:`the standard
 random module <pysupported-random>` (and therefore the same notes apply),
-but with an independent internal state: seeding or drawning numbers from
+but with an independent internal state: seeding or drawing numbers from
 one generator won't affect the other.
 
 The following functions are supported, but only with scalar output: you can't
@@ -205,6 +207,20 @@ Distributions
 * :func:`numpy.random.wald`
 * :func:`numpy.random.weibull`
 * :func:`numpy.random.zipf`
+
+.. note::
+   Calling :func:`numpy.random.seed` from non-Numba code (or from
+   :term:`object mode` code) will seed the Numpy random generator, not the
+   Numba random generator.
+
+.. note::
+   The generator is not thread-safe when :ref:`releasing the GIL <jit-nogil>`.
+
+   Also, under Unix, if creating a child process using :func:`os.fork` or the
+   :mod:`multiprocessing` module, the child's random generator will inherit
+   the parent's state and will therefore produce the same sequence of
+   numbers (except when using the "forkserver" start method under Python 3.4
+   and later).
 
 
 Standard ufuncs

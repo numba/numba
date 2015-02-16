@@ -263,11 +263,17 @@ startup with entropy drawn from the operating system.
    code) will seed the Python random generator, not the Numba random generator.
 
 .. note::
-   Under Unix, if creating a child process using :func:`os.fork` or the
+   The generator is not thread-safe when :ref:`releasing the GIL <jit-nogil>`.
+
+   Also, under Unix, if creating a child process using :func:`os.fork` or the
    :mod:`multiprocessing` module, the child's random generator will inherit
    the parent's state and will therefore produce the same sequence of
    numbers (except when using the "forkserver" start method under Python 3.4
    and later).
+
+.. seealso::
+   Numba also supports most additional distributions from the :ref:`Numpy
+   random module <numpy-random>`.
 
 
 Third-party modules
