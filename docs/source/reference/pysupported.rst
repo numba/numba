@@ -91,7 +91,7 @@ The following built-in functions are supported:
 * :func:`max`: only the multiple-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
 * :class:`range`
-* :func:`round`: only the two-argument form
+* :func:`round`
 * :func:`zip`
 
 
@@ -161,14 +161,20 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.cos`
 * :func:`math.cosh`
 * :func:`math.degrees`
+* :func:`math.erf`
+* :func:`math.erfc`
 * :func:`math.exp`
 * :func:`math.expm1`
 * :func:`math.fabs`
 * :func:`math.floor`
+* :func:`math.frexp`
+* :func:`math.gamma`
 * :func:`math.hypot`
 * :func:`math.isfinite`
 * :func:`math.isinf`
 * :func:`math.isnan`
+* :func:`math.ldexp`
+* :func:`math.lgamma`
 * :func:`math.log`
 * :func:`math.log10`
 * :func:`math.log1p`

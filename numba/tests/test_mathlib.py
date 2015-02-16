@@ -159,6 +159,14 @@ def copysign(x, y):
     return math.copysign(x, y)
 
 
+def frexp(x):
+    return math.frexp(x)
+
+
+def ldexp(x, e):
+    return math.ldexp(x, e)
+
+
 class TestMathLib(TestCase):
 
     def setUp(self):
@@ -515,58 +523,49 @@ class TestMathLib(TestCase):
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erf(self, flags=enable_pyobj_flags):
         pyfunc = erf
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float64]
-        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
+        x_types = [types.float32, types.float64] * (len(x_values) // 2)
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erf_npm(self):
-        with self.assertTypingError():
-            self.test_erf(flags=no_pyobj_flags)
+        self.test_erf(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc(self, flags=enable_pyobj_flags):
         pyfunc = erfc
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float64]
-        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
+        x_types = [types.float32, types.float64] * (len(x_values) // 2)
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc_npm(self):
-        with self.assertTypingError():
-            self.test_erfc(flags=no_pyobj_flags)
+        self.test_erfc(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma(self, flags=enable_pyobj_flags):
         pyfunc = gamma
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float64]
-        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        x_values = [1., -0.9, -0.5, 0.5]
+        x_types = [types.float32, types.float64] * (len(x_values) // 2)
+        self.run_unary(pyfunc, x_types, x_values, flags)
+        x_values = [-0.1, 0.1, 2.5, 10.1, 50., float('inf')]
+        x_types = [types.float64] * len(x_values)
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma_npm(self):
-        with self.assertTypingError():
-            self.test_gamma(flags=no_pyobj_flags)
+        self.test_gamma(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_lgamma(self, flags=enable_pyobj_flags):
         pyfunc = lgamma
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float64]
-        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        x_values = [1., -0.9, -0.1, 0.1, 200., 1e10, 1e30, float('inf')]
+        x_types = [types.float32, types.float64] * (len(x_values) // 2)
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_lgamma_npm(self):
-        with self.assertTypingError():
-            self.test_lgamma(flags=no_pyobj_flags)
+        self.test_lgamma(flags=no_pyobj_flags)
 
     def test_pow(self, flags=enable_pyobj_flags):
         pyfunc = pow
@@ -591,6 +590,31 @@ class TestMathLib(TestCase):
 
     def test_copysign_npm(self):
         self.test_copysign(flags=no_pyobj_flags)
+
+    def test_frexp(self, flags=enable_pyobj_flags):
+        pyfunc = frexp
+        x_types = [types.float32, types.float64]
+        x_values = [-2.5, -0.0, 0.0, 3.5,
+                    float('-inf'), float('inf'), float('nan')]
+        self.run_unary(pyfunc, x_types, x_values, flags, prec='exact')
+
+    def test_frexp_npm(self):
+        self.test_frexp(flags=no_pyobj_flags)
+
+    def test_ldexp(self, flags=enable_pyobj_flags):
+        pyfunc = ldexp
+        for fltty in (types.float32, types.float64):
+            cr = self.ccache.compile(pyfunc, (fltty, types.int32), flags=flags)
+            cfunc = cr.entry_point
+            for args in [(2.5, -2), (2.5, 1), (0.0, 0), (0.0, 1),
+                         (-0.0, 0), (-0.0, 1),
+                         (float('inf'), 0), (float('-inf'), 0),
+                         (float('nan'), 0)]:
+                msg = 'for input %r' % (args,)
+                self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
+
+    def test_ldexp_npm(self):
+        self.test_ldexp(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':

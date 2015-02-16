@@ -141,7 +141,7 @@ class SortedSet(collections.Set):
 class UniqueDict(dict):
     def __setitem__(self, key, value):
         if key in self:
-            raise AssertionError("%r already in UniqueDict" % (key,))
+            raise AssertionError("key already in dictionary: %r" % (key,))
         super(UniqueDict, self).__setitem__(key, value)
 
 
