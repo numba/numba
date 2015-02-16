@@ -661,6 +661,9 @@ class TestBuiltins(TestCase):
                     self.assertPreciseEqual(cfunc(-x, n), pyfunc(-x, n),
                                             prec=prec)
 
+    def test_round2_npm(self):
+        self.test_round2(flags=no_pyobj_flags)
+
     def test_sum(self, flags=enable_pyobj_flags):
         pyfunc = sum_usecase
 
