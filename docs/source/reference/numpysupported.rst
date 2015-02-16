@@ -164,7 +164,6 @@ Simple random data
 * :func:`numpy.random.randint`
 * :func:`numpy.random.randn`: only without argument
 * :func:`numpy.random.random`
-* :func:`numpy.random.random_integers`
 * :func:`numpy.random.random_sample`
 * :func:`numpy.random.ranf`
 * :func:`numpy.random.sample`
