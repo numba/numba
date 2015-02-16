@@ -296,6 +296,10 @@ class TestRandom(TestCase):
         self._check_gauss(None, None, jit_nullary("np.random.standard_normal"),
                           np_state_ptr)
 
+    def test_numpy_randn(self):
+        self._check_gauss(None, None, jit_nullary("np.random.randn"),
+                          np_state_ptr)
+
     def _check_lognormvariate(self, func2, func1, func0, ptr):
         """
         Check a lognormvariate()-like function.
