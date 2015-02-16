@@ -550,7 +550,7 @@ class TestMathLib(TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
         x_values = [-0.1, 0.1, 2.5, 10.1, 50., float('inf')]
         x_types = [types.float64] * len(x_values)
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags, prec='double')
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma_npm(self):
