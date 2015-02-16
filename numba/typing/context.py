@@ -204,8 +204,7 @@ class BaseContext(object):
         elif cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
             return cffi_utils.make_function_type(val)
 
-        elif (cffi_utils.SUPPORTED and
-                  isinstance(val, cffi_utils.ExternCFunction)):
+        elif isinstance(val, types.ExternalFunction):
             return val
 
         elif type(val) is type and issubclass(val, BaseException):
