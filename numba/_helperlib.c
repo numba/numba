@@ -286,26 +286,6 @@ Numba_create_np_timedelta(npy_int64 value, int unit_code)
 }
 
 static
-double Numba_round_even(double y) {
-    double z = round(y);
-    if (fabs(y-z) == 0.5) {
-        /* halfway between two integers; use round-half-even */
-        z = 2.0*round(y / 2.0);
-    }
-    return z;
-}
-
-static
-float Numba_roundf_even(float y) {
-    float z = roundf(y);
-    if (fabsf(y-z) == 0.5) {
-        /* halfway between two integers; use round-half-even */
-        z = 2.0 * roundf(y / 2.0);
-    }
-    return z;
-}
-
-static
 uint64_t Numba_fptoui(double x) {
     /* First cast to signed int of the full width to make sure sign extension
        happens (this can make a difference on some platforms...). */
@@ -380,8 +360,6 @@ build_c_helpers_dict(void)
     declmethod(extract_np_timedelta);
     declmethod(create_np_timedelta);
     declmethod(recreate_record);
-    declmethod(round_even);
-    declmethod(roundf_even);
     declmethod(fptoui);
     declmethod(fptouif);
     declmethod(gil_ensure);

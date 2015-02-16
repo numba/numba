@@ -720,10 +720,16 @@ class Min(AbstractTemplate):
 
 class Round(ConcreteTemplate):
     key = round
-    cases = [
-        signature(types.float32, types.float32),
-        signature(types.float64, types.float64),
-    ]
+    if PYVERSION < (3, 0):
+        cases = [
+            signature(types.float32, types.float32),
+            signature(types.float64, types.float64),
+        ]
+    else:
+        cases = [
+            signature(types.int32, types.float32),
+            signature(types.int64, types.float64),
+        ]
 
 
 builtin_global(max, types.Function(Max))

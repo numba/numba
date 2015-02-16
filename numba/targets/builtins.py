@@ -1275,11 +1275,12 @@ def round_impl_f32(context, builder, sig, args):
     module = cgutils.get_module(builder)
     fnty = Type.function(Type.float(), [Type.float()])
     if utils.IS_PY3:
-        fn = module.get_or_insert_function(fnty, name="numba.roundf")
+        fn = module.get_or_insert_function(fnty, name="llvm.rint.f32")
+        res = builder.call(fn, args)
+        return builder.fptosi(res, Type.int(32))
     else:
-        fn = module.get_or_insert_function(fnty, name="roundf")
-    assert fn.is_declaration
-    return builder.call(fn, args)
+        fn = module.get_or_insert_function(fnty, name="llvm.round.f32")
+        return builder.call(fn, args)
 
 
 @builtin
@@ -1288,11 +1289,12 @@ def round_impl_f64(context, builder, sig, args):
     module = cgutils.get_module(builder)
     fnty = Type.function(Type.double(), [Type.double()])
     if utils.IS_PY3:
-        fn = module.get_or_insert_function(fnty, name="numba.round")
+        fn = module.get_or_insert_function(fnty, name="llvm.rint.f64")
+        res = builder.call(fn, args)
+        return builder.fptosi(res, Type.int(64))
     else:
-        fn = module.get_or_insert_function(fnty, name="round")
-    assert fn.is_declaration
-    return builder.call(fn, args)
+        fn = module.get_or_insert_function(fnty, name="llvm.round.f64")
+        return builder.call(fn, args)
 
 #-------------------------------------------------------------------------------
 

@@ -119,7 +119,7 @@ def ord_usecase(x):
 def reduce_usecase(reduce_func, x):
     return functools.reduce(reduce_func, x)
 
-def round_usecase(x):
+def round_usecase1(x):
     return round(x)
 
 def sum_usecase(x):
@@ -630,17 +630,18 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_reduce(flags=no_pyobj_flags)
 
-    def test_round(self, flags=enable_pyobj_flags):
-        pyfunc = round_usecase
+    def test_round1(self, flags=enable_pyobj_flags):
+        pyfunc = round_usecase1
 
-        cr = compile_isolated(pyfunc, (types.float64,), flags=flags)
-        cfunc = cr.entry_point
-        for x in [-0.5, -0.1, 0.0, 0.1, 0.5, 1.5, 5.0]:
-            # XXX round() doesn't return the right type under Python 3
-            self.assertEqual(cfunc(x), pyfunc(x))
+        for tp in (types.float64, types.float32):
+            cr = compile_isolated(pyfunc, (tp,), flags=flags)
+            cfunc = cr.entry_point
+            for x in [-1.6, -1.5, -1.4, -0.5, -0.1, -0.0,
+                      0.0, 0.1, 0.5, 0.6, 1.4, 1.5, 5.0]:
+                self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-    def test_round_npm(self):
-        self.test_round(flags=no_pyobj_flags)
+    def test_round1_npm(self):
+        self.test_round1(flags=no_pyobj_flags)
 
     def test_sum(self, flags=enable_pyobj_flags):
         pyfunc = sum_usecase
