@@ -1268,42 +1268,41 @@ def min_impl(context, builder, sig, args):
     return resval
 
 
-@builtin
-@implement(round, types.float32)
-def round_impl_f32(context, builder, sig, args):
-    module = cgutils.get_module(builder)
-    fnty = Type.function(Type.float(), [Type.float()])
+def _round_intrinsic(tp):
+    # round() rounds half to even on Python 3, away from zero on Python 2.
     if utils.IS_PY3:
-        fn = module.get_or_insert_function(fnty, name="llvm.rint.f32")
-        res = builder.call(fn, args)
-        return builder.fptosi(res, Type.int(32))
+        return "llvm.rint.f%d" % (tp.bitwidth,)
     else:
-        fn = module.get_or_insert_function(fnty, name="llvm.round.f32")
-        return builder.call(fn, args)
-
+        return "llvm.round.f%d" % (tp.bitwidth,)
 
 @builtin
-@implement(round, types.float64)
-def round_impl_f64(context, builder, sig, args):
+@implement(round, types.Kind(types.Float))
+def round_impl_unary(context, builder, sig, args):
+    fltty = sig.args[0]
+    llty = context.get_value_type(fltty)
     module = cgutils.get_module(builder)
-    fnty = Type.function(Type.double(), [Type.double()])
+    fnty = Type.function(llty, [llty])
+    fn = module.get_or_insert_function(fnty, name=_round_intrinsic(fltty))
+    res = builder.call(fn, args)
     if utils.IS_PY3:
-        fn = module.get_or_insert_function(fnty, name="llvm.rint.f64")
-        res = builder.call(fn, args)
-        return builder.fptosi(res, Type.int(64))
+        # unary round() returns an int on Python 3
+        return builder.fptosi(res, context.get_value_type(sig.return_type))
     else:
-        fn = module.get_or_insert_function(fnty, name="llvm.round.f64")
-        return builder.call(fn, args)
-
+        return res
 
 @builtin
 @implement(round, types.Kind(types.Float), types.Kind(types.Integer))
 def round_impl_binary(context, builder, sig, args):
-    fltty = sig.return_type
+    fltty = sig.args[0]
+    # Allow calling the intrinsic from the Python implementation below.
+    # This avoids the conversion to an int in Python 3's unary round().
+    _round = types.ExternalFunction(
+        _round_intrinsic(fltty), typing.signature(fltty, fltty))
 
     def round_ndigits(x, ndigits):
         if math.isinf(x) or math.isnan(x):
             return x
+
         if ndigits >= 0:
             if ndigits > 22:
                 # pow1 and pow2 are each safe from overflow, but
@@ -1316,18 +1315,12 @@ def round_impl_binary(context, builder, sig, args):
             y = (x * pow1) * pow2
             if math.isinf(y):
                 return x
+            return (_round(y) / pow2) / pow1
+
         else:
             pow1 = 10.0 ** (-ndigits)
             y = x / pow1
-
-        # XXX this does a float -> int -> float roundtrip under Python 3
-        z = round(y)
-        z = math.copysign(z, x)
-        if ndigits >= 0:
-            z = (z / pow2) / pow1
-        else:
-            z *= pow1
-        return z
+            return _round(y) * pow1
 
     return context.compile_internal(builder, round_ndigits, sig, args)
 
