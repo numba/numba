@@ -660,3 +660,29 @@ class UnicodeCharSeq(DataModel):
 
     def get_data_type(self):
         return self._be_type
+
+
+class CConitugousFlatIter(StructModel):
+    def __init__(self, dmm, fe_type):
+        assert fe_type.array_type.layout == 'C'
+        array_type = fe_type.array_type
+        dtype = array_type.dtype
+        members = [('array', types.CPointer(array_type)),
+                   ('stride', types.intp),
+                   ('pointer', types.CPointer(types.CPointer(dtype))),
+                   ('index', types.CPointer(types.intp)),
+                   ('indices', types.CPointer(types.intp)),
+        ]
+        super(CConitugousFlatIter, self).__init__(dmm, fe_type, members)
+
+
+class FlatIter(StructModel):
+    def __init__(self, dmm, fe_type):
+        array_type = fe_type.array_type
+        dtype = array_type.dtype
+        members = [('array', types.CPointer(array_type)),
+                   ('pointers', types.CPointer(types.CPointer(dtype))),
+                   ('indices', types.CPointer(types.intp)),
+                   ('exhausted', types.CPointer(types.boolean)),
+        ]
+        super(FlatIter, self).__init__(dmm, fe_type, members)
