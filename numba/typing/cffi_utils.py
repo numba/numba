@@ -61,20 +61,17 @@ def make_function_type(cffi_func):
     return result
 
 
-class ExternCFunction(types.Function):
+class ExternCFunction(types.ExternalFunction):
     # XXX unused?
 
     def __init__(self, symbol, cstring):
         """Parse C function declaration/signature"""
-        self.symbol = symbol
         parser = cffi.cparser.Parser()
         rft = parser.parse_type(cstring) # "RawFunctionType"
         self.restype = type_map[rft.result.build_backend_type(ffi, None)]
         self.argtypes = [type_map[arg.build_backend_type(ffi, None)] for arg in rft.args]
         signature = templates.signature(self.restype, *self.argtypes)
-        cases = [signature]
-        template = templates.make_concrete_template('ExternCFunction', self.symbol, cases)
-        super(ExternCFunction, self).__init__(template)
+        super(ExternCFunction, self).__init__(symbol, signature)
 
 
 if ffi is not None:
