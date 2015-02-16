@@ -1,6 +1,5 @@
 from __future__ import print_function, absolute_import, division
 
-
 import math
 from functools import reduce
 
@@ -1295,6 +1294,43 @@ def round_impl_f64(context, builder, sig, args):
     else:
         fn = module.get_or_insert_function(fnty, name="llvm.round.f64")
         return builder.call(fn, args)
+
+
+@builtin
+@implement(round, types.Kind(types.Float), types.Kind(types.Integer))
+def round_impl_binary(context, builder, sig, args):
+    fltty = sig.return_type
+
+    def round_ndigits(x, ndigits):
+        if math.isinf(x) or math.isnan(x):
+            return x
+        if ndigits >= 0:
+            if ndigits > 22:
+                # pow1 and pow2 are each safe from overflow, but
+                # pow1*pow2 ~= pow(10.0, ndigits) might overflow.
+                pow1 = 10.0 ** (ndigits - 22)
+                pow2 = 1e22
+            else:
+                pow1 = 10.0 ** ndigits
+                pow2 = 1.0
+            y = (x * pow1) * pow2
+            if math.isinf(y):
+                return x
+        else:
+            pow1 = 10.0 ** (-ndigits)
+            y = x / pow1
+
+        # XXX this does a float -> int -> float roundtrip under Python 3
+        z = round(y)
+        z = math.copysign(z, x)
+        if ndigits >= 0:
+            z = (z / pow2) / pow1
+        else:
+            z *= pow1
+        return z
+
+    return context.compile_internal(builder, round_ndigits, sig, args)
+
 
 #-------------------------------------------------------------------------------
 

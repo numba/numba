@@ -122,6 +122,9 @@ def reduce_usecase(reduce_func, x):
 def round_usecase1(x):
     return round(x)
 
+def round_usecase2(x, n):
+    return round(x, n)
+
 def sum_usecase(x):
     return sum(x)
 
@@ -642,6 +645,21 @@ class TestBuiltins(TestCase):
 
     def test_round1_npm(self):
         self.test_round1(flags=no_pyobj_flags)
+
+    def test_round2(self, flags=enable_pyobj_flags):
+        pyfunc = round_usecase2
+
+        for tp in (types.float64, types.float32):
+            prec = 'single' if tp is types.float32 else 'exact'
+            cr = compile_isolated(pyfunc, (tp, types.int32), flags=flags)
+            cfunc = cr.entry_point
+            for x in [0.0, 0.1, 0.125, 0.25, 0.5, 0.75, 1.25,
+                      1.5, 1.75, 2.25, 2.5, 2.75, 12.5, 15.0, 22.5]:
+                for n in (-1, 0, 1, 2):
+                    self.assertPreciseEqual(cfunc(x, n), pyfunc(x, n),
+                                            prec=prec)
+                    self.assertPreciseEqual(cfunc(-x, n), pyfunc(-x, n),
+                                            prec=prec)
 
     def test_sum(self, flags=enable_pyobj_flags):
         pyfunc = sum_usecase
