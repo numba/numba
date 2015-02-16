@@ -247,36 +247,6 @@ def ptx_atomic_add_intp(context, builder, sig, args):
 @register
 @implement(stubs.atomic.add, types.Kind(types.Array),
            types.Kind(types.UniTuple), types.Any)
-def ptx_atomic_add_unituple(context, builder, sig, args):
-    aryty, indty, valty = sig.args
-    ary, inds, val = args
-    dtype = aryty.dtype
-
-    indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(indty, indices)]
-
-    if dtype != valty:
-        raise TypeError("expect %s but got %s" % (dtype, valty))
-
-    if aryty.ndim != len(indty):
-        raise TypeError("indexing %d-D array with %d-D index" %
-                        (aryty.ndim, len(indty)))
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
-
-    if aryty.dtype == types.float32:
-        lmod = cgutils.get_module(builder)
-        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
-    elif aryty.dtype == types.float64:
-        lmod = cgutils.get_module(builder)
-        return builder.call(nvvmutils.declare_atomic_add_float64(lmod), (ptr, val))
-    else:
-        return builder.atomic_rmw('add', ptr, val, 'monotonic')
-
-
-@register
 @implement(stubs.atomic.add, types.Kind(types.Array),
            types.Kind(types.Tuple), types.Any)
 def ptx_atomic_add_tuple(context, builder, sig, args):
@@ -310,7 +280,7 @@ def ptx_atomic_add_tuple(context, builder, sig, args):
 
 @register
 @implement(stubs.atomic.max, types.Kind(types.Array), types.intp, types.Any)
-def ptx_atomic_add_intp(context, builder, sig, args):
+def ptx_atomic_max_intp(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, ind, val = args
     dtype = aryty.dtype
@@ -331,38 +301,11 @@ def ptx_atomic_add_intp(context, builder, sig, args):
 
 
 @register
-@implement(stubs.atomic.add, types.Kind(types.Array),
-           types.Kind(types.UniTuple), types.Any)
-def ptx_atomic_max_unituple(context, builder, sig, args):
-    aryty, indty, valty = sig.args
-    ary, inds, val = args
-    dtype = aryty.dtype
-
-    indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(indty, indices)]
-
-    if dtype != valty:
-        raise TypeError("expect %s but got %s" % (dtype, valty))
-
-    if aryty.ndim != len(indty):
-        raise TypeError("indexing %d-D array with %d-D index" %
-                        (aryty.ndim, len(indty)))
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
-
-    if aryty.dtype == types.float64:
-        lmod = cgutils.get_module(builder)
-        return builder.call(nvvmutils.declare_atomic_max_float64(lmod), (ptr, val))
-    else:
-        raise TypeError('Unimplemented atomic max with %s array' % dtype)
-
-
-@register
 @implement(stubs.atomic.max, types.Kind(types.Array),
            types.Kind(types.Tuple), types.Any)
-def ptx_atomic_add_tuple(context, builder, sig, args):
+@implement(stubs.atomic.max, types.Kind(types.Array),
+           types.Kind(types.UniTuple), types.Any)
+def ptx_atomic_max_tuple(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, inds, val = args
     dtype = aryty.dtype
