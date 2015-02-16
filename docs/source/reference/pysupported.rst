@@ -91,7 +91,7 @@ The following built-in functions are supported:
 * :func:`max`: only the multiple-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
 * :class:`range`
-* :func:`round`: only the two-argument form
+* :func:`round`
 * :func:`zip`
 
 
