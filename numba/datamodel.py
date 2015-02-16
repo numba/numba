@@ -56,7 +56,7 @@ class FunctionInfo(object):
         args, _ = zip(*_flatten(args))
         return args
 
-    def reverse_as_arguments(self, builder, args):
+    def from_arguments(self, builder, args):
         if len(args) != len(self._posmap):
             raise TypeError("invalid number of args")
 
@@ -64,7 +64,7 @@ class FunctionInfo(object):
             return ()
 
         valtree = _unflatten(self._posmap, args)
-        values = [dm.reverse_as_argument(builder, val)
+        values = [dm.from_argument(builder, val)
                   for dm, val in zip(self._dm_args, valtree)]
 
         return values
@@ -196,6 +196,15 @@ def handle_record(dmm, ty):
 def handle_unicode_char_seq(dmm, ty):
     return UnicodeCharSeq(dmm, ty)
 
+
+@register_default(types.NumpyFlatType)
+def handle_numpy_flat_type(dmm, ty):
+    if ty.array_type.layout == 'C':
+        return CConitugousFlatIter(dmm, ty)
+    else:
+        return FlatIter(dmm, ty)
+
+
 # ============== Define Data Models ==============
 
 class DataModel(object):
@@ -223,13 +232,13 @@ class DataModel(object):
     def as_return(self, builder, value):
         return NotImplemented
 
-    def reverse_as_data(self, builder, value):
+    def from_data(self, builder, value):
         return NotImplemented
 
-    def reverse_as_argument(self, builder, value):
+    def from_argument(self, builder, value):
         return NotImplemented
 
-    def reverse_as_return(self, builder, value):
+    def from_return(self, builder, value):
         return NotImplemented
 
     def load_from_data_pointer(self, builder, value):
@@ -257,10 +266,10 @@ class DataModel(object):
     # ===== Helpers =====
 
     def data_to_argument(self, builder, value):
-        return self.as_argument(builder, self.reverse_as_data(builder, value))
+        return self.as_argument(builder, self.from_data(builder, value))
 
     def argument_to_data(self, builder, value):
-        return self.as_data(builder, self.reverse_as_argument(builder, value))
+        return self.as_data(builder, self.from_argument(builder, value))
 
 
 class BooleanModel(DataModel):
@@ -285,14 +294,14 @@ class BooleanModel(DataModel):
     def as_return(self, builder, value):
         return self.as_data(builder, value)
 
-    def reverse_as_data(self, builder, value):
+    def from_data(self, builder, value):
         return builder.trunc(value, self.get_value_type())
 
-    def reverse_as_argument(self, builder, value):
-        return self.reverse_as_data(builder, value)
+    def from_argument(self, builder, value):
+        return self.from_data(builder, value)
 
-    def reverse_as_return(self, builder, value):
-        return self.reverse_as_data(builder, value)
+    def from_return(self, builder, value):
+        return self.from_data(builder, value)
 
 
 class PrimitiveModel(DataModel):
@@ -316,14 +325,14 @@ class PrimitiveModel(DataModel):
     def as_return(self, builder, value):
         return self.as_data(builder, value)
 
-    def reverse_as_data(self, builder, value):
+    def from_data(self, builder, value):
         return value
 
-    def reverse_as_argument(self, builder, value):
-        return self.reverse_as_data(builder, value)
+    def from_argument(self, builder, value):
+        return self.from_data(builder, value)
 
-    def reverse_as_return(self, builder, value):
-        return self.reverse_as_data(builder, value)
+    def from_return(self, builder, value):
+        return self.from_data(builder, value)
 
     def _compared_fields(self):
         return (self.be_type,)
@@ -388,7 +397,7 @@ class BaseComplexModel(DataModel):
 
         return real, imag
 
-    def reverse_as_argument(self, builder, value):
+    def from_argument(self, builder, value):
         real, imag = value
         real = self._element_model.argument_to_data(builder, real)
         imag = self._element_model.argument_to_data(builder, imag)
@@ -401,13 +410,13 @@ class BaseComplexModel(DataModel):
     def as_return(self, builder, value):
         return value
 
-    def reverse_as_return(self, builder, value):
+    def from_return(self, builder, value):
         return value
 
     def as_data(self, builder, value):
         return value
 
-    def reverse_as_data(self, builder, value):
+    def from_data(self, builder, value):
         return value
 
 
@@ -450,7 +459,7 @@ class UniTupleModel(DataModel):
             out.append(builder.extract_value(value, [i]))
         return out
 
-    def reverse_as_argument(self, builder, value):
+    def from_argument(self, builder, value):
         out = ir.Constant(self.get_value_type(), ir.Undefined)
         for i, v in enumerate(value):
             out = builder.insert_value(out, v, [i])
@@ -464,18 +473,18 @@ class UniTupleModel(DataModel):
             out = builder.insert_value(out, dval, [i])
         return out
 
-    def reverse_as_data(self, builder, value):
+    def from_data(self, builder, value):
         out = ir.Constant(self.get_value_type(), ir.Undefined)
         for i in range(self._count):
             val = builder.extract_value(value, [i])
-            dval = self._elem_model.reverse_as_data(builder, val)
+            dval = self._elem_model.from_data(builder, val)
             out = builder.insert_value(out, dval, [i])
         return out
 
     def as_return(self, builder, value):
         return value
 
-    def reverse_as_return(self, builder, value):
+    def from_return(self, builder, value):
         return value
 
 
@@ -483,7 +492,7 @@ class StructModel(DataModel):
     def __init__(self, dmm, fe_type, members):
         super(StructModel, self).__init__(dmm)
         self.fe_type = fe_type
-        self._members = tuple(members)
+        self._fields, self._members = zip(*members)
         self._models = tuple([self._dmm.lookup(t) for t in self._members])
 
     def get_value_type(self):
@@ -524,16 +533,16 @@ class StructModel(DataModel):
             struct = builder.insert_value(struct, el, [i])
         return struct
 
-    def reverse_as_data(self, builder, value):
+    def from_data(self, builder, value):
         vals = [builder.extract_value(value, [i])
                 for i in range(len(self._members))]
-        return self._reverse_as("reverse_as_data", builder, vals)
+        return self._reverse_as("from_data", builder, vals)
 
     def as_argument(self, builder, value):
         return self._as("as_argument", builder, value)
 
-    def reverse_as_argument(self, builder, value):
-        return self._reverse_as("reverse_as_argument", builder, value)
+    def from_argument(self, builder, value):
+        return self._reverse_as("from_argument", builder, value)
 
     def as_return(self, builder, value):
         elems = self._as("as_data", builder, value)
@@ -542,21 +551,25 @@ class StructModel(DataModel):
             struct = builder.insert_value(struct, el, [i])
         return struct
 
-    def reverse_as_return(self, builder, value):
+    def from_return(self, builder, value):
         vals = [builder.extract_value(value, [i])
                 for i in range(len(self._members))]
-        return self._reverse_as("reverse_as_data", builder, vals)
+        return self._reverse_as("from_data", builder, vals)
 
     def get(self, builder, val, pos):
+        if isinstance(pos, str):
+            pos = self._fields.index(pos)
         return builder.extract_value(val, [pos])
 
-    def set(self, builder, val, field, pos):
-        return builder.insert_value(val, field, [pos])
+    def set(self, builder, stval, val, pos):
+        if isinstance(pos, str):
+            pos = self._fields.index(pos)
+        return builder.insert_value(stval, val, [pos])
 
 
 class TupleModel(StructModel):
     def __init__(self, dmm, fe_type):
-        members = list(fe_type)
+        members = [('f' + str(i), t) for i, t in enumerate(fe_type)]
         super(TupleModel, self).__init__(dmm, fe_type, members)
 
 
@@ -564,27 +577,27 @@ class ArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
         members = [
-            types.pyobject,
-            types.intp,
-            types.intp,
-            types.CPointer(fe_type.dtype),
-            types.UniTuple(types.intp, ndim),
-            types.UniTuple(types.intp, ndim),
+            ('parent', types.pyobject),
+            ('nitems', types.intp),
+            ('itemsize', types.intp),
+            ('data', types.CPointer(fe_type.dtype)),
+            ('shape', types.UniTuple(types.intp, ndim)),
+            ('strides', types.UniTuple(types.intp, ndim)),
         ]
         super(ArrayModel, self).__init__(dmm, fe_type, members)
 
     def as_data(self, builder, value):
         return NotImplemented
 
-    def reverse_as_data(self, builder, value):
+    def from_data(self, builder, value):
         return NotImplemented
 
 
 class OptionalModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            types.boolean,
-            fe_type.type,
+            ('valid', types.boolean),
+            ('data', fe_type.type),
         ]
         self._value_model = dmm.lookup(fe_type.type)
         super(OptionalModel, self).__init__(dmm, fe_type, members)
@@ -595,8 +608,8 @@ class OptionalModel(StructModel):
     def as_return(self, builder, value):
         return NotImplemented
 
-    def reverse_as_return(self, builder, value):
-        return self._value_model.reverse_as_return(builder, value)
+    def from_return(self, builder, value):
+        return self._value_model.from_return(builder, value)
 
 
 class RecordModel(DataModel):
@@ -626,19 +639,19 @@ class RecordModel(DataModel):
     def as_data(self, builder, value):
         return builder.load(value)
 
-    def reverse_as_data(self, builder, value):
+    def from_data(self, builder, value):
         raise NotImplementedError("use load_from_data_pointer() instead")
 
     def as_argument(self, builder, value):
         return value
 
-    def reverse_as_argument(self, builder, value):
+    def from_argument(self, builder, value):
         return value
 
     def as_return(self, builder, value):
         return value
 
-    def reverse_as_return(self, builder, value):
+    def from_return(self, builder, value):
         return value
 
     def load_from_data_pointer(self, builder, ptr):

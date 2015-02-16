@@ -232,7 +232,7 @@ class BaseLower(object):
         rawfnargs = self.context.get_arguments(self.function)
         fi = self.context.get_function_info(self.fndesc.restype,
                                             self.fndesc.argtypes)
-        fnargs = fi.reverse_as_arguments(self.builder, rawfnargs)
+        fnargs = fi.from_arguments(self.builder, rawfnargs)
 
         for ak, av in zip(self.fndesc.args, fnargs):
             av = self.init_argument(av)

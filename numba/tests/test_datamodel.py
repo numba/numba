@@ -50,7 +50,7 @@ def test_factory(name, fetype, support_as_data=True):
                 self.assertEqual(args.type,
                                  self.datamodel.get_argument_type())
 
-            rev_value = self.datamodel.reverse_as_argument(builder, args)
+            rev_value = self.datamodel.from_argument(builder, args)
             self.assertEqual(rev_value.type, self.datamodel.get_value_type())
 
             builder.ret_void()  # end function
@@ -72,7 +72,7 @@ def test_factory(name, fetype, support_as_data=True):
 
             self.assertEqual(ret.type, self.datamodel.get_return_type())
 
-            rev_value = self.datamodel.reverse_as_return(builder, ret)
+            rev_value = self.datamodel.from_return(builder, ret)
             self.assertEqual(rev_value.type, self.datamodel.get_value_type())
 
             builder.ret_void()  # end function
@@ -95,7 +95,7 @@ def test_factory(name, fetype, support_as_data=True):
 
                 self.assertEqual(data.type, self.datamodel.get_data_type())
 
-                rev_value = self.datamodel.reverse_as_data(builder, data)
+                rev_value = self.datamodel.from_data(builder, data)
                 self.assertEqual(rev_value.type,
                                  self.datamodel.get_value_type())
 
@@ -114,7 +114,7 @@ def test_factory(name, fetype, support_as_data=True):
                 undef_value = ir.Constant(self.datamodel.get_value_type(), None)
                 data = self.datamodel.as_data(builder, undef_value)
                 self.assertIs(data, NotImplemented)
-                rev_data = self.datamodel.reverse_as_data(builder, undef_value)
+                rev_data = self.datamodel.from_data(builder, undef_value)
                 self.assertIs(rev_data, NotImplemented)
 
     model = dmm.lookup(fetype)
@@ -170,7 +170,7 @@ class TestFunctionInfo(unittest.TestCase):
                 for t in fe_args]
 
         values = fi.as_arguments(builder, args)
-        asargs = fi.reverse_as_arguments(builder, values)
+        asargs = fi.from_arguments(builder, values)
 
         self.assertEqual(len(asargs), len(fe_args))
         valtys = tuple([v.type for v in values])

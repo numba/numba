@@ -378,7 +378,7 @@ class BaseContext(object):
         dm = self.data_model_manager[ty]
         val = dm.load_from_data_pointer(builder, ptr)
         if val is NotImplemented:
-            return dm.reverse_as_data(builder, builder.load(ptr))
+            return dm.from_data(builder, builder.load(ptr))
         else:
             return val
         #
@@ -573,6 +573,7 @@ class BaseContext(object):
         """
         Argument representation to local value representation
         """
+        return self.data_model_manager[ty].from_argument(builder, val)
         raise NotImplementedError
         if ty == types.boolean:
             return builder.trunc(val, self.get_value_type(ty))
@@ -585,7 +586,7 @@ class BaseContext(object):
         Return value representation to local value representation
         """
         # Same as get_argument_value
-        return self.data_model_manager[ty].reverse_as_return(builder, val)
+        return self.data_model_manager[ty].from_return(builder, val)
         # return self.get_argument_value(builder, ty, val)
 
     def get_return_value(self, builder, ty, val):
@@ -669,7 +670,7 @@ class BaseContext(object):
         """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
-        return self.data_model_manager[ty.first_type].reverse_as_data(builder,
+        return self.data_model_manager[ty.first_type].from_data(builder,
             pair.first)
 
     def pair_second(self, builder, val, ty):
@@ -678,7 +679,7 @@ class BaseContext(object):
         """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
-        return self.data_model_manager[ty.second_type].reverse_as_data(builder,
+        return self.data_model_manager[ty.second_type].from_data(builder,
             pair.second)
 
 
