@@ -173,7 +173,7 @@ class TestMathLib(TestCase):
         self.ccache = CompilationCache()
 
     def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
-                  prec='exact'):
+                  prec='exact', **kwargs):
         for tx, vx in zip(x_types, x_values):
             cr = self.ccache.compile(pyfunc, (tx,), flags=flags)
             cfunc = cr.entry_point
@@ -181,7 +181,8 @@ class TestMathLib(TestCase):
             expected = pyfunc(vx)
             actual_prec = 'single' if tx is types.float32 else prec
             msg = 'for input %r' % (vx,)
-            self.assertPreciseEqual(got, expected, prec=actual_prec, msg=msg)
+            self.assertPreciseEqual(got, expected, prec=actual_prec, msg=msg,
+                                    **kwargs)
 
     def run_binary(self, pyfunc, x_types, x_values, y_values,
                    flags=enable_pyobj_flags, prec='exact'):
@@ -547,10 +548,10 @@ class TestMathLib(TestCase):
         pyfunc = gamma
         x_values = [1., -0.9, -0.5, 0.5]
         x_types = [types.float32, types.float64] * (len(x_values) // 2)
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags, prec='double', ulps=3)
         x_values = [-0.1, 0.1, 2.5, 10.1, 50., float('inf')]
         x_types = [types.float64] * len(x_values)
-        self.run_unary(pyfunc, x_types, x_values, flags, prec='double')
+        self.run_unary(pyfunc, x_types, x_values, flags, prec='double', ulps=3)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma_npm(self):
