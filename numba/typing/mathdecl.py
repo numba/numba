@@ -35,6 +35,11 @@ class Math_unary(ConcreteTemplate):
         signature(types.float64, types.float64),
     ]
 
+if utils.PYVERSION > (2, 6):
+    for func in (math.erf, math.erfc, math.gamma, math.lgamma):
+        Math_unary = registry.resolves_global(func)(Math_unary)
+
+
 @registry.resolves_global(math.atan2)
 class Math_atan2(ConcreteTemplate):
     cases = [
@@ -113,6 +118,20 @@ class Math_pow(ConcreteTemplate):
         signature(types.float64, types.float64, types.uint64),
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
+    ]
+
+@registry.resolves_global(math.frexp)
+class Math_frexp(ConcreteTemplate):
+    cases = [
+        signature(types.Tuple((types.float64, types.intc)), types.float64),
+        signature(types.Tuple((types.float32, types.intc)), types.float32),
+    ]
+
+@registry.resolves_global(math.ldexp)
+class Math_ldexp(ConcreteTemplate):
+    cases = [
+        signature(types.float64, types.float64, types.intc),
+        signature(types.float32, types.float32, types.intc),
     ]
 
 

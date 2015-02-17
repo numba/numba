@@ -65,10 +65,6 @@ class _ExternalMathFunctions(_Installer):
             _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
             _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
 
-        # Necessary for Python3
-        ll.add_symbol("numba.round", c_helpers["round_even"])
-        ll.add_symbol("numba.roundf", c_helpers["roundf_even"])
-
         # List available C-math
         for fname in intrinsics.INTR_MATH:
             # Force binding from CPython's C runtime library.

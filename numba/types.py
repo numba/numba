@@ -323,9 +323,9 @@ class Macro(Type):
 class Function(Type):
     def __init__(self, template):
         self.template = template
-        cls = type(self)
+        name = "%s(%s)" % (self.__class__.__name__, template.key)
         # TODO template is mutable.  Should use different naming scheme
-        super(Function, self).__init__("%s(%s)" % (cls.__name__, template.key))
+        super(Function, self).__init__(name)
 
     @property
     def key(self):
@@ -393,6 +393,19 @@ class FunctionPointer(Function):
         self.funcptr = funcptr
         self.cconv = cconv
         super(FunctionPointer, self).__init__(template)
+
+
+class ExternalFunction(Function):
+    """
+    A named native function (resolvable by LLVM).
+    """
+
+    def __init__(self, symbol, sig):
+        from . import typing
+        self.symbol = symbol
+        self.sig = sig
+        template = typing.make_concrete_template(symbol, symbol, [sig])
+        super(ExternalFunction, self).__init__(template)
 
 
 class BoundFunction(Function):

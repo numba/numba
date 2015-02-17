@@ -496,31 +496,32 @@ class Lower(BaseLower):
                             for av, at, ft in zip(argvals, argtyps,
                                                   signature.args)]
 
-            if isinstance(fnty, types.Method):
+            if isinstance(fnty, types.ExternalFunction):
+                # Handle a named external function
+                fndesc = ExternalFunctionDescriptor(
+                    fnty.symbol, fnty.sig.return_type, fnty.sig.args)
+                func = self.context.declare_external_function(
+                        cgutils.get_module(self.builder), fndesc)
+                res = self.context.call_external_function(
+                    self.builder, func, fndesc.argtypes, castvals)
+
+            elif isinstance(fnty, types.Method):
                 # Method of objects are handled differently
                 fnobj = self.loadvar(expr.func.name)
                 res = self.context.call_class_method(self.builder, fnobj,
                                                      signature, castvals)
 
             elif isinstance(fnty, types.FunctionPointer):
-                # Handle function pointer
+                # Handle a C function pointer
                 pointer = fnty.funcptr
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          signature, castvals,
                                                          fnty.cconv)
 
-            elif isinstance(fnty, cffi_support.ExternCFunction):
-                # XXX unused?
-                fndesc = ExternalFunctionDescriptor(
-                    fnty.symbol, fnty.restype, fnty.argtypes)
-                func = self.context.declare_external_function(
-                        cgutils.get_module(self.builder), fndesc)
-                res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
-
             else:
                 if isinstance(signature.return_type, types.Phantom):
                     return self.context.get_dummy_value()
-                # Normal function resolution
+                # Normal function resolution (for Numba-compiled functions)
                 impl = self.context.get_function(fnty, signature)
                 if signature.recvr:
                     # The "self" object is passed as the function object

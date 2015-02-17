@@ -140,7 +140,8 @@ class SortedSet(collections.Set):
 
 class UniqueDict(dict):
     def __setitem__(self, key, value):
-        assert key not in self
+        if key in self:
+            raise AssertionError("key already in dictionary: %r" % (key,))
         super(UniqueDict, self).__setitem__(key, value)
 
 
