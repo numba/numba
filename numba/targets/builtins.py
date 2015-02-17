@@ -1182,7 +1182,7 @@ def getitem_unituple(context, builder, sig, args):
     switch = builder.switch(idx, bbelse, n=tupty.count)
 
     with cgutils.goto_block(builder, bbelse):
-        context.return_errcode(builder, errcode.OUT_OF_BOUND_ERROR)
+        context.call_conv.return_errcode(builder, errcode.OUT_OF_BOUND_ERROR)
 
     lrtty = context.get_value_type(tupty.dtype)
     with cgutils.goto_block(builder, bbend):

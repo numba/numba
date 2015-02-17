@@ -57,13 +57,17 @@ def impl_attribute_generic(ty):
 
 
 def user_function(func, fndesc, libs):
+    """
+    A wrapper inserting code calling Numba-compiled *func*.
+    """
+
     def imp(context, builder, sig, args):
         func = context.declare_function(cgutils.get_module(builder), fndesc)
         # env=None assumes this is a nopython function
-        status, retval = context.call_function(builder, func, fndesc.restype,
-                                               fndesc.argtypes, args, env=None)
+        status, retval = context.call_conv.call_function(
+            builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
         with cgutils.if_unlikely(builder, status.err):
-            context.return_errcode_propagate(builder, status.code)
+            context.call_conv.return_errcode_propagate(builder, status.code)
         return retval
 
     imp.signature = typing.signature(fndesc.restype, *fndesc.argtypes)
@@ -78,7 +82,7 @@ def python_attr_impl(cls, attr, atyp):
         api = context.get_python_api(builder)
         aval = api.object_getattr_string(value, attr)
         with cgutils.ifthen(builder, cgutils.is_null(builder, aval)):
-            context.return_exc(builder)
+            context.call_conv.return_exc(builder)
 
         if isinstance(atyp, types.Method):
             return aval

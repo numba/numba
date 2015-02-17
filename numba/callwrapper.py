@@ -141,10 +141,9 @@ class PyCallWrapper(object):
         # the Environment object.
         env = self.context.get_env_from_closure(builder, closure)
 
-        status, res = self.context.call_function(builder, self.func,
-                                                 self.fndesc.restype,
-                                                 self.fndesc.argtypes,
-                                                 innerargs, env)
+        status, res = self.context.call_conv.call_function(
+            builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
+            innerargs, env)
         # Do clean up
         cleanup_manager.emit_cleanup()
 

@@ -46,7 +46,7 @@ class PyLower(BaseLower):
 
     def pre_lower(self):
         # Store environment argument for later use
-        self.envarg = self.context.get_env_argument(self.function)
+        self.envarg = self.context.call_conv.get_env_argument(self.function)
         with cgutils.if_unlikely(self.builder, self.is_null(self.envarg)):
             self.pyapi.err_set_string(
                 "PyExc_SystemError",
@@ -58,7 +58,7 @@ class PyLower(BaseLower):
     def post_lower(self):
         with cgutils.goto_block(self.builder, self.ehblock):
             self.cleanup()
-            self.context.return_exc(self.builder)
+            self.context.call_conv.return_exc(self.builder)
 
         self._finalize_frozen_string()
 
@@ -103,7 +103,7 @@ class PyLower(BaseLower):
             retval = self.loadvar(inst.value.name)
             # No need to incref() as the reference is already owned.
             self.cleanup()
-            self.context.return_value(self.builder, retval)
+            self.context.call_conv.return_value(self.builder, retval)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -273,7 +273,7 @@ class PyLower(BaseLower):
                                                tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
                 excid = self.add_exception(ValueError)
-                self.context.return_user_exc(self.builder, excid)
+                self.context.call_conv.return_user_exc(self.builder, excid)
             return tup
         elif expr.op == 'getitem':
             value = self.loadvar(expr.value.name)
@@ -442,7 +442,7 @@ class PyLower(BaseLower):
 
     def return_error_occurred(self):
         self.cleanup()
-        self.context.return_exc(self.builder)
+        self.context.call_conv.return_exc(self.builder)
 
     def _getvar(self, name, ltype=None):
         if name not in self.varmap:

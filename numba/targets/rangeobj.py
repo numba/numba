@@ -117,7 +117,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
 
             with cgutils.if_unlikely(builder, zero_step):
                 # step shouldn't be zero
-                context.return_errcode(builder, errcode.ASSERTION_ERROR)
+                context.call_conv.return_errcode(builder, errcode.ASSERTION_ERROR)
 
             with cgutils.ifelse(builder, sign_differs) as (then, orelse):
                 with then:

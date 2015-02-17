@@ -6,7 +6,9 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
 from numba import typing, types, cgutils
+from numba.utils import cached_property
 from numba.targets.base import BaseContext
+from numba.targets.callconv import MinimalCallConv, RETCODE_OK
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
 
@@ -52,6 +54,10 @@ class CUDATargetContext(BaseContext):
     def target_data(self):
         return self._target_data
 
+    @cached_property
+    def call_conv(self):
+        return CUDACallConv(self)
+
     def mangler(self, name, argtypes):
         def repl(m):
             ch = m.group(0)
@@ -75,7 +81,7 @@ class CUDATargetContext(BaseContext):
         wrapfnty = Type.function(Type.void(), argtys)
         wrapper_module = self.create_module("cuda.kernel.wrapper")
         fnty = Type.function(Type.int(),
-                             [self.get_return_type(types.pyobject)] + argtys)
+                             [self.call_conv.get_return_type(types.pyobject)] + argtys)
         func = wrapper_module.add_function(fnty, name=func.name)
         wrapfn = wrapper_module.add_function(wrapfnty, name="cudaPy_" + func.name)
         builder = Builder.new(wrapfn.append_basic_block(''))
@@ -99,8 +105,8 @@ class CUDATargetContext(BaseContext):
             av = self.get_argument_value(builder, at, av)
             callargs.append(av)
 
-        status, _ = self.call_function(builder, func, types.void, argtypes,
-                                       callargs)
+        status, _ = self.call_conv.call_function(
+            builder, func, types.void, argtypes, callargs)
 
         # Check error status
         with cgutils.if_likely(builder, status.ok):
@@ -193,3 +199,8 @@ class CUDATargetContext(BaseContext):
         # fpm.initialize()
         # fpm.run(func)
         # fpm.finalize()
+
+
+class CUDACallConv(MinimalCallConv):
+    pass
+

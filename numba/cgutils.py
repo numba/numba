@@ -568,7 +568,7 @@ def is_scalar_neg(builder, value):
 
 def guard_null(context, builder, value):
     with if_unlikely(builder, is_scalar_zero(builder, value)):
-        context.return_errcode(builder, errcode.ASSERTION_ERROR)
+        context.call_conv.return_errcode(builder, errcode.ASSERTION_ERROR)
 
 
 guard_zero = guard_null

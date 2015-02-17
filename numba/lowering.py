@@ -224,7 +224,7 @@ class BaseLower(object):
 
     def lower(self):
         # Init argument variables
-        fnargs = self.context.get_arguments(self.function)
+        fnargs = self.context.call_conv.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
             at = self.typeof(ak)
             av = self.context.get_argument_value(self.builder, at, av)
@@ -318,12 +318,12 @@ class Lower(BaseLower):
             ty = self.fndesc.restype
             if isinstance(ty, types.Optional):
                 # If returning an optional type
-                self.context.return_optional_value(self.builder, ty, oty, val)
+                self.context.call_conv.return_optional_value(self.builder, ty, oty, val)
                 return
             if ty != oty:
                 val = self.context.cast(self.builder, val, oty, ty)
             retval = self.context.get_return_value(self.builder, ty, val)
-            self.context.return_value(self.builder, retval)
+            self.context.call_conv.return_value(self.builder, retval)
 
         elif isinstance(inst, ir.SetItem):
             target = self.loadvar(inst.target.name)
@@ -399,7 +399,7 @@ class Lower(BaseLower):
                 raise NotImplementedError("cannot raise value of type %s"
                                           % (exctype,))
             excid = self.add_exception(exctype.exc_class, args)
-        self.context.return_user_exc(self.builder, excid)
+        self.context.call_conv.return_user_exc(self.builder, excid)
 
     def lower_assign(self, ty, inst):
         value = inst.value
@@ -588,7 +588,7 @@ class Lower(BaseLower):
                                                     pair, pairty)
                 with cgutils.if_unlikely(self.builder,
                                          self.builder.not_(is_valid)):
-                    self.context.return_user_exc(self.builder, excid)
+                    self.context.call_conv.return_user_exc(self.builder, excid)
                 item = self.context.pair_first(self.builder,
                                                pair, pairty)
                 tup = self.builder.insert_value(tup, item, i)
@@ -599,7 +599,7 @@ class Lower(BaseLower):
             is_valid = self.context.pair_second(self.builder,
                                                 pair, pairty)
             with cgutils.if_unlikely(self.builder, is_valid):
-                self.context.return_user_exc(self.builder, excid)
+                self.context.call_conv.return_user_exc(self.builder, excid)
 
             return tup
 

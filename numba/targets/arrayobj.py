@@ -357,7 +357,7 @@ def setitem_array1d_slice(context, builder, sig, args):
     b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
     # bail if step is 0
     with cgutils.ifthen(builder, b_step_eq_zero):
-        context.return_errcode(builder, errcode.ASSERTION_ERROR)
+        context.call_conv.return_errcode(builder, errcode.ASSERTION_ERROR)
 
     # adjust for negative indices for start
     start = cgutils.alloca_once_value(builder, slicestruct.start)
