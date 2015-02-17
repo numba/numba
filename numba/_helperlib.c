@@ -840,7 +840,7 @@ void Numba_gil_release(PyGILState_STATE *state) {
 }
 
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
-   This *consumes* a reference count to its arguments. */
+   This *consumes* a reference count to its argument. */
 static int
 Numba_do_raise(PyObject *exc)
 {
@@ -870,7 +870,26 @@ Numba_do_raise(PyObject *exc)
         return 1;
     }
 
-    if (PyExceptionClass_Check(exc)) {
+    if (PyTuple_CheckExact(exc)) {
+        /* A (callable, arguments) tuple. */
+        if (!PyArg_ParseTuple(exc, "OO", &type, &value)) {
+            Py_DECREF(exc);
+            goto raise_error;
+        }
+        value = PyObject_CallObject(type, value);
+        Py_DECREF(exc);
+        type = NULL;
+        if (value == NULL)
+            goto raise_error;
+        if (!PyExceptionInstance_Check(value)) {
+            PyErr_SetString(PyExc_TypeError,
+                            "exceptions must derive from BaseException");
+            goto raise_error;
+        }
+        type = PyExceptionInstance_Class(value);
+        Py_INCREF(type);
+    }
+    else if (PyExceptionClass_Check(exc)) {
         type = exc;
         value = PyObject_CallObject(exc, NULL);
         if (value == NULL)

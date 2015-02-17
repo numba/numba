@@ -30,7 +30,7 @@ def as_bool_bit(builder, value):
 
 def make_anonymous_struct(builder, values):
     """
-    Create an anonymous struct constant containing the given LLVM *values*.
+    Create an anonymous struct containing the given LLVM *values*.
     """
     struct_type = Type.struct([v.type for v in values])
     struct_val = Constant.undef(struct_type)

@@ -216,11 +216,9 @@ class BaseLower(object):
         Called after all blocks are lowered
         """
 
-    def add_exception(self, exc, exc_args=None):
-        assert (exc is None or issubclass(exc, BaseException)), exc
-        excid = len(self.exceptions) + errcode.ERROR_COUNT
-        self.exceptions[excid] = exc, exc_args
-        return excid
+    def return_exception(self, exc_class, exc_args=None):
+        self.context.call_conv.return_user_exc(self.builder, self.exceptions,
+                                               exc_class, exc_args)
 
     def lower(self):
         # Init argument variables
@@ -381,7 +379,7 @@ class Lower(BaseLower):
     def lower_raise(self, inst):
         if inst.exception is None:
             # Reraise
-            excid = self.add_exception(None)
+            self.return_exception(None)
         else:
             exctype = self.typeof(inst.exception.name)
             if isinstance(exctype, types.ExceptionInstance):
@@ -398,8 +396,7 @@ class Lower(BaseLower):
             else:
                 raise NotImplementedError("cannot raise value of type %s"
                                           % (exctype,))
-            excid = self.add_exception(exctype.exc_class, args)
-        self.context.call_conv.return_user_exc(self.builder, excid)
+            self.return_exception(exctype.exc_class, args)
 
     def lower_assign(self, ty, inst):
         value = inst.value
@@ -580,7 +577,6 @@ class Lower(BaseLower):
             iternext_impl = self.context.get_function('iternext',
                                                       iternext_sig)
             iterobj = getiter_impl(self.builder, (val,))
-            excid = self.add_exception(ValueError)
             # We call iternext() as many times as desired (`expr.count`).
             for i in range(expr.count):
                 pair = iternext_impl(self.builder, (iterobj,))
@@ -588,7 +584,7 @@ class Lower(BaseLower):
                                                     pair, pairty)
                 with cgutils.if_unlikely(self.builder,
                                          self.builder.not_(is_valid)):
-                    self.context.call_conv.return_user_exc(self.builder, excid)
+                    self.return_exception(ValueError)
                 item = self.context.pair_first(self.builder,
                                                pair, pairty)
                 tup = self.builder.insert_value(tup, item, i)
@@ -599,7 +595,7 @@ class Lower(BaseLower):
             is_valid = self.context.pair_second(self.builder,
                                                 pair, pairty)
             with cgutils.if_unlikely(self.builder, is_valid):
-                self.context.call_conv.return_user_exc(self.builder, excid)
+                self.return_exception(ValueError)
 
             return tup
 

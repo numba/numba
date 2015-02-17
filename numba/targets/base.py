@@ -229,6 +229,10 @@ class BaseContext(object):
         return Constant.bitcast(gv, stringtype)
 
     def insert_unique_const(self, mod, name, val):
+        """
+        Insert a unique internal constant named *name*, with LLVM value
+        *val*, into module *mod*.
+        """
         gv = mod.get_global(name)
         if gv is not None:
             return gv

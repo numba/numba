@@ -3,23 +3,29 @@ Calling conventions for Numba-compiled functions.
 """
 
 from collections import namedtuple
+import itertools
 
-from llvmlite import ir as llvmir
+from llvmlite import ir as ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant
 
 from numba import cgutils, errcode, types
-from .base import PYOBJECT
+from .base import PYOBJECT, GENERIC_POINTER
 
 
-Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
+Status = namedtuple("Status",
+                    ("code", "ok", "err", "exc", "none", "excinfoptr"))
+
+int32_t = ir.IntType(32)
+errcode_t = int32_t
 
 def _const_int(code):
-    return Constant.int_signextend(Type.int(), code)
+    return Constant.int_signextend(errcode_t, code)
 
 RETCODE_OK = _const_int(0)
 RETCODE_EXC = _const_int(-1)
 RETCODE_NONE = _const_int(-2)
+RETCODE_USEREXC = _const_int(errcode.ERROR_COUNT)
 
 
 class BaseCallConv(object):
@@ -55,7 +61,7 @@ class BaseCallConv(object):
         self._return_errcode_raw(builder, RETCODE_NONE)
 
     def return_errcode(self, builder, code):
-        assert code > 0
+        assert code > 0 and code < errcode.ERROR_COUNT
         self._return_errcode_raw(builder, _const_int(code))
 
     def return_errcode_propagate(self, builder, code):
@@ -63,23 +69,6 @@ class BaseCallConv(object):
 
     def return_exc(self, builder):
         self._return_errcode_raw(builder, RETCODE_EXC)
-
-    def return_user_exc(self, builder, code):
-        assert code >= errcode.ERROR_COUNT
-        self._return_errcode_raw(builder, _const_int(code))
-
-    def get_return_status(self, builder, code):
-        """
-        Given a return *code*, get a Status instance.
-        """
-        norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
-        none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
-        exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
-        ok = builder.or_(norm, none)
-        err = builder.not_(ok)
-
-        status = Status(code=code, ok=ok, err=err, exc=exc, none=none)
-        return status
 
     def get_return_type(self, ty):
         """
@@ -108,8 +97,28 @@ class MinimalCallConv(BaseCallConv):
         builder.store(retval, retptr)
         builder.ret(RETCODE_OK)
 
+    def return_user_exc(self, builder, exceptions, exc, exc_args=None):
+        assert (exc is None or issubclass(exc, BaseException)), exc
+        exc_id = len(exceptions) + errcode.ERROR_COUNT
+        exceptions[exc_id] = exc, exc_args
+        self._return_errcode_raw(builder, _const_int(exc_id))
+
     def _return_errcode_raw(self, builder, code):
         builder.ret(code)
+
+    def _get_return_status(self, builder, code):
+        """
+        Given a return *code*, get a Status instance.
+        """
+        norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
+        none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
+        exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
+        ok = builder.or_(norm, none)
+        err = builder.not_(ok)
+
+        status = Status(code=code, ok=ok, err=err, exc=exc, none=none,
+                        excinfoptr=None)
+        return status
 
     def get_function_type(self, restype, argtypes):
         """
@@ -163,16 +172,21 @@ class MinimalCallConv(BaseCallConv):
                 for ty, arg in zip(argtys, args)]
         realargs = [retvaltmp] + list(args)
         code = builder.call(callee, realargs)
-        status = self.get_return_status(builder, code)
+        status = self._get_return_status(builder, code)
         retval = builder.load(retvaltmp)
         out = self.context.get_returned_value(builder, resty, retval)
         return status, out
+
+
+excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t])
+excinfo_ptr_t = ir.PointerType(excinfo_t)
 
 
 class CPUCallConv(BaseCallConv):
     """
     The calling convention for CPU targets, adding an environment argument.
     """
+    _status_ids = itertools.count(1)
 
     def return_value(self, builder, retval):
         fn = cgutils.get_function(builder)
@@ -180,10 +194,41 @@ class CPUCallConv(BaseCallConv):
         assert retval.type == retptr.type.pointee, \
             (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
-        builder.ret(RETCODE_OK)
+        self._return_errcode_raw(builder, RETCODE_OK)
+
+    def return_user_exc(self, builder, exceptions, exc, exc_args=None):
+        fn = cgutils.get_function(builder)
+        pyapi = self.context.get_python_api(builder)
+        assert (exc is None or issubclass(exc, BaseException)), exc
+        exc_id = len(exceptions) + errcode.ERROR_COUNT
+        exceptions[exc_id] = exc, exc_args
+        # Build excinfo struct
+        if exc_args is not None:
+            exc = (exc, exc_args)
+        struct_gv = pyapi.serialize_object(exc)
+        struct_gv.linkage = 'private'
+        builder.store(struct_gv, self._get_excinfo_argument(fn))
+        self._return_errcode_raw(builder, _const_int(exc_id))
 
     def _return_errcode_raw(self, builder, code):
         builder.ret(code)
+
+    def _get_return_status(self, builder, code, excinfoptr):
+        """
+        Given a return *code* and *excinfoptr*, get a Status instance.
+        """
+        norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
+        none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
+        exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
+        ok = builder.or_(norm, none)
+        err = builder.not_(ok)
+        is_userexc = builder.icmp_signed('>=', code, RETCODE_USEREXC)
+        excinfoptr = builder.select(is_userexc, excinfoptr,
+                                    ir.Constant(excinfo_ptr_t, ir.Undefined))
+
+        status = Status(code=code, ok=ok, err=err, exc=exc, none=none,
+                        excinfoptr=excinfoptr)
+        return status
 
     def get_function_type(self, restype, argtypes):
         """
@@ -209,8 +254,9 @@ class CPUCallConv(BaseCallConv):
         argtypes = [self.context.get_argument_type(aty)
                     for aty in argtypes]
         resptr = self.get_return_type(restype)
-        fnty = lc.Type.function(lc.Type.int(),
-                                [resptr, PYOBJECT] + argtypes)
+        fnty = lc.Type.function(errcode_t,
+                                [resptr, ir.PointerType(excinfo_ptr_t), PYOBJECT]
+                                + argtypes)
         return fnty
 
     def decorate_function(self, fn, args):
@@ -219,7 +265,8 @@ class CPUCallConv(BaseCallConv):
         """
         for ak, av in zip(args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
-        self._get_return_argument(fn).name = ".ret"
+        self._get_return_argument(fn).name = "retptr"
+        self._get_excinfo_argument(fn).name = "excinfo"
         self.get_env_argument(fn).name = "env"
         return fn
 
@@ -228,16 +275,19 @@ class CPUCallConv(BaseCallConv):
         Get the Python-level arguments of LLVM *func*.
         See get_function_type() for the calling convention.
         """
-        return func.args[2:]
+        return func.args[3:]
 
     def get_env_argument(self, func):
         """
         Get the environment argument of LLVM *func*.
         """
-        return func.args[1]
+        return func.args[2]
 
     def _get_return_argument(self, func):
         return func.args[0]
+
+    def _get_excinfo_argument(self, func):
+        return func.args[1]
 
     def call_function(self, builder, callee, resty, argtys, args, env=None):
         """
@@ -253,11 +303,15 @@ class CPUCallConv(BaseCallConv):
         # initialize return value to zeros
         builder.store(lc.Constant.null(retty), retvaltmp)
 
+        excinfoptr = cgutils.alloca_once(builder, ir.PointerType(excinfo_t),
+                                         name="excinfo")
+
         args = [self.context.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
-        realargs = [retvaltmp, env] + list(args)
+        realargs = [retvaltmp, excinfoptr, env] + args
         code = builder.call(callee, realargs)
-        status = self.get_return_status(builder, code)
+        status = self._get_return_status(builder, code,
+                                         builder.load(excinfoptr))
         retval = builder.load(retvaltmp)
         out = self.context.get_returned_value(builder, resty, retval)
         return status, out

@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import pickle
 
+from llvmlite import ir
 import llvmlite.binding as ll
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.llvmpy.core as lc
@@ -55,7 +56,10 @@ class PythonAPI(object):
 
         self.module = builder.basic_block.function.module
         # A unique mapping of serialized objects in this module
-        self.module.__serialized = {}
+        try:
+            self.module.__serialized
+        except AttributeError:
+            self.module.__serialized = {}
 
         # Initialize types
         self.pyobj = self.context.get_argument_type(types.pyobject)
@@ -128,7 +132,8 @@ class PythonAPI(object):
 
     def raise_object(self, exc=None):
         """
-        Raise an arbitrary exception (type or value or None - if reraising).
+        Raise an arbitrary exception (type or value or (type, args)
+        or None - if reraising).  A reference to the argument is consumed.
         """
         fnty = Type.function(Type.void(), [self.pyobj])
         fn = self._get_function(fnty, name="numba_do_raise")
@@ -165,25 +170,16 @@ class PythonAPI(object):
         if exc_type is None:
             # Reraise.
             self.raise_object()
-        elif exc_args is None:
+        else:
+            if exc_args is not None:
+                exc = (exc_type, exc_args)
+            else:
+                exc = exc_type
             assert issubclass(exc_type, BaseException)
-            exc = self.serialize_object(exc_type)
+            exc = self.unserialize(self.serialize_object(exc))
             with cgutils.if_likely(self.builder,
                                    cgutils.is_not_null(self.builder, exc)):
-                self.incref(exc)
-                self.raise_object(exc)
-        else:
-            assert issubclass(exc_type, BaseException)
-            exc_type = self.serialize_object(exc_type)
-            exc_args = self.serialize_object(exc_args)
-            ok = self.builder.and_(
-                cgutils.is_not_null(self.builder, exc_type),
-                cgutils.is_not_null(self.builder, exc_args))
-            with cgutils.if_likely(self.builder, ok):
-                exc = self.call(exc_type, exc_args)
-                self.decref(exc_type)
-                self.decref(exc_args)
-                self.raise_object(exc)
+                self.raise_object(exc)  # steals ref
 
     def get_c_object(self, name):
         """
@@ -817,30 +813,41 @@ class PythonAPI(object):
                 self.list_setitem(seq, idx, items[i])
         return seq
 
-    def unpickle(self, arr):
+    def unserialize(self, structptr):
         """
-        Unpickle some data.  *arr* should be a pointer to an LLVM
-        array of int8.
+        Unserialize some data.  *structptr* should be a pointer to
+        a {i8* data, i32 length} structure.
         """
-        fnty = Type.function(self.pyobj, (self.voidptr, self.py_ssize_t))
+        fnty = Type.function(self.pyobj, (self.voidptr, ir.IntType(32)))
         fn = self._get_function(fnty, name="numba_unpickle")
-        n = self.context.get_constant(types.intp, arr.type.pointee.count)
-        return self.builder.call(fn, (arr.bitcast(self.voidptr), n))
+        ptr = self.builder.extract_value(self.builder.load(structptr), 0)
+        n = self.builder.extract_value(self.builder.load(structptr), 1)
+        return self.builder.call(fn, (ptr, n))
 
     def serialize_object(self, obj):
         """
-        Serialize the given object in the bitcode, and unserialize it
-        as a LLVM value of a PyObject *.
+        Serialize the given object in the bitcode, and return it
+        as a pointer to a {i8* data, i32 length}, structure constant
+        (suitable for passing to unserialize()).
         """
         try:
             gv = self.module.__serialized[obj]
         except KeyError:
+            # First make the array constant
             data = pickle.dumps(obj, protocol=-1)
-            name = ".const.%s" % (id(obj),)
+            name = ".const.pickledata.%s" % (id(obj))
             bdata = cgutils.make_bytearray(data)
-            gv = self.context.insert_unique_const(self.module, name, bdata)
+            arr = self.context.insert_unique_const(self.module, name, bdata)
+            # Then populate the structure constant
+            struct = ir.Constant.literal_struct([
+                arr.bitcast(self.voidptr),
+                ir.Constant(ir.IntType(32), arr.type.pointee.count),
+                ])
+            name = ".const.picklebuf.%s" % (id(obj))
+            gv = self.context.insert_unique_const(self.module, name, struct)
+            # Make the id() (and hence the name) unique while populating the module.
             self.module.__serialized[obj] = gv
-        return self.unpickle(gv)
+        return gv
 
     def to_native_arg(self, obj, typ):
         if isinstance(typ, types.Record):

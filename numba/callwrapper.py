@@ -158,27 +158,24 @@ class PyCallWrapper(object):
         with cgutils.ifthen(builder, builder.not_(status.exc)):
             # !ok && !exc
             # User exception raised
-            self.make_exception_switch(api, builder, status.code)
+            self.make_exception_switch(api, builder, status)
 
         # !ok && exc
         builder.ret(api.get_null_object())
 
-    def make_exception_switch(self, api, builder, code):
+    def make_exception_switch(self, api, builder, status):
         """Handle user defined exceptions.
         Build a switch to check which exception class was raised.
         """
-        nexc = len(self.exceptions)
-        elseblk = cgutils.append_basic_block(builder, ".invalid.user.exception")
-        swt = builder.switch(code, elseblk, n=nexc)
-        for num, (exc_type, exc_args) in self.exceptions.items():
-            bb = cgutils.append_basic_block(builder,
-                                            ".user.exception.%d" % num)
-            swt.add_case(Constant.int(code.type, num), bb)
-            builder.position_at_end(bb)
-            api.raise_exception(exc_type, exc_args)
+        code = status.code
+        is_userexc = builder.icmp_signed(
+            '>=', code, Constant.int(code.type, errcode.ERROR_COUNT))
+        with cgutils.ifthen(builder, is_userexc):
+            exc = api.unserialize(status.excinfoptr)
+            with cgutils.if_likely(builder,
+                                   cgutils.is_not_null(builder, exc)):
+                api.raise_object(exc)  # steals ref
             builder.ret(api.get_null_object())
-
-        builder.position_at_end(elseblk)
 
         # Handle native error
         elseblk = cgutils.append_basic_block(builder, ".invalid.native.error")
