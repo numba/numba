@@ -205,6 +205,11 @@ def handle_numpy_flat_type(dmm, ty):
         return FlatIter(dmm, ty)
 
 
+@register_default(types.UniTupleIter)
+def handle_unitupleiter(dmm, ty):
+    return UniTupleIter(dmm, ty)
+
+
 # ============== Define Data Models ==============
 
 class DataModel(object):
@@ -516,7 +521,7 @@ class StructModel(DataModel):
                                                    self.get(builder, value, i)))
         return tuple(extracted)
 
-    def _reverse_as(self, methname, builder, value):
+    def _from(self, methname, builder, value):
         assert len(value) == len(self._models)
         struct = ir.Constant(self.get_value_type(), ir.Undefined)
 
@@ -536,13 +541,13 @@ class StructModel(DataModel):
     def from_data(self, builder, value):
         vals = [builder.extract_value(value, [i])
                 for i in range(len(self._members))]
-        return self._reverse_as("from_data", builder, vals)
+        return self._from("from_data", builder, vals)
 
     def as_argument(self, builder, value):
         return self._as("as_argument", builder, value)
 
     def from_argument(self, builder, value):
-        return self._reverse_as("from_argument", builder, value)
+        return self._from("from_argument", builder, value)
 
     def as_return(self, builder, value):
         elems = self._as("as_data", builder, value)
@@ -554,7 +559,7 @@ class StructModel(DataModel):
     def from_return(self, builder, value):
         vals = [builder.extract_value(value, [i])
                 for i in range(len(self._members))]
-        return self._reverse_as("from_data", builder, vals)
+        return self._from("from_data", builder, vals)
 
     def get(self, builder, val, pos):
         if isinstance(pos, str):
@@ -699,3 +704,10 @@ class FlatIter(StructModel):
                    ('exhausted', types.CPointer(types.boolean)),
         ]
         super(FlatIter, self).__init__(dmm, fe_type, members)
+
+
+class UniTupleIter(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [('index', types.CPointer(types.intp)),
+                   ('tuple', fe_type.unituple,)]
+        super(UniTupleIter, self).__init__(dmm, fe_type, members)
