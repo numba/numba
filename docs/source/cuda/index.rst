@@ -8,5 +8,6 @@ Numba for CUDA GPUs
    kernels.rst
    memory.rst
    device-functions.rst
+   intrinsics.rst
    device-management.rst
    examples.rst

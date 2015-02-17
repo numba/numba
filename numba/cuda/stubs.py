@@ -285,14 +285,15 @@ class const(Stub):
 # atomic
 
 class atomic(Stub):
-    """atomic namespace
+    """Namespace for atomic operations
     """
     _description_ = '<atomic>'
 
     class add(Stub):
         """add(ary, idx, val)
 
-        Perform atomic ary[idx] += val
+        Perform atomic ary[idx] += val. Supported on int32, float32, and
+        float64 operands only.
         """
 
     class max(Stub):
@@ -302,4 +303,6 @@ class atomic(Stub):
         missing value, so max(NaN, n) == max(n, NaN) == n. Note that this
         differs from Python and Numpy behaviour, where max(a, b) is always
         a when either a or b is a NaN.
+
+        Supported on float64 operands only.
         """
