@@ -272,8 +272,7 @@ class PyLower(BaseLower):
             has_wrong_size = self.builder.icmp(lc.ICMP_NE,
                                                tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
-                excid = self.add_exception(ValueError)
-                self.context.call_conv.return_user_exc(self.builder, excid)
+                self.return_exception(ValueError)
             return tup
         elif expr.op == 'getitem':
             value = self.loadvar(expr.value.name)

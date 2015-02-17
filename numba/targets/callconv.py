@@ -64,9 +64,6 @@ class BaseCallConv(object):
         assert code > 0 and code < errcode.ERROR_COUNT
         self._return_errcode_raw(builder, _const_int(code))
 
-    def return_errcode_propagate(self, builder, code):
-        self._return_errcode_raw(builder, code)
-
     def return_exc(self, builder):
         self._return_errcode_raw(builder, RETCODE_EXC)
 
@@ -102,6 +99,9 @@ class MinimalCallConv(BaseCallConv):
         exc_id = len(exceptions) + errcode.ERROR_COUNT
         exceptions[exc_id] = exc, exc_args
         self._return_errcode_raw(builder, _const_int(exc_id))
+
+    def return_errcode_propagate(self, builder, status):
+        self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):
         builder.ret(code)
@@ -209,6 +209,11 @@ class CPUCallConv(BaseCallConv):
         struct_gv.linkage = 'private'
         builder.store(struct_gv, self._get_excinfo_argument(fn))
         self._return_errcode_raw(builder, _const_int(exc_id))
+
+    def return_errcode_propagate(self, builder, status):
+        fn = cgutils.get_function(builder)
+        builder.store(status.excinfoptr, self._get_excinfo_argument(fn))
+        self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):
         builder.ret(code)

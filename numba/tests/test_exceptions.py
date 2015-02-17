@@ -2,7 +2,7 @@
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba import jit, types
 from numba import unittest_support as unittest
 from numba.pythonapi import NativeError
 from .support import TestCase
@@ -15,6 +15,9 @@ no_pyobj_flags = Flags()
 
 
 class MyError(Exception):
+    pass
+
+class OtherError(Exception):
     pass
 
 
@@ -31,15 +34,23 @@ def raise_class(exc):
 def raise_instance(exc, arg):
     def raiser(i):
         if i == 1:
-            raise exc(arg)
+            raise exc(arg, 1)
         elif i == 2:
-            raise ValueError(arg)
+            raise ValueError(arg, 2)
         return i
     return raiser
 
 
 def reraise():
     raise
+
+
+def outer_function(inner):
+    def outer(i):
+        if i == 3:
+            raise OtherError("bar", 3)
+        return inner(i)
+    return outer
 
 
 class TestRaising(TestCase):
@@ -86,16 +97,40 @@ class TestRaising(TestCase):
 
         with self.assertRaises(MyError) as cm:
             cfunc(1)
-        self.assertEqual(cm.exception.args, ("some message",))
+        self.assertEqual(cm.exception.args, ("some message", 1))
         with self.assertRaises(ValueError) as cm:
             cfunc(2)
-        self.assertEqual(cm.exception.args, ("some message",))
+        self.assertEqual(cm.exception.args, ("some message", 2))
 
     def test_raise_instance_objmode(self):
         self.check_raise_instance(flags=force_pyobj_flags)
 
     def test_raise_instance_nopython(self):
         self.check_raise_instance(flags=no_pyobj_flags)
+
+    def check_raise_nested(self, **jit_args):
+        """
+        Check exception propagation from nested functions.
+        """
+        inner_pyfunc = raise_instance(MyError, "some message")
+        inner_cfunc = jit(**jit_args)(inner_pyfunc)
+        cfunc = jit(**jit_args)(outer_function(inner_cfunc))
+
+        with self.assertRaises(MyError) as cm:
+            cfunc(1)
+        self.assertEqual(cm.exception.args, ("some message", 1))
+        with self.assertRaises(ValueError) as cm:
+            cfunc(2)
+        self.assertEqual(cm.exception.args, ("some message", 2))
+        with self.assertRaises(OtherError) as cm:
+            cfunc(3)
+        self.assertEqual(cm.exception.args, ("bar", 3))
+
+    def test_raise_nested(self):
+        self.check_raise_nested(forceobj=True)
+
+    def test_raise_nested_npm(self):
+        self.check_raise_nested(nopython=True)
 
     def check_reraise(self, flags):
         pyfunc = reraise

@@ -163,24 +163,6 @@ class PythonAPI(object):
         cstr = self.context.insert_const_string(self.module, msg)
         self.err_set_string(self.native_error_type, cstr)
 
-    def raise_exception(self, exc_type, exc_args):
-        """
-        Raise a given exception *exc_type* with arguments tuple *exc_args*.
-        """
-        if exc_type is None:
-            # Reraise.
-            self.raise_object()
-        else:
-            if exc_args is not None:
-                exc = (exc_type, exc_args)
-            else:
-                exc = exc_type
-            assert issubclass(exc_type, BaseException)
-            exc = self.unserialize(self.serialize_object(exc))
-            with cgutils.if_likely(self.builder,
-                                   cgutils.is_not_null(self.builder, exc)):
-                self.raise_object(exc)  # steals ref
-
     def get_c_object(self, name):
         """
         Get a Python object through its C-accessible *name*.
