@@ -1,3 +1,6 @@
+"""
+Calling conventions for Numba-compiled functions.
+"""
 
 from collections import namedtuple
 
@@ -173,7 +176,7 @@ class CPUCallConv(BaseCallConv):
 
     def return_value(self, builder, retval):
         fn = cgutils.get_function(builder)
-        retptr = fn.args[0]
+        retptr = self._get_return_argument(fn)
         assert retval.type == retptr.type.pointee, \
             (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
@@ -216,7 +219,7 @@ class CPUCallConv(BaseCallConv):
         """
         for ak, av in zip(args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
-        fn.args[0].name = ".ret"
+        self._get_return_argument(fn).name = ".ret"
         self.get_env_argument(fn).name = "env"
         return fn
 
@@ -233,6 +236,9 @@ class CPUCallConv(BaseCallConv):
         """
         return func.args[1]
 
+    def _get_return_argument(self, func):
+        return func.args[0]
+
     def call_function(self, builder, callee, resty, argtys, args, env=None):
         """
         Call the Numba-compiled *callee*, using the same calling
@@ -242,7 +248,7 @@ class CPUCallConv(BaseCallConv):
             # This only works with functions that don't use the environment
             # (nopython functions).
             env = lc.Constant.null(PYOBJECT)
-        retty = callee.args[0].type.pointee
+        retty = self._get_return_argument(callee).type.pointee
         retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value to zeros
         builder.store(lc.Constant.null(retty), retvaltmp)
