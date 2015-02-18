@@ -50,14 +50,17 @@ Numba_rnd_shuffle(rnd_state_t *state)
 
     for (i = 0; i < MT_N - MT_M; i++) {
         y = (state->mt[i] & MT_UPPER_MASK) | (state->mt[i+1] & MT_LOWER_MASK);
-        state->mt[i] = state->mt[i+MT_M] ^ (y >> 1) ^ (-(y & 1) & MT_MATRIX_A);
+        state->mt[i] = state->mt[i+MT_M] ^ (y >> 1) ^
+                       (-(int) (y & 1) & MT_MATRIX_A);
     }
     for (; i < MT_N - 1; i++) {
         y = (state->mt[i] & MT_UPPER_MASK) | (state->mt[i+1] & MT_LOWER_MASK);
-        state->mt[i] = state->mt[i+(MT_M-MT_N)] ^ (y >> 1) ^ (-(y & 1) & MT_MATRIX_A);
+        state->mt[i] = state->mt[i+(MT_M-MT_N)] ^ (y >> 1) ^
+                       (-(int) (y & 1) & MT_MATRIX_A);
     }
     y = (state->mt[MT_N - 1] & MT_UPPER_MASK) | (state->mt[0] & MT_LOWER_MASK);
-    state->mt[MT_N - 1] = state->mt[MT_M - 1] ^ (y >> 1) ^ (-(y & 1) & MT_MATRIX_A);
+    state->mt[MT_N - 1] = state->mt[MT_M - 1] ^ (y >> 1) ^
+                          (-(int) (y & 1) & MT_MATRIX_A);
 }
 
 /* Initialize mt[] with an integer seed */
@@ -74,6 +77,7 @@ Numba_rnd_init(rnd_state_t *state, unsigned int seed)
     }
     state->index = MT_N;
     state->has_gauss = 0;
+    state->gauss = 0.0;
 }
 
 /* Perturb mt[] with a key array */
@@ -105,6 +109,7 @@ rnd_init_by_array(rnd_state_t *state, unsigned int init_key[], size_t key_length
     mt[0] = 0x80000000U; /* MSB is 1; ensuring non-zero initial array */
     state->index = MT_N;
     state->has_gauss = 0;
+    state->gauss = 0.0;
 }
 
 /* Random-initialize the given state (for use at startup) */
@@ -112,20 +117,20 @@ static int
 _rnd_random_seed(rnd_state_t *state)
 {
     PyObject *timemod, *timeobj;
-    timemod = PyImport_ImportModuleNoBlock("time");
-    double time;
+    double timeval;
     unsigned int seed, rshift;
 
+    timemod = PyImport_ImportModuleNoBlock("time");
     if (!timemod)
         return -1;
     timeobj = PyObject_CallMethod(timemod, "time", NULL);
     Py_DECREF(timemod);
-    time = PyFloat_AsDouble(timeobj);
+    timeval = PyFloat_AsDouble(timeobj);
     Py_DECREF(timeobj);
-    if (time == -1 && PyErr_Occurred())
+    if (timeval == -1 && PyErr_Occurred())
         return -1;
     /* Mix in seconds and nanoseconds */
-    seed = (unsigned) time ^ (unsigned) (time * 1e9);
+    seed = (unsigned) timeval ^ (unsigned) (timeval * 1e9);
 #ifndef _WIN32
     seed ^= getpid();
 #endif
@@ -178,12 +183,13 @@ rnd_set_state(PyObject *self, PyObject *args)
     state->index = index;
     for (i = 0; i < MT_N; i++) {
         PyObject *v = PyList_GET_ITEM(intlist, i);
-        int x = PyLong_AsUnsignedLong(v);
+        unsigned long x = PyLong_AsUnsignedLong(v);
         if (x == (unsigned long) -1 && PyErr_Occurred())
             return NULL;
-        state->mt[i] = x;
+        state->mt[i] = (unsigned int) x;
     }
     state->has_gauss = 0;
+    state->gauss = 0.0;
     Py_RETURN_NONE;
 }
 
