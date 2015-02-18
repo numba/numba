@@ -141,14 +141,6 @@ class PythonAPI(object):
             exc = self.get_null_object()
         return self.builder.call(fn, (exc,))
 
-    def err_set_none(self, exctype):
-        """
-        Raise an exception of type *exctype* with no value.
-        """
-        fnty = Type.function(Type.void(), [self.pyobj])
-        fn = self._get_function(fnty, name="PyErr_SetNone")
-        return self.builder.call(fn, (exctype,))
-
     def err_set_object(self, exctype, excval):
         fnty = Type.function(Type.void(), [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyErr_SetObject")

@@ -372,19 +372,11 @@ class Interpreter(object):
             var = self.current_scope.get(name)
         return var
 
-    def get_definition(self, name):
-        while True:
-            defs = self.definitions[name]
-            if len(defs) > 1:
-                raise TypeError("more than one definition for %r" % (name,))
-            expr = defs[0]
-            if isinstance(expr, ir.Var):
-                name = expr.name
-            else:
-                assert isinstance(expr, ir.Expr)
-                return expr
-
     def get_definition(self, value):
+        """
+        Get the definition site for the given Var instance.
+        A Expr instance is returned.
+        """
         while True:
             if not isinstance(value, ir.Var):
                 return value

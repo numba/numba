@@ -50,12 +50,6 @@ STRUCT_TYPES = {
     types.slice3_type: builtins.Slice,
 }
 
-Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
-
-RETCODE_OK = Constant.int_signextend(Type.int(), 0)
-RETCODE_EXC = Constant.int_signextend(Type.int(), -1)
-RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
-
 
 class Overloads(object):
     def __init__(self):
