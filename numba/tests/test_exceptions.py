@@ -4,7 +4,6 @@ import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
 from numba import unittest_support as unittest
-from numba.pythonapi import NativeError
 from .support import TestCase
 
 

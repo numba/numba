@@ -1,10 +1,12 @@
 from __future__ import print_function, absolute_import
+
 import numpy
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, typeof, njit
-from numba.pythonapi import NativeError
 from numba import lowering
+
 
 def return_double_or_none(x):
     if x:

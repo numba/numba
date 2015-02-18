@@ -14,10 +14,6 @@ from numba import types, utils, cgutils, _helperlib, assume
 _PyNone = ctypes.c_ssize_t(id(None))
 
 
-class NativeError(RuntimeError):
-    pass
-
-
 @utils.runonce
 def fix_python_api():
     """
@@ -25,7 +21,6 @@ def fix_python_api():
     """
 
     ll.add_symbol("Py_None", ctypes.addressof(_PyNone))
-    ll.add_symbol("numba_native_error", id(NativeError))
 
     # Add C helper functions
     c_helpers = _helperlib.c_helpers
@@ -151,10 +146,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyErr_WriteUnraisable")
         return self.builder.call(fn, (obj,))
 
-    def raise_native_error(self, msg):
-        cstr = self.context.insert_const_string(self.module, msg)
-        self.err_set_string(self.native_error_type, cstr)
-
     def get_c_object(self, name):
         """
         Get a Python object through its C-accessible *name*.
@@ -165,10 +156,6 @@ class PythonAPI(object):
         except LLVMException:
             gv = self.module.add_global_variable(self.pyobj.pointee, name)
         return gv
-
-    @property
-    def native_error_type(self):
-        return self.get_c_object("numba_native_error")
 
     def raise_missing_global_error(self, name):
         msg = "global name '%s' is not defined" % name

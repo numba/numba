@@ -229,8 +229,8 @@ class _MinimalCallHelper(object):
         try:
             return self.exceptions[exc_id]
         except KeyError:
-            from numba.pythonapi import NativeError
-            return NativeError, ("unknown error",)
+            msg = "unknown error %d in native function" % exc_id
+            return SystemError, (msg,)
 
 
 excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t])

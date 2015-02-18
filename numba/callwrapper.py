@@ -176,7 +176,7 @@ class PyCallWrapper(object):
             builder.ret(api.get_null_object())
 
         msg = "unknown error in native function: %s" % self.fndesc.mangled_name
-        api.raise_native_error(msg)
+        api.err_set_string("PyExc_SystemError", msg)
 
     def make_const_string(self, string):
         return self.context.insert_const_string(self.module, string)
