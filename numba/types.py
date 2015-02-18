@@ -870,6 +870,10 @@ class NoneType(Opaque):
 
         return Optional(other)
 
+
+class Slice3Type(Type):
+    pass
+
 # Utils
 
 def is_int_tuple(x):
@@ -931,7 +935,7 @@ range_state32_type = RangeType('range_state32', range_iter32_type)
 range_state64_type = RangeType('range_state64', range_iter64_type)
 
 # slice2_type = Type('slice2_type')
-slice3_type = Type('slice3_type')
+slice3_type = Slice3Type('slice3_type')
 
 signed_domain = frozenset([int8, int16, int32, int64])
 unsigned_domain = frozenset([uint8, uint16, uint32, uint64])

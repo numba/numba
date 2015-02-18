@@ -138,6 +138,7 @@ def handle_boolean(dmm, ty):
 @register_default(types.Opaque)
 @register_default(types.NoneType)
 @register_default(types.Function)
+@register_default(types.Type)
 def handle_opaque(dmm, ty):
     return OpaqueModel(dmm, ty)
 
@@ -208,6 +209,11 @@ def handle_numpy_flat_type(dmm, ty):
 @register_default(types.UniTupleIter)
 def handle_unitupleiter(dmm, ty):
     return UniTupleIter(dmm, ty)
+
+
+@register_default(types.Slice3Type)
+def handle_slice3type(dmm, ty):
+    return Slice3(dmm, ty)
 
 
 # ============== Define Data Models ==============
@@ -497,7 +503,10 @@ class StructModel(DataModel):
     def __init__(self, dmm, fe_type, members):
         super(StructModel, self).__init__(dmm)
         self.fe_type = fe_type
-        self._fields, self._members = zip(*members)
+        if members:
+            self._fields, self._members = zip(*members)
+        else:
+            self._fields = self._members = ()
         self._models = tuple([self._dmm.lookup(t) for t in self._members])
 
     def get_value_type(self):
@@ -522,7 +531,6 @@ class StructModel(DataModel):
         return tuple(extracted)
 
     def _from(self, methname, builder, value):
-        assert len(value) == len(self._models)
         struct = ir.Constant(self.get_value_type(), ir.Undefined)
 
         for i, (dm, val) in enumerate(zip(self._models, value)):
@@ -711,3 +719,11 @@ class UniTupleIter(StructModel):
         members = [('index', types.CPointer(types.intp)),
                    ('tuple', fe_type.unituple,)]
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
+
+
+class Slice3(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [('start', types.intp),
+                   ('stop',  types.intp),
+                   ('step',  types.intp)]
+        super(Slice3, self).__init__(dmm, fe_type, members)

@@ -145,12 +145,17 @@ test_factory("TestDoubleComplex", types.complex128)
 test_factory("TestPointerOfInt32", types.CPointer(types.int32))
 
 test_factory("TestUniTupleOf2xInt32", types.UniTuple(types.int32, 2))
+test_factory("TestUniTupleEmpty", types.UniTuple(types.int32, 0))
 test_factory("TestTupleInt32Float32", types.Tuple([types.int32, types.float32]))
+test_factory("TestTupleEmpty", types.Tuple([]))
 
 test_factory("Test1DArrayOfInt32", types.Array(types.int32, 1, 'C'),
              support_as_data=False)
 
-test_factory("Test2DArrayOfInt32", types.Array(types.complex128, 2, 'C'),
+test_factory("Test2DArrayOfComplex128", types.Array(types.complex128, 2, 'C'),
+             support_as_data=False)
+
+test_factory("Test0DArrayOfInt32", types.Array(types.int32, 0, 'C'),
              support_as_data=False)
 
 
