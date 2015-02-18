@@ -48,6 +48,9 @@ def outer_function(inner):
         return inner(i)
     return outer
 
+def assert_usecase(i):
+    assert i == 1, "bar"
+
 
 class TestRaising(TestCase):
 
@@ -162,6 +165,21 @@ class TestRaising(TestCase):
             self.check_raise_invalid_class(int, flags=no_pyobj_flags)
         with self.assertTypingError():
             self.check_raise_invalid_class(1, flags=no_pyobj_flags)
+
+    def check_assert_statement(self, flags):
+        pyfunc = assert_usecase
+        cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cfunc = cres.entry_point
+        cfunc(1)
+        with self.assertRaises(AssertionError) as cm:
+            cfunc(2)
+        self.assertEqual(str(cm.exception), "bar")
+
+    def test_assert_statement_objmode(self):
+        self.check_assert_statement(flags=force_pyobj_flags)
+
+    def test_assert_statement_nopython(self):
+        self.check_assert_statement(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':
