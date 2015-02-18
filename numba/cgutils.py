@@ -566,9 +566,18 @@ def is_scalar_neg(builder, value):
     return isneg
 
 
-def guard_null(context, builder, value):
+def guard_null(context, builder, value, exc_tuple=None):
+    """
+    Guard against *value* being null or zero.
+    *exc_tuple* should be a (exception type, arguments...) tuple.
+    """
     with if_unlikely(builder, is_scalar_zero(builder, value)):
-        context.call_conv.return_errcode(builder, errcode.ASSERTION_ERROR)
+        if exc_tuple is not None:
+            exc = exc_tuple[0]
+            exc_args = exc_tuple[1:] or None
+            context.call_conv.return_user_exc(builder, exc, exc_args)
+        else:
+            context.call_conv.return_errcode(builder, errcode.ASSERTION_ERROR)
 
 
 guard_zero = guard_null

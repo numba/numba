@@ -133,6 +133,7 @@ class MinimalCallConv(BaseCallConv):
 
     def return_user_exc(self, builder, exc, exc_args=None):
         assert (exc is None or issubclass(exc, BaseException)), exc
+        assert (exc_args is None or isinstance(exc_args, tuple)), exc_args
         call_helper = self._get_call_helper(builder)
         exc_id = call_helper._add_exception(exc, exc_args)
         self._return_errcode_raw(builder, _const_int(exc_id))

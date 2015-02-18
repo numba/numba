@@ -30,7 +30,6 @@ def raise_class(exc):
         return i
     return raiser
 
-
 def raise_instance(exc, arg):
     def raiser(i):
         if i == 1:
@@ -40,10 +39,8 @@ def raise_instance(exc, arg):
         return i
     return raiser
 
-
 def reraise():
     raise
-
 
 def outer_function(inner):
     def outer(i):
