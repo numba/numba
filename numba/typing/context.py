@@ -10,8 +10,11 @@ import numpy
 from numba import types
 from numba.typeconv import rules
 from . import templates
+
 # Initialize declarations
-from . import builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl
+from . import (
+    builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl,
+    randomdecl)
 from numba import numpy_support, utils
 from . import ctypes_utils, cffi_utils
 
@@ -390,6 +393,7 @@ class Context(BaseContext):
         self.install(mathdecl.registry)
         self.install(npydecl.registry)
         self.install(operatordecl.registry)
+        self.install(randomdecl.registry)
 
 
 def new_method(fn, sig):

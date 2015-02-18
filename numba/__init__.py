@@ -73,3 +73,10 @@ def _sentry_llvm_version():
         warnings.warn("llvmlite version format not recognized!")
 
 _sentry_llvm_version()
+
+
+# Process initialization
+# Should this be hooked into CPUContext instead?
+from .targets.randomimpl import random_init
+random_init()
+del random_init

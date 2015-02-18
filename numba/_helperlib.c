@@ -17,6 +17,366 @@
     #define NPY_ARRAY_BEHAVED NPY_BEHAVED
 #endif
 
+/*
+ * PRNG support.
+ */
+
+/* Magic Mersenne Twister constants */
+#define MT_N 624
+#define MT_M 397
+#define MT_MATRIX_A 0x9908b0dfU
+#define MT_UPPER_MASK 0x80000000U
+#define MT_LOWER_MASK 0x7fffffffU
+
+/* unsigned int is sufficient on modern machines as we only need 32 bits */
+typedef struct {
+    int index;
+    unsigned int mt[MT_N];
+    int has_gauss;
+    double gauss;
+} rnd_state_t;
+
+static rnd_state_t py_random_state;
+static rnd_state_t np_random_state;
+
+/* Some code portions below from CPython's _randommodule.c, some others
+   from Numpy's and Jean-Sebastien Roy's randomkit.c. */
+
+static void
+Numba_rnd_shuffle(rnd_state_t *state)
+{
+    int i;
+    unsigned int y;
+
+    for (i = 0; i < MT_N - MT_M; i++) {
+        y = (state->mt[i] & MT_UPPER_MASK) | (state->mt[i+1] & MT_LOWER_MASK);
+        state->mt[i] = state->mt[i+MT_M] ^ (y >> 1) ^ (-(y & 1) & MT_MATRIX_A);
+    }
+    for (; i < MT_N - 1; i++) {
+        y = (state->mt[i] & MT_UPPER_MASK) | (state->mt[i+1] & MT_LOWER_MASK);
+        state->mt[i] = state->mt[i+(MT_M-MT_N)] ^ (y >> 1) ^ (-(y & 1) & MT_MATRIX_A);
+    }
+    y = (state->mt[MT_N - 1] & MT_UPPER_MASK) | (state->mt[0] & MT_LOWER_MASK);
+    state->mt[MT_N - 1] = state->mt[MT_M - 1] ^ (y >> 1) ^ (-(y & 1) & MT_MATRIX_A);
+}
+
+/* Initialize mt[] with an integer seed */
+static void
+Numba_rnd_init(rnd_state_t *state, unsigned int seed)
+{
+    unsigned int pos;
+    seed &= 0xffffffffU;
+
+    /* Knuth's PRNG as used in the Mersenne Twister reference implementation */
+    for (pos = 0; pos < MT_N; pos++) {
+        state->mt[pos] = seed;
+        seed = (1812433253U * (seed ^ (seed >> 30)) + pos + 1) & 0xffffffffU;
+    }
+    state->index = MT_N;
+    state->has_gauss = 0;
+}
+
+/* Perturb mt[] with a key array */
+static void
+rnd_init_by_array(rnd_state_t *state, unsigned int init_key[], size_t key_length)
+{
+    size_t i, j, k;
+    unsigned int *mt = state->mt;
+
+    Numba_rnd_init(state, 19650218U);
+    i = 1; j = 0;
+    k = (MT_N > key_length ? MT_N : key_length);
+    for (; k; k--) {
+        mt[i] = (mt[i] ^ ((mt[i-1] ^ (mt[i-1] >> 30)) * 1664525U))
+                 + init_key[j] + (unsigned int) j; /* non linear */
+        mt[i] &= 0xffffffffU;
+        i++; j++;
+        if (i >= MT_N) { mt[0] = mt[MT_N - 1]; i = 1; }
+        if (j >= key_length) j = 0;
+    }
+    for (k = MT_N - 1; k; k--) {
+        mt[i] = (mt[i] ^ ((mt[i-1] ^ (mt[i-1] >> 30)) * 1566083941U))
+                 - (unsigned int) i; /* non linear */
+        mt[i] &= 0xffffffffU;
+        i++;
+        if (i >= MT_N) { mt[0] = mt[MT_N - 1]; i=1; }
+    }
+
+    mt[0] = 0x80000000U; /* MSB is 1; ensuring non-zero initial array */
+    state->index = MT_N;
+    state->has_gauss = 0;
+}
+
+/* Random-initialize the given state (for use at startup) */
+static int
+_rnd_random_seed(rnd_state_t *state)
+{
+    PyObject *timemod, *timeobj;
+    timemod = PyImport_ImportModuleNoBlock("time");
+    double time;
+    unsigned int seed, rshift;
+
+    if (!timemod)
+        return -1;
+    timeobj = PyObject_CallMethod(timemod, "time", NULL);
+    Py_DECREF(timemod);
+    time = PyFloat_AsDouble(timeobj);
+    Py_DECREF(timeobj);
+    if (time == -1 && PyErr_Occurred())
+        return -1;
+    /* Mix in seconds and nanoseconds */
+    seed = (unsigned) time ^ (unsigned) (time * 1e9);
+#ifndef _WIN32
+    seed ^= getpid();
+#endif
+    /* Address space randomization bits: take MSBs of various pointers.
+     * It is counter-productive to shift by 32, since the virtual address
+     * space width is usually less than 64 bits (48 on x86-64).
+     */
+    rshift = sizeof(void *) > 4 ? 16 : 0;
+    seed ^= (Py_uintptr_t) &timemod >> rshift;
+    seed += (Py_uintptr_t) &PyObject_CallMethod >> rshift;
+    Numba_rnd_init(state, seed);
+    return 0;
+}
+
+/* Python-exposed helpers for state management */
+static int
+rnd_state_converter(PyObject *obj, rnd_state_t **state)
+{
+    *state = (rnd_state_t *) PyLong_AsVoidPtr(obj);
+    return (*state != NULL || !PyErr_Occurred());
+}
+
+static PyObject *
+rnd_shuffle(PyObject *self, PyObject *arg)
+{
+    rnd_state_t *state;
+    if (!rnd_state_converter(arg, &state))
+        return NULL;
+    Numba_rnd_shuffle(state);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+rnd_set_state(PyObject *self, PyObject *args)
+{
+    int i, index;
+    rnd_state_t *state;
+    PyObject *tuplearg, *intlist;
+
+    if (!PyArg_ParseTuple(args, "O&O!:rnd_set_state",
+                          rnd_state_converter, &state,
+                          &PyTuple_Type, &tuplearg))
+        return NULL;
+    if (!PyArg_ParseTuple(tuplearg, "iO!", &index, &PyList_Type, &intlist))
+        return NULL;
+    if (PyList_GET_SIZE(intlist) != MT_N) {
+        PyErr_SetString(PyExc_ValueError, "list object has wrong size");
+        return NULL;
+    }
+    state->index = index;
+    for (i = 0; i < MT_N; i++) {
+        PyObject *v = PyList_GET_ITEM(intlist, i);
+        int x = PyLong_AsUnsignedLong(v);
+        if (x == (unsigned long) -1 && PyErr_Occurred())
+            return NULL;
+        state->mt[i] = x;
+    }
+    state->has_gauss = 0;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+rnd_get_state(PyObject *self, PyObject *arg)
+{
+    PyObject *intlist;
+    int i;
+    rnd_state_t *state;
+    if (!rnd_state_converter(arg, &state))
+        return NULL;
+
+    intlist = PyList_New(MT_N);
+    if (intlist == NULL)
+        return NULL;
+    for (i = 0; i < MT_N; i++) {
+        PyObject *v = PyLong_FromUnsignedLong(state->mt[i]);
+        if (v == NULL) {
+            Py_DECREF(intlist);
+            return NULL;
+        }
+        PyList_SET_ITEM(intlist, i, v);
+    }
+    return Py_BuildValue("iN", state->index, intlist);
+}
+
+static PyObject *
+rnd_seed_with_urandom(PyObject *self, PyObject *args)
+{
+    rnd_state_t *state;
+    Py_buffer buf;
+    unsigned int *keys;
+    unsigned char *bytes;
+    size_t i, nkeys;
+
+    if (!PyArg_ParseTuple(args, "O&s*:rnd_seed",
+                          rnd_state_converter, &state, &buf)) {
+        return NULL;
+    }
+    /* Make a copy to avoid alignment issues */
+    nkeys = buf.len / sizeof(unsigned int);
+    keys = (unsigned int *) PyMem_Malloc(nkeys * sizeof(unsigned int));
+    if (keys == NULL) {
+        PyBuffer_Release(&buf);
+        return NULL;
+    }
+    bytes = (unsigned char *) buf.buf;
+    for (i = 0; i < nkeys; i++, bytes += 4) {
+        keys[i] = (bytes[3] << 24) + (bytes[2] << 16) +
+                  (bytes[1] << 8) + (bytes[0] << 0);
+    }
+    PyBuffer_Release(&buf);
+    rnd_init_by_array(state, keys, nkeys);
+    PyMem_Free(keys);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+rnd_seed(PyObject *self, PyObject *args)
+{
+    unsigned int seed;
+    rnd_state_t *state;
+
+    if (!PyArg_ParseTuple(args, "O&I:rnd_seed",
+                          rnd_state_converter, &state, &seed)) {
+        PyErr_Clear();
+        return rnd_seed_with_urandom(self, args);
+    }
+    Numba_rnd_init(state, seed);
+    Py_RETURN_NONE;
+}
+
+/* Random distribution helpers.
+ * Most code straight from Numpy's distributions.c. */
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846264338328
+#endif
+
+static unsigned int
+get_next_int32(rnd_state_t *state)
+{
+    unsigned int y;
+
+    if (state->index == MT_N) {
+        Numba_rnd_shuffle(state);
+        state->index = 0;
+    }
+    y = state->mt[state->index++];
+    /* Tempering */
+    y ^= (y >> 11);
+    y ^= (y << 7) & 0x9d2c5680U;
+    y ^= (y << 15) & 0xefc60000U;
+    y ^= (y >> 18);
+    return y;
+}
+
+static double
+get_next_double(rnd_state_t *state)
+{
+    double a = get_next_int32(state) >> 5;
+    double b = get_next_int32(state) >> 6;
+    return (a * 67108864.0 + b) / 9007199254740992.0;
+}
+
+static double
+loggam(double x)
+{
+    double x0, x2, xp, gl, gl0;
+    long k, n;
+
+    static double a[10] = {8.333333333333333e-02,-2.777777777777778e-03,
+         7.936507936507937e-04,-5.952380952380952e-04,
+         8.417508417508418e-04,-1.917526917526918e-03,
+         6.410256410256410e-03,-2.955065359477124e-02,
+         1.796443723688307e-01,-1.39243221690590e+00};
+    x0 = x;
+    n = 0;
+    if ((x == 1.0) || (x == 2.0))
+    {
+        return 0.0;
+    }
+    else if (x <= 7.0)
+    {
+        n = (long)(7 - x);
+        x0 = x + n;
+    }
+    x2 = 1.0/(x0*x0);
+    xp = 2*M_PI;
+    gl0 = a[9];
+    for (k=8; k>=0; k--)
+    {
+        gl0 *= x2;
+        gl0 += a[k];
+    }
+    gl = gl0/x0 + 0.5*log(xp) + (x0-0.5)*log(x0) - x0;
+    if (x <= 7.0)
+    {
+        for (k=1; k<=n; k++)
+        {
+            gl -= log(x0-1.0);
+            x0 -= 1.0;
+        }
+    }
+    return gl;
+}
+
+
+static int64_t
+Numba_poisson_ptrs(rnd_state_t *state, double lam)
+{
+    /* This method is invoked only if the parameter lambda of this
+     * distribution is big enough ( >= 10 ). The algorithm used is
+     * described in "Hörmann, W. 1992. 'The Transformed Rejection
+     * Method for Generating Poisson Random Variables'.
+     * The implementation comes straight from Numpy.
+     */
+    int64_t k;
+    double U, V, slam, loglam, a, b, invalpha, vr, us;
+
+    slam = sqrt(lam);
+    loglam = log(lam);
+    b = 0.931 + 2.53*slam;
+    a = -0.059 + 0.02483*b;
+    invalpha = 1.1239 + 1.1328/(b-3.4);
+    vr = 0.9277 - 3.6224/(b-2);
+
+    while (1)
+    {
+        U = get_next_double(state) - 0.5;
+        V = get_next_double(state);
+        us = 0.5 - fabs(U);
+        k = (int64_t) floor((2*a/us + b)*U + lam + 0.43);
+        if ((us >= 0.07) && (V <= vr))
+        {
+            return k;
+        }
+        if ((k < 0) ||
+            ((us < 0.013) && (V > us)))
+        {
+            continue;
+        }
+        if ((log(V) + log(invalpha) - log(a/(us*us)+b)) <=
+            (-lam + k*loglam - loggam(k+1)))
+        {
+            return k;
+        }
+    }
+}
+
+/*
+ * Other helpers.
+ */
 
 /* provide 64-bit division function to 32-bit platforms */
 static
@@ -860,15 +1220,19 @@ build_c_helpers_dict(void)
     if (dct == NULL)
         goto error;
 
-#define declmethod(func) do {                          \
-    PyObject *val = PyLong_FromVoidPtr(&Numba_##func); \
-    if (val == NULL) goto error;                       \
-    if (PyDict_SetItemString(dct, #func, val)) {       \
-        Py_DECREF(val);                                \
+#define _declpointer(name, value) do {                 \
+    PyObject *o = PyLong_FromVoidPtr(value);           \
+    if (o == NULL) goto error;                         \
+    if (PyDict_SetItemString(dct, name, o)) {          \
+        Py_DECREF(o);                                  \
         goto error;                                    \
     }                                                  \
-    Py_DECREF(val);                                    \
+    Py_DECREF(o);                                      \
 } while (0)
+
+#define declmethod(func) _declpointer(#func, &Numba_##func)
+
+#define declpointer(ptr) _declpointer(#ptr, &ptr)
 
     declmethod(sdiv);
     declmethod(srem);
@@ -901,6 +1265,13 @@ build_c_helpers_dict(void)
     declmethod(fptouif);
     declmethod(gil_ensure);
     declmethod(gil_release);
+    declmethod(rnd_shuffle);
+    declmethod(rnd_init);
+    declmethod(poisson_ptrs);
+
+    declpointer(py_random_state);
+    declpointer(np_random_state);
+
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.inc"
@@ -915,6 +1286,10 @@ error:
 }
 
 static PyMethodDef ext_methods[] = {
+    { "rnd_get_state", (PyCFunction) rnd_get_state, METH_O, NULL },
+    { "rnd_seed", (PyCFunction) rnd_seed, METH_VARARGS, NULL },
+    { "rnd_set_state", (PyCFunction) rnd_set_state, METH_VARARGS, NULL },
+    { "rnd_shuffle", (PyCFunction) rnd_shuffle, METH_O, NULL },
     { NULL },
 };
 
@@ -932,6 +1307,10 @@ MOD_INIT(_helperlib) {
     PyModule_AddIntConstant(m, "long_max", LONG_MAX);
     PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));
     PyModule_AddIntConstant(m, "py_gil_state_size", sizeof(PyGILState_STATE));
+
+    if (_rnd_random_seed(&py_random_state) ||
+        _rnd_random_seed(&np_random_state))
+        return MOD_ERROR_VAL;
 
     return MOD_SUCCESS_VAL(m);
 }

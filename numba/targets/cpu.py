@@ -11,7 +11,8 @@ from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.targets import (
-    codegen, externals, intrinsics, cmathimpl, mathimpl, npyimpl, operatorimpl, printimpl)
+    codegen, externals, intrinsics, cmathimpl, mathimpl, npyimpl,
+    operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
 
 
@@ -50,6 +51,7 @@ class CPUContext(BaseContext):
         self.insert_func_defn(npyimpl.registry.functions)
         self.insert_func_defn(operatorimpl.registry.functions)
         self.insert_func_defn(printimpl.registry.functions)
+        self.insert_func_defn(randomimpl.registry.functions)
 
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
