@@ -156,15 +156,15 @@ class PyCallWrapper(object):
             builder.ret(retval)
 
         with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
-            # Native or user exception raised
+            # User exception raised
             self.make_exception_switch(api, builder, status)
 
         # Error out
         builder.ret(api.get_null_object())
 
     def make_exception_switch(self, api, builder, status):
-        """Handle user defined exceptions.
-        Build a switch to check which exception class was raised.
+        """
+        Handle user exceptions.  Unserialize the exception info and raise it.
         """
         code = status.code
         # Handle user exceptions
