@@ -8,7 +8,7 @@ import functools
 import re
 from llvmlite.llvmpy.core import Constant, Type
 import llvmlite.llvmpy.core as lc
-
+from numba import datamodel
 from . import errcode, utils
 
 
@@ -37,6 +37,95 @@ def make_anonymous_struct(builder, values):
     return struct_val
 
 
+def create_struct_proxy(context, fe_type):
+    dmm = context.data_model_manager
+    dmodel = dmm[fe_type]
+
+    assert isinstance(dmodel, datamodel.StructModel), "Not a structure model"
+
+    class StructProxy(object):
+        _context = context
+        _dmm = dmm
+        _datamodel = dmodel
+
+        def __init__(self, builder, value=None):
+            self._context = context
+            self._builder = builder
+
+            self._be_type = self._datamodel.get_value_type()
+            self._value = alloca_once(self._builder, self._be_type)
+            if value is not None:
+                self._builder.store(value, self._value)
+
+        def _get_ptr_by_index(self, index):
+            geped = self._builder.gep(self._value,
+                                      [Constant.int(Type.int(), 0),
+                                       Constant.int(Type.int(), index)])
+            return geped
+
+        def _get_ptr_by_name(self, attrname):
+            index = self._datamodel.get_field_position(attrname)
+            return self._get_ptr_by_index(index)
+
+        def __getattr__(self, field):
+            """
+            Load the LLVM value of the named *field*.
+            """
+            if not field.startswith('_'):
+                return self[self._datamodel.get_field_position(field)]
+            else:
+                raise AttributeError(field)
+
+        def __setattr__(self, field, value):
+            """
+            Store the LLVM *value* into the named *field*.
+            """
+            if field.startswith('_'):
+                return super(StructProxy, self).__setattr__(field, value)
+            self[self._datamodel.get_field_position(field)] = value
+
+        def __getitem__(self, index):
+            """
+            Load the LLVM value of the field at *index*.
+            """
+
+            return self._builder.load(self._get_ptr_by_index(index))
+
+        def __setitem__(self, index, value):
+            """
+            Store the LLVM *value* into the field at *index*.
+            """
+            ptr = self._get_ptr_by_index(index)
+            self._builder.store(value, ptr)
+
+        def __len__(self):
+            """
+            Return the number of fields.
+            """
+            return len(self._namemap)
+
+        def _getpointer(self):
+            """
+            Return the LLVM pointer to the underlying structure.
+            """
+            return self._value
+
+        def _getvalue(self):
+            """
+            Load and return the value of the underlying LLVM structure.
+            """
+            return self._builder.load(self._value)
+
+        def _setvalue(self, value):
+            """Store the value in this structure"""
+            assert not is_pointer(value.type)
+            assert value.type == self._type, (value.type, self._type)
+            self._builder.store(value, self._value)
+
+
+    return StructProxy
+
+
 class Structure(object):
     """
     A high-level object wrapping a alloca'ed LLVM structure, including
@@ -45,6 +134,7 @@ class Structure(object):
 
     # XXX Should this warrant several separate constructors?
     def __init__(self, context, builder, value=None, ref=None, cast_ref=False):
+        raise NotImplementedError
         self._type = context.get_struct_type(self)
         self._context = context
         self._builder = builder
@@ -52,6 +142,7 @@ class Structure(object):
             self._value = alloca_once(builder, self._type)
             if value is not None:
                 assert not is_pointer(value.type)
+                self._context.get_value_as_data(builder, )
                 assert value.type == self._type, (value.type, self._type)
                 builder.store(value, self._value)
         else:
@@ -117,7 +208,8 @@ class Structure(object):
         if ptr.type.pointee != value.type:
             raise AssertionError("Type mismatch: __setitem__(%d, ...) "
                                  "expected %r but got %r"
-                                 % (index, str(ptr.type.pointee), str(value.type)))
+                                 % (
+            index, str(ptr.type.pointee), str(value.type)))
         self._builder.store(value, ptr)
 
     def __len__(self):
@@ -144,7 +236,7 @@ class Structure(object):
         assert value.type == self._type, (value.type, self._type)
         self._builder.store(value, self._value)
 
-    # __iter__ is derived by Python from __len__ and __getitem__
+        # __iter__ is derived by Python from __len__ and __getitem__
 
 
 def get_function(builder):
@@ -542,8 +634,10 @@ def is_scalar_zero_or_nan(builder, value):
         isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
     return isnull
 
+
 is_true = is_not_scalar_zero
 is_false = is_scalar_zero
+
 
 def is_scalar_neg(builder, value):
     """is _value_ negative?. Assumes _value_ is signed"""
@@ -651,7 +745,8 @@ def pointer_add(builder, ptr, offset, return_type=None):
     return builder.inttoptr(intptr, return_type or ptr.type)
 
 
-def global_constant(builder_or_module, name, value, linkage=lc.LINKAGE_INTERNAL):
+def global_constant(builder_or_module, name, value,
+                    linkage=lc.LINKAGE_INTERNAL):
     """
     Get or create a (LLVM module-)global constant with *name* or *value*.
     """

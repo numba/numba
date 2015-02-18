@@ -600,20 +600,20 @@ class BaseContext(object):
         else:
             return val
 
-    def get_struct_member_value(self, builder, ty, val):
-        """
-        Local value representation to struct member representation
-        """
-        # Currently same as get_return_value.
-        # TODO: make a "TypeLayout" class that describe the layout at
-        #       different situations for a value of a type.
-        return self.get_return_value(builder, ty, val)
-
     def get_value_as_argument(self, builder, ty, val):
         """Prepare local value representation as argument type representation
         """
-        raise NotImplementedError
-        return val
+        return self.data_model_manager[ty].as_argument(builder, val)
+
+    def get_value_as_data(self, builder, ty, val):
+        """Prepare local value representation as data type representation
+        """
+        return self.data_model_manager[ty].as_data(builder, val)
+
+    def get_data_as_value(self, builder, ty, val):
+        """Prepare data value representation to local value type representation
+        """
+        return self.data_model_manager[ty].from_data(builder, val)
 
     def return_optional_value(self, builder, retty, valty, value):
         if valty == types.none:
@@ -621,10 +621,9 @@ class BaseContext(object):
 
         elif retty == valty:
             optcls = self.make_optional(retty)
-            optval = optcls(self, builder, value=value)
+            optval = optcls(builder, value=value)
 
-            validbit = builder.trunc(optval.valid, lc.Type.int(1))
-            with cgutils.ifthen(builder, validbit):
+            with cgutils.ifthen(builder, optval.valid):
                 self.return_value(builder, optval.data)
 
             self.return_native_none(builder)
@@ -826,17 +825,18 @@ class BaseContext(object):
         raise NotImplementedError("cast", val, fromty, toty)
 
     def make_optional(self, optionaltype):
-        return optional.make_optional(optionaltype.type)
+        assert isinstance(optionaltype, types.Optional)
+        return cgutils.create_struct_proxy(self, optionaltype)
 
     def make_optional_none(self, builder, valtype):
-        optcls = optional.make_optional(valtype)
-        optval = optcls(self, builder)
+        optcls = self.make_optional(types.Optional(valtype))
+        optval = optcls(builder, )
         optval.valid = cgutils.false_bit
         return optval._getvalue()
 
     def make_optional_value(self, builder, valtype, value):
-        optcls = optional.make_optional(valtype)
-        optval = optcls(self, builder)
+        optcls = self.make_optional(types.Optional(valtype))
+        optval = optcls(builder)
         optval.valid = cgutils.true_bit
         optval.data = value
         return optval._getvalue()
@@ -942,13 +942,13 @@ class BaseContext(object):
             return self.get_value_type(member_type)
         else:
             return self.get_data_type(member_type)
-
-    def get_struct_type(self, struct):
-        """
-        Get the LLVM struct type for the given Structure class *struct*.
-        """
-        fields = [self.get_struct_member_type(v) for _, v in struct._fields]
-        return Type.struct(fields)
+    #
+    # def get_struct_type(self, struct):
+    #     """
+    #     Get the LLVM struct type for the given Structure class *struct*.
+    #     """
+    #     fields = [self.get_struct_member_type(v) for _, v in struct._fields]
+    #     return Type.struct(fields)
 
     def get_dummy_value(self):
         return Constant.null(self.get_dummy_type())

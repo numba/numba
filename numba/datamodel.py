@@ -215,6 +215,11 @@ def handle_unitupleiter(dmm, ty):
 def handle_slice3type(dmm, ty):
     return Slice3(dmm, ty)
 
+@register_default(types.NPDatetime)
+@register_default(types.NPTimedelta)
+def handle_np_datetime(dmm, ty):
+    return NPDatetimeModel(dmm, ty)
+
 
 # ============== Define Data Models ==============
 
@@ -571,13 +576,21 @@ class StructModel(DataModel):
 
     def get(self, builder, val, pos):
         if isinstance(pos, str):
-            pos = self._fields.index(pos)
+            pos = self.get_field_position(pos)
         return builder.extract_value(val, [pos])
 
     def set(self, builder, stval, val, pos):
         if isinstance(pos, str):
-            pos = self._fields.index(pos)
+            pos = self.get_field_position(pos)
         return builder.insert_value(stval, val, [pos])
+
+    def get_field_position(self, field):
+        return self._fields.index(field)
+
+    def get_type(self, pos):
+        if isinstance(pos, str):
+            pos = self.get_field_position(pos)
+        return self._members[pos]
 
 
 class TupleModel(StructModel):
@@ -609,8 +622,8 @@ class ArrayModel(StructModel):
 class OptionalModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            ('valid', types.boolean),
             ('data', fe_type.type),
+            ('valid', types.boolean),
         ]
         self._value_model = dmm.lookup(fe_type.type)
         super(OptionalModel, self).__init__(dmm, fe_type, members)
@@ -727,3 +740,13 @@ class Slice3(StructModel):
                    ('stop',  types.intp),
                    ('step',  types.intp)]
         super(Slice3, self).__init__(dmm, fe_type, members)
+
+
+class NPDatetimeModel(PrimitiveModel):
+    def __init__(self, dmm, fe_type):
+        self.fe_type = fe_type
+        be_type = ir.IntType(64)
+        super(NPDatetimeModel, self).__init__(dmm, be_type)
+
+    def _compared_fields(self):
+        return (self.be_type,)
