@@ -387,9 +387,7 @@ class _GufuncWrapper(object):
                                                       self.signature.return_type,
                                                       self.signature.args, args)
 
-        innercall = status.code
-        error = status.err
-        return innercall, error
+        return status.code, status.is_error
 
     def gen_prologue(self, builder):
         pass        # Do nothing
@@ -501,7 +499,7 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
     status, retval = context.call_conv.call_function(
         builder, func, ll_pyobj, object_sig,
         ndarray_objects, env=env)
-    builder.store(status.err, error_pointer)
+    builder.store(status.is_error, error_pointer)
 
     # Release returned object
     pyapi.decref(retval)

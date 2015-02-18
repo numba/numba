@@ -56,7 +56,7 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         argtypes=cres.signature.args,
                         link=link,
                         debug=debug,
-                        exceptions=cres.exception_map,
+                        call_helper=cres.call_helper,
                         fastmath=fastmath)
     return cukern
 
@@ -279,8 +279,8 @@ class CachedCUFunction(object):
 
 class CUDAKernel(CUDAKernelBase):
     def __init__(self, llvm_module, name, pretty_name,
-                 argtypes, link=(), debug=False, exceptions={},
-                 fastmath=False):
+                 argtypes, call_helper,
+                 link=(), debug=False, fastmath=False):
         super(CUDAKernel, self).__init__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
@@ -296,7 +296,7 @@ class CUDAKernel(CUDAKernelBase):
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
         self._func = CachedCUFunction(self.entry_name, ptx, link)
         self.debug = debug
-        self.exceptions = exceptions
+        self.call_helper = call_helper
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
@@ -367,7 +367,7 @@ class CUDAKernel(CUDAKernelBase):
                                              (code, builtinerr), tid=tid,
                                              ctaid=ctaid)
                 else:
-                    exccls, exc_args = self.exceptions[code]
+                    exccls, exc_args = self.call_helper.get_exception(code)
                     prefix = "tid=%s ctaid=%s" % (tid, ctaid)
                     if exc_args:
                         exc_args = ("%s: %s" % (prefix, exc_args[0]),) + exc_args[1:]

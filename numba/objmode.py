@@ -46,7 +46,7 @@ class PyLower(BaseLower):
 
     def pre_lower(self):
         # Store environment argument for later use
-        self.envarg = self.context.call_conv.get_env_argument(self.function)
+        self.envarg = self.call_conv.get_env_argument(self.function)
         with cgutils.if_unlikely(self.builder, self.is_null(self.envarg)):
             self.pyapi.err_set_string(
                 "PyExc_SystemError",
@@ -58,7 +58,7 @@ class PyLower(BaseLower):
     def post_lower(self):
         with cgutils.goto_block(self.builder, self.ehblock):
             self.cleanup()
-            self.context.call_conv.return_exc(self.builder)
+            self.call_conv.return_exc(self.builder)
 
         self._finalize_frozen_string()
 
@@ -103,7 +103,7 @@ class PyLower(BaseLower):
             retval = self.loadvar(inst.value.name)
             # No need to incref() as the reference is already owned.
             self.cleanup()
-            self.context.call_conv.return_value(self.builder, retval)
+            self.call_conv.return_value(self.builder, retval)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -441,7 +441,7 @@ class PyLower(BaseLower):
 
     def return_error_occurred(self):
         self.cleanup()
-        self.context.call_conv.return_exc(self.builder)
+        self.call_conv.return_exc(self.builder)
 
     def _getvar(self, name, ltype=None):
         if name not in self.varmap:

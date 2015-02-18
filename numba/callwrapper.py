@@ -76,13 +76,12 @@ class _GilManager(object):
 
 
 class PyCallWrapper(object):
-    def __init__(self, context, module, func, fndesc, exceptions,
+    def __init__(self, context, module, func, fndesc, call_helper,
                  release_gil):
         self.context = context
         self.module = module
         self.func = func
         self.fndesc = fndesc
-        self.exceptions = exceptions
         self.release_gil = release_gil
 
     def build(self):
@@ -148,19 +147,19 @@ class PyCallWrapper(object):
         cleanup_manager.emit_cleanup()
 
         # Determine return status
-        with cgutils.if_likely(builder, status.ok):
-            with cgutils.ifthen(builder, status.none):
+        with cgutils.if_likely(builder, status.is_ok):
+            # Ok => return boxed Python value
+            with cgutils.ifthen(builder, status.is_none):
                 api.return_none()
 
             retval = api.from_native_return(res, self.fndesc.restype)
             builder.ret(retval)
 
-        with cgutils.ifthen(builder, builder.not_(status.exc)):
-            # !ok && !exc
-            # User exception raised
+        with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
+            # Native or user exception raised
             self.make_exception_switch(api, builder, status)
 
-        # !ok && exc
+        # Error out
         builder.ret(api.get_null_object())
 
     def make_exception_switch(self, api, builder, status):
@@ -168,16 +167,15 @@ class PyCallWrapper(object):
         Build a switch to check which exception class was raised.
         """
         code = status.code
-        is_userexc = builder.icmp_signed(
-            '>=', code, Constant.int(code.type, errcode.ERROR_COUNT))
-        with cgutils.ifthen(builder, is_userexc):
+        # Handle user exceptions
+        with cgutils.ifthen(builder, status.is_user_exc):
             exc = api.unserialize(status.excinfoptr)
             with cgutils.if_likely(builder,
                                    cgutils.is_not_null(builder, exc)):
                 api.raise_object(exc)  # steals ref
             builder.ret(api.get_null_object())
 
-        # Handle native error
+        # Handle native errors
         elseblk = cgutils.append_basic_block(builder, ".invalid.native.error")
         swt = builder.switch(code, elseblk, n=len(errcode.error_names))
 

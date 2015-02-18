@@ -47,7 +47,7 @@ CR_FIELDS = ["typing_context",
              "fndesc",
              "interpmode",
              "library",
-             "exception_map",
+             "call_helper",
              "environment"]
 
 
@@ -59,7 +59,7 @@ DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
 
 _LowerResult = namedtuple("_LowerResult", [
     "fndesc",
-    "exception_map",
+    "call_helper",
     "cfunc",
     "env",
 ])
@@ -452,7 +452,7 @@ class Pipeline(object):
                             typing_error=self.status.fail_reason,
                             type_annotation=self.type_annotation,
                             library=self.library,
-                            exception_map=lowered.exception_map,
+                            call_helper=lowered.call_helper,
                             signature=signature,
                             objectmode=objectmode,
                             interpmode=False,
@@ -685,18 +685,18 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
     if not flags.no_cpython_wrapper:
         lower.create_cpython_wrapper(flags.release_gil)
     env = lower.env
-    exception_map = lower.exceptions
+    call_helper = lower.call_helper
     del lower
 
     if flags.no_compile:
-        return _LowerResult(fndesc, exception_map, cfunc=None, env=None)
+        return _LowerResult(fndesc, call_helper, cfunc=None, env=None)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         # Insert native function for use by other jitted-functions.
         # We also register its library to allow for inlining.
         targetctx.insert_user_function(cfunc, fndesc, [library])
-        return _LowerResult(fndesc, exception_map, cfunc=cfunc, env=None)
+        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=None)
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
@@ -706,15 +706,15 @@ def py_lowering_stage(targetctx, library, interp, flags):
     if not flags.no_cpython_wrapper:
         lower.create_cpython_wrapper()
     env = lower.env
-    exception_map = lower.exceptions
+    call_helper = lower.call_helper
     del lower
 
     if flags.no_compile:
-        return _LowerResult(fndesc, exception_map, cfunc=None, env=env)
+        return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
-        return _LowerResult(fndesc, exception_map, cfunc, env)
+        return _LowerResult(fndesc, call_helper, cfunc, env)
 
 
 def ir_optimize_for_py_stage(interp):

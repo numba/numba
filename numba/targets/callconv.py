@@ -14,7 +14,20 @@ from .base import PYOBJECT, GENERIC_POINTER
 
 
 Status = namedtuple("Status",
-                    ("code", "ok", "err", "exc", "none", "excinfoptr"))
+                    ("code",
+                     # If the function returned ok (a value or None)
+                     "is_ok",
+                     # If the function returned None
+                     "is_none",
+                     # If the function errored out (== not is_ok)
+                     "is_error",
+                     # If the function errored with an already set exception
+                     "is_python_exc",
+                     # If the function errored with a user exception
+                     "is_user_exc",
+                     # The pointer to the exception info structure (for user exceptions)
+                     "excinfoptr",
+                     ))
 
 int32_t = ir.IntType(32)
 errcode_t = int32_t
@@ -80,11 +93,35 @@ class BaseCallConv(object):
             argty = self.context.get_argument_type(ty)
             return Type.pointer(argty)
 
+    def init_call_helper(self, builder):
+        """
+        Initialize and return a call helper object for the given builder.
+        """
+        ch = self._make_call_helper(builder)
+        builder.__call_helper = ch
+        return ch
+
+    def _get_call_helper(self, builder):
+        return builder.__call_helper
+
 
 class MinimalCallConv(BaseCallConv):
     """
     A minimal calling convention, suitable for e.g. GPU targets.
+    The implemented function signature is:
+
+        retcode_t (<Python return type>*, ... <Python arguments>)
+
+    The return code will be one of the RETCODE_* constants, one
+    of the errcode.ERROR_* constants, or a function-specific user
+    exception id (>= RETCODE_USEREXC).
+
+    Caller is responsible for allocating a slot for the return value
+    (passed as a pointer in the first argument).
     """
+
+    def _make_call_helper(self, builder):
+        return _MinimalCallHelper()
 
     def return_value(self, builder, retval):
         fn = cgutils.get_function(builder)
@@ -94,10 +131,10 @@ class MinimalCallConv(BaseCallConv):
         builder.store(retval, retptr)
         builder.ret(RETCODE_OK)
 
-    def return_user_exc(self, builder, exceptions, exc, exc_args=None):
+    def return_user_exc(self, builder, exc, exc_args=None):
         assert (exc is None or issubclass(exc, BaseException)), exc
-        exc_id = len(exceptions) + errcode.ERROR_COUNT
-        exceptions[exc_id] = exc, exc_args
+        call_helper = self._get_call_helper(builder)
+        exc_id = call_helper._add_exception(exc, exc_args)
         self._return_errcode_raw(builder, _const_int(exc_id))
 
     def return_errcode_propagate(self, builder, status):
@@ -112,30 +149,23 @@ class MinimalCallConv(BaseCallConv):
         """
         norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
         none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
-        exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
         ok = builder.or_(norm, none)
         err = builder.not_(ok)
+        exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
+        is_user_exc = builder.icmp_signed('>=', code, RETCODE_USEREXC)
 
-        status = Status(code=code, ok=ok, err=err, exc=exc, none=none,
+        status = Status(code=code,
+                        is_ok=ok,
+                        is_error=err,
+                        is_python_exc=exc,
+                        is_none=none,
+                        is_user_exc=is_user_exc,
                         excinfoptr=None)
         return status
 
     def get_function_type(self, restype, argtypes):
         """
         Get the implemented Function type for *restype* and *argtypes*.
-        Some parameters can be added or shuffled around.
-        This is kept in sync with call_function() and get_arguments().
-
-        Calling Convention
-        ------------------
-        Returns: -2 for return none in native function;
-                 -1 for failure with python exception set;
-                  0 for success;
-                 >0 for user error code.
-        Return value is passed by reference as the first argument.
-
-        Actual arguments starts at the 2nd argument position.
-        Caller is responsible to allocate space for return value.
         """
         argtypes = [self.context.get_argument_type(aty) for aty in argtypes]
         resptr = self.get_return_type(restype)
@@ -160,8 +190,7 @@ class MinimalCallConv(BaseCallConv):
 
     def call_function(self, builder, callee, resty, argtys, args, env=None):
         """
-        Call the Numba-compiled *callee*, using the same calling
-        convention as in get_function_type().
+        Call the Numba-compiled *callee*.
         """
         assert env is None
         retty = callee.args[0].type.pointee
@@ -178,15 +207,56 @@ class MinimalCallConv(BaseCallConv):
         return status, out
 
 
+class _MinimalCallHelper(object):
+    """
+    A call helper object for the "minimal" calling convention.
+    User exceptions are represented as integer codes and stored in
+    a mapping for retrieval from the caller.
+    """
+
+    def __init__(self):
+        self.exceptions = {}
+
+    def _add_exception(self, exc, exc_args):
+        exc_id = len(self.exceptions) + errcode.ERROR_COUNT
+        self.exceptions[exc_id] = exc, exc_args
+        return exc_id
+
+    def get_exception(self, exc_id):
+        try:
+            return self.exceptions[exc_id]
+        except KeyError:
+            from numba.pythonapi import NativeError
+            return NativeError, ("unknown error",)
+
+
 excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t])
 excinfo_ptr_t = ir.PointerType(excinfo_t)
 
 
 class CPUCallConv(BaseCallConv):
     """
-    The calling convention for CPU targets, adding an environment argument.
+    The calling convention for CPU targets.
+    The implemented function signature is:
+
+        retcode_t (<Python return type>*, excinfo **, env *, ... <Python arguments>)
+
+    The return code will be one of the RETCODE_* constants or one
+    of the errcode.ERROR_* constants.  If RETCODE_USEREXC, the exception
+    info pointer will be filled with a pointer to a constant struct
+    describing the raised exception.
+
+    Caller is responsible for allocating slots for the return value
+    and the exception info pointer (passed as first and second arguments,
+    respectively).
+
+    The third argument (env *) is a _dynfunc.Environment object, used
+    only for object mode functions.
     """
     _status_ids = itertools.count(1)
+
+    def _make_call_helper(self, builder):
+        return None
 
     def return_value(self, builder, retval):
         fn = cgutils.get_function(builder)
@@ -196,19 +266,16 @@ class CPUCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
-    def return_user_exc(self, builder, exceptions, exc, exc_args=None):
+    def return_user_exc(self, builder, exc, exc_args=None):
         fn = cgutils.get_function(builder)
         pyapi = self.context.get_python_api(builder)
         assert (exc is None or issubclass(exc, BaseException)), exc
-        exc_id = len(exceptions) + errcode.ERROR_COUNT
-        exceptions[exc_id] = exc, exc_args
         # Build excinfo struct
         if exc_args is not None:
             exc = (exc, exc_args)
         struct_gv = pyapi.serialize_object(exc)
-        struct_gv.linkage = 'private'
         builder.store(struct_gv, self._get_excinfo_argument(fn))
-        self._return_errcode_raw(builder, _const_int(exc_id))
+        self._return_errcode_raw(builder, RETCODE_USEREXC)
 
     def return_errcode_propagate(self, builder, status):
         fn = cgutils.get_function(builder)
@@ -227,34 +294,22 @@ class CPUCallConv(BaseCallConv):
         exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
         ok = builder.or_(norm, none)
         err = builder.not_(ok)
-        is_userexc = builder.icmp_signed('>=', code, RETCODE_USEREXC)
-        excinfoptr = builder.select(is_userexc, excinfoptr,
+        is_user_exc = builder.icmp_signed('>=', code, RETCODE_USEREXC)
+        excinfoptr = builder.select(is_user_exc, excinfoptr,
                                     ir.Constant(excinfo_ptr_t, ir.Undefined))
 
-        status = Status(code=code, ok=ok, err=err, exc=exc, none=none,
+        status = Status(code=code,
+                        is_ok=ok,
+                        is_error=err,
+                        is_python_exc=exc,
+                        is_none=none,
+                        is_user_exc=is_user_exc,
                         excinfoptr=excinfoptr)
         return status
 
     def get_function_type(self, restype, argtypes):
         """
         Get the implemented Function type for *restype* and *argtypes*.
-        Some parameters can be added or shuffled around.
-        This is kept in sync with call_function() and get_arguments().
-
-        Calling Convention
-        ------------------
-        (Same return value convention as BaseContext target.)
-        Returns: -2 for return none in native function;
-                 -1 for failure with python exception set;
-                  0 for success;
-                 >0 for user error code.
-        Return value is passed by reference as the first argument.
-
-        The 2nd argument is a _dynfunc.Environment object.
-        It MUST NOT be used if the function is in nopython mode.
-
-        Actual arguments starts at the 3rd argument position.
-        Caller is responsible to allocate space for return value.
         """
         argtypes = [self.context.get_argument_type(aty)
                     for aty in argtypes]
@@ -278,7 +333,6 @@ class CPUCallConv(BaseCallConv):
     def get_arguments(self, func):
         """
         Get the Python-level arguments of LLVM *func*.
-        See get_function_type() for the calling convention.
         """
         return func.args[3:]
 
@@ -296,8 +350,7 @@ class CPUCallConv(BaseCallConv):
 
     def call_function(self, builder, callee, resty, argtys, args, env=None):
         """
-        Call the Numba-compiled *callee*, using the same calling
-        convention as in get_function_type().
+        Call the Numba-compiled *callee*.
         """
         if env is None:
             # This only works with functions that don't use the environment
@@ -320,4 +373,3 @@ class CPUCallConv(BaseCallConv):
         retval = builder.load(retvaltmp)
         out = self.context.get_returned_value(builder, resty, retval)
         return status, out
-

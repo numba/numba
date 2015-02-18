@@ -109,10 +109,10 @@ class CUDATargetContext(BaseContext):
             builder, func, types.void, argtypes, callargs)
 
         # Check error status
-        with cgutils.if_likely(builder, status.ok):
+        with cgutils.if_likely(builder, status.is_ok):
             builder.ret_void()
 
-        with cgutils.ifthen(builder, builder.not_(status.exc)):
+        with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
             # User exception raised
             old = Constant.null(gv_exc.type.pointee)
 

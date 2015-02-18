@@ -66,7 +66,7 @@ def user_function(func, fndesc, libs):
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
             builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
-        with cgutils.if_unlikely(builder, status.err):
+        with cgutils.if_unlikely(builder, status.is_error):
             context.call_conv.return_errcode_propagate(builder, status)
         return retval
 

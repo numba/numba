@@ -177,6 +177,7 @@ class BaseLower(object):
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
         self.interp = interp
+        self.call_conv = context.call_conv
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -186,13 +187,11 @@ class BaseLower(object):
         self.env = _dynfunc.Environment(
             globals=self.fndesc.lookup_module().__dict__)
 
-        # Mapping of error codes to exception classes or instances
-        self.exceptions = {}
-
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)
+        self.call_helper = self.call_conv.init_call_helper(self.builder)
 
         # Internal states
         self.blkmap = {}
@@ -217,12 +216,11 @@ class BaseLower(object):
         """
 
     def return_exception(self, exc_class, exc_args=None):
-        self.context.call_conv.return_user_exc(self.builder, self.exceptions,
-                                               exc_class, exc_args)
+        self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
 
     def lower(self):
         # Init argument variables
-        fnargs = self.context.call_conv.get_arguments(self.function)
+        fnargs = self.call_conv.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
             at = self.typeof(ak)
             av = self.context.get_argument_value(self.builder, at, av)
@@ -266,7 +264,7 @@ class BaseLower(object):
         Create CPython wrapper.
         """
         self.context.create_cpython_wrapper(self.library, self.fndesc,
-                                            self.exceptions,
+                                            self.call_helper,
                                             release_gil=release_gil)
 
     def init_argument(self, arg):
@@ -316,12 +314,12 @@ class Lower(BaseLower):
             ty = self.fndesc.restype
             if isinstance(ty, types.Optional):
                 # If returning an optional type
-                self.context.call_conv.return_optional_value(self.builder, ty, oty, val)
+                self.call_conv.return_optional_value(self.builder, ty, oty, val)
                 return
             if ty != oty:
                 val = self.context.cast(self.builder, val, oty, ty)
             retval = self.context.get_return_value(self.builder, ty, val)
-            self.context.call_conv.return_value(self.builder, retval)
+            self.call_conv.return_value(self.builder, retval)
 
         elif isinstance(inst, ir.SetItem):
             target = self.loadvar(inst.target.name)
