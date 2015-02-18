@@ -75,9 +75,6 @@ class StructProxy(object):
             if value is not None:
                 self._builder.store(value, self._value)
 
-
-
-
     def _get_ptr_by_index(self, index):
         geped = self._builder.gep(self._value,
                                   [Constant.int(Type.int(), 0),
@@ -219,10 +216,13 @@ class Structure(object):
         Store the LLVM *value* into the field at *index*.
         """
         ptr = self._get_ptr_by_index(index)
-        value = self._context.get_value_as_data(self._builder,
-                                                self._typemap[index],
-                                                value)
+        # value = self._context.get_value_as_data(self._builder,
+        #                                         self._typemap[index],
+        #                                         value)
         if ptr.type.pointee != value.type:
+            print(self._typemap[index])
+            print(value)
+            print(self._value)
             raise AssertionError("Type mismatch: __setitem__(%d, ...) "
                                  "expected %r but got %r"
                                  % (

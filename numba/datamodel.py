@@ -198,6 +198,11 @@ def handle_unicode_char_seq(dmm, ty):
     return UnicodeCharSeq(dmm, ty)
 
 
+@register_default(types.CharSeq)
+def handle_char_seq(dmm, ty):
+    return CharSeq(dmm, ty)
+
+
 @register_default(types.NumpyFlatType)
 def handle_numpy_flat_type(dmm, ty):
     if ty.array_type.layout == 'C':
@@ -215,10 +220,26 @@ def handle_unitupleiter(dmm, ty):
 def handle_slice3type(dmm, ty):
     return Slice3(dmm, ty)
 
+
 @register_default(types.NPDatetime)
 @register_default(types.NPTimedelta)
 def handle_np_datetime(dmm, ty):
     return NPDatetimeModel(dmm, ty)
+
+
+@register_default(types.ArrayIterator)
+def handle_arrayiterator(dmm, ty):
+    return ArrayIterator(dmm, ty)
+
+
+@register_default(types.EnumerateType)
+def handle_enumeratetype(dmm, ty):
+    return EnumerateType(dmm, ty)
+
+
+@register_default(types.RangeIteratorType)
+def handle_rangeIteratorType(dmm, ty):
+    return RangeIteratorType(dmm, ty)
 
 
 # ============== Define Data Models ==============
@@ -701,6 +722,29 @@ class UnicodeCharSeq(DataModel):
         return self._be_type
 
 
+class CharSeq(DataModel):
+    def __init__(self, dmm, fe_type):
+        super(CharSeq, self).__init__(dmm)
+        self.fe_type = fe_type
+        charty = ir.IntType(8)
+        self._be_type = ir.ArrayType(charty, fe_type.count)
+
+    def _compared_fields(self):
+        return (self.fe_type,)
+
+    def get_value_type(self):
+        return self._be_type
+
+    def get_data_type(self):
+        return self._be_type
+
+    def as_data(self, builder, value):
+        return value
+
+    def from_data(self, builder, value):
+        return value
+
+
 class CConitugousFlatIter(StructModel):
     def __init__(self, dmm, fe_type):
         assert fe_type.array_type.layout == 'C'
@@ -737,8 +781,8 @@ class UniTupleIter(StructModel):
 class Slice3(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('start', types.intp),
-                   ('stop',  types.intp),
-                   ('step',  types.intp)]
+                   ('stop', types.intp),
+                   ('step', types.intp)]
         super(Slice3, self).__init__(dmm, fe_type, members)
 
 
@@ -750,3 +794,31 @@ class NPDatetimeModel(PrimitiveModel):
 
     def _compared_fields(self):
         return (self.be_type,)
+
+
+class ArrayIterator(StructModel):
+    def __init__(self, dmm, fe_type):
+        # We use an unsigned index to avoid the cost of negative index tests.
+        members = [('index', types.CPointer(types.uintp)),
+                   ('array', fe_type.array_type)]
+        super(ArrayIterator, self).__init__(dmm, fe_type, members)
+
+
+class EnumerateType(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [('count', types.CPointer(types.intp)),
+                   ('iter', fe_type.source_type)]
+
+        super(EnumerateType, self).__init__(dmm, fe_type, members)
+
+
+class RangeIteratorType(StructModel):
+    def __init__(self, dmm, fe_type):
+        int_type = fe_type.yield_type
+        members = [('iter', types.CPointer(int_type)),
+                   ('stop', int_type),
+                   ('step', int_type),
+                   ('count', types.CPointer(int_type))]
+        super(RangeIteratorType, self).__init__(dmm, fe_type, members)
+
+

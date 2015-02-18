@@ -574,12 +574,6 @@ class BaseContext(object):
         Argument representation to local value representation
         """
         return self.data_model_manager[ty].from_argument(builder, val)
-        raise NotImplementedError
-        if ty == types.boolean:
-            return builder.trunc(val, self.get_value_type(ty))
-        elif cgutils.is_struct_ptr(val.type):
-            return builder.load(val)
-        return val
 
     def get_returned_value(self, builder, ty, val):
         """
@@ -670,8 +664,7 @@ class BaseContext(object):
         """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
-        return self.data_model_manager[ty.first_type].from_data(builder,
-            pair.first)
+        return pair.first
 
     def pair_second(self, builder, val, ty):
         """
@@ -679,9 +672,7 @@ class BaseContext(object):
         """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
-        return self.data_model_manager[ty.second_type].from_data(builder,
-            pair.second)
-
+        return pair.second
 
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
@@ -947,7 +938,7 @@ class BaseContext(object):
         """
         Get the LLVM struct type for the given Structure class *struct*.
         """
-        fields = [self.get_struct_member_type(v) for _, v in struct._fields]
+        fields = [self.get_value_type(v) for _, v in struct._fields]
         return Type.struct(fields)
 
     def get_dummy_value(self):
