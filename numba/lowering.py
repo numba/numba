@@ -7,7 +7,7 @@ from types import ModuleType
 from llvmlite.llvmpy.core import Type, Builder
 
 
-from numba import (_dynfunc, errcode, ir, types, cgutils, utils, config,
+from numba import (_dynfunc, ir, types, cgutils, utils, config,
                    cffi_support, typing, six)
 
 

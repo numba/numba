@@ -67,7 +67,7 @@ def user_function(func, fndesc, libs):
         status, retval = context.call_conv.call_function(
             builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
         with cgutils.if_unlikely(builder, status.is_error):
-            context.call_conv.return_errcode_propagate(builder, status)
+            context.call_conv.return_status_propagate(builder, status)
         return retval
 
     imp.signature = typing.signature(fndesc.restype, *fndesc.argtypes)

@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from llvmlite.llvmpy.core import Type, Builder, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils, errcode
+from numba import types, cgutils
 
 
 class _ArgManager(object):
@@ -175,22 +175,6 @@ class PyCallWrapper(object):
                 api.raise_object(exc)  # steals ref
             builder.ret(api.get_null_object())
 
-        # Handle native errors
-        elseblk = cgutils.append_basic_block(builder, ".invalid.native.error")
-        swt = builder.switch(code, elseblk, n=len(errcode.error_names))
-
-        msgfmt = "{error} in native function: {fname}"
-        for errnum, errname in errcode.error_names.items():
-            bb = cgutils.append_basic_block(builder,
-                                            ".native.error.%d" % errnum)
-            swt.add_case(Constant.int(code.type, errnum), bb)
-            builder.position_at_end(bb)
-
-            api.raise_native_error(msgfmt.format(error=errname,
-                                                 fname=self.fndesc.mangled_name))
-            builder.ret(api.get_null_object())
-
-        builder.position_at_end(elseblk)
         msg = "unknown error in native function: %s" % self.fndesc.mangled_name
         api.raise_native_error(msg)
 

@@ -9,7 +9,7 @@ import llvmlite.llvmpy.core as lc
 from .imputils import (builtin, builtin_attr, implement, impl_attribute,
                        iternext_impl, struct_factory)
 from . import optional
-from .. import typing, types, cgutils, utils, errcode, intrinsics
+from .. import typing, types, cgutils, utils, intrinsics
 
 #-------------------------------------------------------------------------------
 
@@ -1192,7 +1192,8 @@ def getitem_unituple(context, builder, sig, args):
     switch = builder.switch(idx, bbelse, n=tupty.count)
 
     with cgutils.goto_block(builder, bbelse):
-        context.call_conv.return_errcode(builder, errcode.OUT_OF_BOUND_ERROR)
+        context.call_conv.return_user_exc(builder, IndexError,
+                                          ("tuple index out of range",))
 
     lrtty = context.get_value_type(tupty.dtype)
     with cgutils.goto_block(builder, bbend):

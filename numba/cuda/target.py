@@ -8,7 +8,7 @@ import llvmlite.binding as ll
 from numba import typing, types, cgutils
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
-from numba.targets.callconv import MinimalCallConv, RETCODE_OK
+from numba.targets.callconv import MinimalCallConv
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
 

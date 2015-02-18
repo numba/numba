@@ -64,8 +64,9 @@ class TestRaising(TestCase):
 
         self.assertEqual(cfunc(a, 0), pyfunc(a, 0))
 
-        with self.assertRaises(NativeError):
+        with self.assertRaises(IndexError) as cm:
             cfunc(a, 2)
+        self.assertEqual(str(cm.exception), "tuple index out of range")
 
     def check_raise_class(self, flags):
         pyfunc = raise_class(MyError)

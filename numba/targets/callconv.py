@@ -9,7 +9,7 @@ from llvmlite import ir as ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant
 
-from numba import cgutils, errcode, types
+from numba import cgutils, types
 from .base import PYOBJECT, GENERIC_POINTER
 
 
@@ -38,7 +38,12 @@ def _const_int(code):
 RETCODE_OK = _const_int(0)
 RETCODE_EXC = _const_int(-1)
 RETCODE_NONE = _const_int(-2)
-RETCODE_USEREXC = _const_int(errcode.ERROR_COUNT)
+
+FIRST_USEREXC = 1
+
+RETCODE_USEREXC = _const_int(FIRST_USEREXC)
+
+
 
 
 class BaseCallConv(object):
@@ -72,10 +77,6 @@ class BaseCallConv(object):
 
     def return_native_none(self, builder):
         self._return_errcode_raw(builder, RETCODE_NONE)
-
-    def return_errcode(self, builder, code):
-        assert code > 0 and code < errcode.ERROR_COUNT
-        self._return_errcode_raw(builder, _const_int(code))
 
     def return_exc(self, builder):
         self._return_errcode_raw(builder, RETCODE_EXC)
@@ -112,9 +113,8 @@ class MinimalCallConv(BaseCallConv):
 
         retcode_t (<Python return type>*, ... <Python arguments>)
 
-    The return code will be one of the RETCODE_* constants, one
-    of the errcode.ERROR_* constants, or a function-specific user
-    exception id (>= RETCODE_USEREXC).
+    The return code will be one of the RETCODE_* constants or a
+    function-specific user exception id (>= RETCODE_USEREXC).
 
     Caller is responsible for allocating a slot for the return value
     (passed as a pointer in the first argument).
@@ -129,7 +129,7 @@ class MinimalCallConv(BaseCallConv):
         assert retval.type == retptr.type.pointee, \
             (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
-        builder.ret(RETCODE_OK)
+        self._return_errcode_raw(builder, RETCODE_OK)
 
     def return_user_exc(self, builder, exc, exc_args=None):
         assert (exc is None or issubclass(exc, BaseException)), exc
@@ -138,10 +138,12 @@ class MinimalCallConv(BaseCallConv):
         exc_id = call_helper._add_exception(exc, exc_args)
         self._return_errcode_raw(builder, _const_int(exc_id))
 
-    def return_errcode_propagate(self, builder, status):
+    def return_status_propagate(self, builder, status):
         self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):
+        if isinstance(code, int):
+            code = _const_int(code)
         builder.ret(code)
 
     def _get_return_status(self, builder, code):
@@ -219,7 +221,7 @@ class _MinimalCallHelper(object):
         self.exceptions = {}
 
     def _add_exception(self, exc, exc_args):
-        exc_id = len(self.exceptions) + errcode.ERROR_COUNT
+        exc_id = len(self.exceptions) + FIRST_USEREXC
         self.exceptions[exc_id] = exc, exc_args
         return exc_id
 
@@ -242,10 +244,9 @@ class CPUCallConv(BaseCallConv):
 
         retcode_t (<Python return type>*, excinfo **, env *, ... <Python arguments>)
 
-    The return code will be one of the RETCODE_* constants or one
-    of the errcode.ERROR_* constants.  If RETCODE_USEREXC, the exception
-    info pointer will be filled with a pointer to a constant struct
-    describing the raised exception.
+    The return code will be one of the RETCODE_* constants.
+    If RETCODE_USEREXC, the exception info pointer will be filled with
+    a pointer to a constant struct describing the raised exception.
 
     Caller is responsible for allocating slots for the return value
     and the exception info pointer (passed as first and second arguments,
@@ -268,9 +269,10 @@ class CPUCallConv(BaseCallConv):
         self._return_errcode_raw(builder, RETCODE_OK)
 
     def return_user_exc(self, builder, exc, exc_args=None):
+        assert (exc is None or issubclass(exc, BaseException)), exc
+        assert (exc_args is None or isinstance(exc_args, tuple)), exc_args
         fn = cgutils.get_function(builder)
         pyapi = self.context.get_python_api(builder)
-        assert (exc is None or issubclass(exc, BaseException)), exc
         # Build excinfo struct
         if exc_args is not None:
             exc = (exc, exc_args)
@@ -278,7 +280,7 @@ class CPUCallConv(BaseCallConv):
         builder.store(struct_gv, self._get_excinfo_argument(fn))
         self._return_errcode_raw(builder, RETCODE_USEREXC)
 
-    def return_errcode_propagate(self, builder, status):
+    def return_status_propagate(self, builder, status):
         fn = cgutils.get_function(builder)
         builder.store(status.excinfoptr, self._get_excinfo_argument(fn))
         self._return_errcode_raw(builder, status.code)

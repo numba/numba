@@ -10,7 +10,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant
 
 import numba
-from numba import types, utils, cgutils, typing, numpy_support, errcode
+from numba import types, utils, cgutils, typing, numpy_support
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
@@ -729,7 +729,8 @@ class BaseContext(object):
             optval = optty(self, builder, value=val)
             validbit = cgutils.as_bool_bit(builder, optval.valid)
             with cgutils.if_unlikely(builder, builder.not_(validbit)):
-                self.call_conv.return_errcode(builder, errcode.NONE_TYPE_ERROR)
+                msg = "expected %s, got None" % (fromty.type,)
+                self.call_conv.return_user_exc(builder, TypeError, (msg,))
 
             return optval.data
 

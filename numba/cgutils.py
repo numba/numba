@@ -11,7 +11,7 @@ from llvmlite import ir
 from llvmlite.llvmpy.core import Constant, Type
 import llvmlite.llvmpy.core as lc
 
-from . import errcode, utils
+from . import utils
 
 
 true_bit = Constant.int(Type.int(1), 1)
@@ -566,18 +566,15 @@ def is_scalar_neg(builder, value):
     return isneg
 
 
-def guard_null(context, builder, value, exc_tuple=None):
+def guard_null(context, builder, value, exc_tuple):
     """
     Guard against *value* being null or zero.
     *exc_tuple* should be a (exception type, arguments...) tuple.
     """
     with if_unlikely(builder, is_scalar_zero(builder, value)):
-        if exc_tuple is not None:
-            exc = exc_tuple[0]
-            exc_args = exc_tuple[1:] or None
-            context.call_conv.return_user_exc(builder, exc, exc_args)
-        else:
-            context.call_conv.return_errcode(builder, errcode.ASSERTION_ERROR)
+        exc = exc_tuple[0]
+        exc_args = exc_tuple[1:] or None
+        context.call_conv.return_user_exc(builder, exc, exc_args)
 
 
 guard_zero = guard_null

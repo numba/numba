@@ -17,6 +17,7 @@ def usecase(obs, nPoints):
 
 
 class TestStoreSlice(unittest.TestCase):
+
     def test_usecase(self):
         n = 10
         obs_got = np.zeros(n)
@@ -58,8 +59,9 @@ class TestStoreSlice(unittest.TestCase):
         #test if step = 0
         a = np.arange(n, dtype=np.int64)
         b = np.arange(n, dtype=np.int64)
-        with self.assertRaises(NativeError):
+        with self.assertRaises(ValueError) as cm:
             cres.entry_point(a, 3, 6, 0, 88)
+        self.assertEqual(str(cm.exception), "slice step cannot be zero")
    
 
 if __name__ == '__main__':

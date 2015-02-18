@@ -11,7 +11,6 @@ import llvmlite.llvmpy.core as lc
 import numba.ctypes_support as ctypes
 import numpy
 from llvmlite.llvmpy.core import Constant
-from numba import errcode
 from numba import types, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
@@ -357,7 +356,8 @@ def setitem_array1d_slice(context, builder, sig, args):
     b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
     # bail if step is 0
     with cgutils.ifthen(builder, b_step_eq_zero):
-        context.call_conv.return_errcode(builder, errcode.ASSERTION_ERROR)
+        context.call_conv.return_user_exc(builder, ValueError,
+                                          ("slice step cannot be zero",))
 
     # adjust for negative indices for start
     start = cgutils.alloca_once_value(builder, slicestruct.start)

@@ -188,21 +188,20 @@ class TestFlowControl(TestCase):
             try:
                 pyres = pyfunc(x, y)
             except Exception as e:
-                print("note: ", pyfunc, (x, y), "raises exception: %s" % e)
                 pyerr = e
 
             try:
                 cres = cfunc(x, y)
             except Exception as e:
-                print("note: ", cfunc, (x, y), "raises exception: %s" % e)
                 if pyerr is None:
                     raise
                 cerr = e
+                self.assertEqual(type(pyerr), type(cerr))
             else:
                 if pyerr is not None:
                     self.fail("Invalid for pure-python but numba works\n" +
                               pyerr)
-            self.assertEqual(pyres, cres)
+                self.assertEqual(pyres, cres)
 
     def test_for_loop1(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase1, [-10, 0, 10], [0], flags=flags)
@@ -832,5 +831,4 @@ class TestCFGraph(TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
-
+    unittest.main()
