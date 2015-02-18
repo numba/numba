@@ -796,7 +796,6 @@ class PythonAPI(object):
             def dtor():
                 self.release_record_buffer(buf_as_voidptr)
 
-
         else:
             val = self.to_native_value(obj, typ)
 
@@ -877,18 +876,19 @@ class PythonAPI(object):
 
         elif isinstance(typ, types.Optional):
             isnone = self.builder.icmp(lc.ICMP_EQ, obj, self.borrow_none())
+            noneval = self.context.make_optional_none(self.builder, typ.type)
+            retptr = cgutils.alloca_once(self.builder, noneval.type)
             with cgutils.ifelse(self.builder, isnone) as (then, orelse):
                 with then:
-                    noneval = self.context.make_optional_none(self.builder, typ.type)
-                    ret = cgutils.alloca_once(self.builder, noneval.type)
-                    self.builder.store(noneval, ret)
+                    self.builder.store(noneval, retptr)
 
                 with orelse:
                     val = self.to_native_value(obj, typ.type)
                     just = self.context.make_optional_value(self.builder,
                                                             typ.type, val)
-                    self.builder.store(just, ret)
-            return ret
+                    self.builder.store(just, retptr)
+
+            return self.builder.load(retptr)
 
         raise NotImplementedError(typ)
 
