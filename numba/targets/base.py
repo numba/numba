@@ -7,10 +7,11 @@ import numpy
 
 from llvmlite import ir as llvmir
 import llvmlite.llvmpy.core as lc
-from llvmlite.llvmpy.core import Type, Constant
+from llvmlite.llvmpy.core import Type, Constant, LLVMException
+import llvmlite.binding as ll
 
 import numba
-from numba import types, utils, cgutils, typing, numpy_support
+from numba import types, utils, cgutils, typing, numpy_support, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
@@ -98,6 +99,26 @@ class Overloads(object):
         self.versions.append(impl)
 
 
+@utils.runonce
+def _load_global_helpers():
+    """
+    Execute once to install special symbols into the LLVM symbol table.
+    """
+    ll.add_symbol("Py_None", id(None))
+
+    # Add C helper functions
+    c_helpers = _helperlib.c_helpers
+    for py_name in c_helpers:
+        c_name = "numba_" + py_name
+        c_address = c_helpers[py_name]
+        ll.add_symbol(c_name, c_address)
+
+    # Add all built-in exception classes
+    for obj in utils.builtins.__dict__.values():
+        if isinstance(obj, type) and issubclass(obj, BaseException):
+            ll.add_symbol("PyExc_%s" % (obj.__name__), id(obj))
+
+
 class BaseContext(object):
     """
 
@@ -121,6 +142,7 @@ class BaseContext(object):
     implement_pow_as_math_call = False
 
     def __init__(self, typing_context):
+        _load_global_helpers()
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
 
@@ -453,6 +475,10 @@ class BaseContext(object):
             return _wrap_impl(imp, self, sig)
 
     def get_function(self, fn, sig):
+        """
+        Return the implementation of function *fn* for signature *sig*.
+        The return value is a callable with the signature (builder, args).
+        """
         if isinstance(fn, types.Function):
             key = fn.template.key
 
@@ -770,6 +796,18 @@ class BaseContext(object):
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
 
+    def get_c_value(self, builder, typ, name):
+        """
+        Get a global value through its C-accessible *name*, with the given
+        LLVM type.
+        """
+        module = builder.function.module
+        try:
+            gv = module.get_global_variable_named(name)
+        except LLVMException:
+            gv = module.add_global_variable(typ, name)
+        return gv
+
     def call_external_function(self, builder, callee, argtys, args):
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
@@ -848,6 +886,10 @@ class BaseContext(object):
         """Invoke compiler to implement a function for a nopython function
         """
         cache_key = (impl.__code__, sig)
+        if impl.__closure__:
+            # XXX This obviously won't work if a cell's value is
+            # unhashable.
+            cache_key += tuple(c.cell_contents for c in impl.__closure__)
         fndesc = self.cached_internal_func.get(cache_key)
 
         if fndesc is None:
@@ -876,6 +918,8 @@ class BaseContext(object):
         status, res = self.call_conv.call_function(builder, fn, sig.return_type,
                                                    sig.args, args)
 
+        with cgutils.if_unlikely(builder, status.is_error):
+            self.call_conv.return_status_propagate(builder, status)
         return res
 
     def get_executable(self, func, fndesc):

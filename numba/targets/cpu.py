@@ -13,7 +13,7 @@ from numba import utils, cgutils, types
 from numba.utils import cached_property
 from numba.targets import (
     callconv, codegen, externals, intrinsics, cmathimpl, mathimpl,
-    npyimpl, operatorimpl, printimpl)
+    npyimpl, operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
 
 
@@ -52,6 +52,7 @@ class CPUContext(BaseContext):
         self.insert_func_defn(npyimpl.registry.functions)
         self.insert_func_defn(operatorimpl.registry.functions)
         self.insert_func_defn(printimpl.registry.functions)
+        self.insert_func_defn(randomimpl.registry.functions)
 
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 

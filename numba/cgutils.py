@@ -645,7 +645,8 @@ def gep(builder, ptr, *inds):
     idx = []
     for i in inds:
         if isinstance(i, int):
-            ind = Constant.int(Type.int(64), i)
+            # NOTE: llvm only accepts int32 inside structs, not int64
+            ind = Constant.int(Type.int(32), i)
         else:
             ind = i
         idx.append(ind)

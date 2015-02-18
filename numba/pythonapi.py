@@ -11,29 +11,6 @@ from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
 from numba import types, utils, cgutils, _helperlib, assume
 
-_PyNone = ctypes.c_ssize_t(id(None))
-
-
-@utils.runonce
-def fix_python_api():
-    """
-    Execute once to install special symbols into the LLVM symbol table
-    """
-
-    ll.add_symbol("Py_None", ctypes.addressof(_PyNone))
-
-    # Add C helper functions
-    c_helpers = _helperlib.c_helpers
-    for py_name in c_helpers:
-        c_name = "numba_" + py_name
-        c_address = c_helpers[py_name]
-        ll.add_symbol(c_name, c_address)
-
-    # Add all built-in exception classes
-    for obj in utils.builtins.__dict__.values():
-        if isinstance(obj, type) and issubclass(obj, BaseException):
-            ll.add_symbol("PyExc_%s" % (obj.__name__), id(obj))
-
 
 class PythonAPI(object):
     """
@@ -45,7 +22,6 @@ class PythonAPI(object):
         """
         Note: Maybe called multiple times when lowering a function
         """
-        fix_python_api()
         self.context = context
         self.builder = builder
 
@@ -148,14 +124,13 @@ class PythonAPI(object):
 
     def get_c_object(self, name):
         """
-        Get a Python object through its C-accessible *name*.
-        (e.g. "PyExc_ValueError").
+        Get a Python object through its C-accessible *name*
+        (e.g. "PyExc_ValueError").  The underlying variable must be
+        a `PyObject *`, and the value of that pointer is returned.
         """
-        try:
-            gv = self.module.get_global_variable_named(name)
-        except LLVMException:
-            gv = self.module.add_global_variable(self.pyobj.pointee, name)
-        return gv
+        # A LLVM global variable is implicitly a pointer to the declared
+        # type, so fix up by using pyobj.pointee.
+        return self.context.get_c_value(self.builder, self.pyobj.pointee, name)
 
     def raise_missing_global_error(self, name):
         msg = "global name '%s' is not defined" % name
@@ -709,12 +684,12 @@ class PythonAPI(object):
         return self.builder.call(fn, [obj])
 
     def make_none(self):
-        obj = self._get_object("Py_None")
+        obj = self.get_c_object("Py_None")
         self.incref(obj)
         return obj
 
     def borrow_none(self):
-        obj = self._get_object("Py_None")
+        obj = self.get_c_object("Py_None")
         return obj
 
     def sys_write_stdout(self, fmt, *args):
@@ -731,13 +706,6 @@ class PythonAPI(object):
         return self.builder.call(fn, (obj,))
 
     # ------ utils -----
-
-    def _get_object(self, name):
-        try:
-            gv = self.module.get_global_variable_named(name)
-        except LLVMException:
-            gv = self.module.add_global_variable(self.pyobj, name)
-        return self.builder.load(gv)
 
     def _get_function(self, fnty, name):
         return self.module.get_or_insert_function(fnty, name=name)

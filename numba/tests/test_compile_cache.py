@@ -21,6 +21,11 @@ class TestCompileCache(unittest.TestCase):
         def times3(i):
             return i*3
 
+        def make_closure(x, y):
+            def f(z):
+                return y + z
+            return f
+
         i32 = lc.Type.int(32)
         llvm_fnty = lc.Type.function(i32, [i32])
         module = lc.Module.new("test_module")
@@ -62,6 +67,18 @@ class TestCompileCache(unittest.TestCase):
         # reuse an entry from the cache in error
         context.compile_internal(builder2, times3, sig2, function2.args)
         self.assertEqual(3, len(context.cached_internal_func))
+
+        # Closures with distinct cell contents must each be compiled.
+        clo11 = make_closure(1, 1)
+        clo12 = make_closure(1, 2)
+        clo22 = make_closure(2, 2)
+        res1 = context.compile_internal(builder, clo11, sig, function.args)
+        self.assertEqual(4, len(context.cached_internal_func))
+        res2 = context.compile_internal(builder, clo12, sig, function.args)
+        self.assertEqual(5, len(context.cached_internal_func))
+        # Same cell contents as above (first parameter isn't captured)
+        res3 = context.compile_internal(builder, clo22, sig, function.args)
+        self.assertEqual(5, len(context.cached_internal_func))
 
 
 if __name__ == '__main__':

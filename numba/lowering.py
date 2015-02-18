@@ -54,13 +54,13 @@ class FunctionDescriptor(object):
         # Argument types
         self.argtypes = argtypes or [self.typemap[a] for a in args]
         mangler = default_mangler if mangler is None else mangler
-        # XXX The mangled name should really be unique but this formula
-        # doesn't guarantee it entirely.
+        # The mangled name *must* be unique, else the wrong function can
+        # be chosen at link time.
         if self.modname:
-            self.mangled_name = mangler('%s.%s' % (self.modname, self.qualname),
+            self.mangled_name = mangler('%s.%s' % (self.modname, self.unique_name),
                                         self.argtypes)
         else:
-            self.mangled_name = mangler(self.qualname, self.argtypes)
+            self.mangled_name = mangler(self.unique_name, self.argtypes)
         self.inline = inline
 
     def lookup_module(self):
@@ -102,15 +102,13 @@ class FunctionDescriptor(object):
         kws = ()        # TODO
 
         if modname is None:
-            # For dynamically generated functions (e.g. compile()),
-            # add the function id to the name to create a unique name.
-            unique_name = "%s$%d" % (qualname, id(func))
+            # Dynamically generated function.
             modname = _dynamic_modname
-        else:
-            # For a top-level function or closure, make sure to disambiguate
-            # the function name.
-            # TODO avoid unnecessary recompilation of the same function
-            unique_name = "%s$%d" % (qualname, func.__code__.co_firstlineno)
+
+        # Even the same function definition can be compiled into
+        # several different function objects with distinct closure
+        # variables, so we make sure to disambiguish using the id().
+        unique_name = "%s$%d" % (qualname, id(func))
 
         return qualname, unique_name, modname, doc, args, kws
 
