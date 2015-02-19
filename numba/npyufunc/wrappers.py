@@ -213,7 +213,6 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
         builder.ret_void()
     del builder
 
-
     # Run optimizer
     library.add_ir_module(wrapper_module)
     wrapper = library.get_function(wrapper.name)
@@ -256,7 +255,6 @@ class UArrayArg(object):
 
     def store_direct(self, value, byteoffset):
         ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)
-        assert ptr.type.pointee == value.type, (ptr.type, value.type)
         self.context.pack_value(self.builder, self.fe_type, value, ptr)
 
 
@@ -335,13 +333,10 @@ class _GufuncWrapper(object):
 
         # Loop
         with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
-            args = [a.array_value for a in arrays]
+            args = [a.get_array_at_offset(ind) for a in arrays]
             innercall, error = self.gen_loop_body(builder, func, args)
             # If error, escape
             cgutils.cbranch_or_continue(builder, error, bbreturn)
-
-            for a in arrays:
-                a.next(ind)
 
         builder.branch(bbreturn)
         builder.position_at_end(bbreturn)
@@ -440,6 +435,7 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
     builder.store(cgutils.true_bit, error_pointer)
     ndarray_pointers = []
     ndarray_objects = []
+
     for i, (arr, arrtype) in enumerate(zip(args, signature.args)):
         ptr = cgutils.alloca_once(builder, ll_pyobj)
         ndarray_pointers.append(ptr)
@@ -447,7 +443,7 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
         builder.store(Constant.null(ll_pyobj), ptr)   # initialize to NULL
 
         arycls = context.make_array(arrtype)
-        array = arycls(context, builder, ref=arr)
+        array = arycls(context, builder, value=arr)
 
         zero = Constant.int(ll_int, 0)
 
@@ -509,52 +505,58 @@ class GUArrayArg(object):
         self.syms = syms
         self.as_scalar = not syms
 
+        offset = context.get_constant(types.intp, i)
+
+        core_step_ptr = builder.gep(steps, [offset], name="core.step.ptr")
+        self.core_step = builder.load(core_step_ptr)
+
         if self.as_scalar:
             self.ndim = 1
         else:
             self.ndim = len(syms)
+            self.shape = []
+            self.strides = []
 
-        core_step_ptr = builder.gep(steps,
-                                    [context.get_constant(types.intp, i)],
-                                    name="core.step.ptr")
-
-        self.core_step = builder.load(core_step_ptr)
-        self.strides = []
-        for j in range(self.ndim):
-            step = builder.gep(steps, [context.get_constant(types.intp,
+            for j in range(self.ndim):
+                stepptr = builder.gep(steps,
+                                      [context.get_constant(types.intp,
                                                             step_offset + j)],
-                               name="step.ptr")
+                                      name="step.ptr")
 
-            self.strides.append(builder.load(step))
+                step = builder.load(stepptr)
+                self.strides.append(step)
 
-        self.shape = []
-        for s in syms:
-            self.shape.append(sym_dim[s])
+            for s in syms:
+                self.shape.append(sym_dim[s])
 
-        data = builder.load(builder.gep(args,
-                                        [context.get_constant(types.intp,
-                                                              i)],
-                                        name="data.ptr"),
+        data = builder.load(builder.gep(args, [offset], name="data.ptr"),
                             name="data")
 
         self.data = data
 
+    def get_array_at_offset(self, ind):
+        context = self.context
+        builder = self.builder
+
         arytyp = types.Array(dtype=self.dtype, ndim=self.ndim, layout="A")
         arycls = context.make_array(arytyp)
 
-        self.array = arycls(context, builder)
-        self.array.data = builder.bitcast(self.data, self.array.data.type)
+        array = arycls(context, builder)
+        offseted_data = cgutils.pointer_add(self.builder,
+                                            self.data,
+                                            self.builder.mul(self.core_step,
+                                                             ind))
+        array.data = builder.bitcast(offseted_data, array.data.type)
+
         if not self.as_scalar:
-            self.array.shape = cgutils.pack_array(builder, self.shape)
-            self.array.strides = cgutils.pack_array(builder, self.strides)
+            array.shape = cgutils.pack_array(builder, self.shape)
+            array.strides = cgutils.pack_array(builder, self.strides)
         else:
             one = context.get_constant(types.intp, 1)
             zero = context.get_constant(types.intp, 0)
-            self.array.shape = cgutils.pack_array(builder, [one])
-            self.array.strides = cgutils.pack_array(builder, [zero])
-        self.array_value = self.array._getpointer()
+            array.shape = cgutils.pack_array(builder, [one])
+            array.strides = cgutils.pack_array(builder, [zero])
 
-    def next(self, i):
-        self.array.data = cgutils.pointer_add(self.builder,
-                                              self.array.data, self.core_step)
+        return array._getvalue()
+
 
