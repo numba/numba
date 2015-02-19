@@ -19,13 +19,6 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
 
     # Ignoring error status and store result
     # Store
-    if out.byref:
-        retval = builder.load(retval)
-
-    if not cgutils.is_struct(retval.type):
-        retval = context.get_value_as_argument(builder, signature.return_type,
-                                               retval)
-
     store(retval)
 
     # increment indices
@@ -50,9 +43,6 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
 
     # Ignoring error status and store result
     # Store
-    if out.byref:
-        retval = builder.load(retval)
-
     store(retval)
 
     # increment indices
@@ -165,13 +155,11 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
     # Prepare inputs
     arrays = []
     for i, typ in enumerate(signature.args):
-        arrays.append(UArrayArg(context, builder, arg_args, arg_steps, i,
-                                context.get_argument_type(typ)))
+        arrays.append(UArrayArg(context, builder, arg_args, arg_steps, i, typ))
 
     # Prepare output
-    valty = context.get_data_type(signature.return_type)
-    out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args),
-                    valty)
+    out = UArrayArg(context, builder, arg_args, arg_steps, len(arrays),
+                    signature.return_type)
 
     # Setup indices
     offsets = []
@@ -235,50 +223,41 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
 
 
 class UArrayArg(object):
-    def __init__(self, context, builder, args, steps, i, argtype):
-        # Get data
-        p = builder.gep(args, [context.get_constant(types.intp, i)])
-        if cgutils.is_struct_ptr(argtype):
-            self.byref = True
-            self.data = builder.bitcast(builder.load(p), argtype)
-        else:
-            self.byref = False
-            self.data = builder.bitcast(builder.load(p), Type.pointer(argtype))
-            # Get step
-        p = builder.gep(steps, [context.get_constant(types.intp, i)])
-        abisize = context.get_constant(types.intp,
-                                       context.get_abi_sizeof(argtype))
-        self.step = builder.load(p)
-        self.is_unit_strided = builder.icmp(ICMP_EQ, abisize, self.step)
+    def __init__(self, context, builder, args, steps, i, fe_type):
+        self.context = context
+        self.builder = builder
+        self.fe_type = fe_type
+        offset = self.context.get_constant(types.intp, i)
+        offseted_args = self.builder.load(builder.gep(args, [offset]))
+        self.data_type = context.get_data_type(fe_type).as_pointer()
+        self.dataptr = self.builder.bitcast(offseted_args, self.data_type)
+        sizeof = self.context.get_abi_sizeof(self.data_type)
+        self.abisize = self.context.get_constant(types.intp, sizeof)
+        offseted_step = self.builder.gep(steps, [offset])
+        self.step = self.builder.load(offseted_step)
+        self.is_unit_strided = builder.icmp(ICMP_EQ, self.abisize, self.step)
         self.builder = builder
 
-    def load(self, ind):
-        offset = self.builder.mul(self.step, ind)
-        return self.load_direct(offset)
-
-    def load_direct(self, offset):
-        ptr = cgutils.pointer_add(self.builder, self.data, offset)
-        if self.byref:
-            return ptr
-        else:
-            return self.builder.load(ptr)
-
     def load_aligned(self, ind):
-        ptr = self.builder.gep(self.data, [ind])
-        return self.builder.load(ptr)
+        byteoffset = self.builder.mul(self.step, ind)
+        return self.load_direct(byteoffset)
+
+    def load_direct(self, byteoffset):
+        ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)
+        return self.context.unpack_value(self.builder, self.fe_type, ptr)
 
     def store(self, value, ind):
         offset = self.builder.mul(self.step, ind)
         self.store_direct(value, offset)
 
-    def store_direct(self, value, offset):
-        ptr = cgutils.pointer_add(self.builder, self.data, offset)
-        assert ptr.type.pointee == value.type, (ptr.type, value.type)
-        self.builder.store(value, ptr)
-
     def store_aligned(self, value, ind):
-        ptr = self.builder.gep(self.data, [ind])
-        self.builder.store(value, ptr)
+        ptr = self.builder.gep(self.dataptr, [ind])
+        self.context.pack_value(self.builder, self.fe_type, value, ptr)
+
+    def store_direct(self, value, byteoffset):
+        ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)
+        assert ptr.type.pointee == value.type, (ptr.type, value.type)
+        self.context.pack_value(self.builder, self.fe_type, value, ptr)
 
 
 class _GufuncWrapper(object):
@@ -496,8 +475,8 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
     # Call ufunc core function
     object_sig = [types.pyobject] * len(ndarray_objects)
 
-    status, retval = context.call_function(builder, func, ll_pyobj, object_sig,
-                                           ndarray_objects, env=env)
+    status, retval = context.call_function(builder, func, types.pyobject,
+                                           object_sig, ndarray_objects, env=env)
     builder.store(status.err, error_pointer)
 
     # Release returned object

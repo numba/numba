@@ -293,62 +293,62 @@ class BaseContext(object):
             return fac(self, ty)
 
         return self.data_model_manager[ty].get_data_type()
-
-        if (isinstance(ty, types.Dummy) or
-                isinstance(ty, types.Module) or
-                isinstance(ty, types.Function) or
-                isinstance(ty, types.Dispatcher) or
-                isinstance(ty, types.Object) or
-                isinstance(ty, types.Macro)):
-            return PYOBJECT
-
-        elif isinstance(ty, types.CPointer):
-            dty = self.get_data_type(ty.dtype)
-            return Type.pointer(dty)
-
-        elif isinstance(ty, types.Optional):
-            return self.get_struct_type(self.make_optional(ty))
-
-        elif isinstance(ty, types.Array):
-            return self.get_struct_type(self.make_array(ty))
-
-        elif isinstance(ty, types.UniTuple):
-            dty = self.get_value_type(ty.dtype)
-            return Type.array(dty, ty.count)
-
-        elif isinstance(ty, types.Tuple):
-            dtys = [self.get_value_type(t) for t in ty]
-            return Type.struct(dtys)
-
-        elif isinstance(ty, types.Record):
-            # Record are represented as byte array
-            return Type.struct([Type.array(Type.int(8), ty.size)])
-
-        elif isinstance(ty, types.UnicodeCharSeq):
-            charty = Type.int(numpy_support.sizeof_unicode_char * 8)
-            return Type.struct([Type.array(charty, ty.count)])
-
-        elif isinstance(ty, types.CharSeq):
-            charty = Type.int(8)
-            return Type.struct([Type.array(charty, ty.count)])
-
-        elif ty in STRUCT_TYPES:
-            return self.get_struct_type(STRUCT_TYPES[ty])
-
-        else:
-            try:
-                impl = struct_registry.match(ty)
-            except KeyError:
-                pass
-            else:
-                return self.get_struct_type(impl(ty))
-
-        if isinstance(ty, types.Pair):
-            pairty = self.make_pair(ty.first_type, ty.second_type)
-            return self.get_struct_type(pairty)
-
-        else:
-            return LTYPEMAP[ty]
+        #
+        # if (isinstance(ty, types.Dummy) or
+        #         isinstance(ty, types.Module) or
+        #         isinstance(ty, types.Function) or
+        #         isinstance(ty, types.Dispatcher) or
+        #         isinstance(ty, types.Object) or
+        #         isinstance(ty, types.Macro)):
+        #     return PYOBJECT
+        #
+        # elif isinstance(ty, types.CPointer):
+        #     dty = self.get_data_type(ty.dtype)
+        #     return Type.pointer(dty)
+        #
+        # elif isinstance(ty, types.Optional):
+        #     return self.get_struct_type(self.make_optional(ty))
+        #
+        # elif isinstance(ty, types.Array):
+        #     return self.get_struct_type(self.make_array(ty))
+        #
+        # elif isinstance(ty, types.UniTuple):
+        #     dty = self.get_value_type(ty.dtype)
+        #     return Type.array(dty, ty.count)
+        #
+        # elif isinstance(ty, types.Tuple):
+        #     dtys = [self.get_value_type(t) for t in ty]
+        #     return Type.struct(dtys)
+        #
+        # elif isinstance(ty, types.Record):
+        #     # Record are represented as byte array
+        #     return Type.struct([Type.array(Type.int(8), ty.size)])
+        #
+        # elif isinstance(ty, types.UnicodeCharSeq):
+        #     charty = Type.int(numpy_support.sizeof_unicode_char * 8)
+        #     return Type.struct([Type.array(charty, ty.count)])
+        #
+        # elif isinstance(ty, types.CharSeq):
+        #     charty = Type.int(8)
+        #     return Type.struct([Type.array(charty, ty.count)])
+        #
+        # elif ty in STRUCT_TYPES:
+        #     return self.get_struct_type(STRUCT_TYPES[ty])
+        #
+        # else:
+        #     try:
+        #         impl = struct_registry.match(ty)
+        #     except KeyError:
+        #         pass
+        #     else:
+        #         return self.get_struct_type(impl(ty))
+        #
+        # if isinstance(ty, types.Pair):
+        #     pairty = self.make_pair(ty.first_type, ty.second_type)
+        #     return self.get_struct_type(pairty)
+        #
+        # else:
+        #     return LTYPEMAP[ty]
 
     def get_value_type(self, ty):
         return self.data_model_manager[ty].get_value_type()
@@ -397,7 +397,10 @@ class BaseContext(object):
         #     return value
 
     def is_struct_type(self, ty):
-        return cgutils.is_struct(self.get_data_type(ty))
+        return isinstance(self.data_model_manager[ty],
+                          (datamodel.StructModel,
+                           datamodel.RecordModel,
+                           datamodel.BaseComplexModel))
 
     def get_constant_generic(self, builder, ty, val):
         """
@@ -465,7 +468,7 @@ class BaseContext(object):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
 
-        raise NotImplementedError(ty)
+        raise NotImplementedError(ty, val)
 
     def get_constant_undef(self, ty):
         lty = self.get_value_type(ty)
@@ -1019,6 +1022,7 @@ class BaseContext(object):
         flat = ary.flatten()
 
         # Handle data
+        print(typ.dtype, self.is_struct_type(typ.dtype))
         if self.is_struct_type(typ.dtype):
             values = [self.get_constant_struct(builder, typ.dtype, flat[i])
                       for i in range(flat.size)]

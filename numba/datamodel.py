@@ -139,6 +139,7 @@ def handle_boolean(dmm, ty):
 @register_default(types.NoneType)
 @register_default(types.Function)
 @register_default(types.Type)
+@register_default(types.Object)
 def handle_opaque(dmm, ty):
     return OpaqueModel(dmm, ty)
 
