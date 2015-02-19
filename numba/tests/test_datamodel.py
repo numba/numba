@@ -5,158 +5,95 @@ from llvmlite import ir, binding as ll
 from numba import types
 from numba import unittest_support as unittest
 from numba import datamodel
+from numba.datamodel.testing import test_factory
 
 
-def test_factory(name, fetype, support_as_data=True):
-    dmm = datamodel.defaultDataModelManager
-
-    class DataModelTester(unittest.TestCase):
-        datamodel = NotImplemented
-
-        def setUp(self):
-            self.module = ir.Module()
-
-        def test_as_arg(self):
-            fnty = ir.FunctionType(ir.VoidType(), [])
-            function = ir.Function(self.module, fnty, name="test_as_arg")
-            builder = ir.IRBuilder()
-            builder.position_at_end(function.append_basic_block())
-
-            undef_value = ir.Constant(self.datamodel.get_value_type(), None)
-            args = self.datamodel.as_argument(builder, undef_value)
-            self.assertIsNot(args, NotImplemented, "as_argument returned "
-                                                   "NotImplementedError")
-
-            if isinstance(args, (tuple, list)):
-                def recur_flatten_type(args):
-                    for arg in args:
-                        if isinstance(arg, (tuple, list)):
-                            yield tuple(recur_flatten_type(arg))
-                        else:
-                            yield arg.type
-
-                def recur_tuplize(args):
-                    for arg in args:
-                        if isinstance(arg, (tuple, list)):
-                            yield tuple(recur_tuplize(arg))
-                        else:
-                            yield arg
-
-                argtypes = tuple(recur_flatten_type(args))
-                exptypes = tuple(recur_tuplize(
-                    self.datamodel.get_argument_type()))
-                self.assertEqual(exptypes, argtypes)
-            else:
-                self.assertEqual(args.type,
-                                 self.datamodel.get_argument_type())
-
-            rev_value = self.datamodel.from_argument(builder, args)
-            self.assertEqual(rev_value.type, self.datamodel.get_value_type())
-
-            builder.ret_void()  # end function
-
-            # Ensure valid LLVM generation
-            materialized = ll.parse_assembly(str(self.module))
-            print(materialized)
-
-        def test_as_return(self):
-            fnty = ir.FunctionType(ir.VoidType(), [])
-            function = ir.Function(self.module, fnty, name="test_as_return")
-            builder = ir.IRBuilder()
-            builder.position_at_end(function.append_basic_block())
-
-            undef_value = ir.Constant(self.datamodel.get_value_type(), None)
-            ret = self.datamodel.as_return(builder, undef_value)
-            self.assertIsNot(ret, NotImplemented, "as_return returned "
-                                                  "NotImplementedError")
-
-            self.assertEqual(ret.type, self.datamodel.get_return_type())
-
-            rev_value = self.datamodel.from_return(builder, ret)
-            self.assertEqual(rev_value.type, self.datamodel.get_value_type())
-
-            builder.ret_void()  # end function
-
-            # Ensure valid LLVM generation
-            materialized = ll.parse_assembly(str(self.module))
-            print(materialized)
-
-        if support_as_data:
-            def test_as_data(self):
-                fnty = ir.FunctionType(ir.VoidType(), [])
-                function = ir.Function(self.module, fnty, name="test_as_data")
-                builder = ir.IRBuilder()
-                builder.position_at_end(function.append_basic_block())
-
-                undef_value = ir.Constant(self.datamodel.get_value_type(), None)
-                data = self.datamodel.as_data(builder, undef_value)
-                self.assertIsNot(data, NotImplemented, "as_data returned "
-                                                       "NotImplementedError")
-
-                self.assertEqual(data.type, self.datamodel.get_data_type())
-
-                rev_value = self.datamodel.from_data(builder, data)
-                self.assertEqual(rev_value.type,
-                                 self.datamodel.get_value_type())
-
-                builder.ret_void()  # end function
-
-                # Ensure valid LLVM generation
-                materialized = ll.parse_assembly(str(self.module))
-                print(materialized)
-        else:
-            def test_as_data_not_supported(self):
-                fnty = ir.FunctionType(ir.VoidType(), [])
-                function = ir.Function(self.module, fnty, name="test_as_data")
-                builder = ir.IRBuilder()
-                builder.position_at_end(function.append_basic_block())
-
-                undef_value = ir.Constant(self.datamodel.get_value_type(), None)
-                data = self.datamodel.as_data(builder, undef_value)
-                self.assertIs(data, NotImplemented)
-                rev_data = self.datamodel.from_data(builder, undef_value)
-                self.assertIs(rev_data, NotImplemented)
-
-    model = dmm.lookup(fetype)
-    testcls = type(name, (DataModelTester,), {'datamodel': model})
-    glbls = globals()
-    assert name not in glbls
-    glbls[name] = testcls
+class TestBool(*test_factory()):
+    fe_type = types.boolean
 
 
+class TestPyObject(*test_factory()):
+    fe_type = types.pyobject
 
-test_factory("TestBool", types.boolean)
-test_factory("TestPyObject", types.pyobject)
+
+class TestInt8(*test_factory()):
+    fe_type = types.int8
 
 
-for bits in [8, 16, 32, 64]:
-    # signed
-    test_factory("TestInt{0}".format(bits),
-                 getattr(types, 'int{0}'.format(bits)))
-    # unsigned
-    test_factory("TestUInt{0}".format(bits),
-                 getattr(types, 'uint{0}'.format(bits)))
+class TestInt16(*test_factory()):
+    fe_type = types.int16
 
-test_factory("TestFloat", types.float32)
-test_factory("TestDouble", types.float64)
-test_factory("TestComplex", types.complex64)
-test_factory("TestDoubleComplex", types.complex128)
 
-test_factory("TestPointerOfInt32", types.CPointer(types.int32))
+class TestInt32(*test_factory()):
+    fe_type = types.int32
 
-test_factory("TestUniTupleOf2xInt32", types.UniTuple(types.int32, 2))
-test_factory("TestUniTupleEmpty", types.UniTuple(types.int32, 0))
-test_factory("TestTupleInt32Float32", types.Tuple([types.int32, types.float32]))
-test_factory("TestTupleEmpty", types.Tuple([]))
 
-test_factory("Test1DArrayOfInt32", types.Array(types.int32, 1, 'C'),
-             support_as_data=False)
+class TestInt64(*test_factory()):
+    fe_type = types.int64
 
-test_factory("Test2DArrayOfComplex128", types.Array(types.complex128, 2, 'C'),
-             support_as_data=False)
 
-test_factory("Test0DArrayOfInt32", types.Array(types.int32, 0, 'C'),
-             support_as_data=False)
+class TestUInt8(*test_factory()):
+    fe_type = types.uint8
+
+
+class TestUInt16(*test_factory()):
+    fe_type = types.uint16
+
+
+class TestUInt32(*test_factory()):
+    fe_type = types.uint32
+
+
+class TestUInt64(*test_factory()):
+    fe_type = types.uint64
+
+
+class TestFloat(*test_factory()):
+    fe_type = types.float32
+
+
+class TestDouble(*test_factory()):
+    fe_type = types.float64
+
+
+class TestComplex(*test_factory()):
+    fe_type = types.complex64
+
+
+class TestDoubleComplex(*test_factory()):
+    fe_type = types.complex128
+
+
+class TestPointerOfInt32(*test_factory()):
+    fe_type = types.CPointer(types.int32)
+
+
+class TestUniTupleOf2xInt32(*test_factory()):
+    fe_type = types.UniTuple(types.int32, 2)
+
+
+class TestUniTupleEmpty(*test_factory()):
+    fe_type = types.UniTuple(types.int32, 0)
+
+
+class TestTupleInt32Float32(*test_factory()):
+    fe_type = types.Tuple([types.int32, types.float32])
+
+
+class TestTupleEmpty(*test_factory()):
+    fe_type = types.Tuple([])
+
+
+class Test1DArrayOfInt32(*test_factory(support_as_data=False)):
+    fe_type = types.Array(types.int32, 1, 'C')
+
+
+class Test2DArrayOfComplex128(*test_factory(support_as_data=False)):
+    fe_type = types.Array(types.complex128, 2, 'C')
+
+
+class Test0DArrayOfInt32(*test_factory(support_as_data=False)):
+    fe_type = types.Array(types.int32, 0, 'C')
 
 
 class TestFunctionInfo(unittest.TestCase):
