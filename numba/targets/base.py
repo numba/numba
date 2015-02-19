@@ -314,10 +314,7 @@ class BaseContext(object):
             return val
 
     def is_struct_type(self, ty):
-        return isinstance(self.data_model_manager[ty],
-                          (datamodel.StructModel,
-                           datamodel.RecordModel,
-                           datamodel.BaseComplexModel))
+        return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
 
     def get_constant_generic(self, builder, ty, val):
         """

@@ -6,8 +6,13 @@ from .registry import register_default
 
 
 class DataModel(object):
-    def __init__(self, dmm):
+    def __init__(self, dmm, fe_type):
         self._dmm = dmm
+        self._fe_type = fe_type
+
+    @property
+    def fe_type(self):
+        return self._fe_type
 
     def get_value_type(self):
         raise NotImplementedError
@@ -43,11 +48,7 @@ class DataModel(object):
         return NotImplemented
 
     def _compared_fields(self):
-        """
-        The default comparison uses the type(self).
-        So any instance of the same type is equal.
-        """
-        return (type(self),)
+        return (type(self), self._fe_type)
 
     def __hash__(self):
         return hash(tuple(self._compared_fields()))
@@ -70,6 +71,7 @@ class DataModel(object):
         return self.as_data(builder, self.from_argument(builder, value))
 
 
+@register_default(types.Boolean)
 class BooleanModel(DataModel):
     def get_value_type(self):
         return ir.IntType(1)
@@ -107,8 +109,8 @@ class PrimitiveModel(DataModel):
     usage contexts.
     """
 
-    def __init__(self, dmm, be_type):
-        super(PrimitiveModel, self).__init__(dmm)
+    def __init__(self, dmm, fe_type, be_type):
+        super(PrimitiveModel, self).__init__(dmm, fe_type)
         self.be_type = be_type
 
     def get_value_type(self):
@@ -132,110 +134,50 @@ class PrimitiveModel(DataModel):
     def from_return(self, builder, value):
         return self.from_data(builder, value)
 
-    def _compared_fields(self):
-        return (self.be_type,)
 
-
+@register_default(types.Opaque)
+@register_default(types.NoneType)
+@register_default(types.Function)
+@register_default(types.Type)
+@register_default(types.Object)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
     """
 
     def __init__(self, dmm, fe_type):
-        self.fe_type = fe_type
         be_type = ir.IntType(8).as_pointer()
-        super(OpaqueModel, self).__init__(dmm, be_type)
-
-    def _compared_fields(self):
-        return (self.fe_type,)
+        super(OpaqueModel, self).__init__(dmm, fe_type, be_type)
 
 
+@register_default(types.Integer)
 class IntegerModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
-        self.fe_type = fe_type
-        self.signed = fe_type.signed
-        be_type = ir.IntType(self.fe_type.bitwidth)
-        super(IntegerModel, self).__init__(dmm, be_type)
-
-    def _compared_fields(self):
-        return self.be_type, self.signed
+        be_type = ir.IntType(fe_type.bitwidth)
+        super(IntegerModel, self).__init__(dmm, fe_type, be_type)
 
 
 class FloatModel(PrimitiveModel):
-    def __init__(self, dmm):
-        super(FloatModel, self).__init__(dmm, ir.FloatType())
+    def __init__(self, dmm, fe_type):
+        super(FloatModel, self).__init__(dmm, fe_type, ir.FloatType())
 
 
 class DoubleModel(PrimitiveModel):
-    def __init__(self, dmm):
-        super(DoubleModel, self).__init__(dmm, ir.DoubleType())
-
-
-class BaseComplexModel(DataModel):
-    _element_type = NotImplemented
-
-    def __init__(self, dmm):
-        super(BaseComplexModel, self).__init__(dmm)
-        self._element_model = self._dmm.lookup(self._element_type)
-
-    def get_value_type(self):
-        elem = self._element_model.get_data_type()
-        return ir.LiteralStructType([elem] * 2)
-
-    def get_argument_type(self):
-        elem = self._element_model.get_data_type()
-        return tuple([elem] * 2)
-
-    def as_argument(self, builder, value):
-        real = builder.extract_value(value, [0])
-        imag = builder.extract_value(value, [1])
-
-        real = self._element_model.data_to_argument(builder, real)
-        imag = self._element_model.data_to_argument(builder, imag)
-
-        return real, imag
-
-    def from_argument(self, builder, value):
-        real, imag = value
-        real = self._element_model.argument_to_data(builder, real)
-        imag = self._element_model.argument_to_data(builder, imag)
-        valty = self.get_value_type()
-        val = ir.Constant(valty, ir.Undefined)
-        val = builder.insert_value(val, real, [0])
-        val = builder.insert_value(val, imag, [1])
-        return val
-
-    def as_return(self, builder, value):
-        return value
-
-    def from_return(self, builder, value):
-        return value
-
-    def as_data(self, builder, value):
-        return value
-
-    def from_data(self, builder, value):
-        return value
-
-
-class ComplexModel(BaseComplexModel):
-    _element_type = types.float32
-
-
-class DoubleComplexModel(BaseComplexModel):
-    _element_type = types.float64
+    def __init__(self, dmm, fe_type):
+        super(DoubleModel, self).__init__(dmm, fe_type, ir.DoubleType())
 
 
 @register_default(types.CPointer)
 class PointerModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
         be_type = dmm.lookup(fe_type.dtype).get_data_type().as_pointer()
-        super(PointerModel, self).__init__(dmm, be_type)
+        super(PointerModel, self).__init__(dmm, fe_type, be_type)
 
 
 @register_default(types.UniTuple)
 class UniTupleModel(DataModel):
     def __init__(self, dmm, fe_type):
+        super(UniTupleModel, self).__init__(dmm, fe_type)
         self._elem_model = dmm.lookup(fe_type.dtype)
         self._count = len(fe_type)
 
@@ -288,10 +230,16 @@ class UniTupleModel(DataModel):
         return value
 
 
-class StructModel(DataModel):
+class CompositeModel(DataModel):
+    """Any model that is composed of multiple other models should subclass from
+    this.
+    """
+    pass
+
+
+class StructModel(CompositeModel):
     def __init__(self, dmm, fe_type, members):
-        super(StructModel, self).__init__(dmm)
-        self.fe_type = fe_type
+        super(StructModel, self).__init__(dmm, fe_type)
         if members:
             self._fields, self._members = zip(*members)
         else:
@@ -377,6 +325,18 @@ class StructModel(DataModel):
         return self._members[pos]
 
 
+@register_default(types.Complex)
+class ComplexModel(StructModel):
+    _element_type = NotImplemented
+
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('real', fe_type.underlying_float),
+            ('imag', fe_type.underlying_float),
+        ]
+        super(ComplexModel, self).__init__(dmm, fe_type, members)
+
+
 @register_default(types.Tuple)
 class TupleModel(StructModel):
     def __init__(self, dmm, fe_type):
@@ -426,15 +386,11 @@ class OptionalModel(StructModel):
 
 
 @register_default(types.Record)
-class RecordModel(DataModel):
+class RecordModel(CompositeModel):
     def __init__(self, dmm, fe_type):
-        super(RecordModel, self).__init__(dmm)
-        self.fe_type = fe_type
+        super(RecordModel, self).__init__(dmm, fe_type)
         self._models = [self._dmm.lookup(t) for _, t in fe_type.members]
-        self._be_type = ir.ArrayType(ir.IntType(8), self.fe_type.size)
-
-    def _compared_fields(self):
-        return (self.fe_type,)
+        self._be_type = ir.ArrayType(ir.IntType(8), fe_type.size)
 
     def get_value_type(self):
         """Passed around as reference to underlying data
@@ -475,13 +431,9 @@ class RecordModel(DataModel):
 @register_default(types.UnicodeCharSeq)
 class UnicodeCharSeq(DataModel):
     def __init__(self, dmm, fe_type):
-        super(UnicodeCharSeq, self).__init__(dmm)
-        self.fe_type = fe_type
+        super(UnicodeCharSeq, self).__init__(dmm, fe_type)
         charty = ir.IntType(numpy_support.sizeof_unicode_char * 8)
         self._be_type = ir.ArrayType(charty, fe_type.count)
-
-    def _compared_fields(self):
-        return (self.fe_type,)
 
     def get_value_type(self):
         return self._be_type
@@ -493,13 +445,9 @@ class UnicodeCharSeq(DataModel):
 @register_default(types.CharSeq)
 class CharSeq(DataModel):
     def __init__(self, dmm, fe_type):
-        super(CharSeq, self).__init__(dmm)
-        self.fe_type = fe_type
+        super(CharSeq, self).__init__(dmm, fe_type)
         charty = ir.IntType(8)
         self._be_type = ir.ArrayType(charty, fe_type.count)
-
-    def _compared_fields(self):
-        return (self.fe_type,)
 
     def get_value_type(self):
         return self._be_type
@@ -561,12 +509,8 @@ class Slice3(StructModel):
 @register_default(types.NPTimedelta)
 class NPDatetimeModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
-        self.fe_type = fe_type
         be_type = ir.IntType(64)
-        super(NPDatetimeModel, self).__init__(dmm, be_type)
-
-    def _compared_fields(self):
-        return (self.be_type,)
+        super(NPDatetimeModel, self).__init__(dmm, fe_type, be_type)
 
 
 @register_default(types.ArrayIterator)
@@ -601,45 +545,14 @@ class RangeIteratorType(StructModel):
 # =============================================================================
 
 
-
-@register_default(types.Integer)
-def handle_integers(dmm, ty):
-    return IntegerModel(dmm, ty)
-
-
-@register_default(types.Boolean)
-def handle_boolean(dmm, ty):
-    return BooleanModel(dmm)
-
-
-@register_default(types.Opaque)
-@register_default(types.NoneType)
-@register_default(types.Function)
-@register_default(types.Type)
-@register_default(types.Object)
-def handle_opaque(dmm, ty):
-    return OpaqueModel(dmm, ty)
-
-
 @register_default(types.Float)
 def handle_floats(dmm, ty):
     if ty == types.float32:
-        return FloatModel(dmm)
+        return FloatModel(dmm, ty)
     elif ty == types.float64:
-        return DoubleModel(dmm)
+        return DoubleModel(dmm, ty)
     else:
         raise NotImplementedError(ty)
-
-
-@register_default(types.Complex)
-def handle_complex_numbers(dmm, ty):
-    if ty == types.complex64:
-        return ComplexModel(dmm)
-    elif ty == types.complex128:
-        return DoubleComplexModel(dmm)
-    else:
-        raise NotImplementedError(ty)
-
 
 
 @register_default(types.NumpyFlatType)
