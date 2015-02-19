@@ -293,62 +293,6 @@ class BaseContext(object):
             return fac(self, ty)
 
         return self.data_model_manager[ty].get_data_type()
-        #
-        # if (isinstance(ty, types.Dummy) or
-        #         isinstance(ty, types.Module) or
-        #         isinstance(ty, types.Function) or
-        #         isinstance(ty, types.Dispatcher) or
-        #         isinstance(ty, types.Object) or
-        #         isinstance(ty, types.Macro)):
-        #     return PYOBJECT
-        #
-        # elif isinstance(ty, types.CPointer):
-        #     dty = self.get_data_type(ty.dtype)
-        #     return Type.pointer(dty)
-        #
-        # elif isinstance(ty, types.Optional):
-        #     return self.get_struct_type(self.make_optional(ty))
-        #
-        # elif isinstance(ty, types.Array):
-        #     return self.get_struct_type(self.make_array(ty))
-        #
-        # elif isinstance(ty, types.UniTuple):
-        #     dty = self.get_value_type(ty.dtype)
-        #     return Type.array(dty, ty.count)
-        #
-        # elif isinstance(ty, types.Tuple):
-        #     dtys = [self.get_value_type(t) for t in ty]
-        #     return Type.struct(dtys)
-        #
-        # elif isinstance(ty, types.Record):
-        #     # Record are represented as byte array
-        #     return Type.struct([Type.array(Type.int(8), ty.size)])
-        #
-        # elif isinstance(ty, types.UnicodeCharSeq):
-        #     charty = Type.int(numpy_support.sizeof_unicode_char * 8)
-        #     return Type.struct([Type.array(charty, ty.count)])
-        #
-        # elif isinstance(ty, types.CharSeq):
-        #     charty = Type.int(8)
-        #     return Type.struct([Type.array(charty, ty.count)])
-        #
-        # elif ty in STRUCT_TYPES:
-        #     return self.get_struct_type(STRUCT_TYPES[ty])
-        #
-        # else:
-        #     try:
-        #         impl = struct_registry.match(ty)
-        #     except KeyError:
-        #         pass
-        #     else:
-        #         return self.get_struct_type(impl(ty))
-        #
-        # if isinstance(ty, types.Pair):
-        #     pairty = self.make_pair(ty.first_type, ty.second_type)
-        #     return self.get_struct_type(pairty)
-        #
-        # else:
-        #     return LTYPEMAP[ty]
 
     def get_value_type(self, ty):
         return self.data_model_manager[ty].get_value_type()
@@ -358,19 +302,6 @@ class BaseContext(object):
         """
         dataval = self.data_model_manager[ty].as_data(builder, value)
         builder.store(dataval, ptr)
-        return
-        #
-        # if isinstance(ty, types.Record):
-        #     pdata = cgutils.get_record_data(builder, value)
-        #     databuf = builder.load(pdata)
-        #     casted = builder.bitcast(ptr, Type.pointer(databuf.type))
-        #     builder.store(databuf, casted)
-        #     return
-        #
-        # if ty == types.boolean:
-        #     value = cgutils.as_bool_byte(builder, value)
-        # assert value.type == ptr.type.pointee
-        # builder.store(value, ptr)
 
     def unpack_value(self, builder, ty, ptr):
         """Unpack data from array storage
@@ -381,20 +312,6 @@ class BaseContext(object):
             return dm.from_data(builder, builder.load(ptr))
         else:
             return val
-        #
-        # if isinstance(ty, types.Record):
-        #     vt = self.get_value_type(ty)
-        #     tmp = cgutils.alloca_once(builder, vt)
-        #     dataptr = cgutils.inbound_gep(builder, ptr, 0, 0)
-        #     builder.store(dataptr, cgutils.inbound_gep(builder, tmp, 0, 0))
-        #     return builder.load(tmp)
-        #
-        # assert cgutils.is_pointer(ptr.type)
-        # value = builder.load(ptr)
-        # if ty == types.boolean:
-        #     return builder.trunc(value, Type.int(1))
-        # else:
-        #     return value
 
     def is_struct_type(self, ty):
         return isinstance(self.data_model_manager[ty],
@@ -415,8 +332,6 @@ class BaseContext(object):
 
     def get_constant_struct(self, builder, ty, val):
         assert self.is_struct_type(ty)
-        module = cgutils.get_module(builder)
-
         if ty in types.complex_domain:
             if ty == types.complex64:
                 innertype = types.float32

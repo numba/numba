@@ -150,8 +150,6 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
 
     loopcount = builder.load(arg_dims, name="loopcount")
 
-    actual_args = context.get_arguments(func)
-
     # Prepare inputs
     arrays = []
     for i, typ in enumerate(signature.args):
@@ -177,7 +175,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
         unit_strided = builder.and_(unit_strided, ary.is_unit_strided)
 
     if objmode:
-    # General loop
+        # General loop
         pyapi = context.get_python_api(builder)
         gil = pyapi.gil_ensure()
         with cgutils.for_range(builder, loopcount, intp=intp_t):
