@@ -149,7 +149,8 @@ class TestInternals(TestCase):
         # (CPython is different: it treats the integer as a byte array)
         r = np.random.RandomState()
         for i in [0, 1, 125, 2**32 - 5]:
-            r.seed(i)
+            # Need to cast to a C-sized int (for Numpy <= 1.7)
+            r.seed(np.uint32(i))
             st = r.get_state()
             ints = list(st[1])
             index = st[2]
@@ -183,12 +184,17 @@ class TestInternals(TestCase):
 
 class TestRandom(TestCase):
 
-    def _follow_cpython(self, ptr):
-        r = random.Random()
+    # NOTE: there may be cascading imprecision issues (e.g. between x87-using
+    # C code and SSE-using LLVM code), which is especially brutal for some
+    # iterative algorithms with sensitive exit conditions.
+    # Therefore we stick to hardcoded integers for seed values below.
+
+    def _follow_cpython(self, ptr, seed=2):
+        r = random.Random(seed)
         _copy_py_state(r, ptr)
         return r
 
-    def _follow_numpy(self, ptr, seed=None):
+    def _follow_numpy(self, ptr, seed=2):
         r = np.random.RandomState(seed)
         _copy_np_state(r, ptr)
         return r
@@ -200,7 +206,8 @@ class TestRandom(TestCase):
         # Our seed() mimicks Numpy's.
         r = np.random.RandomState()
         for i in [0, 1, 125, 2**32 - 1]:
-            r.seed(i)
+            # Need to cast to a C-sized int (for Numpy <= 1.7)
+            r.seed(np.uint32(i))
             seedfunc(i)
             # Be sure to trigger a reshuffle
             for j in range(N + 10):
