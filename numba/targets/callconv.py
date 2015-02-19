@@ -6,8 +6,6 @@ from collections import namedtuple
 import itertools
 
 from llvmlite import ir as ir
-import llvmlite.llvmpy.core as lc
-from llvmlite.llvmpy.core import Type, Constant
 
 from numba import cgutils, types
 from .base import PYOBJECT, GENERIC_POINTER
@@ -33,7 +31,7 @@ int32_t = ir.IntType(32)
 errcode_t = int32_t
 
 def _const_int(code):
-    return Constant.int_signextend(errcode_t, code)
+    return ir.Constant(errcode_t, code)
 
 RETCODE_OK = _const_int(0)
 RETCODE_EXC = _const_int(-1)
@@ -59,7 +57,7 @@ class BaseCallConv(object):
             optcls = self.context.make_optional(retty)
             optval = optcls(self.context, builder, value=value)
 
-            validbit = builder.trunc(optval.valid, lc.Type.int(1))
+            validbit = cgutils.as_bool_bit(builder, optval.valid)
             with cgutils.ifthen(builder, validbit):
                 self.return_value(builder, optval.data)
 
@@ -92,7 +90,7 @@ class BaseCallConv(object):
             return self.context.get_argument_type(ty)
         else:
             argty = self.context.get_argument_type(ty)
-            return Type.pointer(argty)
+            return ir.PointerType(argty)
 
     def init_call_helper(self, builder):
         """
@@ -150,11 +148,11 @@ class MinimalCallConv(BaseCallConv):
         """
         Given a return *code*, get a Status instance.
         """
-        norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
-        none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
+        norm = builder.icmp_signed('==', code, RETCODE_OK)
+        none = builder.icmp_signed('==', code, RETCODE_NONE)
         ok = builder.or_(norm, none)
         err = builder.not_(ok)
-        exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
+        exc = builder.icmp_signed('==', code, RETCODE_EXC)
         is_user_exc = builder.icmp_signed('>=', code, RETCODE_USEREXC)
 
         status = Status(code=code,
@@ -172,7 +170,7 @@ class MinimalCallConv(BaseCallConv):
         """
         argtypes = [self.context.get_argument_type(aty) for aty in argtypes]
         resptr = self.get_return_type(restype)
-        fnty = Type.function(Type.int(), [resptr] + argtypes)
+        fnty = ir.FunctionType(errcode_t, [resptr] + argtypes)
         return fnty
 
     def decorate_function(self, fn, args):
@@ -199,7 +197,7 @@ class MinimalCallConv(BaseCallConv):
         retty = callee.args[0].type.pointee
         retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value
-        builder.store(lc.Constant.null(retty), retvaltmp)
+        builder.store(cgutils.get_null_value(retty), retvaltmp)
         args = [self.context.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
         realargs = [retvaltmp] + list(args)
@@ -292,9 +290,9 @@ class CPUCallConv(BaseCallConv):
         """
         Given a return *code* and *excinfoptr*, get a Status instance.
         """
-        norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
-        none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
-        exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
+        norm = builder.icmp_signed('==', code, RETCODE_OK)
+        none = builder.icmp_signed('==', code, RETCODE_NONE)
+        exc = builder.icmp_signed('==', code, RETCODE_EXC)
         ok = builder.or_(norm, none)
         err = builder.not_(ok)
         is_user_exc = builder.icmp_signed('>=', code, RETCODE_USEREXC)
@@ -317,9 +315,9 @@ class CPUCallConv(BaseCallConv):
         argtypes = [self.context.get_argument_type(aty)
                     for aty in argtypes]
         resptr = self.get_return_type(restype)
-        fnty = lc.Type.function(errcode_t,
-                                [resptr, ir.PointerType(excinfo_ptr_t), PYOBJECT]
-                                + argtypes)
+        fnty = ir.FunctionType(errcode_t,
+                               [resptr, ir.PointerType(excinfo_ptr_t), PYOBJECT]
+                               + argtypes)
         return fnty
 
     def decorate_function(self, fn, args):
@@ -358,11 +356,11 @@ class CPUCallConv(BaseCallConv):
         if env is None:
             # This only works with functions that don't use the environment
             # (nopython functions).
-            env = lc.Constant.null(PYOBJECT)
+            env = cgutils.get_null_value(PYOBJECT)
         retty = self._get_return_argument(callee).type.pointee
         retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value to zeros
-        builder.store(lc.Constant.null(retty), retvaltmp)
+        builder.store(cgutils.get_null_value(retty), retvaltmp)
 
         excinfoptr = cgutils.alloca_once(builder, ir.PointerType(excinfo_t),
                                          name="excinfo")
