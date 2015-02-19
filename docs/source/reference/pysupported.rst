@@ -28,8 +28,8 @@ The ``raise`` statement is supported in several forms:
 
 * ``raise`` (to re-raise the current exception)
 * ``raise SomeException``
-* ``raise SomeException(<arguments>)``: if constructor arguments
-  are compile-time constants
+* ``raise SomeException(<arguments>)``: in :term:`nopython mode`, constructor
+  arguments must be :term:`compile-time constants <compile-time constant>`
 
 Similarly, the ``assert`` statement is supported with or without an error
 message.
