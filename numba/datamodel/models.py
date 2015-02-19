@@ -1,249 +1,9 @@
 from __future__ import print_function, absolute_import
 
-import functools
-from collections import deque
 from llvmlite import ir
 from numba import types, numpy_support
+from .registry import register_default
 
-
-class DataModelManager(object):
-    """Manages mapping of FE types to their corresponding data model
-    """
-
-    def __init__(self):
-        # handler map
-        # key: numba.types.Type subclass
-        # value: function
-        self._handlers = {}
-
-    def register(self, fetypecls, handler):
-        assert issubclass(fetypecls, types.Type)
-        self._handlers[fetypecls] = handler
-
-    def lookup(self, fetype):
-        handler = self._handlers[type(fetype)]
-        return handler(self, fetype)
-
-    def __getitem__(self, fetype):
-        return self.lookup(fetype)
-
-
-class FunctionInfo(object):
-    def __init__(self, dmm, fe_ret, fe_args):
-        self._dmm = dmm
-        self._fe_ret = fe_ret
-        self._fe_args = fe_args
-        self._nargs = len(fe_args)
-        self._dm_ret = self._dmm.lookup(fe_ret)
-        self._dm_args = [self._dmm.lookup(ty) for ty in fe_args]
-        argtys = [bt.get_argument_type() for bt in self._dm_args]
-        if len(argtys):
-            self._be_args, self._posmap = zip(*_flatten(argtys))
-        else:
-            self._be_args = self._posmap = ()
-        self._be_ret = self._dm_ret.get_return_type()
-
-    def as_arguments(self, builder, values):
-        if len(values) != self._nargs:
-            raise TypeError("invalid number of args")
-
-        if not values:
-            return ()
-
-        args = [dm.as_argument(builder, val)
-                for dm, val in zip(self._dm_args, values)]
-
-        args, _ = zip(*_flatten(args))
-        return args
-
-    def from_arguments(self, builder, args):
-        if len(args) != len(self._posmap):
-            raise TypeError("invalid number of args")
-
-        if not args:
-            return ()
-
-        valtree = _unflatten(self._posmap, args)
-        values = [dm.from_argument(builder, val)
-                  for dm, val in zip(self._dm_args, valtree)]
-
-        return values
-
-    @property
-    def argument_types(self):
-        return tuple(self._be_args)
-
-    @property
-    def return_type(self):
-        return self._be_ret
-
-
-def _unflatten(posmap, flatiter):
-    poss = deque(posmap)
-    vals = deque(flatiter)
-
-    res = []
-    while poss:
-        assert len(poss) == len(vals)
-        cur = poss.popleft()
-        ptr = res
-        for loc in cur[:-1]:
-            if loc >= len(ptr):
-                ptr.append([])
-            ptr = ptr[loc]
-
-        assert len(ptr) == cur[-1]
-        ptr.append(vals.popleft())
-
-    return res
-
-
-def _flatten(iterable, indices=(0,)):
-    """
-    Flatten nested iterable of (tuple, list) with position information
-    """
-    for i in iterable:
-        if isinstance(i, (tuple, list)):
-            inner = indices + (0,)
-            for j, k in _flatten(i, indices=inner):
-                yield j, k
-        else:
-            yield i, indices
-        indices = indices[:-1] + (indices[-1] + 1,)
-
-
-def register(dmm, typecls):
-    def wraps(fn):
-        dmm.register(typecls, fn)
-        return fn
-
-    return wraps
-
-
-defaultDataModelManager = DataModelManager()
-
-register_default = functools.partial(register, defaultDataModelManager)
-
-
-@register_default(types.Integer)
-def handle_integers(dmm, ty):
-    return IntegerModel(dmm, ty)
-
-
-@register_default(types.Boolean)
-def handle_boolean(dmm, ty):
-    return BooleanModel(dmm)
-
-
-@register_default(types.Opaque)
-@register_default(types.NoneType)
-@register_default(types.Function)
-@register_default(types.Type)
-@register_default(types.Object)
-def handle_opaque(dmm, ty):
-    return OpaqueModel(dmm, ty)
-
-
-@register_default(types.Float)
-def handle_floats(dmm, ty):
-    if ty == types.float32:
-        return FloatModel(dmm)
-    elif ty == types.float64:
-        return DoubleModel(dmm)
-    else:
-        raise NotImplementedError(ty)
-
-
-@register_default(types.Complex)
-def handle_complex_numbers(dmm, ty):
-    if ty == types.complex64:
-        return ComplexModel(dmm)
-    elif ty == types.complex128:
-        return DoubleComplexModel(dmm)
-    else:
-        raise NotImplementedError(ty)
-
-
-@register_default(types.CPointer)
-def handle_pointer(dmm, ty):
-    return PointerModel(dmm, ty)
-
-
-@register_default(types.UniTuple)
-def handle_unituple(dmm, ty):
-    return UniTupleModel(dmm, ty)
-
-
-@register_default(types.Tuple)
-def handle_tuple(dmm, ty):
-    return TupleModel(dmm, ty)
-
-
-@register_default(types.Array)
-def handle_array(dmm, ty):
-    return ArrayModel(dmm, ty)
-
-
-@register_default(types.Optional)
-def handle_optional(dmm, ty):
-    return OptionalModel(dmm, ty)
-
-
-@register_default(types.Record)
-def handle_record(dmm, ty):
-    return RecordModel(dmm, ty)
-
-
-@register_default(types.UnicodeCharSeq)
-def handle_unicode_char_seq(dmm, ty):
-    return UnicodeCharSeq(dmm, ty)
-
-
-@register_default(types.CharSeq)
-def handle_char_seq(dmm, ty):
-    return CharSeq(dmm, ty)
-
-
-@register_default(types.NumpyFlatType)
-def handle_numpy_flat_type(dmm, ty):
-    if ty.array_type.layout == 'C':
-        return CConitugousFlatIter(dmm, ty)
-    else:
-        return FlatIter(dmm, ty)
-
-
-@register_default(types.UniTupleIter)
-def handle_unitupleiter(dmm, ty):
-    return UniTupleIter(dmm, ty)
-
-
-@register_default(types.Slice3Type)
-def handle_slice3type(dmm, ty):
-    return Slice3(dmm, ty)
-
-
-@register_default(types.NPDatetime)
-@register_default(types.NPTimedelta)
-def handle_np_datetime(dmm, ty):
-    return NPDatetimeModel(dmm, ty)
-
-
-@register_default(types.ArrayIterator)
-def handle_arrayiterator(dmm, ty):
-    return ArrayIterator(dmm, ty)
-
-
-@register_default(types.EnumerateType)
-def handle_enumeratetype(dmm, ty):
-    return EnumerateType(dmm, ty)
-
-
-@register_default(types.RangeIteratorType)
-def handle_rangeIteratorType(dmm, ty):
-    return RangeIteratorType(dmm, ty)
-
-
-# ============== Define Data Models ==============
 
 class DataModel(object):
     def __init__(self, dmm):
@@ -466,12 +226,14 @@ class DoubleComplexModel(BaseComplexModel):
     _element_type = types.float64
 
 
+@register_default(types.CPointer)
 class PointerModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
         be_type = dmm.lookup(fe_type.dtype).get_data_type().as_pointer()
         super(PointerModel, self).__init__(dmm, be_type)
 
 
+@register_default(types.UniTuple)
 class UniTupleModel(DataModel):
     def __init__(self, dmm, fe_type):
         self._elem_model = dmm.lookup(fe_type.dtype)
@@ -615,12 +377,14 @@ class StructModel(DataModel):
         return self._members[pos]
 
 
+@register_default(types.Tuple)
 class TupleModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('f' + str(i), t) for i, t in enumerate(fe_type)]
         super(TupleModel, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.Array)
 class ArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
@@ -641,6 +405,7 @@ class ArrayModel(StructModel):
         return NotImplemented
 
 
+@register_default(types.Optional)
 class OptionalModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [
@@ -660,6 +425,7 @@ class OptionalModel(StructModel):
         return self._value_model.from_return(builder, value)
 
 
+@register_default(types.Record)
 class RecordModel(DataModel):
     def __init__(self, dmm, fe_type):
         super(RecordModel, self).__init__(dmm)
@@ -706,6 +472,7 @@ class RecordModel(DataModel):
         return builder.bitcast(ptr, self.get_value_type())
 
 
+@register_default(types.UnicodeCharSeq)
 class UnicodeCharSeq(DataModel):
     def __init__(self, dmm, fe_type):
         super(UnicodeCharSeq, self).__init__(dmm)
@@ -723,6 +490,7 @@ class UnicodeCharSeq(DataModel):
         return self._be_type
 
 
+@register_default(types.CharSeq)
 class CharSeq(DataModel):
     def __init__(self, dmm, fe_type):
         super(CharSeq, self).__init__(dmm)
@@ -772,6 +540,7 @@ class FlatIter(StructModel):
         super(FlatIter, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.UniTupleIter)
 class UniTupleIter(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('index', types.CPointer(types.intp)),
@@ -779,6 +548,7 @@ class UniTupleIter(StructModel):
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.Slice3Type)
 class Slice3(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('start', types.intp),
@@ -787,6 +557,8 @@ class Slice3(StructModel):
         super(Slice3, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.NPDatetime)
+@register_default(types.NPTimedelta)
 class NPDatetimeModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
         self.fe_type = fe_type
@@ -797,6 +569,7 @@ class NPDatetimeModel(PrimitiveModel):
         return (self.be_type,)
 
 
+@register_default(types.ArrayIterator)
 class ArrayIterator(StructModel):
     def __init__(self, dmm, fe_type):
         # We use an unsigned index to avoid the cost of negative index tests.
@@ -805,6 +578,7 @@ class ArrayIterator(StructModel):
         super(ArrayIterator, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.EnumerateType)
 class EnumerateType(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('count', types.CPointer(types.intp)),
@@ -813,6 +587,7 @@ class EnumerateType(StructModel):
         super(EnumerateType, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.RangeIteratorType)
 class RangeIteratorType(StructModel):
     def __init__(self, dmm, fe_type):
         int_type = fe_type.yield_type
@@ -821,5 +596,57 @@ class RangeIteratorType(StructModel):
                    ('step', int_type),
                    ('count', types.CPointer(int_type))]
         super(RangeIteratorType, self).__init__(dmm, fe_type, members)
+
+
+# =============================================================================
+
+
+
+@register_default(types.Integer)
+def handle_integers(dmm, ty):
+    return IntegerModel(dmm, ty)
+
+
+@register_default(types.Boolean)
+def handle_boolean(dmm, ty):
+    return BooleanModel(dmm)
+
+
+@register_default(types.Opaque)
+@register_default(types.NoneType)
+@register_default(types.Function)
+@register_default(types.Type)
+@register_default(types.Object)
+def handle_opaque(dmm, ty):
+    return OpaqueModel(dmm, ty)
+
+
+@register_default(types.Float)
+def handle_floats(dmm, ty):
+    if ty == types.float32:
+        return FloatModel(dmm)
+    elif ty == types.float64:
+        return DoubleModel(dmm)
+    else:
+        raise NotImplementedError(ty)
+
+
+@register_default(types.Complex)
+def handle_complex_numbers(dmm, ty):
+    if ty == types.complex64:
+        return ComplexModel(dmm)
+    elif ty == types.complex128:
+        return DoubleComplexModel(dmm)
+    else:
+        raise NotImplementedError(ty)
+
+
+
+@register_default(types.NumpyFlatType)
+def handle_numpy_flat_type(dmm, ty):
+    if ty.array_type.layout == 'C':
+        return CConitugousFlatIter(dmm, ty)
+    else:
+        return FlatIter(dmm, ty)
 
 
