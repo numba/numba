@@ -6,6 +6,7 @@ from types import ModuleType
 
 from llvmlite.llvmpy.core import Type, Builder
 
+
 from numba import (_dynfunc, errcode, ir, types, cgutils, utils, config,
                    cffi_support, typing, six)
 
@@ -98,7 +99,7 @@ class FunctionDescriptor(object):
         modname = func.__module__
         doc = func.__doc__ or ''
         args = interp.argspec.args
-        kws = ()  # TODO
+        kws = ()        # TODO
 
         if modname is None:
             # For dynamically generated functions (e.g. compile()),
@@ -117,7 +118,7 @@ class FunctionDescriptor(object):
     def _from_python_function(cls, interp, typemap, restype, calltypes,
                               native, mangler=None, inline=False):
         (qualname, unique_name, modname, doc, args, kws,
-        ) = cls._get_function_info(interp)
+         )= cls._get_function_info(interp)
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
                    args, kws, mangler=mangler, inline=inline)
@@ -160,23 +161,16 @@ class ExternalFunctionDescriptor(FunctionDescriptor):
     def __init__(self, name, restype, argtypes):
         args = ["arg%d" % i for i in range(len(argtypes))]
         super(ExternalFunctionDescriptor, self).__init__(native=True,
-                                                         modname=None,
-                                                         qualname=name,
-                                                         unique_name=name,
-                                                         doc='',
-                                                         typemap=None,
-                                                         restype=restype,
-                                                         calltypes=None,
-                                                         args=args, kws=None,
-                                                         mangler=lambda a, x: a,
-                                                         argtypes=argtypes)
+                modname=None, qualname=name, unique_name=name, doc='',
+                typemap=None, restype=restype, calltypes=None,
+                args=args, kws=None, mangler=lambda a, x: a,
+                argtypes=argtypes)
 
 
 class BaseLower(object):
     """
     Lower IR to LLVM
     """
-
     def __init__(self, context, library, fndesc, interp):
         self.context = context
         self.library = library
@@ -470,9 +464,8 @@ class Lower(BaseLower):
                     try:
                         pysig = fnty.pysig
                     except AttributeError:
-                        raise NotImplementedError(
-                            "unsupported keyword arguments "
-                            "when calling %s" % (fnty,))
+                        raise NotImplementedError("unsupported keyword arguments "
+                                                  "when calling %s" % (fnty,))
                     ba = pysig.bind(*expr.args, **dict(expr.kws))
                     assert not ba.kwargs
                     args = ba.args
@@ -504,10 +497,8 @@ class Lower(BaseLower):
                 fndesc = ExternalFunctionDescriptor(
                     fnty.symbol, fnty.restype, fnty.argtypes)
                 func = self.context.declare_external_function(
-                    cgutils.get_module(self.builder), fndesc)
-                res = self.context.call_external_function(self.builder, func,
-                                                          fndesc.argtypes,
-                                                          castvals)
+                        cgutils.get_module(self.builder), fndesc)
+                res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
 
             else:
                 # Normal function resolution
@@ -672,7 +663,7 @@ class Lower(BaseLower):
         if name not in self.varmap:
             self.varmap[name] = self.alloca_lltype(name, value.type)
         ptr = self.getvar(name)
-        assert value.type == ptr.type.pointee, \
+        assert value.type == ptr.type.pointee,\
             "store %s to ptr of %s" % (value.type, ptr.type.pointee)
         self.builder.store(value, ptr)
 
