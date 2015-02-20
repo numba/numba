@@ -52,7 +52,10 @@ class TypeAnnotation(object):
         self.typemap = typemap
         self.calltypes = calltypes
         self.lifted = lifted
-        self.fancy = os.path.join(os.getcwd(), fancy)
+        if fancy is None:
+            self.fancy = None
+        else:
+            self.fancy = os.path.join(os.getcwd(), fancy)
         self.filename = interp.loc.filename
         self.linenum = str(interp.loc.line)
         self.signature = str(args) + ' -> ' + str(return_type)
