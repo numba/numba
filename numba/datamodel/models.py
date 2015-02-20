@@ -62,14 +62,6 @@ class DataModel(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    # ===== Helpers =====
-
-    def data_to_argument(self, builder, value):
-        return self.as_argument(builder, self.from_data(builder, value))
-
-    def argument_to_data(self, builder, value):
-        return self.as_data(builder, self.from_argument(builder, value))
-
 
 @register_default(types.Boolean)
 class BooleanModel(DataModel):
