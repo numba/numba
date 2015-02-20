@@ -42,19 +42,17 @@ class SourceLines(Mapping):
 
 class TypeAnnotation(object):
     
-    output_filename = os.path.join(os.getcwd(),
-                                   os.path.splitext(sys.argv[0])[0] + '.html')
     data = {'func_data': OrderedDict()}
 
     def __init__(self, interp, typemap, calltypes, lifted, args, return_type,
-                 func_attr, fancy=False):
+                 func_attr, fancy=None):
         self.filename = interp.bytecode.filename
         self.func = interp.bytecode.func
         self.blocks = interp.blocks
         self.typemap = typemap
         self.calltypes = calltypes
         self.lifted = lifted
-        self.fancy = fancy
+        self.fancy = os.path.join(os.getcwd(), fancy)
         self.filename = interp.loc.filename
         self.linenum = str(interp.loc.line)
         self.signature = str(args) + ' -> ' + str(return_type)
@@ -180,11 +178,11 @@ class TypeAnnotation(object):
                 for inst in llvm_instructions[num]:
                     func_data['llvm_lines'][num].append(inst.strip())
 
-        with open(self.output_filename, 'w') as output:
+        with open(self.fancy, 'w') as output:
             step.Template(html).stream(output, TypeAnnotation.data.copy())
 
     def __str__(self):
-        if self.fancy:
+        if self.fancy is not None:
             self.html_annotate()
             return self.annotate()
         else:

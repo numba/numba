@@ -82,7 +82,7 @@ DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
 ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
 
 # Dump type annotation in "fancy" html format
-FANCY = _readenv("NUMBA_DUMP_FANCY", int, 0)
+FANCY = _readenv("NUMBA_DUMP_FANCY", str, None)
 
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]

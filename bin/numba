@@ -22,8 +22,8 @@ def make_parser():
                         help='[Deprecated] Dump the control flow graph')
     parser.add_argument('--dump-ast', action="store_true",
                         help='[Deprecated] Dump the AST')
-    parser.add_argument('--fancy', action='store_true',
-                        help='Try to output fancy files (.dot or .html)')
+    parser.add_argument('--fancy', nargs=1, metavar='html_filename',
+                        help='Try to output source annotation as html')
     parser.add_argument('filename', help='Python source filename')
     return parser
 
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     os.environ['NUMBA_DUMP_ANNOTATION'] = str(int(args.annotate))
-    os.environ['NUMBA_DUMP_FANCY'] = str(int(args.fancy))
+    os.environ['NUMBA_DUMP_FANCY'] = str(args.fancy[0])
     os.environ['NUMBA_DUMP_LLVM'] = str(int(args.dump_llvm))
     os.environ['NUMBA_DUMP_OPTIMIZED'] = str(int(args.dump_optimized))
     os.environ['NUMBA_DUMP_ASSEMBLY'] = str(int(args.dump_assembly))
