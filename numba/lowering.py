@@ -224,10 +224,12 @@ class BaseLower(object):
 
     def lower(self):
         # Init argument variables
-        fnargs = self.context.get_arguments(self.function)
+        rawfnargs = self.context.get_arguments(self.function)
+        fi = self.context.get_function_info(self.fndesc.restype,
+                                            self.fndesc.argtypes)
+        fnargs = fi.from_arguments(self.builder, rawfnargs)
+
         for ak, av in zip(self.fndesc.args, fnargs):
-            at = self.typeof(ak)
-            av = self.context.get_argument_value(self.builder, at, av)
             av = self.init_argument(av)
             self.storevar(av, ak)
 
@@ -521,15 +523,13 @@ class Lower(BaseLower):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             item = self.context.pair_first(self.builder, val, ty)
-            return self.context.get_argument_value(self.builder,
-                                                   ty.first_type, item)
+            return item
 
         elif expr.op == 'pair_second':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             item = self.context.pair_second(self.builder, val, ty)
-            return self.context.get_argument_value(self.builder,
-                                                   ty.second_type, item)
+            return item
 
         elif expr.op in ('getiter', 'iternext'):
             val = self.loadvar(expr.value.name)
@@ -617,7 +617,8 @@ class Lower(BaseLower):
                 impl = self.context.get_function("getitem", signature)
                 argvals = (baseval, indexval)
                 res = impl(self.builder, argvals)
-                return self.context.cast(self.builder, res, signature.return_type,
+                return self.context.cast(self.builder, res,
+                                         signature.return_type,
                                          resty)
 
         elif expr.op == "getitem":

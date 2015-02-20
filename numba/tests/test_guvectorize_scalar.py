@@ -18,7 +18,7 @@ class TestGUVectorizeScalar(unittest.TestCase):
         a pointer to the output location.
         """
 
-        @guvectorize(['void(int32[:], int32[:])'], '(n)->()')
+        @guvectorize(['void(int32[:], int32[:])'], '(n)->()', nopython=True)
         def sum_row(inp, out):
             tmp = 0.
             for i in range(inp.shape[0]):
@@ -34,21 +34,22 @@ class TestGUVectorizeScalar(unittest.TestCase):
 
         # verify result
         for i in range(inp.shape[0]):
-            assert out[i] == inp[i].sum()
+            np.testing.assert_allclose(inp[i].sum(), out[i])
 
     def test_scalar_input(self):
 
-        @guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)')
+        @guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)', nopython=True)
         def foo(inp, n, out):
             for i in range(inp.shape[0]):
-                out[i] = inp[i] * n[()]
+                out[i] = inp[i] * n[0]
 
         inp = np.arange(3 * 10, dtype=np.int32).reshape(10, 3)
         # out = np.empty_like(inp)
         out = foo(inp, 2)
 
         # verify result
-        self.assertTrue(np.all(inp * 2 == out))
+        np.testing.assert_allclose(inp * 2, out)
+
 
 if __name__ == '__main__':
     unittest.main()

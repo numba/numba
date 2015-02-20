@@ -25,11 +25,7 @@ def make_enumerate_cls(enum_type):
     instance of types.EnumerateType).
     """
 
-    class Enumerate(cgutils.Structure):
-        _fields = [('count', types.CPointer(types.intp)),
-                   ('iter', enum_type.source_type)]
-
-    return Enumerate
+    return cgutils.create_struct_proxy(enum_type)
 
 
 @builtin

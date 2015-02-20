@@ -25,23 +25,8 @@ def make_array(array_type):
     Return the Structure representation of the given *array_type*
     (an instance of types.Array).
     """
-    dtype = array_type.dtype
-    nd = array_type.ndim
+    return cgutils.create_struct_proxy(array_type)
 
-    # This structure should be kept in sync with Numba_adapt_ndarray()
-    # in _helperlib.c.
-    class ArrayTemplate(cgutils.Structure):
-        _fields = [('parent', types.pyobject),
-                   ('nitems', types.intp),
-                   ('itemsize', types.intp),
-                   # These three fields comprise the unofficiel llarray ABI
-                   # (used by the GPU backend)
-                   ('data', types.CPointer(dtype)),
-                   ('shape', types.UniTuple(types.intp, nd)),
-                   ('strides', types.UniTuple(types.intp, nd)),
-                   ]
-
-    return ArrayTemplate
 
 def make_array_ctype(ndim):
     """Create a ctypes representation of an array_type.
@@ -75,13 +60,8 @@ def make_arrayiter_cls(iterator_type):
     Return the Structure representation of the given *iterator_type* (an
     instance of types.ArrayIteratorType).
     """
+    return cgutils.create_struct_proxy(iterator_type)
 
-    class ArrayIteratorStruct(cgutils.Structure):
-        # We use an unsigned index to avoid the cost of negative index tests.
-        _fields = [('index', types.CPointer(types.uintp)),
-                   ('array', iterator_type.array_type)]
-
-    return ArrayIteratorStruct
 
 @builtin
 @implement('getiter', types.Kind(types.Array))
@@ -438,7 +418,7 @@ def array_sum(context, builder, sig, args):
             c += v
         return c
 
-    return context.compile_internal(builder, array_sum_impl, sig, args, 
+    return context.compile_internal(builder, array_sum_impl, sig, args,
                                     locals=dict(c=sig.return_type))
 
 
@@ -526,7 +506,7 @@ def array_max(context, builder, sig, args):
         for v in arry.flat:
             max_value = v
             break
-        
+
         for v in arry.flat:
             if v > max_value:
                 max_value = v

@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import
 
 import sys
 
+from llvmlite import ir as llir
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.ee as le
 import llvmlite.binding as ll
@@ -9,7 +10,7 @@ import llvmlite.binding as ll
 from numba import _dynfunc, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
-from numba import utils, cgutils, types
+from numba import utils, cgutils, types, datamodel
 from numba.targets import (
     codegen, externals, intrinsics, cmathimpl, mathimpl, npyimpl,
     operatorimpl, printimpl, randomimpl)
@@ -109,10 +110,10 @@ class CPUContext(BaseContext):
         Actual arguments starts at the 3rd argument position.
         Caller is responsible to allocate space for return value.
         """
-        argtypes = [self.get_argument_type(aty)
-                    for aty in argtypes]
-        resptr = self.get_return_type(restype)
-        fnty = lc.Type.function(lc.Type.int(), [resptr, PYOBJECT] + argtypes)
+        argtypes = [types.pyobject] + list(argtypes)
+        fi = self.get_function_info(restype, argtypes)
+        argtys = (fi.return_type.as_pointer(),) + fi.argument_types
+        fnty = llir.FunctionType(llir.IntType(32), argtys)
         return fnty
 
     def declare_function(self, module, fndesc):
@@ -156,8 +157,8 @@ class CPUContext(BaseContext):
         # initialize return value to zeros
         builder.store(lc.Constant.null(retty), retvaltmp)
 
-        args = [self.get_value_as_argument(builder, ty, arg)
-                for ty, arg in zip(argtys, args)]
+        fi = self.get_function_info(resty, argtys)
+        args = fi.as_arguments(builder, args)
         realargs = [retvaltmp, env] + list(args)
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)

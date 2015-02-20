@@ -16,16 +16,8 @@ def make_range_iterator(typ):
     Return the Structure representation of the given *typ* (an
     instance of types.RangeIteratorType).
     """
-    int_type = typ.yield_type
+    return cgutils.create_struct_proxy(typ)
 
-    class RangeIter(cgutils.Structure):
-
-        _fields = [('iter', types.CPointer(int_type)),
-                   ('stop', int_type),
-                   ('step', int_type),
-                   ('count', types.CPointer(int_type))]
-
-    return RangeIter
 
 
 def make_range_impl(range_state_type, range_iter_type, int_type):
