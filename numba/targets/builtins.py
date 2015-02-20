@@ -449,6 +449,17 @@ def _implement_integer_operators():
 _implement_integer_operators()
 
 
+def tuple_new_impl(context, builder, sig, args):
+    """ build tuple from unituple, tuple or array """
+    # this simply does nothing but directly return the original object
+    # because tuples are already tuples, and arrays, we convert to
+    # an ArrayTuple type (used in getitem)
+    [val] = args
+    return val
+builtin(implement(types.tuple_type, types.Kind(types.UniTuple))(tuple_new_impl))
+builtin(implement(types.tuple_type, types.Kind(types.Tuple))(tuple_new_impl))
+builtin(implement(types.tuple_type, types.Kind(types.Array))(tuple_new_impl))
+
 def optional_is_none(context, builder, sig, args):
     """Check if an Optional value is invalid
     """

@@ -11,7 +11,8 @@ import llvmlite.llvmpy.core as lc
 
 import numba.ctypes_support as ctypes
 import numpy
-from llvmlite.llvmpy.core import Constant
+from llvmlite.llvmpy.core import Constant, Type
+from numba import errcode
 from numba import types, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
@@ -260,6 +261,47 @@ def getitem_array_tuple(context, builder, sig, args):
                                        wraparound=True)
 
         return context.unpack_value(builder, aryty.dtype, ptr)
+
+@builtin
+@implement('getitem', types.Kind(types.Array),
+           types.Kind(types.ArrayTuple))
+def getitem_array_arraytuple(context, builder, sig, args):
+    aryty, idxty = sig.args
+    ary, idx = args
+
+    ndim = aryty.ndim
+    arystty = make_array(aryty)
+    idxstty = make_array(idxty)
+
+    ary = arystty(context, builder, ary)
+    idx = idxstty(context, builder, idx)
+
+    assert isinstance(idxty.dtype, types.Integer)
+
+    # WATCHOUT: if idx.shape[0] is smaller than ndim, this would
+    # produce segfaults
+    # there doesn't seem to be a way to check this at compile time
+    # and checking at runtime is likely not worth it.
+
+    # create indices in the idx array
+    indices = [Constant.int(Type.int(16), i) for i in range(ndim)]
+
+    # get the pointers in the idx array
+    indices = [cgutils.get_item_pointer(builder, idxty, idx,
+                [i], False) for i in indices]
+
+    # fetch the values from the idx array
+    indices = [context.unpack_value(builder, idxty.dtype, p) for p in indices]
+
+    # cast to intp, for indexing
+    indices = [context.cast(builder, i, idxty.dtype, types.intp)
+               for i in indices]
+
+    # fetch the true item
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                   wraparound=idxty.dtype.signed)
+
+    return context.unpack_value(builder, aryty.dtype, ptr)
 
 
 @builtin
