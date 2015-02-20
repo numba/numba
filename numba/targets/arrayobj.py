@@ -25,22 +25,8 @@ def make_array(array_type):
     Return the Structure representation of the given *array_type*
     (an instance of types.Array).
     """
-    # dtype = array_type.dtype
-    # nd = array_type.ndim
-    # This structure should be kept in sync with Numba_adapt_ndarray()
-    # in _helperlib.c.
-    # class ArrayTemplate(cgutils.Structure):
-    #     _fields = [('parent', types.pyobject),
-    #                ('nitems', types.intp),
-    #                ('itemsize', types.intp),
-    #                # These three fields comprise the unofficiel llarray ABI
-    #                # (used by the GPU backend)
-    #                ('data', types.CPointer(dtype)),
-    #                ('shape', types.UniTuple(types.intp, nd)),
-    #                ('strides', types.UniTuple(types.intp, nd)),
-    #                ]
-
     return cgutils.create_struct_proxy(array_type)
+
 
 def make_array_ctype(ndim):
     """Create a ctypes representation of an array_type.
@@ -75,13 +61,7 @@ def make_arrayiter_cls(iterator_type):
     instance of types.ArrayIteratorType).
     """
     return cgutils.create_struct_proxy(iterator_type)
-    #
-    # class ArrayIteratorStruct(cgutils.Structure):
-    #     # We use an unsigned index to avoid the cost of negative index tests.
-    #     _fields = [('index', types.CPointer(types.uintp)),
-    #                ('array', iterator_type.array_type)]
-    #
-    # return ArrayIteratorStruct
+
 
 @builtin
 @implement('getiter', types.Kind(types.Array))

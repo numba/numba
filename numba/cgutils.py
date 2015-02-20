@@ -149,7 +149,6 @@ class Structure(object):
 
     # XXX Should this warrant several separate constructors?
     def __init__(self, context, builder, value=None, ref=None, cast_ref=False):
-        # raise NotImplementedError
         self._type = context.get_struct_type(self)
         self._context = context
         self._builder = builder
@@ -216,17 +215,11 @@ class Structure(object):
         Store the LLVM *value* into the field at *index*.
         """
         ptr = self._get_ptr_by_index(index)
-        # value = self._context.get_value_as_data(self._builder,
-        #                                         self._typemap[index],
-        #                                         value)
         if ptr.type.pointee != value.type:
-            print(self._typemap[index])
-            print(value)
-            print(self._value)
-            raise AssertionError("Type mismatch: __setitem__(%d, ...) "
-                                 "expected %r but got %r"
-                                 % (
-            index, str(ptr.type.pointee), str(value.type)))
+            fmt = "Type mismatch: __setitem__(%d, ...) expected %r but got %r"
+            raise AssertionError(fmt % (index,
+                                        str(ptr.type.pointee),
+                                        str(value.type)))
         self._builder.store(value, ptr)
 
     def __len__(self):
@@ -253,7 +246,7 @@ class Structure(object):
         assert value.type == self._type, (value.type, self._type)
         self._builder.store(value, self._value)
 
-        # __iter__ is derived by Python from __len__ and __getitem__
+    # __iter__ is derived by Python from __len__ and __getitem__
 
 
 def get_function(builder):
@@ -699,25 +692,6 @@ def get_record_member(builder, record, offset, typ):
     pval = inbound_gep(builder, record, 0, offset)
     assert not is_pointer(pval.type.pointee)
     return builder.bitcast(pval, Type.pointer(typ))
-
-
-def get_record_data(builder, record):
-    raise NotImplementedError
-    # return record #return builder.extract_value(record, 0)
-
-
-def set_record_data(builder, record, buf):
-    raise NotImplementedError
-
-    casted = builder.bitcast(buf, record.type.pointee)
-    builder.store(casted, record)
-
-
-def init_record_by_ptr(builder, ltyp, ptr):
-    raise NotImplementedError
-    tmp = alloca_once(builder, ltyp)
-    set_record_data(builder, tmp, ptr)
-    return builder.load(tmp)
 
 
 def is_neg_int(builder, val):
