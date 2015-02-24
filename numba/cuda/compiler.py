@@ -4,7 +4,7 @@ import ctypes
 
 
 from numba.typing.templates import AbstractTemplate
-from numba import config, compiler, types, errcode
+from numba import config, compiler, types
 from numba.typing.templates import ConcreteTemplate
 from numba import typing, lowering
 
@@ -56,7 +56,7 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         argtypes=cres.signature.args,
                         link=link,
                         debug=debug,
-                        exceptions=cres.exception_map,
+                        call_helper=cres.call_helper,
                         fastmath=fastmath)
     return cukern
 
@@ -279,8 +279,8 @@ class CachedCUFunction(object):
 
 class CUDAKernel(CUDAKernelBase):
     def __init__(self, llvm_module, name, pretty_name,
-                 argtypes, link=(), debug=False, exceptions={},
-                 fastmath=False):
+                 argtypes, call_helper,
+                 link=(), debug=False, fastmath=False):
         super(CUDAKernel, self).__init__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
@@ -296,7 +296,7 @@ class CUDAKernel(CUDAKernelBase):
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
         self._func = CachedCUFunction(self.entry_name, ptx, link)
         self.debug = debug
-        self.exceptions = exceptions
+        self.call_helper = call_helper
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
@@ -343,13 +343,13 @@ class CUDAKernel(CUDAKernelBase):
         cu_func = cufunc.configure(griddim, blockdim,
                                    stream=stream,
                                    sharedmem=sharedmem)
-        # invoke kernel
+        # Invoke kernel
         cu_func(*args)
 
         if self.debug:
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
             if excval.value != 0:
-                # Error occurred
+                # An error occurred
                 def load_symbol(name):
                     mem, sz = cufunc.module.get_global_symbol("%s__%s__" %
                                                               (cufunc.name,
@@ -361,14 +361,14 @@ class CUDAKernel(CUDAKernelBase):
                 tid = [load_symbol("tid" + i) for i in 'zyx']
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
                 code = excval.value
-                builtinerr = errcode.error_names.get(code)
-                if builtinerr is not None:
-                    raise KernelRuntimeError("code=%d reason=%s" %
-                                             (code, builtinerr), tid=tid,
-                                             ctaid=ctaid)
+                exccls, exc_args = self.call_helper.get_exception(code)
+                # Prefix the exception message with the thread position
+                prefix = "tid=%s ctaid=%s" % (tid, ctaid)
+                if exc_args:
+                    exc_args = ("%s: %s" % (prefix, exc_args[0]),) + exc_args[1:]
                 else:
-                    exccls = self.exceptions[code]
-                    raise exccls("tid=%s ctaid=%s" % (tid, ctaid))
+                    exc_args = prefix,
+                raise exccls(*exc_args)
 
         # retrieve auto converted arrays
         for wb in retr:

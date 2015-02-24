@@ -12,7 +12,6 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import jit, _helperlib, types
 from numba.compiler import compile_isolated
-from numba.pythonapi import NativeError
 from .support import TestCase
 
 
@@ -248,9 +247,9 @@ class TestRandom(TestCase):
             expected = r.getrandbits(nbits)
             got = func(nbits)
             self.assertPreciseEqual(expected, got)
-        self.assertRaises(NativeError, func, 65)
-        self.assertRaises(NativeError, func, 9999999)
-        self.assertRaises(NativeError, func, -1)
+        self.assertRaises(OverflowError, func, 65)
+        self.assertRaises(OverflowError, func, 9999999)
+        self.assertRaises(OverflowError, func, -1)
 
     def test_random_getrandbits(self):
         self._check_getrandbits(jit_unary("random.getrandbits"), py_state_ptr)
@@ -357,13 +356,13 @@ class TestRandom(TestCase):
                     self.assertPreciseEqual(func3(2 + width, 2, -3),
                                             r.randrange(2 + width, 2, -3))
         # Empty ranges
-        self.assertRaises(NativeError, func1, 0)
-        self.assertRaises(NativeError, func1, -5)
-        self.assertRaises(NativeError, func2, 5, 5)
-        self.assertRaises(NativeError, func2, 5, 2)
+        self.assertRaises(ValueError, func1, 0)
+        self.assertRaises(ValueError, func1, -5)
+        self.assertRaises(ValueError, func2, 5, 5)
+        self.assertRaises(ValueError, func2, 5, 2)
         if func3 is not None:
-            self.assertRaises(NativeError, func3, 5, 7, -1)
-            self.assertRaises(NativeError, func3, 7, 5, 1)
+            self.assertRaises(ValueError, func3, 5, 7, -1)
+            self.assertRaises(ValueError, func3, 7, 5, 1)
 
     def test_random_randrange(self):
         for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
@@ -397,8 +396,8 @@ class TestRandom(TestCase):
                     continue
                 self._check_dist(func, r.randint, [args], niters=10)
         # Empty ranges
-        self.assertRaises(NativeError, func, 5, 4)
-        self.assertRaises(NativeError, func, 5, 2)
+        self.assertRaises(ValueError, func, 5, 4)
+        self.assertRaises(ValueError, func, 5, 2)
 
     def test_random_randint(self):
         for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
@@ -454,13 +453,13 @@ class TestRandom(TestCase):
             self.assertPreciseEqual(func1(1.5), r.gammavariate(1.5, 1.0))
         # Invalid inputs
         if func2 is not None:
-            self.assertRaises(NativeError, func2, 0.0, 1.0)
-            self.assertRaises(NativeError, func2, 1.0, 0.0)
-            self.assertRaises(NativeError, func2, -0.5, 1.0)
-            self.assertRaises(NativeError, func2, 1.0, -0.5)
+            self.assertRaises(ValueError, func2, 0.0, 1.0)
+            self.assertRaises(ValueError, func2, 1.0, 0.0)
+            self.assertRaises(ValueError, func2, -0.5, 1.0)
+            self.assertRaises(ValueError, func2, 1.0, -0.5)
         if func1 is not None:
-            self.assertRaises(NativeError, func1, 0.0)
-            self.assertRaises(NativeError, func1, -0.5)
+            self.assertRaises(ValueError, func1, 0.0)
+            self.assertRaises(ValueError, func1, -0.5)
 
     def test_random_gammavariate(self):
         self._check_gammavariate(jit_binary("random.gammavariate"), None,
@@ -482,10 +481,10 @@ class TestRandom(TestCase):
         r = self._follow_cpython(ptr)
         self._check_dist(func, r.betavariate, [(0.5, 2.5)])
         # Invalid inputs
-        self.assertRaises(NativeError, func, 0.0, 1.0)
-        self.assertRaises(NativeError, func, 1.0, 0.0)
-        self.assertRaises(NativeError, func, -0.5, 1.0)
-        self.assertRaises(NativeError, func, 1.0, -0.5)
+        self.assertRaises(ValueError, func, 0.0, 1.0)
+        self.assertRaises(ValueError, func, 1.0, 0.0)
+        self.assertRaises(ValueError, func, -0.5, 1.0)
+        self.assertRaises(ValueError, func, 1.0, -0.5)
 
     def test_random_betavariate(self):
         self._check_betavariate(jit_binary("random.betavariate"), py_state_ptr)
@@ -593,9 +592,9 @@ class TestRandom(TestCase):
         # We follow Numpy's algorithm up to n*p == 30
         self._follow_numpy(np_state_ptr, 0)
         binomial = jit_binary("np.random.binomial")
-        self.assertRaises(NativeError, binomial, -1, 0.5)
-        self.assertRaises(NativeError, binomial, 10, -0.1)
-        self.assertRaises(NativeError, binomial, 10, 1.1)
+        self.assertRaises(ValueError, binomial, -1, 0.5)
+        self.assertRaises(ValueError, binomial, 10, -0.1)
+        self.assertRaises(ValueError, binomial, 10, 1.1)
 
     def test_numpy_chisquare(self):
         chisquare = jit_unary("np.random.chisquare")
@@ -613,9 +612,9 @@ class TestRandom(TestCase):
     def test_numpy_geometric(self):
         geom = jit_unary("np.random.geometric")
         # p out of domain
-        self.assertRaises(NativeError, geom, -1.0)
-        self.assertRaises(NativeError, geom, 0.0)
-        self.assertRaises(NativeError, geom, 1.001)
+        self.assertRaises(ValueError, geom, -1.0)
+        self.assertRaises(ValueError, geom, 0.0)
+        self.assertRaises(ValueError, geom, 1.001)
         # Some basic checks
         N = 200
         r = [geom(1.0) for i in range(N)]
@@ -684,9 +683,9 @@ class TestRandom(TestCase):
         self.assertEqual([logseries(0.9999999999999) for i in range(10)],
                          [2022733531, 77296, 30, 52204, 9341294, 703057324,
                           413147702918, 1870715907, 16009330, 738])
-        self.assertRaises(NativeError, logseries, 0.0)
-        self.assertRaises(NativeError, logseries, -0.1)
-        self.assertRaises(NativeError, logseries, 1.1)
+        self.assertRaises(ValueError, logseries, 0.0)
+        self.assertRaises(ValueError, logseries, -0.1)
+        self.assertRaises(ValueError, logseries, 1.1)
 
     def test_numpy_poisson(self):
         r = self._follow_numpy(np_state_ptr)
@@ -695,7 +694,7 @@ class TestRandom(TestCase):
         self._check_dist(poisson, r.poisson,
                          [(0.0,), (0.5,), (2.0,), (10.0,), (900.5,)],
                          niters=50)
-        self.assertRaises(NativeError, poisson, -0.1)
+        self.assertRaises(ValueError, poisson, -0.1)
 
     def test_numpy_negative_binomial(self):
         self._follow_numpy(np_state_ptr, 0)
@@ -711,18 +710,18 @@ class TestRandom(TestCase):
                      for i in range(50)])
         self.assertGreater(m, 9e9 * 0.99)
         self.assertLess(m, 9e9 * 1.01)
-        self.assertRaises(NativeError, negbin, 0, 0.5)
-        self.assertRaises(NativeError, negbin, -1, 0.5)
-        self.assertRaises(NativeError, negbin, 10, -0.1)
-        self.assertRaises(NativeError, negbin, 10, 1.1)
+        self.assertRaises(ValueError, negbin, 0, 0.5)
+        self.assertRaises(ValueError, negbin, -1, 0.5)
+        self.assertRaises(ValueError, negbin, 10, -0.1)
+        self.assertRaises(ValueError, negbin, 10, 1.1)
 
     def test_numpy_power(self):
         r = self._follow_numpy(np_state_ptr)
         power = jit_unary("np.random.power")
         self._check_dist(power, r.power,
                          [(0.1,), (0.5,), (0.9,), (6.0,)])
-        self.assertRaises(NativeError, power, 0.0)
-        self.assertRaises(NativeError, power, -0.1)
+        self.assertRaises(ValueError, power, 0.0)
+        self.assertRaises(ValueError, power, -0.1)
 
     def test_numpy_rayleigh(self):
         r = self._follow_numpy(np_state_ptr)
@@ -731,8 +730,8 @@ class TestRandom(TestCase):
         self._check_dist(rayleigh1, r.rayleigh,
                          [(0.1,), (0.8,), (25.,), (1e3,)])
         self._check_dist(rayleigh0, r.rayleigh, [()])
-        self.assertRaises(NativeError, rayleigh1, 0.0)
-        self.assertRaises(NativeError, rayleigh1, -0.1)
+        self.assertRaises(ValueError, rayleigh1, 0.0)
+        self.assertRaises(ValueError, rayleigh1, -0.1)
 
     def test_numpy_standard_cauchy(self):
         r = self._follow_numpy(np_state_ptr)
@@ -753,17 +752,17 @@ class TestRandom(TestCase):
         r = self._follow_numpy(np_state_ptr)
         wald = jit_binary("np.random.wald")
         self._check_dist(wald, r.wald, [(1.0, 1.0), (2.0, 5.0)])
-        self.assertRaises(NativeError, wald, 0.0, 1.0)
-        self.assertRaises(NativeError, wald, -0.1, 1.0)
-        self.assertRaises(NativeError, wald, 1.0, 0.0)
-        self.assertRaises(NativeError, wald, 1.0, -0.1)
+        self.assertRaises(ValueError, wald, 0.0, 1.0)
+        self.assertRaises(ValueError, wald, -0.1, 1.0)
+        self.assertRaises(ValueError, wald, 1.0, 0.0)
+        self.assertRaises(ValueError, wald, 1.0, -0.1)
 
     def test_numpy_zipf(self):
         r = self._follow_numpy(np_state_ptr)
         zipf = jit_unary("np.random.zipf")
         self._check_dist(zipf, r.zipf, [(1.5,), (2.5,)], niters=100)
         for val in (1.0, 0.5, 0.0, -0.1):
-            self.assertRaises(NativeError, zipf, val)
+            self.assertRaises(ValueError, zipf, val)
 
     def _check_shuffle(self, func, ptr):
         """

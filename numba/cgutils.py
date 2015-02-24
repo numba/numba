@@ -6,10 +6,12 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import functools
 import re
+
+from llvmlite import ir
 from llvmlite.llvmpy.core import Constant, Type
 import llvmlite.llvmpy.core as lc
 
-from . import errcode, utils
+from . import utils
 
 
 true_bit = Constant.int(Type.int(1), 1)
@@ -28,13 +30,22 @@ def as_bool_bit(builder, value):
 
 def make_anonymous_struct(builder, values):
     """
-    Create an anonymous struct constant containing the given LLVM *values*.
+    Create an anonymous struct containing the given LLVM *values*.
     """
     struct_type = Type.struct([v.type for v in values])
     struct_val = Constant.undef(struct_type)
     for i, v in enumerate(values):
         struct_val = builder.insert_value(struct_val, v, i)
     return struct_val
+
+
+def make_bytearray(buf):
+    """
+    Make a byte array constant from *buf*.
+    """
+    b = bytearray(buf)
+    n = len(b)
+    return ir.Constant(ir.ArrayType(ir.IntType(8), n), b)
 
 
 class Structure(object):
@@ -555,9 +566,15 @@ def is_scalar_neg(builder, value):
     return isneg
 
 
-def guard_null(context, builder, value):
+def guard_null(context, builder, value, exc_tuple):
+    """
+    Guard against *value* being null or zero.
+    *exc_tuple* should be a (exception type, arguments...) tuple.
+    """
     with if_unlikely(builder, is_scalar_zero(builder, value)):
-        context.return_errcode(builder, errcode.ASSERTION_ERROR)
+        exc = exc_tuple[0]
+        exc_args = exc_tuple[1:] or None
+        context.call_conv.return_user_exc(builder, exc, exc_args)
 
 
 guard_zero = guard_null
@@ -661,7 +678,7 @@ def global_constant(builder_or_module, name, value, linkage=lc.LINKAGE_INTERNAL)
     else:
         module = get_module(builder_or_module)
     data = module.add_global_variable(value.type, name=name)
-    data.linkage = lc.LINKAGE_INTERNAL
+    data.linkage = linkage
     data.global_constant = True
     data.initializer = value
     return data

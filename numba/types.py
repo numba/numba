@@ -880,6 +880,40 @@ class NoneType(Opaque):
 
         return Optional(other)
 
+
+class ExceptionType(Phantom):
+    """
+    The type of exception classes (not instances).
+    """
+
+    def __init__(self, exc_class):
+        assert issubclass(exc_class, BaseException)
+        name = "%s" % (exc_class.__name__)
+        self.exc_class = exc_class
+        super(ExceptionType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.exc_class
+
+
+class ExceptionInstance(Phantom):
+    """
+    The type of exception instances.  *exc_class* should be the
+    exception class.
+    """
+
+    def __init__(self, exc_class):
+        assert issubclass(exc_class, BaseException)
+        name = "%s(...)" % (exc_class.__name__,)
+        self.exc_class = exc_class
+        super(ExceptionInstance, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.exc_class
+
+
 # Utils
 
 def is_int_tuple(x):
@@ -897,7 +931,7 @@ def is_int_tuple(x):
 pyobject = Opaque('pyobject')
 none = NoneType('none')
 Any = Phantom('any')
-string = Opaque('str')
+string = Dummy('str')
 
 # No operation is defined on voidptr
 # Can only pass it around
@@ -933,7 +967,6 @@ neg_type = Phantom('neg')
 print_type = Phantom('print')
 print_item_type = Phantom('print-item')
 sign_type = Phantom('sign')
-exception_type = Phantom('exception')
 
 range_iter32_type = RangeIteratorType('range_iter32', int32)
 range_iter64_type = RangeIteratorType('range_iter64', int64)

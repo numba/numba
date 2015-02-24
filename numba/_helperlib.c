@@ -1205,6 +1205,116 @@ void Numba_gil_release(PyGILState_STATE *state) {
     PyGILState_Release(*state);
 }
 
+/* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
+   This *consumes* a reference count to its argument. */
+static int
+Numba_do_raise(PyObject *exc)
+{
+    PyObject *type = NULL, *value = NULL;
+
+    /* We support the following forms of raise:
+       raise
+       raise <instance>
+       raise <type> */
+
+    if (exc == NULL) {
+        /* Reraise */
+        PyThreadState *tstate = PyThreadState_GET();
+        PyObject *tb;
+        type = tstate->exc_type;
+        value = tstate->exc_value;
+        tb = tstate->exc_traceback;
+        if (type == Py_None) {
+            PyErr_SetString(PyExc_RuntimeError,
+                            "No active exception to reraise");
+            return 0;
+        }
+        Py_XINCREF(type);
+        Py_XINCREF(value);
+        Py_XINCREF(tb);
+        PyErr_Restore(type, value, tb);
+        return 1;
+    }
+
+    if (PyTuple_CheckExact(exc)) {
+        /* A (callable, arguments) tuple. */
+        if (!PyArg_ParseTuple(exc, "OO", &type, &value)) {
+            Py_DECREF(exc);
+            goto raise_error;
+        }
+        value = PyObject_CallObject(type, value);
+        Py_DECREF(exc);
+        type = NULL;
+        if (value == NULL)
+            goto raise_error;
+        if (!PyExceptionInstance_Check(value)) {
+            PyErr_SetString(PyExc_TypeError,
+                            "exceptions must derive from BaseException");
+            goto raise_error;
+        }
+        type = PyExceptionInstance_Class(value);
+        Py_INCREF(type);
+    }
+    else if (PyExceptionClass_Check(exc)) {
+        type = exc;
+        value = PyObject_CallObject(exc, NULL);
+        if (value == NULL)
+            goto raise_error;
+        if (!PyExceptionInstance_Check(value)) {
+            PyErr_SetString(PyExc_TypeError,
+                            "exceptions must derive from BaseException");
+            goto raise_error;
+        }
+    }
+    else if (PyExceptionInstance_Check(exc)) {
+        value = exc;
+        type = PyExceptionInstance_Class(exc);
+        Py_INCREF(type);
+    }
+    else {
+        /* Not something you can raise.  You get an exception
+           anyway, just not what you specified :-) */
+        Py_DECREF(exc);
+        PyErr_SetString(PyExc_TypeError,
+                        "exceptions must derive from BaseException");
+        goto raise_error;
+    }
+
+    PyErr_SetObject(type, value);
+    /* PyErr_SetObject incref's its arguments */
+    Py_XDECREF(value);
+    Py_XDECREF(type);
+    return 0;
+
+raise_error:
+    Py_XDECREF(value);
+    Py_XDECREF(type);
+    return 0;
+}
+
+static PyObject *
+Numba_unpickle(const char *data, Py_ssize_t n)
+{
+    PyObject *buf, *picklemod, *obj;
+    buf = PyBytes_FromStringAndSize(data, n);
+    if (buf == NULL)
+        return NULL;
+#if PY_MAJOR_VERSION >= 3
+    picklemod = PyImport_ImportModule("pickle");
+#else
+    picklemod = PyImport_ImportModule("cPickle");
+#endif
+    if (picklemod == NULL) {
+        Py_DECREF(buf);
+        return NULL;
+    }
+    obj = PyObject_CallMethod(picklemod, "loads", "O", buf);
+    Py_DECREF(buf);
+    Py_DECREF(picklemod);
+    return obj;
+}
+
+
 /*
 Define bridge for all math functions
 */
@@ -1271,6 +1381,8 @@ build_c_helpers_dict(void)
     declmethod(fptouif);
     declmethod(gil_ensure);
     declmethod(gil_release);
+    declmethod(do_raise);
+    declmethod(unpickle);
     declmethod(rnd_shuffle);
     declmethod(rnd_init);
     declmethod(poisson_ptrs);

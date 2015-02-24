@@ -1,5 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
+import pickle
+
+from llvmlite import ir
 import llvmlite.binding as ll
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.llvmpy.core as lc
@@ -7,10 +10,6 @@ import llvmlite.llvmpy.core as lc
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
 from numba import types, utils, cgutils, _helperlib, assume
-
-
-class NativeError(RuntimeError):
-    pass
 
 
 class PythonAPI(object):
@@ -27,6 +26,12 @@ class PythonAPI(object):
         self.builder = builder
 
         self.module = builder.basic_block.function.module
+        # A unique mapping of serialized objects in this module
+        try:
+            self.module.__serialized
+        except AttributeError:
+            self.module.__serialized = {}
+
         # Initialize types
         self.pyobj = self.context.get_argument_type(types.pyobject)
         self.voidptr = Type.pointer(Type.int(8))
@@ -96,6 +101,17 @@ class PythonAPI(object):
             msg = self.context.insert_const_string(self.module, msg)
         return self.builder.call(fn, (exctype, msg))
 
+    def raise_object(self, exc=None):
+        """
+        Raise an arbitrary exception (type or value or (type, args)
+        or None - if reraising).  A reference to the argument is consumed.
+        """
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="numba_do_raise")
+        if exc is None:
+            exc = self.get_null_object()
+        return self.builder.call(fn, (exc,))
+
     def err_set_object(self, exctype, excval):
         fnty = Type.function(Type.void(), [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyErr_SetObject")
@@ -106,18 +122,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyErr_WriteUnraisable")
         return self.builder.call(fn, (obj,))
 
-    def raise_native_error(self, msg):
-        cstr = self.context.insert_const_string(self.module, msg)
-        self.err_set_string(self.native_error_type, cstr)
-
-    def raise_exception(self, exctype, excval):
-        # XXX This produces non-reusable bitcode: the pointer's value
-        # is specific to this process execution.
-        exctypeaddr = self.context.get_constant(types.intp, id(exctype))
-        excvaladdr = self.context.get_constant(types.intp, id(excval))
-        self.err_set_object(exctypeaddr.inttoptr(self.pyobj),
-                            excvaladdr.inttoptr(self.pyobj))
-
     def get_c_object(self, name):
         """
         Get a Python object through its C-accessible *name*
@@ -127,10 +131,6 @@ class PythonAPI(object):
         # A LLVM global variable is implicitly a pointer to the declared
         # type, so fix up by using pyobj.pointee.
         return self.context.get_c_value(self.builder, self.pyobj.pointee, name)
-
-    @property
-    def native_error_type(self):
-        return self.get_c_object("numba_native_error")
 
     def raise_missing_global_error(self, name):
         msg = "global name '%s' is not defined" % name
@@ -549,7 +549,11 @@ class PythonAPI(object):
         args.append(self.context.get_constant_null(types.pyobject))
         return self.builder.call(fn, args)
 
-    def call(self, callee, args, kws):
+    def call(self, callee, args=None, kws=None):
+        if args is None:
+            args = self.get_null_object()
+        if kws is None:
+            kws = self.get_null_object()
         fnty = Type.function(self.pyobj, [self.pyobj] * 3)
         fn = self._get_function(fnty, name="PyObject_Call")
         return self.builder.call(fn, (callee, args, kws))
@@ -737,6 +741,42 @@ class PythonAPI(object):
                 self.incref(items[i])
                 self.list_setitem(seq, idx, items[i])
         return seq
+
+    def unserialize(self, structptr):
+        """
+        Unserialize some data.  *structptr* should be a pointer to
+        a {i8* data, i32 length} structure.
+        """
+        fnty = Type.function(self.pyobj, (self.voidptr, ir.IntType(32)))
+        fn = self._get_function(fnty, name="numba_unpickle")
+        ptr = self.builder.extract_value(self.builder.load(structptr), 0)
+        n = self.builder.extract_value(self.builder.load(structptr), 1)
+        return self.builder.call(fn, (ptr, n))
+
+    def serialize_object(self, obj):
+        """
+        Serialize the given object in the bitcode, and return it
+        as a pointer to a {i8* data, i32 length}, structure constant
+        (suitable for passing to unserialize()).
+        """
+        try:
+            gv = self.module.__serialized[obj]
+        except KeyError:
+            # First make the array constant
+            data = pickle.dumps(obj, protocol=-1)
+            name = ".const.pickledata.%s" % (id(obj))
+            bdata = cgutils.make_bytearray(data)
+            arr = self.context.insert_unique_const(self.module, name, bdata)
+            # Then populate the structure constant
+            struct = ir.Constant.literal_struct([
+                arr.bitcast(self.voidptr),
+                ir.Constant(ir.IntType(32), arr.type.pointee.count),
+                ])
+            name = ".const.picklebuf.%s" % (id(obj))
+            gv = self.context.insert_unique_const(self.module, name, struct)
+            # Make the id() (and hence the name) unique while populating the module.
+            self.module.__serialized[obj] = gv
+        return gv
 
     def to_native_arg(self, obj, typ):
         if isinstance(typ, types.Record):

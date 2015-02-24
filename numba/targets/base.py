@@ -11,9 +11,8 @@ from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
 import numba
-from numba import (types, utils, cgutils, typing, numpy_support, errcode,
-                   _helperlib)
-from numba.pythonapi import PythonAPI, NativeError
+from numba import types, utils, cgutils, typing, numpy_support, _helperlib
+from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry, type_registry)
@@ -51,12 +50,6 @@ STRUCT_TYPES = {
     types.complex128: builtins.Complex128,
     types.slice3_type: builtins.Slice,
 }
-
-Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
-
-RETCODE_OK = Constant.int_signextend(Type.int(), 0)
-RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
-RETCODE_EXC = Constant.int_signextend(Type.int(), -1)
 
 
 class Overloads(object):
@@ -112,7 +105,6 @@ def _load_global_helpers():
     Execute once to install special symbols into the LLVM symbol table.
     """
     ll.add_symbol("Py_None", id(None))
-    ll.add_symbol("numba_native_error", id(NativeError))
 
     # Add C helper functions
     c_helpers = _helperlib.c_helpers
@@ -217,29 +209,6 @@ class BaseContext(object):
     def get_user_function(self, func):
         return self.users[func]
 
-    def get_function_type(self, fndesc):
-        """
-        Get the implemented Function type for the high-level *fndesc*.
-        Some parameters can be added or shuffled around.
-        This is kept in sync with call_function() and get_arguments().
-
-        Calling Convention
-        ------------------
-        Returns: -2 for return none in native function;
-                 -1 for failure with python exception set;
-                  0 for success;
-                 >0 for user error code.
-        Return value is passed by reference as the first argument.
-
-        Actual arguments starts at the 2rd argument position.
-        Caller is responsible to allocate space for return value.
-        """
-        argtypes = [self.get_argument_type(aty)
-                    for aty in fndesc.argtypes]
-        resptr = self.get_return_type(fndesc.restype)
-        fnty = Type.function(Type.int(), [resptr] + argtypes)
-        return fnty
-
     def get_external_function_type(self, fndesc):
         argtypes = [self.get_argument_type(aty)
                     for aty in fndesc.argtypes]
@@ -249,12 +218,10 @@ class BaseContext(object):
         return fnty
 
     def declare_function(self, module, fndesc):
-        fnty = self.get_function_type(fndesc)
+        fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
         assert fn.is_declaration
-        for ak, av in zip(fndesc.args, self.get_arguments(fn)):
-            av.name = "arg.%s" % ak
-        fn.args[0].name = ".ret"
+        self.call_conv.decorate_function(fn, fndesc.args)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
         return fn
@@ -268,23 +235,25 @@ class BaseContext(object):
         return fn
 
     def insert_const_string(self, mod, string):
+        """
+        Insert constant *string* (a str object) into module *mod*.
+        """
         stringtype = GENERIC_POINTER
-        text = Constant.stringz(string)
         name = ".const.%s" % string
-        for gv in mod.global_values:
-            if gv.name == name and gv.type.pointee == text.type:
-                break
-        else:
-            gv = cgutils.global_constant(mod, name, text)
-            gv.linkage = lc.LINKAGE_INTERNAL
+        text = cgutils.make_bytearray(string.encode("utf-8") + b"\x00")
+        gv = self.insert_unique_const(mod, name, text)
         return Constant.bitcast(gv, stringtype)
 
-    def get_arguments(self, func):
+    def insert_unique_const(self, mod, name, val):
         """
-        Get the Python-level arguments of LLVM *func*.
-        See get_function_type() for the calling convention.
+        Insert a unique internal constant named *name*, with LLVM value
+        *val*, into module *mod*.
         """
-        return func.args[1:]
+        gv = mod.get_global(name)
+        if gv is not None:
+            return gv
+        else:
+            return cgutils.global_constant(mod, name, val)
 
     def get_argument_type(self, ty):
         if ty == types.boolean:
@@ -293,15 +262,6 @@ class BaseContext(object):
             return Type.pointer(self.get_value_type(ty))
         else:
             return self.get_value_type(ty)
-
-    def get_return_type(self, ty):
-        if isinstance(ty, types.Optional):
-            return self.get_return_type(ty.type)
-        elif self.is_struct_type(ty):
-            return self.get_argument_type(ty)
-        else:
-            argty = self.get_argument_type(ty)
-            return Type.pointer(argty)
 
     def get_data_type(self, ty):
         """
@@ -428,8 +388,6 @@ class BaseContext(object):
         """
         if self.is_struct_type(ty):
             return self.get_constant_struct(builder, ty, val)
-        elif ty == types.string:
-            return self.get_constant_string(builder, ty, val)
         else:
             return self.get_constant(ty, val)
 
@@ -617,9 +575,8 @@ class BaseContext(object):
         """
         Local value representation to return type representation
         """
-
         if ty is types.boolean:
-            r = self.get_return_type(ty).pointee
+            r = self.call_conv.get_return_type(ty).pointee
             return builder.zext(val, r)
         else:
             return val
@@ -651,55 +608,6 @@ class BaseContext(object):
             return builder.zext(val, argty)
 
         raise NotImplementedError("value %s -> arg %s" % (val.type, argty))
-
-    def return_optional_value(self, builder, retty, valty, value):
-        if valty == types.none:
-            self.return_native_none(builder)
-
-        elif retty == valty:
-            optcls = self.make_optional(retty)
-            optval = optcls(self, builder, value=value)
-
-            validbit = builder.trunc(optval.valid, lc.Type.int(1))
-            with cgutils.ifthen(builder, validbit):
-                self.return_value(builder, optval.data)
-
-            self.return_native_none(builder)
-
-        elif not isinstance(valty, types.Optional):
-            if valty != retty.type:
-                value = self.cast(builder, value, fromty=valty,
-                                  toty=retty.type)
-            self.return_value(builder, value)
-
-        else:
-            raise NotImplementedError("returning {0} for {1}".format(valty,
-                                                                     retty))
-
-    def return_value(self, builder, retval):
-        fn = cgutils.get_function(builder)
-        retptr = fn.args[0]
-        assert retval.type == retptr.type.pointee, \
-            (str(retval.type), str(retptr.type.pointee))
-        builder.store(retval, retptr)
-        builder.ret(RETCODE_OK)
-
-    def return_native_none(self, builder):
-        builder.ret(RETCODE_NONE)
-
-    def return_errcode(self, builder, code):
-        assert code > 0
-        builder.ret(Constant.int(Type.int(), code))
-
-    def return_errcode_propagate(self, builder, code):
-        builder.ret(code)
-
-    def return_exc(self, builder):
-        builder.ret(RETCODE_EXC)
-
-    def return_user_exc(self, builder, code):
-        assert code > 0
-        builder.ret(Constant.int(Type.int(), code))
 
     def pair_first(self, builder, val, ty):
         """
@@ -847,7 +755,8 @@ class BaseContext(object):
             optval = optty(self, builder, value=val)
             validbit = cgutils.as_bool_bit(builder, optval.valid)
             with cgutils.if_unlikely(builder, builder.not_(validbit)):
-                self.return_errcode(builder, errcode.NONE_TYPE_ERROR)
+                msg = "expected %s, got None" % (fromty.type,)
+                self.call_conv.return_user_exc(builder, TypeError, (msg,))
 
             return optval.data
 
@@ -899,40 +808,11 @@ class BaseContext(object):
             gv = module.add_global_variable(typ, name)
         return gv
 
-    def call_function(self, builder, callee, resty, argtys, args, env=None):
-        """
-        Call the Numba-compiled *callee*, using the same calling
-        convention as in get_function_type().
-        """
-        assert env is None
-        retty = callee.args[0].type.pointee
-        retvaltmp = cgutils.alloca_once(builder, retty)
-        # initialize return value
-        builder.store(lc.Constant.null(retty), retvaltmp)
-        args = [self.get_value_as_argument(builder, ty, arg)
-                for ty, arg in zip(argtys, args)]
-        realargs = [retvaltmp] + list(args)
-        code = builder.call(callee, realargs)
-        status = self.get_return_status(builder, code)
-        retval = builder.load(retvaltmp)
-        out = self.get_returned_value(builder, resty, retval)
-        return status, out
-
     def call_external_function(self, builder, callee, argtys, args):
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
         retval = builder.call(callee, args)
         return retval
-
-    def get_return_status(self, builder, code):
-        norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
-        none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
-        exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
-        ok = builder.or_(norm, none)
-        err = builder.not_(ok)
-
-        status = Status(code=code, ok=ok, err=err, exc=exc, none=none)
-        return status
 
     def call_function_pointer(self, builder, funcptr, signature, args, cconv=None):
         retty = self.get_value_type(signature.return_type)
@@ -955,7 +835,7 @@ class BaseContext(object):
             api.decref(obj)
 
         with cgutils.ifthen(builder, cgutils.is_null(builder, res)):
-            self.return_exc(builder)
+            self.call_conv.return_exc(builder)
 
         if retty == types.none:
             api.decref(res)
@@ -1035,11 +915,11 @@ class BaseContext(object):
         # Add call to the generated function
         llvm_mod = cgutils.get_module(builder)
         fn = self.declare_function(llvm_mod, fndesc)
-        status, res = self.call_function(builder, fn, sig.return_type,
-                                         sig.args, args)
+        status, res = self.call_conv.call_function(builder, fn, sig.return_type,
+                                                   sig.args, args)
 
-        with cgutils.if_unlikely(builder, status.err):
-            self.return_errcode_propagate(builder, status.code)
+        with cgutils.if_unlikely(builder, status.is_error):
+            self.call_conv.return_status_propagate(builder, status)
         return res
 
     def get_executable(self, func, fndesc):

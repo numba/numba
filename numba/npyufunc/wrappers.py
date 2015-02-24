@@ -13,9 +13,9 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
     elems = load()
 
     # Compute
-    status, retval = context.call_function(builder, func,
-                                           signature.return_type,
-                                           signature.args, elems)
+    status, retval = context.call_conv.call_function(builder, func,
+                                                     signature.return_type,
+                                                     signature.args, elems)
 
     # Ignoring error status and store result
     # Store
@@ -45,8 +45,8 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
 
     # Compute
     _objargs = [types.pyobject] * len(signature.args)
-    status, retval = context.call_function(builder, func, types.pyobject,
-                                           _objargs, elems, env=env)
+    status, retval = context.call_conv.call_function(builder, func, types.pyobject,
+                                                     _objargs, elems, env=env)
 
     # Ignoring error status and store result
     # Store
@@ -139,11 +139,11 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
 
     wrapper_module = library.create_ir_module('')
     if objmode:
-        func_type = context.get_function_type2(
+        func_type = context.call_conv.get_function_type(
             types.pyobject, [types.pyobject] * len(signature.args))
     else:
-        func_type = context.get_function_type2(signature.return_type,
-                                               signature.args)
+        func_type = context.call_conv.get_function_type(
+            signature.return_type, signature.args)
     oldfunc = func
     func = wrapper_module.add_function(func_type,
                                        name=func.name)
@@ -160,7 +160,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
 
     loopcount = builder.load(arg_dims, name="loopcount")
 
-    actual_args = context.get_arguments(func)
+    actual_args = context.call_conv.get_arguments(func)
 
     # Prepare inputs
     arrays = []
@@ -286,6 +286,7 @@ class _GufuncWrapper(object):
                  env):
         self.library = library
         self.context = context
+        self.call_conv = context.call_conv
         self.func = func
         self.signature = signature
         self.sin = sin
@@ -305,7 +306,8 @@ class _GufuncWrapper(object):
                                            intp_ptr_t, byte_ptr_t])
 
         wrapper_module = self.library.create_ir_module('')
-        func_type = self.context.get_function_type(self.fndesc)
+        func_type = self.call_conv.get_function_type(self.fndesc.restype,
+                                                     self.fndesc.argtypes)
         func = wrapper_module.add_function(func_type, name=self.func.name)
         func.attributes.add("alwaysinline")
         wrapper = wrapper_module.add_function(fnty,
@@ -381,13 +383,11 @@ class _GufuncWrapper(object):
         return wrapper, self.env
 
     def gen_loop_body(self, builder, func, args):
-        status, retval = self.context.call_function(builder, func,
-                                                    self.signature.return_type,
-                                                    self.signature.args, args)
+        status, retval = self.call_conv.call_function(builder, func,
+                                                      self.signature.return_type,
+                                                      self.signature.args, args)
 
-        innercall = status.code
-        error = status.err
-        return innercall, error
+        return status.code, status.is_error
 
     def gen_prologue(self, builder):
         pass        # Do nothing
@@ -496,9 +496,10 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
     # Call ufunc core function
     object_sig = [types.pyobject] * len(ndarray_objects)
 
-    status, retval = context.call_function(builder, func, ll_pyobj, object_sig,
-                                           ndarray_objects, env=env)
-    builder.store(status.err, error_pointer)
+    status, retval = context.call_conv.call_function(
+        builder, func, ll_pyobj, object_sig,
+        ndarray_objects, env=env)
+    builder.store(status.is_error, error_pointer)
 
     # Release returned object
     pyapi.decref(retval)

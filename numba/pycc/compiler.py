@@ -171,7 +171,8 @@ class _Compiler(object):
                 wrapper = cres.library.get_function(wrappername)
                 wrapper.name = entry.symbol
                 wrapper.linkage = lc.LINKAGE_EXTERNAL
-                fnty = cres.target_context.get_function_type(cres.fndesc)
+                fnty = cres.target_context.call_conv.get_function_type(
+                    cres.fndesc.restype, cres.fndesc.argtypes)
                 self.exported_function_types[entry] = fnty
             else:
                 llvm_func.linkage = lc.LINKAGE_EXTERNAL

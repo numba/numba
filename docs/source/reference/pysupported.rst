@@ -24,12 +24,15 @@ some language features are not available inside Numba-compiled functions:
 * Exception handling (``try .. except``, ``try .. finally``)
 * Context management (the ``with`` statement)
 
-The ``raise`` statement is only supported in the simplest form of
-raising a type without explicitly creating an instance, i.e.
-``raise TypeError`` is possible but not ``raise TypeError("some message")``.
+The ``raise`` statement is supported in several forms:
 
-Similarly, the ``assert`` statement is only supported without an explicit
-error message.
+* ``raise`` (to re-raise the current exception)
+* ``raise SomeException``
+* ``raise SomeException(<arguments>)``: in :term:`nopython mode`, constructor
+  arguments must be :term:`compile-time constants <compile-time constant>`
+
+Similarly, the ``assert`` statement is supported with or without an error
+message.
 
 Function calls
 --------------

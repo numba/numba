@@ -14,7 +14,7 @@ from llvmlite import ir
 
 from numba.targets.imputils import implement, Registry
 from numba.typing import signature
-from numba import _helperlib, cgutils, errcode, types, utils
+from numba import _helperlib, cgutils, types, utils
 
 
 registry = Registry()
@@ -265,7 +265,8 @@ def getrandbits_impl(context, builder, sig, args):
     too_large = builder.icmp_unsigned(">=", nbits, const_int(65))
     too_small = builder.icmp_unsigned("==", nbits, const_int(0))
     with cgutils.if_unlikely(builder, builder.or_(too_large, too_small)):
-        context.return_errcode(builder, errcode.OUT_OF_BOUND_ERROR)
+        msg = "getrandbits() limited to 64 bits"
+        context.call_conv.return_user_exc(builder, OverflowError, (msg,))
     state_ptr = get_state_ptr(context, builder, "py")
     return get_next_int(context, builder, state_ptr, nbits)
 
@@ -292,8 +293,9 @@ def _randrange_impl(context, builder, start, stop, step, state):
 
     n = builder.load(nptr)
     with cgutils.if_unlikely(builder, builder.icmp_signed('<=', n, zero)):
-        # n <= 0 => ValueError
-        context.return_errcode(builder, errcode.RUNTIME_ERROR)
+        # n <= 0
+        msg = "empty range for randrange()"
+        context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
     fnty = ir.FunctionType(ty, [ty, cgutils.true_bit.type])
     fn = builder.function.module.get_or_insert_function(fnty, "llvm.ctlz.%s" % ty)
@@ -463,9 +465,7 @@ def _gammavariate_impl(context, builder, sig, args, _random):
         # Warning: a few older sources define the gamma distribution in terms
         # of alpha > -1.0
         if alpha <= 0.0 or beta <= 0.0:
-            # XXX error propagation doesn't work for user exceptions.
-            # This will instead produce an "unknown error in native function".
-            raise ValueError#('gammavariate: alpha and beta must be > 0.0')
+            raise ValueError('gammavariate: alpha and beta must be > 0.0')
 
         if alpha > 1.0:
             # Uses R.C.H. Cheng, "The generation of Gamma
@@ -753,9 +753,9 @@ def binomial_impl(context, builder, sig, args):
         (Numpy uses BTPE for n*p >= 30, though)
         """
         if n < 0:
-            raise ValueError
+            raise ValueError("binomial(): n <= 0")
         if not (0.0 <= p <= 1.0):
-            raise ValueError
+            raise ValueError("binomial(): p outside of [0, 1]")
         flipped = p > 0.5
         if flipped:
             p = 1.0 - p
@@ -807,7 +807,7 @@ def geometric_impl(context, builder, sig, args):
     def geometric_impl(p):
         # Numpy's algorithm.
         if p <= 0.0 or p > 1.0:
-            raise ValueError
+            raise ValueError("geometric(): p outside of (0, 1]")
         q = 1.0 - p
         if p >= 0.333333333333333333333333:
             X = intty(1)
@@ -908,7 +908,7 @@ def logseries_impl(context, builder, sig, args):
     def logseries_impl(p):
         """Numpy's algorithm for logseries()."""
         if p <= 0.0 or p > 1.0:
-            raise ValueError
+            raise ValueError("logseries(): p outside of (0, 1]")
         r = _log(1.0 - p)
 
         while 1:
@@ -936,9 +936,9 @@ def negative_binomial_impl(context, builder, sig, args):
 
     def negative_binomial_impl(n, p):
         if n <= 0:
-            raise ValueError
+            raise ValueError("negative_binomial(): n <= 0")
         if p < 0.0 or p > 1.0:
-            raise ValueError
+            raise ValueError("negative_binomial(): p outside of [0, 1]")
         Y = _gamma(n, (1.0 - p) / p)
         return _poisson(Y)
 
@@ -983,7 +983,7 @@ def poisson_impl(context, builder, sig, args):
         Computer Programming' vol 2.
         """
         if lam < 0.0:
-            raise ValueError
+            raise ValueError("poisson(): lambda < 0")
         if lam == 0.0:
             return 0
         enlam = _exp(-lam)
@@ -1013,7 +1013,7 @@ def power_impl(context, builder, sig, args):
 
     def power_impl(a):
         if a <= 0.0:
-            raise ValueError
+            raise ValueError("power(): a <= 0")
         return math.pow(1 - math.exp(-np.random.standard_exponential()),
                         1./a)
 
@@ -1028,7 +1028,7 @@ def rayleigh_impl(context, builder, sig, args):
 
     def rayleigh_impl(mode):
         if mode <= 0.0:
-            raise ValueError
+            raise ValueError("rayleigh(): mode <= 0")
         return mode * math.sqrt(-2.0 * math.log(1.0 - _random()))
 
     sig, args = _fill_defaults(context, builder, sig, args, (1.0,))
@@ -1065,9 +1065,9 @@ def wald_impl(context, builder, sig, args):
 
     def wald_impl(mean, scale):
         if mean <= 0.0:
-            raise ValueError
+            raise ValueError("wald(): mean <= 0")
         if scale <= 0.0:
-            raise ValueError
+            raise ValueError("wald(): scale <= 0")
         mu_2l = mean / (2.0 * scale)
         Y = np.random.standard_normal()
         Y = mean * Y * Y
@@ -1089,7 +1089,7 @@ def zipf_impl(context, builder, sig, args):
 
     def zipf_impl(a):
         if a <= 1.0:
-            raise ValueError
+            raise ValueError("zipf(): a <= 1")
         am1 = a - 1.0
         b = 2.0 ** am1
         while 1:

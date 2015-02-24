@@ -8,7 +8,7 @@ from types import ModuleType
 from llvmlite.llvmpy.core import Type, Builder
 
 
-from numba import (_dynfunc, errcode, ir, types, cgutils, utils, config,
+from numba import (_dynfunc, ir, types, cgutils, utils, config,
                    cffi_support, typing, six)
 
 
@@ -177,6 +177,8 @@ class BaseLower(object):
         self.library = library
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
+        self.interp = interp
+        self.call_conv = context.call_conv
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -186,13 +188,11 @@ class BaseLower(object):
         self.env = _dynfunc.Environment(
             globals=self.fndesc.lookup_module().__dict__)
 
-        # Mapping of error codes to exception classes or instances
-        self.exceptions = {}
-
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)
+        self.call_helper = self.call_conv.init_call_helper(self.builder)
 
         # Internal states
         self.blkmap = {}
@@ -216,15 +216,12 @@ class BaseLower(object):
         Called after all blocks are lowered
         """
 
-    def add_exception(self, exc):
-        assert issubclass(exc, BaseException), exc
-        excid = len(self.exceptions) + errcode.ERROR_COUNT
-        self.exceptions[excid] = exc
-        return excid
+    def return_exception(self, exc_class, exc_args=None):
+        self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
 
     def lower(self):
         # Init argument variables
-        fnargs = self.context.get_arguments(self.function)
+        fnargs = self.call_conv.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
             at = self.typeof(ak)
             av = self.context.get_argument_value(self.builder, at, av)
@@ -268,7 +265,7 @@ class BaseLower(object):
         Create CPython wrapper.
         """
         self.context.create_cpython_wrapper(self.library, self.fndesc,
-                                            self.exceptions,
+                                            self.call_helper,
                                             release_gil=release_gil)
 
     def init_argument(self, arg):
@@ -318,12 +315,12 @@ class Lower(BaseLower):
             ty = self.fndesc.restype
             if isinstance(ty, types.Optional):
                 # If returning an optional type
-                self.context.return_optional_value(self.builder, ty, oty, val)
+                self.call_conv.return_optional_value(self.builder, ty, oty, val)
                 return
             if ty != oty:
                 val = self.context.cast(self.builder, val, oty, ty)
             retval = self.context.get_return_value(self.builder, ty, val)
-            self.context.return_value(self.builder, retval)
+            self.call_conv.return_value(self.builder, retval)
 
         elif isinstance(inst, ir.SetItem):
             target = self.loadvar(inst.target.name)
@@ -373,28 +370,37 @@ class Lower(BaseLower):
             return impl(self.builder, (target, value))
 
         elif isinstance(inst, ir.Raise):
-            excid = self.add_exception(inst.exception)
-            self.context.return_user_exc(self.builder, excid)
+            self.lower_raise(inst)
 
         else:
             raise NotImplementedError(type(inst))
 
+    def lower_raise(self, inst):
+        if inst.exception is None:
+            # Reraise
+            self.return_exception(None)
+        else:
+            exctype = self.typeof(inst.exception.name)
+            if isinstance(exctype, types.ExceptionInstance):
+                # raise <instance> => find the instantiation site
+                excdef = self.interp.get_definition(inst.exception)
+                if (not isinstance(excdef, ir.Expr) or excdef.op != 'call'
+                    or excdef.kws):
+                    raise NotImplementedError("unsupported kind of raising")
+                # Try to infer the args tuple
+                args = tuple(self.interp.get_definition(arg).infer_constant()
+                             for arg in excdef.args)
+            elif isinstance(exctype, types.ExceptionType):
+                args = None
+            else:
+                raise NotImplementedError("cannot raise value of type %s"
+                                          % (exctype,))
+            self.return_exception(exctype.exc_class, args)
+
     def lower_assign(self, ty, inst):
         value = inst.value
-        if isinstance(value, ir.Const):
-            return self.context.get_constant_generic(self.builder, ty,
-                                                     value.value)
-
-        elif isinstance(value, ir.Expr):
-            return self.lower_expr(ty, value)
-
-        elif isinstance(value, ir.Var):
-            val = self.loadvar(value.name)
-            oty = self.typeof(value.name)
-            return self.context.cast(self.builder, val, oty, ty)
-
         # In nopython mode, closure vars are frozen like globals
-        elif isinstance(value, (ir.Global, ir.FreeVar)):
+        if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
             if (isinstance(ty, types.Dummy) or
                     isinstance(ty, types.Module) or
                     isinstance(ty, types.Function) or
@@ -408,6 +414,14 @@ class Lower(BaseLower):
             else:
                 return self.context.get_constant_generic(self.builder, ty,
                                                          value.value)
+
+        elif isinstance(value, ir.Expr):
+            return self.lower_expr(ty, value)
+
+        elif isinstance(value, ir.Var):
+            val = self.loadvar(value.name)
+            oty = self.typeof(value.name)
+            return self.context.cast(self.builder, val, oty, ty)
 
         else:
             raise NotImplementedError(type(value), value)
@@ -501,6 +515,8 @@ class Lower(BaseLower):
                                                          fnty.cconv)
 
             else:
+                if isinstance(signature.return_type, types.Phantom):
+                    return self.context.get_dummy_value()
                 # Normal function resolution (for Numba-compiled functions)
                 impl = self.context.get_function(fnty, signature)
                 if signature.recvr:
@@ -560,7 +576,6 @@ class Lower(BaseLower):
             iternext_impl = self.context.get_function('iternext',
                                                       iternext_sig)
             iterobj = getiter_impl(self.builder, (val,))
-            excid = self.add_exception(ValueError)
             # We call iternext() as many times as desired (`expr.count`).
             for i in range(expr.count):
                 pair = iternext_impl(self.builder, (iterobj,))
@@ -568,7 +583,7 @@ class Lower(BaseLower):
                                                     pair, pairty)
                 with cgutils.if_unlikely(self.builder,
                                          self.builder.not_(is_valid)):
-                    self.context.return_user_exc(self.builder, excid)
+                    self.return_exception(ValueError)
                 item = self.context.pair_first(self.builder,
                                                pair, pairty)
                 tup = self.builder.insert_value(tup, item, i)
@@ -579,7 +594,7 @@ class Lower(BaseLower):
             is_valid = self.context.pair_second(self.builder,
                                                 pair, pairty)
             with cgutils.if_unlikely(self.builder, is_valid):
-                self.context.return_user_exc(self.builder, excid)
+                self.return_exception(ValueError)
 
             return tup
 

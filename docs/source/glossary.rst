@@ -4,6 +4,10 @@ Glossary
 
 .. glossary::
 
+   compile-time constant
+      An expression whose value Numba can infer and freeze at compile-time.
+      Global variables and closure variables are compile-time constants.
+
    JIT function
       Shorthand for "a function compiled with Numba using the
       :ref:`@jit <jit>` decorator."
