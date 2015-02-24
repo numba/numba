@@ -35,12 +35,19 @@ env_traverse(EnvironmentObject *env, visitproc visit, void *arg)
     return 0;
 }
 
+static int
+env_clear(EnvironmentObject *env)
+{
+    Py_CLEAR(env->globals);
+    Py_CLEAR(env->consts);
+    return 0;
+}
+
 static void
 env_dealloc(EnvironmentObject *env)
 {
     _PyObject_GC_UNTRACK((PyObject *) env);
-    Py_DECREF(env->globals);
-    Py_DECREF(env->consts);
+    env_clear(env);
     Py_TYPE(env)->tp_free((PyObject *) env);
 }
 
@@ -98,7 +105,7 @@ static PyTypeObject EnvironmentType = {
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /*tp_flags*/
     0,                         /* tp_doc */
     (traverseproc) env_traverse, /* tp_traverse */
-    0,                         /* tp_clear */
+    (inquiry) env_clear,       /* tp_clear */
     0,                         /* tp_richcompare */
     0,                         /* tp_weaklistoffset */
     0,                         /* tp_iter */
