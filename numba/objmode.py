@@ -413,10 +413,12 @@ class PyLower(BaseLower):
                                            self.pyapi.err_occurred())
 
         with cgutils.if_unlikely(self.builder, err_occurred):
+            # FIXME: this should decref all live variables before returning
             self.return_exception_raised()
 
     def check_error(self, obj):
         with cgutils.if_unlikely(self.builder, self.is_null(obj)):
+            # FIXME: this should decref all live variables before returning
             self.return_exception_raised()
 
         return obj

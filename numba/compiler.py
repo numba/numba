@@ -1,9 +1,11 @@
 from __future__ import print_function, division, absolute_import
-from pprint import pprint
+
+import inspect
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
+from pprint import pprint
+import sys
 import warnings
-import inspect
 
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    objmode, irpasses, utils, config, type_annotations,
@@ -106,6 +108,11 @@ def compile_result(**kws):
     missing = fieldset - keys
     for k in missing:
         kws[k] = None
+    # Avoid keeping alive traceback variables
+    if sys.version_info >= (3,):
+        err = kws['typing_error']
+        if err is not None:
+            kws['typing_error'] = err.with_traceback(None)
     return CompileResult(**kws)
 
 
