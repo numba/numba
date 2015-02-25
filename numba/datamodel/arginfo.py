@@ -75,10 +75,15 @@ class ArgInfo(object):
 
     @property
     def argument_types(self):
+        """Return a list of LLVM types that are results of flattening
+        composite types.
+        """
         return tuple(self._be_args)
 
 
 def _unflatten(posmap, flatiter):
+    """Rebuild a nested tuple structure
+    """
     poss = deque(posmap)
     vals = deque(flatiter)
 

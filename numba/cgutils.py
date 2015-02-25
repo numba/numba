@@ -52,6 +52,9 @@ _struct_proxy_cache = {}
 
 
 def create_struct_proxy(fe_type):
+    """
+    Returns a specialized StructProxy subclass for the given fe_type.
+    """
     res = _struct_proxy_cache.get(fe_type)
     if res is None:
         clsname = StructProxy.__name__ + '_' + str(fe_type)
@@ -63,6 +66,11 @@ def create_struct_proxy(fe_type):
 
 
 class StructProxy(object):
+    """
+    Creates a `Structure` like interface that is constructed with information
+    from DataModel instance.  FE type must have a data model that is a
+    subclass of StructModel.
+    """
     # The following class members must be overridden by subclass
     _fe_type = None
 

@@ -377,6 +377,9 @@ class CUDAKernel(CUDAKernelBase):
             wb()
 
     def _prepare_args(self, ty, val, stream, retr, kernelargs):
+        """
+        Convert arguments to ctypes and append to kernelargs
+        """
         if isinstance(ty, types.Array):
             devary, conv = devicearray.auto_device(val, stream=stream)
             if conv:

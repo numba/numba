@@ -6,6 +6,28 @@ from .registry import register_default
 
 
 class DataModel(object):
+    """
+    DataModel describe how a FE type is represented in the LLVM IR at
+    different contexts.
+
+    Contexts are:
+
+    - value: representation inside function body.  Maybe stored in stack.
+    The representation here are flexible.
+
+    - data: representation used when storing into containers (e.g. arrays).
+
+    - argument: representation used for function argument.  All composite
+    types are unflattened into multiple primitive types.
+
+    - return: representation used for return argument.
+
+    Throughput the compiler pipeline, a LLVM value is usually passed around
+    in the "value" representation.  All "as_" prefix function converts from
+    "value" representation.  All "from_" prefix function converts to the
+    "value"  representation.
+
+    """
     def __init__(self, dmm, fe_type):
         self._dmm = dmm
         self._fe_type = fe_type
@@ -21,6 +43,8 @@ class DataModel(object):
         return self.get_value_type()
 
     def get_argument_type(self):
+        """Return a LLVM type or nested tuple of LLVM type
+        """
         return self.get_value_type()
 
     def get_return_type(self):
@@ -30,6 +54,10 @@ class DataModel(object):
         return NotImplemented
 
     def as_argument(self, builder, value):
+        """
+        Takes one LLVM value
+        Return a LLVM value or nested tuple of LLVM value
+        """
         return NotImplemented
 
     def as_return(self, builder, value):
@@ -39,12 +67,18 @@ class DataModel(object):
         return NotImplemented
 
     def from_argument(self, builder, value):
+        """
+        Takes a LLVM value or nested tuple of LLVM value
+        Returns one LLVM value
+        """
         return NotImplemented
 
     def from_return(self, builder, value):
         return NotImplemented
 
     def load_from_data_pointer(self, builder, value):
+        """Only the record model this for pass by reference semantic.
+        """
         return NotImplemented
 
     def _compared_fields(self):
