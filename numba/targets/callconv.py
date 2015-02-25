@@ -162,9 +162,8 @@ class MinimalCallConv(BaseCallConv):
         """
         Get the implemented Function type for *restype* and *argtypes*.
         """
-        raise NotImplementedError
-        fi = self.context.get_function_info(restype, argtypes)
-        argtypes = list(fi.argument_types)
+        arginfo = self.context.get_arg_info(argtypes)
+        argtypes = list(arginfo.argument_types)
         resptr = self.get_return_type(restype)
         fnty = ir.FunctionType(errcode_t, [resptr] + argtypes)
         return fnty
@@ -195,8 +194,9 @@ class MinimalCallConv(BaseCallConv):
         retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value
         builder.store(cgutils.get_null_value(retty), retvaltmp)
-        args = [self.context.get_value_as_argument(builder, ty, arg)
-                for ty, arg in zip(argtys, args)]
+
+        arginfo = self.context.get_arg_info(argtys)
+        args = arginfo.as_arguments(builder, args)
         realargs = [retvaltmp] + list(args)
         code = builder.call(callee, realargs)
         status = self._get_return_status(builder, code)

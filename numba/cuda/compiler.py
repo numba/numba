@@ -2,7 +2,6 @@ from __future__ import absolute_import, print_function
 import copy
 import ctypes
 
-
 from numba.typing.templates import AbstractTemplate
 from numba import config, compiler, types
 from numba.typing.templates import ConcreteTemplate
@@ -12,6 +11,7 @@ from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import KernelRuntimeError
 from .api import get_current_device
+from numba.targets.arrayobj import make_array_ctype
 
 
 def compile_cuda(pyfunc, return_type, args, debug, inline):
@@ -336,15 +336,17 @@ class CUDAKernel(CUDAKernelBase):
 
         # Prepare arguments
         retr = []                       # hold functors for writeback
-        args = [self._prepare_args(t, v, stream, retr)
-                for t, v in zip(self.argument_types, args)]
+
+        kernelargs = []
+        for t, v in zip(self.argument_types, args):
+            self._prepare_args(t, v, stream, retr, kernelargs)
 
         # Configure kernel
         cu_func = cufunc.configure(griddim, blockdim,
                                    stream=stream,
                                    sharedmem=sharedmem)
         # Invoke kernel
-        cu_func(*args)
+        cu_func(*kernelargs)
 
         if self.debug:
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
@@ -374,69 +376,53 @@ class CUDAKernel(CUDAKernelBase):
         for wb in retr:
             wb()
 
-    def _prepare_args(self, ty, val, stream, retr):
+    def _prepare_args(self, ty, val, stream, retr, kernelargs):
         if isinstance(ty, types.Array):
             devary, conv = devicearray.auto_device(val, stream=stream)
             if conv:
                 retr.append(lambda: devary.copy_to_host(val, stream=stream))
-            return devary.as_cuda_arg()
+
+            c_intp = ctypes.c_ssize_t
+
+            parent = ctypes.c_void_p(0)
+            nitems = c_intp(devary.size)
+            itemsize = c_intp(devary.dtype.itemsize)
+            data = ctypes.c_void_p(driver.device_pointer(devary))
+            kernelargs.append(parent)
+            kernelargs.append(nitems)
+            kernelargs.append(itemsize)
+            kernelargs.append(data)
+            for ax in range(devary.ndim):
+                kernelargs.append(c_intp(devary.shape[ax]))
+            for ax in range(devary.ndim):
+                kernelargs.append(c_intp(devary.strides[ax]))
 
         elif isinstance(ty, types.Integer):
-            return getattr(ctypes, "c_%s" % ty)(val)
+            cval = getattr(ctypes, "c_%s" % ty)(val)
+            kernelargs.append(cval)
 
         elif ty == types.float64:
-            return ctypes.c_double(val)
+            cval = ctypes.c_double(val)
+            kernelargs.append(cval)
 
         elif ty == types.float32:
-            return ctypes.c_float(val)
+            cval = ctypes.c_float(val)
+            kernelargs.append(cval)
 
         elif ty == types.boolean:
-            return ctypes.c_uint8(int(val))
+            cval = ctypes.c_uint8(int(val))
+            kernelargs.append(cval)
 
         elif ty == types.complex64:
-            ctx = get_context()
-            size = ctypes.sizeof(Complex64)
-            dmem = ctx.memalloc(size)
-            cval = Complex64(val)
-            driver.host_to_device(dmem, ctypes.addressof(cval), size,
-                                  stream=stream)
-            return dmem
+            kernelargs.append(ctypes.c_float(val.real))
+            kernelargs.append(ctypes.c_float(val.imag))
 
         elif ty == types.complex128:
-            ctx = get_context()
-            size = ctypes.sizeof(Complex128)
-            dmem = ctx.memalloc(size)
-            cval = Complex128(val)
-            driver.host_to_device(dmem, ctypes.addressof(cval), size,
-                                  stream=stream)
-            return dmem
+            kernelargs.append(ctypes.c_double(val.real))
+            kernelargs.append(ctypes.c_double(val.imag))
 
         else:
             raise NotImplementedError(ty, val)
-
-
-class Complex(ctypes.Structure):
-    def __init__(self, val):
-        super(Complex, self).__init__()
-        if isinstance(val, complex):
-            self.real = val.real
-            self.imag = val.imag
-        else:
-            self.real = val
-
-
-class Complex64(Complex):
-    _fields_ = [
-        ('real', ctypes.c_float),
-        ('imag', ctypes.c_float)
-    ]
-
-
-class Complex128(Complex):
-    _fields_ = [
-        ('real', ctypes.c_double),
-        ('imag', ctypes.c_double),
-    ]
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):
