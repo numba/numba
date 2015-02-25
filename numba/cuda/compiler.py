@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function
 import copy
-import ctypes
 
+from numba import ctypes_support as ctypes
 from numba.typing.templates import AbstractTemplate
 from numba import config, compiler, types
 from numba.typing.templates import ConcreteTemplate
@@ -11,7 +11,6 @@ from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import KernelRuntimeError
 from .api import get_current_device
-from numba.targets.arrayobj import make_array_ctype
 
 
 def compile_cuda(pyfunc, return_type, args, debug, inline):

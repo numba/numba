@@ -8,91 +8,91 @@ from numba import datamodel
 from numba.datamodel.testing import test_factory
 
 
-class TestBool(*test_factory()):
+class TestBool(test_factory()):
     fe_type = types.boolean
 
 
-class TestPyObject(*test_factory()):
+class TestPyObject(test_factory()):
     fe_type = types.pyobject
 
 
-class TestInt8(*test_factory()):
+class TestInt8(test_factory()):
     fe_type = types.int8
 
 
-class TestInt16(*test_factory()):
+class TestInt16(test_factory()):
     fe_type = types.int16
 
 
-class TestInt32(*test_factory()):
+class TestInt32(test_factory()):
     fe_type = types.int32
 
 
-class TestInt64(*test_factory()):
+class TestInt64(test_factory()):
     fe_type = types.int64
 
 
-class TestUInt8(*test_factory()):
+class TestUInt8(test_factory()):
     fe_type = types.uint8
 
 
-class TestUInt16(*test_factory()):
+class TestUInt16(test_factory()):
     fe_type = types.uint16
 
 
-class TestUInt32(*test_factory()):
+class TestUInt32(test_factory()):
     fe_type = types.uint32
 
 
-class TestUInt64(*test_factory()):
+class TestUInt64(test_factory()):
     fe_type = types.uint64
 
 
-class TestFloat(*test_factory()):
+class TestFloat(test_factory()):
     fe_type = types.float32
 
 
-class TestDouble(*test_factory()):
+class TestDouble(test_factory()):
     fe_type = types.float64
 
 
-class TestComplex(*test_factory()):
+class TestComplex(test_factory()):
     fe_type = types.complex64
 
 
-class TestDoubleComplex(*test_factory()):
+class TestDoubleComplex(test_factory()):
     fe_type = types.complex128
 
 
-class TestPointerOfInt32(*test_factory()):
+class TestPointerOfInt32(test_factory()):
     fe_type = types.CPointer(types.int32)
 
 
-class TestUniTupleOf2xInt32(*test_factory()):
+class TestUniTupleOf2xInt32(test_factory()):
     fe_type = types.UniTuple(types.int32, 2)
 
 
-class TestUniTupleEmpty(*test_factory()):
+class TestUniTupleEmpty(test_factory()):
     fe_type = types.UniTuple(types.int32, 0)
 
 
-class TestTupleInt32Float32(*test_factory()):
+class TestTupleInt32Float32(test_factory()):
     fe_type = types.Tuple([types.int32, types.float32])
 
 
-class TestTupleEmpty(*test_factory()):
+class TestTupleEmpty(test_factory()):
     fe_type = types.Tuple([])
 
 
-class Test1DArrayOfInt32(*test_factory(support_as_data=False)):
+class Test1DArrayOfInt32(test_factory(support_as_data=False)):
     fe_type = types.Array(types.int32, 1, 'C')
 
 
-class Test2DArrayOfComplex128(*test_factory(support_as_data=False)):
+class Test2DArrayOfComplex128(test_factory(support_as_data=False)):
     fe_type = types.Array(types.complex128, 2, 'C')
 
 
-class Test0DArrayOfInt32(*test_factory(support_as_data=False)):
+class Test0DArrayOfInt32(test_factory(support_as_data=False)):
     fe_type = types.Array(types.int32, 0, 'C')
 
 

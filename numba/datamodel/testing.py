@@ -136,13 +136,20 @@ class NotSupportAsDataMixin(object):
         self.assertIs(rev_data, NotImplemented)
 
 
+class DataModelTester_SupportAsDataMixin(DataModelTester,
+                                         SupportAsDataMixin):
+    pass
+
+
+class DataModelTester_NotSupportAsDataMixin(DataModelTester,
+                                            NotSupportAsDataMixin):
+    pass
+
+
 def test_factory(support_as_data=True):
     """A helper for returning a unittest TestCase for testing
     """
-    baseclses = ()
     if support_as_data:
-        baseclses += (SupportAsDataMixin,)
+        return DataModelTester_SupportAsDataMixin
     else:
-        baseclses += (NotSupportAsDataMixin,)
-    baseclses += (DataModelTester,)
-    return baseclses
+        return DataModelTester_NotSupportAsDataMixin
