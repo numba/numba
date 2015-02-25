@@ -83,14 +83,8 @@ class BaseCallConv(object):
         """
         Get the actual type of the return argument for Numba type *ty*.
         """
-        if isinstance(ty, types.Optional):
-            return self.get_return_type(ty.type)
-        elif self.context.is_struct_type(ty):
-            # Argument type is already a pointer
-            return self.context.get_argument_type(ty)
-        else:
-            argty = self.context.get_argument_type(ty)
-            return ir.PointerType(argty)
+        restype = self.context.data_model_manager[ty].get_return_type()
+        return restype.as_pointer()
 
     def init_call_helper(self, builder):
         """
@@ -168,17 +162,20 @@ class MinimalCallConv(BaseCallConv):
         """
         Get the implemented Function type for *restype* and *argtypes*.
         """
-        argtypes = [self.context.get_argument_type(aty) for aty in argtypes]
+        raise NotImplementedError
+        fi = self.context.get_function_info(restype, argtypes)
+        argtypes = list(fi.argument_types)
         resptr = self.get_return_type(restype)
         fnty = ir.FunctionType(errcode_t, [resptr] + argtypes)
         return fnty
 
-    def decorate_function(self, fn, args):
+    def decorate_function(self, fn, args, fe_argtypes):
         """
         Set names of function arguments.
         """
-        for ak, av in zip(args, self.get_arguments(fn)):
-            av.name = "arg.%s" % ak
+        arginfo = self.context.get_arg_info(fe_argtypes)
+        arginfo.assign_names(self.get_arguments(fn),
+                             ['arg.' + a for a in args])
         fn.args[0].name = ".ret"
         return fn
 
@@ -312,20 +309,22 @@ class CPUCallConv(BaseCallConv):
         """
         Get the implemented Function type for *restype* and *argtypes*.
         """
-        argtypes = [self.context.get_argument_type(aty)
-                    for aty in argtypes]
+
+        arginfo = self.context.get_arg_info(argtypes)
+        argtypes = list(arginfo.argument_types)
         resptr = self.get_return_type(restype)
         fnty = ir.FunctionType(errcode_t,
                                [resptr, ir.PointerType(excinfo_ptr_t), PYOBJECT]
                                + argtypes)
         return fnty
 
-    def decorate_function(self, fn, args):
+    def decorate_function(self, fn, args, fe_argtypes):
         """
         Set names of function arguments.
         """
-        for ak, av in zip(args, self.get_arguments(fn)):
-            av.name = "arg.%s" % ak
+        arginfo = self.context.get_arg_info(fe_argtypes)
+        arginfo.assign_names(self.get_arguments(fn),
+                             ['arg.' + a for a in args])
         self._get_return_argument(fn).name = "retptr"
         self._get_excinfo_argument(fn).name = "excinfo"
         self.get_env_argument(fn).name = "env"
@@ -365,8 +364,8 @@ class CPUCallConv(BaseCallConv):
         excinfoptr = cgutils.alloca_once(builder, ir.PointerType(excinfo_t),
                                          name="excinfo")
 
-        args = [self.context.get_value_as_argument(builder, ty, arg)
-                for ty, arg in zip(argtys, args)]
+        arginfo = self.context.get_arg_info(argtys)
+        args = list(arginfo.as_arguments(builder, args))
         realargs = [retvaltmp, excinfoptr, env] + args
         code = builder.call(callee, realargs)
         status = self._get_return_status(builder, code,

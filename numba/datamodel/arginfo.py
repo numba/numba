@@ -3,22 +3,26 @@ from __future__ import print_function, absolute_import
 from collections import deque
 
 
-class FunctionInfo(object):
-    def __init__(self, dmm, fe_ret, fe_args):
+class ArgInfo(object):
+    """
+    Compute the position for each high-level typed argument.
+    It flattens every composite argument into primitive types.
+    It maintains a position map for unflattening the arguments.
+    """
+    def __init__(self, dmm, fe_args):
         self._dmm = dmm
-        self._fe_ret = fe_ret
         self._fe_args = fe_args
         self._nargs = len(fe_args)
-        self._dm_ret = self._dmm.lookup(fe_ret)
         self._dm_args = [self._dmm.lookup(ty) for ty in fe_args]
         argtys = [bt.get_argument_type() for bt in self._dm_args]
         if len(argtys):
             self._be_args, self._posmap = zip(*_flatten(argtys))
         else:
             self._be_args = self._posmap = ()
-        self._be_ret = self._dm_ret.get_return_type()
 
     def as_arguments(self, builder, values):
+        """Flatten all argument values
+        """
         if len(values) != self._nargs:
             raise TypeError("invalid number of args")
 
@@ -32,6 +36,9 @@ class FunctionInfo(object):
         return args
 
     def from_arguments(self, builder, args):
+        """Unflatten all argument values
+        """
+
         if len(args) != len(self._posmap):
             raise TypeError("invalid number of args")
 
@@ -44,13 +51,31 @@ class FunctionInfo(object):
 
         return values
 
+    def assign_names(self, args, names):
+        """Assign names for each flattened argument values.
+        """
+        if len(args) != len(self._posmap):
+            raise TypeError("invalid number of args")
+
+        if not args:
+            return ()
+
+        valtree = _unflatten(self._posmap, args)
+        for aval, aname in zip(valtree, names):
+            self._assign_names(aval, aname)
+
+    def _assign_names(self, val_or_nested, name, depth=()):
+        if isinstance(val_or_nested, (tuple, list)):
+            for pos, aval in enumerate(val_or_nested):
+                self._assign_names(aval, name, depth=depth + (pos,))
+        else:
+            postfix = '.'.join(map(str, depth))
+            parts = [name, postfix]
+            val_or_nested.name = '.'.join(filter(bool, parts))
+
     @property
     def argument_types(self):
         return tuple(self._be_args)
-
-    @property
-    def return_type(self):
-        return self._be_ret
 
 
 def _unflatten(posmap, flatiter):

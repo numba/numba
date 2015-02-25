@@ -96,11 +96,10 @@ class Test0DArrayOfInt32(*test_factory(support_as_data=False)):
     fe_type = types.Array(types.int32, 0, 'C')
 
 
-class TestFunctionInfo(unittest.TestCase):
+class TestArgInfo(unittest.TestCase):
     def _test_as_arguments(self, fe_args):
         dmm = datamodel.defaultDataModelManager
-        fe_ret = types.int32
-        fi = datamodel.FunctionInfo(dmm, fe_ret, fe_args)
+        fi = datamodel.ArgInfo(dmm, fe_args)
 
         module = ir.Module()
         fnty = ir.FunctionType(ir.VoidType(), [])

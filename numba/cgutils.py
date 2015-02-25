@@ -47,6 +47,109 @@ def make_bytearray(buf):
     n = len(b)
     return ir.Constant(ir.ArrayType(ir.IntType(8), n), b)
 
+_struct_proxy_cache = {}
+
+
+def create_struct_proxy(fe_type):
+    res = _struct_proxy_cache.get(fe_type)
+    if res is None:
+        clsname = StructProxy.__name__ + '_' + str(fe_type)
+        bases = (StructProxy,)
+        clsmembers = dict(_fe_type=fe_type)
+        res = type(clsname, bases, clsmembers)
+        _struct_proxy_cache[fe_type] = res
+    return res
+
+
+class StructProxy(object):
+    # The following class members must be overridden by subclass
+    _fe_type = None
+
+    def __init__(self, context, builder, value=None, ref=None):
+        self._context = context
+        self._dmm = self._context.data_model_manager
+        self._datamodel = self._dmm[self._fe_type]
+        if not isinstance(self._datamodel, datamodel.StructModel):
+            raise TypeError("Not a structure model: {0}".format(self._dmodel))
+        self._builder = builder
+
+        self._be_type = self._datamodel.get_value_type()
+        assert not is_pointer(self._be_type)
+
+        if ref is not None:
+            assert value is None
+            assert ref.type.pointee == self._be_type
+            self._value = ref
+        else:
+            self._value = alloca_once(self._builder, self._be_type)
+            if value is not None:
+                self._builder.store(value, self._value)
+
+    def _get_ptr_by_index(self, index):
+        geped = self._builder.gep(self._value,
+                                  [Constant.int(Type.int(), 0),
+                                   Constant.int(Type.int(), index)])
+        return geped
+
+    def _get_ptr_by_name(self, attrname):
+        index = self._datamodel.get_field_position(attrname)
+        return self._get_ptr_by_index(index)
+
+    def __getattr__(self, field):
+        """
+        Load the LLVM value of the named *field*.
+        """
+        if not field.startswith('_'):
+            return self[self._datamodel.get_field_position(field)]
+        else:
+            raise AttributeError(field)
+
+    def __setattr__(self, field, value):
+        """
+        Store the LLVM *value* into the named *field*.
+        """
+        if field.startswith('_'):
+            return super(StructProxy, self).__setattr__(field, value)
+        self[self._datamodel.get_field_position(field)] = value
+
+    def __getitem__(self, index):
+        """
+        Load the LLVM value of the field at *index*.
+        """
+
+        return self._builder.load(self._get_ptr_by_index(index))
+
+    def __setitem__(self, index, value):
+        """
+        Store the LLVM *value* into the field at *index*.
+        """
+        ptr = self._get_ptr_by_index(index)
+        self._builder.store(value, ptr)
+
+    def __len__(self):
+        """
+        Return the number of fields.
+        """
+        return len(self._namemap)
+
+    def _getpointer(self):
+        """
+        Return the LLVM pointer to the underlying structure.
+        """
+        return self._value
+
+    def _getvalue(self):
+        """
+        Load and return the value of the underlying LLVM structure.
+        """
+        return self._builder.load(self._value)
+
+    def _setvalue(self, value):
+        """Store the value in this structure"""
+        assert not is_pointer(value.type)
+        assert value.type == self._type, (value.type, self._type)
+        self._builder.store(value, self._value)
+
 
 class Structure(object):
     """
@@ -122,13 +225,11 @@ class Structure(object):
         Store the LLVM *value* into the field at *index*.
         """
         ptr = self._get_ptr_by_index(index)
-        value = self._context.get_struct_member_value(self._builder,
-                                                      self._typemap[index],
-                                                      value)
         if ptr.type.pointee != value.type:
-            raise AssertionError("Type mismatch: __setitem__(%d, ...) "
-                                 "expected %r but got %r"
-                                 % (index, str(ptr.type.pointee), str(value.type)))
+            fmt = "Type mismatch: __setitem__(%d, ...) expected %r but got %r"
+            raise AssertionError(fmt % (index,
+                                        str(ptr.type.pointee),
+                                        str(value.type)))
         self._builder.store(value, ptr)
 
     def __len__(self):
@@ -602,28 +703,9 @@ def is_struct_ptr(ltyp):
 
 
 def get_record_member(builder, record, offset, typ):
-    pdata = get_record_data(builder, record)
-    pval = inbound_gep(builder, pdata, 0, offset)
+    pval = inbound_gep(builder, record, 0, offset)
     assert not is_pointer(pval.type.pointee)
     return builder.bitcast(pval, Type.pointer(typ))
-
-
-def get_record_data(builder, record):
-    return builder.extract_value(record, 0)
-
-
-def set_record_data(builder, record, buf):
-    pdata = inbound_gep(builder, record, 0, 0)
-    assert pdata.type.pointee == buf.type
-    builder.store(buf, pdata)
-
-
-def init_record_by_ptr(builder, ltyp, ptr):
-    tmp = alloca_once(builder, ltyp)
-    pdata = ltyp.elements[0]
-    buf = builder.bitcast(ptr, pdata)
-    set_record_data(builder, tmp, buf)
-    return tmp
 
 
 def is_neg_int(builder, val):
