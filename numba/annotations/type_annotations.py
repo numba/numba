@@ -6,6 +6,7 @@ import textwrap
 from contextlib import closing
 from numba.io_support import StringIO
 from numba import ir
+import numba.dispatcher
 from . import step
 import os
 import sys
@@ -44,7 +45,7 @@ class TypeAnnotation(object):
     
     data = {'func_data': OrderedDict()}
 
-    def __init__(self, interp, typemap, calltypes, lifted, args, return_type,
+    def __init__(self, interp, typemap, calltypes, lifted, lifted_from, args, return_type,
                  func_attr, fancy=None):
         self.filename = interp.bytecode.filename
         self.func = interp.bytecode.func
@@ -52,6 +53,8 @@ class TypeAnnotation(object):
         self.typemap = typemap
         self.calltypes = calltypes
         self.lifted = lifted
+        self.lifted_from = lifted_from
+        self.num_waiting_lifted = len(lifted)
         if fancy is None:
             self.fancy = None
         else:
@@ -64,15 +67,25 @@ class TypeAnnotation(object):
     def prepare_annotations(self):
         # Prepare annotations
         groupedinst = defaultdict(list)
-        for blkid, blk in self.blocks.items():
+        found_lifted_loop = False
+        #for blkid, blk in self.blocks.items():
+        for blkid in sorted(self.blocks.keys()):
+            blk = self.blocks[blkid]
             groupedinst[blk.loc.line].append("label %s" % blkid)
             for inst in blk.body:
                 lineno = inst.loc.line
 
                 if isinstance(inst, ir.Assign):
-                    if (isinstance(inst.value, ir.Expr) and
+                    if found_lifted_loop:
+                        atype = 'XXX Lifted Loop XXX'
+                        found_lifted_loop = False
+                    elif (isinstance(inst.value, ir.Expr) and
                             inst.value.op ==  'call'):
                         atype = self.calltypes[inst.value]
+                    elif (isinstance(inst.value, ir.Const) and
+                            isinstance(inst.value.value, numba.dispatcher.LiftedLoop)):
+                        atype = 'XXX Lifted Loop XXX'
+                        found_lifted_loop = True
                     else:
                         atype = self.typemap[inst.target.name]
 
@@ -137,10 +150,26 @@ class TypeAnnotation(object):
         lifted_lines = [l.bytecode.firstlineno for l in self.lifted]
 
         func_key = (self.filename + ':' + self.linenum, self.signature)
-        if func_key not in TypeAnnotation.data['func_data']:
+        if self.lifted_from is not None and self.lifted_from['num_waiting_lifted'] > 0:
+            func_data = self.lifted_from
+            for num in line_nums:
+                if num not in llvm_instructions.keys():
+                    continue
+                func_data['llvm_lines'][num] = []
+                func_data['llvm_indent'][num] = []
+                for inst in llvm_instructions[num]:
+                    func_data['llvm_lines'][num].append(inst.strip())
+                    indent_len = len(_getindent(inst))
+                    func_data['llvm_indent'][num].append('&nbsp;' * indent_len)
+            self.lifted_from['num_waiting_lifted'] -= 1
+        elif func_key not in TypeAnnotation.data['func_data']:
 
             TypeAnnotation.data['func_data'][func_key] = {}
             func_data = TypeAnnotation.data['func_data'][func_key]
+            
+            for loop in self.lifted:
+                loop.lifted_from = func_data
+            func_data['num_waiting_lifted'] = self.num_waiting_lifted
 
             func_data['filename'] = self.filename
             func_data['funcname'] = self.func_attr.name
@@ -179,15 +208,25 @@ class TypeAnnotation(object):
             for num in line_nums:
                 func_data['llvm_lines'][num] = []
                 for inst in llvm_instructions[num]:
-                    func_data['llvm_lines'][num].append(inst.strip())
+                    inst_str = inst.strip()
+                    if inst_str.endswith('pyobject'):
+                        inst_str = inst_str.replace('pyobject', '<span class="object_tag">pyobject</span>')
+                    func_data['llvm_lines'][num].append(inst_str)
 
-        with open(self.fancy, 'w') as output:
-            step.Template(html).stream(output, TypeAnnotation.data.copy())
+        if (len(self.lifted) == 0 or
+                (self.lifted_from is not None and self.lifted_from['num_waiting_lifted'] == 1)):
+            with open(self.fancy, 'w') as output:
+                step.Template(html).stream(output, TypeAnnotation.data.copy())
+            return True
+        else:
+            return False
 
     def __str__(self):
         if self.fancy is not None:
-            self.html_annotate()
-            return self.annotate()
+            if not self.html_annotate():
+                return ''
+            else:
+                return self.annotate()
         else:
             return self.annotate()
 

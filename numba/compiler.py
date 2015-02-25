@@ -300,11 +300,12 @@ class Pipeline(object):
 
         return self.compile_bytecode(bc, func_attr=self.func_attr)
 
-    def compile_bytecode(self, bc, lifted=(),
+    def compile_bytecode(self, bc, lifted=(), lifted_from=None,
                          func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
         self.bc = bc
         self.func = bc.func
         self.lifted = lifted
+        self.lifted_from = lifted_from
         self.func_attr = func_attr
         return self._compile_bytecode()
 
@@ -362,7 +363,7 @@ class Pipeline(object):
             cres = compile_bytecode(self.typingctx, self.targetctx, entry,
                                     self.args, self.return_type,
                                     outer_flags, self.locals,
-                                    lifted=tuple(loops),
+                                    lifted=tuple(loops), lifted_from=None,
                                     func_attr=self.func_attr)
             return cres
 
@@ -410,6 +411,7 @@ class Pipeline(object):
             typemap=self.typemap,
             calltypes=self.calltypes,
             lifted=self.lifted,
+            lifted_from=self.lifted_from,
             args=self.args,
             return_type=self.return_type,
             func_attr=self.func_attr,
@@ -563,12 +565,12 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
 
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
-                     locals, lifted=(),
+                     locals, lifted=(), lifted_from=None,
                      func_attr=DEFAULT_FUNCTION_ATTRIBUTES, library=None):
 
     pipeline = Pipeline(typingctx, targetctx, library,
                         args, return_type, flags, locals)
-    return pipeline.compile_bytecode(bc=bc, lifted=lifted, func_attr=func_attr)
+    return pipeline.compile_bytecode(bc=bc, lifted=lifted, lifted_from=lifted_from, func_attr=func_attr)
 
 
 def compile_internal(typingctx, targetctx, library,

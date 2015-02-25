@@ -39,7 +39,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     os.environ['NUMBA_DUMP_ANNOTATION'] = str(int(args.annotate))
-    os.environ['NUMBA_DUMP_FANCY'] = str(args.fancy[0])
+    if args.fancy is not None:
+        os.environ['NUMBA_DUMP_FANCY'] = str(args.fancy[0])
     os.environ['NUMBA_DUMP_LLVM'] = str(int(args.dump_llvm))
     os.environ['NUMBA_DUMP_OPTIMIZED'] = str(int(args.dump_optimized))
     os.environ['NUMBA_DUMP_ASSEMBLY'] = str(int(args.dump_assembly))

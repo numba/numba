@@ -332,6 +332,7 @@ class LiftedLoop(_OverloadedBase):
         self.locals = locals
         self.flags = flags
         self.bytecode = bytecode
+        self.lifted_from = None
 
     def get_source_location(self):
         """Return the starting line number of the loop.
@@ -357,7 +358,8 @@ class LiftedLoop(_OverloadedBase):
                                              args=args,
                                              return_type=return_type,
                                              flags=flags,
-                                             locals=self.locals)
+                                             locals=self.locals,
+                                             lifted=(), lifted_from=self.lifted_from)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:
