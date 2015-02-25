@@ -652,7 +652,7 @@ class Array(IterableType):
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
-    def __init__(self, dtype, ndim, layout, const=False):
+    def __init__(self, dtype, ndim, layout, const=False, name=None):
         if isinstance(dtype, Array):
             raise TypeError("Array dtype cannot be Array")
         if layout not in self.LAYOUTS:
@@ -662,9 +662,10 @@ class Array(IterableType):
         self.ndim = ndim
         self.layout = layout
         self.const = const
-        name = "array(%s, %sd, %s, %s)" % (dtype, ndim, layout,
-                                           {True: 'const',
-                                            False: 'nonconst'}[const])
+        if name is None:
+            name = "array(%s, %sd, %s, %s)" % (dtype, ndim, layout,
+                                               {True: 'const',
+                                                False: 'nonconst'}[const])
         super(Array, self).__init__(name, param=True)
         self.iterator_type = ArrayIterator(self)
 
@@ -717,6 +718,33 @@ class Array(IterableType):
     def is_contig(self):
         return self.layout in 'CF'
 
+
+class VoidArray(Array):
+    """
+    A VoidArray is an array nested within a structured type (which are "void"
+    type in NumPy parlance). Unlike an Array, the shape, and not just the number
+    of dimenions is part of the type of a VoidArray.
+    """
+
+    def __init__(self, dtype, shape, const=False):
+        self._shape = shape
+        name = "voidarray(%s, %s, %s)" % (dtype, shape,
+                                          {True: 'const',
+                                           False: 'nonconst'}[const])
+        ndim = len(shape)
+        super(VoidArray, self).__init__(dtype, ndim, 'C', const=const,
+                                        name=name)
+
+    @property
+    def shape(self):
+        return self._shape
+
+    @property
+    def nitems(self):
+        l = 1
+        for s in self.shape:
+            l = l * s
+        return l
 
 class UniTuple(IterableType):
 
