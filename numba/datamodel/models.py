@@ -132,6 +132,7 @@ class PrimitiveModel(DataModel):
 @register_default(types.Function)
 @register_default(types.Type)
 @register_default(types.Object)
+@register_default(types.Module)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers

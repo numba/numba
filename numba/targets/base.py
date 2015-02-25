@@ -501,6 +501,12 @@ class BaseContext(object):
         """
         return self.data_model_manager[ty].as_argument(builder, val)
 
+    def get_value_as_data(self, builder, ty, val):
+        return self.data_model_manager[ty].as_data(builder, val)
+
+    def get_data_as_value(self, builder, ty, val):
+        return self.data_model_manager[ty].from_data(builder, val)
+
     def pair_first(self, builder, val, ty):
         """
         Extract the first element of a heterogenous pair.
