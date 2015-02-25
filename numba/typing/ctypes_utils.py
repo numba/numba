@@ -56,10 +56,9 @@ def get_pointer(ctypes_func):
     return ctypes.cast(ctypes_func, ctypes.c_void_p).value
 
 
-def make_function_type(cfnptr, save_value):
+def make_function_type(cfnptr):
     """
     Return a Numba type for the given ctypes function pointer.
-    If *save_value* is true, the function's value will be part of the type.
     """
     if cfnptr.argtypes is None:
         raise TypeError("ctypes function %r doesn't define its argument types; "
@@ -76,9 +75,5 @@ def make_function_type(cfnptr, save_value):
         cconv = None
 
     sig = templates.signature(cret, *cargs)
-    if save_value:
-        return types.ExternalFunctionPointer(sig, cconv=cconv,
-                                             value=get_pointer(cfnptr))
-    else:
-        return types.ExternalFunctionPointer(sig, cconv=cconv,
-                                             get_pointer=get_pointer)
+    return types.ExternalFunctionPointer(sig, cconv=cconv,
+                                         get_pointer=get_pointer)

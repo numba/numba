@@ -387,23 +387,21 @@ class Dispatcher(WeakType):
 class ExternalFunctionPointer(Function):
     """
     A pointer to a native function (e.g. exported via ctypes or cffi).
-    It can have a *value* (if a constant).
-    *get_pointer*, if not None, is a Python function taking an object
+    *get_pointer* is a Python function taking an object
     and returning the raw pointer value as an int.
     """
 
-    def __init__(self, sig, cconv=None, value=None, get_pointer=None):
+    def __init__(self, sig, get_pointer, cconv=None):
         from . import typing
         self.sig = sig
-        self.cconv = cconv
-        self.value = value
         self.get_pointer = get_pointer
+        self.cconv = cconv
         template = typing.make_concrete_template("CFuncPtr", sig, [sig])
         super(ExternalFunctionPointer, self).__init__(template)
 
     @property
     def key(self):
-        return self.sig, self.cconv, self.value
+        return self.sig, self.cconv, self.get_pointer
 
 
 class ExternalFunction(Function):

@@ -129,12 +129,12 @@ class BaseContext(object):
             # Force all integers to be 64-bit
             return types.int64
 
-        tp = self.resolve_data_type(val, kind='argument')
+        tp = self.resolve_data_type(val)
         if tp is None:
             tp = getattr(val, "_numba_type_", types.pyobject)
         return tp
 
-    def resolve_data_type(self, val, kind='value'):
+    def resolve_data_type(self, val):
         """
         Return the numba type of a Python value representing data
         (e.g. a number or an array, but not more sophisticated types
@@ -170,12 +170,10 @@ class BaseContext(object):
                 return types.Tuple(tys)
 
         elif ctypes_utils.is_ctypes_funcptr(val):
-            return ctypes_utils.make_function_type(val,
-                                                   save_value=kind == 'value')
+            return ctypes_utils.make_function_type(val)
 
         elif cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
-            return cffi_utils.make_function_type(val,
-                                                 save_value=kind == 'value')
+            return cffi_utils.make_function_type(val)
 
         else:
             try:
@@ -199,7 +197,7 @@ class BaseContext(object):
         Return the numba type of a Python value
         Return None if fail to type.
         """
-        tp = self.resolve_data_type(val, kind='value')
+        tp = self.resolve_data_type(val)
         if tp is not None:
             return tp
 

@@ -52,17 +52,13 @@ def map_type(cffi_type):
     return result
 
 
-def make_function_type(cffi_func, save_value):
+def make_function_type(cffi_func):
     """
     Return a Numba type for the given CFFI function pointer.
-    If *save_value* is true, the function's value will be part of the type.
     """
     cffi_type = ffi.typeof(cffi_func)
     sig = map_type(cffi_type)
-    if save_value:
-        return types.ExternalFunctionPointer(sig, value=get_pointer(cffi_func))
-    else:
-        return types.ExternalFunctionPointer(sig, get_pointer=get_pointer)
+    return types.ExternalFunctionPointer(sig, get_pointer=get_pointer)
 
 
 class ExternCFunction(types.ExternalFunction):

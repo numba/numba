@@ -393,11 +393,10 @@ class BaseContext(object):
             return self.get_constant_struct(builder, ty, val)
 
         elif isinstance(ty, types.ExternalFunctionPointer):
-            if ty.value is not None:
-                fnptrty = self.get_function_pointer_type(ty.sig)
-                return builder.inttoptr(self.get_constant(types.intp, ty.value),
-                                        fnptrty)
-            raise NotImplementedError("non-constant function pointer %s" % (ty,))
+            ptrty = self.get_function_pointer_type(ty.sig)
+            ptrval = ty.get_pointer(val)
+            return builder.inttoptr(self.get_constant(types.intp, ptrval),
+                                    ptrty)
 
         else:
             return self.get_constant(ty, val)
