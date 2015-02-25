@@ -174,20 +174,20 @@ class TypeAnnotation(object):
             func_data['filename'] = self.filename
             func_data['funcname'] = self.func_attr.name
 
-            func_data['python_indent'] = {}
+            func_data['python_indent'] = OrderedDict()
             for num in line_nums:
                 indent_len = len(_getindent(python_source[num]))
                 func_data['python_indent'][num] = '&nbsp;' * indent_len
         
-            func_data['llvm_indent'] = {}
+            func_data['llvm_indent'] = OrderedDict()
             for num in line_nums:
                 func_data['llvm_indent'][num] = []
                 for inst in llvm_instructions[num]:
                     indent_len = len(_getindent(inst))
                     func_data['llvm_indent'][num].append('&nbsp;' * indent_len)
 
-            func_data['python_object'] = {}
-            func_data['llvm_object'] = {}
+            func_data['python_object'] = OrderedDict()
+            func_data['llvm_object'] = OrderedDict()
             for num in line_nums:
                 func_data['python_object'][num] = ''
                 func_data['llvm_object'][num] = []
@@ -200,11 +200,11 @@ class TypeAnnotation(object):
                     else:
                         func_data['llvm_object'][num].append('')
 
-            func_data['python_lines'] = {}
+            func_data['python_lines'] = OrderedDict()
             for num in line_nums:
                 func_data['python_lines'][num] = python_source[num].strip()
         
-            func_data['llvm_lines'] = {}
+            func_data['llvm_lines'] = OrderedDict()
             for num in line_nums:
                 func_data['llvm_lines'][num] = []
                 for inst in llvm_instructions[num]:
