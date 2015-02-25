@@ -384,15 +384,26 @@ class Dispatcher(WeakType):
         return self.overloaded._pysig
 
 
-class FunctionPointer(Function):
+class ExternalFunctionPointer(Function):
     """
     A pointer to a native function (e.g. exported via ctypes or cffi).
+    It can have a *value* (if a constant).
+    *get_pointer*, if not None, is a Python function taking an object
+    and returning the raw pointer value as an int.
     """
 
-    def __init__(self, template, funcptr, cconv=None):
-        self.funcptr = funcptr
+    def __init__(self, sig, cconv=None, value=None, get_pointer=None):
+        from . import typing
+        self.sig = sig
         self.cconv = cconv
-        super(FunctionPointer, self).__init__(template)
+        self.value = value
+        self.get_pointer = get_pointer
+        template = typing.make_concrete_template("CFuncPtr", sig, [sig])
+        super(ExternalFunctionPointer, self).__init__(template)
+
+    @property
+    def key(self):
+        return self.sig, self.cconv, self.value
 
 
 class ExternalFunction(Function):

@@ -812,33 +812,35 @@ class PythonAPI(object):
         return val, dtor
 
     def to_native_value(self, obj, typ):
+        builder = self.builder
+
         if isinstance(typ, types.Object) or typ == types.pyobject:
             return obj
 
         elif typ == types.boolean:
             istrue = self.object_istrue(obj)
             zero = Constant.null(istrue.type)
-            return self.builder.icmp(lc.ICMP_NE, istrue, zero)
+            return builder.icmp(lc.ICMP_NE, istrue, zero)
 
         elif typ in types.unsigned_domain:
             longobj = self.number_long(obj)
             ullval = self.long_as_ulonglong(longobj)
             self.decref(longobj)
-            return self.builder.trunc(ullval,
+            return builder.trunc(ullval,
                                       self.context.get_argument_type(typ))
 
         elif typ in types.signed_domain:
             longobj = self.number_long(obj)
             llval = self.long_as_longlong(longobj)
             self.decref(longobj)
-            return self.builder.trunc(llval,
+            return builder.trunc(llval,
                                       self.context.get_argument_type(typ))
 
         elif typ == types.float32:
             fobj = self.number_float(obj)
             fval = self.float_as_double(fobj)
             self.decref(fobj)
-            return self.builder.fptrunc(fval,
+            return builder.fptrunc(fval,
                                         self.context.get_argument_type(typ))
 
         elif typ == types.float64:
@@ -849,20 +851,20 @@ class PythonAPI(object):
 
         elif typ in (types.complex128, types.complex64):
             cplxcls = self.context.make_complex(types.complex128)
-            cplx = cplxcls(self.context, self.builder)
+            cplx = cplxcls(self.context, builder)
             pcplx = cplx._getpointer()
             ok = self.complex_adaptor(obj, pcplx)
-            failed = cgutils.is_false(self.builder, ok)
+            failed = cgutils.is_false(builder, ok)
 
-            with cgutils.if_unlikely(self.builder, failed):
-                self.builder.ret(self.get_null_object())
+            with cgutils.if_unlikely(builder, failed):
+                builder.ret(self.get_null_object())
 
             if typ == types.complex64:
                 c64cls = self.context.make_complex(typ)
-                c64 = c64cls(self.context, self.builder)
-                freal = self.context.cast(self.builder, cplx.real,
+                c64 = c64cls(self.context, builder)
+                freal = self.context.cast(builder, cplx.real,
                                           types.float64, types.float32)
-                fimag = self.context.cast(self.builder, cplx.imag,
+                fimag = self.context.cast(builder, cplx.imag,
                                           types.float64, types.float32)
                 c64.real = freal
                 c64.imag = fimag
@@ -882,24 +884,44 @@ class PythonAPI(object):
             return self.to_native_array(obj, typ)
 
         elif isinstance(typ, types.Optional):
-            isnone = self.builder.icmp(lc.ICMP_EQ, obj, self.borrow_none())
-            with cgutils.ifelse(self.builder, isnone) as (then, orelse):
+            isnone = builder.icmp(lc.ICMP_EQ, obj, self.borrow_none())
+            with cgutils.ifelse(builder, isnone) as (then, orelse):
                 with then:
-                    noneval = self.context.make_optional_none(self.builder, typ.type)
-                    ret = cgutils.alloca_once(self.builder, noneval.type)
-                    self.builder.store(noneval, ret)
+                    noneval = self.context.make_optional_none(builder, typ.type)
+                    ret = cgutils.alloca_once(builder, noneval.type)
+                    builder.store(noneval, ret)
 
                 with orelse:
                     val = self.to_native_value(obj, typ.type)
-                    just = self.context.make_optional_value(self.builder,
+                    just = self.context.make_optional_value(builder,
                                                             typ.type, val)
-                    self.builder.store(just, ret)
+                    builder.store(just, ret)
             return ret
 
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
             return self.to_native_tuple(obj, typ)
 
-        raise NotImplementedError(typ)
+        elif isinstance(typ, types.ExternalFunctionPointer):
+            if typ.get_pointer is not None:
+                # Call get_pointer() on the object to get the raw pointer value
+                ptrty = self.context.get_function_pointer_type(typ.sig)
+                ret = cgutils.alloca_once_value(builder,
+                                                Constant.null(ptrty),
+                                                name='fnptr')
+                ser = self.serialize_object(typ.get_pointer)
+                get_pointer = self.unserialize(ser)
+                with cgutils.if_likely(builder,
+                                       cgutils.is_not_null(builder, get_pointer)):
+                    intobj = self.call_function_objargs(get_pointer, (obj,))
+                    self.decref(get_pointer)
+                    with cgutils.if_likely(builder,
+                                           cgutils.is_not_null(builder, intobj)):
+                        intval = self.number_as_ssize_t(intobj)
+                        self.decref(intobj)
+                        builder.store(builder.inttoptr(intval, ptrty), ret)
+                return builder.load(ret)
+
+        raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
     def from_native_return(self, val, typ):
         return self.from_native_value(val, typ)

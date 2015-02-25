@@ -278,6 +278,9 @@ class BaseContext(object):
         else:
             return fac(self, ty)
 
+        if isinstance(ty, types.ExternalFunctionPointer):
+            return self.get_function_pointer_type(ty.sig)
+
         if (isinstance(ty, types.Dummy) or
                 isinstance(ty, types.Module) or
                 isinstance(ty, types.Function) or
@@ -388,6 +391,14 @@ class BaseContext(object):
         """
         if self.is_struct_type(ty):
             return self.get_constant_struct(builder, ty, val)
+
+        elif isinstance(ty, types.ExternalFunctionPointer):
+            if ty.value is not None:
+                fnptrty = self.get_function_pointer_type(ty.sig)
+                return builder.inttoptr(self.get_constant(types.intp, ty.value),
+                                        fnptrty)
+            raise NotImplementedError("non-constant function pointer %s" % (ty,))
+
         else:
             return self.get_constant(ty, val)
 
@@ -446,7 +457,7 @@ class BaseContext(object):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
 
-        raise NotImplementedError(ty)
+        raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
 
     def get_constant_undef(self, ty):
         lty = self.get_value_type(ty)
@@ -814,13 +825,13 @@ class BaseContext(object):
         retval = builder.call(callee, args)
         return retval
 
-    def call_function_pointer(self, builder, funcptr, signature, args, cconv=None):
+    def get_function_pointer_type(self, signature):
         retty = self.get_value_type(signature.return_type)
-        fnty = Type.function(retty, [a.type for a in args])
-        fnptrty = Type.pointer(fnty)
-        addr = self.get_constant(types.intp, funcptr)
-        ptr = builder.inttoptr(addr, fnptrty)
-        return builder.call(ptr, args, cconv=cconv)
+        args = [self.get_value_type(t) for t in signature.args]
+        return Type.pointer(Type.function(retty, args))
+
+    def call_function_pointer(self, builder, funcptr, args, cconv=None):
+        return builder.call(funcptr, args, cconv=cconv)
 
     def call_class_method(self, builder, func, signature, args):
         api = self.get_python_api(builder)

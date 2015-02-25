@@ -401,7 +401,11 @@ class Lower(BaseLower):
         value = inst.value
         # In nopython mode, closure vars are frozen like globals
         if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
-            if (isinstance(ty, types.Dummy) or
+            if isinstance(ty, types.ExternalFunctionPointer):
+                return self.context.get_constant_generic(self.builder, ty,
+                                                         value.value)
+
+            elif (isinstance(ty, types.Dummy) or
                     isinstance(ty, types.Module) or
                     isinstance(ty, types.Function) or
                     isinstance(ty, types.Dispatcher)):
@@ -507,12 +511,11 @@ class Lower(BaseLower):
                 res = self.context.call_class_method(self.builder, fnobj,
                                                      signature, castvals)
 
-            elif isinstance(fnty, types.FunctionPointer):
+            elif isinstance(fnty, types.ExternalFunctionPointer):
                 # Handle a C function pointer
-                pointer = fnty.funcptr
+                pointer = self.loadvar(expr.func.name)
                 res = self.context.call_function_pointer(self.builder, pointer,
-                                                         signature, castvals,
-                                                         fnty.cconv)
+                                                         castvals, fnty.cconv)
 
             else:
                 if isinstance(signature.return_type, types.Phantom):

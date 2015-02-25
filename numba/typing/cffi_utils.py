@@ -52,13 +52,17 @@ def map_type(cffi_type):
     return result
 
 
-def make_function_type(cffi_func):
+def make_function_type(cffi_func, save_value):
+    """
+    Return a Numba type for the given CFFI function pointer.
+    If *save_value* is true, the function's value will be part of the type.
+    """
     cffi_type = ffi.typeof(cffi_func)
-    signature = map_type(cffi_type)
-    cases = [signature]
-    template = templates.make_concrete_template("CFFIFuncPtr", cffi_func, cases)
-    result = types.FunctionPointer(template, get_pointer(cffi_func))
-    return result
+    sig = map_type(cffi_type)
+    if save_value:
+        return types.ExternalFunctionPointer(sig, value=get_pointer(cffi_func))
+    else:
+        return types.ExternalFunctionPointer(sig, get_pointer=get_pointer)
 
 
 class ExternCFunction(types.ExternalFunction):
@@ -104,4 +108,3 @@ if ffi is not None:
         ffi.typeof('size_t') :              types.uintp,
         ffi.typeof('void') :                types.void,
     }
-
