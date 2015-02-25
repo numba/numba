@@ -10,6 +10,7 @@ import re
 from llvmlite import ir
 from llvmlite.llvmpy.core import Constant, Type
 import llvmlite.llvmpy.core as lc
+from numba import datamodel
 
 from . import utils
 
@@ -130,7 +131,7 @@ class StructProxy(object):
         """
         Return the number of fields.
         """
-        return len(self._namemap)
+        return self._datamodel.field_count
 
     def _getpointer(self):
         """

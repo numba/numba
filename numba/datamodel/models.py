@@ -312,6 +312,10 @@ class StructModel(CompositeModel):
     def get_field_position(self, field):
         return self._fields.index(field)
 
+    @property
+    def field_count(self):
+        return len(self._fields)
+
     def get_type(self, pos):
         if isinstance(pos, str):
             pos = self.get_field_position(pos)
@@ -335,6 +339,14 @@ class TupleModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('f' + str(i), t) for i, t in enumerate(fe_type)]
         super(TupleModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.Pair)
+class PairModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [('first', fe_type.first_type),
+                   ('second', fe_type.second_type)]
+        super(PairModel, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.Array)
@@ -522,6 +534,14 @@ class EnumerateType(StructModel):
                    ('iter', fe_type.source_type)]
 
         super(EnumerateType, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.ZipType)
+class ZipType(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [('iter%d' % i, source_type.iterator_type)
+                   for i, source_type in enumerate(fe_type.source_types)]
+        super(ZipType, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.RangeIteratorType)

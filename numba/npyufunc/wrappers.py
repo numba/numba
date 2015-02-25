@@ -2,10 +2,8 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
                                   ICMP_EQ, Constant)
-import llvmlite.llvmpy.core as lc
-from llvmlite import binding as ll
 
-from numba import types, cgutils, config
+from numba import types, cgutils
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,

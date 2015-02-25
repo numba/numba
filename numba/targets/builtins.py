@@ -1111,11 +1111,7 @@ def slice0_none_none_impl(context, builder, sig, args):
 
 
 def make_pair(first_type, second_type):
-    class Pair(cgutils.Structure):
-        _fields = [('first', first_type),
-                   ('second', second_type)]
-
-    return Pair
+    return cgutils.create_struct_proxy(types.Pair(first_type, second_type))
 
 
 @struct_factory(types.UniTupleIter)
@@ -1124,13 +1120,7 @@ def make_unituple_iter(tupiter):
     Return the Structure representation of the given *tupiter* (an
     instance of types.UniTupleIter).
     """
-    unituple = tupiter.unituple
-
-    class UniTupleIter(cgutils.Structure):
-        _fields = [('index', types.CPointer(types.intp)),
-                   ('tuple', tupiter.unituple,)]
-
-    return UniTupleIter
+    return cgutils.create_struct_proxy(tupiter)
 
 
 @builtin
