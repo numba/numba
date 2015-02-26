@@ -20,7 +20,7 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
-def jit(*signatures, locals={}, target='cpu', **targetoptions):
+def jit(*signatures, **options):
     """
     This decorator is used to compile a Python function into native code.
     
@@ -106,24 +106,26 @@ def jit(*signatures, locals={}, target='cpu', **targetoptions):
                 return x + y
 
     """
+    locals = options.pop('locals', {})
+    target = options.pop('target', 'cpu')
 
     # Handle signature
     if not signatures:
         # No signature, no function in args
         def configured_jit(func):
-            return jit(func, locals=locals, target=target, **targetoptions)
+            return jit(func, locals=locals, target=target, **options)
         return configured_jit
     elif len(signatures) == 1 and not sigutils.is_signature(signatures[0]):
         # A function is passed
         pyfunc = signatures[0]
         dispatcher = registry.target_registry[target]
         dispatcher = dispatcher(py_func=pyfunc, locals=locals,
-                                targetoptions=targetoptions)
+                                targetoptions=options)
         return dispatcher
     else:
         # Signatures are provided
         return _jit(signatures, locals=locals, target=target,
-                    targetoptions=targetoptions)
+                    targetoptions=options)
 
 
 def _jit(sigs, locals, target, targetoptions):
