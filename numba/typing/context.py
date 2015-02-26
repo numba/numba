@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import
 from collections import defaultdict
 import functools
 import types as pytypes
+import sys
 import weakref
 
 import numpy
@@ -17,6 +18,29 @@ from . import (
     randomdecl)
 from numba import numpy_support, utils
 from . import ctypes_utils, cffi_utils
+
+
+_pep3118_int_types = set('bBhHiIlLqQnN')
+
+_pep3118_scalar_map = {
+    'f': types.float32,
+    'd': types.float64,
+    'Zf': types.complex64,
+    'Zd': types.complex128,
+    }
+
+
+def _decode_pep3118_format(fmt, itemsize):
+    if fmt in _pep3118_int_types:
+        # Determine int width and signedness
+        name = 'int%d' % (itemsize * 8,)
+        if fmt.isupper():
+            name = 'u' + name
+        return types.Integer(name)
+    try:
+        return _pep3118_scalar_map[fmt]
+    except KeyError:
+        raise ValueError("unsupported PEP 3118 format %r" % (format,))
 
 
 class BaseContext(object):
@@ -193,6 +217,21 @@ class BaseContext(object):
             else:
                 layout = 'A'
             return types.Array(dtype, ary.ndim, layout)
+
+        if sys.version_info >= (2, 7):
+            try:
+                m = memoryview(val)
+            except TypeError:
+                pass
+            else:
+                # Object has the buffer protocol
+                # XXX handle .readonly, .c_contiguous, .f_contiguous (3.x)
+                try:
+                    dtype = _decode_pep3118_format(m.format, m.itemsize)
+                except ValueError:
+                    pass
+                else:
+                    return types.Buffer(dtype, m.ndim, layout='A')
 
         return
 

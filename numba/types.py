@@ -641,8 +641,24 @@ class ArrayIterator(IteratorType):
         super(ArrayIterator, self).__init__(name, param=True)
 
 
-class Array(IterableType):
+class Buffer(Type):
+    """
+    Type class for objects providing the buffer protocol.
+    """
+    mutable = True
 
+    def __init__(self, dtype, ndim, layout):
+        self.dtype = dtype
+        self.ndim = ndim
+        self.layout = layout
+        name = "buffer(%s, %sd, %s)" % (dtype, ndim, layout)
+        super(Buffer, self).__init__(name, param=True)
+
+
+class Array(IterableType):
+    """
+    Type class for Numpy arrays.
+    """
     mutable = True
 
     # CS and FS are not reserved for inner contig but strided
@@ -684,18 +700,6 @@ class Array(IterableType):
         if const is None:
             const = self.const
         return Array(dtype=dtype, ndim=ndim, layout=layout, const=const)
-
-    def get_layout(self, dim):
-        assert 0 <= dim < self.ndim
-        if self.layout in 'CFA':
-            return self.layout
-        elif self.layout == 'CS':
-            if dim == self.ndim - 1:
-                return 'C'
-        elif self.layout == 'FS':
-            if dim == 0:
-                return 'F'
-        return 'A'
 
     @property
     def key(self):

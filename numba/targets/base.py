@@ -293,7 +293,7 @@ class BaseContext(object):
         elif isinstance(ty, types.Optional):
             return self.get_struct_type(self.make_optional(ty))
 
-        elif isinstance(ty, types.Array):
+        elif isinstance(ty, (types.Buffer, types.Array)):
             return self.get_struct_type(self.make_array(ty))
 
         elif isinstance(ty, types.UniTuple):

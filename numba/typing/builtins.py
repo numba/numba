@@ -437,14 +437,14 @@ class SetItemArray(AbstractTemplate):
 
 
 @builtin
-class LenArray(AbstractTemplate):
+class Len(AbstractTemplate):
     key = types.len_type
 
     def generic(self, args, kws):
         assert not kws
-        (ary,) = args
-        if isinstance(ary, types.Array):
-            return signature(types.intp, ary)
+        (val,) = args
+        if isinstance(val, (types.Buffer, types.Array)):
+            return signature(types.intp, val)
 
 #-------------------------------------------------------------------------------
 

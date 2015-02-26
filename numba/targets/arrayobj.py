@@ -416,6 +416,7 @@ def setitem_array1d_slice(context, builder, sig, args):
 
 
 @builtin
+@implement(types.len_type, types.Kind(types.Buffer))
 @implement(types.len_type, types.Kind(types.Array))
 def array_len(context, builder, sig, args):
     (aryty,) = sig.args
