@@ -134,6 +134,7 @@ class TestDispatcher(TestCase):
 
     def test_explicit_signatures(self):
         f = jit("(int64,int64)")(add)
+        # Approximate match (unsafe conversion)
         self.assertPreciseEqual(f(1.5, 2.5), 3)
         self.assertEqual(len(f.overloads), 1, f.overloads)
         f = jit("(int64,int64)", "(float64,float64)")(add)
@@ -147,6 +148,10 @@ class TestDispatcher(TestCase):
             f(1j, 1j)
         self.assertIn("No matching definition", str(cm.exception))
         self.assertEqual(len(f.overloads), 2, f.overloads)
+        # A more interesting one...
+        f = jit("(float32,float32)", "(float64,float64)")(add)
+        self.assertPreciseEqual(f(np.float32(1), np.float32(2**-25)), 1.0)
+        self.assertPreciseEqual(f(1, 2**-25), 1.0000000298023224)
 
     def test_signature_mismatch(self):
         tmpl = "Signature mismatch: %d argument types given, but function takes 2 arguments"
