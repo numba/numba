@@ -1,5 +1,6 @@
 #include <cstring>
 #include <algorithm>
+#include <limits.h>
 #include "typeconv.hpp"
 
 
@@ -17,20 +18,19 @@ Type& Type::operator = (const Type& other) {
 }
 
 bool Type::valid() const {
-	return id != -1;
+    return id != -1;
 }
 
 bool Type::operator == (const Type& other) const {
-	return id == other.id;
+    return id == other.id;
 }
 
-
 bool Type::operator != (const Type& other) const {
-	return id != other.id;
+    return id != other.id;
 }
 
 bool Type:: operator < (const Type& other) const {
-	return id < other.id;
+    return id < other.id;
 }
 
 int Type::get() const { return id; }
@@ -75,122 +75,113 @@ TypeCompatibleCode TCCMap::find(TypePair key) const {
 // ------ TypeManager ------
 
 bool TypeManager::canPromote(Type from, Type to) const {
-	return isCompatible(from, to) == TCC_PROMOTE;
+    return isCompatible(from, to) == TCC_PROMOTE;
 }
 
 bool TypeManager::canSafeConvert(Type from, Type to) const {
-	return isCompatible(from, to) == TCC_CONVERT_SAFE;
+    return isCompatible(from, to) == TCC_CONVERT_SAFE;
 }
 
 bool TypeManager::canUnsafeConvert(Type from, Type to) const {
-	return isCompatible(from, to) == TCC_CONVERT_UNSAFE;
+    return isCompatible(from, to) == TCC_CONVERT_UNSAFE;
 }
 
 void TypeManager::addPromotion(Type from, Type to) {
-	return addCompatibility(from, to, TCC_PROMOTE);
+    return addCompatibility(from, to, TCC_PROMOTE);
 }
 
 void TypeManager::addUnsafeConversion(Type from, Type to) {
-	return addCompatibility(from, to, TCC_CONVERT_UNSAFE);
+    return addCompatibility(from, to, TCC_CONVERT_UNSAFE);
 }
 
 void TypeManager::addSafeConversion(Type from, Type to) {
-	return addCompatibility(from, to, TCC_CONVERT_SAFE);
+    return addCompatibility(from, to, TCC_CONVERT_SAFE);
 }
 
 void TypeManager::addCompatibility(Type from, Type to, TypeCompatibleCode tcc) {
-	TypePair pair(from, to);
-    //	tccmap[pair] = tcc;
+    TypePair pair(from, to);
     tccmap.insert(pair, tcc);
 }
 
 TypeCompatibleCode TypeManager::isCompatible(Type from, Type to) const {
-	if (from == to)
-		return TCC_EXACT;
-	TypePair pair(from, to);
-//	TCCMap::const_iterator it = tccmap.find(pair);
-//	if (it == tccmap.end())
-//		return TCC_FALSE;
-//	else
-//		return it->second;
+    if (from == to)
+        return TCC_EXACT;
+    TypePair pair(from, to);
     return tccmap.find(pair);
 }
 
 
 int TypeManager::selectOverload(Type sig[], Type ovsigs[], int &selected,
                                 int sigsz, int ovct, bool allow_unsafe) const {
-	int count;
-	if (ovct < 16) {
-		Rating ratings[16];
-		count = _selectOverload(sig, ovsigs, selected, sigsz, ovct,
-                                        allow_unsafe, ratings);
-	}
-	// Necessary?
-    //	else if (ovct < 128) {
-    //		Rating ratings[128];
-    //		sel = _selectOverload(sig, ovsigs, sigsz, ovct, ratings);
-    //	}
-	else {
-		Rating *ratings = new Rating[ovct];
-		count = _selectOverload(sig, ovsigs, selected, sigsz, ovct,
-                                        allow_unsafe, ratings);
-		delete [] ratings;
-	}
-	return count;
+    int count;
+    if (ovct <= 16) {
+        Rating ratings[16];
+        count = _selectOverload(sig, ovsigs, selected, sigsz, ovct,
+                                allow_unsafe, ratings);
+    }
+    else {
+        Rating *ratings = new Rating[ovct];
+        count = _selectOverload(sig, ovsigs, selected, sigsz, ovct,
+                                allow_unsafe, ratings);
+        delete [] ratings;
+    }
+    return count;
 }
 
 int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int &selected,
                                  int sigsz, int ovct, bool allow_unsafe,
                                  Rating ratings[]) const {
-	// Generate rating table
-	// Use a penalize scheme.
-	int badcount = 0;
-	for (int i = 0; i < ovct; ++i) {
-		Type* entry = &ovsigs[i * sigsz];
+    // Generate rating table
+    // Use a penalize scheme.
+    int badcount = 0;
+    for (int i = 0; i < ovct; ++i) {
+        Type* entry = &ovsigs[i * sigsz];
 
-		Rating &rate = ratings[i];
-		for (int j = 0; j < sigsz; ++j) {
-			TypeCompatibleCode tcc = isCompatible(sig[j], entry[j]);
-			if (tcc == TCC_FALSE ||
-                            (tcc == TCC_CONVERT_UNSAFE && !allow_unsafe)) {
-				rate.bad();
-				++badcount;
-				break; // stop the loop early for incompatbile type
-			}
-			switch(tcc) {
-			case TCC_PROMOTE:
-				rate.promote += 1;
-				break;
-			case TCC_CONVERT_SAFE:
-				rate.safe_convert += 1;
-				break;
-			case TCC_CONVERT_UNSAFE:
-				rate.unsafe_convert += 1;
-				break;
-			default:
-				break;
-			}
-		}
-	}
+        Rating &rate = ratings[i];
+        for (int j = 0; j < sigsz; ++j) {
+            TypeCompatibleCode tcc = isCompatible(sig[j], entry[j]);
+            if (tcc == TCC_FALSE ||
+                (tcc == TCC_CONVERT_UNSAFE && !allow_unsafe)) {
+                rate.bad();
+                ++badcount;
+                break; // stop the loop early for incompatbile type
+            }
+            switch(tcc) {
+            case TCC_PROMOTE:
+                rate.promote += 1;
+                break;
+            case TCC_CONVERT_SAFE:
+                rate.safe_convert += 1;
+                break;
+            case TCC_CONVERT_UNSAFE:
+                rate.unsafe_convert += 1;
+                break;
+            default:
+                break;
+            }
+        }
+    }
 
-	if (badcount == ovct) return 0;
+    // Fast path for no match
+    if (badcount == ovct)
+        return 0;
 
     // Find lowest rating
-	Rating best;
-	best.bad();
+    Rating best;
+    best.bad();
 
-	int matchcount = 0;
-	for (int i = 0; i < ovct; ++i) {
-            if (ratings[i] < best){
-                best = ratings[i];
-                matchcount = 1;
-                selected = i;
-            }
-            else if (ratings[i] == best) {
-                matchcount += 1;
-            }
-	}
-	return matchcount;
+    int matchcount = 0;
+    for (int i = 0; i < ovct; ++i) {
+        if (ratings[i] < best){
+            best = ratings[i];
+            matchcount = 1;
+            selected = i;
+        }
+        else if (ratings[i] == best) {
+            matchcount += 1;
+        }
+    }
+    return matchcount;
 }
 
 // ----- Ratings -----
@@ -198,9 +189,9 @@ Rating::Rating() :promote(0), safe_convert(0), unsafe_convert(0) { }
 
 void Rating::bad() {
     // Max out everything
-    promote = -1;
-    safe_convert = -1;
-    unsafe_convert = -1;
+    promote = UINT_MAX;
+    safe_convert = UINT_MAX;
+    unsafe_convert = UINT_MAX;
 }
 
 bool Rating::operator < (const Rating &other) const {
@@ -224,19 +215,19 @@ bool Rating::operator == (const Rating &other) const {
 // ----- utils -----
 
 const char* TCCString(TypeCompatibleCode tcc) {
-	switch(tcc) {
-	case TCC_EXACT:
-		return "exact";
-	case TCC_SUBTYPE:
-		return "subtype";
-	case TCC_PROMOTE:
-		return "promote";
-	case TCC_CONVERT_SAFE:
-		return "safe_convert";
-	case TCC_CONVERT_UNSAFE:
-		return "unsafe_convert";
-	default:
-		return "false";
-	}
+    switch(tcc) {
+    case TCC_EXACT:
+        return "exact";
+    case TCC_SUBTYPE:
+        return "subtype";
+    case TCC_PROMOTE:
+        return "promote";
+    case TCC_CONVERT_SAFE:
+        return "safe_convert";
+    case TCC_CONVERT_UNSAFE:
+        return "unsafe_convert";
+    default:
+        return "false";
+    }
 }
 
