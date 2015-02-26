@@ -33,21 +33,17 @@ class DataModelTester(unittest.TestCase):
                                                "NotImplementedError")
 
         if isinstance(args, (tuple, list)):
-            def recur_flatten_type(args):
+            def recur_tuplize(args, func=None):
                 for arg in args:
                     if isinstance(arg, (tuple, list)):
-                        yield tuple(recur_flatten_type(arg))
+                        yield tuple(recur_tuplize(arg, func=func))
                     else:
-                        yield arg.type
+                        if func is None:
+                            yield arg
+                        else:
+                            yield func(arg)
 
-            def recur_tuplize(args):
-                for arg in args:
-                    if isinstance(arg, (tuple, list)):
-                        yield tuple(recur_tuplize(arg))
-                    else:
-                        yield arg
-
-            argtypes = tuple(recur_flatten_type(args))
+            argtypes = tuple(recur_tuplize(args, func=lambda x: x.type))
             exptypes = tuple(recur_tuplize(
                 self.datamodel.get_argument_type()))
             self.assertEqual(exptypes, argtypes)
