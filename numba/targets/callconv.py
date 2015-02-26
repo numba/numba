@@ -162,7 +162,7 @@ class MinimalCallConv(BaseCallConv):
         """
         Get the implemented Function type for *restype* and *argtypes*.
         """
-        arginfo = self.context.get_arg_info(argtypes)
+        arginfo = self.context.get_arg_packer(argtypes)
         argtypes = list(arginfo.argument_types)
         resptr = self.get_return_type(restype)
         fnty = ir.FunctionType(errcode_t, [resptr] + argtypes)
@@ -172,7 +172,7 @@ class MinimalCallConv(BaseCallConv):
         """
         Set names of function arguments.
         """
-        arginfo = self.context.get_arg_info(fe_argtypes)
+        arginfo = self.context.get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
         fn.args[0].name = ".ret"
@@ -195,7 +195,7 @@ class MinimalCallConv(BaseCallConv):
         # initialize return value
         builder.store(cgutils.get_null_value(retty), retvaltmp)
 
-        arginfo = self.context.get_arg_info(argtys)
+        arginfo = self.context.get_arg_packer(argtys)
         args = arginfo.as_arguments(builder, args)
         realargs = [retvaltmp] + list(args)
         code = builder.call(callee, realargs)
@@ -310,7 +310,7 @@ class CPUCallConv(BaseCallConv):
         Get the implemented Function type for *restype* and *argtypes*.
         """
 
-        arginfo = self.context.get_arg_info(argtypes)
+        arginfo = self.context.get_arg_packer(argtypes)
         argtypes = list(arginfo.argument_types)
         resptr = self.get_return_type(restype)
         fnty = ir.FunctionType(errcode_t,
@@ -322,7 +322,7 @@ class CPUCallConv(BaseCallConv):
         """
         Set names of function arguments.
         """
-        arginfo = self.context.get_arg_info(fe_argtypes)
+        arginfo = self.context.get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
         self._get_return_argument(fn).name = "retptr"
@@ -364,7 +364,7 @@ class CPUCallConv(BaseCallConv):
         excinfoptr = cgutils.alloca_once(builder, ir.PointerType(excinfo_t),
                                          name="excinfo")
 
-        arginfo = self.context.get_arg_info(argtys)
+        arginfo = self.context.get_arg_packer(argtys)
         args = list(arginfo.as_arguments(builder, args))
         realargs = [retvaltmp, excinfoptr, env] + args
         code = builder.call(callee, realargs)

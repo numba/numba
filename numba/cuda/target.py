@@ -78,7 +78,7 @@ class CUDATargetContext(BaseContext):
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
 
-        arginfo = self.get_arg_info(argtypes)
+        arginfo = self.get_arg_packer(argtypes)
         argtys = list(arginfo.argument_types)
         wrapfnty = Type.function(Type.void(), argtys)
         wrapper_module = self.create_module("cuda.kernel.wrapper")

@@ -157,7 +157,7 @@ class BaseContext(object):
 
         self.cached_internal_func = {}
 
-        self.data_model_manager = datamodel.defaultDataModelManager
+        self.data_model_manager = datamodel.default_manager
 
         # Initialize
         self.init()
@@ -168,8 +168,8 @@ class BaseContext(object):
         """
         pass
 
-    def get_arg_info(self, fe_args):
-        return datamodel.ArgInfo(self.data_model_manager, fe_args)
+    def get_arg_packer(self, fe_args):
+        return datamodel.ArgPacker(self.data_model_manager, fe_args)
 
     @property
     def target_data(self):

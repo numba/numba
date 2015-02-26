@@ -222,7 +222,7 @@ class BaseLower(object):
     def lower(self):
         # Init argument variables
         rawfnargs = self.call_conv.get_arguments(self.function)
-        arginfo = self.context.get_arg_info(self.fndesc.argtypes)
+        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
         fnargs = arginfo.from_arguments(self.builder, rawfnargs)
         for ak, av in zip(self.fndesc.args, fnargs):
             av = self.init_argument(av)

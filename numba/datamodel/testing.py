@@ -15,7 +15,7 @@ class DataModelTester(unittest.TestCase):
 
     def setUp(self):
         self.module = ir.Module()
-        self.datamodel = datamodel.defaultDataModelManager[self.fe_type]
+        self.datamodel = datamodel.default_manager[self.fe_type]
 
     def test_as_arg(self):
         """

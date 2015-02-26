@@ -88,7 +88,7 @@ class DataModel(object):
         return hash(tuple(self._compared_fields()))
 
     def __eq__(self, other):
-        if isinstance(other, type(self)):
+        if type(self) is type(other):
             return self._compared_fields() == other._compared_fields()
         else:
             return False
@@ -184,14 +184,16 @@ class IntegerModel(PrimitiveModel):
         super(IntegerModel, self).__init__(dmm, fe_type, be_type)
 
 
+@register_default(types.Float)
 class FloatModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
-        super(FloatModel, self).__init__(dmm, fe_type, ir.FloatType())
-
-
-class DoubleModel(PrimitiveModel):
-    def __init__(self, dmm, fe_type):
-        super(DoubleModel, self).__init__(dmm, fe_type, ir.DoubleType())
+        if fe_type == types.float32:
+            be_type = ir.FloatType()
+        elif fe_type == types.float64:
+            be_type = ir.DoubleType()
+        else:
+            raise NotImplementedError(fe_type)
+        super(FloatModel, self).__init__(dmm, fe_type, be_type)
 
 
 @register_default(types.CPointer)
@@ -220,7 +222,7 @@ class UniTupleModel(DataModel):
         return self.get_value_type()
 
     def get_argument_type(self):
-        return [self._elem_model.get_argument_type()] * self._count
+        return (self._elem_model.get_argument_type(),) * self._count
 
     def as_argument(self, builder, value):
         out = []
@@ -304,6 +306,21 @@ class StructModel(CompositeModel):
         return struct
 
     def as_data(self, builder, value):
+        """
+        Converts the LLVM struct in `value` into a representation suited for
+        storing into arrays.
+
+        Note
+        ----
+        Current implementation rarely changes how types are represented for
+        "value" and "data".  This is usually a pointless rebuild of the
+        immutable LLVM struct value.  Luckily, LLVM optimization removes all
+        redundancy.
+
+        Sample usecase: Structures nested with pointers to other structures
+        that can be serialized into  a flat representation when storing into
+        array.
+        """
         elems = self._as("as_data", builder, value)
         struct = ir.Constant(self.get_data_type(), ir.Undefined)
         for i, el in enumerate(elems):
@@ -311,6 +328,12 @@ class StructModel(CompositeModel):
         return struct
 
     def from_data(self, builder, value):
+        """
+        Convert from "data" representation back into "value" representation.
+        Usually invoked when loading from array.
+
+        See notes in `as_data()`
+        """
         vals = [builder.extract_value(value, [i])
                 for i in range(len(self._members))]
         return self._from("from_data", builder, vals)
@@ -334,11 +357,43 @@ class StructModel(CompositeModel):
         return self._from("from_data", builder, vals)
 
     def get(self, builder, val, pos):
+        """Get a field at the given position or the fieldname
+
+        Args
+        ----
+        builder:
+            LLVM IRBuilder
+        val:
+            value to be inserted
+        pos: int or str
+            field index or field name
+
+        Returns
+        -------
+        Extracted value
+        """
         if isinstance(pos, str):
             pos = self.get_field_position(pos)
         return builder.extract_value(val, [pos])
 
     def set(self, builder, stval, val, pos):
+        """Set a field at the given position or the fieldname
+
+        Args
+        ----
+        builder:
+            LLVM IRBuilder
+        stval:
+            LLVM struct value
+        val:
+            value to be inserted
+        pos: int or str
+            field index or field name
+
+        Returns
+        -------
+        A new LLVM struct with the value inserted
+        """
         if isinstance(pos, str):
             pos = self.get_field_position(pos)
         return builder.insert_value(stval, val, [pos])
@@ -351,6 +406,15 @@ class StructModel(CompositeModel):
         return len(self._fields)
 
     def get_type(self, pos):
+        """Get the frontend type (numba type) of a field given the position
+         or the fieldname
+
+        Args
+        ----
+        pos: int or str
+            field index or field name
+
+        """
         if isinstance(pos, str):
             pos = self.get_field_position(pos)
         return self._members[pos]
@@ -501,7 +565,7 @@ class CharSeq(DataModel):
         return value
 
 
-class CConitugousFlatIter(StructModel):
+class CContiugousFlatIter(StructModel):
     def __init__(self, dmm, fe_type):
         assert fe_type.array_type.layout == 'C'
         array_type = fe_type.array_type
@@ -512,7 +576,7 @@ class CConitugousFlatIter(StructModel):
                    ('index', types.CPointer(types.intp)),
                    ('indices', types.CPointer(types.intp)),
         ]
-        super(CConitugousFlatIter, self).__init__(dmm, fe_type, members)
+        super(CContiugousFlatIter, self).__init__(dmm, fe_type, members)
 
 
 class FlatIter(StructModel):
@@ -592,20 +656,10 @@ class RangeIteratorType(StructModel):
 # =============================================================================
 
 
-@register_default(types.Float)
-def handle_floats(dmm, ty):
-    if ty == types.float32:
-        return FloatModel(dmm, ty)
-    elif ty == types.float64:
-        return DoubleModel(dmm, ty)
-    else:
-        raise NotImplementedError(ty)
-
-
 @register_default(types.NumpyFlatType)
 def handle_numpy_flat_type(dmm, ty):
     if ty.array_type.layout == 'C':
-        return CConitugousFlatIter(dmm, ty)
+        return CContiugousFlatIter(dmm, ty)
     else:
         return FlatIter(dmm, ty)
 

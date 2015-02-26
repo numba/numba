@@ -15,6 +15,6 @@ def register(dmm, typecls):
     return wraps
 
 
-defaultDataModelManager = DataModelManager()
+default_manager = DataModelManager()
 
-register_default = functools.partial(register, defaultDataModelManager)
+register_default = functools.partial(register, default_manager)

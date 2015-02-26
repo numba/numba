@@ -98,8 +98,8 @@ class Test0DArrayOfInt32(test_factory(support_as_data=False)):
 
 class TestArgInfo(unittest.TestCase):
     def _test_as_arguments(self, fe_args):
-        dmm = datamodel.defaultDataModelManager
-        fi = datamodel.ArgInfo(dmm, fe_args)
+        dmm = datamodel.default_manager
+        fi = datamodel.ArgPacker(dmm, fe_args)
 
         module = ir.Module()
         fnty = ir.FunctionType(ir.VoidType(), [])
