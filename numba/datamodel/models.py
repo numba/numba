@@ -374,7 +374,8 @@ class StructModel(CompositeModel):
         """
         if isinstance(pos, str):
             pos = self.get_field_position(pos)
-        return builder.extract_value(val, [pos])
+        return builder.extract_value(val, [pos],
+                                     name="extracted." + self._fields[pos])
 
     def set(self, builder, stval, val, pos):
         """Set a field at the given position or the fieldname
@@ -396,7 +397,8 @@ class StructModel(CompositeModel):
         """
         if isinstance(pos, str):
             pos = self.get_field_position(pos)
-        return builder.insert_value(stval, val, [pos])
+        return builder.insert_value(stval, val, [pos],
+                                    name="inserted." + self._fields[pos])
 
     def get_field_position(self, field):
         return self._fields.index(field)
