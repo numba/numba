@@ -186,6 +186,13 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         sigs = [cr.signature for cr in self._compileinfos.values()]
         resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
 
+    def _explain_matching_error(self, *args, **kws):
+        assert not kws, "kwargs not handled"
+        args = [self.typeof_pyval(a) for a in args]
+        msg = ("No matching definition for argument type(s) %s"
+               % ', '.join(map(str, args)))
+        raise TypeError(msg)
+
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
 
