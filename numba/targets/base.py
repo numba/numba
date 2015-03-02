@@ -17,6 +17,8 @@ from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry, type_registry)
 from . import arrayobj, builtins, iterators, rangeobj, optional
+from numba import datamodel
+
 try:
     from . import npdatetime
 except NotImplementedError:
@@ -155,6 +157,8 @@ class BaseContext(object):
 
         self.cached_internal_func = {}
 
+        self.data_model_manager = datamodel.default_manager
+
         # Initialize
         self.init()
 
@@ -163,6 +167,9 @@ class BaseContext(object):
         For subclasses to add initializer
         """
         pass
+
+    def get_arg_packer(self, fe_args):
+        return datamodel.ArgPacker(self.data_model_manager, fe_args)
 
     @property
     def target_data(self):
@@ -221,7 +228,7 @@ class BaseContext(object):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
         assert fn.is_declaration
-        self.call_conv.decorate_function(fn, fndesc.args)
+        self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
         return fn
@@ -256,12 +263,10 @@ class BaseContext(object):
             return cgutils.global_constant(mod, name, val)
 
     def get_argument_type(self, ty):
-        if ty == types.boolean:
-            return self.get_data_type(ty)
-        elif self.is_struct_type(ty):
-            return Type.pointer(self.get_value_type(ty))
-        else:
-            return self.get_value_type(ty)
+        return self.data_model_manager[ty].get_argument_type()
+
+    def get_return_type(self, ty):
+        return self.data_model_manager[ty].get_return_type()
 
     def get_data_type(self, ty):
         """
@@ -278,109 +283,29 @@ class BaseContext(object):
         else:
             return fac(self, ty)
 
-        if (isinstance(ty, types.Dummy) or
-                isinstance(ty, types.Module) or
-                isinstance(ty, types.Function) or
-                isinstance(ty, types.Dispatcher) or
-                isinstance(ty, types.Object) or
-                isinstance(ty, types.Macro)):
-            return PYOBJECT
-
-        elif isinstance(ty, types.CPointer):
-            dty = self.get_data_type(ty.dtype)
-            return Type.pointer(dty)
-
-        elif isinstance(ty, types.Optional):
-            return self.get_struct_type(self.make_optional(ty))
-
-        elif isinstance(ty, types.Array):
-            return self.get_struct_type(self.make_array(ty))
-
-        elif isinstance(ty, types.UniTuple):
-            dty = self.get_value_type(ty.dtype)
-            return Type.array(dty, ty.count)
-
-        elif isinstance(ty, types.Tuple):
-            dtys = [self.get_value_type(t) for t in ty]
-            return Type.struct(dtys)
-
-        elif isinstance(ty, types.Record):
-            # Record are represented as byte array
-            return Type.struct([Type.array(Type.int(8), ty.size)])
-
-        elif isinstance(ty, types.UnicodeCharSeq):
-            charty = Type.int(numpy_support.sizeof_unicode_char * 8)
-            return Type.struct([Type.array(charty, ty.count)])
-
-        elif isinstance(ty, types.CharSeq):
-            charty = Type.int(8)
-            return Type.struct([Type.array(charty, ty.count)])
-
-        elif ty in STRUCT_TYPES:
-            return self.get_struct_type(STRUCT_TYPES[ty])
-
-        else:
-            try:
-                impl = struct_registry.match(ty)
-            except KeyError:
-                pass
-            else:
-                return self.get_struct_type(impl(ty))
-
-        if isinstance(ty, types.Pair):
-            pairty = self.make_pair(ty.first_type, ty.second_type)
-            return self.get_struct_type(pairty)
-
-        else:
-            return LTYPEMAP[ty]
+        return self.data_model_manager[ty].get_data_type()
 
     def get_value_type(self, ty):
-        if ty == types.boolean:
-            return Type.int(1)
-        dataty = self.get_data_type(ty)
-
-        if isinstance(ty, types.Record):
-            # Record data are passed by refrence
-            memory = dataty.elements[0]
-            return Type.struct([Type.pointer(memory)])
-
-        return dataty
+        return self.data_model_manager[ty].get_value_type()
 
     def pack_value(self, builder, ty, value, ptr):
         """Pack data for array storage
         """
-        if isinstance(ty, types.Record):
-            pdata = cgutils.get_record_data(builder, value)
-            databuf = builder.load(pdata)
-            casted = builder.bitcast(ptr, Type.pointer(databuf.type))
-            builder.store(databuf, casted)
-            return
-
-        if ty == types.boolean:
-            value = cgutils.as_bool_byte(builder, value)
-        assert value.type == ptr.type.pointee
-        builder.store(value, ptr)
+        dataval = self.data_model_manager[ty].as_data(builder, value)
+        builder.store(dataval, ptr)
 
     def unpack_value(self, builder, ty, ptr):
         """Unpack data from array storage
         """
-
-        if isinstance(ty, types.Record):
-            vt = self.get_value_type(ty)
-            tmp = cgutils.alloca_once(builder, vt)
-            dataptr = cgutils.inbound_gep(builder, ptr, 0, 0)
-            builder.store(dataptr, cgutils.inbound_gep(builder, tmp, 0, 0))
-            return builder.load(tmp)
-
-        assert cgutils.is_pointer(ptr.type)
-        value = builder.load(ptr)
-        if ty == types.boolean:
-            return builder.trunc(value, Type.int(1))
+        dm = self.data_model_manager[ty]
+        val = dm.load_from_data_pointer(builder, ptr)
+        if val is NotImplemented:
+            return dm.from_data(builder, builder.load(ptr))
         else:
-            return value
+            return val
 
     def is_struct_type(self, ty):
-        return cgutils.is_struct(self.get_data_type(ty))
+        return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
 
     def get_constant_generic(self, builder, ty, val):
         """
@@ -393,7 +318,6 @@ class BaseContext(object):
 
     def get_constant_struct(self, builder, ty, val):
         assert self.is_struct_type(ty)
-        module = cgutils.get_module(builder)
 
         if ty in types.complex_domain:
             if ty == types.complex64:
@@ -558,56 +482,30 @@ class BaseContext(object):
         """
         Argument representation to local value representation
         """
-        if ty == types.boolean:
-            return builder.trunc(val, self.get_value_type(ty))
-        elif cgutils.is_struct_ptr(val.type):
-            return builder.load(val)
-        return val
+        return self.data_model_manager[ty].from_argument(builder, val)
 
     def get_returned_value(self, builder, ty, val):
         """
         Return value representation to local value representation
         """
-        # Same as get_argument_value
-        return self.get_argument_value(builder, ty, val)
+        return self.data_model_manager[ty].from_return(builder, val)
 
     def get_return_value(self, builder, ty, val):
         """
         Local value representation to return type representation
         """
-        if ty is types.boolean:
-            r = self.call_conv.get_return_type(ty).pointee
-            return builder.zext(val, r)
-        else:
-            return val
-
-    def get_struct_member_value(self, builder, ty, val):
-        """
-        Local value representation to struct member representation
-        """
-        # Currently same as get_return_value.
-        # TODO: make a "TypeLayout" class that describe the layout at
-        #       different situations for a value of a type.
-        return self.get_return_value(builder, ty, val)
+        return self.data_model_manager[ty].as_return(builder, val)
 
     def get_value_as_argument(self, builder, ty, val):
         """Prepare local value representation as argument type representation
         """
-        argty = self.get_argument_type(ty)
-        if argty == val.type:
-            return val
+        return self.data_model_manager[ty].as_argument(builder, val)
 
-        elif self.is_struct_type(ty):
-            # Arguments are passed by pointer
-            assert argty.pointee == val.type
-            tmp = cgutils.alloca_once(builder, val.type)
-            builder.store(val, tmp)
-            return tmp
+    def get_value_as_data(self, builder, ty, val):
+        return self.data_model_manager[ty].as_data(builder, val)
 
-        elif ty == types.boolean:
-            return builder.zext(val, argty)
-
-        raise NotImplementedError("value %s -> arg %s" % (val.type, argty))
+    def get_data_as_value(self, builder, ty, val):
+        return self.data_model_manager[ty].from_data(builder, val)
 
     def pair_first(self, builder, val, ty):
         """
@@ -615,7 +513,7 @@ class BaseContext(object):
         """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
-        return self.get_argument_value(builder, ty.first_type, pair.first)
+        return pair.first
 
     def pair_second(self, builder, val, ty):
         """
@@ -623,7 +521,7 @@ class BaseContext(object):
         """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
-        return self.get_argument_value(builder, ty.second_type, pair.second)
+        return pair.second
 
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
@@ -873,7 +771,7 @@ class BaseContext(object):
         """
         Get the LLVM struct type for the given Structure class *struct*.
         """
-        fields = [self.get_struct_member_type(v) for _, v in struct._fields]
+        fields = [self.get_value_type(v) for _, v in struct._fields]
         return Type.struct(fields)
 
     def get_dummy_value(self):

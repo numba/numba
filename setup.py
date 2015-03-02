@@ -96,6 +96,7 @@ packages = [
     "numba.npyufunc",
     "numba.pycc",
     "numba.servicelib",
+    "numba.datamodel",
     "numba.cuda",
     "numba.cuda.cudadrv",
     "numba.cuda.tests",

@@ -78,7 +78,9 @@ class CUDATargetContext(BaseContext):
 
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
-        argtys = [self.get_argument_type(ty) for ty in argtypes]
+
+        arginfo = self.get_arg_packer(argtypes)
+        argtys = list(arginfo.argument_types)
         wrapfnty = Type.function(Type.void(), argtys)
         wrapper_module = self.create_module("cuda.kernel.wrapper")
         fnty = Type.function(Type.int(),
@@ -101,11 +103,7 @@ class CUDATargetContext(BaseContext):
             gv_tid.append(define_error_gv("__tid%s__" % i))
             gv_ctaid.append(define_error_gv("__ctaid%s__" % i))
 
-        callargs = []
-        for at, av in zip(argtypes, wrapfn.args):
-            av = self.get_argument_value(builder, at, av)
-            callargs.append(av)
-
+        callargs = arginfo.from_arguments(builder, wrapfn.args)
         status, _ = self.call_conv.call_function(
             builder, func, types.void, argtypes, callargs)
 

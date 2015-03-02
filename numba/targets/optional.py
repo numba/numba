@@ -6,12 +6,7 @@ def make_optional(valtype):
     """
     Return the Structure representation of a optional value
     """
-
-    class OptionalStruct(cgutils.Structure):
-        _fields = [('data', valtype),
-                   ('valid', types.boolean)]
-
-    return OptionalStruct
+    return cgutils.create_struct_proxy(types.Optional(valtype))
 
 
 def always_return_true_impl(context, builder, sig, args):
