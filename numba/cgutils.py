@@ -133,6 +133,20 @@ class StructProxy(object):
         Store the LLVM *value* into the field at *index*.
         """
         ptr = self._get_ptr_by_index(index)
+        if value.type != ptr.type.pointee:
+            if (is_pointer(value.type) and is_pointer(ptr.type.pointee)
+                and  value.type.pointee == ptr.type.pointee.pointee):
+                # Differ by address-space only
+                # Auto coerce it
+                value = self._context.addrspacecast(self._builder,
+                                                    value,
+                                                    ptr.type.pointee.addrspace)
+            else:
+                raise TypeError("Invalid store {value.type} {"
+                                "ptr.type.pointee} in "
+                                "{self._datamodel}".format(value=value,
+                                                           ptr=ptr,
+                                                           self=self))
         self._builder.store(value, ptr)
 
     def __len__(self):
