@@ -92,7 +92,7 @@ def from_dtype(dtype):
                 return _from_datetime_dtype(dtype)
             if dtype.char in 'V':
                 subtype = from_dtype(dtype.subdtype[0])
-                return types.VoidArray(subtype, dtype.shape)
+                return types.NestedArray(subtype, dtype.shape)
             raise NotImplementedError(dtype)
     else:
         return from_struct_dtype(dtype)

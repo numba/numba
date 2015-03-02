@@ -719,21 +719,19 @@ class Array(IterableType):
         return self.layout in 'CF'
 
 
-class VoidArray(Array):
+class NestedArray(Array):
     """
-    A VoidArray is an array nested within a structured type (which are "void"
+    A NestedArray is an array nested within a structured type (which are "void"
     type in NumPy parlance). Unlike an Array, the shape, and not just the number
-    of dimenions is part of the type of a VoidArray.
+    of dimenions is part of the type of a NestedArray.
     """
 
-    def __init__(self, dtype, shape, const=False):
+    def __init__(self, dtype, shape):
         self._shape = shape
-        name = "voidarray(%s, %s, %s)" % (dtype, shape,
-                                          {True: 'const',
-                                           False: 'nonconst'}[const])
+        name = "nestedarray(%s, %s)" % (dtype, shape)
         ndim = len(shape)
-        super(VoidArray, self).__init__(dtype, ndim, 'C', const=const,
-                                        name=name)
+        super(NestedArray, self).__init__(dtype, ndim, 'C', const=False,
+                                          name=name)
 
     @property
     def shape(self):
