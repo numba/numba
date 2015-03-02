@@ -280,6 +280,13 @@ def getitem_array_arraytuple(context, builder, sig, args):
 
     # WATCHOUT: if idx.shape[0] is smaller than ndim, this would
     # produce segfaults
+    lenidx = builder.extract_value(idx.shape, 0)
+
+    too_short = builder.icmp_unsigned("<", lenidx, Constant.int(Type.int(16), ndim))
+
+    with cgutils.if_unlikely(builder, too_short):
+        context.call_conv.return_user_exc(builder, IndexError, ("Dimension Mismatch",))
+
     # there doesn't seem to be a way to check this at compile time
     # and checking at runtime is likely not worth it.
 
