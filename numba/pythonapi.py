@@ -904,7 +904,7 @@ class PythonAPI(object):
         elif isinstance(typ, types.ExternalFunctionPointer):
             if typ.get_pointer is not None:
                 # Call get_pointer() on the object to get the raw pointer value
-                ptrty = self.context.get_function_pointer_type(typ.sig)
+                ptrty = self.context.get_function_pointer_type(typ)
                 ret = cgutils.alloca_once_value(builder,
                                                 Constant.null(ptrty),
                                                 name='fnptr')

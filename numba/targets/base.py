@@ -315,7 +315,7 @@ class BaseContext(object):
             return self.get_constant_struct(builder, ty, val)
 
         elif isinstance(ty, types.ExternalFunctionPointer):
-            ptrty = self.data_model_manager[ty].get_data_type()
+            ptrty = self.get_function_pointer_type(ty)
             ptrval = ty.get_pointer(val)
             return builder.inttoptr(self.get_constant(types.intp, ptrval),
                                     ptrty)
@@ -719,10 +719,8 @@ class BaseContext(object):
         retval = builder.call(callee, args)
         return retval
 
-    def get_function_pointer_type(self, signature):
-        retty = self.get_value_type(signature.return_type)
-        args = [self.get_value_type(t) for t in signature.args]
-        return Type.pointer(Type.function(retty, args))
+    def get_function_pointer_type(self, typ):
+        return self.data_model_manager[typ].get_data_type()
 
     def call_function_pointer(self, builder, funcptr, args, cconv=None):
         return builder.call(funcptr, args, cconv=cconv)
