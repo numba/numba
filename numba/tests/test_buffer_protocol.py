@@ -1,8 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
 import array
-import copy
 import sys
+
+import numpy as np
 
 from numba import unittest_support as unittest
 from numba import jit
@@ -32,9 +33,10 @@ def setitem_usecase(buf, i, v):
 
 @jit(nopython=True)
 def iter_usecase(buf):
-    res = 0
+    res = 0.0
     for i, x in enumerate(buf):
-        res += (i + 1) * x
+        res += x
+        res *= i + 1
     return res
 
 
@@ -50,6 +52,44 @@ memoryview_structured_indexing = sys.version_info >= (3,)
                  "buffer protocol not supported on Python 2.6")
 class TestBufferProtocol(TestCase):
 
+    def _arrays(self):
+        n = 10
+        for letter, offset in [
+            ('b', -3),
+            ('B', 0),
+            ('h', -5000),
+            ('H', 40000),
+            ('i', -100000),
+            ('I', 1000000),
+            ('l', -100000),
+            ('L', 1000000),
+            ('q', -2**60),
+            ('Q', 2**63 + 1),
+            ('f', 1.5),
+            ('d', -1.5),
+            ]:
+            yield array.array(letter, [i + offset for i in range(n)])
+
+    def _memoryviews(self):
+        n = 10
+        yield memoryview(bytearray(b"abcdefghi"))
+        yield memoryview(b"abcdefghi")
+        for dtype, start, stop in [
+            ('int8', -10, 10),
+            ('uint8', 0, 10),
+            ('int16', -5000, 1000),
+            ('uint16', 40000, 50000),
+            ('int32', -100000, 100000),
+            ('uint32', 0, 1000000),
+            ('int64', -2**60, 10),
+            ('uint64', 0, 2**64 - 10),
+            ('float32', 1.5, 3.5),
+            ('float64', 1.5, 3.5),
+            ('complex64', -8j, 12 + 5j),
+            ('complex128', -8j, 12 + 5j),
+            ]:
+            yield memoryview(np.linspace(start, stop, n, dtype=dtype))
+
     def _check_unary(self, jitfunc, *args):
         pyfunc = jitfunc.py_func
         self.assertPreciseEqual(jitfunc(*args), pyfunc(*args))
@@ -62,12 +102,19 @@ class TestBufferProtocol(TestCase):
 
     def check_getitem(self, obj):
         for i in range(len(obj)):
-            self._check_unary(getitem_usecase, obj, i)
+            try:
+                expected = obj[i]
+            except NotImplementedError:
+                if isinstance(obj, memoryview):
+                    # The memoryview object doesn't support all codes yet,
+                    # fall back on the underlying object.
+                    expected = obj.obj[i]
+            self.assertPreciseEqual(getitem_usecase(obj, i), expected)
 
     def check_setitem(self, obj):
         for i in range(len(obj)):
             orig = list(obj)
-            val = obj[i] * 2 + 1
+            val = obj[i] // 2 + 1
             setitem_usecase(obj, i, val)
             self.assertEqual(obj[i], val)
             for j, val in enumerate(orig):
@@ -81,18 +128,22 @@ class TestBufferProtocol(TestCase):
         self.check_len(bytearray(5))
         if bytes_supported:
             self.check_len(b"xyz")
-        self.check_len(memoryview(b"xyz"))
+        for mem in self._memoryviews():
+            self.check_len(mem)
         if array_supported:
-            self.check_len(array.array('i', range(3)))
+            for arr in self._arrays():
+                self.check_len(arr)
 
     def test_getitem(self):
         self.check_getitem(bytearray(b"abc"))
         if bytes_supported:
             self.check_getitem(b"xyz")
         if memoryview_structured_indexing:
-            self.check_getitem(memoryview(b"xyz"))
+            for mem in self._memoryviews():
+                self.check_getitem(mem)
         if array_supported:
-            self.check_getitem(array.array('i', range(3)))
+            for arr in self._arrays():
+                self.check_getitem(arr)
 
     def test_getslice(self):
         with self.assertTypingError():
@@ -110,7 +161,8 @@ class TestBufferProtocol(TestCase):
         if memoryview_structured_indexing:
             self.check_setitem(memoryview(b"abcdefghi"))
         if array_supported:
-            self.check_setitem(array.array('i', range(3)))
+            for arr in self._arrays():
+                self.check_setitem(arr)
 
     def test_iter(self):
         self.check_iter(bytearray(b"abc"))
@@ -119,7 +171,8 @@ class TestBufferProtocol(TestCase):
         if memoryview_structured_indexing:
             self.check_iter(memoryview(b"xyz"))
         if array_supported:
-            self.check_iter(array.array('i', range(3)))
+            for arr in self._arrays():
+                self.check_iter(arr)
 
 
 if __name__ == '__main__':
