@@ -56,6 +56,9 @@ If you need CUDA support, you should also install the CUDA toolkit::
 
    $ conda install cudatoolkit
 
+This installs the CUDA Toolkit version 6.0, which requires driver version 331.00
+or later to be installed.
+
 Custom Python Environments
 --------------------------
 
@@ -90,10 +93,16 @@ or simply
 
    $ pip install numba
 
-If you want to enable CUDA support, you will need CUDA Toolkit 5.5+ (which
-contains ``libnvvm``). After installing the Toolkit, you might have to
-specify a few  environment variables according to
-http://numba.pydata.org/numba-doc/dev/CUDASupport.html
+If you want to enable CUDA support, you will need to install CUDA Toolkit 6.0.
+After installing the toolkit, you might have to specify environment variables
+in order to override the standard search paths:
+
+NUMBAPRO_CUDA_DRIVER
+  Path to the CUDA driver shared library
+NUMBAPRO_NVVM
+  Path to the CUDA libNVVM shared library file
+NUMBAPRO_LIBDEVICE
+  Path to the CUDA libNVVM libdevice directory which contains .bc files
 
 
 Documentation

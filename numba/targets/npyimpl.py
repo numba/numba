@@ -164,8 +164,7 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
         ctx = self.context
         bld = self.builder
 
-        # maybe there should be a "get_memory_value" or "get_storage_value"
-        store_value = ctx.get_struct_member_value(bld, self.base_type, value)
+        store_value = ctx.get_value_as_data(bld, self.base_type, value)
         assert ctx.get_data_type(self.base_type) == store_value.type
 
         bld.store(store_value, self._load_effective_address(indices))

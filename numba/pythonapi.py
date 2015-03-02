@@ -878,7 +878,7 @@ class PythonAPI(object):
                 self.builder.ret(ptr)
 
             ltyp = self.context.get_value_type(typ)
-            val = cgutils.init_record_by_ptr(self.builder, ltyp, ptr)
+            val = self.builder.bitcast(ptr, ltyp)
             def cleanup():
                 self.release_buffer(buf)
             return NativeValue(val, cleanup=cleanup)
@@ -902,11 +902,11 @@ class PythonAPI(object):
 
         elif isinstance(typ, types.Optional):
             isnone = self.builder.icmp(lc.ICMP_EQ, obj, self.borrow_none())
+            noneval = self.context.make_optional_none(self.builder, typ.type)
+            retptr = cgutils.alloca_once(self.builder, noneval.type)
             with cgutils.ifelse(self.builder, isnone) as (then, orelse):
                 with then:
-                    noneval = self.context.make_optional_none(self.builder, typ.type)
-                    ret = cgutils.alloca_once(self.builder, noneval.type)
-                    self.builder.store(noneval, ret)
+                    self.builder.store(noneval, retptr)
 
                 with orelse:
                     # XXX propagate error and cleanup?
@@ -915,7 +915,8 @@ class PythonAPI(object):
                         raise NotImplementedError("%s not supported" % (typ,))
                     just = self.context.make_optional_value(self.builder,
                                                             typ.type, native.value)
-                    self.builder.store(just, ret)
+                    self.builder.store(just, retptr)
+            ret = self.builder.load(retptr)
             return NativeValue(ret, is_error=c_api_error())
 
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
@@ -983,9 +984,8 @@ class PythonAPI(object):
         elif isinstance(typ, types.Record):
             # Note we will create a copy of the record
             # This is the only safe way.
-            pdata = cgutils.get_record_data(self.builder, val)
-            size = Constant.int(Type.int(), pdata.type.pointee.count)
-            ptr = self.builder.bitcast(pdata, Type.pointer(Type.int(8)))
+            size = Constant.int(Type.int(), val.type.pointee.count)
+            ptr = self.builder.bitcast(val, Type.pointer(Type.int(8)))
             # Note: this will only work for CPU mode
             #       The following requires access to python object
             dtype_addr = Constant.int(self.py_ssize_t, id(typ.dtype))
