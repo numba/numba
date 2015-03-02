@@ -437,7 +437,7 @@ class BaseContext(object):
             offset = typ.offset(attr)
             elemty = typ.typeof(attr)
 
-            if isinstance(elemty, types.Array):
+            if isinstance(elemty, types.NestedArray):
                 # Inside a structured type only the array data is stored, so we
                 # create an array structure to point to that data.
                 aryty = arrayobj.make_array(elemty)
