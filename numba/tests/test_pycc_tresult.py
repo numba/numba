@@ -38,19 +38,20 @@ class TestPYCC(unittest.TestCase):
 
         main(args=[modulename + '.py'])
         lib = CDLL(cdll_modulename)
-        lib.mult.argtypes = [POINTER(c_double), c_void_p, c_double,
-                             c_double]
+        lib.mult.argtypes = [POINTER(c_double), c_void_p, c_void_p,
+                             c_double, c_double]
         lib.mult.restype = c_int
 
-        lib.multf.argtypes = [POINTER(c_float), c_void_p, c_float, c_float]
+        lib.multf.argtypes = [POINTER(c_float), c_void_p, c_void_p,
+                              c_float, c_float]
         lib.multf.restype = c_int
 
         res = c_double()
-        lib.mult(byref(res), None, 123, 321)
+        lib.mult(byref(res), None, None, 123, 321)
         self.assertEqual(res.value, 123 * 321)
 
         res = c_float()
-        lib.multf(byref(res), None, 987, 321)
+        lib.multf(byref(res), None, None, 987, 321)
         self.assertEqual(res.value, 987 * 321)
 
     def test_pycc_pymodule(self):

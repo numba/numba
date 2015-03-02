@@ -154,6 +154,10 @@ class OpaqueType(Type):
         super(OpaqueType, self).__init__(name)
 
 
+class Boolean(Type):
+    pass
+
+
 @utils.total_ordering
 class Integer(Type):
     def __init__(self, *args, **kws):
@@ -323,9 +327,9 @@ class Macro(Type):
 class Function(Type):
     def __init__(self, template):
         self.template = template
-        cls = type(self)
+        name = "%s(%s)" % (self.__class__.__name__, template.key)
         # TODO template is mutable.  Should use different naming scheme
-        super(Function, self).__init__("%s(%s)" % (cls.__name__, template.key))
+        super(Function, self).__init__(name)
 
     @property
     def key(self):
@@ -393,6 +397,19 @@ class FunctionPointer(Function):
         self.funcptr = funcptr
         self.cconv = cconv
         super(FunctionPointer, self).__init__(template)
+
+
+class ExternalFunction(Function):
+    """
+    A named native function (resolvable by LLVM).
+    """
+
+    def __init__(self, symbol, sig):
+        from . import typing
+        self.symbol = symbol
+        self.sig = sig
+        template = typing.make_concrete_template(symbol, symbol, [sig])
+        super(ExternalFunction, self).__init__(template)
 
 
 class BoundFunction(Function):
@@ -867,6 +884,44 @@ class NoneType(Opaque):
 
         return Optional(other)
 
+
+class ExceptionType(Phantom):
+    """
+    The type of exception classes (not instances).
+    """
+
+    def __init__(self, exc_class):
+        assert issubclass(exc_class, BaseException)
+        name = "%s" % (exc_class.__name__)
+        self.exc_class = exc_class
+        super(ExceptionType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.exc_class
+
+
+class ExceptionInstance(Phantom):
+    """
+    The type of exception instances.  *exc_class* should be the
+    exception class.
+    """
+
+    def __init__(self, exc_class):
+        assert issubclass(exc_class, BaseException)
+        name = "%s(...)" % (exc_class.__name__,)
+        self.exc_class = exc_class
+        super(ExceptionInstance, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.exc_class
+
+
+class Slice3Type(Type):
+    pass
+
+
 # Utils
 
 def is_int_tuple(x):
@@ -884,13 +939,13 @@ def is_int_tuple(x):
 pyobject = Opaque('pyobject')
 none = NoneType('none')
 Any = Phantom('any')
-string = Opaque('str')
+string = Dummy('str')
 
 # No operation is defined on voidptr
 # Can only pass it around
 voidptr = Opaque('void*')
 
-boolean = bool_ = Type('bool')
+boolean = bool_ = Boolean('bool')
 
 byte = uint8 = Integer('uint8')
 uint16 = Integer('uint16')
@@ -920,7 +975,6 @@ neg_type = Phantom('neg')
 print_type = Phantom('print')
 print_item_type = Phantom('print-item')
 sign_type = Phantom('sign')
-exception_type = Phantom('exception')
 
 range_iter32_type = RangeIteratorType('range_iter32', int32)
 range_iter64_type = RangeIteratorType('range_iter64', int64)
@@ -928,7 +982,7 @@ range_state32_type = RangeType('range_state32', range_iter32_type)
 range_state64_type = RangeType('range_state64', range_iter64_type)
 
 # slice2_type = Type('slice2_type')
-slice3_type = Type('slice3_type')
+slice3_type = Slice3Type('slice3_type')
 
 signed_domain = frozenset([int8, int16, int32, int64])
 unsigned_domain = frozenset([uint8, uint16, uint32, uint64])

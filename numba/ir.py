@@ -126,7 +126,11 @@ class Stmt(Inst):
     Base class for IR statements (instructions which can appear on their
     own in a Block).
     """
+    # Whether this statement ends its basic block (i.e. it will either jump
+    # to another block or exit the function).
     is_terminator = False
+    # Whether this statement exits the function.
+    is_exit = False
 
     def list_vars(self):
         return self._rec_list_vars(self.__dict__)
@@ -247,6 +251,9 @@ class Expr(Inst):
     def list_vars(self):
         return self._rec_list_vars(self._kws)
 
+    def infer_constant(self):
+        raise TypeError("cannot make a constant of %s" % (self,))
+
 
 class SetItem(Stmt):
     def __init__(self, target, index, value, loc):
@@ -302,6 +309,7 @@ class Del(Stmt):
 
 class Raise(Stmt):
     is_terminator = True
+    is_exit = True
 
     def __init__(self, exception, loc):
         self.exception = exception
@@ -313,6 +321,7 @@ class Raise(Stmt):
 
 class Return(Stmt):
     is_terminator = True
+    is_exit = True
 
     def __init__(self, value, loc):
         self.value = value
@@ -364,6 +373,9 @@ class Const(object):
     def __repr__(self):
         return 'const(%s, %s)' % (type(self.value).__name__, self.value)
 
+    def infer_constant(self):
+        return self.value
+
 
 class Global(object):
     def __init__(self, name, value, loc):
@@ -373,6 +385,9 @@ class Global(object):
 
     def __str__(self):
         return 'global(%s: %s)' % (self.name, self.value)
+
+    def infer_constant(self):
+        return self.value
 
 
 class FreeVar(object):
@@ -392,6 +407,9 @@ class FreeVar(object):
 
     def __str__(self):
         return 'freevar(%s: %s)' % (self.name, self.value)
+
+    def infer_constant(self):
+        return self.value
 
 
 class Var(object):

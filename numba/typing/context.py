@@ -10,8 +10,11 @@ import numpy
 from numba import types
 from numba.typeconv import rules
 from . import templates
+
 # Initialize declarations
-from . import builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl
+from . import (
+    builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl,
+    randomdecl)
 from numba import numpy_support, utils
 from . import ctypes_utils, cffi_utils
 
@@ -49,12 +52,20 @@ class BaseContext(object):
             raise NotImplementedError(type(num), num)
 
     def resolve_function_type(self, func, args, kws):
+        """
+        Resolve function type *func* for argument types *args* and *kws*.
+        A signature is returned.
+        """
         if isinstance(func, types.Function):
             return func.template(self).apply(args, kws)
 
         if isinstance(func, types.Dispatcher):
             template, args, kws = func.overloaded.get_call_template(args, kws)
             return template(self).apply(args, kws)
+
+        if isinstance(func, types.ExceptionType):
+            return_type = types.ExceptionInstance(func.exc_class)
+            return templates.signature(return_type)
 
         defns = self.functions[func]
         for defn in defns:
@@ -201,12 +212,11 @@ class BaseContext(object):
         elif cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
             return cffi_utils.make_function_type(val)
 
-        elif (cffi_utils.SUPPORTED and
-                  isinstance(val, cffi_utils.ExternCFunction)):
+        elif isinstance(val, types.ExternalFunction):
             return val
 
-        elif type(val) is type and issubclass(val, BaseException):
-            return types.exception_type
+        elif isinstance(val, type) and issubclass(val, BaseException):
+            return types.ExceptionType(val)
 
         else:
             try:
@@ -391,6 +401,7 @@ class Context(BaseContext):
         self.install(mathdecl.registry)
         self.install(npydecl.registry)
         self.install(operatordecl.registry)
+        self.install(randomdecl.registry)
 
 
 def new_method(fn, sig):

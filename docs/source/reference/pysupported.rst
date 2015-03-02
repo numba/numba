@@ -24,12 +24,15 @@ some language features are not available inside Numba-compiled functions:
 * Exception handling (``try .. except``, ``try .. finally``)
 * Context management (the ``with`` statement)
 
-The ``raise`` statement is only supported in the simplest form of
-raising a type without explicitly creating an instance, i.e.
-``raise TypeError`` is possible but not ``raise TypeError("some message")``.
+The ``raise`` statement is supported in several forms:
 
-Similarly, the ``assert`` statement is only supported without an explicit
-error message.
+* ``raise`` (to re-raise the current exception)
+* ``raise SomeException``
+* ``raise SomeException(<arguments>)``: in :term:`nopython mode`, constructor
+  arguments must be :term:`compile-time constants <compile-time constant>`
+
+Similarly, the ``assert`` statement is supported with or without an error
+message.
 
 Function calls
 --------------
@@ -91,7 +94,7 @@ The following built-in functions are supported:
 * :func:`max`: only the multiple-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
 * :class:`range`
-* :func:`round`: only the two-argument form
+* :func:`round`
 * :func:`zip`
 
 
@@ -161,14 +164,20 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.cos`
 * :func:`math.cosh`
 * :func:`math.degrees`
+* :func:`math.erf`
+* :func:`math.erfc`
 * :func:`math.exp`
 * :func:`math.expm1`
 * :func:`math.fabs`
 * :func:`math.floor`
+* :func:`math.frexp`
+* :func:`math.gamma`
 * :func:`math.hypot`
 * :func:`math.isfinite`
 * :func:`math.isinf`
 * :func:`math.isnan`
+* :func:`math.ldexp`
+* :func:`math.lgamma`
 * :func:`math.log`
 * :func:`math.log10`
 * :func:`math.log1p`
@@ -222,6 +231,52 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.sub`
 * :func:`operator.truediv`
 * :func:`operator.xor`
+
+.. _pysupported-random:
+
+``random``
+----------
+
+Numba supports top-level functions from the :mod:`random` module, but does
+not allow you to create individual Random instances.  A Mersenne-Twister
+generator is used, with a dedicated internal state.  It is initialized at
+startup with entropy drawn from the operating system.
+
+* :func:`random.betavariate`
+* :func:`random.expovariate`
+* :func:`random.gammavariate`
+* :func:`random.gauss`
+* :func:`random.getrandbits`: number of bits must not be greater than 64
+* :func:`random.lognormvariate`
+* :func:`random.normalvariate`
+* :func:`random.paretovariate`
+* :func:`random.randint`
+* :func:`random.random`
+* :func:`random.randrange`
+* :func:`random.seed`: with an integer argument only
+* :func:`random.shuffle`: the sequence argument must be a 1D Numpy array;
+  the second (optional) argument is not supported
+* :func:`random.uniform`
+* :func:`random.triangular`
+* :func:`random.vonmisesvariate`
+* :func:`random.weibullvariate`
+
+.. note::
+   Calling :func:`random.seed` from non-Numba code (or from :term:`object mode`
+   code) will seed the Python random generator, not the Numba random generator.
+
+.. note::
+   The generator is not thread-safe when :ref:`releasing the GIL <jit-nogil>`.
+
+   Also, under Unix, if creating a child process using :func:`os.fork` or the
+   :mod:`multiprocessing` module, the child's random generator will inherit
+   the parent's state and will therefore produce the same sequence of
+   numbers (except when using the "forkserver" start method under Python 3.4
+   and later).
+
+.. seealso::
+   Numba also supports most additional distributions from the :ref:`Numpy
+   random module <numpy-random>`.
 
 
 Third-party modules

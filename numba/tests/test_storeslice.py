@@ -1,9 +1,11 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
+
 import numpy as np
+
+import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types
-from numba.pythonapi import NativeError
+
 
 def setitem_slice(a, start, stop, step, scalar): 
     a[start:stop:step] = scalar
@@ -17,6 +19,7 @@ def usecase(obs, nPoints):
 
 
 class TestStoreSlice(unittest.TestCase):
+
     def test_usecase(self):
         n = 10
         obs_got = np.zeros(n)
@@ -58,8 +61,9 @@ class TestStoreSlice(unittest.TestCase):
         #test if step = 0
         a = np.arange(n, dtype=np.int64)
         b = np.arange(n, dtype=np.int64)
-        with self.assertRaises(NativeError):
+        with self.assertRaises(ValueError) as cm:
             cres.entry_point(a, 3, 6, 0, 88)
+        self.assertEqual(str(cm.exception), "slice step cannot be zero")
    
 
 if __name__ == '__main__':

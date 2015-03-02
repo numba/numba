@@ -100,6 +100,25 @@ class Cuda_atomic_add(AbstractTemplate):
             return signature(ary.dtype, ary, idx, ary.dtype)
 
 
+@intrinsic
+class Cuda_atomic_max(AbstractTemplate):
+    key = cuda.atomic.max
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, idx, val = args
+
+        # Implementation presently supports float64 only,
+        # so fail typing otherwise
+        if ary.dtype != types.float64:
+            return
+
+        if ary.ndim == 1:
+            return signature(ary.dtype, ary, types.intp, ary.dtype)
+        elif ary.ndim > 1:
+            return signature(ary.dtype, ary, idx, ary.dtype)
+
+
 @intrinsic_attr
 class Cuda_threadIdx(AttributeTemplate):
     key = types.Module(cuda.threadIdx)
@@ -186,6 +205,9 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_add(self, mod):
         return types.Function(Cuda_atomic_add)
+
+    def resolve_max(self, mod):
+        return types.Function(Cuda_atomic_max)
 
 
 @intrinsic_attr

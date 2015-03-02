@@ -1,10 +1,9 @@
 from __future__ import absolute_import, print_function
 import copy
-import ctypes
 
-
+from numba import ctypes_support as ctypes
 from numba.typing.templates import AbstractTemplate
-from numba import config, compiler, types, errcode
+from numba import config, compiler, types
 from numba.typing.templates import ConcreteTemplate
 from numba import typing, lowering
 
@@ -56,7 +55,7 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         argtypes=cres.signature.args,
                         link=link,
                         debug=debug,
-                        exceptions=cres.exception_map,
+                        call_helper=cres.call_helper,
                         fastmath=fastmath)
     return cukern
 
@@ -279,8 +278,8 @@ class CachedCUFunction(object):
 
 class CUDAKernel(CUDAKernelBase):
     def __init__(self, llvm_module, name, pretty_name,
-                 argtypes, link=(), debug=False, exceptions={},
-                 fastmath=False):
+                 argtypes, call_helper,
+                 link=(), debug=False, fastmath=False):
         super(CUDAKernel, self).__init__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
@@ -296,7 +295,7 @@ class CUDAKernel(CUDAKernelBase):
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
         self._func = CachedCUFunction(self.entry_name, ptx, link)
         self.debug = debug
-        self.exceptions = exceptions
+        self.call_helper = call_helper
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
@@ -336,20 +335,22 @@ class CUDAKernel(CUDAKernelBase):
 
         # Prepare arguments
         retr = []                       # hold functors for writeback
-        args = [self._prepare_args(t, v, stream, retr)
-                for t, v in zip(self.argument_types, args)]
+
+        kernelargs = []
+        for t, v in zip(self.argument_types, args):
+            self._prepare_args(t, v, stream, retr, kernelargs)
 
         # Configure kernel
         cu_func = cufunc.configure(griddim, blockdim,
                                    stream=stream,
                                    sharedmem=sharedmem)
-        # invoke kernel
-        cu_func(*args)
+        # Invoke kernel
+        cu_func(*kernelargs)
 
         if self.debug:
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
             if excval.value != 0:
-                # Error occurred
+                # An error occurred
                 def load_symbol(name):
                     mem, sz = cufunc.module.get_global_symbol("%s__%s__" %
                                                               (cufunc.name,
@@ -361,82 +362,69 @@ class CUDAKernel(CUDAKernelBase):
                 tid = [load_symbol("tid" + i) for i in 'zyx']
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
                 code = excval.value
-                builtinerr = errcode.error_names.get(code)
-                if builtinerr is not None:
-                    raise KernelRuntimeError("code=%d reason=%s" %
-                                             (code, builtinerr), tid=tid,
-                                             ctaid=ctaid)
+                exccls, exc_args = self.call_helper.get_exception(code)
+                # Prefix the exception message with the thread position
+                prefix = "tid=%s ctaid=%s" % (tid, ctaid)
+                if exc_args:
+                    exc_args = ("%s: %s" % (prefix, exc_args[0]),) + exc_args[1:]
                 else:
-                    exccls = self.exceptions[code]
-                    raise exccls("tid=%s ctaid=%s" % (tid, ctaid))
+                    exc_args = prefix,
+                raise exccls(*exc_args)
 
         # retrieve auto converted arrays
         for wb in retr:
             wb()
 
-    def _prepare_args(self, ty, val, stream, retr):
+    def _prepare_args(self, ty, val, stream, retr, kernelargs):
+        """
+        Convert arguments to ctypes and append to kernelargs
+        """
         if isinstance(ty, types.Array):
             devary, conv = devicearray.auto_device(val, stream=stream)
             if conv:
                 retr.append(lambda: devary.copy_to_host(val, stream=stream))
-            return devary.as_cuda_arg()
+
+            c_intp = ctypes.c_ssize_t
+
+            parent = ctypes.c_void_p(0)
+            nitems = c_intp(devary.size)
+            itemsize = c_intp(devary.dtype.itemsize)
+            data = ctypes.c_void_p(driver.device_pointer(devary))
+            kernelargs.append(parent)
+            kernelargs.append(nitems)
+            kernelargs.append(itemsize)
+            kernelargs.append(data)
+            for ax in range(devary.ndim):
+                kernelargs.append(c_intp(devary.shape[ax]))
+            for ax in range(devary.ndim):
+                kernelargs.append(c_intp(devary.strides[ax]))
 
         elif isinstance(ty, types.Integer):
-            return getattr(ctypes, "c_%s" % ty)(val)
+            cval = getattr(ctypes, "c_%s" % ty)(val)
+            kernelargs.append(cval)
 
         elif ty == types.float64:
-            return ctypes.c_double(val)
+            cval = ctypes.c_double(val)
+            kernelargs.append(cval)
 
         elif ty == types.float32:
-            return ctypes.c_float(val)
+            cval = ctypes.c_float(val)
+            kernelargs.append(cval)
 
         elif ty == types.boolean:
-            return ctypes.c_uint8(int(val))
+            cval = ctypes.c_uint8(int(val))
+            kernelargs.append(cval)
 
         elif ty == types.complex64:
-            ctx = get_context()
-            size = ctypes.sizeof(Complex64)
-            dmem = ctx.memalloc(size)
-            cval = Complex64(val)
-            driver.host_to_device(dmem, ctypes.addressof(cval), size,
-                                  stream=stream)
-            return dmem
+            kernelargs.append(ctypes.c_float(val.real))
+            kernelargs.append(ctypes.c_float(val.imag))
 
         elif ty == types.complex128:
-            ctx = get_context()
-            size = ctypes.sizeof(Complex128)
-            dmem = ctx.memalloc(size)
-            cval = Complex128(val)
-            driver.host_to_device(dmem, ctypes.addressof(cval), size,
-                                  stream=stream)
-            return dmem
+            kernelargs.append(ctypes.c_double(val.real))
+            kernelargs.append(ctypes.c_double(val.imag))
 
         else:
             raise NotImplementedError(ty, val)
-
-
-class Complex(ctypes.Structure):
-    def __init__(self, val):
-        super(Complex, self).__init__()
-        if isinstance(val, complex):
-            self.real = val.real
-            self.imag = val.imag
-        else:
-            self.real = val
-
-
-class Complex64(Complex):
-    _fields_ = [
-        ('real', ctypes.c_float),
-        ('imag', ctypes.c_float)
-    ]
-
-
-class Complex128(Complex):
-    _fields_ = [
-        ('real', ctypes.c_double),
-        ('imag', ctypes.c_double),
-    ]
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):

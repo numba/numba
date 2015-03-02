@@ -91,7 +91,7 @@ class TestCase(unittest.TestCase):
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
-    _sequence_typesets = [(tuple,)]
+    _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
     _complex_types = (complex, np.complexfloating)
 
@@ -142,7 +142,6 @@ class TestCase(unittest.TestCase):
             failure_msg = str(exc)
             # Fall off of the 'except' scope to avoid Python 3 exception
             # chaining.
-            self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
         else:
             return
         # Decorate the failure message with more information

@@ -1,13 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
+import itertools
 import sys
 from types import ModuleType
 
 from llvmlite.llvmpy.core import Type, Builder
 
 
-from numba import (_dynfunc, errcode, ir, types, cgutils, utils, config,
+from numba import (_dynfunc, ir, types, cgutils, utils, config,
                    cffi_support, typing, six)
 
 
@@ -22,8 +23,21 @@ class ForbiddenConstruct(LoweringError):
     pass
 
 
+def transform_arg_name(arg):
+    if isinstance(arg, types.Record):
+        return "Record_%s" % arg._code
+    elif (isinstance(arg, types.Array) and
+          isinstance(arg.dtype, types.Record)):
+        c = '' and arg.const or 'non'
+        return "array(Record_%s, %sd, %s, %sconst)" % \
+            (arg.dtype._code, arg.ndim, arg.layout, c)
+    else:
+        return str(arg)
+
+
 def default_mangler(name, argtypes):
-    codedargs = '.'.join(str(a).replace(' ', '_') for a in argtypes)
+    codedargs = '.'.join(transform_arg_name(a).replace(' ', '_')
+                             for a in argtypes)
     return '.'.join([name, codedargs])
 
 
@@ -37,6 +51,8 @@ class FunctionDescriptor(object):
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
                  'mangled_name', 'unique_name', 'inline')
+
+    _unique_ids = itertools.count(1)
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
@@ -54,13 +70,13 @@ class FunctionDescriptor(object):
         # Argument types
         self.argtypes = argtypes or [self.typemap[a] for a in args]
         mangler = default_mangler if mangler is None else mangler
-        # XXX The mangled name should really be unique but this formula
-        # doesn't guarantee it entirely.
+        # The mangled name *must* be unique, else the wrong function can
+        # be chosen at link time.
         if self.modname:
-            self.mangled_name = mangler('%s.%s' % (self.modname, self.qualname),
+            self.mangled_name = mangler('%s.%s' % (self.modname, self.unique_name),
                                         self.argtypes)
         else:
-            self.mangled_name = mangler(self.qualname, self.argtypes)
+            self.mangled_name = mangler(self.unique_name, self.argtypes)
         self.inline = inline
 
     def lookup_module(self):
@@ -92,7 +108,7 @@ class FunctionDescriptor(object):
         -------
         qualname, unique_name, modname, doc, args, kws, globals
 
-        ``unique_name`` must be a unique name in ``pymod``.
+        ``unique_name`` must be a unique name.
         """
         func = interp.bytecode.func
         qualname = interp.bytecode.func_qualname
@@ -102,15 +118,13 @@ class FunctionDescriptor(object):
         kws = ()        # TODO
 
         if modname is None:
-            # For dynamically generated functions (e.g. compile()),
-            # add the function id to the name to create a unique name.
-            unique_name = "%s$%d" % (qualname, id(func))
+            # Dynamically generated function.
             modname = _dynamic_modname
-        else:
-            # For a top-level function or closure, make sure to disambiguate
-            # the function name.
-            # TODO avoid unnecessary recompilation of the same function
-            unique_name = "%s$%d" % (qualname, func.__code__.co_firstlineno)
+
+        # Even the same function definition can be compiled into
+        # several different function objects with distinct closure
+        # variables, so we make sure to disambiguish using an unique id.
+        unique_name = "%s$%d" % (qualname, next(cls._unique_ids))
 
         return qualname, unique_name, modname, doc, args, kws
 
@@ -176,6 +190,8 @@ class BaseLower(object):
         self.library = library
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
+        self.interp = interp
+        self.call_conv = context.call_conv
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -185,13 +201,11 @@ class BaseLower(object):
         self.env = _dynfunc.Environment(
             globals=self.fndesc.lookup_module().__dict__)
 
-        # Mapping of error codes to exception classes or instances
-        self.exceptions = {}
-
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)
+        self.call_helper = self.call_conv.init_call_helper(self.builder)
 
         # Internal states
         self.blkmap = {}
@@ -215,18 +229,15 @@ class BaseLower(object):
         Called after all blocks are lowered
         """
 
-    def add_exception(self, exc):
-        assert issubclass(exc, BaseException), exc
-        excid = len(self.exceptions) + errcode.ERROR_COUNT
-        self.exceptions[excid] = exc
-        return excid
+    def return_exception(self, exc_class, exc_args=None):
+        self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
 
     def lower(self):
         # Init argument variables
-        fnargs = self.context.get_arguments(self.function)
+        rawfnargs = self.call_conv.get_arguments(self.function)
+        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
+        fnargs = arginfo.from_arguments(self.builder, rawfnargs)
         for ak, av in zip(self.fndesc.args, fnargs):
-            at = self.typeof(ak)
-            av = self.context.get_argument_value(self.builder, at, av)
             av = self.init_argument(av)
             self.storevar(av, ak)
 
@@ -267,7 +278,7 @@ class BaseLower(object):
         Create CPython wrapper.
         """
         self.context.create_cpython_wrapper(self.library, self.fndesc,
-                                            self.exceptions,
+                                            self.call_helper,
                                             release_gil=release_gil)
 
     def init_argument(self, arg):
@@ -317,12 +328,12 @@ class Lower(BaseLower):
             ty = self.fndesc.restype
             if isinstance(ty, types.Optional):
                 # If returning an optional type
-                self.context.return_optional_value(self.builder, ty, oty, val)
+                self.call_conv.return_optional_value(self.builder, ty, oty, val)
                 return
             if ty != oty:
                 val = self.context.cast(self.builder, val, oty, ty)
             retval = self.context.get_return_value(self.builder, ty, val)
-            self.context.return_value(self.builder, retval)
+            self.call_conv.return_value(self.builder, retval)
 
         elif isinstance(inst, ir.SetItem):
             target = self.loadvar(inst.target.name)
@@ -372,28 +383,37 @@ class Lower(BaseLower):
             return impl(self.builder, (target, value))
 
         elif isinstance(inst, ir.Raise):
-            excid = self.add_exception(inst.exception)
-            self.context.return_user_exc(self.builder, excid)
+            self.lower_raise(inst)
 
         else:
             raise NotImplementedError(type(inst))
 
+    def lower_raise(self, inst):
+        if inst.exception is None:
+            # Reraise
+            self.return_exception(None)
+        else:
+            exctype = self.typeof(inst.exception.name)
+            if isinstance(exctype, types.ExceptionInstance):
+                # raise <instance> => find the instantiation site
+                excdef = self.interp.get_definition(inst.exception)
+                if (not isinstance(excdef, ir.Expr) or excdef.op != 'call'
+                    or excdef.kws):
+                    raise NotImplementedError("unsupported kind of raising")
+                # Try to infer the args tuple
+                args = tuple(self.interp.get_definition(arg).infer_constant()
+                             for arg in excdef.args)
+            elif isinstance(exctype, types.ExceptionType):
+                args = None
+            else:
+                raise NotImplementedError("cannot raise value of type %s"
+                                          % (exctype,))
+            self.return_exception(exctype.exc_class, args)
+
     def lower_assign(self, ty, inst):
         value = inst.value
-        if isinstance(value, ir.Const):
-            return self.context.get_constant_generic(self.builder, ty,
-                                                     value.value)
-
-        elif isinstance(value, ir.Expr):
-            return self.lower_expr(ty, value)
-
-        elif isinstance(value, ir.Var):
-            val = self.loadvar(value.name)
-            oty = self.typeof(value.name)
-            return self.context.cast(self.builder, val, oty, ty)
-
         # In nopython mode, closure vars are frozen like globals
-        elif isinstance(value, (ir.Global, ir.FreeVar)):
+        if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
             if (isinstance(ty, types.Dummy) or
                     isinstance(ty, types.Module) or
                     isinstance(ty, types.Function) or
@@ -407,6 +427,14 @@ class Lower(BaseLower):
             else:
                 return self.context.get_constant_generic(self.builder, ty,
                                                          value.value)
+
+        elif isinstance(value, ir.Expr):
+            return self.lower_expr(ty, value)
+
+        elif isinstance(value, ir.Var):
+            val = self.loadvar(value.name)
+            oty = self.typeof(value.name)
+            return self.context.cast(self.builder, val, oty, ty)
 
         else:
             raise NotImplementedError(type(value), value)
@@ -477,29 +505,32 @@ class Lower(BaseLower):
                             for av, at, ft in zip(argvals, argtyps,
                                                   signature.args)]
 
-            if isinstance(fnty, types.Method):
+            if isinstance(fnty, types.ExternalFunction):
+                # Handle a named external function
+                fndesc = ExternalFunctionDescriptor(
+                    fnty.symbol, fnty.sig.return_type, fnty.sig.args)
+                func = self.context.declare_external_function(
+                        cgutils.get_module(self.builder), fndesc)
+                res = self.context.call_external_function(
+                    self.builder, func, fndesc.argtypes, castvals)
+
+            elif isinstance(fnty, types.Method):
                 # Method of objects are handled differently
                 fnobj = self.loadvar(expr.func.name)
                 res = self.context.call_class_method(self.builder, fnobj,
                                                      signature, castvals)
 
             elif isinstance(fnty, types.FunctionPointer):
-                # Handle function pointer
+                # Handle a C function pointer
                 pointer = fnty.funcptr
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          signature, castvals,
                                                          fnty.cconv)
 
-            elif isinstance(fnty, cffi_support.ExternCFunction):
-                # XXX unused?
-                fndesc = ExternalFunctionDescriptor(
-                    fnty.symbol, fnty.restype, fnty.argtypes)
-                func = self.context.declare_external_function(
-                        cgutils.get_module(self.builder), fndesc)
-                res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
-
             else:
-                # Normal function resolution
+                if isinstance(signature.return_type, types.Phantom):
+                    return self.context.get_dummy_value()
+                # Normal function resolution (for Numba-compiled functions)
                 impl = self.context.get_function(fnty, signature)
                 if signature.recvr:
                     # The "self" object is passed as the function object
@@ -518,16 +549,12 @@ class Lower(BaseLower):
         elif expr.op == 'pair_first':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            item = self.context.pair_first(self.builder, val, ty)
-            return self.context.get_argument_value(self.builder,
-                                                   ty.first_type, item)
+            return self.context.pair_first(self.builder, val, ty)
 
         elif expr.op == 'pair_second':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            item = self.context.pair_second(self.builder, val, ty)
-            return self.context.get_argument_value(self.builder,
-                                                   ty.second_type, item)
+            return self.context.pair_second(self.builder, val, ty)
 
         elif expr.op in ('getiter', 'iternext'):
             val = self.loadvar(expr.value.name)
@@ -558,7 +585,6 @@ class Lower(BaseLower):
             iternext_impl = self.context.get_function('iternext',
                                                       iternext_sig)
             iterobj = getiter_impl(self.builder, (val,))
-            excid = self.add_exception(ValueError)
             # We call iternext() as many times as desired (`expr.count`).
             for i in range(expr.count):
                 pair = iternext_impl(self.builder, (iterobj,))
@@ -566,7 +592,7 @@ class Lower(BaseLower):
                                                     pair, pairty)
                 with cgutils.if_unlikely(self.builder,
                                          self.builder.not_(is_valid)):
-                    self.context.return_user_exc(self.builder, excid)
+                    self.return_exception(ValueError)
                 item = self.context.pair_first(self.builder,
                                                pair, pairty)
                 tup = self.builder.insert_value(tup, item, i)
@@ -577,7 +603,7 @@ class Lower(BaseLower):
             is_valid = self.context.pair_second(self.builder,
                                                 pair, pairty)
             with cgutils.if_unlikely(self.builder, is_valid):
-                self.context.return_user_exc(self.builder, excid)
+                self.return_exception(ValueError)
 
             return tup
 

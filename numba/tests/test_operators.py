@@ -651,6 +651,45 @@ class TestOperators(TestCase):
                           'floats_array': 'run_binop_array_floats',
                           })
 
+    def check_div_errors(self, usecase_name, msg, flags=force_pyobj_flags):
+        pyfunc = getattr(self.op, usecase_name)
+        if pyfunc is NotImplemented:
+            self.skipTest("%r not implemented" % (usecase_name,))
+        # Signed and unsigned division can take different code paths,
+        # test them both.
+        for tp in (types.int32, types.uint32, types.float64):
+            cr = compile_isolated(pyfunc, (tp, tp), flags=flags)
+            cfunc = cr.entry_point
+            with self.assertRaises(ZeroDivisionError) as cm:
+                cfunc(1, 0)
+            # Test exception message if not in object mode
+            if flags is not force_pyobj_flags:
+                self.assertIn(msg, str(cm.exception))
+
+    def test_truediv_errors(self, flags=force_pyobj_flags):
+        self.check_div_errors("truediv_usecase", "division by zero", flags=flags)
+
+    def test_truediv_errors_npm(self):
+        self.test_truediv_errors(flags=Noflags)
+
+    def test_floordiv_errors(self, flags=force_pyobj_flags):
+        self.check_div_errors("floordiv_usecase", "division by zero", flags=flags)
+
+    def test_floordiv_errors_npm(self):
+        self.test_floordiv_errors(flags=Noflags)
+
+    def test_div_errors(self, flags=force_pyobj_flags):
+        self.check_div_errors("div_usecase", "division by zero", flags=flags)
+
+    def test_div_errors_npm(self):
+        self.test_div_errors(flags=Noflags)
+
+    def test_mod_errors(self, flags=force_pyobj_flags):
+        self.check_div_errors("mod_usecase", "modulo by zero", flags=flags)
+
+    def test_mod_errors_npm(self):
+        self.test_mod_errors(flags=Noflags)
+
     def run_pow_ints(self, pyfunc, flags=force_pyobj_flags):
         x_operands = [-2, -1, 0, 1, 2]
         y_operands = [0, 1, 2]

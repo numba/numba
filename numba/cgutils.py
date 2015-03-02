@@ -6,10 +6,13 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import functools
 import re
+
+from llvmlite import ir
 from llvmlite.llvmpy.core import Constant, Type
 import llvmlite.llvmpy.core as lc
+from numba import datamodel
 
-from . import errcode, utils
+from . import utils
 
 
 true_bit = Constant.int(Type.int(1), 1)
@@ -28,13 +31,133 @@ def as_bool_bit(builder, value):
 
 def make_anonymous_struct(builder, values):
     """
-    Create an anonymous struct constant containing the given LLVM *values*.
+    Create an anonymous struct containing the given LLVM *values*.
     """
     struct_type = Type.struct([v.type for v in values])
     struct_val = Constant.undef(struct_type)
     for i, v in enumerate(values):
         struct_val = builder.insert_value(struct_val, v, i)
     return struct_val
+
+
+def make_bytearray(buf):
+    """
+    Make a byte array constant from *buf*.
+    """
+    b = bytearray(buf)
+    n = len(b)
+    return ir.Constant(ir.ArrayType(ir.IntType(8), n), b)
+
+_struct_proxy_cache = {}
+
+
+def create_struct_proxy(fe_type):
+    """
+    Returns a specialized StructProxy subclass for the given fe_type.
+    """
+    res = _struct_proxy_cache.get(fe_type)
+    if res is None:
+        clsname = StructProxy.__name__ + '_' + str(fe_type)
+        bases = (StructProxy,)
+        clsmembers = dict(_fe_type=fe_type)
+        res = type(clsname, bases, clsmembers)
+        _struct_proxy_cache[fe_type] = res
+    return res
+
+
+class StructProxy(object):
+    """
+    Creates a `Structure` like interface that is constructed with information
+    from DataModel instance.  FE type must have a data model that is a
+    subclass of StructModel.
+    """
+    # The following class members must be overridden by subclass
+    _fe_type = None
+
+    def __init__(self, context, builder, value=None, ref=None):
+        self._context = context
+        self._dmm = self._context.data_model_manager
+        self._datamodel = self._dmm[self._fe_type]
+        if not isinstance(self._datamodel, datamodel.StructModel):
+            raise TypeError("Not a structure model: {0}".format(self._dmodel))
+        self._builder = builder
+
+        self._be_type = self._datamodel.get_value_type()
+        assert not is_pointer(self._be_type)
+
+        if ref is not None:
+            assert value is None
+            assert ref.type.pointee == self._be_type
+            self._value = ref
+        else:
+            self._value = alloca_once(self._builder, self._be_type)
+            if value is not None:
+                self._builder.store(value, self._value)
+
+    def _get_ptr_by_index(self, index):
+        geped = self._builder.gep(self._value,
+                                  [Constant.int(Type.int(), 0),
+                                   Constant.int(Type.int(), index)])
+        return geped
+
+    def _get_ptr_by_name(self, attrname):
+        index = self._datamodel.get_field_position(attrname)
+        return self._get_ptr_by_index(index)
+
+    def __getattr__(self, field):
+        """
+        Load the LLVM value of the named *field*.
+        """
+        if not field.startswith('_'):
+            return self[self._datamodel.get_field_position(field)]
+        else:
+            raise AttributeError(field)
+
+    def __setattr__(self, field, value):
+        """
+        Store the LLVM *value* into the named *field*.
+        """
+        if field.startswith('_'):
+            return super(StructProxy, self).__setattr__(field, value)
+        self[self._datamodel.get_field_position(field)] = value
+
+    def __getitem__(self, index):
+        """
+        Load the LLVM value of the field at *index*.
+        """
+
+        return self._builder.load(self._get_ptr_by_index(index))
+
+    def __setitem__(self, index, value):
+        """
+        Store the LLVM *value* into the field at *index*.
+        """
+        ptr = self._get_ptr_by_index(index)
+        self._builder.store(value, ptr)
+
+    def __len__(self):
+        """
+        Return the number of fields.
+        """
+        return self._datamodel.field_count
+
+    def _getpointer(self):
+        """
+        Return the LLVM pointer to the underlying structure.
+        """
+        return self._value
+
+    def _getvalue(self):
+        """
+        Load and return the value of the underlying LLVM structure.
+        """
+        return self._builder.load(self._value)
+
+    def _setvalue(self, value):
+        """Store the value in this structure"""
+        assert not is_pointer(value.type)
+        assert value.type == self._type, (value.type, self._type)
+        self._builder.store(value, self._value)
 
 
 class Structure(object):
@@ -111,26 +234,11 @@ class Structure(object):
         Store the LLVM *value* into the field at *index*.
         """
         ptr = self._get_ptr_by_index(index)
-        value = self._context.get_struct_member_value(self._builder,
-                                                      self._typemap[index],
-                                                      value)
         if ptr.type.pointee != value.type:
-            dstty = ptr.type.pointee
-            srcty = value.type
-            is_differ_by_addrspace = (is_pointer(dstty) and is_pointer(srcty)
-                                      and dstty.pointee == srcty.pointee)
-            if is_differ_by_addrspace:
-                genaddrspace = self._context.generic_addrspace
-                if dstty.addrspace == genaddrspace:
-                    # Is storing to generic addrspace
-                    asgen = self._context.addrspacecast(self._builder, value,
-                                                        genaddrspace)
-                    self._builder.store(asgen, ptr)
-                    return
-
-            raise AssertionError("Type mismatch: __setitem__(%d, ...) "
-                                 "expected %r but got %r"
-                                 % (index, str(ptr.type.pointee), str(value.type)))
+            fmt = "Type mismatch: __setitem__(%d, ...) expected %r but got %r"
+            raise AssertionError(fmt % (index,
+                                        str(ptr.type.pointee),
+                                        str(value.type)))
         self._builder.store(value, ptr)
 
     def __len__(self):
@@ -568,9 +676,15 @@ def is_scalar_neg(builder, value):
     return isneg
 
 
-def guard_null(context, builder, value):
+def guard_null(context, builder, value, exc_tuple):
+    """
+    Guard against *value* being null or zero.
+    *exc_tuple* should be a (exception type, arguments...) tuple.
+    """
     with if_unlikely(builder, is_scalar_zero(builder, value)):
-        context.return_errcode(builder, errcode.ASSERTION_ERROR)
+        exc = exc_tuple[0]
+        exc_args = exc_tuple[1:] or None
+        context.call_conv.return_user_exc(builder, exc, exc_args)
 
 
 guard_zero = guard_null
@@ -598,28 +712,9 @@ def is_struct_ptr(ltyp):
 
 
 def get_record_member(builder, record, offset, typ):
-    pdata = get_record_data(builder, record)
-    pval = inbound_gep(builder, pdata, 0, offset)
+    pval = inbound_gep(builder, record, 0, offset)
     assert not is_pointer(pval.type.pointee)
     return builder.bitcast(pval, Type.pointer(typ))
-
-
-def get_record_data(builder, record):
-    return builder.extract_value(record, 0)
-
-
-def set_record_data(builder, record, buf):
-    pdata = inbound_gep(builder, record, 0, 0)
-    assert pdata.type.pointee == buf.type
-    builder.store(buf, pdata)
-
-
-def init_record_by_ptr(builder, ltyp, ptr):
-    tmp = alloca_once(builder, ltyp)
-    pdata = ltyp.elements[0]
-    buf = builder.bitcast(ptr, pdata)
-    set_record_data(builder, tmp, buf)
-    return tmp
 
 
 def is_neg_int(builder, val):
@@ -641,7 +736,8 @@ def gep(builder, ptr, *inds):
     idx = []
     for i in inds:
         if isinstance(i, int):
-            ind = Constant.int(Type.int(64), i)
+            # NOTE: llvm only accepts int32 inside structs, not int64
+            ind = Constant.int(Type.int(32), i)
         else:
             ind = i
         idx.append(ind)
@@ -673,7 +769,7 @@ def global_constant(builder_or_module, name, value, linkage=lc.LINKAGE_INTERNAL)
     else:
         module = get_module(builder_or_module)
     data = module.add_global_variable(value.type, name=name)
-    data.linkage = lc.LINKAGE_INTERNAL
+    data.linkage = linkage
     data.global_constant = True
     data.initializer = value
     return data

@@ -133,6 +133,95 @@ The following constructors are supported, only with a numeric input:
 * :class:`numpy.uintp`
 
 
+Modules
+=======
+
+.. _numpy-random:
+
+``random``
+----------
+
+Numba supports top-level functions from the
+`numpy.random <http://docs.scipy.org/doc/numpy/reference/routines.random.html>`_
+module, but does not allow you to create individual RandomState instances.
+The same algorithms are used as for :ref:`the standard
+random module <pysupported-random>` (and therefore the same notes apply),
+but with an independent internal state: seeding or drawing numbers from
+one generator won't affect the other.
+
+The following functions are supported, but only with scalar output: you can't
+pass a *size* argument.
+
+Initialization
+''''''''''''''
+
+* :func:`numpy.random.seed`: with an integer argument only
+
+Simple random data
+''''''''''''''''''
+
+* :func:`numpy.random.rand`: only without argument
+* :func:`numpy.random.randint`
+* :func:`numpy.random.randn`: only without argument
+* :func:`numpy.random.random`
+* :func:`numpy.random.random_sample`
+* :func:`numpy.random.ranf`
+* :func:`numpy.random.sample`
+
+Permutations
+''''''''''''
+
+* :func:`numpy.random.shuffle`: the sequence argument must be a 1D Numpy array
+
+Distributions
+'''''''''''''
+
+* :func:`numpy.random.beta`
+* :func:`numpy.random.binomial`
+* :func:`numpy.random.chisquare`
+* :func:`numpy.random.exponential`
+* :func:`numpy.random.f`
+* :func:`numpy.random.gamma`
+* :func:`numpy.random.geometric`
+* :func:`numpy.random.gumbel`
+* :func:`numpy.random.hypergeometric`
+* :func:`numpy.random.laplace`
+* :func:`numpy.random.logistic`
+* :func:`numpy.random.lognormal`
+* :func:`numpy.random.logseries`
+* :func:`numpy.random.negative_binomial`
+* :func:`numpy.random.normal`
+* :func:`numpy.random.pareto`
+* :func:`numpy.random.poisson`
+* :func:`numpy.random.power`
+* :func:`numpy.random.rayleigh`
+* :func:`numpy.random.standard_cauchy`
+* :func:`numpy.random.standard_exponential`
+* :func:`numpy.random.standard_gamma`
+* :func:`numpy.random.standard_normal`
+* :func:`numpy.random.standard_t`
+* :func:`numpy.random.triangular`
+* :func:`numpy.random.uniform`
+* :func:`numpy.random.vonmises`
+* :func:`numpy.random.wald`
+* :func:`numpy.random.weibull`
+* :func:`numpy.random.zipf`
+
+.. note::
+   Calling :func:`numpy.random.seed` from non-Numba code (or from
+   :term:`object mode` code) will seed the Numpy random generator, not the
+   Numba random generator.
+
+.. note::
+   The generator is not thread-safe when :ref:`releasing the GIL <jit-nogil>`.
+
+   Also, under Unix, if creating a child process using :func:`os.fork` or the
+   :mod:`multiprocessing` module, the child's random generator will inherit
+   the parent's state and will therefore produce the same sequence of
+   numbers (except when using the "forkserver" start method under Python 3.4
+   and later).
+
+
 Standard ufuncs
 ===============
 

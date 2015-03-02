@@ -83,13 +83,13 @@ class Interpreter(object):
         self.blocks = {}
         # { name: value } of global variables used by the bytecode
         self.used_globals = {}
+        self.definitions = collections.defaultdict(list)
 
         # Temp states during interpretation
         self.current_block = None
         self.current_block_offset = None
         self.syntax_blocks = []
         self.dfainfo = None
-        self.constants = {}
 
     def _fill_global_scope(self, scope):
         """TODO
@@ -130,7 +130,7 @@ class Interpreter(object):
         for offset, ir_block in self.blocks.items():
             for stmt in ir_block.body:
                 for var_name in stmt.list_vars():
-                    if stmt.is_terminator and not isinstance(stmt, ir.Return):
+                    if stmt.is_terminator and not stmt.is_exit:
                         # Move the "last use" at the beginning of successor
                         # blocks.
                         for succ, _ in cfg.successors(offset):
@@ -157,9 +157,9 @@ class Interpreter(object):
             if stmt is None:
                 ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
             else:
-                # If the variable is used in a Return statement, we
-                # don't insert anything.
-                if not isinstance(stmt, ir.Return):
+                # If the variable is used in an exiting statement
+                # (e.g. raise or return), we don't insert anything.
+                if not stmt.is_exit:
                     ir_block.insert_after(ir.Del(var_name, loc=stmt.loc), stmt)
 
     def _compute_var_disposal(self, var_name, use_map):
@@ -348,7 +348,7 @@ class Interpreter(object):
 
     def store(self, value, name, redefine=False):
         """
-        Store *value* (a Var instance) into the variable named *name*
+        Store *value* (a Expr or Var instance) into the variable named *name*
         (a str object).
         """
         if redefine or self.current_block_offset in self.cfa.backbone:
@@ -359,6 +359,7 @@ class Interpreter(object):
             value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
+        self.definitions[name].append(value)
 
     def get(self, name):
         """
@@ -370,6 +371,23 @@ class Interpreter(object):
         if var is None:
             var = self.current_scope.get(name)
         return var
+
+    def get_definition(self, value):
+        """
+        Get the definition site for the given Var instance.
+        A Expr instance is returned.
+        """
+        while True:
+            if not isinstance(value, ir.Var):
+                return value
+            defs = self.definitions[value.name]
+            if len(defs) == 0:
+                raise KeyError("no definition for %r"
+                               % (value.name,))
+            if len(defs) > 1:
+                raise KeyError("more than one definition for %r"
+                               % (value.name,))
+            value = defs[0]
 
     # --- Block operations ---
 
@@ -617,7 +635,6 @@ class Interpreter(object):
         self.used_globals[name] = value
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
-        self.constants[res] = value
 
     def op_LOAD_DEREF(self, inst, res):
         name = self.code_freevars[inst.arg]
@@ -883,5 +900,7 @@ class Interpreter(object):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
     def op_RAISE_VARARGS(self, inst, exc):
-        stmt = ir.Raise(exception=self.constants[exc], loc=self.loc)
+        if exc is not None:
+            exc = self.get(exc)
+        stmt = ir.Raise(exception=exc, loc=self.loc)
         self.current_block.append(stmt)

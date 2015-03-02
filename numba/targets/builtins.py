@@ -1,6 +1,5 @@
 from __future__ import print_function, absolute_import, division
 
-
 import math
 from functools import reduce
 
@@ -10,7 +9,7 @@ import llvmlite.llvmpy.core as lc
 from .imputils import (builtin, builtin_attr, implement, impl_attribute,
                        iternext_impl, struct_factory)
 from . import optional
-from .. import typing, types, cgutils, utils, errcode, intrinsics
+from .. import typing, types, cgutils, utils, intrinsics
 
 #-------------------------------------------------------------------------------
 
@@ -44,7 +43,8 @@ def int_udiv_impl(context, builder, sig, args):
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
-    cgutils.guard_zero(context, builder, b)
+    cgutils.guard_zero(context, builder, b,
+                       (ZeroDivisionError, "integer division by zero"))
     return builder.udiv(a, b)
 
 
@@ -99,7 +99,8 @@ def int_sdiv_impl(context, builder, sig, args):
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
-    cgutils.guard_zero(context, builder, b)
+    cgutils.guard_zero(context, builder, b,
+                       (ZeroDivisionError, "integer division by zero"))
     div, _ = int_divmod(context, builder, a, b)
     return div
 
@@ -108,7 +109,8 @@ def int_struediv_impl(context, builder, sig, args):
     x, y = args
     fx = builder.sitofp(x, Type.double())
     fy = builder.sitofp(y, Type.double())
-    cgutils.guard_zero(context, builder, y)
+    cgutils.guard_zero(context, builder, y,
+                       (ZeroDivisionError, "division by zero"))
     return builder.fdiv(fx, fy)
 
 
@@ -116,7 +118,8 @@ def int_utruediv_impl(context, builder, sig, args):
     x, y = args
     fx = builder.uitofp(x, Type.double())
     fy = builder.uitofp(y, Type.double())
-    cgutils.guard_zero(context, builder, y)
+    cgutils.guard_zero(context, builder, y,
+                       (ZeroDivisionError, "division by zero"))
     return builder.fdiv(fx, fy)
 
 
@@ -126,13 +129,16 @@ int_ufloordiv_impl = int_udiv_impl
 
 def int_srem_impl(context, builder, sig, args):
     x, y = args
-    cgutils.guard_zero(context, builder, y)
+    cgutils.guard_zero(context, builder, y,
+                       (ZeroDivisionError, "integer modulo by zero"))
     _, rem = int_divmod(context, builder, x, y)
     return rem
 
 
 def int_urem_impl(context, builder, sig, args):
     x, y = args
+    cgutils.guard_zero(context, builder, y,
+                       (ZeroDivisionError, "integer modulo by zero"))
     return builder.urem(x, y)
 
 
@@ -498,7 +504,8 @@ def real_mul_impl(context, builder, sig, args):
 
 
 def real_div_impl(context, builder, sig, args):
-    cgutils.guard_zero(context, builder, args[1])
+    cgutils.guard_zero(context, builder, args[1],
+                       (ZeroDivisionError, "division by zero"))
     return builder.fdiv(*args)
 
 
@@ -635,14 +642,16 @@ def real_divmod_func_body(context, builder, vx, wx):
 
 def real_mod_impl(context, builder, sig, args):
     x, y = args
-    cgutils.guard_zero(context, builder, y)
+    cgutils.guard_zero(context, builder, args[1],
+                       (ZeroDivisionError, "modulo by zero"))
     _, rem = real_divmod(context, builder, x, y)
     return rem
 
 
 def real_floordiv_impl(context, builder, sig, args):
     x, y = args
-    cgutils.guard_zero(context, builder, y)
+    cgutils.guard_zero(context, builder, args[1],
+                       (ZeroDivisionError, "division by zero"))
     quot, _ = real_divmod(context, builder, x, y)
     return quot
 
@@ -1102,11 +1111,7 @@ def slice0_none_none_impl(context, builder, sig, args):
 
 
 def make_pair(first_type, second_type):
-    class Pair(cgutils.Structure):
-        _fields = [('first', first_type),
-                   ('second', second_type)]
-
-    return Pair
+    return cgutils.create_struct_proxy(types.Pair(first_type, second_type))
 
 
 @struct_factory(types.UniTupleIter)
@@ -1115,13 +1120,7 @@ def make_unituple_iter(tupiter):
     Return the Structure representation of the given *tupiter* (an
     instance of types.UniTupleIter).
     """
-    unituple = tupiter.unituple
-
-    class UniTupleIter(cgutils.Structure):
-        _fields = [('index', types.CPointer(types.intp)),
-                   ('tuple', tupiter.unituple,)]
-
-    return UniTupleIter
+    return cgutils.create_struct_proxy(tupiter)
 
 
 @builtin
@@ -1183,7 +1182,8 @@ def getitem_unituple(context, builder, sig, args):
     switch = builder.switch(idx, bbelse, n=tupty.count)
 
     with cgutils.goto_block(builder, bbelse):
-        context.return_errcode(builder, errcode.OUT_OF_BOUND_ERROR)
+        context.call_conv.return_user_exc(builder, IndexError,
+                                          ("tuple index out of range",))
 
     lrtty = context.get_value_type(tupty.dtype)
     with cgutils.goto_block(builder, bbend):
@@ -1269,30 +1269,62 @@ def min_impl(context, builder, sig, args):
     return resval
 
 
-@builtin
-@implement(round, types.float32)
-def round_impl_f32(context, builder, sig, args):
-    module = cgutils.get_module(builder)
-    fnty = Type.function(Type.float(), [Type.float()])
+def _round_intrinsic(tp):
+    # round() rounds half to even on Python 3, away from zero on Python 2.
     if utils.IS_PY3:
-        fn = module.get_or_insert_function(fnty, name="numba.roundf")
+        return "llvm.rint.f%d" % (tp.bitwidth,)
     else:
-        fn = module.get_or_insert_function(fnty, name="roundf")
-    assert fn.is_declaration
-    return builder.call(fn, args)
-
+        return "llvm.round.f%d" % (tp.bitwidth,)
 
 @builtin
-@implement(round, types.float64)
-def round_impl_f64(context, builder, sig, args):
+@implement(round, types.Kind(types.Float))
+def round_impl_unary(context, builder, sig, args):
+    fltty = sig.args[0]
+    llty = context.get_value_type(fltty)
     module = cgutils.get_module(builder)
-    fnty = Type.function(Type.double(), [Type.double()])
+    fnty = Type.function(llty, [llty])
+    fn = module.get_or_insert_function(fnty, name=_round_intrinsic(fltty))
+    res = builder.call(fn, args)
     if utils.IS_PY3:
-        fn = module.get_or_insert_function(fnty, name="numba.round")
+        # unary round() returns an int on Python 3
+        return builder.fptosi(res, context.get_value_type(sig.return_type))
     else:
-        fn = module.get_or_insert_function(fnty, name="round")
-    assert fn.is_declaration
-    return builder.call(fn, args)
+        return res
+
+@builtin
+@implement(round, types.Kind(types.Float), types.Kind(types.Integer))
+def round_impl_binary(context, builder, sig, args):
+    fltty = sig.args[0]
+    # Allow calling the intrinsic from the Python implementation below.
+    # This avoids the conversion to an int in Python 3's unary round().
+    _round = types.ExternalFunction(
+        _round_intrinsic(fltty), typing.signature(fltty, fltty))
+
+    def round_ndigits(x, ndigits):
+        if math.isinf(x) or math.isnan(x):
+            return x
+
+        if ndigits >= 0:
+            if ndigits > 22:
+                # pow1 and pow2 are each safe from overflow, but
+                # pow1*pow2 ~= pow(10.0, ndigits) might overflow.
+                pow1 = 10.0 ** (ndigits - 22)
+                pow2 = 1e22
+            else:
+                pow1 = 10.0 ** ndigits
+                pow2 = 1.0
+            y = (x * pow1) * pow2
+            if math.isinf(y):
+                return x
+            return (_round(y) / pow2) / pow1
+
+        else:
+            pow1 = 10.0 ** (-ndigits)
+            y = x / pow1
+            return _round(y) * pow1
+
+    return context.compile_internal(builder, round_ndigits, sig, args)
+
 
 #-------------------------------------------------------------------------------
 

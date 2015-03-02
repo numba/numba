@@ -1,5 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
+import pickle
+
+from llvmlite import ir
 import llvmlite.binding as ll
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.llvmpy.core as lc
@@ -7,34 +10,6 @@ import llvmlite.llvmpy.core as lc
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
 from numba import types, utils, cgutils, _helperlib, assume
-
-_PyNone = ctypes.c_ssize_t(id(None))
-
-
-class NativeError(RuntimeError):
-    pass
-
-
-@utils.runonce
-def fix_python_api():
-    """
-    Execute once to install special symbols into the LLVM symbol table
-    """
-
-    ll.add_symbol("Py_None", ctypes.addressof(_PyNone))
-    ll.add_symbol("numba_native_error", id(NativeError))
-
-    # Add C helper functions
-    c_helpers = _helperlib.c_helpers
-    for py_name in c_helpers:
-        c_name = "numba_" + py_name
-        c_address = c_helpers[py_name]
-        ll.add_symbol(c_name, c_address)
-
-    # Add all built-in exception classes
-    for obj in utils.builtins.__dict__.values():
-        if isinstance(obj, type) and issubclass(obj, BaseException):
-            ll.add_symbol("PyExc_%s" % (obj.__name__), id(obj))
 
 
 class PythonAPI(object):
@@ -47,11 +22,16 @@ class PythonAPI(object):
         """
         Note: Maybe called multiple times when lowering a function
         """
-        fix_python_api()
         self.context = context
         self.builder = builder
 
         self.module = builder.basic_block.function.module
+        # A unique mapping of serialized objects in this module
+        try:
+            self.module.__serialized
+        except AttributeError:
+            self.module.__serialized = {}
+
         # Initialize types
         self.pyobj = self.context.get_argument_type(types.pyobject)
         self.voidptr = Type.pointer(Type.int(8))
@@ -121,6 +101,17 @@ class PythonAPI(object):
             msg = self.context.insert_const_string(self.module, msg)
         return self.builder.call(fn, (exctype, msg))
 
+    def raise_object(self, exc=None):
+        """
+        Raise an arbitrary exception (type or value or (type, args)
+        or None - if reraising).  A reference to the argument is consumed.
+        """
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="numba_do_raise")
+        if exc is None:
+            exc = self.get_null_object()
+        return self.builder.call(fn, (exc,))
+
     def err_set_object(self, exctype, excval):
         fnty = Type.function(Type.void(), [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyErr_SetObject")
@@ -131,32 +122,15 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyErr_WriteUnraisable")
         return self.builder.call(fn, (obj,))
 
-    def raise_native_error(self, msg):
-        cstr = self.context.insert_const_string(self.module, msg)
-        self.err_set_string(self.native_error_type, cstr)
-
-    def raise_exception(self, exctype, excval):
-        # XXX This produces non-reusable bitcode: the pointer's value
-        # is specific to this process execution.
-        exctypeaddr = self.context.get_constant(types.intp, id(exctype))
-        excvaladdr = self.context.get_constant(types.intp, id(excval))
-        self.err_set_object(exctypeaddr.inttoptr(self.pyobj),
-                            excvaladdr.inttoptr(self.pyobj))
-
     def get_c_object(self, name):
         """
-        Get a Python object through its C-accessible *name*.
-        (e.g. "PyExc_ValueError").
+        Get a Python object through its C-accessible *name*
+        (e.g. "PyExc_ValueError").  The underlying variable must be
+        a `PyObject *`, and the value of that pointer is returned.
         """
-        try:
-            gv = self.module.get_global_variable_named(name)
-        except LLVMException:
-            gv = self.module.add_global_variable(self.pyobj.pointee, name)
-        return gv
-
-    @property
-    def native_error_type(self):
-        return self.get_c_object("numba_native_error")
+        # A LLVM global variable is implicitly a pointer to the declared
+        # type, so fix up by using pyobj.pointee.
+        return self.context.get_c_value(self.builder, self.pyobj.pointee, name)
 
     def raise_missing_global_error(self, name):
         msg = "global name '%s' is not defined" % name
@@ -575,7 +549,11 @@ class PythonAPI(object):
         args.append(self.context.get_constant_null(types.pyobject))
         return self.builder.call(fn, args)
 
-    def call(self, callee, args, kws):
+    def call(self, callee, args=None, kws=None):
+        if args is None:
+            args = self.get_null_object()
+        if kws is None:
+            kws = self.get_null_object()
         fnty = Type.function(self.pyobj, [self.pyobj] * 3)
         fn = self._get_function(fnty, name="PyObject_Call")
         return self.builder.call(fn, (callee, args, kws))
@@ -706,12 +684,12 @@ class PythonAPI(object):
         return self.builder.call(fn, [obj])
 
     def make_none(self):
-        obj = self._get_object("Py_None")
+        obj = self.get_c_object("Py_None")
         self.incref(obj)
         return obj
 
     def borrow_none(self):
-        obj = self._get_object("Py_None")
+        obj = self.get_c_object("Py_None")
         return obj
 
     def sys_write_stdout(self, fmt, *args):
@@ -728,13 +706,6 @@ class PythonAPI(object):
         return self.builder.call(fn, (obj,))
 
     # ------ utils -----
-
-    def _get_object(self, name):
-        try:
-            gv = self.module.get_global_variable_named(name)
-        except LLVMException:
-            gv = self.module.add_global_variable(self.pyobj, name)
-        return self.builder.load(gv)
 
     def _get_function(self, fnty, name):
         return self.module.get_or_insert_function(fnty, name=name)
@@ -771,6 +742,42 @@ class PythonAPI(object):
                 self.list_setitem(seq, idx, items[i])
         return seq
 
+    def unserialize(self, structptr):
+        """
+        Unserialize some data.  *structptr* should be a pointer to
+        a {i8* data, i32 length} structure.
+        """
+        fnty = Type.function(self.pyobj, (self.voidptr, ir.IntType(32)))
+        fn = self._get_function(fnty, name="numba_unpickle")
+        ptr = self.builder.extract_value(self.builder.load(structptr), 0)
+        n = self.builder.extract_value(self.builder.load(structptr), 1)
+        return self.builder.call(fn, (ptr, n))
+
+    def serialize_object(self, obj):
+        """
+        Serialize the given object in the bitcode, and return it
+        as a pointer to a {i8* data, i32 length}, structure constant
+        (suitable for passing to unserialize()).
+        """
+        try:
+            gv = self.module.__serialized[obj]
+        except KeyError:
+            # First make the array constant
+            data = pickle.dumps(obj, protocol=-1)
+            name = ".const.pickledata.%s" % (id(obj))
+            bdata = cgutils.make_bytearray(data)
+            arr = self.context.insert_unique_const(self.module, name, bdata)
+            # Then populate the structure constant
+            struct = ir.Constant.literal_struct([
+                arr.bitcast(self.voidptr),
+                ir.Constant(ir.IntType(32), arr.type.pointee.count),
+                ])
+            name = ".const.picklebuf.%s" % (id(obj))
+            gv = self.context.insert_unique_const(self.module, name, struct)
+            # Make the id() (and hence the name) unique while populating the module.
+            self.module.__serialized[obj] = gv
+        return gv
+
     def to_native_arg(self, obj, typ):
         if isinstance(typ, types.Record):
             # Generate a dummy integer type that has the size of Py_buffer
@@ -791,7 +798,7 @@ class PythonAPI(object):
                 self.builder.ret(ptr)
 
             ltyp = self.context.get_value_type(typ)
-            val = cgutils.init_record_by_ptr(self.builder, ltyp, ptr)
+            val = self.builder.bitcast(ptr, ltyp)
 
             def dtor():
                 self.release_record_buffer(buf_as_voidptr)
@@ -876,18 +883,18 @@ class PythonAPI(object):
 
         elif isinstance(typ, types.Optional):
             isnone = self.builder.icmp(lc.ICMP_EQ, obj, self.borrow_none())
+            noneval = self.context.make_optional_none(self.builder, typ.type)
+            retptr = cgutils.alloca_once(self.builder, noneval.type)
             with cgutils.ifelse(self.builder, isnone) as (then, orelse):
                 with then:
-                    noneval = self.context.make_optional_none(self.builder, typ.type)
-                    ret = cgutils.alloca_once(self.builder, noneval.type)
-                    self.builder.store(noneval, ret)
+                    self.builder.store(noneval, retptr)
 
                 with orelse:
                     val = self.to_native_value(obj, typ.type)
                     just = self.context.make_optional_value(self.builder,
                                                             typ.type, val)
-                    self.builder.store(just, ret)
-            return ret
+                    self.builder.store(just, retptr)
+            return self.builder.load(retptr)
 
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
             return self.to_native_tuple(obj, typ)
@@ -953,9 +960,8 @@ class PythonAPI(object):
         elif isinstance(typ, types.Record):
             # Note we will create a copy of the record
             # This is the only safe way.
-            pdata = cgutils.get_record_data(self.builder, val)
-            size = Constant.int(Type.int(), pdata.type.pointee.count)
-            ptr = self.builder.bitcast(pdata, Type.pointer(Type.int(8)))
+            size = Constant.int(Type.int(), val.type.pointee.count)
+            ptr = self.builder.bitcast(val, Type.pointer(Type.int(8)))
             # Note: this will only work for CPU mode
             #       The following requires access to python object
             dtype_addr = Constant.int(self.py_ssize_t, id(typ.dtype))

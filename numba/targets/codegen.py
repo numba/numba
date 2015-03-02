@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import functools
 import sys
 
 import llvmlite.llvmpy.core as lc
@@ -7,7 +8,7 @@ import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
-from numba import config
+from numba import config, utils
 
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
@@ -157,7 +158,9 @@ class CodeLibrary(object):
         # It seems add_module() must be done only here and not before
         # linking in other modules, otherwise get_pointer_to_function()
         # could fail.
-        self._codegen._add_module(self._final_module)
+        cleanup = self._codegen._add_module(self._final_module)
+        if cleanup:
+            utils.finalize(self, cleanup)
         self._finalize_specific()
 
         self._finalized = True
@@ -379,3 +382,5 @@ class JITCPUCodegen(BaseCPUCodegen):
 
     def _add_module(self, module):
         self._engine.add_module(module)
+        # Early bind the engine method to avoid keeping a reference to self.
+        return functools.partial(self._engine.remove_module, module)
