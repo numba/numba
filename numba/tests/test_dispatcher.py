@@ -2,6 +2,8 @@ from __future__ import print_function, division, absolute_import
 
 import threading
 
+import numpy as np
+
 from numba import unittest_support as unittest
 from numba import utils, vectorize, jit
 from .support import TestCase
@@ -130,6 +132,27 @@ class TestDispatcher(TestCase):
             f(3, 4, y=6)
         self.assertIn("missing argument 'z'", str(cm.exception))
 
+    def test_explicit_signatures(self):
+        f = jit("(int64,int64)")(add)
+        # Approximate match (unsafe conversion)
+        self.assertPreciseEqual(f(1.5, 2.5), 3)
+        self.assertEqual(len(f.overloads), 1, f.overloads)
+        f = jit(["(int64,int64)", "(float64,float64)"])(add)
+        # Exact signature matches
+        self.assertPreciseEqual(f(1, 2), 3)
+        self.assertPreciseEqual(f(1.5, 2.5), 4.0)
+        # Approximate match (int32 -> float64 is a safe conversion)
+        self.assertPreciseEqual(f(np.int32(1), 2.5), 3.5)
+        # No conversion
+        with self.assertRaises(TypeError) as cm:
+            f(1j, 1j)
+        self.assertIn("No matching definition", str(cm.exception))
+        self.assertEqual(len(f.overloads), 2, f.overloads)
+        # A more interesting one...
+        f = jit(["(float32,float32)", "(float64,float64)"])(add)
+        self.assertPreciseEqual(f(np.float32(1), np.float32(2**-25)), 1.0)
+        self.assertPreciseEqual(f(1, 2**-25), 1.0000000298023224)
+
     def test_signature_mismatch(self):
         tmpl = "Signature mismatch: %d argument types given, but function takes 2 arguments"
         with self.assertRaises(TypeError) as cm:
@@ -224,6 +247,7 @@ class TestDispatcher(TestCase):
         for asm in asms.values():
             # Look for the function name
             self.assertTrue("foo" in asm)
+
 
 if __name__ == '__main__':
     unittest.main()

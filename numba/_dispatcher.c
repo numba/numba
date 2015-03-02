@@ -96,14 +96,13 @@ PyObject* init_types(PyObject *self, PyObject *args)
 static void
 Dispatcher_dealloc(DispatcherObject *self)
 {
-    Py_DECREF(self->argnames);
+    Py_XDECREF(self->argnames);
     dispatcher_del(self->dispatcher);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 
-static
-int
+static int
 Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
 {
     PyObject *tmaddrobj;

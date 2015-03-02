@@ -4,13 +4,15 @@ Compilation
 JIT functions
 -------------
 
-.. decorator:: numba.jit([signature], *, nopython=False, nogil=False, forceobj=False, locals={})
+.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, forceobj=False, locals={})
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters all optional.
 
-   *signature* represents the expected :ref:`numba-types` of function arguments
-   and return value.  It can be given in several forms:
+   If present, the *signature* is either a single signature or a list of
+   signatures representing the expected :ref:`numba-types` of function
+   arguments and return values.  Each signature can be given in several
+   forms:
 
    * A tuple of :ref:`numba-types` arguments (for example
      ``(numba.int32, numba.double)``) representing the types of the
@@ -28,21 +30,21 @@ JIT functions
 
    This decorator has several modes of operation:
 
-   * If *signature* is given, a single specialization is compiled
-     corresponding to this signature.  Calling the decorated function will
-     then try to convert the arguments to this signature, and raise a
-     :class:`TypeError` if converting fails.  If converting succeeds, the
-     compiled machine code is executed with the converted arguments and the
-     return value is converted back according to the signature.
+   * If one more *signature* is given, a specialization is compiled
+     for each signature.  Calling the decorated function will
+     then try to choose the best matching signature, and raise a
+     :class:`TypeError` if no appropriate conversion is available for the
+     funciton arguments.  If converting succeeds, the compiled machine code
+     is executed with the converted arguments and the return value is
+     converted back according to the signature.
 
-   * If *signature* is not given, the decorated function implements
-     multiple dispatch and lazy compilation.  Each call to the decorated
-     function will try to re-use an existing specialization if it exists
-     (for example, a call with two integer arguments may re-use a
-     specialization for argument types ``(numba.int64, numba.int64)``).
-     If no suitable specialization exists, a new specialization is compiled
-     on-the-fly, stored for later use, and executed with the converted
-     arguments.
+   * If no *signature* is given, the decorated function implements
+     lazy compilation.  Each call to the decorated function will try to
+     re-use an existing specialization if it exists (for example, a call
+     with two integer arguments may re-use a specialization for argument
+     types ``(numba.int64, numba.int64)``).  If no suitable specialization
+     exists, a new specialization is compiled on-the-fly, stored for later
+     use, and executed with the converted arguments.
 
    If true, *nopython* forces the function to be compiled in :term:`nopython
    mode`. If not possible, compilation will raise an error.
@@ -60,6 +62,11 @@ JIT functions
    of particular local variables, for example if you want to force the
    use of single precision floats at some point.  In general, we recommend
    you let Numba's compiler infer the types of local variables by itself.
+
+   Here is an example with two signatures::
+
+      @jit(["int32(int32)", "float32(float32)"], nopython=True)
+      def f(x): ...
 
    Not putting any parentheses after the decorator is equivalent to calling
    the decorator without any arguments, i.e.::

@@ -184,7 +184,8 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         assert not kws, "kwargs not handled"
         args = tuple([self.typeof_pyval(a) for a in args])
         sigs = [cr.signature for cr in self._compileinfos.values()]
-        resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
+        res = resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
+        print("res =", res)
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
