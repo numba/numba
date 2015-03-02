@@ -23,8 +23,21 @@ class ForbiddenConstruct(LoweringError):
     pass
 
 
+def transform_arg_name(arg):
+    if isinstance(arg, types.Record):
+        return "Record_%s" % arg._code
+    elif (isinstance(arg, types.Array) and
+          isinstance(arg.dtype, types.Record)):
+        c = '' and arg.const or 'non'
+        return "array(Record_%s, %sd, %s, %sconst)" % \
+            (arg.dtype._code, arg.ndim, arg.layout, c)
+    else:
+        return str(arg)
+
+
 def default_mangler(name, argtypes):
-    codedargs = '.'.join(str(a).replace(' ', '_') for a in argtypes)
+    codedargs = '.'.join(transform_arg_name(a).replace(' ', '_')
+                             for a in argtypes)
     return '.'.join([name, codedargs])
 
 
@@ -221,10 +234,10 @@ class BaseLower(object):
 
     def lower(self):
         # Init argument variables
-        fnargs = self.call_conv.get_arguments(self.function)
+        rawfnargs = self.call_conv.get_arguments(self.function)
+        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
+        fnargs = arginfo.from_arguments(self.builder, rawfnargs)
         for ak, av in zip(self.fndesc.args, fnargs):
-            at = self.typeof(ak)
-            av = self.context.get_argument_value(self.builder, at, av)
             av = self.init_argument(av)
             self.storevar(av, ak)
 
@@ -539,16 +552,12 @@ class Lower(BaseLower):
         elif expr.op == 'pair_first':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            item = self.context.pair_first(self.builder, val, ty)
-            return self.context.get_argument_value(self.builder,
-                                                   ty.first_type, item)
+            return self.context.pair_first(self.builder, val, ty)
 
         elif expr.op == 'pair_second':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            item = self.context.pair_second(self.builder, val, ty)
-            return self.context.get_argument_value(self.builder,
-                                                   ty.second_type, item)
+            return self.context.pair_second(self.builder, val, ty)
 
         elif expr.op in ('getiter', 'iternext'):
             val = self.loadvar(expr.value.name)

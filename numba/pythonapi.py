@@ -798,7 +798,7 @@ class PythonAPI(object):
                 self.builder.ret(ptr)
 
             ltyp = self.context.get_value_type(typ)
-            val = cgutils.init_record_by_ptr(self.builder, ltyp, ptr)
+            val = self.builder.bitcast(ptr, ltyp)
 
             def dtor():
                 self.release_record_buffer(buf_as_voidptr)
@@ -885,18 +885,18 @@ class PythonAPI(object):
 
         elif isinstance(typ, types.Optional):
             isnone = builder.icmp(lc.ICMP_EQ, obj, self.borrow_none())
+            noneval = self.context.make_optional_none(builder, typ.type)
+            retptr = cgutils.alloca_once(builder, noneval.type)
             with cgutils.ifelse(builder, isnone) as (then, orelse):
                 with then:
-                    noneval = self.context.make_optional_none(builder, typ.type)
-                    ret = cgutils.alloca_once(builder, noneval.type)
-                    builder.store(noneval, ret)
+                    builder.store(noneval, retptr)
 
                 with orelse:
                     val = self.to_native_value(obj, typ.type)
                     just = self.context.make_optional_value(builder,
                                                             typ.type, val)
-                    builder.store(just, ret)
-            return ret
+                    builder.store(just, retptr)
+            return builder.load(retptr)
 
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
             return self.to_native_tuple(obj, typ)
@@ -982,9 +982,8 @@ class PythonAPI(object):
         elif isinstance(typ, types.Record):
             # Note we will create a copy of the record
             # This is the only safe way.
-            pdata = cgutils.get_record_data(self.builder, val)
-            size = Constant.int(Type.int(), pdata.type.pointee.count)
-            ptr = self.builder.bitcast(pdata, Type.pointer(Type.int(8)))
+            size = Constant.int(Type.int(), val.type.pointee.count)
+            ptr = self.builder.bitcast(val, Type.pointer(Type.int(8)))
             # Note: this will only work for CPU mode
             #       The following requires access to python object
             dtype_addr = Constant.int(self.py_ssize_t, id(typ.dtype))

@@ -3,29 +3,56 @@ Travis Oliphant <travis@continuum.io>
 
 If you have contributed to Numba add your name to this file:
 
+ahmadia                                  <aron@ahmadia.net>
 Alberto Valverde                         <alberto@meteogrid.com>
 Antoine Pitrou                           <antoine@python.org>
+Bengt Lüers                              <Bengt.Lueers@gmail.com>
+Björn Linse                              <bjorn.linse@gmail.com>
+Christoph Gohlke                         <cgohlke@uci.edu>
+Dag Sverre Seljebotn                     <dagss@student.matnat.uio.no>
 Dan Christensen                          <jdc@uwo.ca>
 Dan Yamins                               <dyamins@gmail.com>
+David Warde-Farley                       <wardefar@iro.umontreal.ca>
+Falcon Dai                               <dai@uchicago.edu>
+Francesc Alted                           <francesc@continuum.io>
+Frederic                                 <nouiz@nouiz.org>
+Gaëtan de Menten                         <gdementen@gmail.com>
+GFKjunior                                <xacadena@gmail.com>
 Graham Markall                           <graham.markall@continuum.io>
 Hernan Grecco                            <hernan.grecco@gmail.com>
 Ilan Schnell                             <ilanschnell@gmail.com>
 James Bergstra                           <james.bergstra@gmail.com>
+Jay Bourque                              <jay.bourque@continuum.io>
+Jens Timmerman                           <jens.timmerman@gmail.com>
+Jim Garrison                             <jim@garrison.cc>
 Jon Riehl                                <jon.riehl@gmail.com>          (Resilient Science)
 Juan Luis Cano Rodríguez                 <juanlu001@gmail.com>
+kichik                                   <kichik@gmail.com>
 Lars Buitinck                            <larsmans@gmail.com>
+Laurent Fasnacht                         <l@libres.ch>
+liuzhenhai                               <1989lzhh@gmail.com>
 Maggie Mari                              <maggie.mari@continuum.io>
+majidaldo                                <majidaldosari-github@yahoo.com>
 Mark Florisson                           <markflorisson88@gmail.com>
 Mark Wiebe                               <mwwiebe@gmail.com>
+Martin Fiers                             <martin.fiers@intec.ugent.be>
 Martin Spacek                            <git@mspacek.mm.st>
 Meador Inge
-Ondřej Čertík                            <ondrej.certik@gmail.com>
-Phillip Cloud                            <cpcloud@gmail.com>
-Siu Kwan Lam                             <michael.lam.sk@gmail.com>
-Thomas Kluyver                           <takowl@gmail.com>
-Travis E. Oliphant                       <teoliphant@gmail.com>
-Yaroslav Halchenko                       <debian@onerussian.com>
-timo                                     <timonator@perpetuum-immobile.de>
-Jay Bourque                              <jay.bourque@continuum.io>
-Stan Seibert                             <stan.seibert@continuum.io>
+Michael Joyce                            <mltjoyce@gmail.com>
 Matthew Goodman                          <meawoppl@gmail.com>
+Ondřej Čertík                            <ondrej.certik@gmail.com>
+Óscar Villellas Guillén                  <oscar.villellas@continuum.io>
+Pablo Jiménez Mateo                      <gef3233@gmail.com>
+Phillip Cloud                            <cpcloud@gmail.com>
+Scott Chadde                             <scott.chadde@continuum.io>
+Shiquan Wang                             <shiquanwang@gmail.com>
+Siu Kwan Lam                             <michael.lam.sk@gmail.com>
+Stan Seibert                             <stan.seibert@continuum.io>
+Thomas Kluyver                           <takowl@gmail.com>
+timo                                     <timonator@perpetuum-immobile.de>
+Travis E. Oliphant                       <teoliphant@gmail.com>
+Uri Laserson                             <laserson@cloudera.com>
+Valentin Haenel                          <valentin.haenel@gmx.de>
+Yaroslav Halchenko                       <debian@onerussian.com>
+Yauhen Yakimovich                        <eugeny.yakimovitch@gmail.com>
+Yuval Langer                             <yuval.langer@gmail.com>
