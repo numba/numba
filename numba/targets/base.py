@@ -841,9 +841,10 @@ class BaseContext(object):
             api.decref(res)
             return self.get_dummy_value()
         else:
-            nativeresult = api.to_native_value(res, retty)
+            native = api.to_native_value(res, retty)
+            assert native.cleanup is None
             api.decref(res)
-            return nativeresult
+            return native.value
 
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module

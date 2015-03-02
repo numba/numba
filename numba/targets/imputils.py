@@ -87,9 +87,10 @@ def python_attr_impl(cls, attr, atyp):
         if isinstance(atyp, types.Method):
             return aval
         else:
-            nativevalue = api.to_native_value(aval, atyp)
+            native = api.to_native_value(aval, atyp)
+            assert native.cleanup is None
             api.decref(aval)
-            return nativevalue
+            return native.value
 
     return imp
 
