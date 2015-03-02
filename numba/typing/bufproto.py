@@ -1,0 +1,56 @@
+"""
+Typing support for the buffer protocol (PEP 3118).
+"""
+
+import array
+import sys
+
+from numba import types
+
+
+_pep3118_int_types = set('bBhHiIlLqQnN')
+
+_pep3118_scalar_map = {
+    'f': types.float32,
+    'd': types.float64,
+    'Zf': types.complex64,
+    'Zd': types.complex128,
+    }
+
+_type_map = {
+    bytearray: types.ByteArray,
+    array.array: types.PyArray,
+    }
+
+if sys.version_info >= (3,):
+    _type_map[bytes] = types.Bytes
+
+
+def decode_pep3118_format(fmt, itemsize):
+    """
+    Return the Numba type for an item with format string *fmt* and size
+    *itemsize* (in bytes).
+    """
+    if fmt in _pep3118_int_types:
+        # Determine int width and signedness
+        name = 'int%d' % (itemsize * 8,)
+        if fmt.isupper():
+            name = 'u' + name
+        return types.Integer(name)
+    try:
+        return _pep3118_scalar_map[fmt]
+    except KeyError:
+        raise ValueError("unsupported PEP 3118 format %r" % (format,))
+
+
+def get_type_class(typ):
+    """
+    Get the Numba type class for buffer-compatible Python *typ*.
+    """
+    try:
+        # Look up special case.
+        return _type_map[typ]
+    except KeyError:
+        # Fall back on generic one.
+        return types.Buffer
+

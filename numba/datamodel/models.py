@@ -451,6 +451,9 @@ class PairModel(StructModel):
 
 @register_default(types.Array)
 @register_default(types.Buffer)
+@register_default(types.ByteArray)
+@register_default(types.Bytes)
+@register_default(types.PyArray)
 class ArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
@@ -665,5 +668,3 @@ def handle_numpy_flat_type(dmm, ty):
         return CContiguousFlatIter(dmm, ty)
     else:
         return FlatIter(dmm, ty)
-
-

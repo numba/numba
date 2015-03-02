@@ -633,6 +633,9 @@ class Record(Type):
 
 
 class ArrayIterator(IteratorType):
+    """
+    Type class for iterators of array and buffer objects.
+    """
 
     def __init__(self, array_type):
         self.array_type = array_type
@@ -645,44 +648,86 @@ class ArrayIterator(IteratorType):
         super(ArrayIterator, self).__init__(name, param=True)
 
 
-class Buffer(Type):
+class Buffer(IterableType):
     """
     Type class for objects providing the buffer protocol.
+    Derived classes exist for more specific cases.
     """
     mutable = True
-
-    def __init__(self, dtype, ndim, layout):
-        self.dtype = dtype
-        self.ndim = ndim
-        self.layout = layout
-        name = "buffer(%s, %sd, %s)" % (dtype, ndim, layout)
-        super(Buffer, self).__init__(name, param=True)
-
-
-class Array(IterableType):
-    """
-    Type class for Numpy arrays.
-    """
-    mutable = True
+    slice_is_copy = False
 
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
-    def __init__(self, dtype, ndim, layout, const=False):
-        if isinstance(dtype, Array):
-            raise TypeError("Array dtype cannot be Array")
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+        if isinstance(dtype, Buffer):
+            raise TypeError("Buffer dtype cannot be buffer")
         if layout not in self.LAYOUTS:
             raise ValueError("Invalid layout '%s'" % layout)
-
         self.dtype = dtype
         self.ndim = ndim
         self.layout = layout
+        if readonly:
+            self.mutable = False
+        if name is None:
+            type_name = self.__class__.__name__.lower()
+            if readonly:
+                type_name = "readonly %s" % type_name
+            name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
+        super(Buffer, self).__init__(name, param=True)
+        self.iterator_type = ArrayIterator(self)
+
+    def copy(self, dtype=None, ndim=None, layout=None):
+        if dtype is None:
+            dtype = self.dtype
+        if ndim is None:
+            ndim = self.ndim
+        if layout is None:
+            layout = self.layout
+        return self.__class__(dtype=dtype, ndim=ndim, layout=layout,
+                              readonly=not self.mutable)
+
+    @property
+    def key(self):
+        return self.dtype, self.ndim, self.layout
+
+
+class Bytes(Buffer):
+    """
+    Type class for Python 3.x bytes objects.
+    """
+    mutable = False
+    # Actually true but doesn't matter since bytes is immutable
+    slice_is_copy = False
+
+
+class ByteArray(Buffer):
+    """
+    Type class for bytearray objects.
+    """
+    slice_is_copy = True
+
+
+class PyArray(Buffer):
+    """
+    Type class for array.array objects.
+    """
+    slice_is_copy = True
+
+
+class Array(Buffer):
+    """
+    Type class for Numpy arrays.
+    """
+
+    def __init__(self, dtype, ndim, layout, const=False):
         self.const = const
+        if const:
+            self.mutable = False
         name = "array(%s, %sd, %s, %s)" % (dtype, ndim, layout,
                                            {True: 'const',
                                             False: 'nonconst'}[const])
-        super(Array, self).__init__(name, param=True)
-        self.iterator_type = ArrayIterator(self)
+        super(Array, self).__init__(dtype, ndim, layout, name=name)
 
     def post_init(self):
         """

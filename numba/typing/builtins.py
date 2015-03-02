@@ -384,13 +384,13 @@ class GetItemUniTuple(AbstractTemplate):
 
 
 @builtin
-class GetItemArray(AbstractTemplate):
+class GetItemBuffer(AbstractTemplate):
     key = "getitem"
 
     def generic(self, args, kws):
         assert not kws
         [ary, idx] = args
-        if not isinstance(ary, types.Array):
+        if not isinstance(ary, types.Buffer):
             return
 
         idx = normalize_index(idx)
@@ -420,19 +420,24 @@ class GetItemArray(AbstractTemplate):
         else:
             raise Exception("unreachable: index type of %s" % idx)
 
+        if isinstance(res, types.Buffer) and res.slice_is_copy:
+            # Avoid view semantics when the original type creates a copy
+            # when slicing.
+            return
+
         return signature(res, ary, idx)
 
 
 @builtin
-class SetItemArray(AbstractTemplate):
+class SetItemBuffer(AbstractTemplate):
     key = "setitem"
 
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args
-        if isinstance(ary, types.Array):
-            if ary.const:
-                raise TypeError("Constant array")
+        if isinstance(ary, types.Buffer):
+            if not ary.mutable:
+                raise TypeError("Immutable array")
             return signature(types.none, ary, normalize_index(idx), ary.dtype)
 
 
@@ -443,7 +448,7 @@ class Len(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         (val,) = args
-        if isinstance(val, (types.Buffer, types.Array)):
+        if isinstance(val, types.Buffer):
             return signature(types.intp, val)
 
 #-------------------------------------------------------------------------------
