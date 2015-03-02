@@ -3,7 +3,10 @@ import re
 from llvmlite.llvmpy import core as lc
 from llvmlite import ir as llvmir
 from numba import typing, types, utils, cgutils
+from numba.utils import cached_property
+from numba import datamodel
 from numba.targets.base import BaseContext
+from numba.targets.callconv import MinimalCallConv
 from . import codegen
 from .hlc import DATALAYOUT
 
@@ -37,6 +40,23 @@ SPIR_GENERIC_ADDRSPACE = 4
 SPIR_VERSION = (2, 0)
 
 
+class GenericPointerModel(datamodel.PrimitiveModel):
+    def __init__(self, dmm, fe_type):
+        adrsp = SPIR_GENERIC_ADDRSPACE
+        be_type = dmm.lookup(fe_type.dtype).get_data_type().as_pointer(adrsp)
+        super(GenericPointerModel, self).__init__(dmm, fe_type, be_type)
+
+
+def _init_data_model_manager():
+    dmm = datamodel.default_manager.copy()
+    dmm.register(types.CPointer, GenericPointerModel)
+    return dmm
+
+
+hsa_data_model_manager = _init_data_model_manager()
+
+
+
 class HSATargetContext(BaseContext):
     implement_powi_as_math_call = True
     generic_addrspace = SPIR_GENERIC_ADDRSPACE
@@ -48,6 +68,12 @@ class HSATargetContext(BaseContext):
         self.insert_func_defn(mathimpl.registry.functions)
         self._internal_codegen = codegen.JITHSACodegen("numba.hsa.jit")
         self._target_data = DATALAYOUT[utils.MACHINE_BITS]
+        # Override data model manager
+        self.data_model_manager = hsa_data_model_manager
+
+    @cached_property
+    def call_conv(self):
+        return HSACallConv(self)
 
     def jit_codegen(self):
         return self._internal_codegen
@@ -79,33 +105,36 @@ class HSATargetContext(BaseContext):
 
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
+        arginfo = self.get_arg_packer(argtypes)
 
-        llargtys = []
-
-        for arg in argtypes:
-            lty = self.get_argument_type(arg)
+        def sub_gen_with_global(lty):
             if isinstance(lty, llvmir.PointerType):
-                gptr = llvmir.PointerType(lty.pointee,
-                                          addrspace=SPIR_GLOBAL_ADDRSPACE)
-                llargtys.append(gptr)
-            else:
-                llargtys.append(lty)
+                return (lty.pointee.as_pointer(SPIR_GLOBAL_ADDRSPACE),
+                        lty.addrspace)
+            return lty, None
 
+        llargtys, changed = zip(*map(sub_gen_with_global,
+                                     arginfo.argument_types))
         fnty = lc.Type.function(lc.Type.void(), llargtys)
         wrappername = 'hsaPy_{name}'.format(name=func.name)
         wrapper = module.add_function(fnty, name=wrappername)
 
         builder = lc.Builder.new(wrapper.append_basic_block(''))
 
-        callargs = []
-        for at, av in zip(argtypes, wrapper.args):
-            av = self.get_argument_value(builder, at, av)
-            callargs.append(av)
+        # Adjust address space of each kernel argument
+        fixed_args = []
+        for av, adrsp in zip(wrapper.args, changed):
+            if adrsp is not None:
+                casted = self.addrspacecast(builder, av, adrsp)
+                fixed_args.append(casted)
+            else:
+                fixed_args.append(av)
+
+        callargs = arginfo.from_arguments(builder, fixed_args)
 
         # XXX handle error status
-        status, _ = self.call_function(builder, func, types.void, argtypes,
-                                       callargs)
-
+        status, _ = self.call_conv.call_function(builder, func, types.void,
+                                                 argtypes, callargs)
         builder.ret_void()
         return wrapper
 
@@ -115,33 +144,6 @@ class HSATargetContext(BaseContext):
         if fndesc.llvm_func_name.startswith('hsapy_devfn'):
             ret.calling_convention = CC_SPIR_FUNC
         return ret
-
-
-    def call_function(self, builder, callee, resty, argtys, args, env=None):
-        """
-        Call the Numba-compiled *callee*, using the same calling
-        convention as in get_function_type().
-        """
-        assert env is None
-        retty = callee.args[0].type.pointee
-        retval = cgutils.alloca_once(builder, retty)
-        # initialize return value
-        builder.store(lc.Constant.null(retty), retval)
-        args = [self.get_value_as_argument(builder, ty, arg)
-                for ty, arg in zip(argtys, args)]
-        realargs = [retval] + list(args)
-        # Fix addrspace
-        fixed = []
-        for arg, argty in zip(realargs, callee.function_type.args):
-            if isinstance(arg.type, llvmir.PointerType):
-                if arg.type.addrspace != argty.addrspace:
-                    arg = builder.bitcast(arg, argty)
-
-            fixed.append(arg)
-
-        code = builder.call(callee, fixed)
-        status = self.get_return_status(builder, code)
-        return status, builder.load(retval)
 
     def make_constant_array(self, builder, typ, ary):
         """
@@ -268,3 +270,25 @@ def gen_arg_base_type(fn):
     consts = [lc.MetaDataString.get(mod, str(a)) for a in fnty.args]
     name = lc.MetaDataString.get(mod, "kernel_arg_base_type")
     return lc.MetaData.get(mod, [name] + consts)
+
+
+class HSACallConv(MinimalCallConv):
+
+    def call_function(self, builder, callee, resty, argtys, args, env=None):
+        """
+        Call the Numba-compiled *callee*.
+        """
+        assert env is None
+        retty = callee.args[0].type.pointee
+        retvaltmp = cgutils.alloca_once(builder, retty)
+        # initialize return value
+        builder.store(cgutils.get_null_value(retty), retvaltmp)
+
+        arginfo = self.context.get_arg_packer(argtys)
+        args = arginfo.as_arguments(builder, args)
+        realargs = [retvaltmp] + list(args)
+        code = builder.call(callee, realargs)
+        status = self._get_return_status(builder, code)
+        retval = builder.load(retvaltmp)
+        out = self.context.get_returned_value(builder, resty, retval)
+        return status, out

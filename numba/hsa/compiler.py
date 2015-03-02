@@ -182,19 +182,10 @@ class HSAKernel(HSAKernelBase):
         self.assembly, self.binary = self._finalize()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
-        self._arginfos = [ArgumentInfo(argty) for argty in self.argument_types]
         self._argloc = []
         # Calculate argument position
         self._injectedargsize = self.INJECTED_NARG * ctypes.sizeof(
             ctypes.c_void_p)
-        kas = 0
-        for ai in self._arginfos:
-            padding = ai.calc_padding(kas)
-            self._argloc.append(padding + kas + self._injectedargsize)
-            kas += padding + ai.size
-        kernargsize = kas + self._injectedargsize
-        self._kernarg_types = (ctypes.c_byte * kernargsize)
-
         # cached finalized program
         self._cacheprog = _CachedProgram(entry_name=self.entry_name,
                                          binary=self.binary)
@@ -210,9 +201,11 @@ class HSAKernel(HSAKernelBase):
         Bind kernel to device
         """
         ctx, entry = self._cacheprog.get()
-        assert entry.code_desc._id.kernarg_segment_byte_size == ctypes.sizeof(
-            self._kernarg_types)
-        kernargs = entry.kernarg_region.allocate(self._kernarg_types)
+        # assert entry.code_desc._id.kernarg_segment_byte_size == ctypes.sizeof(
+        #     self._kernarg_types)
+        kernarg_type = (ctypes.c_byte *
+                        entry.code_desc._id.kernarg_segment_byte_size)
+        kernargs = entry.kernarg_region.allocate(kernarg_type)
         # Inject dummy argument
         injectargs = ctypes.cast(kernargs,
                                  ctypes.POINTER(ctypes.c_void_p *
@@ -225,12 +218,30 @@ class HSAKernel(HSAKernelBase):
     def __call__(self, *args):
         ctx, code_desc, kernargs, kernarg_region = self.bind()
 
-        # Insert kernel arguments
-        keepalive = []
-        for byteoffset, arginfo, argval in zip(self._argloc, self._arginfos,
-                                               args):
-            keepalive.append(arginfo.assign(kernargs, byteoffset, argval))
+        # Unpack pyobject values into ctypes scalar values
+        expanded_values = []
+        for ty, val in zip(self.argument_types, args):
+            _unpack_argument(ty, val, expanded_values)
 
+        # Insert kernel arguments
+        base = self._injectedargsize
+        for av in expanded_values:
+            # Adjust for alignemnt
+            align = ctypes.sizeof(av)
+            pad = _calc_padding_for_alignment(align, base)
+            base += pad
+            # Move to offset
+            offseted = ctypes.addressof(kernargs) + base
+            asptr = ctypes.cast(offseted, ctypes.POINTER(type(av)))
+            # Assign value
+            asptr[0] = av
+            # Increment offset
+            base += align
+
+        assert base == ctypes.sizeof(kernargs), \
+            "Kernel argument size is invalid"
+
+        # Actual Kernel launch
         qq = ctx.default_queue
 
         # Dispatch
@@ -241,101 +252,64 @@ class HSAKernel(HSAKernelBase):
         kernarg_region.free(kernargs)
 
 
-class ArgumentInfo(object):
-    def __init__(self, ty):
-        self.byref = False
-        if isinstance(ty, types.Array):
-            self._arytype = make_array_ctype(ndim=ty.ndim)
-            self.ctype = ctypes.c_void_p
-            self.byref = True
 
-            def ctor(val):
-                cval = self._arytype(parent=None,
-                                     data=val.ctypes.data,
-                                     shape=val.ctypes.shape,
-                                     strides=val.ctypes.strides)
-                return cval
+def _unpack_argument(ty, val, kernelargs):
+    """
+    Convert arguments to ctypes and append to kernelargs
+    """
+    if isinstance(ty, types.Array):
+        c_intp = ctypes.c_ssize_t
 
-            self.ctor = ctor
+        parent = ctypes.c_void_p(0)
+        nitems = c_intp(val.size)
+        itemsize = c_intp(val.dtype.itemsize)
+        data = ctypes.c_void_p(val.ctypes.data)
+        kernelargs.append(parent)
+        kernelargs.append(nitems)
+        kernelargs.append(itemsize)
+        kernelargs.append(data)
+        for ax in range(val.ndim):
+            kernelargs.append(c_intp(val.shape[ax]))
+        for ax in range(val.ndim):
+            kernelargs.append(c_intp(val.strides[ax]))
 
-        elif ty in REAL_TYPE_MAP:
-            self.ctype = self.ctor = REAL_TYPE_MAP[ty]
+    elif isinstance(ty, types.Integer):
+        cval = getattr(ctypes, "c_%s" % ty)(val)
+        kernelargs.append(cval)
 
-        elif ty in INTEGER_TYPE_MAP:
-            self.ctype = self.ctor = INTEGER_TYPE_MAP[ty]
+    elif ty == types.float64:
+        cval = ctypes.c_double(val)
+        kernelargs.append(cval)
 
-        elif ty in COMPLEX_TYPE_MAP:
-            self.byref = True
-            self.ctype = ctypes.c_void_p
-            self.ctor = COMPLEX_TYPE_MAP[ty]
+    elif ty == types.float32:
+        cval = ctypes.c_float(val)
+        kernelargs.append(cval)
 
-        else:
-            raise TypeError(ty)
+    elif ty == types.boolean:
+        cval = ctypes.c_uint8(int(val))
+        kernelargs.append(cval)
 
-        self.align = ctypes.sizeof(self.ctype)
-        self.size = self.align
+    elif ty == types.complex64:
+        kernelargs.append(ctypes.c_float(val.real))
+        kernelargs.append(ctypes.c_float(val.imag))
 
-    def calc_padding(self, base):
-        rmdr = int(base) % self.align
-        if rmdr == 0:
-            return 0
-        else:
-            return self.align - rmdr
+    elif ty == types.complex128:
+        kernelargs.append(ctypes.c_double(val.real))
+        kernelargs.append(ctypes.c_double(val.imag))
 
-    def assign(self, bytestorage, offset, val):
-        keepalive = cval = self.ctor(val)
-        if self.byref:
-            cval = ctypes.c_void_p(ctypes.addressof(cval))
-        ptr = ctypes.c_void_p(ctypes.addressof(bytestorage) + offset)
-        casted = ctypes.cast(ptr, ctypes.POINTER(self.ctype))
-        casted[0] = cval
-        return keepalive
+    else:
+        raise NotImplementedError(ty, val)
 
 
-class _BaseComplex(ctypes.Structure):
-    def __init__(self, real_or_cmpl=0, imag=0):
-        if isinstance(real_or_cmpl, float):
-            self.real = real_or_cmpl
-            self.imag = imag
-        else:
-            self.real = real_or_cmpl.real
-            self.imag = real_or_cmpl.imag
-
-
-class Complex(_BaseComplex):
-    _fields_ = [
-        ('real', ctypes.c_float),
-        ('imag', ctypes.c_float),
-    ]
-
-
-class DoubleComplex(_BaseComplex):
-    _fields_ = [
-        ('real', ctypes.c_double),
-        ('imag', ctypes.c_double),
-    ]
-
-
-INTEGER_TYPE_MAP = {
-    types.int8: ctypes.c_int8,
-    types.int16: ctypes.c_int16,
-    types.int32: ctypes.c_int32,
-    types.int64: ctypes.c_int64,
-    types.uint8: ctypes.c_uint8,
-    types.uint16: ctypes.c_uint16,
-    types.uint32: ctypes.c_uint32,
-    types.uint64: ctypes.c_uint64,
-}
-
-REAL_TYPE_MAP = {
-    types.float32: ctypes.c_float,
-    types.float64: ctypes.c_double,
-}
-
-COMPLEX_TYPE_MAP = {
-    types.complex64: Complex,
-    types.complex128: DoubleComplex,
-}
+def _calc_padding_for_alignment(align, base):
+    """
+    Returns byte padding required to move the base pointer into proper alignment
+    """
+    rmdr = int(base) % align
+    if rmdr == 0:
+        return 0
+    else:
+        return align - rmdr
 
 
 class AutoJitHSAKernel(HSAKernelBase):
