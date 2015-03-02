@@ -170,6 +170,14 @@ class TestDispatcher(TestCase):
             jit("(intc,)", forceobj=True)(add)
         self.assertIn(tmpl % 1, str(cm.exception))
 
+    def test_matching_error_message(self):
+        f = jit("(intc,intc)")(add)
+        with self.assertRaises(TypeError) as cm:
+            f(1j, 1j)
+        self.assertEqual(str(cm.exception),
+                         "No matching definition for argument type(s) "
+                         "complex128, complex128")
+
     def test_recompile(self):
         closure = 1
 

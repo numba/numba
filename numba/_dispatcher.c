@@ -441,20 +441,36 @@ int typecode(DispatcherObject *dispatcher, PyObject *val) {
 }
 
 static
-void explain_ambiguous(PyObject *dispatcher, PyObject *args, PyObject *kws) {
+void explain_issue(PyObject *dispatcher, PyObject *args, PyObject *kws,
+                   const char *method_name, const char *default_msg)
+{
     PyObject *callback, *result;
-    callback = PyObject_GetAttrString(dispatcher, "_explain_ambiguous");
+    callback = PyObject_GetAttrString(dispatcher, method_name);
     if (!callback) {
-        PyErr_SetString(PyExc_TypeError, "Ambigous overloading");
+        PyErr_SetString(PyExc_TypeError, default_msg);
         return;
     }
     result = PyObject_Call(callback, args, kws);
+    Py_DECREF(callback);
     if (result != NULL) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "_explain_ambiguous must raise an exception");
+        PyErr_Format(PyExc_RuntimeError, "%s must raise an exception",
+                     method_name);
         Py_DECREF(result);
     }
-    Py_XDECREF(callback);
+}
+
+static
+void explain_ambiguous(PyObject *dispatcher, PyObject *args, PyObject *kws)
+{
+    explain_issue(dispatcher, args, kws, "_explain_ambiguous",
+                  "Ambigous overloading");
+}
+
+static
+void explain_matching_error(PyObject *dispatcher, PyObject *args, PyObject *kws)
+{
+    explain_issue(dispatcher, args, kws, "_explain_matching_error",
+                  "No matching definition");
 }
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
@@ -589,7 +605,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
             retval = call_cfunc(self->fallbackdef, args, kws);
         } else {
             /* Raise TypeError */
-            PyErr_SetString(PyExc_TypeError, "No matching definition");
+            explain_matching_error((PyObject *) self, args, kws);
             retval = NULL;
         }
     } else if (self->can_compile) {
@@ -597,7 +613,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         retval = compile_and_invoke(self, args, kws);
     } else {
         /* Ambiguous */
-        explain_ambiguous((PyObject*)self, args, kws);
+        explain_ambiguous((PyObject *) self, args, kws);
         retval = NULL;
     }
 
