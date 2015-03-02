@@ -20,16 +20,16 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
-def jit(*signatures, **options):
+def jit(signature_or_function=None, locals={}, target='cpu', **options):
     """
     This decorator is used to compile a Python function into native code.
     
     Args
     -----
-    signatures:
-        The (optional) list of signatures to be compiled.  If not passed,
-        required signatures will be compiled when the decorated function is
-        called, depending on the argument values.
+    signature:
+        The (optional) signature or list of signatures to be compiled.
+        If not passed, required signatures will be compiled when the
+        decorated function is called, depending on the argument values.
         As a convenience, you can directly pass the function to be compiled
         instead.
 
@@ -74,7 +74,7 @@ def jit(*signatures, **options):
     --------
     The function can be used in the following ways:
 
-    1) jit(*signatures, target='cpu', **targetoptions) -> jit(function)
+    1) jit(signatures, target='cpu', **targetoptions) -> jit(function)
 
         Equivalent to:
 
@@ -87,8 +87,12 @@ def jit(*signatures, **options):
 
         Example:
 
-            @jit("void(int32, float32)")
+            @jit("int32(int32, int32)")
             def foo(x, y):
+                return x + y
+
+            @jit(["int32(int32, int32)", "float32(float32, float32)"])
+            def bar(x, y):
                 return x + y
 
     2) jit(function, target='cpu', **targetoptions) -> dispatcher
@@ -106,26 +110,28 @@ def jit(*signatures, **options):
                 return x + y
 
     """
-    locals = options.pop('locals', {})
-    target = options.pop('target', 'cpu')
 
     # Handle signature
-    if not signatures:
-        # No signature, no function in args
+    if signature_or_function is None:
+        # No signature, no function
         def configured_jit(func):
             return jit(func, locals=locals, target=target, **options)
         return configured_jit
-    elif len(signatures) == 1 and not sigutils.is_signature(signatures[0]):
+    elif isinstance(signature_or_function, list):
+        # A list of signatures is passed
+        return _jit(signature_or_function, locals=locals, target=target,
+                    targetoptions=options)
+    elif sigutils.is_signature(signature_or_function):
+        # A single signature is passed
+        return _jit([signature_or_function], locals=locals, target=target,
+                    targetoptions=options)
+    else:
         # A function is passed
-        pyfunc = signatures[0]
+        pyfunc = signature_or_function
         dispatcher = registry.target_registry[target]
         dispatcher = dispatcher(py_func=pyfunc, locals=locals,
                                 targetoptions=options)
         return dispatcher
-    else:
-        # Signatures are provided
-        return _jit(signatures, locals=locals, target=target,
-                    targetoptions=options)
 
 
 def _jit(sigs, locals, target, targetoptions):

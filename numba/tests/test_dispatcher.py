@@ -137,7 +137,7 @@ class TestDispatcher(TestCase):
         # Approximate match (unsafe conversion)
         self.assertPreciseEqual(f(1.5, 2.5), 3)
         self.assertEqual(len(f.overloads), 1, f.overloads)
-        f = jit("(int64,int64)", "(float64,float64)")(add)
+        f = jit(["(int64,int64)", "(float64,float64)"])(add)
         # Exact signature matches
         self.assertPreciseEqual(f(1, 2), 3)
         self.assertPreciseEqual(f(1.5, 2.5), 4.0)
@@ -149,7 +149,7 @@ class TestDispatcher(TestCase):
         self.assertIn("No matching definition", str(cm.exception))
         self.assertEqual(len(f.overloads), 2, f.overloads)
         # A more interesting one...
-        f = jit("(float32,float32)", "(float64,float64)")(add)
+        f = jit(["(float32,float32)", "(float64,float64)"])(add)
         self.assertPreciseEqual(f(np.float32(1), np.float32(2**-25)), 1.0)
         self.assertPreciseEqual(f(1, 2**-25), 1.0000000298023224)
 

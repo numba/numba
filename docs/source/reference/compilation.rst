@@ -4,14 +4,15 @@ Compilation
 JIT functions
 -------------
 
-.. decorator:: numba.jit(*signatures, nopython=False, nogil=False, forceobj=False, locals={})
+.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, forceobj=False, locals={})
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters all optional.
 
-   If present, the *signatures* represent the expected :ref:`numba-types`
-   of function arguments and return values.  Each signature can be
-   given in several forms:
+   If present, the *signature* is either a single signature or a list of
+   signatures representing the expected :ref:`numba-types` of function
+   arguments and return values.  Each signature can be given in several
+   forms:
 
    * A tuple of :ref:`numba-types` arguments (for example
      ``(numba.int32, numba.double)``) representing the types of the
@@ -61,6 +62,11 @@ JIT functions
    of particular local variables, for example if you want to force the
    use of single precision floats at some point.  In general, we recommend
    you let Numba's compiler infer the types of local variables by itself.
+
+   Here is an example with two signatures::
+
+      @jit(["int32(int32)", "float32(float32)"], nopython=True)
+      def f(x): ...
 
    Not putting any parentheses after the decorator is equivalent to calling
    the decorator without any arguments, i.e.::
