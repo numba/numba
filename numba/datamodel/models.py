@@ -567,7 +567,7 @@ class CharSeq(DataModel):
         return value
 
 
-class CContiugousFlatIter(StructModel):
+class CContiguousFlatIter(StructModel):
     def __init__(self, dmm, fe_type):
         assert fe_type.array_type.layout == 'C'
         array_type = fe_type.array_type
@@ -578,7 +578,7 @@ class CContiugousFlatIter(StructModel):
                    ('index', types.CPointer(types.intp)),
                    ('indices', types.CPointer(types.intp)),
         ]
-        super(CContiugousFlatIter, self).__init__(dmm, fe_type, members)
+        super(CContiguousFlatIter, self).__init__(dmm, fe_type, members)
 
 
 class FlatIter(StructModel):
@@ -661,7 +661,7 @@ class RangeIteratorType(StructModel):
 @register_default(types.NumpyFlatType)
 def handle_numpy_flat_type(dmm, ty):
     if ty.array_type.layout == 'C':
-        return CContiugousFlatIter(dmm, ty)
+        return CContiguousFlatIter(dmm, ty)
     else:
         return FlatIter(dmm, ty)
 
