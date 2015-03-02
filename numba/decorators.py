@@ -110,6 +110,10 @@ def jit(signature_or_function=None, locals={}, target='cpu', **options):
                 return x + y
 
     """
+    if 'argtypes' in options:
+        raise DeprecationWarning("Deprecatd keyword argument `argtypes`. "
+                                 "Signatures should be passed as the first "
+                                 "positional argument.")
 
     # Handle signature
     if signature_or_function is None:
