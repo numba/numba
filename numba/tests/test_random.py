@@ -784,14 +784,15 @@ class TestRandom(TestCase):
                 self.assertFalse(np.all(a == b))
                 self.assertEqual(sorted(a), sorted(b))
                 a = b
-        # Test with an arbitrary buffer-providing object
-        b = a.copy()
-        func(memoryview(b))
-        self.assertFalse(np.all(a == b))
-        self.assertEqual(sorted(a), sorted(b))
-        # Read-only object
-        with self.assertTypingError():
-            func(memoryview(b"xyz"))
+        if sys.version_info >= (2, 7):
+            # Test with an arbitrary buffer-providing object
+            b = a.copy()
+            func(memoryview(b))
+            self.assertFalse(np.all(a == b))
+            self.assertEqual(sorted(a), sorted(b))
+            # Read-only object
+            with self.assertTypingError():
+                func(memoryview(b"xyz"))
 
     def test_random_shuffle(self):
         self._check_shuffle(jit_unary("random.shuffle"), py_state_ptr)
