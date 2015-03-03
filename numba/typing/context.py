@@ -197,7 +197,6 @@ class BaseContext(object):
                 pass
             else:
                 # Object has the buffer protocol
-                # XXX handle .readonly, .c_contiguous, .f_contiguous (3.x)
                 try:
                     dtype = bufproto.decode_pep3118_format(m.format, m.itemsize)
                 except ValueError:
