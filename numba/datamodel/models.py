@@ -227,12 +227,15 @@ class UniTupleModel(DataModel):
     def as_argument(self, builder, value):
         out = []
         for i in range(self._count):
-            out.append(builder.extract_value(value, [i]))
+            v = builder.extract_value(value, [i])
+            v = self._elem_model.as_argument(builder, v)
+            out.append(v)
         return out
 
     def from_argument(self, builder, value):
         out = ir.Constant(self.get_value_type(), ir.Undefined)
         for i, v in enumerate(value):
+            v = self._elem_model.from_argument(builder, v)
             out = builder.insert_value(out, v, [i])
         return out
 

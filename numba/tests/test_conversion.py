@@ -187,35 +187,50 @@ class TestConversion(unittest.TestCase):
         """
         def f(x, y):
             pass
-        # TypeError is for 2.6
+        # The exception raised when passing a negative number
+        # to PyLong_AsUnsignedLongLong
         exc_type = OverflowError if sys.version_info >= (2, 7) else TypeError
 
+        def _refcounts(obj):
+            refs = [sys.getrefcount(obj)]
+            if isinstance(obj, tuple):
+                refs += [_refcounts(v) for v in obj]
+            return refs
+
         cres = compile_isolated(f, (typ, types.uint32))
-        old_refcnt = sys.getrefcount(obj)
+        old_refcnt = _refcounts(obj)
         cres.entry_point(obj, 1)
-        self.assertEqual(sys.getrefcount(obj), old_refcnt)
+        self.assertEqual(_refcounts(obj), old_refcnt)
         with self.assertRaises(exc_type):
             cres.entry_point(obj, -1)
-        self.assertEqual(sys.getrefcount(obj), old_refcnt)
+        self.assertEqual(_refcounts(obj), old_refcnt)
 
         cres = compile_isolated(f, (types.uint32, typ))
-        old_refcnt = sys.getrefcount(obj)
+        old_refcnt = _refcounts(obj)
         cres.entry_point(1, obj)
-        self.assertEqual(sys.getrefcount(obj), old_refcnt)
+        self.assertEqual(_refcounts(obj), old_refcnt)
         with self.assertRaises(exc_type):
             cres.entry_point(-1, obj)
-        self.assertEqual(sys.getrefcount(obj), old_refcnt)
+        self.assertEqual(_refcounts(obj), old_refcnt)
 
-    @unittest.skipIf(sys.version_info < (3,),
-                     "array.array doesn't have the new buffer protocol in 2.x")
     def test_cleanup_buffer(self):
-        self.check_argument_cleanup(types.Buffer(types.intc, 1, 'C'),
-                                    array.array('i', [0]))
+        mem = memoryview(bytearray(b"xyz"))
+        self.check_argument_cleanup(types.Buffer(types.intc, 1, 'C'), mem)
 
     def test_cleanup_record(self):
         dtype = np.dtype([('x', np.float64), ('y', np.float64)])
         recarr = np.zeros(1, dtype=dtype)
         self.check_argument_cleanup(numpy_support.from_dtype(dtype), recarr[0])
+
+    def test_cleanup_tuple(self):
+        mem = memoryview(bytearray(b"xyz"))
+        tp = types.UniTuple(types.Buffer(types.intc, 1, 'C'), 2)
+        self.check_argument_cleanup(tp, (mem, mem))
+
+    def test_cleanup_optional(self):
+        mem = memoryview(bytearray(b"xyz"))
+        tp = types.Optional(types.Buffer(types.intc, 1, 'C'))
+        self.check_argument_cleanup(tp, mem)
 
 
 if __name__ == '__main__':
