@@ -153,5 +153,5 @@ class Random_triangular(ConcreteTemplate):
 class Random_shuffle(AbstractTemplate):
     def generic(self, args, kws):
         arr, = args
-        if isinstance(arr, types.Array) and arr.ndim == 1:
+        if isinstance(arr, types.Buffer) and arr.ndim == 1 and arr.mutable:
             return signature(types.void, arr)

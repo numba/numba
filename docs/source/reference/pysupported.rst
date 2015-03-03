@@ -280,8 +280,9 @@ startup with entropy drawn from the operating system.
 * :func:`random.random`
 * :func:`random.randrange`
 * :func:`random.seed`: with an integer argument only
-* :func:`random.shuffle`: the sequence argument must be a 1D Numpy array;
-  the second (optional) argument is not supported
+* :func:`random.shuffle`: the sequence argument must be a one-dimension
+  Numpy array or buffer-providing object (such as a :class:`bytearray`
+  or :class:`array.array`); the second (optional) argument is not supported
 * :func:`random.uniform`
 * :func:`random.triangular`
 * :func:`random.vonmisesvariate`
