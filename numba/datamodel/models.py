@@ -450,6 +450,7 @@ class PairModel(StructModel):
 
 
 @register_default(types.Array)
+@register_default(types.NestedArray)
 class ArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
