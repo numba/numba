@@ -272,7 +272,6 @@ class GetAttrConstrain(object):
                 msg = "Unknown attribute '%s' for %s %s %s" % args
                 raise TypingError(msg, loc=self.inst.loc)
             else:
-                assert attrty
                 restypes.append(attrty)
         typevars[self.target].add_types(*restypes)
 

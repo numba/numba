@@ -453,6 +453,7 @@ class PairModel(StructModel):
 @register_default(types.Buffer)
 @register_default(types.ByteArray)
 @register_default(types.Bytes)
+@register_default(types.MemoryView)
 @register_default(types.NestedArray)
 @register_default(types.PyArray)
 class ArrayModel(StructModel):

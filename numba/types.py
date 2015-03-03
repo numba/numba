@@ -689,7 +689,19 @@ class Buffer(IterableType):
 
     @property
     def key(self):
-        return self.dtype, self.ndim, self.layout
+        return self.dtype, self.ndim, self.layout, self.mutable
+
+    @property
+    def is_c_contig(self):
+        return self.layout == 'C' or (self.ndim <= 1 and self.layout in 'CF')
+
+    @property
+    def is_f_contig(self):
+        return self.layout == 'F' or (self.ndim <= 1 and self.layout in 'CF')
+
+    @property
+    def is_contig(self):
+        return self.layout in 'CF'
 
 
 class Bytes(Buffer):
@@ -713,6 +725,12 @@ class PyArray(Buffer):
     Type class for array.array objects.
     """
     slice_is_copy = True
+
+
+class MemoryView(Buffer):
+    """
+    Type class for memoryview objects.
+    """
 
 
 class Array(Buffer):
@@ -752,18 +770,6 @@ class Array(Buffer):
     @property
     def key(self):
         return self.dtype, self.ndim, self.layout, self.mutable
-
-    @property
-    def is_c_contig(self):
-        return self.layout == 'C' or (self.ndim == 1 and self.layout in 'CF')
-
-    @property
-    def is_f_contig(self):
-        return self.layout == 'F' or (self.ndim == 1 and self.layout in 'CF')
-
-    @property
-    def is_contig(self):
-        return self.layout in 'CF'
 
 
 class NestedArray(Array):

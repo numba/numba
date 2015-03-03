@@ -4,6 +4,7 @@ Utilities to simplify the boilerplate for native lowering.
 
 from __future__ import print_function, absolute_import, division
 
+import collections
 import functools
 
 from .. import typing, cgutils, types
@@ -25,9 +26,13 @@ def implement(func, *argtys):
 
 def impl_attribute(ty, attr, rtype=None):
     def wrapper(impl):
+        real_impl = impl
+        while hasattr(real_impl, "__wrapped__"):
+            real_impl = real_impl.__wrapped__
+
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = impl(context, builder, typ, value)
+            ret = real_impl(context, builder, typ, value)
             return ret
 
         if rtype is None:
@@ -43,9 +48,13 @@ def impl_attribute(ty, attr, rtype=None):
 
 def impl_attribute_generic(ty):
     def wrapper(impl):
+        real_impl = impl
+        while hasattr(real_impl, "__wrapped__"):
+            real_impl = real_impl.__wrapped__
+
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = impl(context, builder, typ, value, attr)
+            ret = real_impl(context, builder, typ, value, attr)
             return ret
 
         res.signature = typing.signature(types.Any, ty)
@@ -226,7 +235,7 @@ class Registry(object):
         curr_item = item
         while hasattr(curr_item, '__wrapped__'):
             self.attributes.append(curr_item)
-            curr_item=curr_item.__wrapped__
+            curr_item = curr_item.__wrapped__
         return item
 
 

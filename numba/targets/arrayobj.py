@@ -560,6 +560,7 @@ def array_argmax(context, builder, sig, args):
 
 @builtin_attr
 @impl_attribute(types.Kind(types.Array), "shape", types.Kind(types.UniTuple))
+@impl_attribute(types.Kind(types.MemoryView), "shape", types.Kind(types.UniTuple))
 def array_shape(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -568,6 +569,7 @@ def array_shape(context, builder, typ, value):
 
 @builtin_attr
 @impl_attribute(types.Kind(types.Array), "strides", types.Kind(types.UniTuple))
+@impl_attribute(types.Kind(types.MemoryView), "strides", types.Kind(types.UniTuple))
 def array_strides(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -576,6 +578,7 @@ def array_strides(context, builder, typ, value):
 
 @builtin_attr
 @impl_attribute(types.Kind(types.Array), "ndim", types.intp)
+@impl_attribute(types.Kind(types.MemoryView), "ndim", types.intp)
 def array_ndim(context, builder, typ, value):
     return context.get_constant(types.intp, typ.ndim)
 
@@ -585,8 +588,50 @@ def array_ndim(context, builder, typ, value):
 def array_size(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
+    return array.nitems
+
+
+@builtin_attr
+@impl_attribute(types.Kind(types.Array), "itemsize", types.intp)
+@impl_attribute(types.Kind(types.MemoryView), "itemsize", types.intp)
+def array_ndim(context, builder, typ, value):
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+    return array.itemsize
+
+
+@builtin_attr
+@impl_attribute(types.Kind(types.MemoryView), "nbytes", types.intp)
+def array_size(context, builder, typ, value):
+    """
+    nbytes = size * itemsize
+    """
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
     dims = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
-    return reduce(builder.mul, dims[1:], dims[0])
+    return builder.mul(array.nitems, array.itemsize)
+
+
+@builtin_attr
+@impl_attribute(types.Kind(types.MemoryView), "contiguous", types.boolean)
+def array_ndim(context, builder, typ, value):
+    return context.get_constant(types.boolean, typ.is_contig)
+
+@builtin_attr
+@impl_attribute(types.Kind(types.MemoryView), "c_contiguous", types.boolean)
+def array_ndim(context, builder, typ, value):
+    return context.get_constant(types.boolean, typ.is_c_contig)
+
+@builtin_attr
+@impl_attribute(types.Kind(types.MemoryView), "f_contiguous", types.boolean)
+def array_ndim(context, builder, typ, value):
+    return context.get_constant(types.boolean, typ.is_f_contig)
+
+
+@builtin_attr
+@impl_attribute(types.Kind(types.MemoryView), "readonly", types.boolean)
+def array_ndim(context, builder, typ, value):
+    return context.get_constant(types.boolean, not typ.mutable)
 
 
 @builtin_attr

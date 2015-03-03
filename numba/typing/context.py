@@ -94,7 +94,8 @@ class BaseContext(object):
                 raise
 
         ret = attrinfo.resolve(value, attr)
-        assert ret
+        if ret is None:
+            raise KeyError(attr)
         return ret
 
     def resolve_setitem(self, target, index, value):

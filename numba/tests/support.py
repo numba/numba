@@ -256,6 +256,17 @@ def override_config(name, value):
         setattr(config, name, old_value)
 
 
+def compile_function(name, code, globs):
+    """
+    Given a *code* string, compile it with globals *globs* and return
+    the function named *name*.
+    """
+    co = compile(code, "<string>", "exec")
+    ns = {}
+    eval(co, globs, ns)
+    return ns[name]
+
+
 # From CPython
 
 @contextlib.contextmanager

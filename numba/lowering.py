@@ -28,7 +28,7 @@ def transform_arg_name(arg):
         return "Record_%s" % arg._code
     elif (isinstance(arg, types.Array) and
           isinstance(arg.dtype, types.Record)):
-        type_name = "array" if arr.mutable else "readonly array"
+        type_name = "array" if arg.mutable else "readonly array"
         return ("%s(Record_%s, %sd, %s)"
                 % (type_name, arg.dtype._code, arg.ndim, arg.layout))
     else:
