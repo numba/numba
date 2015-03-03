@@ -100,9 +100,6 @@ class Overloads(object):
     def append(self, impl):
         self.versions.append(impl)
 
-    def extend(self, impls):
-        self.versions.extend(impls)
-
 
 @utils.runonce
 def _load_global_helpers():
