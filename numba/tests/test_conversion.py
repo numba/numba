@@ -213,6 +213,7 @@ class TestConversion(unittest.TestCase):
             cres.entry_point(-1, obj)
         self.assertEqual(_refcounts(obj), old_refcnt)
 
+    @unittest.skipUnless(sys.version_info >= (2, 7), "test uses memoryview")
     def test_cleanup_buffer(self):
         mem = memoryview(bytearray(b"xyz"))
         self.check_argument_cleanup(types.Buffer(types.intc, 1, 'C'), mem)
@@ -222,11 +223,13 @@ class TestConversion(unittest.TestCase):
         recarr = np.zeros(1, dtype=dtype)
         self.check_argument_cleanup(numpy_support.from_dtype(dtype), recarr[0])
 
+    @unittest.skipUnless(sys.version_info >= (2, 7), "test uses memoryview")
     def test_cleanup_tuple(self):
         mem = memoryview(bytearray(b"xyz"))
         tp = types.UniTuple(types.Buffer(types.intc, 1, 'C'), 2)
         self.check_argument_cleanup(tp, (mem, mem))
 
+    @unittest.skipUnless(sys.version_info >= (2, 7), "test uses memoryview")
     def test_cleanup_optional(self):
         mem = memoryview(bytearray(b"xyz"))
         tp = types.Optional(types.Buffer(types.intc, 1, 'C'))
