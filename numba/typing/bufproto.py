@@ -18,6 +18,7 @@ _pep3118_scalar_map = {
     }
 
 _type_map = {
+    bytes: types.Bytes,
     bytearray: types.ByteArray,
     array.array: types.PyArray,
     memoryview: types.MemoryView,

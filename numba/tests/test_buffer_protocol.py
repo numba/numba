@@ -129,7 +129,7 @@ class TestBufferProtocol(TestCase):
             yield memoryview(b"abcdefghi")
             arr = np.arange(5)
             arr.setflags(write=False)
-            #yield memoryview(arr)
+            yield memoryview(arr)
 
     def _check_unary(self, jitfunc, *args):
         pyfunc = jitfunc.py_func
