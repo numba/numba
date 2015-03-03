@@ -437,11 +437,31 @@ class BaseContext(object):
             offset = typ.offset(attr)
             elemty = typ.typeof(attr)
 
-            @impl_attribute(typ, attr, elemty)
-            def imp(context, builder, typ, val):
-                dptr = cgutils.get_record_member(builder, val, offset,
-                                                 self.get_data_type(elemty))
-                return self.unpack_value(builder, elemty, dptr)
+            if isinstance(elemty, types.NestedArray):
+                # Inside a structured type only the array data is stored, so we
+                # create an array structure to point to that data.
+                aryty = arrayobj.make_array(elemty)
+                @impl_attribute(typ, attr, elemty)
+                def imp(context, builder, typ, val):
+                    ary = aryty(context, builder)
+                    dtype = elemty.dtype
+                    ary.nitems = context.get_constant(types.intp, elemty.nitems)
+                    ary.itemsize = context.get_constant(types.intp, elemty.size)
+                    ary.data = cgutils.get_record_member(builder, val, offset,
+                                                         self.get_data_type(dtype))
+                    ary.shape = cgutils.pack_array(builder,
+                                                   [ self.get_constant(types.intp, s)
+                                                     for s in elemty.shape ])
+                    ary.strides = cgutils.pack_array(builder,
+                                                     [self.get_constant(types.intp, s)
+                                                     for s in elemty.strides ])
+                    return ary._getvalue()
+            else:
+                @impl_attribute(typ, attr, elemty)
+                def imp(context, builder, typ, val):
+                    dptr = cgutils.get_record_member(builder, val, offset,
+                                                     self.get_data_type(elemty))
+                    return self.unpack_value(builder, elemty, dptr)
             return imp
 
         if isinstance(typ, types.Module):

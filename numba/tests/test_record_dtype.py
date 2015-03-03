@@ -112,6 +112,37 @@ def record_return(ary, i):
     return ary[i]
 
 
+def record_write_array(ary):
+    ary.g = 2
+    ary.h[0] = 3.0
+    ary.h[1] = 4.0
+
+def record_write_2d_array(ary):
+    ary.i = 3
+    ary.j[0, 0] = 5.0
+    ary.j[0, 1] = 6.0
+    ary.j[1, 0] = 7.0
+    ary.j[1, 1] = 8.0
+    ary.j[2, 0] = 9.0
+    ary.j[2, 1] = 10.0
+
+
+def record_read_array0(ary):
+    return ary.h[0]
+
+def record_read_array1(ary):
+    return ary.h[1]
+
+def record_read_2d_array00(ary):
+    return ary.j[0,0]
+
+def record_read_2d_array10(ary):
+    return ary.j[1,0]
+
+def record_read_2d_array01(ary):
+    return ary.j[0,1]
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
                        ('c', np.complex64),
@@ -122,6 +153,12 @@ recordtype2 = np.dtype([('e', np.int32),
 
 recordtype3 = np.dtype([('first', np.float32),
                         ('second', np.float64)])
+
+recordwitharray = np.dtype([('g', np.int32),
+                            ('h', np.float32, 2)])
+
+recordwith2darray = np.dtype([('i', np.int32),
+                              ('j', np.float32, (3, 2))])
 
 class TestRecordDtype(unittest.TestCase):
 
@@ -349,6 +386,7 @@ class TestRecordDtype(unittest.TestCase):
             got = cfunc(nbval1, nbval2)
             self.assertEqual(expected, got)
 
+
     def test_two_distinct_records(self):
         '''
         Testing the use of two scalar records of differing type
@@ -363,6 +401,77 @@ class TestRecordDtype(unittest.TestCase):
 
         got = cfunc(nbval1, nbval2)
         self.assertEqual(expected, got)
+
+
+    def test_record_write_array(self):
+        '''
+        Testing writing to a 1D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwitharray)
+        nbrecord = numpy_support.from_dtype(recordwitharray)
+        cfunc = self.get_cfunc(record_write_array, (nbrecord,))
+        cfunc(nbval[0])
+
+        expected = np.recarray(1, dtype=recordwitharray)
+        expected[0].g = 2
+        expected[0].h[0] = 3.0
+        expected[0].h[1] = 4.0
+        np.testing.assert_equal(expected, nbval)
+
+
+    def test_record_write_2d_array(self):
+        '''
+        Test writing to a 2D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwith2darray)
+        nbrecord = numpy_support.from_dtype(recordwith2darray)
+        cfunc = self.get_cfunc(record_write_2d_array, (nbrecord,))
+        cfunc(nbval[0])
+
+        expected = np.recarray(1, dtype=recordwith2darray)
+        expected[0].i = 3
+        expected[0].j[:] = np.asarray([5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+                                      np.float32).reshape(3, 2)
+        np.testing.assert_equal(expected, nbval)
+
+
+    def test_record_read_array(self):
+        '''
+        Test reading from a 1D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwitharray)
+        nbval[0].h[0] = 15.0
+        nbval[0].h[1] = 25.0
+        nbrecord = numpy_support.from_dtype(recordwitharray)
+        cfunc = self.get_cfunc(record_read_array0, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].h[0])
+
+        cfunc = self.get_cfunc(record_read_array1, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].h[1])
+
+
+    def test_record_read_2d_array(self):
+        '''
+        Test reading from a 2D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwith2darray)
+        nbval[0].j = np.asarray([1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
+                                np.float32).reshape(3, 2)
+        nbrecord = numpy_support.from_dtype(recordwith2darray)
+        cfunc = self.get_cfunc(record_read_2d_array00, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].j[0, 0])
+
+        cfunc = self.get_cfunc(record_read_2d_array01, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].j[0, 1])
+
+        cfunc = self.get_cfunc(record_read_2d_array10, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].j[1, 0])
+
 
     def test_record_return(self):
         """
