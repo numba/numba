@@ -727,6 +727,8 @@ class NestedArray(Array):
     """
 
     def __init__(self, dtype, shape):
+        assert dtype.bitwidth % 8 == 0, \
+            "Dtype bitwidth must be a multiple of bytes"
         self._shape = shape
         name = "nestedarray(%s, %s)" % (dtype, shape)
         ndim = len(shape)
@@ -743,6 +745,19 @@ class NestedArray(Array):
         for s in self.shape:
             l = l * s
         return l
+
+    @property
+    def size(self):
+        return self.dtype.bitwidth // 8
+
+    @property
+    def strides(self):
+        stride = self.size
+        strides = []
+        for i in reversed(self._shape):
+             strides.append(stride)
+             stride *= i
+        return tuple(strides)
 
 class UniTuple(IterableType):
 
