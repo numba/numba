@@ -18,12 +18,12 @@ _pep3118_scalar_map = {
     }
 
 _type_map = {
-    bytes: types.Bytes,
     bytearray: types.ByteArray,
     array.array: types.PyArray,
-    memoryview: types.MemoryView,
     }
 
+if sys.version_info >= (2, 7):
+    _type_map[memoryview] = types.MemoryView
 if sys.version_info >= (3,):
     _type_map[bytes] = types.Bytes
 

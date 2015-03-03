@@ -246,6 +246,8 @@ class TestBufferProtocol(TestCase):
             self.check_getitem(buf)
 
 
+@unittest.skipUnless(sys.version_info >= (2, 7),
+                     "memoryview doesn't exist on 2.6")
 class TestMemoryView(TestCase):
     """
     Test memoryview-specific attributes and operations.
@@ -298,6 +300,8 @@ class TestMemoryView(TestCase):
         m = memoryview(bytearray(b"xyz"))
         self.assertIs(readonly_usecase(m), False)
 
+    @unittest.skipUnless(sys.version_info >= (3,),
+                         "memoryview.*contiguous doesn't exist on 2.7")
     def test_contiguous(self):
         m = memoryview(bytearray(b"xyz"))
         self.assertIs(contiguous_usecase(m), True)

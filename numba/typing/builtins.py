@@ -554,14 +554,15 @@ class CmpOpEqArray(AbstractTemplate):
 class MemoryViewAttribute(AttributeTemplate):
     key = types.MemoryView
 
-    def resolve_contiguous(self, buf):
-        return types.boolean
+    if PYVERSION >= (3,):
+        def resolve_contiguous(self, buf):
+            return types.boolean
 
-    def resolve_c_contiguous(self, buf):
-        return types.boolean
+        def resolve_c_contiguous(self, buf):
+            return types.boolean
 
-    def resolve_f_contiguous(self, buf):
-        return types.boolean
+        def resolve_f_contiguous(self, buf):
+            return types.boolean
 
     def resolve_itemsize(self, buf):
         return types.intp
