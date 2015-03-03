@@ -20,6 +20,14 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
+class DeprecationError(Exception):
+    pass
+
+
+_msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
+                                 "Signatures should be passed as the first "
+                                 "positional argument.")
+
 def jit(signature_or_function=None, locals={}, target='cpu', **options):
     """
     This decorator is used to compile a Python function into native code.
@@ -110,6 +118,10 @@ def jit(signature_or_function=None, locals={}, target='cpu', **options):
                 return x + y
 
     """
+    if 'argtypes' in options:
+        raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
+    if 'restype' in options:
+        raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
 
     # Handle signature
     if signature_or_function is None:
