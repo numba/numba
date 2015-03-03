@@ -553,7 +553,8 @@ class TypeInferer(object):
         typ = self.context.resolve_value_type(gvar.value)
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
-            typ = typ.copy(layout='C', const=True)
+            # XXX why layout='C'?
+            typ = typ.copy(layout='C', readonly=True)
 
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)

@@ -720,14 +720,12 @@ class Array(Buffer):
     Type class for Numpy arrays.
     """
 
-    def __init__(self, dtype, ndim, layout, const=False, name=None):
-        self.const = const
-        if const:
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+        if readonly:
             self.mutable = False
         if name is None:
-            name = "array(%s, %sd, %s, %s)" % (dtype, ndim, layout,
-                                               {True: 'const',
-                                                False: 'nonconst'}[const])
+            type_name = "array" if self.mutable else "readonly array"
+            name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Array, self).__init__(dtype, ndim, layout, name=name)
 
     def post_init(self):
@@ -736,24 +734,24 @@ class Array(Buffer):
         """
         if self.layout != 'A':
             from numba.typeconv.rules import default_casting_rules as tcr
-            ary_any = Array(self.dtype, self.ndim, 'A', const=self.const)
+            ary_any = self.copy(layout='A')
             # XXX This will make the types immortal
             tcr.safe(self, ary_any)
 
-    def copy(self, dtype=None, ndim=None, layout=None, const=None):
+    def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
         if dtype is None:
             dtype = self.dtype
         if ndim is None:
             ndim = self.ndim
         if layout is None:
             layout = self.layout
-        if const is None:
-            const = self.const
-        return Array(dtype=dtype, ndim=ndim, layout=layout, const=const)
+        if readonly is None:
+            readonly = not self.mutable
+        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly)
 
     @property
     def key(self):
-        return self.dtype, self.ndim, self.layout, self.const
+        return self.dtype, self.ndim, self.layout, self.mutable
 
     @property
     def is_c_contig(self):
@@ -781,8 +779,7 @@ class NestedArray(Array):
         self._shape = shape
         name = "nestedarray(%s, %s)" % (dtype, shape)
         ndim = len(shape)
-        super(NestedArray, self).__init__(dtype, ndim, 'C', const=False,
-                                          name=name)
+        super(NestedArray, self).__init__(dtype, ndim, 'C', name=name)
 
     @property
     def shape(self):
@@ -807,6 +804,7 @@ class NestedArray(Array):
              strides.append(stride)
              stride *= i
         return tuple(strides)
+
 
 class UniTuple(IterableType):
 

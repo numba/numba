@@ -51,6 +51,9 @@ memoryview_structured_indexing = sys.version_info >= (3,)
 @unittest.skipIf(sys.version_info < (2, 7),
                  "buffer protocol not supported on Python 2.6")
 class TestBufferProtocol(TestCase):
+    """
+    Test operations on buffer-providing objects.
+    """
 
     def _arrays(self):
         n = 10
@@ -74,6 +77,7 @@ class TestBufferProtocol(TestCase):
         n = 10
         yield memoryview(bytearray(b"abcdefghi"))
         yield memoryview(b"abcdefghi")
+        # Different item types
         for dtype, start, stop in [
             ('int8', -10, 10),
             ('uint8', 0, 10),
@@ -89,6 +93,16 @@ class TestBufferProtocol(TestCase):
             ('complex128', -8j, 12 + 5j),
             ]:
             yield memoryview(np.linspace(start, stop, n, dtype=dtype))
+        # Different layouts
+        arr = np.arange(12).reshape((3, 4))
+        assert arr.flags.c_contiguous and not arr.flags.f_contiguous
+        yield memoryview(arr)
+        arr = arr.T
+        assert arr.flags.f_contiguous and not arr.flags.c_contiguous
+        yield memoryview(arr)
+        arr = arr[::2]
+        assert not arr.flags.f_contiguous and not arr.flags.c_contiguous
+        yield memoryview(arr)
 
     def _check_unary(self, jitfunc, *args):
         pyfunc = jitfunc.py_func
@@ -101,14 +115,31 @@ class TestBufferProtocol(TestCase):
         self._check_unary(iter_usecase, obj)
 
     def check_getitem(self, obj):
-        for i in range(len(obj)):
+        # Be careful to index all dimensions, since we don't support
+        # partial indexing yet.
+        def yield_indices(obj):
+            try:
+                shape = obj.shape
+            except AttributeError:
+                shape = len(obj),
+            for tup in np.ndindex(shape):
+                # Simple 1d buffer-providing objects usually don't support
+                # tuple indexing.
+                if len(tup) == 1:
+                    yield tup[0]
+                else:
+                    yield tup
+
+        for i in yield_indices(obj):
             try:
                 expected = obj[i]
-            except NotImplementedError:
+            except (NotImplementedError, TypeError):
                 if isinstance(obj, memoryview):
                     # The memoryview object doesn't support all codes yet,
                     # fall back on the underlying object.
                     expected = obj.obj[i]
+                else:
+                    raise
             self.assertPreciseEqual(getitem_usecase(obj, i), expected)
 
     def check_setitem(self, obj):
@@ -158,11 +189,18 @@ class TestBufferProtocol(TestCase):
 
     def test_setitem(self):
         self.check_setitem(bytearray(b"abcdefghi"))
-        if memoryview_structured_indexing:
-            self.check_setitem(memoryview(b"abcdefghi"))
         if array_supported:
             for arr in self._arrays():
                 self.check_setitem(arr)
+        # Read-only buffers
+        with self.assertTypingError():
+            self.check_setitem(b"xyz")
+        with self.assertTypingError():
+            self.check_setitem(memoryview(b"abcdefghi"))
+        arr = np.arange(5)
+        arr.setflags(write=False)
+        with self.assertTypingError():
+            self.check_setitem(memoryview(arr))
 
     def test_iter(self):
         self.check_iter(bytearray(b"abc"))
@@ -173,6 +211,12 @@ class TestBufferProtocol(TestCase):
         if array_supported:
             for arr in self._arrays():
                 self.check_iter(arr)
+
+
+class TestMemoryView(TestCase):
+    """
+    Test memoryview-specific attributes and operations.
+    """
 
 
 if __name__ == '__main__':

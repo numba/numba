@@ -203,7 +203,9 @@ class BaseContext(object):
                     pass
                 else:
                     type_class = bufproto.get_type_class(type(val))
-                    return type_class(dtype, m.ndim, layout='A')
+                    layout = bufproto.infer_layout(m)
+                    return type_class(dtype, m.ndim, layout=layout,
+                                      readonly=m.readonly)
 
         else:
             # Matching here is quite broad, so we have to do it after
