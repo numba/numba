@@ -72,9 +72,10 @@ class _MethodDescriptor(object):
 class _NativeDataSpec(object):
     __slots__ = ('_type', '_ref_type', '_ctype')
 
-    def __init__(self, clsname, descriptors):
+    def __init__(self, clsname, descriptors, methoddescriptors):
         fieldtypes = [(d._name, d._type) for d in descriptors]
-        self._type = numba.types.Structure(clsname, fieldtypes)
+        methods = [(d._name, d._compiled) for d in methoddescriptors]
+        self._type = numba.types.Structure(clsname, fieldtypes, methods)
         self._ref_type = numba.types.StructRef(self._type)
         ctx = CPUTarget.target_context
         llty = ctx.get_value_type(self._type)
@@ -117,11 +118,14 @@ class PlainOldDataMeta(type):
             descriptors.append(desc)
 
         # Insert descriptor for methods:
+        methodescriptors = []
         for name, func in methods:
-            dct[name] = _MethodDescriptor(name, func)
+            desc = _MethodDescriptor(name, func)
+            dct[name] = desc
+            methodescriptors.append(desc)
 
         # Generate the "spec" for creating the native data
-        ndspec = _NativeDataSpec(clsname, descriptors)
+        ndspec = _NativeDataSpec(clsname, descriptors, methodescriptors)
 
         def ctor(self, **kwargs):
             assert not kwargs, "args at ctor not implemented"

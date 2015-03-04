@@ -430,6 +430,13 @@ class BaseContext(object):
             else:
                 overloads = self.defns[key]
 
+            # TODO this is ugly
+            if (isinstance(fn, types.BoundFunction) and
+                    isinstance(fn.this, types.Structure)):
+                overloaded = fn.this.methodtable[fn.template.key]
+                key = overloaded.get_overload(sig)
+                overloads = self.defns[key]
+
         elif isinstance(fn, types.Dispatcher):
             key = fn.overloaded.get_overload(sig.args)
             overloads = self.defns[key]

@@ -974,15 +974,47 @@ def is_int_tuple(x):
         return False
 
 
+def _make_method_template(name, func):
+    from numba.typing.templates import AbstractTemplate
+    from numba.typing import signature
+
+    class MethodTemplate(AbstractTemplate):
+        key = name
+
+        def generic(self, args, kws):
+            assert not kws
+
+            thisref = StructRef(self.this)
+            args = (thisref,) + args
+
+            func.compile(args)
+            cres = func._compileinfos.get(args)
+            if cres is not None:
+                oldsig = cres.signature
+                sig = signature(oldsig.return_type, *oldsig.args[1:])
+                sig.recvr = thisref
+                return sig
+            assert False
+
+    return MethodTemplate
+
+
 class Structure(Type):
-    def __init__(self, name, members):
+    def __init__(self, name, members, methods):
         self.members = tuple((k, v) for k, v in members)
-        self.fields = dict(self.members)
+        self.methods = tuple((k, v) for k, v in methods)
+        self.methodtable = dict(self.methods)
+
         super(Structure, self).__init__(name)
+
+        self.fields = dict(self.members)
+        for name, func in self.methods:
+            template = _make_method_template(name, func)
+            self.fields[name] = BoundFunction(template, self)
 
     @property
     def key(self):
-        return self.members
+        return self.members, tuple(self.methodtable.keys())
 
     def typeof(self, key):
         return self.fields[key]
