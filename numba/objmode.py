@@ -35,14 +35,14 @@ PYTHON_OPMAP = {
 
 
 class PyLower(BaseLower):
+
     def init(self):
         self.pyapi = self.context.get_python_api(self.builder)
 
-        # Add error handling block
-        self.ehblock = self.function.append_basic_block('error')
-
         # Strings to be frozen into the Environment object
         self._frozen_strings = set()
+
+        self._live_vars = set()
 
     def pre_lower(self):
         # Store environment argument for later use
@@ -56,15 +56,10 @@ class PyLower(BaseLower):
         self.env_body = self.context.get_env_body(self.builder, self.envarg)
 
     def post_lower(self):
-        with cgutils.goto_block(self.builder, self.ehblock):
-            self.cleanup()
-            self.call_conv.return_exc(self.builder)
-
         self._finalize_frozen_string()
 
-    def init_argument(self, arg):
-        self.incref(arg)
-        return arg
+    def pre_block(self, block):
+        self.init_vars(block)
 
     def lower_inst(self, inst):
         if isinstance(inst, ir.Assign):
@@ -102,7 +97,6 @@ class PyLower(BaseLower):
         elif isinstance(inst, ir.Return):
             retval = self.loadvar(inst.value.name)
             # No need to incref() as the reference is already owned.
-            self.cleanup()
             self.call_conv.return_value(self.builder, retval)
 
         elif isinstance(inst, ir.Branch):
@@ -127,6 +121,9 @@ class PyLower(BaseLower):
         elif isinstance(inst, ir.Raise):
             if inst.exception is not None:
                 exc = self.loadvar(inst.exception.name)
+                # A reference will be stolen by raise_object() and another
+                # by return_exception_raised().
+                self.incref(exc)
             else:
                 exc = None
             self.pyapi.raise_object(exc)
@@ -150,6 +147,10 @@ class PyLower(BaseLower):
             return self.lower_expr(value)
         elif isinstance(value, ir.Global):
             return self.lower_global(value.name, value.value)
+        elif isinstance(value, ir.Arg):
+            value = self.fnargs[value.index]
+            self.incref(value)
+            return value
         else:
             raise NotImplementedError(type(value), value)
 
@@ -412,16 +413,20 @@ class PyLower(BaseLower):
         return builtin
 
     def check_occurred(self):
+        """
+        Return if an exception occurred.
+        """
         err_occurred = cgutils.is_not_null(self.builder,
                                            self.pyapi.err_occurred())
 
         with cgutils.if_unlikely(self.builder, err_occurred):
-            # FIXME: this should decref all live variables before returning
             self.return_exception_raised()
 
     def check_error(self, obj):
+        """
+        Return if *obj* is NULL.
+        """
         with cgutils.if_unlikely(self.builder, self.is_null(obj)):
-            # FIXME: this should decref all live variables before returning
             self.return_exception_raised()
 
         return obj
@@ -439,11 +444,17 @@ class PyLower(BaseLower):
         return cgutils.is_null(self.builder, obj)
 
     def return_exception_raised(self):
-        self.builder.branch(self.ehblock)
-
-    def return_error_occurred(self):
-        self.cleanup()
+        """
+        Return with the currently raised exception.
+        """
+        self.cleanup_vars()
         self.call_conv.return_exc(self.builder)
+
+    def init_vars(self, block):
+        """
+        Initialize live variables for *block*.
+        """
+        self._live_vars = set(self.interp.get_block_entry_vars(block))
 
     def _getvar(self, name, ltype=None):
         if name not in self.varmap:
@@ -454,11 +465,13 @@ class PyLower(BaseLower):
         """
         Load the llvm value of the variable named *name*.
         """
+        # If this raises then the live variables analysis is wrong
+        assert name in self._live_vars, name
         ptr = self.varmap[name]
         val = self.builder.load(ptr)
         with cgutils.if_unlikely(self.builder, self.is_null(val)):
             self.pyapi.raise_missing_name_error(name)
-            self.return_error_occurred()
+            self.return_exception_raised()
         return val
 
     def delvar(self, name):
@@ -466,6 +479,8 @@ class PyLower(BaseLower):
         Delete the variable slot with the given name. This will decref
         the corresponding Python object.
         """
+        # If this raises then the live variables analysis is wrong
+        self._live_vars.remove(name)
         ptr = self._getvar(name)  # initializes `name` if not already
         self.decref(self.builder.load(ptr))
         # This is a safety guard against double decref's, but really
@@ -478,17 +493,26 @@ class PyLower(BaseLower):
         Stores a llvm value and allocate stack slot if necessary.
         The llvm value can be of arbitrary type.
         """
+        is_redefine = name in self._live_vars
         ptr = self._getvar(name, ltype=value.type)
-        old = self.builder.load(ptr)
+        if is_redefine:
+            old = self.builder.load(ptr)
+        else:
+            self._live_vars.add(name)
         assert value.type == ptr.type.pointee, (str(value.type),
                                                 str(ptr.type.pointee))
         self.builder.store(value, ptr)
         # Safe to call decref even on non python object
-        self.decref(old)
+        if is_redefine:
+            self.decref(old)
 
-    def cleanup(self):
-        # Nothing to do.
-        pass
+    def cleanup_vars(self):
+        """
+        Cleanup live variables.
+        """
+        for name in self._live_vars:
+            ptr = self._getvar(name)
+            self.decref(self.builder.load(ptr))
 
     def alloca(self, name, ltype=None):
         """

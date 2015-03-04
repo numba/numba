@@ -83,7 +83,10 @@ class Interpreter(object):
         self.blocks = {}
         # { name: value } of global variables used by the bytecode
         self.used_globals = {}
+        # { name: [definitions] } of local variables
         self.definitions = collections.defaultdict(list)
+        # { ir.Block: { variable names (potentially) alive at start of block } }
+        self.block_entry_vars = collections.defaultdict(set)
 
         # Temp states during interpretation
         self.current_block = None
@@ -102,21 +105,66 @@ class Interpreter(object):
         """
         return self.used_globals
 
-    def _fill_args_into_scope(self, scope):
-        for arg in self.argspec.args:
-            scope.define(name=arg, loc=self.loc)
+    def get_block_entry_vars(self, block):
+        """
+        Return a set of variable names possibly alive at the beginning of
+        the block.
+        """
+        return self.block_entry_vars[block]
 
     def interpret(self):
         firstblk = min(self.cfa.blocks.keys())
         self.loc = ir.Loc(filename=self.bytecode.filename,
                           line=self.bytecode[firstblk].lineno)
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
-        self._fill_args_into_scope(self.current_scope)
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        # Clean up
+        # Analysis on generated IR
         self._insert_var_dels()
+        self._compute_block_entry_vars()
+
+    def _compute_block_entry_vars(self):
+        """
+        Compute the live variables at the beginning of each block.
+        This must be done after insertion of ir.Dels.
+        """
+        # Scan for variable additions and deletions in each block
+        block_var_adds = {}
+        block_var_dels = {}
+        cfg = self.cfa.graph
+
+        for ir_block in self.blocks.values():
+            adds = block_var_adds[ir_block] = set()
+            dels = block_var_dels[ir_block] = set()
+            for stmt in ir_block.body:
+                if isinstance(stmt, ir.Assign):
+                    name = stmt.target.name
+                    adds.add(name)
+                    dels.discard(name)
+                elif isinstance(stmt, ir.Del):
+                    name = stmt.value
+                    adds.discard(name)
+                    dels.add(name)
+
+        # Propagate defined variables from every block to its successors.
+        # (note the entry block automatically gets an empty set)
+        changed = True
+        while changed:
+            # We iterate until the result stabilizes.  This is necessary
+            # because of loops in the graph.
+            changed = False
+            for i in cfg.topo_order():
+                ir_block = self.blocks[i]
+                v = self.block_entry_vars[ir_block].copy()
+                v |= block_var_adds[ir_block]
+                v -= block_var_dels[ir_block]
+                for j, _ in cfg.successors(i):
+                    succ = self.blocks[j]
+                    succ_entry_vars = self.block_entry_vars[succ]
+                    if not succ_entry_vars >= v:
+                        succ_entry_vars.update(v)
+                        changed = True
 
     def _insert_var_dels(self):
         """
@@ -222,11 +270,10 @@ class Interpreter(object):
         return tails
 
     def init_first_block(self):
-        # Duplicate arguments so that these values can be casted into different
-        # types.
-        for aname in self.argspec.args:
-            aval = self.get(aname)
-            self.store(aval, aname, redefine=True)
+        # Define variables receiving the function arguments
+        for index, name in enumerate(self.argspec.args):
+            val = ir.Arg(index=index, name=name, loc=self.loc)
+            self.store(val, name)
 
     def _iter_inst(self):
         for blkct, block in enumerate(self.cfa.iterliveblocks()):
