@@ -2,8 +2,10 @@ from __future__ import absolute_import
 import types
 import ctypes
 import numba.types
+from functools import partial
 from numba.targets.registry import CPUTarget
-from numba import njit
+from numba import jit, njit
+
 
 
 _field_setter_name = "field_setter{clsname}_{field}"
@@ -55,18 +57,20 @@ class _FieldDescriptor(object):
 
 
 class _MethodDescriptor(object):
-    __slots__ = ('_name', '_function')
+    __slots__ = ('_name', '_function', '_compiled')
 
     def __init__(self, name, function):
         self._name = name
         self._function = function
+        self._compiled = jit(self._function)
 
     def __get__(self, instance, owner):
-        print(self, instance, owner)
-        raise NotImplementedError
+        return partial(self._compiled, instance)
 
 
 class _NativeData(object):
+    __slots__ = ('_type', '_ref_type', '_data', '_dataptr')
+
     def __init__(self, clsname, descriptors):
         fieldtypes = [(d._name, d._type) for d in descriptors]
         self._type = numba.types.Structure(clsname, fieldtypes)
