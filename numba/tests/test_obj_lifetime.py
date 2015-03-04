@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import collections
+import sys
 import weakref
 
 import numba.unittest_support as unittest
@@ -164,9 +165,40 @@ def looping_usecase2(rec):
     return cum
 
 
+class MyError(RuntimeError):
+    pass
+
+def do_raise(x):
+    raise MyError(x)
+
+def raising_usecase1(rec):
+    a = rec('a')
+    b = rec('b')
+    d = rec('d')
+    if a:
+        do_raise("foo")
+        c = rec('c')
+        c + a
+    c + b
+
+def raising_usecase2(rec):
+    a = rec('a')
+    b = rec('b')
+    if a:
+        c = rec('c')
+        do_raise(b)
+    a + c
+
+def raising_usecase3(rec):
+    a = rec('a')
+    b = rec('b')
+    if a:
+        raise MyError(b)
+
+
 def del_before_definition(rec):
     """
-    This test reveal a bug that the there is a del on uninitialized variable
+    This test reveal a bug that there is a del on uninitialized variable
     """
     n = 5
     for i in range(n):
@@ -186,6 +218,7 @@ def del_before_definition(rec):
     rec.mark('OK')
     return -1
 
+
 class TestObjLifetime(TestCase):
     """
     Test lifetime of Python objects inside jit-compiled functions.
@@ -196,10 +229,14 @@ class TestObjLifetime(TestCase):
         self.__cres = cr
         return cr.entry_point
 
-    def compile_and_record(self, pyfunc):
+    def compile_and_record(self, pyfunc, raises=None):
         rec = RefRecorder()
         cr = compile_isolated(pyfunc, (), flags=forceobj_flags)
-        cr.entry_point(rec)
+        if raises is not None:
+            with self.assertRaises(raises):
+                cr.entry_point(rec)
+        else:
+            cr.entry_point(rec)
         return rec
 
     def assertRecordOrder(self, rec, expected):
@@ -269,6 +306,23 @@ class TestObjLifetime(TestCase):
         rec = self.compile_and_record(del_before_definition)
         self.assertEqual(rec.recorded, ['0', '1', '2'])
 
+    def test_raising1(self):
+        old_refcnt = sys.getrefcount(do_raise)
+        rec = self.compile_and_record(raising_usecase1, raises=MyError)
+        self.assertFalse(rec.alive)
+        self.assertEqual(sys.getrefcount(do_raise), old_refcnt)
+
+    def test_raising2(self):
+        old_refcnt = sys.getrefcount(do_raise)
+        rec = self.compile_and_record(raising_usecase2, raises=MyError)
+        self.assertFalse(rec.alive)
+        self.assertEqual(sys.getrefcount(do_raise), old_refcnt)
+
+    def test_raising3(self):
+        old_refcnt = sys.getrefcount(MyError)
+        rec = self.compile_and_record(raising_usecase3, raises=MyError)
+        self.assertFalse(rec.alive)
+        self.assertEqual(sys.getrefcount(MyError), old_refcnt)
 
 
 if __name__ == "__main__":
