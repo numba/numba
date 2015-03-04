@@ -208,7 +208,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             # typecode() function in _dispatcher.c.
             return types.int64
 
-        tp = self.typingctx.resolve_data_type(val)
+        tp = self.typingctx.resolve_argument_type(val)
         if tp is None:
             tp = types.pyobject
         return tp

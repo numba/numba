@@ -806,8 +806,9 @@ class PythonAPI(object):
         return gv
 
     def to_native_value(self, obj, typ):
+        builder = self.builder
         def c_api_error():
-            return cgutils.is_not_null(self.builder, self.err_occurred())
+            return cgutils.is_not_null(builder, self.err_occurred())
 
         if isinstance(typ, types.Object) or typ == types.pyobject:
             return NativeValue(obj)
@@ -815,19 +816,33 @@ class PythonAPI(object):
         elif typ == types.boolean:
             istrue = self.object_istrue(obj)
             zero = Constant.null(istrue.type)
-            val = self.builder.icmp(lc.ICMP_NE, istrue, zero)
+            val = builder.icmp(lc.ICMP_NE, istrue, zero)
             return NativeValue(val, is_error=c_api_error())
 
         elif isinstance(typ, types.Integer):
             val = self.to_native_int(obj, typ)
             return NativeValue(val, is_error=c_api_error())
 
+        elif typ in types.unsigned_domain:
+            longobj = self.number_long(obj)
+            ullval = self.long_as_ulonglong(longobj)
+            self.decref(longobj)
+            return builder.trunc(ullval,
+                                 self.context.get_argument_type(typ))
+
+        elif typ in types.signed_domain:
+            longobj = self.number_long(obj)
+            llval = self.long_as_longlong(longobj)
+            self.decref(longobj)
+            return builder.trunc(llval,
+                                 self.context.get_argument_type(typ))
+
         elif typ == types.float32:
             fobj = self.number_float(obj)
             fval = self.float_as_double(fobj)
             self.decref(fobj)
-            val = self.builder.fptrunc(fval,
-                                       self.context.get_argument_type(typ))
+            val = builder.fptrunc(fval,
+                                  self.context.get_argument_type(typ))
             return NativeValue(val, is_error=c_api_error())
 
         elif typ == types.float64:
@@ -838,21 +853,21 @@ class PythonAPI(object):
 
         elif typ in (types.complex128, types.complex64):
             cplxcls = self.context.make_complex(types.complex128)
-            cplx = cplxcls(self.context, self.builder)
+            cplx = cplxcls(self.context, builder)
             pcplx = cplx._getpointer()
             ok = self.complex_adaptor(obj, pcplx)
-            failed = cgutils.is_false(self.builder, ok)
+            failed = cgutils.is_false(builder, ok)
 
-            with cgutils.if_unlikely(self.builder, failed):
+            with cgutils.if_unlikely(builder, failed):
                 self.err_set_string("PyExc_TypeError",
                                     "conversion to %s failed" % (typ,))
 
             if typ == types.complex64:
                 c64cls = self.context.make_complex(typ)
-                c64 = c64cls(self.context, self.builder)
-                freal = self.context.cast(self.builder, cplx.real,
+                c64 = c64cls(self.context, builder)
+                freal = self.context.cast(builder, cplx.real,
                                           types.float64, types.float32)
-                fimag = self.context.cast(self.builder, cplx.imag,
+                fimag = self.context.cast(builder, cplx.imag,
                                           types.float64, types.float32)
                 c64.real = freal
                 c64.imag = fimag
@@ -878,7 +893,7 @@ class PythonAPI(object):
                 self.builder.ret(ptr)
 
             ltyp = self.context.get_value_type(typ)
-            val = self.builder.bitcast(ptr, ltyp)
+            val = builder.bitcast(ptr, ltyp)
             def cleanup():
                 self.release_buffer(buf)
             return NativeValue(val, cleanup=cleanup)
@@ -896,7 +911,27 @@ class PythonAPI(object):
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
             return self.to_native_tuple(obj, typ)
 
-        raise NotImplementedError(typ)
+        elif isinstance(typ, types.ExternalFunctionPointer):
+            if typ.get_pointer is not None:
+                # Call get_pointer() on the object to get the raw pointer value
+                ptrty = self.context.get_function_pointer_type(typ)
+                ret = cgutils.alloca_once_value(builder,
+                                                Constant.null(ptrty),
+                                                name='fnptr')
+                ser = self.serialize_object(typ.get_pointer)
+                get_pointer = self.unserialize(ser)
+                with cgutils.if_likely(builder,
+                                       cgutils.is_not_null(builder, get_pointer)):
+                    intobj = self.call_function_objargs(get_pointer, (obj,))
+                    self.decref(get_pointer)
+                    with cgutils.if_likely(builder,
+                                           cgutils.is_not_null(builder, intobj)):
+                        intval = self.number_as_ssize_t(intobj)
+                        self.decref(intobj)
+                        builder.store(builder.inttoptr(intval, ptrty), ret)
+                return NativeValue(builder.load(ret), is_error=c_api_error())
+
+        raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
     def from_native_return(self, val, typ):
         return self.from_native_value(val, typ)
