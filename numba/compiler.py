@@ -596,17 +596,20 @@ def legalize_return_type(return_type, interp, targetctx):
     assert assume.return_argument_array_only
 
     if isinstance(return_type, types.Array):
-        # Walk IR to discover all return statements
+        # Walk IR to discover all arguments and all return statements
         retstmts = []
         caststmts = {}
+        argvars = set()
         for bid, blk in interp.blocks.items():
             for inst in blk.body:
                 if isinstance(inst, ir.Return):
                     retstmts.append(inst.value.name)
-                if (isinstance(inst, ir.Assign)
-                        and isinstance(inst.value, ir.Expr)
+                elif isinstance(inst, ir.Assign):
+                    if (isinstance(inst.value, ir.Expr)
                         and inst.value.op == 'cast'):
-                    caststmts[inst.target.name] = inst.value
+                        caststmts[inst.target.name] = inst.value
+                    elif isinstance(inst.value, ir.Arg):
+                        argvars.add(inst.target.name)
 
         assert retstmts, "No return statements?"
 
@@ -615,11 +618,10 @@ def legalize_return_type(return_type, interp, targetctx):
         #        must be statically resolvable.
 
         # The return value must be the first modification of the value.
-        arguments = set("{0}.1".format(a) for a in interp.argspec.args)
 
         for var in retstmts:
             cast = caststmts.get(var)
-            if cast is None or cast.value.name not in arguments:
+            if cast is None or cast.value.name not in argvars:
                 raise TypeError("Only accept returning of array passed into the "
                                 "function as argument")
 
@@ -657,8 +659,8 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     infer = typeinfer.TypeInferer(typingctx, interp.blocks)
 
     # Seed argument types
-    for arg, ty in zip(interp.argspec.args, args):
-        infer.seed_type(arg, ty)
+    for name, ty in zip(interp.argspec.args, args):
+        infer.seed_argument(name, ty)
 
     # Seed return type
     if return_type is not None:

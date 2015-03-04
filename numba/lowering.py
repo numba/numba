@@ -229,17 +229,19 @@ class BaseLower(object):
         Called after all blocks are lowered
         """
 
+    def pre_block(self, block):
+        """
+        Called before lowering a block.
+        """
+
     def return_exception(self, exc_class, exc_args=None):
         self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
 
     def lower(self):
-        # Init argument variables
+        # Init argument values
         rawfnargs = self.call_conv.get_arguments(self.function)
         arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
-        fnargs = arginfo.from_arguments(self.builder, rawfnargs)
-        for ak, av in zip(self.fndesc.args, fnargs):
-            av = self.init_argument(av)
-            self.storevar(av, ak)
+        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
 
         # Init blocks
         for offset in self.blocks:
@@ -281,10 +283,8 @@ class BaseLower(object):
                                             self.call_helper,
                                             release_gil=release_gil)
 
-    def init_argument(self, arg):
-        return arg
-
     def lower_block(self, block):
+        self.pre_block(block)
         for inst in block.body:
             self.loc = inst.loc
             try:
@@ -439,6 +439,9 @@ class Lower(BaseLower):
             val = self.loadvar(value.name)
             oty = self.typeof(value.name)
             return self.context.cast(self.builder, val, oty, ty)
+
+        elif isinstance(value, ir.Arg):
+            return self.fnargs[value.index]
 
         else:
             raise NotImplementedError(type(value), value)

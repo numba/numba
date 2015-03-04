@@ -90,6 +90,9 @@ def from_dtype(dtype):
                 return _from_str_dtype(dtype)
             if dtype.char in 'mM' and npdatetime.NPDATETIME_SUPPORTED:
                 return _from_datetime_dtype(dtype)
+            if dtype.char in 'V':
+                subtype = from_dtype(dtype.subdtype[0])
+                return types.NestedArray(subtype, dtype.shape)
             raise NotImplementedError(dtype)
     else:
         return from_struct_dtype(dtype)
@@ -293,7 +296,7 @@ else:
 
 def from_struct_dtype(dtype):
     if dtype.hasobject:
-        raise TypeError("Do not support object containing dtype")
+        raise TypeError("Do not support dtype containing object")
 
     fields = {}
     for name, (elemdtype, offset) in dtype.fields.items():

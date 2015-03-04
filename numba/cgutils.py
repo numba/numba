@@ -79,7 +79,7 @@ class StructProxy(object):
         self._dmm = self._context.data_model_manager
         self._datamodel = self._dmm[self._fe_type]
         if not isinstance(self._datamodel, datamodel.StructModel):
-            raise TypeError("Not a structure model: {0}".format(self._dmodel))
+            raise TypeError("Not a structure model: {0}".format(self._datamodel))
         self._builder = builder
 
         self._be_type = self._datamodel.get_value_type()
