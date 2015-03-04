@@ -120,7 +120,7 @@ class Interpreter(object):
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        # Analysis on generated IR
+        # Post-processing and analysis on generated IR
         self._insert_var_dels()
         self._compute_block_entry_vars()
 
