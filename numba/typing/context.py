@@ -195,8 +195,10 @@ class BaseContext(object):
             return types.Array(dtype, ary.ndim, layout)
 
         if hasattr(val, '__numba__'):
-            ty = val.__numba__.numba_type
-            return ty
+            attrnb = val.__numba__
+            if hasattr(attrnb, "numba_type"):
+                ty = val.__numba__.numba_type
+                return ty
 
         return
 
