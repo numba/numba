@@ -397,6 +397,20 @@ class BaseContext(object):
                 self.pack_value(builder, elemty, val, dptr)
 
             return _wrap_impl(imp, self, sig)
+        elif isinstance(typ, types.StructRef):
+            def imp(context, builder, sig, args):
+                refty, valty = sig.args
+                ptr, val = args
+                basety = refty.base
+                elemty = basety.typeof(attr)
+                wrappercls = cgutils.create_struct_proxy(basety)
+                wrapper = wrappercls(context, builder, ref=ptr)
+                val = context.cast(builder, val, valty, elemty)
+                setattr(wrapper, attr, val)
+
+            return _wrap_impl(imp, self, sig)
+        else:
+            raise NotImplementedError("no setter for {typ}".format(typ=typ))
 
     def get_function(self, fn, sig):
         """
@@ -462,6 +476,15 @@ class BaseContext(object):
                     dptr = cgutils.get_record_member(builder, val, offset,
                                                      self.get_data_type(elemty))
                     return self.unpack_value(builder, elemty, dptr)
+            return imp
+
+        if isinstance(typ, types.StructRef):
+            elemty = typ.typeof(attr)
+            @impl_attribute(typ, attr, elemty)
+            def imp(context, builder, typ, val):
+                wrappercls = cgutils.create_struct_proxy(typ.base)
+                wrapper = wrappercls(context, builder, ref=val)
+                return getattr(wrapper, attr)
             return imp
 
         if isinstance(typ, types.Module):

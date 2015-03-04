@@ -667,3 +667,10 @@ def handle_numpy_flat_type(dmm, ty):
         return FlatIter(dmm, ty)
 
 
+@register_default(types.Structure)
+def handle_structure(dmm, ty):
+    return StructModel(dmm, ty, ty.members)
+
+@register_default(types.StructRef)
+def handle_structref(dmm, ty):
+    return dmm[types.CPointer(ty.base)]

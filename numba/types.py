@@ -974,6 +974,37 @@ def is_int_tuple(x):
         return False
 
 
+class Structure(Type):
+    def __init__(self, name, members):
+        self.members = tuple((k, v) for k, v in members)
+        self.fields = dict(self.members)
+        super(Structure, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.members
+
+    def typeof(self, key):
+        return self.fields[key]
+
+
+class StructRef(Type):
+    def __init__(self, base_struct):
+        self._struct = base_struct
+        super(StructRef, self).__init__("Ref({0})".format(self._struct.name))
+
+    @property
+    def key(self):
+        return self._struct.key
+
+    def typeof(self, key):
+        return self._struct.typeof(key)
+
+    @property
+    def base(self):
+        return self._struct
+
+
 # Short names
 
 
