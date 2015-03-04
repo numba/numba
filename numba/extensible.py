@@ -5,6 +5,7 @@ import numba.types
 from functools import partial
 from numba.targets.registry import CPUTarget
 from numba import jit, njit
+from numba import utils
 
 
 
@@ -87,7 +88,7 @@ class _NativeData(object):
     def __init__(self, spec):
         self._spec = spec
         self._data = self._spec._ctype()
-        self._dataptr = ctypes.addressof(self._data)
+        self._dataptr = utils.longint(ctypes.addressof(self._data))
 
     @property
     def data_pointer(self):
@@ -98,7 +99,7 @@ class _NativeData(object):
         return self._spec._ref_type
 
 
-class PlainOldData(type):
+class PlainOldDataMeta(type):
     def __new__(cls, clsname, parents, dct):
         # Discover all the methods.  They are still functions at this point.
         methods = [(name, value) for name, value in dct.items()
@@ -128,6 +129,8 @@ class PlainOldData(type):
 
         dct['__init__'] = ctor
 
-        return super(PlainOldData, cls).__new__(cls, clsname, parents, dct)
+        return super(PlainOldDataMeta, cls).__new__(cls, clsname, parents, dct)
 
 
+# Make an inheritable class to hide the metaclass for (2+3) compatibility
+PlainOldData = utils.with_metaclass(PlainOldDataMeta)

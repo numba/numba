@@ -6,7 +6,7 @@ from numba import int32, float64
 
 class TestPlainOldData(unittest.TestCase):
     def test_simple_usecase_from_python(self):
-        class Pair(metaclass=extensible.PlainOldData):
+        class Pair(extensible.PlainOldData):
             __fields__ = [
                 ('first', int32),
                 ('second', float64),
