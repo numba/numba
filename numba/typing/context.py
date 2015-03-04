@@ -128,10 +128,6 @@ class BaseContext(object):
         if isinstance(val, utils.INT_TYPES):
             # Force all integers to be 64-bit
             return types.int64
-        elif numpy_support.is_array(val):
-            dtype = numpy_support.from_dtype(val.dtype)
-            layout = numpy_support.map_layout(val)
-            return types.Array(dtype, val.ndim, layout)
 
         tp = self.resolve_data_type(val)
         if tp is None:
@@ -173,6 +169,12 @@ class BaseContext(object):
             else:
                 return types.Tuple(tys)
 
+        elif ctypes_utils.is_ctypes_funcptr(val):
+            return ctypes_utils.make_function_type(val)
+
+        elif cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
+            return cffi_utils.make_function_type(val)
+
         else:
             try:
                 return numpy_support.map_arrayscalar_type(val)
@@ -185,13 +187,7 @@ class BaseContext(object):
                 dtype = numpy_support.from_dtype(ary.dtype)
             except NotImplementedError:
                 return
-
-            if ary.flags.c_contiguous:
-                layout = 'C'
-            elif ary.flags.f_contiguous:
-                layout = 'F'
-            else:
-                layout = 'A'
+            layout = numpy_support.map_layout(ary)
             return types.Array(dtype, ary.ndim, layout)
 
         return
@@ -204,13 +200,6 @@ class BaseContext(object):
         tp = self.resolve_data_type(val)
         if tp is not None:
             return tp
-
-        elif ctypes_utils.is_ctypes_funcptr(val):
-            cfnptr = val
-            return ctypes_utils.make_function_type(cfnptr)
-
-        elif cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
-            return cffi_utils.make_function_type(val)
 
         elif isinstance(val, types.ExternalFunction):
             return val

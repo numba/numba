@@ -203,6 +203,18 @@ class PointerModel(PrimitiveModel):
         super(PointerModel, self).__init__(dmm, fe_type, be_type)
 
 
+@register_default(types.ExternalFunctionPointer)
+class ExternalFuncPointerModel(PrimitiveModel):
+    def __init__(self, dmm, fe_type):
+        sig = fe_type.sig
+        # Since the function is non-Numba, there is no adaptation
+        # of arguments and return value, hence get_value_type().
+        retty = dmm.lookup(sig.return_type).get_value_type()
+        args = [dmm.lookup(t).get_value_type() for t in sig.args]
+        be_type = ir.PointerType(ir.FunctionType(retty, args))
+        super(ExternalFuncPointerModel, self).__init__(dmm, fe_type, be_type)
+
+
 @register_default(types.UniTuple)
 class UniTupleModel(DataModel):
     def __init__(self, dmm, fe_type):

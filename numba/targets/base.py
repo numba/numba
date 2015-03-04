@@ -313,6 +313,13 @@ class BaseContext(object):
         """
         if self.is_struct_type(ty):
             return self.get_constant_struct(builder, ty, val)
+
+        elif isinstance(ty, types.ExternalFunctionPointer):
+            ptrty = self.get_function_pointer_type(ty)
+            ptrval = ty.get_pointer(val)
+            return builder.inttoptr(self.get_constant(types.intp, ptrval),
+                                    ptrty)
+
         else:
             return self.get_constant(ty, val)
 
@@ -370,7 +377,7 @@ class BaseContext(object):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
 
-        raise NotImplementedError(ty)
+        raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
 
     def get_constant_undef(self, ty):
         lty = self.get_value_type(ty)
@@ -732,13 +739,11 @@ class BaseContext(object):
         retval = builder.call(callee, args)
         return retval
 
-    def call_function_pointer(self, builder, funcptr, signature, args, cconv=None):
-        retty = self.get_value_type(signature.return_type)
-        fnty = Type.function(retty, [a.type for a in args])
-        fnptrty = Type.pointer(fnty)
-        addr = self.get_constant(types.intp, funcptr)
-        ptr = builder.inttoptr(addr, fnptrty)
-        return builder.call(ptr, args, cconv=cconv)
+    def get_function_pointer_type(self, typ):
+        return self.data_model_manager[typ].get_data_type()
+
+    def call_function_pointer(self, builder, funcptr, args, cconv=None):
+        return builder.call(funcptr, args, cconv=cconv)
 
     def call_class_method(self, builder, func, signature, args):
         api = self.get_python_api(builder)
