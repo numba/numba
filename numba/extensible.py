@@ -68,8 +68,8 @@ class _MethodDescriptor(object):
         return partial(self._compiled, instance)
 
 
-class _NativeData(object):
-    __slots__ = ('_type', '_ref_type', '_data', '_dataptr')
+class _NativeDataSpec(object):
+    __slots__ = ('_type', '_ref_type', '_ctype')
 
     def __init__(self, clsname, descriptors):
         fieldtypes = [(d._name, d._type) for d in descriptors]
@@ -78,8 +78,15 @@ class _NativeData(object):
         ctx = CPUTarget.target_context
         llty = ctx.get_value_type(self._type)
         sizeof = ctx.get_abi_sizeof(llty)
-        byteseq = (ctypes.c_byte * sizeof)()
-        self._data = byteseq
+        self._ctype = (ctypes.c_byte * sizeof)
+
+
+class _NativeData(object):
+    __slots__ = ('_spec', '_data', '_dataptr')
+
+    def __init__(self, spec):
+        self._spec = spec
+        self._data = self._spec._ctype()
         self._dataptr = ctypes.addressof(self._data)
 
     @property
@@ -88,7 +95,7 @@ class _NativeData(object):
 
     @property
     def numba_type(self):
-        return self._ref_type
+        return self._spec._ref_type
 
 
 class PlainOldData(type):
@@ -112,9 +119,12 @@ class PlainOldData(type):
         for name, func in methods:
             dct[name] = _MethodDescriptor(name, func)
 
+        # Generate the "spec" for creating the native data
+        ndspec = _NativeDataSpec(clsname, descriptors)
+
         def ctor(self, **kwargs):
             assert not kwargs, "args at ctor not implemented"
-            self.__numba__ = _NativeData(clsname, descriptors)
+            self.__numba__ = _NativeData(ndspec)
 
         dct['__init__'] = ctor
 
