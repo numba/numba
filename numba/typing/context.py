@@ -74,7 +74,7 @@ class BaseContext(object):
                 return res
 
     def resolve_getattr(self, value, attr):
-        if isinstance(value, types.Record):
+        if isinstance(value, (types.Record, types.Structure, types.StructRef)):
             ret = value.typeof(attr)
             assert ret
             return ret
@@ -102,7 +102,7 @@ class BaseContext(object):
         return self.resolve_function_type("setitem", args, kws)
 
     def resolve_setattr(self, target, attr, value):
-        if isinstance(target, types.Record):
+        if isinstance(target, (types.Record, types.Structure, types.StructRef)):
             expectedty = target.typeof(attr)
             if self.type_compatibility(value, expectedty) is not None:
                 return templates.signature(types.void, target, value)
@@ -193,6 +193,10 @@ class BaseContext(object):
             else:
                 layout = 'A'
             return types.Array(dtype, ary.ndim, layout)
+
+        if hasattr(val, '__numba__'):
+            ty = val.__numba__.numba_type
+            return ty
 
         return
 
