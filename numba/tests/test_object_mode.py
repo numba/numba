@@ -62,5 +62,6 @@ class TestObjectMode(unittest.TestCase):
         objarr = numpy.array([object()] * 10)
         self.assertIs(cfunc(objarr), objarr)
 
+
 if __name__ == '__main__':
     unittest.main()
