@@ -823,20 +823,6 @@ class PythonAPI(object):
             val = self.to_native_int(obj, typ)
             return NativeValue(val, is_error=c_api_error())
 
-        elif typ in types.unsigned_domain:
-            longobj = self.number_long(obj)
-            ullval = self.long_as_ulonglong(longobj)
-            self.decref(longobj)
-            return builder.trunc(ullval,
-                                 self.context.get_argument_type(typ))
-
-        elif typ in types.signed_domain:
-            longobj = self.number_long(obj)
-            llval = self.long_as_longlong(longobj)
-            self.decref(longobj)
-            return builder.trunc(llval,
-                                 self.context.get_argument_type(typ))
-
         elif typ == types.float32:
             fobj = self.number_float(obj)
             fval = self.float_as_double(fobj)
@@ -886,14 +872,11 @@ class PythonAPI(object):
         elif isinstance(typ, types.Record):
             buf = self.alloca_buffer()
             ptr = self.extract_record_data(obj, buf)
-
-            with cgutils.if_unlikely(self.builder,
-                                     cgutils.is_null(self.builder, ptr)):
-                # XXX
-                self.builder.ret(ptr)
+            is_error = cgutils.is_null(self.builder, ptr)
 
             ltyp = self.context.get_value_type(typ)
             val = builder.bitcast(ptr, ltyp)
+
             def cleanup():
                 self.release_buffer(buf)
             return NativeValue(val, cleanup=cleanup)

@@ -593,7 +593,7 @@ def array_size(context, builder, typ, value):
 @builtin_attr
 @impl_attribute(types.Kind(types.Array), "itemsize", types.intp)
 @impl_attribute(types.Kind(types.MemoryView), "itemsize", types.intp)
-def array_ndim(context, builder, typ, value):
+def array_itemsize(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
     return array.itemsize
@@ -613,23 +613,23 @@ def array_size(context, builder, typ, value):
 
 @builtin_attr
 @impl_attribute(types.Kind(types.MemoryView), "contiguous", types.boolean)
-def array_ndim(context, builder, typ, value):
+def array_contiguous(context, builder, typ, value):
     return context.get_constant(types.boolean, typ.is_contig)
 
 @builtin_attr
 @impl_attribute(types.Kind(types.MemoryView), "c_contiguous", types.boolean)
-def array_ndim(context, builder, typ, value):
+def array_c_contiguous(context, builder, typ, value):
     return context.get_constant(types.boolean, typ.is_c_contig)
 
 @builtin_attr
 @impl_attribute(types.Kind(types.MemoryView), "f_contiguous", types.boolean)
-def array_ndim(context, builder, typ, value):
+def array_f_contiguous(context, builder, typ, value):
     return context.get_constant(types.boolean, typ.is_f_contig)
 
 
 @builtin_attr
 @impl_attribute(types.Kind(types.MemoryView), "readonly", types.boolean)
-def array_ndim(context, builder, typ, value):
+def array_readonly(context, builder, typ, value):
     return context.get_constant(types.boolean, not typ.mutable)
 
 
