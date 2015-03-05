@@ -31,6 +31,12 @@ class Hsa_get_local_id(ConcreteTemplate):
 
 
 @intrinsic
+class Hsa_get_group_id(ConcreteTemplate):
+    key = hsa.get_group_id
+    cases = [signature(types.intp, types.uint32)]
+
+
+@intrinsic
 class Hsa_get_global_size(ConcreteTemplate):
     key = hsa.get_global_size
     cases = [signature(types.intp, types.uint32)]
@@ -102,6 +108,9 @@ class HsaModuleTemplate(AttributeTemplate):
 
     def resolve_get_local_size(self, mod):
         return types.Function(Hsa_get_local_size)
+
+    def resolve_get_group_id(self, mod):
+        return types.Function(Hsa_get_group_id)
 
     def resolve_barrier(self, mod):
         return types.Function(Hsa_barrier)

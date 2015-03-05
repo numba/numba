@@ -102,6 +102,15 @@ def get_local_id_impl(context, builder, sig, args):
     res = builder.call(get_local_id, [dim])
     return context.cast(builder, res, types.uintp, types.intp)
 
+@register
+@implement(stubs.get_group_id, types.uint32)
+def get_group_id_impl(context, builder, sig, args):
+    [dim] = args
+    get_group_id = _declare_function(context, builder, 'get_group_id', sig,
+                                     ['unsigned int'])
+    res = builder.call(get_group_id, [dim])
+    return context.cast(builder, res, types.uintp, types.intp)
+
 
 @register
 @implement(stubs.get_global_size, types.uint32)

@@ -30,6 +30,13 @@ def get_local_size(*args, **kargs):
     raise NotImplementedError("This is a stub.")
 
 
+def get_group_id(*args, **kargs):
+    """
+    OpenCL get_group_id()
+    """
+    raise NotImplementedError("This is a stub.")
+
+
 def barrier(*args, **kargs):
     """
     OpenCL barrier()
