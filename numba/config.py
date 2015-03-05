@@ -90,6 +90,9 @@ DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, 0)
 # Disable HSA support
 DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
 
+# Enable Profiler
+ENABLE_HSA_PROFILER = _readenv("NUMBA_HSA_PROFILER", int, 0)
+
 
 # Allow interpreter fallback so that Numba @jit decorator will never fail
 # Use for migrating from old numba (<0.12) which supported closure, and other

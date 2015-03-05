@@ -12,6 +12,8 @@ import struct
 import weakref
 import logging
 
+from numba.hsa.profiler import profiler as _prof
+
 #logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 from numba.utils import total_ordering
@@ -604,6 +606,7 @@ class Queue(object):
     def __getattr__(self, fname):
         return getattr(self._id.contents, fname)
 
+    @_prof.mark("hsa.queue.dispatch")
     def dispatch(self, code_descriptor, kernargs,
                  workgroup_size=None,
                  grid_size=None,
