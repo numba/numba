@@ -56,16 +56,17 @@ STRUCT_TYPES = {
 
 class Overloads(object):
     def __init__(self):
+        # A list of (signature, implementation)
         self.versions = []
 
     def find(self, sig):
-        for i, ver in enumerate(self.versions):
-            if ver.signature == sig:
-                return ver
+        for ver_sig, impl in self.versions:
+            if ver_sig == sig:
+                return impl
 
             # As generic type
-            if self._match_arglist(ver.signature.args, sig.args):
-                return ver
+            if self._match_arglist(ver_sig.args, sig.args):
+                return impl
 
         raise NotImplementedError(self, sig)
 
@@ -97,8 +98,8 @@ class Overloads(object):
             # is of that kind
             return True
 
-    def append(self, impl):
-        self.versions.append(impl)
+    def append(self, impl, sig):
+        self.versions.append((sig, impl))
 
 
 @utils.runonce
@@ -152,8 +153,7 @@ class BaseContext(object):
         self.attrs = defaultdict(Overloads)
         self.users = utils.UniqueDict()
 
-        self.insert_func_defn(builtin_registry.functions)
-        self.insert_attr_defn(builtin_registry.attributes)
+        self.install_registry(builtin_registry)
 
         self.cached_internal_func = {}
 
@@ -175,20 +175,29 @@ class BaseContext(object):
     def target_data(self):
         raise NotImplementedError
 
+    def install_registry(self, registry):
+        """
+        Install a *registry* (a imputils.Registry instance) of function
+        and attribute implementations.
+        """
+        self.insert_func_defn(registry.functions)
+        self.insert_attr_defn(registry.attributes)
+
     def insert_func_defn(self, defns):
-        for defn in defns:
-            self.defns[defn.key].append(defn)
+        for impl, func_sigs in defns:
+            for func, sig in func_sigs:
+                self.defns[func].append(impl, sig)
 
     def insert_attr_defn(self, defns):
-        for imp in defns:
-            self.attrs[imp.attr].append(imp)
+        for impl in defns:
+            self.attrs[impl.attr].append(impl, impl.signature)
 
     def insert_user_function(self, func, fndesc, libs=()):
-        imp = user_function(func, fndesc, libs)
-        self.defns[func].append(imp)
+        impl = user_function(func, fndesc, libs)
+        self.defns[func].append(impl, impl.signature)
 
         baseclses = (typing.templates.ConcreteTemplate,)
-        glbls = dict(key=func, cases=[imp.signature])
+        glbls = dict(key=func, cases=[impl.signature])
         name = "CallTemplate(%s)" % fndesc.mangled_name
         self.users[func] = type(name, baseclses, glbls)
 
@@ -196,14 +205,14 @@ class BaseContext(object):
         if func not in self.users:
             msg = "{func} is not a registered user function"
             raise KeyError(msg.format(func=func))
-        imp = user_function(func, fndesc, libs)
-        self.defns[func].append(imp)
+        impl = user_function(func, fndesc, libs)
+        self.defns[func].append(impl, impl.signature)
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
         for name, vtype in utils.iteritems(attrs):
-            imp = python_attr_impl(clsty, name, vtype)
-            self.attrs[imp.attr].append(imp)
+            impl = python_attr_impl(clsty, name, vtype)
+            self.attrs[impl.attr].append(impl, impl.signature)
 
     def remove_user_function(self, func):
         """

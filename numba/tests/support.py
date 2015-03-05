@@ -170,6 +170,8 @@ class TestCase(unittest.TestCase):
         second_family = self._detect_family(second)
 
         assertion_message = "Type Family mismatch. (%s != %s)" % (first_family, second_family)
+        if msg:
+            assertion_message += ': %s' % (msg,)
         self.assertEqual(first_family, second_family, msg=assertion_message)
 
         # We now know they are in the same comparison family

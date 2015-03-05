@@ -318,13 +318,12 @@ def register_unary_ufunc_kernel(ufunc, kernel):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
 
-    register(implement(ufunc, types.Kind(types.Array),
-        types.Kind(types.Array))(unary_ufunc))
-    for ty in types.number_domain:
-        register(implement(ufunc, ty,
-            types.Kind(types.Array))(unary_ufunc))
-    for ty in types.number_domain:
-        register(implement(ufunc, ty)(unary_scalar_ufunc)) # scalar
+    _any = types.Any
+
+    # (array or scalar, out=array)
+    register(implement(ufunc, _any, types.Kind(types.Array))(unary_ufunc))
+    # (scalar, out=array)
+    register(implement(ufunc, _any)(unary_scalar_ufunc))
 
 
 def register_binary_ufunc_kernel(ufunc, kernel):
@@ -335,17 +334,12 @@ def register_binary_ufunc_kernel(ufunc, kernel):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
 
-    register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array),
-        types.Kind(types.Array))(binary_ufunc))
-    for ty in types.number_domain:
-        register(implement(ufunc, ty, types.Kind(types.Array),
-            types.Kind(types.Array))(binary_ufunc))
-        register(implement(ufunc, types.Kind(types.Array), ty,
-            types.Kind(types.Array))(binary_ufunc))
-    for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
-        register(implement(ufunc, ty1, ty2,
-            types.Kind(types.Array))(binary_ufunc))
-        register(implement(ufunc, ty1, ty2)(binary_scalar_ufunc)) # scalar
+    _any = types.Any
+
+    # (array or scalar, array o scalar, out=array)
+    register(implement(ufunc, _any, _any, types.Kind(types.Array))(binary_ufunc))
+    # (scalar, scalar)
+    register(implement(ufunc, _any, _any)(binary_scalar_ufunc))
 
 
 ################################################################################

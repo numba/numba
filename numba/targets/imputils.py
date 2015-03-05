@@ -10,15 +10,12 @@ from .. import typing, cgutils, types
 
 def implement(func, *argtys):
     def wrapper(impl):
-        @functools.wraps(impl)
-        def res(context, builder, sig, args):
-            ret = impl(context, builder, sig, args)
-            return ret
-
-        res.signature = typing.signature(types.Any, *argtys)
-        res.key = func
-        res.__wrapped__ = impl
-        return res
+        try:
+            sigs = impl.function_signatures
+        except AttributeError:
+            sigs = impl.function_signatures = []
+        sigs.append((func, typing.signature(types.Any, *argtys)))
+        return impl
 
     return wrapper
 
@@ -214,12 +211,11 @@ class Registry(object):
         self.functions = []
         self.attributes = []
 
-    def register(self, item):
-        curr_item = item
-        while hasattr(curr_item, '__wrapped__'):
-            self.functions.append(curr_item)
-            curr_item = curr_item.__wrapped__
-        return item
+    def register(self, impl):
+        sigs = impl.function_signatures
+        impl.function_signatures = []
+        self.functions.append((impl, sigs))
+        return impl
 
     def register_attr(self, item):
         curr_item = item

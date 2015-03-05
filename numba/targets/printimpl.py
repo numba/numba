@@ -14,6 +14,8 @@ register = registry.register
 #        nopython mode.
 
 
+@register
+@implement(types.print_item_type, types.Kind(types.Integer))
 def int_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -24,10 +26,8 @@ def int_print_impl(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-for ty in types.integer_domain:
-    register(implement(types.print_item_type, ty)(int_print_impl))
-
-
+@register
+@implement(types.print_item_type, types.Kind(types.Float))
 def real_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -36,10 +36,6 @@ def real_print_impl(context, builder, sig, args):
     py.print_object(intobj)
     py.decref(intobj)
     return context.get_dummy_value()
-
-
-for ty in types.real_domain:
-    register(implement(types.print_item_type, ty)(real_print_impl))
 
 
 @register
