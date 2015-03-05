@@ -11,7 +11,8 @@ registry = Registry()
 register = registry.register
 
 
-for ty in types.integer_domain:
+def _implement_integer_operators():
+    ty = types.Kind(types.Integer)
     register(implement(operator.add, ty, ty)(builtins.int_add_impl))
     register(implement(operator.iadd, ty, ty)(builtins.int_add_impl))
     register(implement(operator.sub, ty, ty)(builtins.int_sub_impl))
@@ -33,45 +34,48 @@ for ty in types.integer_domain:
     register(implement(operator.invert, ty)(builtins.int_invert_impl))
     register(implement(operator.not_, ty)(builtins.number_not_impl))
 
-for ty in types.unsigned_domain:
-    if not utils.IS_PY3:
-        register(implement(operator.div, ty, ty)(builtins.int_udiv_impl))
-        register(implement(operator.idiv, ty, ty)(builtins.int_udiv_impl))
-    register(implement(operator.floordiv, ty, ty)(builtins.int_ufloordiv_impl))
-    register(implement(operator.ifloordiv, ty, ty)(builtins.int_ufloordiv_impl))
-    register(implement(operator.truediv, ty, ty)(builtins.int_utruediv_impl))
-    register(implement(operator.itruediv, ty, ty)(builtins.int_utruediv_impl))
-    register(implement(operator.mod, ty, ty)(builtins.int_urem_impl))
-    register(implement(operator.imod, ty, ty)(builtins.int_urem_impl))
-    register(implement(operator.lt, ty, ty)(builtins.int_ult_impl))
-    register(implement(operator.le, ty, ty)(builtins.int_ule_impl))
-    register(implement(operator.gt, ty, ty)(builtins.int_ugt_impl))
-    register(implement(operator.ge, ty, ty)(builtins.int_uge_impl))
-    register(implement(operator.pow, types.float64, ty)(builtins.int_upower_impl))
-    register(implement(operator.ipow, types.float64, ty)(builtins.int_upower_impl))
-    register(implement(operator.rshift, ty, ty)(builtins.int_lshr_impl))
-    register(implement(operator.irshift, ty, ty)(builtins.int_lshr_impl))
+    for ty in types.unsigned_domain:
+        if not utils.IS_PY3:
+            register(implement(operator.div, ty, ty)(builtins.int_udiv_impl))
+            register(implement(operator.idiv, ty, ty)(builtins.int_udiv_impl))
+        register(implement(operator.floordiv, ty, ty)(builtins.int_ufloordiv_impl))
+        register(implement(operator.ifloordiv, ty, ty)(builtins.int_ufloordiv_impl))
+        register(implement(operator.truediv, ty, ty)(builtins.int_utruediv_impl))
+        register(implement(operator.itruediv, ty, ty)(builtins.int_utruediv_impl))
+        register(implement(operator.mod, ty, ty)(builtins.int_urem_impl))
+        register(implement(operator.imod, ty, ty)(builtins.int_urem_impl))
+        register(implement(operator.lt, ty, ty)(builtins.int_ult_impl))
+        register(implement(operator.le, ty, ty)(builtins.int_ule_impl))
+        register(implement(operator.gt, ty, ty)(builtins.int_ugt_impl))
+        register(implement(operator.ge, ty, ty)(builtins.int_uge_impl))
+        register(implement(operator.pow, types.float64, ty)(builtins.int_upower_impl))
+        register(implement(operator.ipow, types.float64, ty)(builtins.int_upower_impl))
+        register(implement(operator.rshift, ty, ty)(builtins.int_lshr_impl))
+        register(implement(operator.irshift, ty, ty)(builtins.int_lshr_impl))
 
-for ty in types.signed_domain:
-    if not utils.IS_PY3:
-        register(implement(operator.div, ty, ty)(builtins.int_sdiv_impl))
-        register(implement(operator.idiv, ty, ty)(builtins.int_sdiv_impl))
-    register(implement(operator.floordiv, ty, ty)(builtins.int_sfloordiv_impl))
-    register(implement(operator.ifloordiv, ty, ty)(builtins.int_sfloordiv_impl))
-    register(implement(operator.truediv, ty, ty)(builtins.int_struediv_impl))
-    register(implement(operator.itruediv, ty, ty)(builtins.int_struediv_impl))
-    register(implement(operator.mod, ty, ty)(builtins.int_srem_impl))
-    register(implement(operator.imod, ty, ty)(builtins.int_srem_impl))
-    register(implement(operator.lt, ty, ty)(builtins.int_slt_impl))
-    register(implement(operator.le, ty, ty)(builtins.int_sle_impl))
-    register(implement(operator.gt, ty, ty)(builtins.int_sgt_impl))
-    register(implement(operator.ge, ty, ty)(builtins.int_sge_impl))
-    register(implement(operator.pow, types.float64, ty)(builtins.int_spower_impl))
-    register(implement(operator.ipow, types.float64, ty)(builtins.int_spower_impl))
-    register(implement(operator.rshift, ty, ty)(builtins.int_ashr_impl))
-    register(implement(operator.irshift, ty, ty)(builtins.int_ashr_impl))
+    for ty in types.signed_domain:
+        if not utils.IS_PY3:
+            register(implement(operator.div, ty, ty)(builtins.int_sdiv_impl))
+            register(implement(operator.idiv, ty, ty)(builtins.int_sdiv_impl))
+        register(implement(operator.floordiv, ty, ty)(builtins.int_sfloordiv_impl))
+        register(implement(operator.ifloordiv, ty, ty)(builtins.int_sfloordiv_impl))
+        register(implement(operator.truediv, ty, ty)(builtins.int_struediv_impl))
+        register(implement(operator.itruediv, ty, ty)(builtins.int_struediv_impl))
+        register(implement(operator.mod, ty, ty)(builtins.int_srem_impl))
+        register(implement(operator.imod, ty, ty)(builtins.int_srem_impl))
+        register(implement(operator.lt, ty, ty)(builtins.int_slt_impl))
+        register(implement(operator.le, ty, ty)(builtins.int_sle_impl))
+        register(implement(operator.gt, ty, ty)(builtins.int_sgt_impl))
+        register(implement(operator.ge, ty, ty)(builtins.int_sge_impl))
+        register(implement(operator.pow, types.float64, ty)(builtins.int_spower_impl))
+        register(implement(operator.ipow, types.float64, ty)(builtins.int_spower_impl))
+        register(implement(operator.rshift, ty, ty)(builtins.int_ashr_impl))
+        register(implement(operator.irshift, ty, ty)(builtins.int_ashr_impl))
 
-for ty in types.real_domain:
+_implement_integer_operators()
+
+def _implement_real_operators():
+    ty = types.Kind(types.Float)
     register(implement(operator.add, ty, ty)(builtins.real_add_impl))
     register(implement(operator.iadd, ty, ty)(builtins.real_add_impl))
     register(implement(operator.sub, ty, ty)(builtins.real_sub_impl))
@@ -99,7 +103,11 @@ for ty in types.real_domain:
     register(implement(operator.pos, ty)(builtins.real_positive_impl))
     register(implement(operator.not_, ty)(builtins.number_not_impl))
 
-for ty in types.complex_domain:
+_implement_real_operators()
+
+
+def _implement_complex_operators():
+    ty = types.Kind(types.Complex)
     register(implement(operator.add, ty, ty)(builtins.complex_add_impl))
     register(implement(operator.iadd, ty, ty)(builtins.complex_add_impl))
     register(implement(operator.sub, ty, ty)(builtins.complex_sub_impl))
@@ -116,3 +124,5 @@ for ty in types.complex_domain:
     register(implement(operator.neg, ty)(builtins.complex_negate_impl))
     register(implement(operator.pos, ty)(builtins.complex_positive_impl))
     register(implement(operator.not_, ty)(builtins.number_not_impl))
+
+_implement_complex_operators()
