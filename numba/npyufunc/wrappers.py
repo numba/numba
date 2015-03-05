@@ -89,9 +89,10 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
                 pyapi.decref(msgobj)
             with if_ok:
                 # Unbox
-                retval = pyapi.to_native_value(retval, signature.return_type)
+                native = pyapi.to_native_value(retval, signature.return_type)
+                assert native.cleanup is None
                 # Store
-                out.store_direct(retval, builder.load(store_offset))
+                out.store_direct(native.value, builder.load(store_offset))
 
     return _build_ufunc_loop_body_objmode(load, store, context, func, builder,
                                           arrays, out, offsets, store_offset,

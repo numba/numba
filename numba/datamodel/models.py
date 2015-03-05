@@ -239,12 +239,15 @@ class UniTupleModel(DataModel):
     def as_argument(self, builder, value):
         out = []
         for i in range(self._count):
-            out.append(builder.extract_value(value, [i]))
+            v = builder.extract_value(value, [i])
+            v = self._elem_model.as_argument(builder, v)
+            out.append(v)
         return out
 
     def from_argument(self, builder, value):
         out = ir.Constant(self.get_value_type(), ir.Undefined)
         for i, v in enumerate(value):
+            v = self._elem_model.from_argument(builder, v)
             out = builder.insert_value(out, v, [i])
         return out
 
@@ -462,7 +465,12 @@ class PairModel(StructModel):
 
 
 @register_default(types.Array)
+@register_default(types.Buffer)
+@register_default(types.ByteArray)
+@register_default(types.Bytes)
+@register_default(types.MemoryView)
 @register_default(types.NestedArray)
+@register_default(types.PyArray)
 class ArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
@@ -677,5 +685,3 @@ def handle_numpy_flat_type(dmm, ty):
         return CContiguousFlatIter(dmm, ty)
     else:
         return FlatIter(dmm, ty)
-
-

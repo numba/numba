@@ -1,5 +1,6 @@
 """
-Implementation of operations on Array objects.
+Implementation of operations on Array objects and objects supporting
+the buffer protocol.
 """
 
 from __future__ import print_function, absolute_import, division
@@ -62,7 +63,7 @@ def make_arrayiter_cls(iterator_type):
     return cgutils.create_struct_proxy(iterator_type)
 
 @builtin
-@implement('getiter', types.Kind(types.Array))
+@implement('getiter', types.Kind(types.Buffer))
 def getiter_array(context, builder, sig, args):
     [arrayty] = sig.args
     [array] = args
@@ -112,7 +113,7 @@ def iternext_array(context, builder, sig, args, result):
         builder.store(nindex, iterobj.index)
 
 @builtin
-@implement('getitem', types.Kind(types.Array), types.Kind(types.Integer))
+@implement('getitem', types.Kind(types.Buffer), types.Kind(types.Integer))
 def getitem_array1d_intp(context, builder, sig, args):
     aryty, idxty = sig.args
     if aryty.ndim != 1:
@@ -127,7 +128,7 @@ def getitem_array1d_intp(context, builder, sig, args):
                             wraparound=idxty.signed)
 
 @builtin
-@implement('getitem', types.Kind(types.Array), types.slice3_type)
+@implement('getitem', types.Kind(types.Buffer), types.slice3_type)
 def getitem_array1d_slice(context, builder, sig, args):
     aryty, _ = sig.args
     if aryty.ndim != 1:
@@ -163,7 +164,7 @@ def getitem_array1d_slice(context, builder, sig, args):
 
 
 @builtin
-@implement('getitem', types.Kind(types.Array),
+@implement('getitem', types.Kind(types.Buffer),
            types.Kind(types.UniTuple))
 def getitem_array_unituple(context, builder, sig, args):
     aryty, idxty = sig.args
@@ -210,7 +211,7 @@ def getitem_array_unituple(context, builder, sig, args):
 
 
 @builtin
-@implement('getitem', types.Kind(types.Array),
+@implement('getitem', types.Kind(types.Buffer),
            types.Kind(types.Tuple))
 def getitem_array_tuple(context, builder, sig, args):
     aryty, idxty = sig.args
@@ -262,7 +263,7 @@ def getitem_array_tuple(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.Array), types.Kind(types.Integer),
+@implement('setitem', types.Kind(types.Buffer), types.Kind(types.Integer),
            types.Any)
 def setitem_array1d(context, builder, sig, args):
     aryty, idxty, valty = sig.args
@@ -280,7 +281,7 @@ def setitem_array1d(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.Array),
+@implement('setitem', types.Kind(types.Buffer),
            types.Kind(types.UniTuple), types.Any)
 def setitem_array_unituple(context, builder, sig, args):
     aryty, idxty, valty = sig.args
@@ -299,7 +300,7 @@ def setitem_array_unituple(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.Array),
+@implement('setitem', types.Kind(types.Buffer),
            types.Kind(types.Tuple), types.Any)
 def setitem_array_tuple(context, builder, sig, args):
     aryty, idxty, valty = sig.args
@@ -317,7 +318,7 @@ def setitem_array_tuple(context, builder, sig, args):
     context.pack_value(builder, aryty.dtype, val, ptr)
 
 @builtin
-@implement('setitem', types.Kind(types.Array),
+@implement('setitem', types.Kind(types.Buffer),
            types.slice3_type, types.Any)
 def setitem_array1d_slice(context, builder, sig, args):
     aryty, idxty, valty = sig.args
@@ -395,7 +396,7 @@ def setitem_array1d_slice(context, builder, sig, args):
 
 
 @builtin
-@implement(types.len_type, types.Kind(types.Array))
+@implement(types.len_type, types.Kind(types.Buffer))
 def array_len(context, builder, sig, args):
     (aryty,) = sig.args
     (ary,) = args
@@ -558,6 +559,7 @@ def array_argmax(context, builder, sig, args):
 
 @builtin_attr
 @impl_attribute(types.Kind(types.Array), "shape", types.Kind(types.UniTuple))
+@impl_attribute(types.Kind(types.MemoryView), "shape", types.Kind(types.UniTuple))
 def array_shape(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -566,6 +568,7 @@ def array_shape(context, builder, typ, value):
 
 @builtin_attr
 @impl_attribute(types.Kind(types.Array), "strides", types.Kind(types.UniTuple))
+@impl_attribute(types.Kind(types.MemoryView), "strides", types.Kind(types.UniTuple))
 def array_strides(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -574,6 +577,7 @@ def array_strides(context, builder, typ, value):
 
 @builtin_attr
 @impl_attribute(types.Kind(types.Array), "ndim", types.intp)
+@impl_attribute(types.Kind(types.MemoryView), "ndim", types.intp)
 def array_ndim(context, builder, typ, value):
     return context.get_constant(types.intp, typ.ndim)
 
@@ -583,8 +587,50 @@ def array_ndim(context, builder, typ, value):
 def array_size(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
+    return array.nitems
+
+
+@builtin_attr
+@impl_attribute(types.Kind(types.Array), "itemsize", types.intp)
+@impl_attribute(types.Kind(types.MemoryView), "itemsize", types.intp)
+def array_itemsize(context, builder, typ, value):
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+    return array.itemsize
+
+
+@builtin_attr
+@impl_attribute(types.Kind(types.MemoryView), "nbytes", types.intp)
+def array_size(context, builder, typ, value):
+    """
+    nbytes = size * itemsize
+    """
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
     dims = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
-    return reduce(builder.mul, dims[1:], dims[0])
+    return builder.mul(array.nitems, array.itemsize)
+
+
+@builtin_attr
+@impl_attribute(types.Kind(types.MemoryView), "contiguous", types.boolean)
+def array_contiguous(context, builder, typ, value):
+    return context.get_constant(types.boolean, typ.is_contig)
+
+@builtin_attr
+@impl_attribute(types.Kind(types.MemoryView), "c_contiguous", types.boolean)
+def array_c_contiguous(context, builder, typ, value):
+    return context.get_constant(types.boolean, typ.is_c_contig)
+
+@builtin_attr
+@impl_attribute(types.Kind(types.MemoryView), "f_contiguous", types.boolean)
+def array_f_contiguous(context, builder, typ, value):
+    return context.get_constant(types.boolean, typ.is_f_contig)
+
+
+@builtin_attr
+@impl_attribute(types.Kind(types.MemoryView), "readonly", types.boolean)
+def array_readonly(context, builder, typ, value):
+    return context.get_constant(types.boolean, not typ.mutable)
 
 
 @builtin_attr

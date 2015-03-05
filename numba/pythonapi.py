@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import contextlib
 import pickle
 
 from llvmlite import ir
@@ -10,6 +11,18 @@ import llvmlite.llvmpy.core as lc
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
 from numba import types, utils, cgutils, _helperlib, assume
+
+
+class NativeValue(object):
+    """
+    Encapsulate the result of converting a Python object to a native value,
+    recording whether the conversion was successful and how to cleanup.
+    """
+
+    def __init__(self, value, is_error=None, cleanup=None):
+        self.value = value
+        self.is_error = is_error if is_error is not None else cgutils.false_bit
+        self.cleanup = cleanup
 
 
 class PythonAPI(object):
@@ -42,6 +55,7 @@ class PythonAPI(object):
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
         self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
+        self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
 
     # ------ Python API -----
 
@@ -196,8 +210,7 @@ class PythonAPI(object):
         keyvalues: iterable of (str, llvm.Value of PyObject*)
         """
         dictobj = self.dict_new()
-        not_null = cgutils.is_not_null(self.builder, dictobj)
-        with cgutils.if_likely(self.builder, not_null):
+        with self.if_object_ok(dictobj):
             for k, v in keyvalues:
                 self.dict_setitem_string(dictobj, k, v)
         return dictobj
@@ -713,6 +726,21 @@ class PythonAPI(object):
     def alloca_obj(self):
         return self.builder.alloca(self.pyobj)
 
+    def alloca_buffer(self):
+        """
+        Return a pointer to a stack-allocated, zero-initialized Py_buffer.
+        """
+        # Treat the buffer as an opaque array of bytes
+        ptr = cgutils.alloca_once_value(self.builder,
+                                        lc.Constant.null(self.py_buffer_t))
+        return ptr
+
+    @contextlib.contextmanager
+    def if_object_ok(self, obj):
+        with cgutils.if_likely(self.builder,
+                               cgutils.is_not_null(self.builder, obj)):
+            yield
+
     def print_object(self, obj):
         strobj = self.object_str(obj)
         cstr = self.string_as_string(strobj)
@@ -734,8 +762,7 @@ class PythonAPI(object):
     def list_pack(self, items):
         n = len(items)
         seq = self.list_new(self.context.get_constant(types.intp, n))
-        not_null = cgutils.is_not_null(self.builder, seq)
-        with cgutils.if_likely(self.builder, not_null):
+        with self.if_object_ok(seq):
             for i in range(n):
                 idx = self.context.get_constant(types.intp, i)
                 self.incref(items[i])
@@ -778,76 +805,37 @@ class PythonAPI(object):
             self.module.__serialized[obj] = gv
         return gv
 
-    def to_native_arg(self, obj, typ):
-        if isinstance(typ, types.Record):
-            # Generate a dummy integer type that has the size of Py_buffer
-            dummy_py_buffer_type = Type.int(_helperlib.py_buffer_size * 8)
-            # Allocate the Py_buffer
-            py_buffer = cgutils.alloca_once(self.builder, dummy_py_buffer_type)
-
-            # Zero-fill the py_buffer. where the obj field in Py_buffer is NULL
-            # PyBuffer_Release has no effect.
-            zeroed_buffer = lc.Constant.null(dummy_py_buffer_type)
-            self.builder.store(zeroed_buffer, py_buffer)
-
-            buf_as_voidptr = self.builder.bitcast(py_buffer, self.voidptr)
-            ptr = self.extract_record_data(obj, buf_as_voidptr)
-
-            with cgutils.if_unlikely(self.builder,
-                                     cgutils.is_null(self.builder, ptr)):
-                self.builder.ret(ptr)
-
-            ltyp = self.context.get_value_type(typ)
-            val = self.builder.bitcast(ptr, ltyp)
-
-            def dtor():
-                self.release_record_buffer(buf_as_voidptr)
-
-        else:
-            val = self.to_native_value(obj, typ)
-
-            def dtor():
-                pass
-
-        return val, dtor
-
     def to_native_value(self, obj, typ):
         builder = self.builder
+        def c_api_error():
+            return cgutils.is_not_null(builder, self.err_occurred())
 
         if isinstance(typ, types.Object) or typ == types.pyobject:
-            return obj
+            return NativeValue(obj)
 
         elif typ == types.boolean:
             istrue = self.object_istrue(obj)
             zero = Constant.null(istrue.type)
-            return builder.icmp(lc.ICMP_NE, istrue, zero)
+            val = builder.icmp(lc.ICMP_NE, istrue, zero)
+            return NativeValue(val, is_error=c_api_error())
 
-        elif typ in types.unsigned_domain:
-            longobj = self.number_long(obj)
-            ullval = self.long_as_ulonglong(longobj)
-            self.decref(longobj)
-            return builder.trunc(ullval,
-                                      self.context.get_argument_type(typ))
-
-        elif typ in types.signed_domain:
-            longobj = self.number_long(obj)
-            llval = self.long_as_longlong(longobj)
-            self.decref(longobj)
-            return builder.trunc(llval,
-                                      self.context.get_argument_type(typ))
+        elif isinstance(typ, types.Integer):
+            val = self.to_native_int(obj, typ)
+            return NativeValue(val, is_error=c_api_error())
 
         elif typ == types.float32:
             fobj = self.number_float(obj)
             fval = self.float_as_double(fobj)
             self.decref(fobj)
-            return builder.fptrunc(fval,
-                                        self.context.get_argument_type(typ))
+            val = builder.fptrunc(fval,
+                                  self.context.get_argument_type(typ))
+            return NativeValue(val, is_error=c_api_error())
 
         elif typ == types.float64:
             fobj = self.number_float(obj)
-            fval = self.float_as_double(fobj)
+            val = self.float_as_double(fobj)
             self.decref(fobj)
-            return fval
+            return NativeValue(val, is_error=c_api_error())
 
         elif typ in (types.complex128, types.complex64):
             cplxcls = self.context.make_complex(types.complex128)
@@ -857,7 +845,8 @@ class PythonAPI(object):
             failed = cgutils.is_false(builder, ok)
 
             with cgutils.if_unlikely(builder, failed):
-                builder.ret(self.get_null_object())
+                self.err_set_string("PyExc_TypeError",
+                                    "conversion to %s failed" % (typ,))
 
             if typ == types.complex64:
                 c64cls = self.context.make_complex(typ)
@@ -868,35 +857,39 @@ class PythonAPI(object):
                                           types.float64, types.float32)
                 c64.real = freal
                 c64.imag = fimag
-                return c64._getvalue()
+                return NativeValue(c64._getvalue(), is_error=failed)
             else:
-                return cplx._getvalue()
+                return NativeValue(cplx._getvalue(), is_error=failed)
 
         elif isinstance(typ, types.NPDatetime):
             val = self.extract_np_datetime(obj)
-            return val
+            return NativeValue(val, is_error=c_api_error())
 
         elif isinstance(typ, types.NPTimedelta):
             val = self.extract_np_timedelta(obj)
-            return val
+            return NativeValue(val, is_error=c_api_error())
+
+        elif isinstance(typ, types.Record):
+            buf = self.alloca_buffer()
+            ptr = self.extract_record_data(obj, buf)
+            is_error = cgutils.is_null(self.builder, ptr)
+
+            ltyp = self.context.get_value_type(typ)
+            val = builder.bitcast(ptr, ltyp)
+
+            def cleanup():
+                self.release_buffer(buf)
+            return NativeValue(val, cleanup=cleanup, is_error=is_error)
 
         elif isinstance(typ, types.Array):
-            return self.to_native_array(obj, typ)
+            val, failed = self.to_native_array(obj, typ)
+            return NativeValue(val, is_error=failed)
+
+        elif isinstance(typ, types.Buffer):
+            return self.to_native_buffer(obj, typ)
 
         elif isinstance(typ, types.Optional):
-            isnone = builder.icmp(lc.ICMP_EQ, obj, self.borrow_none())
-            noneval = self.context.make_optional_none(builder, typ.type)
-            retptr = cgutils.alloca_once(builder, noneval.type)
-            with cgutils.ifelse(builder, isnone) as (then, orelse):
-                with then:
-                    builder.store(noneval, retptr)
-
-                with orelse:
-                    val = self.to_native_value(obj, typ.type)
-                    just = self.context.make_optional_value(builder,
-                                                            typ.type, val)
-                    builder.store(just, retptr)
-            return builder.load(retptr)
+            return self.to_native_optional(obj, typ)
 
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
             return self.to_native_tuple(obj, typ)
@@ -919,7 +912,7 @@ class PythonAPI(object):
                         intval = self.number_as_ssize_t(intobj)
                         self.decref(intobj)
                         builder.store(builder.inttoptr(intval, ptrty), ret)
-                return builder.load(ret)
+                return NativeValue(builder.load(ret), is_error=c_api_error())
 
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
@@ -995,21 +988,49 @@ class PythonAPI(object):
 
         raise NotImplementedError(typ)
 
+    def to_native_int(self, obj, typ):
+        ll_type = self.context.get_argument_type(typ)
+        val = cgutils.alloca_once(self.builder, ll_type)
+        longobj = self.number_long(obj)
+        with self.if_object_ok(longobj):
+            if typ.signed:
+                llval = self.long_as_longlong(longobj)
+            else:
+                llval = self.long_as_ulonglong(longobj)
+            self.decref(longobj)
+            self.builder.store(self.builder.trunc(llval, ll_type), val)
+        return self.builder.load(val)
+
+    def to_native_buffer(self, obj, typ):
+        buf = self.alloca_buffer()
+        res = self.get_buffer(obj, buf)
+        is_error = cgutils.is_not_null(self.builder, res)
+
+        nativearycls = self.context.make_array(typ)
+        nativeary = nativearycls(self.context, self.builder)
+        aryptr = nativeary._getpointer()
+
+        with cgutils.if_likely(self.builder, self.builder.not_(is_error)):
+            ptr = self.builder.bitcast(aryptr, self.voidptr)
+            self.numba_buffer_adaptor(buf, ptr)
+
+        def cleanup():
+            self.release_buffer(buf)
+
+        return NativeValue(self.builder.load(aryptr), is_error=is_error,
+                           cleanup=cleanup)
+
     def to_native_array(self, ary, typ):
         # TODO check matching dtype.
         #      currently, mismatching dtype will still work and causes
         #      potential memory corruption
-        voidptr = Type.pointer(Type.int(8))
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, self.builder)
         aryptr = nativeary._getpointer()
-        ptr = self.builder.bitcast(aryptr, voidptr)
+        ptr = self.builder.bitcast(aryptr, self.voidptr)
         errcode = self.numba_array_adaptor(ary, ptr)
         failed = cgutils.is_not_null(self.builder, errcode)
-        with cgutils.if_unlikely(self.builder, failed):
-            # TODO
-            self.builder.unreachable()
-        return self.builder.load(aryptr)
+        return self.builder.load(aryptr), failed
 
     def from_native_array(self, ary, typ):
         assert assume.return_argument_array_only
@@ -1019,19 +1040,68 @@ class PythonAPI(object):
         self.incref(parent)
         return parent
 
+    def to_native_optional(self, obj, typ):
+        """
+        Convert object *obj* to a native optional structure.
+        """
+        noneval = self.context.make_optional_none(self.builder, typ.type)
+        is_not_none = self.builder.icmp(lc.ICMP_NE, obj, self.borrow_none())
+
+        retptr = cgutils.alloca_once(self.builder, noneval.type)
+        errptr = cgutils.alloca_once_value(self.builder, cgutils.false_bit)
+
+        with cgutils.ifelse(self.builder, is_not_none) as (then, orelse):
+            with then:
+                native = self.to_native_value(obj, typ.type)
+                just = self.context.make_optional_value(self.builder,
+                                                        typ.type, native.value)
+                self.builder.store(just, retptr)
+                self.builder.store(native.is_error, errptr)
+
+            with orelse:
+                self.builder.store(ir.Constant(noneval.type, ir.Undefined),
+                                   retptr)
+                self.builder.store(noneval, retptr)
+
+        if native.cleanup is not None:
+            def cleanup():
+                with cgutils.ifthen(self.builder, is_not_none):
+                    native.cleanup()
+        else:
+            cleanup = None
+
+        ret = self.builder.load(retptr)
+        return NativeValue(ret, is_error=self.builder.load(errptr),
+                           cleanup=cleanup)
+
     def to_native_tuple(self, obj, typ):
         """
         Convert tuple *obj* to a native array (if homogenous) or structure.
         """
         n = len(typ)
         values = []
+        cleanups = []
+        is_error = cgutils.false_bit
         for i, eltype in enumerate(typ):
             elem = self.tuple_getitem(obj, i)
-            values.append(self.to_native_value(elem, eltype))
-        if isinstance(typ, types.UniTuple):
-            return cgutils.pack_array(self.builder, values)
+            native = self.to_native_value(elem, eltype)
+            values.append(native.value)
+            is_error = self.builder.or_(is_error, native.is_error)
+            if native.cleanup is not None:
+                cleanups.append(native.cleanup)
+
+        if cleanups:
+            def cleanup():
+                for func in reversed(cleanups):
+                    func()
         else:
-            return cgutils.make_anonymous_struct(self.builder, values)
+            cleanup = None
+
+        if isinstance(typ, types.UniTuple):
+            value = cgutils.pack_array(self.builder, values)
+        else:
+            value = cgutils.make_anonymous_struct(self.builder, values)
+        return NativeValue(value, is_error=is_error, cleanup=cleanup)
 
     def from_native_tuple(self, val, typ):
         """
@@ -1047,12 +1117,19 @@ class PythonAPI(object):
         return tuple_val
 
     def numba_array_adaptor(self, ary, ptr):
-        voidptr = Type.pointer(Type.int(8))
-        fnty = Type.function(Type.int(), [self.pyobj, voidptr])
+        fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
         fn = self._get_function(fnty, name="numba_adapt_ndarray")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
         return self.builder.call(fn, (ary, ptr))
+
+    def numba_buffer_adaptor(self, buf, ptr):
+        fnty = Type.function(Type.void(),
+                             [ir.PointerType(self.py_buffer_t), self.voidptr])
+        fn = self._get_function(fnty, name="numba_adapt_buffer")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        return self.builder.call(fn, (buf, ptr))
 
     def complex_adaptor(self, cobj, cmplx):
         fnty = Type.function(Type.int(), [self.pyobj, cmplx.type])
@@ -1060,14 +1137,20 @@ class PythonAPI(object):
         return self.builder.call(fn, [cobj, cmplx])
 
     def extract_record_data(self, obj, pbuf):
-        fnty = Type.function(self.voidptr, [self.pyobj,
-                                                         self.voidptr])
+        fnty = Type.function(self.voidptr,
+                             [self.pyobj, ir.PointerType(self.py_buffer_t)])
         fn = self._get_function(fnty, name="numba_extract_record_data")
         return self.builder.call(fn, [obj, pbuf])
 
-    def release_record_buffer(self, pbuf):
-        fnty = Type.function(Type.void(), [self.voidptr])
-        fn = self._get_function(fnty, name="numba_release_record_buffer")
+    def get_buffer(self, obj, pbuf):
+        fnty = Type.function(Type.int(),
+                             [self.pyobj, ir.PointerType(self.py_buffer_t)])
+        fn = self._get_function(fnty, name="numba_get_buffer")
+        return self.builder.call(fn, [obj, pbuf])
+
+    def release_buffer(self, pbuf):
+        fnty = Type.function(Type.void(), [ir.PointerType(self.py_buffer_t)])
+        fn = self._get_function(fnty, name="numba_release_buffer")
         return self.builder.call(fn, [pbuf])
 
     def extract_np_datetime(self, obj):

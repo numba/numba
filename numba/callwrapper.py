@@ -27,29 +27,25 @@ class _ArgManager(object):
             arg2.err -> arg1.err -> arg0.err -> arg.end (returns)
         """
         # Unbox argument
-        val, dtor = self.api.to_native_arg(self.builder.load(obj), ty)
+        native = self.api.to_native_value(self.builder.load(obj), ty)
 
-        # check for Python C-API Error
-        error_check = self.api.err_occurred()
-        err_happened = self.builder.icmp(lc.ICMP_NE, error_check,
-                                         self.api.get_null_object())
+        # If an error occurred, go to the cleanup block for the previous argument.
+        with cgutils.if_unlikely(self.builder, native.is_error):
+            self.builder.branch(self.nextblk)
 
-        # Write the cleanup block
+        # Write the cleanup block for this argument
         cleanupblk = cgutils.append_basic_block(self.builder,
                                                 "arg%d.err" % self.arg_count)
         with cgutils.goto_block(self.builder, cleanupblk):
-            dtor()
+            if native.cleanup is not None:
+                native.cleanup()
+                self.cleanups.append(native.cleanup)
             # Go to next cleanup block
             self.builder.branch(self.nextblk)
 
-        # If an error occurred, go to the cleanup block
-        with cgutils.if_unlikely(self.builder, err_happened):
-            self.builder.branch(cleanupblk)
-
-        self.cleanups.append(dtor)
         self.nextblk = cleanupblk
         self.arg_count += 1
-        return val
+        return native.value
 
     def emit_cleanup(self):
         """Emit the cleanup code after we are done with the arguments

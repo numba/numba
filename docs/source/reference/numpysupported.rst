@@ -81,6 +81,7 @@ Attributes
 The following attributes of Numpy arrays are supported:
 
 * :attr:`~numpy.ndarray.flat`
+* :attr:`~numpy.ndarray.itemsize`
 * :attr:`~numpy.ndarray.ndim`
 * :attr:`~numpy.ndarray.shape`
 * :attr:`~numpy.ndarray.size`
@@ -172,7 +173,9 @@ Simple random data
 Permutations
 ''''''''''''
 
-* :func:`numpy.random.shuffle`: the sequence argument must be a 1D Numpy array
+* :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
+  Numpy array or buffer-providing object (such as a :class:`bytearray`
+  or :class:`array.array`)
 
 Distributions
 '''''''''''''

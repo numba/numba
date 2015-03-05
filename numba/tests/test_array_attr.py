@@ -5,6 +5,10 @@ from numba.compiler import compile_isolated, Flags
 from numba import types
 
 
+def array_itemsize(a):
+    return a.itemsize
+
+
 def array_shape(a, i):
     return a.shape[i]
 
@@ -56,6 +60,14 @@ class TestArrayAttr(unittest.TestCase):
         a = np.arange(10).reshape(2, 5)
         self.assertEqual(pyfunc(a), cfunc(a))
 
+    def test_itemsize(self):
+        pyfunc = array_itemsize
+        cres = compile_isolated(pyfunc, (types.int32[:,:],))
+        cfunc = cres.entry_point
+
+        a = np.arange(10).reshape(2, 5)
+        self.assertEqual(pyfunc(a), cfunc(a))
+
+
 if __name__ == '__main__':
     unittest.main()
-

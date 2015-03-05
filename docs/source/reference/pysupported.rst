@@ -77,6 +77,25 @@ None
 The :const:`None` value is supported for identity testing (when using
 an :class:`~numba.optional` type).
 
+bytes, bytearray, memoryview
+----------------------------
+
+The :class:`bytearray` type and, on Python 3, the :class:`bytes` type
+support indexing, iteration and retrieving the len().
+
+The :class:`memoryview` type supports indexing, slicing, iteration,
+retrieving the len(), and also the following attributes:
+
+* :attr:`~memoryview.contiguous`
+* :attr:`~memoryview.c_contiguous`
+* :attr:`~memoryview.f_contiguous`
+* :attr:`~memoryview.itemsize`
+* :attr:`~memoryview.nbytes`
+* :attr:`~memoryview.ndim`
+* :attr:`~memoryview.readonly`
+* :attr:`~memoryview.shape`
+* :attr:`~memoryview.strides`
+
 
 Built-in functions
 ==================
@@ -100,6 +119,13 @@ The following built-in functions are supported:
 
 Standard library modules
 ========================
+
+``array``
+---------
+
+Limited support for the :class:`array.array` type is provided through
+the buffer protocol.  Indexing, iteration and taking the len() is supported.
+All type codes are supported except for ``"u"``.
 
 ``cmath``
 ---------
@@ -254,8 +280,9 @@ startup with entropy drawn from the operating system.
 * :func:`random.random`
 * :func:`random.randrange`
 * :func:`random.seed`: with an integer argument only
-* :func:`random.shuffle`: the sequence argument must be a 1D Numpy array;
-  the second (optional) argument is not supported
+* :func:`random.shuffle`: the sequence argument must be a one-dimension
+  Numpy array or buffer-providing object (such as a :class:`bytearray`
+  or :class:`array.array`); the second (optional) argument is not supported
 * :func:`random.uniform`
 * :func:`random.triangular`
 * :func:`random.vonmisesvariate`

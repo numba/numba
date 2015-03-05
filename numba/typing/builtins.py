@@ -384,13 +384,13 @@ class GetItemUniTuple(AbstractTemplate):
 
 
 @builtin
-class GetItemArray(AbstractTemplate):
+class GetItemBuffer(AbstractTemplate):
     key = "getitem"
 
     def generic(self, args, kws):
         assert not kws
         [ary, idx] = args
-        if not isinstance(ary, types.Array):
+        if not isinstance(ary, types.Buffer):
             return
 
         idx = normalize_index(idx)
@@ -420,37 +420,45 @@ class GetItemArray(AbstractTemplate):
         else:
             raise Exception("unreachable: index type of %s" % idx)
 
+        if isinstance(res, types.Buffer) and res.slice_is_copy:
+            # Avoid view semantics when the original type creates a copy
+            # when slicing.
+            return
+
         return signature(res, ary, idx)
 
 
 @builtin
-class SetItemArray(AbstractTemplate):
+class SetItemBuffer(AbstractTemplate):
     key = "setitem"
 
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args
-        if isinstance(ary, types.Array):
-            if ary.const:
-                raise TypeError("Constant array")
+        if isinstance(ary, types.Buffer):
+            if not ary.mutable:
+                raise TypeError("Immutable array")
             return signature(types.none, ary, normalize_index(idx), ary.dtype)
 
 
 @builtin
-class LenArray(AbstractTemplate):
+class Len(AbstractTemplate):
     key = types.len_type
 
     def generic(self, args, kws):
         assert not kws
-        (ary,) = args
-        if isinstance(ary, types.Array):
-            return signature(types.intp, ary)
+        (val,) = args
+        if isinstance(val, types.Buffer):
+            return signature(types.intp, val)
 
 #-------------------------------------------------------------------------------
 
 @builtin_attr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
+
+    def resolve_itemsize(self, ary):
+        return types.intp
 
     def resolve_shape(self, ary):
         return types.UniTuple(types.intp, ary.ndim)
@@ -538,6 +546,41 @@ class CmpOpEqArray(AbstractTemplate):
         [va, vb] = args
         if isinstance(va, types.Array) and va == vb:
             return signature(va.copy(dtype=types.boolean), va, vb)
+
+
+#-------------------------------------------------------------------------------
+
+@builtin_attr
+class MemoryViewAttribute(AttributeTemplate):
+    key = types.MemoryView
+
+    if PYVERSION >= (3,):
+        def resolve_contiguous(self, buf):
+            return types.boolean
+
+        def resolve_c_contiguous(self, buf):
+            return types.boolean
+
+        def resolve_f_contiguous(self, buf):
+            return types.boolean
+
+    def resolve_itemsize(self, buf):
+        return types.intp
+
+    def resolve_nbytes(self, buf):
+        return types.intp
+
+    def resolve_readonly(self, buf):
+        return types.boolean
+
+    def resolve_shape(self, buf):
+        return types.UniTuple(types.intp, buf.ndim)
+
+    def resolve_strides(self, buf):
+        return types.UniTuple(types.intp, buf.ndim)
+
+    def resolve_ndim(self, buf):
+        return types.intp
 
 
 #-------------------------------------------------------------------------------

@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import
 from collections import defaultdict
 import functools
 import types as pytypes
+import sys
 import weakref
 
 import numpy
@@ -16,7 +17,7 @@ from . import (
     builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl,
     randomdecl)
 from numba import numpy_support, utils
-from . import ctypes_utils, cffi_utils
+from . import ctypes_utils, cffi_utils, bufproto
 
 
 class BaseContext(object):
@@ -93,7 +94,8 @@ class BaseContext(object):
                 raise
 
         ret = attrinfo.resolve(value, attr)
-        assert ret
+        if ret is None:
+            raise KeyError(attr)
         return ret
 
     def resolve_setitem(self, target, index, value):
@@ -175,13 +177,7 @@ class BaseContext(object):
         elif cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
             return cffi_utils.make_function_type(val)
 
-        else:
-            try:
-                return numpy_support.map_arrayscalar_type(val)
-            except NotImplementedError:
-                pass
-
-        if numpy_support.is_array(val):
+        elif numpy_support.is_array(val):
             ary = val
             try:
                 dtype = numpy_support.from_dtype(ary.dtype)
@@ -189,6 +185,31 @@ class BaseContext(object):
                 return
             layout = numpy_support.map_layout(ary)
             return types.Array(dtype, ary.ndim, layout)
+
+        elif sys.version_info >= (2, 7) and not isinstance(val, numpy.generic):
+            try:
+                m = memoryview(val)
+            except TypeError:
+                pass
+            else:
+                # Object has the buffer protocol
+                try:
+                    dtype = bufproto.decode_pep3118_format(m.format, m.itemsize)
+                except ValueError:
+                    pass
+                else:
+                    type_class = bufproto.get_type_class(type(val))
+                    layout = bufproto.infer_layout(m)
+                    return type_class(dtype, m.ndim, layout=layout,
+                                      readonly=m.readonly)
+
+        else:
+            # Matching here is quite broad, so we have to do it after
+            # the more specific matches above.
+            try:
+                return numpy_support.map_arrayscalar_type(val)
+            except NotImplementedError:
+                pass
 
         return
 
