@@ -63,5 +63,40 @@ class TestPlainOldData(unittest.TestCase):
         self.assertEqual(pair.second, 2 + 1 + 2)
 
 
+class TestImmutablePOD(unittest.TestCase):
+    def test_simple_usecase_from_python(self):
+        class Pair(extensible.ImmutablePOD):
+            __fields__ = [
+                ('first', int32),
+                ('second', float64),
+            ]
+
+            def combine(self, val):
+                return self.first + self.second + val
+
+        pair = Pair(first=2, second=3)
+        self.assertEqual(pair.first, 2)
+        self.assertEqual(pair.second, 3)
+        self.assertEqual(pair.combine(123), 123 + 2 + 3)
+
+    def test_nopython_usecase(self):
+        class Pair(extensible.ImmutablePOD):
+            __fields__ = [
+                ('first', int32),
+                ('second', float64),
+            ]
+
+            def combine(self, val):
+                return self.first + self.second + val
+
+        pair = Pair(first=2, second=3)
+
+        @njit
+        def foo(pair):
+            return pair.combine(123)
+
+        self.assertEqual(foo(pair), 123 + 2 + 3)
+
+
 if __name__ == '__main__':
     unittest.main()

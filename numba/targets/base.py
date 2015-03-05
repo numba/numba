@@ -432,7 +432,7 @@ class BaseContext(object):
 
             # TODO this is ugly
             if (isinstance(fn, types.BoundFunction) and
-                    isinstance(fn.this, types.Structure)):
+                    isinstance(fn.this, (types.StructRef, types.Structure))):
                 overloaded = fn.this.methodtable[fn.template.key]
                 key = overloaded.get_overload(sig)
                 overloads = self.defns[key]
@@ -491,6 +491,15 @@ class BaseContext(object):
             def imp(context, builder, typ, val):
                 wrappercls = cgutils.create_struct_proxy(typ.base)
                 wrapper = wrappercls(context, builder, ref=val)
+                return getattr(wrapper, attr)
+            return imp
+
+        if isinstance(typ, types.Structure):
+            elemty = typ.typeof(attr)
+            @impl_attribute(typ, attr, elemty)
+            def imp(context, builder, typ, val):
+                wrappercls = cgutils.create_struct_proxy(typ)
+                wrapper = wrappercls(context, builder, value=val)
                 return getattr(wrapper, attr)
             return imp
 

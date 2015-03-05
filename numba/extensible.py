@@ -54,6 +54,9 @@ class _FieldDescriptor(object):
         return self._getter(instance)
 
     def __set__(self, instance, value):
+        if instance.__numba__.is_immutable:
+            raise TypeError("attribute {name!r} is immutable".format(
+                name=self._name))
         self._setter(instance, value)
 
 
@@ -84,12 +87,20 @@ class _NativeDataSpec(object):
 
 
 class _NativeData(object):
-    __slots__ = ('_spec', '_data', '_dataptr')
+    __slots__ = ('_spec', '_data', '_dataptr', "_immutable")
 
     def __init__(self, spec):
         self._spec = spec
         self._data = self._spec._ctype()
         self._dataptr = utils.longint(ctypes.addressof(self._data))
+        self._immutable = False
+
+    def set_immutable(self):
+        self._immutable = True
+
+    @property
+    def is_immutable(self):
+        return self._immutable
 
     @property
     def data_pointer(self):
@@ -97,39 +108,48 @@ class _NativeData(object):
 
     @property
     def numba_type(self):
-        return self._spec._ref_type
+        if self.is_immutable:
+            return self._spec._type
+        else:
+            return self._spec._ref_type
+
+
+def _prepare_meta_class(clsname, dct):
+    # Discover all the methods.  They are still functions at this point.
+    methods = [(name, value) for name, value in dct.items()
+               if isinstance(value, types.FunctionType)]
+
+    # Set __slots__ to empty to disable __dict__ and disallow adding
+    # fields dynamically
+    dct['__slots__'] = ('__numba__',)
+
+    # Insert descriptor for each field
+    descriptors = []
+    for offset, (name, typ) in enumerate(dct.pop('__fields__')):
+        desc = _FieldDescriptor(clsname, name, typ, offset)
+        dct[name] = desc
+        descriptors.append(desc)
+
+    # Insert descriptor for methods:
+    methodescriptors = []
+    for name, func in methods:
+        desc = _MethodDescriptor(name, func)
+        dct[name] = desc
+        methodescriptors.append(desc)
+
+    # Generate the "spec" for creating the native data
+    ndspec = _NativeDataSpec(clsname, descriptors, methodescriptors)
+    return ndspec
 
 
 class PlainOldDataMeta(type):
     def __new__(cls, clsname, parents, dct):
-        # Discover all the methods.  They are still functions at this point.
-        methods = [(name, value) for name, value in dct.items()
-                   if isinstance(value, types.FunctionType)]
-
-        # Set __slots__ to empty to disable __dict__ and disallow adding
-        # fields dynamically
-        dct['__slots__'] = ('__numba__',)
-
-        # Insert descriptor for each field
-        descriptors = []
-        for offset, (name, typ) in enumerate(dct.pop('__fields__')):
-            desc = _FieldDescriptor(clsname, name, typ, offset)
-            dct[name] = desc
-            descriptors.append(desc)
-
-        # Insert descriptor for methods:
-        methodescriptors = []
-        for name, func in methods:
-            desc = _MethodDescriptor(name, func)
-            dct[name] = desc
-            methodescriptors.append(desc)
-
-        # Generate the "spec" for creating the native data
-        ndspec = _NativeDataSpec(clsname, descriptors, methodescriptors)
+        ndspec = _prepare_meta_class(clsname, dct)
 
         def ctor(self, **kwargs):
-            assert not kwargs, "args at ctor not implemented"
             self.__numba__ = _NativeData(ndspec)
+            for k, v in kwargs.items():
+                setattr(self, k, v)
 
         dct['__init__'] = ctor
 
@@ -138,3 +158,23 @@ class PlainOldDataMeta(type):
 
 # Make an inheritable class to hide the metaclass for (2+3) compatibility
 PlainOldData = utils.with_metaclass(PlainOldDataMeta)
+
+
+class ImmutablePODMeta(type):
+    def __new__(cls, clsname, parents, dct):
+        ndspec = _prepare_meta_class(clsname, dct)
+
+        def ctor(self, **kwargs):
+            self.__numba__ = _NativeData(ndspec)
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+            self.__numba__.set_immutable()
+
+        dct['__init__'] = ctor
+
+        return super(ImmutablePODMeta, cls).__new__(cls, clsname, parents, dct)
+
+
+# Make an inheritable class to hide the metaclass for (2+3) compatibility
+ImmutablePOD = utils.with_metaclass(ImmutablePODMeta)
+

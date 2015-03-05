@@ -908,6 +908,16 @@ class PythonAPI(object):
             llty = self.context.get_value_type(typ)
             return self.builder.inttoptr(addr, llty)
 
+        elif isinstance(typ, types.Structure):
+            base = self.object_getattr_string(obj, '__numba__')
+            addrobj = self.object_getattr_string(base, 'data_pointer')
+            addr = self.long_as_ulonglong(addrobj)
+            self.decref(base)
+            self.decref(addrobj)
+            llty = self.context.get_value_type(types.CPointer(typ))
+            ptr = self.builder.inttoptr(addr, llty)
+            return self.builder.load(ptr)
+
         raise NotImplementedError(typ)
 
     def from_native_return(self, val, typ):

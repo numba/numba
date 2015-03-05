@@ -984,15 +984,14 @@ def _make_method_template(name, func):
         def generic(self, args, kws):
             assert not kws
 
-            thisref = StructRef(self.this)
-            args = (thisref,) + args
-
+            this = self.this
+            args = (this,) + args
             func.compile(args)
             cres = func._compileinfos.get(args)
             if cres is not None:
                 oldsig = cres.signature
                 sig = signature(oldsig.return_type, *oldsig.args[1:])
-                sig.recvr = thisref
+                sig.recvr = this
                 return sig
             assert False
 
@@ -1022,15 +1021,23 @@ class Structure(Type):
 
 class StructRef(Type):
     def __init__(self, base_struct):
+        assert isinstance(base_struct, Structure), base_struct
         self._struct = base_struct
         super(StructRef, self).__init__("Ref({0})".format(self._struct.name))
+
+        self.methodtable = dict(self._struct.methods)
+        self.fields = dict(self._struct.members)
+        for name, func in self._struct.methods:
+            template = _make_method_template(name, func)
+            self.fields[name] = BoundFunction(template, self)
+
 
     @property
     def key(self):
         return self._struct.key
 
     def typeof(self, key):
-        return self._struct.typeof(key)
+        return self.fields[key]
 
     @property
     def base(self):
