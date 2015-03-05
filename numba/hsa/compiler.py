@@ -7,7 +7,7 @@ from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
 from .hlc import hlc
 from .hsadrv import devices, driver
-from numba.targets.arrayobj import make_array_ctype
+from numba.typing.templates import AbstractTemplate
 
 
 def compile_hsa(pyfunc, return_type, args, debug):
@@ -64,6 +64,59 @@ def compile_device(pyfunc, return_type, args, debug=False):
     return devfn
 
 
+def compile_device_template(pyfunc):
+    """Compile a DeviceFunctionTemplate
+    """
+    from .descriptor import HSATargetDesc
+
+    dft = DeviceFunctionTemplate(pyfunc)
+
+    class device_function_template(AbstractTemplate):
+        key = dft
+
+        def generic(self, args, kws):
+            assert not kws
+            return dft.compile(args)
+
+    typingctx = HSATargetDesc.typingctx
+    typingctx.insert_user_function(dft, device_function_template)
+    return dft
+
+
+class DeviceFunctionTemplate(object):
+    """Unmaterialized device function
+    """
+    def __init__(self, pyfunc, debug=False):
+        self.py_func = pyfunc
+        self.debug = debug
+        # self.inline = inline
+        self._compileinfos = {}
+
+    def compile(self, args):
+        """Compile the function for the given argument types.
+
+        Each signature is compiled once by caching the compiled function inside
+        this object.
+        """
+        if args not in self._compileinfos:
+            cres = compile_hsa(self.py_func, None, args, debug=self.debug)
+            first_definition = not self._compileinfos
+            self._compileinfos[args] = cres
+            libs = [cres.library]
+
+            if first_definition:
+                # First definition
+                cres.target_context.insert_user_function(self, cres.fndesc,
+                                                         libs)
+            else:
+                cres.target_context.add_user_function(self, cres.fndesc, libs)
+
+        else:
+            cres = self._compileinfos[args]
+
+        return cres.signature
+
+
 class DeviceFunction(object):
     def __init__(self, cres):
         self.cres = cres
@@ -112,6 +165,11 @@ class HSAKernelBase(object):
         clone.stream = stream
 
         return clone
+
+    def forall(self, nelem, local_size=64, stream=None):
+        """Simplified configuration for 1D kernel launch
+        """
+        return self.configure(nelem, min(nelem, local_size), stream=stream)
 
     def __getitem__(self, args):
         """Mimick CUDA python's square-bracket notation for configuration.
