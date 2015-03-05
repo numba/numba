@@ -879,7 +879,7 @@ class PythonAPI(object):
 
             def cleanup():
                 self.release_buffer(buf)
-            return NativeValue(val, cleanup=cleanup)
+            return NativeValue(val, cleanup=cleanup, is_error=is_error)
 
         elif isinstance(typ, types.Array):
             val, failed = self.to_native_array(obj, typ)
