@@ -100,6 +100,8 @@ class DeviceFunctionTemplate(object):
         """
         if args not in self._compileinfos:
             cres = compile_hsa(self.py_func, None, args, debug=self.debug)
+            func = cres.library.get_function(cres.fndesc.llvm_func_name)
+            cres.target_context.mark_hsa_device(func)
             first_definition = not self._compileinfos
             self._compileinfos[args] = cres
             libs = [cres.library]

@@ -101,6 +101,7 @@ class HSATargetContext(BaseContext):
         # Adapt to SPIR
         # module = func.module
         func.calling_convention = CC_SPIR_FUNC
+        func.linkage = 'linkonce_odr'
         return func
 
     def generate_kernel_wrapper(self, func, argtypes):

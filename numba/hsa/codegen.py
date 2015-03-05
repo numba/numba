@@ -26,9 +26,7 @@ class ModuleCollection(object):
             if glbl is None:
                 self._gvars[gv.name] = gv
             else:
-                if not glbl.is_declaration and not gv.is_declaration:
-                    raise NameError(gv.name)
-                elif not glbl.is_declaration:
+                if not glbl.is_declaration:
                     self._gvars[gv.name] = glbl
                 elif not gv.is_declaration:
                     self._gvars[gv.name] = gv
