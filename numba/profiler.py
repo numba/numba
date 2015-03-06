@@ -1,9 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
+import sys
 import atexit
 import timeit
 import functools
 import tempfile
+from collections import defaultdict, OrderedDict
 from contextlib import contextmanager
 
 
@@ -74,3 +76,88 @@ class DummyProfiler(object):
             return wrapped
 
         return decor
+
+
+class Plotter(object):
+    def __init__(self, fileobj, output):
+        self._fileobj = fileobj
+        self._output = output
+
+    def render(self):
+        from bokeh import plotting as bp
+        from bokeh.models import HoverTool
+
+        evt_list = []
+        dur_list = []
+        begin_list = []
+        end_list = []
+
+        evt_set = set()
+        evt_range = []
+        # Preprocess data
+        for evt, ts, te in self._parse():
+            evt_list.append(evt)
+            begin_list.append(ts)
+            end_list.append(te)
+            dur_list.append(te - ts)
+            if evt not in evt_set:
+                evt_set.add(evt)
+                evt_range.append(evt)
+
+        source = bp.ColumnDataSource(
+            data=dict(event=evt_list,
+                      begin=begin_list,
+                      end=end_list,
+                      duration=dur_list)
+        )
+
+        # Plot
+        minheight = 150
+        bp.output_file(self._output)
+
+        tools = "resize,hover,save,pan,box_zoom,wheel_zoom,reset"
+        fig = bp.figure(title='Execution Timeline',
+                        width=1000,
+                        height=max(minheight, 50 * len(evt_set)),
+                        y_range=evt_range,
+                        x_range=(0, end_list[-1] + 1),
+                        x_axis_location="above",
+                        toolbar_location="left",
+                        tools=tools)
+        fig.rect(x="begin", y="event", width="duration", height=1,
+                 source=source, fill_alpha=0.3,
+                 line_color='black')
+
+        hover = fig.select(dict(type=HoverTool))
+        hover.snap_to_data = False
+        hover.tooltips = OrderedDict([
+            ('duration', '@duration'),
+            ('start time', '@begin'),
+            ('stop time', '@end'),
+        ])
+        bp.show(fig)
+
+    def _parse(self):
+        eventmap = defaultdict(list)
+        for line in self._fileobj:
+            state, stamp, event = line.rstrip().split(' ', 2)
+            stamp = float(stamp)
+            if state == 'S':
+                eventmap[event].append(stamp)
+            elif state == 'E':
+                start = eventmap[event].pop()
+                end = stamp
+                yield event, start, end
+            else:
+                raise ValueError("invalid format")
+
+
+def main():
+    filename = sys.argv[1]
+    with open(filename) as fin:
+        plt = Plotter(fin, output=filename + '.html')
+        plt.render()
+
+
+if __name__ == '__main__':
+    main()
