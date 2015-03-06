@@ -1,12 +1,16 @@
 from __future__ import print_function, division, absolute_import
 
 import sys
+import math
 import atexit
 import timeit
 import functools
+import itertools
 import tempfile
 from collections import defaultdict, OrderedDict
 from contextlib import contextmanager
+import numpy as np
+from numba import utils
 
 
 class Profiler(object):
@@ -85,57 +89,104 @@ class Plotter(object):
 
     def render(self):
         from bokeh import plotting as bp
+        from bokeh.charts import Bar
         from bokeh.models import HoverTool
 
         evt_list = []
         dur_list = []
         begin_list = []
-        end_list = []
+        start_list = []
+        stop_list = []
+        color_list = []
 
-        evt_set = set()
+        evt_color = {}
+        evt_total = defaultdict(float)
+
+        colors = [
+            '#B45C5C',
+            '#B4845C',
+            '#376C6C',
+            '#4A904A',
+        ]
+
+        infinte_colors = iter(itertools.cycle(colors))
+
         evt_range = []
         # Preprocess data
         for evt, ts, te in self._parse():
             evt_list.append(evt)
-            begin_list.append(ts)
-            end_list.append(te)
-            dur_list.append(te - ts)
-            if evt not in evt_set:
-                evt_set.add(evt)
+            dur = te - ts
+            begin_list.append(ts + dur / 2)
+            start_list.append(ts)
+            stop_list.append(te)
+            dur_list.append(dur)
+            if evt not in evt_color:
                 evt_range.append(evt)
+                evt_color[evt] = utils.next(infinte_colors)
+
+            color_list.append(evt_color[evt])
+            evt_total[evt] += dur
+
+        def format_time(seconds):
+            nano = 10 ** -9
+            micro = 10 ** -6
+            mini = 10 ** -3
+            if seconds < micro:
+                return "{0:.2f}ns".format(seconds / nano)
+            if seconds < mini:
+                return "{0:.2f}us".format(seconds / micro)
+            if seconds < 1:
+                return "{0:.2f}ms".format(seconds / mini)
+            return "{0:.2f}s".format(seconds)
 
         source = bp.ColumnDataSource(
             data=dict(event=evt_list,
                       begin=begin_list,
-                      end=end_list,
-                      duration=dur_list)
+                      start=start_list,
+                      stop=stop_list,
+                      duration=dur_list,
+                      duration_formated=[format_time(t) for t in dur_list],
+                      percent=["{0:.1%}".format(d/stop_list[-1])
+                                  for d in dur_list],
+                      color=color_list)
         )
 
         # Plot
         minheight = 150
         bp.output_file(self._output)
 
-        tools = "resize,hover,save,pan,box_zoom,wheel_zoom,reset"
-        fig = bp.figure(title='Execution Timeline',
-                        width=1000,
-                        height=max(minheight, 50 * len(evt_set)),
-                        y_range=evt_range,
-                        x_range=(0, end_list[-1] + 1),
-                        x_axis_location="above",
-                        toolbar_location="left",
-                        tools=tools)
-        fig.rect(x="begin", y="event", width="duration", height=1,
-                 source=source, fill_alpha=0.3,
-                 line_color='black')
+        total_seconds = stop_list[-1]
 
-        hover = fig.select(dict(type=HoverTool))
+        tools = "resize,hover,save,pan,box_zoom,reset"
+        fig_timeline = bp.figure(title='',
+                                 width=1200,
+                                 height=max(minheight, 50 * len(evt_color)),
+                                 y_range=list(reversed(evt_range)),
+                                 x_range=(0, total_seconds + 1),
+                                 x_axis_location="above",
+                                 tools=tools)
+
+        fig_timeline.rect(x="begin", y="event", width="duration", height=1,
+                          fill_color="color", source=source, fill_alpha=0.8,
+                          line_color="color")
+        fig_timeline.ygrid[0].grid_line_color=None
+        hover = fig_timeline.select(dict(type=HoverTool))
         hover.snap_to_data = False
         hover.tooltips = OrderedDict([
-            ('duration', '@duration'),
-            ('start time', '@begin'),
-            ('stop time', '@end'),
+            ('event', '@event'),
+            ('duration', '@duration_formated'),
+            ("percent", '@percent'),
+            ('start time', '@start'),
+            ('stop time', '@stop'),
         ])
-        bp.show(fig)
+
+        totals = [evt_total[evt] for evt in evt_range]
+        totaltimes = dict(total=totals)
+        fig_bar = Bar(totaltimes, evt_range, width=1200, height=400,
+                      xlabel='events', ylabel='total seconds',
+                      tools = "resize,save,pan,box_zoom,reset")
+
+        bp.show(bp.VBox(fig_timeline, fig_bar))
 
     def _parse(self):
         eventmap = defaultdict(list)
