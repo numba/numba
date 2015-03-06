@@ -179,8 +179,12 @@ class DeviceNDArrayBase(object):
             _driver.device_to_host(hostary, self, self.alloc_size, stream=stream)
 
         if ary is None:
-            hostary = np.ndarray(shape=self.shape, strides=self.strides,
-                                 dtype=self.dtype, buffer=hostary)
+            if self.size == 0:
+                hostary = np.ndarray(shape=self.shape, dtype=self.dtype,
+                                     buffer=hostary)
+            else:
+                hostary = np.ndarray(shape=self.shape, dtype=self.dtype,
+                                     strides=self.strides, buffer=hostary)
         return hostary
 
     def to_host(self, stream=0):
