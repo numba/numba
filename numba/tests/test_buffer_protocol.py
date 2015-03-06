@@ -110,7 +110,7 @@ class TestBufferProtocol(TestCase):
             ('complex64', -8j, 12 + 5j),
             ('complex128', -8j, 12 + 5j),
             ]:
-            yield memoryview(np.linspace(start, stop, n, dtype=dtype))
+            yield memoryview(np.linspace(start, stop, n).astype(dtype))
         # Different layouts
         arr = np.arange(12).reshape((3, 4))
         assert arr.flags.c_contiguous and not arr.flags.f_contiguous

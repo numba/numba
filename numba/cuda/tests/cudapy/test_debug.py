@@ -19,7 +19,7 @@ class TestDebugOutput(unittest.TestCase):
             cfunc = cuda.jit((float64[:], float64[:]))(simple_cuda)
             # Call compiled function (to ensure PTX is generated)
             # and sanity-check results.
-            A = np.linspace(0, 1, 10, dtype=np.float64)
+            A = np.linspace(0, 1, 10).astype(np.float64)
             B = np.zeros_like(A)
             cfunc[1, 10](A, B)
             self.assertTrue(np.allclose(A + 1.5, B))
