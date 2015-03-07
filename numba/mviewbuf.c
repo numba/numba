@@ -1,8 +1,22 @@
 #include "_pymodule.h"
 
-static int get_buffer(PyObject* obj, Py_buffer *buf)
+static int get_buffer(PyObject* obj, Py_buffer *buf, int force)
 {
-    return PyObject_GetBuffer(obj, buf, PyBUF_WRITABLE|PyBUF_ND|PyBUF_STRIDES|PyBUF_FORMAT);
+    Py_buffer read_buf;
+    int flags = PyBUF_ND|PyBUF_STRIDES|PyBUF_FORMAT;
+
+    /* Attempt to get a writable buffer */
+    if (!PyObject_GetBuffer(obj, buf, flags|PyBUF_WRITABLE))
+        return 0;
+    if (!force)
+        return -1;
+
+    /* Make a writable buffer from a read-only buffer */
+    PyErr_Clear();
+    if(-1 == PyObject_GetBuffer(obj, &read_buf, flags))
+        return -1;
+    return PyBuffer_FillInfo(buf, NULL, read_buf.buf, read_buf.len, 0,
+                             flags|PyBUF_WRITABLE);
 }
 
 static void free_buffer(Py_buffer * buf)
@@ -10,23 +24,39 @@ static void free_buffer(Py_buffer * buf)
     PyBuffer_Release(buf);
 }
 
+/**
+ * Return a pointer to the data of a writable buffer from obj. If only a
+ * read-only buffer is available and force is True, a read-write buffer based on
+ * the read-only buffer is obtained. Note that this may have some surprising
+ * effects on buffers which expect the data from their read-only buffer not to
+ * be modified.
+ */
 static PyObject*
 memoryview_get_buffer(PyObject *self, PyObject *args){
     PyObject *obj = NULL;
+    PyObject *force = NULL;
     PyObject *ret = NULL;
     void * ptr = NULL;
+    const void* roptr = NULL;
     Py_ssize_t buflen;
     Py_buffer buf;
 
-    if (!PyArg_ParseTuple(args, "O", &obj))
+    if (!PyArg_ParseTuple(args, "O|O", &obj, &force))
         return NULL;
 
-    if (!get_buffer(obj, &buf)) { /* new buffer api */
+    if (!get_buffer(obj, &buf, (force == Py_True))) { /* new buffer api */
         ret = PyLong_FromVoidPtr(buf.buf);
         free_buffer(&buf);
     } else { /* old buffer api */
         PyErr_Clear();
-        if (-1 == PyObject_AsWriteBuffer(obj, &ptr, &buflen)) return NULL;
+        if (-1 == PyObject_AsWriteBuffer(obj, &ptr, &buflen)) {
+          if (!force)
+            return NULL;
+          PyErr_Clear();
+          if(-1 == PyObject_AsReadBuffer(obj, &roptr, &buflen))
+            return NULL;
+          ptr = (void*) roptr;
+        }
         ret = PyLong_FromVoidPtr(ptr);
     }
     return ret;
@@ -108,7 +138,7 @@ memoryview_get_extents(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O", &obj))
         return NULL;
 
-    if (!get_buffer(obj, &b)) { /* new buffer api */
+    if (!get_buffer(obj, &b, 0)) { /* new buffer api */
         ret = get_extents(b.shape, b.strides, b.ndim, b.itemsize,
                           (Py_ssize_t)b.buf);
         free_buffer(&b);
