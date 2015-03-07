@@ -469,7 +469,6 @@ class PairModel(StructModel):
 @register_default(types.ByteArray)
 @register_default(types.Bytes)
 @register_default(types.MemoryView)
-@register_default(types.NestedArray)
 @register_default(types.PyArray)
 class ArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
@@ -489,6 +488,17 @@ class ArrayModel(StructModel):
 
     def from_data(self, builder, value):
         return NotImplemented
+
+
+@register_default(types.NestedArray)
+class NestedArrayModel(ArrayModel):
+    def __init__(self, dmm, fe_type):
+        self._be_type = dmm.lookup(fe_type.dtype).get_data_type()
+        super(NestedArrayModel, self).__init__(dmm, fe_type)
+
+    def get_data_type(self):
+        ret = self._be_type
+        return ret
 
 
 @register_default(types.Optional)
