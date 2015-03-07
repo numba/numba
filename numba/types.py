@@ -818,7 +818,7 @@ class NestedArray(Array):
         for i in reversed(self._shape):
              strides.append(stride)
              stride *= i
-        return tuple(strides)
+        return tuple(reversed(strides))
 
 
 class UniTuple(IterableType):
