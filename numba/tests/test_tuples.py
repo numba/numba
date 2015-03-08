@@ -19,6 +19,9 @@ def tuple_second(tup):
     a, b = tup
     return b
 
+def tuple_tuple_usecase(a, b):
+    return tuple((a, b))
+
 
 class TestTupleReturn(TestCase):
 
@@ -58,6 +61,14 @@ class TestTupleReturn(TestCase):
             ra, rb = cres.entry_point(a, b)
             self.assertPreciseEqual((ra, rb), (a, b))
 
+    def test_tuple_tuple(self):
+        scalarty = types.float32
+        cres = compile_isolated(tuple_tuple_usecase, (scalarty, scalarty))
+        a = b = 1
+        ra, rb = cres.entry_point(a, b)
+        self.assertEqual(ra, a)
+        self.assertEqual(rb, b)
+        
 
 class TestTuplePassing(TestCase):
 
