@@ -50,27 +50,26 @@ cursor: pointer;
 
 window.onload = function() {
 
-%for func_id, func_key in enumerate(func_data):
+{% for func_key in func_data.keys() %}
 
-    <%func_id_str = str(func_id)%>
-    document.getElementById('func{{func_id_str}}_toggle_llvm').onclick = function() {
+    document.getElementById('func{{loop.index}}_toggle_llvm').onclick = function() {
         if (this.innerHTML == 'show llvm') {
-            var llvm_lines = getElementsByClassName('func{{func_id_str}}_llvm');
+            var llvm_lines = getElementsByClassName('func{{loop.index}}_llvm');
             for (var i = 0; i < llvm_lines.length; i++) {
-                llvm_lines[i].setAttribute('class', 'llvm_code func{{func_id_str}}_llvm');
+                llvm_lines[i].setAttribute('class', 'llvm_code func{{loop.index}}_llvm');
             }
             this.innerHTML = 'hide llvm'
         }
         else {
-            var llvm_lines = getElementsByClassName('func{{func_id_str}}_llvm');
+            var llvm_lines = getElementsByClassName('func{{loop.index}}_llvm');
             for (var i = 0; i < llvm_lines.length; i++) {
-                llvm_lines[i].setAttribute('class', 'llvm_code func{{func_id_str}}_llvm hidden');
+                llvm_lines[i].setAttribute('class', 'llvm_code func{{loop.index}}_llvm hidden');
             }
             this.innerHTML = 'show llvm'
         }
     }
 
-    %endfor
+{% endfor %}
 
 }
 
@@ -157,13 +156,16 @@ var getElementsByClassName = function (className, tag, elm){
 
 </script>
 
+</script>
+
 </head>
 
 <body>
 
-    %for func_id, func_key in enumerate(func_data):
+    {% for func_key in func_data.keys() %}
 
-        <%func_id_str = str(func_id)%>
+        {% set loop1 = loop %}
+
         <div class="metadata">
         Function name: {{func_data[func_key]['funcname']}}<br />
         in file: {{func_data[func_key]['filename']}}<br />
@@ -173,16 +175,15 @@ var getElementsByClassName = function (className, tag, elm){
 
         <div class="annotations">
 
-        <span id="func{{func_id_str}}_toggle_llvm" class="buttons">show llvm</span>
+        <span id="func{{loop1.index}}_toggle_llvm" class="buttons">show llvm</span>
 
         <table class="annotation_table">
 
-            %for num, line in func_data[func_key]['python_lines'].items():
+            {% for num, line in func_data[func_key]['python_lines'].items() %}
                 <tr>
                 
-                    <%num_str = str(num)%>
                     <td class="{{func_data[func_key]['python_object'][num]}}">
-                    {{num_str}}:
+                    {{num}}:
                     </td>
 
                     <td class="{{func_data[func_key]['python_object'][num]}}">
@@ -191,9 +192,9 @@ var getElementsByClassName = function (className, tag, elm){
                 
                 </tr>
 
-                %for i, llvm_line in enumerate(func_data[func_key]['llvm_lines'][num]):
+                {% for llvm_line in func_data[func_key]['llvm_lines'][num] %}
 
-                    <tr class="llvm_code func{{func_id_str}}_llvm hidden">
+                    <tr class="llvm_code func{{loop1.index}}_llvm hidden">
 
                         <td>&nbsp;</td>
 
@@ -204,9 +205,9 @@ var getElementsByClassName = function (className, tag, elm){
 
                     </tr>
 
-                %endfor
+                {% endfor %}
 
-            %endfor
+            {% endfor %}
 
         </table>
 
@@ -214,7 +215,7 @@ var getElementsByClassName = function (className, tag, elm){
 
         <br /><br /><br />
 
-    %endfor
+    {% endfor %}
 
 </body>
 

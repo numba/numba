@@ -7,9 +7,9 @@ from contextlib import closing
 from numba.io_support import StringIO
 from numba import ir
 import numba.dispatcher
-from . import step
 import os
 import sys
+from jinja2 import Template
 
 
 class SourceLines(Mapping):
@@ -216,7 +216,9 @@ class TypeAnnotation(object):
         if (len(self.lifted) == 0 or
                 (self.lifted_from is not None and self.lifted_from['num_waiting_lifted'] == 1)):
             with open(self.fancy, 'w') as output:
-                step.Template(html).stream(output, TypeAnnotation.data.copy())
+                #step.Template(html).stream(output, TypeAnnotation.data.copy())
+                template = Template(html)
+                output.write(template.render(func_data=TypeAnnotation.data['func_data']))                
             return True
         else:
             return False
