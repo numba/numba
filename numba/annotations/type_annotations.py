@@ -9,7 +9,6 @@ from numba import ir
 import numba.dispatcher
 import os
 import sys
-from jinja2 import Template
 
 
 class SourceLines(Mapping):
@@ -215,8 +214,11 @@ class TypeAnnotation(object):
 
         if (len(self.lifted) == 0 or
                 (self.lifted_from is not None and self.lifted_from['num_waiting_lifted'] == 1)):
+            try:
+                from jinja2 import Template
+            except ImportError:
+                return False
             with open(self.fancy, 'w') as output:
-                #step.Template(html).stream(output, TypeAnnotation.data.copy())
                 template = Template(html)
                 output.write(template.render(func_data=TypeAnnotation.data['func_data']))                
             return True
