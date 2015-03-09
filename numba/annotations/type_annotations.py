@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import
 import inspect
 import re
-from collections import Mapping, defaultdict, OrderedDict
+from collections import Mapping, defaultdict
 import textwrap
 from contextlib import closing
 from numba.io_support import StringIO
@@ -42,7 +42,14 @@ class SourceLines(Mapping):
 
 class TypeAnnotation(object):
     
-    data = {'func_data': OrderedDict()}
+    # func_data dict stores fancy annotation data for all functions that are
+    # compiled. We store the data in the TypeAnnotation class since a new
+    # TypeAnnotation instance is created for each function that is compiled.
+    # For every function that is compiled, we add the type annotation data to
+    # this dict and write the html annotation file to disk (rewrite the html
+    # file for every function since we don't know if this is the last function
+    # to be compiled).
+    func_data = {}
 
     def __init__(self, interp, typemap, calltypes, lifted, lifted_from, args, return_type,
                  func_attr, fancy=None):
@@ -51,9 +58,6 @@ class TypeAnnotation(object):
         self.blocks = interp.blocks
         self.typemap = typemap
         self.calltypes = calltypes
-        self.lifted = lifted
-        self.lifted_from = lifted_from
-        self.num_waiting_lifted = len(lifted)
         if fancy is None:
             self.fancy = None
         else:
@@ -62,6 +66,16 @@ class TypeAnnotation(object):
         self.linenum = str(interp.loc.line)
         self.signature = str(args) + ' -> ' + str(return_type)
         self.func_attr = func_attr
+        
+        # lifted loop information
+        self.lifted = lifted
+        self.num_lifted_loops = len(lifted)
+
+        # If this is a lifted loop function that is being compiled, lifted_from
+        # points to annotation data from function that this loop lifted function
+        # was lifted from. This is used to stick lifted loop annotations back
+        # into original function.
+        self.lifted_from = lifted_from
 
     def prepare_annotations(self):
         # Prepare annotations
@@ -137,91 +151,91 @@ class TypeAnnotation(object):
             return io.getvalue()
 
     def html_annotate(self):
-        root = os.path.join(os.path.dirname(__file__))
-        template_filename = os.path.join(root, 'template.html')
-        with open(template_filename, 'r') as template:
-            html = template.read()
-
         python_source = SourceLines(self.func)
-        llvm_instructions = self.prepare_annotations()
+        llvm_lines = self.prepare_annotations()
         line_nums = [num for num in python_source]
-
         lifted_lines = [l.bytecode.firstlineno for l in self.lifted]
 
-        func_key = (self.filename + ':' + self.linenum, self.signature)
-        if self.lifted_from is not None and self.lifted_from['num_waiting_lifted'] > 0:
+        def add_llvm_line(line):
+            line_str = line.strip()
+            line_type = ''
+            if line_str.endswith('pyobject'):
+                line_str = line_str.replace('pyobject', '')
+                line_type = 'pyobject'
+            func_data['llvm_lines'][num].append((line_str, line_type))
+            indent_len = len(_getindent(line))
+            func_data['llvm_indent'][num].append('&nbsp;' * indent_len)
+
+        func_key = (self.func_attr.filename + ':' + str(self.func_attr.lineno + 1), self.signature)
+        if self.lifted_from is not None and self.lifted_from['num_lifted_loops'] > 0:
+            # This is a lifted loop function that is being compiled. Get the
+            # llvm instructions for lines in loop function to use for annotating
+            # original python function that the loop was lifted from.
             func_data = self.lifted_from
             for num in line_nums:
-                if num not in llvm_instructions.keys():
+                if num not in llvm_lines.keys():
                     continue
                 func_data['llvm_lines'][num] = []
                 func_data['llvm_indent'][num] = []
-                for inst in llvm_instructions[num]:
-                    func_data['llvm_lines'][num].append(inst.strip())
-                    indent_len = len(_getindent(inst))
-                    func_data['llvm_indent'][num].append('&nbsp;' * indent_len)
-            self.lifted_from['num_waiting_lifted'] -= 1
-        elif func_key not in TypeAnnotation.data['func_data']:
+                for line in llvm_lines[num]:
+                    add_llvm_line(line)
+            # We're done with this lifted loop, so decrement lfited loop counter.
+            # When lifted loop counter hits zero, that means we're ready to write
+            # out annotations to html file.
+            self.lifted_from['num_lifted_loops'] -= 1
+        elif func_key not in TypeAnnotation.func_data.keys():
 
-            TypeAnnotation.data['func_data'][func_key] = {}
-            func_data = TypeAnnotation.data['func_data'][func_key]
+            TypeAnnotation.func_data[func_key] = {}
+            func_data = TypeAnnotation.func_data[func_key]
             
             for loop in self.lifted:
+                # Make sure that when we process each lifted loop function later,
+                # we'll know where it originally came from.
                 loop.lifted_from = func_data
-            func_data['num_waiting_lifted'] = self.num_waiting_lifted
+            func_data['num_lifted_loops'] = self.num_lifted_loops
 
             func_data['filename'] = self.filename
             func_data['funcname'] = self.func_attr.name
+            func_data['python_lines'] = []
+            func_data['python_indent'] = {}
+            func_data['python_tags'] = {}
+            func_data['llvm_lines'] = {}
+            func_data['llvm_indent'] = {}
 
-            func_data['python_indent'] = OrderedDict()
             for num in line_nums:
+                func_data['python_lines'].append((num, python_source[num].strip()))
                 indent_len = len(_getindent(python_source[num]))
                 func_data['python_indent'][num] = '&nbsp;' * indent_len
-        
-            func_data['llvm_indent'] = OrderedDict()
-            for num in line_nums:
-                func_data['llvm_indent'][num] = []
-                for inst in llvm_instructions[num]:
-                    indent_len = len(_getindent(inst))
-                    func_data['llvm_indent'][num].append('&nbsp;' * indent_len)
-
-            func_data['python_object'] = OrderedDict()
-            func_data['llvm_object'] = OrderedDict()
-            for num in line_nums:
-                func_data['python_object'][num] = ''
-                func_data['llvm_object'][num] = []
-                for inst in llvm_instructions[num]:
-                    if num in lifted_lines:
-                        func_data['python_object'][num] = 'lifted_tag'
-                    elif inst.endswith('pyobject'):
-                        func_data['llvm_object'][num].append('object_tag')
-                        func_data['python_object'][num] = 'object_tag'
-                    else:
-                        func_data['llvm_object'][num].append('')
-
-            func_data['python_lines'] = OrderedDict()
-            for num in line_nums:
-                func_data['python_lines'][num] = python_source[num].strip()
-        
-            func_data['llvm_lines'] = OrderedDict()
-            for num in line_nums:
+                func_data['python_tags'][num] = ''
                 func_data['llvm_lines'][num] = []
-                for inst in llvm_instructions[num]:
-                    inst_str = inst.strip()
-                    if inst_str.endswith('pyobject'):
-                        inst_str = inst_str.replace('pyobject', '<span class="object_tag">pyobject</span>')
-                    func_data['llvm_lines'][num].append(inst_str)
-
-        if (len(self.lifted) == 0 or
-                (self.lifted_from is not None and self.lifted_from['num_waiting_lifted'] == 1)):
+                func_data['llvm_indent'][num] = []
+                for line in llvm_lines[num]:
+                    add_llvm_line(line)
+                    if num in lifted_lines:
+                        func_data['python_tags'][num] = 'lifted_tag'
+                    elif line.strip().endswith('pyobject'):
+                        func_data['python_tags'][num] = 'object_tag'
+        
+        # If there are no lifted loops to compile, or if there are lifted loops
+        # to compiled and they've all been compiled, then write annotations
+        # for current function.
+        if ((len(self.lifted) == 0 and self.lifted_from is None) or
+                (self.lifted_from is not None and
+                 self.lifted_from['num_lifted_loops'] == 0)):
             try:
                 from jinja2 import Template
             except ImportError:
                 return False
+
+            root = os.path.join(os.path.dirname(__file__))
+            template_filename = os.path.join(root, 'template.html')
+            with open(template_filename, 'r') as template:
+                html = template.read()
             with open(self.fancy, 'w') as output:
                 template = Template(html)
-                output.write(template.render(func_data=TypeAnnotation.data['func_data']))                
+                output.write(template.render(func_data=TypeAnnotation.func_data))                
             return True
+
         else:
             return False
 
