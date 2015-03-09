@@ -47,12 +47,12 @@ class CPUContext(BaseContext):
         externals.c_numpy_functions.install()
 
         # Add target specific implementations
-        self.insert_func_defn(cmathimpl.registry.functions)
-        self.insert_func_defn(mathimpl.registry.functions)
-        self.insert_func_defn(npyimpl.registry.functions)
-        self.insert_func_defn(operatorimpl.registry.functions)
-        self.insert_func_defn(printimpl.registry.functions)
-        self.insert_func_defn(randomimpl.registry.functions)
+        self.install_registry(cmathimpl.registry)
+        self.install_registry(mathimpl.registry)
+        self.install_registry(npyimpl.registry)
+        self.install_registry(operatorimpl.registry)
+        self.install_registry(printimpl.registry)
+        self.install_registry(randomimpl.registry)
 
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 

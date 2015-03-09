@@ -20,29 +20,26 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
-def jit(signature_or_function=None, argtypes=None, restype=None, locals={},
-        target='cpu', **targetoptions):
-    """jit([signature_or_function, [locals={}, [target='cpu', [**targetoptions]]]])
+class DeprecationError(Exception):
+    pass
 
-    This function is used to compile a Python function into native code. It is
-    designed to be used as a decorator for the function to be compiled,
-    but it can also be called as a regular function.
+
+_msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
+                                 "Signatures should be passed as the first "
+                                 "positional argument.")
+
+def jit(signature_or_function=None, locals={}, target='cpu', **options):
+    """
+    This decorator is used to compile a Python function into native code.
     
     Args
     -----
-    signature_or_function: function or str
-        This argument takes either the function to be compiled, or the signature
-        of the function to be compiled. If this function is used as a decorator,
-        the function to be compiled is the decorated function. In that case,
-        this argument should only be used to optionally specify the function
-        signature. If this function is called like a regular function, and this
-        argument is used to specify the function signature, this function will
-        return another jit function object which can be called again with the
-        function to be compiled as this argument.
-
-    argtypes: deprecated
-
-    restype: deprecated
+    signature:
+        The (optional) signature or list of signatures to be compiled.
+        If not passed, required signatures will be compiled when the
+        decorated function is called, depending on the argument values.
+        As a convenience, you can directly pass the function to be compiled
+        instead.
 
     locals: dict
         Mapping of local variable names to Numba types. Used to override the
@@ -78,97 +75,85 @@ def jit(signature_or_function=None, argtypes=None, restype=None, locals={},
 
     Returns
     --------
-
-    compiled function
+    A callable usable as a compiled function.  Actual compiling will be
+    done lazily if no explicit signatures are passed.
 
     Examples
     --------
     The function can be used in the following ways:
 
-    1) jit(signature, [target='cpu', [**targetoptions]]) -> jit(function)
+    1) jit(signatures, target='cpu', **targetoptions) -> jit(function)
 
         Equivalent to:
 
             d = dispatcher(function, targetoptions)
-            d.compile(signature)
+            for signature in signatures:
+                d.compile(signature)
 
-        Create a dispatcher object for a python function and default
-        target-options.  Then, compile the funciton with the given signature.
+        Create a dispatcher object for a python function.  Then, compile
+        the function with the given signature(s).
 
         Example:
 
-            @jit("void(int32, float32)")
+            @jit("int32(int32, int32)")
             def foo(x, y):
                 return x + y
 
-    2) jit(function) -> dispatcher
+            @jit(["int32(int32, int32)", "float32(float32, float32)"])
+            def bar(x, y):
+                return x + y
 
-        Same as old autojit.  Create a dispatcher function object that
-        specialize at call site.
+    2) jit(function, target='cpu', **targetoptions) -> dispatcher
 
-        Example:
+        Create a dispatcher function object that specializes at call site.
+
+        Examples:
 
             @jit
             def foo(x, y):
                 return x + y
 
-    3) jit([target='cpu', [**targetoptions]]) -> configured_jit(function)
-
-        Same as old autojit and 2).  But configure with target and default
-        target-options.
-
-
-        Example:
-
             @jit(target='cpu', nopython=True)
-            def foo(x, y):
+            def bar(x, y):
                 return x + y
 
     """
-
-    # Handle deprecated argtypes and restype keyword arguments
-    if argtypes is not None:
-
-        assert signature_or_function is None, "argtypes used but " \
-                                              "signature is provided"
-        warnings.warn("Keyword argument 'argtypes' is deprecated",
-                      DeprecationWarning)
-        if restype is None:
-            signature_or_function = tuple(argtypes)
-        else:
-            signature_or_function = restype(*argtypes)
+    if 'argtypes' in options:
+        raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
+    if 'restype' in options:
+        raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
 
     # Handle signature
     if signature_or_function is None:
-        # Used as autojit
-        def configured_jit(arg):
-            return jit(arg, locals=locals, target=target, **targetoptions)
+        # No signature, no function
+        def configured_jit(func):
+            return jit(func, locals=locals, target=target, **options)
         return configured_jit
+    elif isinstance(signature_or_function, list):
+        # A list of signatures is passed
+        return _jit(signature_or_function, locals=locals, target=target,
+                    targetoptions=options)
     elif sigutils.is_signature(signature_or_function):
-        # Function signature is provided
-        sig = signature_or_function
-        return _jit(sig, locals=locals, target=target,
-                    targetoptions=targetoptions)
+        # A single signature is passed
+        return _jit([signature_or_function], locals=locals, target=target,
+                    targetoptions=options)
     else:
-        # No signature is provided
+        # A function is passed
         pyfunc = signature_or_function
         dispatcher = registry.target_registry[target]
         dispatcher = dispatcher(py_func=pyfunc, locals=locals,
-                                targetoptions=targetoptions)
-        # NOTE This affects import time for large function
-        # # Compile a pure object mode
-        # if target == 'cpu' and not targetoptions.get('nopython', False):
-        #     dispatcher.compile((), locals=locals, forceobj=True)
+                                targetoptions=options)
         return dispatcher
 
 
-def _jit(sig, locals, target, targetoptions):
+def _jit(sigs, locals, target, targetoptions):
     dispatcher = registry.target_registry[target]
 
     def wrapper(func):
-        disp = dispatcher(py_func=func,  locals=locals,
+        disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions)
-        disp.compile(sig)
+        for sig in sigs:
+            disp.compile(sig)
         disp.disable_compile()
         return disp
 

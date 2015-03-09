@@ -9,6 +9,7 @@ from numba import typing, types, cgutils
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
+from numba.lowering import transform_arg_name
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
 
@@ -43,8 +44,8 @@ class CUDATargetContext(BaseContext):
 
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
 
-        self.insert_func_defn(cudaimpl.registry.functions)
-        self.insert_func_defn(libdevice.registry.functions)
+        self.install_registry(cudaimpl.registry)
+        self.install_registry(libdevice.registry)
         self._target_data = ll.create_target_data(nvvm.default_data_layout)
 
     def jit_codegen(self):
@@ -63,7 +64,7 @@ class CUDATargetContext(BaseContext):
             ch = m.group(0)
             return "_%X_" % ord(ch)
 
-        qualified = name + '.' + '.'.join(str(a) for a in argtypes)
+        qualified = name + '.' + '.'.join(transform_arg_name(a) for a in argtypes)
         mangled = VALID_CHARS.sub(repl, qualified)
         return mangled
 
@@ -77,7 +78,9 @@ class CUDATargetContext(BaseContext):
 
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
-        argtys = [self.get_argument_type(ty) for ty in argtypes]
+
+        arginfo = self.get_arg_packer(argtypes)
+        argtys = list(arginfo.argument_types)
         wrapfnty = Type.function(Type.void(), argtys)
         wrapper_module = self.create_module("cuda.kernel.wrapper")
         fnty = Type.function(Type.int(),
@@ -100,11 +103,7 @@ class CUDATargetContext(BaseContext):
             gv_tid.append(define_error_gv("__tid%s__" % i))
             gv_ctaid.append(define_error_gv("__ctaid%s__" % i))
 
-        callargs = []
-        for at, av in zip(argtypes, wrapfn.args):
-            av = self.get_argument_value(builder, at, av)
-            callargs.append(av)
-
+        callargs = arginfo.from_arguments(builder, wrapfn.args)
         status, _ = self.call_conv.call_function(
             builder, func, types.void, argtypes, callargs)
 

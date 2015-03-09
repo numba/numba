@@ -170,6 +170,8 @@ class TestCase(unittest.TestCase):
         second_family = self._detect_family(second)
 
         assertion_message = "Type Family mismatch. (%s != %s)" % (first_family, second_family)
+        if msg:
+            assertion_message += ': %s' % (msg,)
         self.assertEqual(first_family, second_family, msg=assertion_message)
 
         # We now know they are in the same comparison family
@@ -254,6 +256,17 @@ def override_config(name, value):
         yield
     finally:
         setattr(config, name, old_value)
+
+
+def compile_function(name, code, globs):
+    """
+    Given a *code* string, compile it with globals *globs* and return
+    the function named *name*.
+    """
+    co = compile(code, "<string>", "exec")
+    ns = {}
+    eval(co, globs, ns)
+    return ns[name]
 
 
 # From CPython

@@ -184,7 +184,15 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         assert not kws, "kwargs not handled"
         args = tuple([self.typeof_pyval(a) for a in args])
         sigs = [cr.signature for cr in self._compileinfos.values()]
-        resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
+        res = resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
+        print("res =", res)
+
+    def _explain_matching_error(self, *args, **kws):
+        assert not kws, "kwargs not handled"
+        args = [self.typeof_pyval(a) for a in args]
+        msg = ("No matching definition for argument type(s) %s"
+               % ', '.join(map(str, args)))
+        raise TypeError(msg)
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
@@ -200,7 +208,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             # typecode() function in _dispatcher.c.
             return types.int64
 
-        tp = self.typingctx.resolve_data_type(val)
+        tp = self.typingctx.resolve_argument_type(val)
         if tp is None:
             tp = types.pyobject
         return tp

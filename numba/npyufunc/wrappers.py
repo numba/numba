@@ -2,10 +2,8 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
                                   ICMP_EQ, Constant)
-import llvmlite.llvmpy.core as lc
-from llvmlite import binding as ll
 
-from numba import types, cgutils, config
+from numba import types, cgutils
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
@@ -19,13 +17,6 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
 
     # Ignoring error status and store result
     # Store
-    if out.byref:
-        retval = builder.load(retval)
-
-    if not cgutils.is_struct(retval.type):
-        retval = context.get_value_as_argument(builder, signature.return_type,
-                                               retval)
-
     store(retval)
 
     # increment indices
@@ -50,9 +41,6 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
 
     # Ignoring error status and store result
     # Store
-    if out.byref:
-        retval = builder.load(retval)
-
     store(retval)
 
     # increment indices
@@ -101,9 +89,10 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
                 pyapi.decref(msgobj)
             with if_ok:
                 # Unbox
-                retval = pyapi.to_native_value(retval, signature.return_type)
+                native = pyapi.to_native_value(retval, signature.return_type)
+                assert native.cleanup is None
                 # Store
-                out.store_direct(retval, builder.load(store_offset))
+                out.store_direct(native.value, builder.load(store_offset))
 
     return _build_ufunc_loop_body_objmode(load, store, context, func, builder,
                                           arrays, out, offsets, store_offset,
@@ -160,18 +149,14 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
 
     loopcount = builder.load(arg_dims, name="loopcount")
 
-    actual_args = context.call_conv.get_arguments(func)
-
     # Prepare inputs
     arrays = []
     for i, typ in enumerate(signature.args):
-        arrays.append(UArrayArg(context, builder, arg_args, arg_steps, i,
-                                context.get_argument_type(typ)))
+        arrays.append(UArrayArg(context, builder, arg_args, arg_steps, i, typ))
 
     # Prepare output
-    valty = context.get_data_type(signature.return_type)
-    out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args),
-                    valty)
+    out = UArrayArg(context, builder, arg_args, arg_steps, len(arrays),
+                    signature.return_type)
 
     # Setup indices
     offsets = []
@@ -189,7 +174,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
         unit_strided = builder.and_(unit_strided, ary.is_unit_strided)
 
     if objmode:
-    # General loop
+        # General loop
         pyapi = context.get_python_api(builder)
         gil = pyapi.gil_ensure()
         with cgutils.for_range(builder, loopcount, intp=intp_t):
@@ -235,50 +220,44 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
 
 
 class UArrayArg(object):
-    def __init__(self, context, builder, args, steps, i, argtype):
-        # Get data
-        p = builder.gep(args, [context.get_constant(types.intp, i)])
-        if cgutils.is_struct_ptr(argtype):
-            self.byref = True
-            self.data = builder.bitcast(builder.load(p), argtype)
-        else:
-            self.byref = False
-            self.data = builder.bitcast(builder.load(p), Type.pointer(argtype))
-            # Get step
-        p = builder.gep(steps, [context.get_constant(types.intp, i)])
-        abisize = context.get_constant(types.intp,
-                                       context.get_abi_sizeof(argtype))
-        self.step = builder.load(p)
-        self.is_unit_strided = builder.icmp(ICMP_EQ, abisize, self.step)
+    def __init__(self, context, builder, args, steps, i, fe_type):
+        self.context = context
+        self.builder = builder
+        self.fe_type = fe_type
+        offset = self.context.get_constant(types.intp, i)
+        offseted_args = self.builder.load(builder.gep(args, [offset]))
+        self.data_type = context.get_data_type(fe_type).as_pointer()
+        self.dataptr = self.builder.bitcast(offseted_args, self.data_type)
+        sizeof = self.context.get_abi_sizeof(self.data_type)
+        self.abisize = self.context.get_constant(types.intp, sizeof)
+        offseted_step = self.builder.gep(steps, [offset])
+        self.step = self.builder.load(offseted_step)
+        self.is_unit_strided = builder.icmp(ICMP_EQ, self.abisize, self.step)
         self.builder = builder
 
     def load(self, ind):
         offset = self.builder.mul(self.step, ind)
         return self.load_direct(offset)
 
-    def load_direct(self, offset):
-        ptr = cgutils.pointer_add(self.builder, self.data, offset)
-        if self.byref:
-            return ptr
-        else:
-            return self.builder.load(ptr)
+    def load_direct(self, byteoffset):
+        ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)
+        return self.context.unpack_value(self.builder, self.fe_type, ptr)
 
     def load_aligned(self, ind):
-        ptr = self.builder.gep(self.data, [ind])
-        return self.builder.load(ptr)
+        byteoffset = self.builder.mul(self.step, ind)
+        return self.load_direct(byteoffset)
 
     def store(self, value, ind):
         offset = self.builder.mul(self.step, ind)
         self.store_direct(value, offset)
 
-    def store_direct(self, value, offset):
-        ptr = cgutils.pointer_add(self.builder, self.data, offset)
-        assert ptr.type.pointee == value.type, (ptr.type, value.type)
-        self.builder.store(value, ptr)
+    def store_direct(self, value, byteoffset):
+        ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)
+        self.context.pack_value(self.builder, self.fe_type, value, ptr)
 
     def store_aligned(self, value, ind):
-        ptr = self.builder.gep(self.data, [ind])
-        self.builder.store(value, ptr)
+        ptr = self.builder.gep(self.dataptr, [ind])
+        self.context.pack_value(self.builder, self.fe_type, value, ptr)
 
 
 class _GufuncWrapper(object):
@@ -358,13 +337,10 @@ class _GufuncWrapper(object):
 
         # Loop
         with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
-            args = [a.array_value for a in arrays]
+            args = [a.get_array_at_offset(ind) for a in arrays]
             innercall, error = self.gen_loop_body(builder, func, args)
             # If error, escape
             cgutils.cbranch_or_continue(builder, error, bbreturn)
-
-            for a in arrays:
-                a.next(ind)
 
         builder.branch(bbreturn)
         builder.position_at_end(bbreturn)
@@ -468,7 +444,7 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
         builder.store(Constant.null(ll_pyobj), ptr)   # initialize to NULL
 
         arycls = context.make_array(arrtype)
-        array = arycls(context, builder, ref=arr)
+        array = arycls(context, builder, value=arr)
 
         zero = Constant.int(ll_int, 0)
 
@@ -497,7 +473,7 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
     object_sig = [types.pyobject] * len(ndarray_objects)
 
     status, retval = context.call_conv.call_function(
-        builder, func, ll_pyobj, object_sig,
+        builder, func, types.pyobject, object_sig,
         ndarray_objects, env=env)
     builder.store(status.is_error, error_pointer)
 
@@ -531,52 +507,57 @@ class GUArrayArg(object):
         self.syms = syms
         self.as_scalar = not syms
 
+        offset = context.get_constant(types.intp, i)
+
+        core_step_ptr = builder.gep(steps, [offset], name="core.step.ptr")
+        self.core_step = builder.load(core_step_ptr)
+
         if self.as_scalar:
             self.ndim = 1
         else:
             self.ndim = len(syms)
+            self.shape = []
+            self.strides = []
 
-        core_step_ptr = builder.gep(steps,
-                                    [context.get_constant(types.intp, i)],
-                                    name="core.step.ptr")
-
-        self.core_step = builder.load(core_step_ptr)
-        self.strides = []
-        for j in range(self.ndim):
-            step = builder.gep(steps, [context.get_constant(types.intp,
+            for j in range(self.ndim):
+                stepptr = builder.gep(steps,
+                                      [context.get_constant(types.intp,
                                                             step_offset + j)],
-                               name="step.ptr")
+                                      name="step.ptr")
 
-            self.strides.append(builder.load(step))
+                step = builder.load(stepptr)
+                self.strides.append(step)
 
-        self.shape = []
-        for s in syms:
-            self.shape.append(sym_dim[s])
+            for s in syms:
+                self.shape.append(sym_dim[s])
 
-        data = builder.load(builder.gep(args,
-                                        [context.get_constant(types.intp,
-                                                              i)],
-                                        name="data.ptr"),
+        data = builder.load(builder.gep(args, [offset], name="data.ptr"),
                             name="data")
 
         self.data = data
 
+    def get_array_at_offset(self, ind):
+        context = self.context
+        builder = self.builder
+
         arytyp = types.Array(dtype=self.dtype, ndim=self.ndim, layout="A")
         arycls = context.make_array(arytyp)
 
-        self.array = arycls(context, builder)
-        self.array.data = builder.bitcast(self.data, self.array.data.type)
+        array = arycls(context, builder)
+        offseted_data = cgutils.pointer_add(self.builder,
+                                            self.data,
+                                            self.builder.mul(self.core_step,
+                                                             ind))
+        array.data = builder.bitcast(offseted_data, array.data.type)
+
         if not self.as_scalar:
-            self.array.shape = cgutils.pack_array(builder, self.shape)
-            self.array.strides = cgutils.pack_array(builder, self.strides)
+            array.shape = cgutils.pack_array(builder, self.shape)
+            array.strides = cgutils.pack_array(builder, self.strides)
         else:
             one = context.get_constant(types.intp, 1)
             zero = context.get_constant(types.intp, 0)
-            self.array.shape = cgutils.pack_array(builder, [one])
-            self.array.strides = cgutils.pack_array(builder, [zero])
-        self.array_value = self.array._getpointer()
+            array.shape = cgutils.pack_array(builder, [one])
+            array.strides = cgutils.pack_array(builder, [zero])
 
-    def next(self, i):
-        self.array.data = cgutils.pointer_add(self.builder,
-                                              self.array.data, self.core_step)
+        return array._getvalue()
 

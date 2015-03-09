@@ -272,7 +272,6 @@ class GetAttrConstrain(object):
                 msg = "Unknown attribute '%s' for %s %s %s" % args
                 raise TypingError(msg, loc=self.inst.loc)
             else:
-                assert attrty
                 restypes.append(attrty)
         typevars[self.target].add_types(*restypes)
 
@@ -357,6 +356,13 @@ class TypeInferer(object):
     def dump(self):
         print('---- type variables ----')
         pprint(list(six.itervalues(self.typevars)))
+
+    def _mangle_arg_name(self, name):
+        # Disambiguise argument name
+        return "arg.%s" % (name,)
+
+    def seed_argument(self, name, typ):
+        self.seed_type(self._mangle_arg_name(name), typ)
 
     def seed_type(self, name, typ):
         """All arguments should be seeded.
@@ -512,6 +518,8 @@ class TypeInferer(object):
                                              src=value.name, loc=inst.loc))
         elif isinstance(value, (ir.Global, ir.FreeVar)):
             self.typeof_global(inst, inst.target, value)
+        elif isinstance(value, ir.Arg):
+            self.typeof_arg(inst, inst.target, value)
         elif isinstance(value, ir.Expr):
             self.typeof_expr(inst, inst.target, value)
         else:
@@ -528,6 +536,12 @@ class TypeInferer(object):
             raise TypingError(msg, loc=inst.loc)
         else:
             return ty
+
+    def typeof_arg(self, inst, target, arg):
+        src_name = self._mangle_arg_name(arg.name)
+        self.constrains.append(Propagate(dst=target.name,
+                                         src=src_name,
+                                         loc=inst.loc))
 
     def typeof_const(self, inst, target, const):
         self.typevars[target.name].lock(self.resolve_value_type(inst, const))
@@ -553,7 +567,8 @@ class TypeInferer(object):
         typ = self.context.resolve_value_type(gvar.value)
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
-            typ = typ.copy(layout='C', const=True)
+            # XXX why layout='C'?
+            typ = typ.copy(layout='C', readonly=True)
 
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)

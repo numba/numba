@@ -1,11 +1,16 @@
 from __future__ import print_function
+
+import array
+import gc
 import itertools
+import sys
+
+import numpy as np
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, jit, numpy_support
 
-import numpy as np
-import sys
 
 def identity(x):
     return x
@@ -19,10 +24,12 @@ def equality(x, y):
 def foobar(x, y, z):
     return x
 
+
 class TestConversion(unittest.TestCase):
     """
     Testing Python to Native conversion
     """
+
     def test_complex_identity(self):
         pyfunc = identity
         cres = compile_isolated(pyfunc, [types.complex64],
@@ -145,37 +152,89 @@ class TestConversion(unittest.TestCase):
         mystruct = numpy_support.from_dtype(mystruct_dt)
 
         cres = compile_isolated(pyfunc, [mystruct[:], types.uint64, types.uint64],
-                return_type=mystruct[:])
+                                return_type=mystruct[:])
         cfunc = cres.entry_point
 
         st1 = np.recarray(3, dtype=mystruct_dt)
-        st2 = np.recarray(3, dtype=mystruct_dt)
 
         st1.p = np.arange(st1.size) + 1
         st1.row = np.arange(st1.size) + 1
         st1.col = np.arange(st1.size) + 1
 
-        st2.p = np.arange(st2.size) + 1
-        st2.row = np.arange(st2.size) + 1
-        st2.col = np.arange(st2.size) + 1
+        old_refcnt_st1 = sys.getrefcount(st1)
 
-        test_fail_args = ((st1, -1, st2), (st1, st2, -1))
-        
+        test_fail_args = ((st1, -1, 1), (st1, 1, -1))
+
         # TypeError is for 2.6
-        if sys.version_info >= (2, 7):
-            with self.assertRaises(OverflowError):
-                for a, b, c in test_fail_args:
-                    cfunc(a, b, c) 
-        else:
-            with self.assertRaises(TypeError):
-                for a, b, c in test_fail_args:
-                    cfunc(a, b, c) 
+        exc_type = OverflowError if sys.version_info >= (2, 7) else TypeError
+        for a, b, c in test_fail_args:
+            with self.assertRaises(exc_type):
+                cfunc(a, b, c)
+
+        del test_fail_args, a, b, c
+        gc.collect()
+        self.assertEqual(sys.getrefcount(st1), old_refcnt_st1)
 
     # test switch logic of callwraper.py:build_wrapper() with no function parameters
     def test_with_no_parameters(self):
         def f():
             pass 
         self.assertEqual(f(), jit('()', nopython=True)(f)())
+
+    def check_argument_cleanup(self, typ, obj):
+        """
+        Check that argument cleanup doesn't leak references.
+        """
+        def f(x, y):
+            pass
+        # The exception raised when passing a negative number
+        # to PyLong_AsUnsignedLongLong
+        exc_type = OverflowError if sys.version_info >= (2, 7) else TypeError
+
+        def _refcounts(obj):
+            refs = [sys.getrefcount(obj)]
+            if isinstance(obj, tuple):
+                refs += [_refcounts(v) for v in obj]
+            return refs
+
+        cres = compile_isolated(f, (typ, types.uint32))
+        old_refcnt = _refcounts(obj)
+        cres.entry_point(obj, 1)
+        self.assertEqual(_refcounts(obj), old_refcnt)
+        with self.assertRaises(exc_type):
+            cres.entry_point(obj, -1)
+        self.assertEqual(_refcounts(obj), old_refcnt)
+
+        cres = compile_isolated(f, (types.uint32, typ))
+        old_refcnt = _refcounts(obj)
+        cres.entry_point(1, obj)
+        self.assertEqual(_refcounts(obj), old_refcnt)
+        with self.assertRaises(exc_type):
+            cres.entry_point(-1, obj)
+        self.assertEqual(_refcounts(obj), old_refcnt)
+
+    @unittest.skipUnless(sys.version_info >= (2, 7), "test uses memoryview")
+    def test_cleanup_buffer(self):
+        mem = memoryview(bytearray(b"xyz"))
+        self.check_argument_cleanup(types.Buffer(types.intc, 1, 'C'), mem)
+
+    def test_cleanup_record(self):
+        dtype = np.dtype([('x', np.float64), ('y', np.float64)])
+        recarr = np.zeros(1, dtype=dtype)
+        self.check_argument_cleanup(numpy_support.from_dtype(dtype), recarr[0])
+
+    @unittest.skipUnless(sys.version_info >= (2, 7), "test uses memoryview")
+    def test_cleanup_tuple(self):
+        mem = memoryview(bytearray(b"xyz"))
+        tp = types.UniTuple(types.Buffer(types.intc, 1, 'C'), 2)
+        self.check_argument_cleanup(tp, (mem, mem))
+
+    @unittest.skipUnless(sys.version_info >= (2, 7), "test uses memoryview")
+    def test_cleanup_optional(self):
+        mem = memoryview(bytearray(b"xyz"))
+        tp = types.Optional(types.Buffer(types.intc, 1, 'C'))
+        self.check_argument_cleanup(tp, mem)
+
 
 if __name__ == '__main__':
     unittest.main()

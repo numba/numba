@@ -61,8 +61,8 @@ to use single-precision floats).
 
 If you omit the return type, e.g. by writing ``(int32, int32)`` instead of
 ``int32(int32, int32)``, Numba will try to infer it for you.  Function
-signatures can also be strings; see the :func:`numba.jit` documentation for
-more details.
+signatures can also be strings, and you can pass several of them as a list;
+see the :func:`numba.jit` documentation for more details.
 
 Of course, the compiled function gives the expected results::
 

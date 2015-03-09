@@ -4,30 +4,32 @@ Utilities to simplify the boilerplate for native lowering.
 
 from __future__ import print_function, absolute_import, division
 
+import collections
 import functools
 
 from .. import typing, cgutils, types
 
 def implement(func, *argtys):
     def wrapper(impl):
-        @functools.wraps(impl)
-        def res(context, builder, sig, args):
-            ret = impl(context, builder, sig, args)
-            return ret
-
-        res.signature = typing.signature(types.Any, *argtys)
-        res.key = func
-        res.__wrapped__ = impl
-        return res
+        try:
+            sigs = impl.function_signatures
+        except AttributeError:
+            sigs = impl.function_signatures = []
+        sigs.append((func, typing.signature(types.Any, *argtys)))
+        return impl
 
     return wrapper
 
 
 def impl_attribute(ty, attr, rtype=None):
     def wrapper(impl):
+        real_impl = impl
+        while hasattr(real_impl, "__wrapped__"):
+            real_impl = real_impl.__wrapped__
+
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = impl(context, builder, typ, value)
+            ret = real_impl(context, builder, typ, value)
             return ret
 
         if rtype is None:
@@ -43,9 +45,13 @@ def impl_attribute(ty, attr, rtype=None):
 
 def impl_attribute_generic(ty):
     def wrapper(impl):
+        real_impl = impl
+        while hasattr(real_impl, "__wrapped__"):
+            real_impl = real_impl.__wrapped__
+
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = impl(context, builder, typ, value, attr)
+            ret = real_impl(context, builder, typ, value, attr)
             return ret
 
         res.signature = typing.signature(types.Any, ty)
@@ -87,9 +93,10 @@ def python_attr_impl(cls, attr, atyp):
         if isinstance(atyp, types.Method):
             return aval
         else:
-            nativevalue = api.to_native_value(aval, atyp)
+            native = api.to_native_value(aval, atyp)
+            assert native.cleanup is None
             api.decref(aval)
-            return nativevalue
+            return native.value
 
     return imp
 
@@ -214,18 +221,17 @@ class Registry(object):
         self.functions = []
         self.attributes = []
 
-    def register(self, item):
-        curr_item = item
-        while hasattr(curr_item, '__wrapped__'):
-            self.functions.append(curr_item)
-            curr_item = curr_item.__wrapped__
-        return item
+    def register(self, impl):
+        sigs = impl.function_signatures
+        impl.function_signatures = []
+        self.functions.append((impl, sigs))
+        return impl
 
     def register_attr(self, item):
         curr_item = item
         while hasattr(curr_item, '__wrapped__'):
             self.attributes.append(curr_item)
-            curr_item=curr_item.__wrapped__
+            curr_item = curr_item.__wrapped__
         return item
 
 

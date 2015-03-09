@@ -51,13 +51,16 @@ class TestMacro(unittest.TestCase):
     def getarg(self):
         return np.array(100, dtype=np.float32)
 
+    def getarg2(self):
+        return self.getarg().reshape(1,1)
+
     def test_global_constants(self):
         udt = cuda.jit((float32[:],))(udt_global_constants)
         udt(self.getarg())
 
     def test_global_build_tuple(self):
         udt = cuda.jit((float32[:, :],))(udt_global_build_tuple)
-        udt(self.getarg())
+        udt(self.getarg2())
 
     def test_global_build_list(self):
         with self.assertRaises(MacroError) as raises:
@@ -68,7 +71,7 @@ class TestMacro(unittest.TestCase):
 
     def test_global_constant_tuple(self):
         udt = cuda.jit((float32[:, :],))(udt_global_constant_tuple)
-        udt(self.getarg())
+        udt(self.getarg2())
 
     def test_invalid_1(self):
         with self.assertRaises(ValueError) as raises:

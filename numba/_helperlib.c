@@ -1110,6 +1110,39 @@ int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     return 0;
 }
 
+static int
+Numba_get_buffer(PyObject *obj, Py_buffer *buf)
+{
+    /* Ask for shape and strides, but no suboffsets */
+    return PyObject_GetBuffer(obj, buf, PyBUF_RECORDS_RO);
+}
+
+static void
+Numba_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
+{
+    int i;
+    npy_intp *p;
+
+    arystruct->data = buf->buf;
+    arystruct->itemsize = buf->itemsize;
+    arystruct->parent = buf->obj;
+    arystruct->nitems = 1;
+    p = arystruct->shape_and_strides;
+    for (i = 0; i < buf->ndim; i++, p++) {
+        *p = buf->shape[i];
+        arystruct->nitems *= buf->shape[i];
+    }
+    for (i = 0; i < buf->ndim; i++, p++) {
+        *p = buf->strides[i];
+    }
+}
+
+static void
+Numba_release_buffer(Py_buffer *buf)
+{
+    PyBuffer_Release(buf);
+}
+
 static
 PyObject* Numba_ndarray_new(int nd,
                             npy_intp *dims,   /* shape */
@@ -1187,13 +1220,6 @@ static
 uint64_t Numba_fptouif(float x) {
     return (uint64_t) (int64_t) x;
 }
-
-static
-void Numba_release_record_buffer(Py_buffer *buf)
-{
-    PyBuffer_Release(buf);
-}
-
 
 static
 void Numba_gil_ensure(PyGILState_STATE *state) {
@@ -1369,9 +1395,11 @@ build_c_helpers_dict(void)
     declmethod(lgammaf);
     declmethod(complex_adaptor);
     declmethod(extract_record_data);
-    declmethod(release_record_buffer);
     declmethod(adapt_ndarray);
     declmethod(ndarray_new);
+    declmethod(get_buffer);
+    declmethod(adapt_buffer);
+    declmethod(release_buffer);
     declmethod(extract_np_datetime);
     declmethod(create_np_datetime);
     declmethod(extract_np_timedelta);

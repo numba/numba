@@ -8,36 +8,36 @@ This object must be int sized
 */
 class Type{
 public:
-	Type();
-	Type(int id);
-	Type(const Type& other);
-	Type& operator = (const Type& other);
-	bool valid() const;
-	bool operator ==(const Type& other) const;
-	bool operator !=(const Type& other) const;
-	bool operator <(const Type& other) const;
+    Type();
+    Type(int id);
+    Type(const Type& other);
+    Type& operator = (const Type& other);
+    bool valid() const;
+    bool operator ==(const Type& other) const;
+    bool operator !=(const Type& other) const;
+    bool operator <(const Type& other) const;
 
-	int get() const;
+    int get() const;
 
 private:
     int id;
 };
 
 enum TypeCompatibleCode{
-	// No match
-	TCC_FALSE = 0,
-	// Exact match
-	TCC_EXACT,
-	// Subtype is UNUSED
-	TCC_SUBTYPE,
-	// Promotion with no precision loss
-	TCC_PROMOTE,
-	// Conversion with no precision loss
-	// e.g. int32 to double
+    // No match
+    TCC_FALSE = 0,
+    // Exact match
+    TCC_EXACT,
+    // Subtype is UNUSED
+    TCC_SUBTYPE,
+    // Promotion with no precision loss
+    TCC_PROMOTE,
+    // Conversion with no precision loss
+    // e.g. int32 to double
     TCC_CONVERT_SAFE,
-	// Conversion with precision loss
-	// e.g. int64 to double (53 bits precision)
-	TCC_CONVERT_UNSAFE,
+    // Conversion with precision loss
+    // e.g. int64 to double (53 bits precision)
+    TCC_CONVERT_UNSAFE,
 };
 
 typedef std::pair<Type, Type> TypePair;
@@ -62,9 +62,9 @@ private:
 };
 
 struct Rating{
-    unsigned short promote;
-    unsigned short safe_convert;
-    unsigned short unsafe_convert;
+    unsigned int promote;
+    unsigned int safe_convert;
+    unsigned int unsafe_convert;
 
     Rating();
     void bad();
@@ -76,30 +76,30 @@ struct Rating{
 
 class TypeManager{
 public:
-	bool canPromote(Type from, Type to) const;
-	bool canUnsafeConvert(Type from, Type to) const;
-	bool canSafeConvert(Type from, Type to) const;
+    bool canPromote(Type from, Type to) const;
+    bool canUnsafeConvert(Type from, Type to) const;
+    bool canSafeConvert(Type from, Type to) const;
 
-	void addPromotion(Type from, Type to);
-	void addUnsafeConversion(Type from, Type to);
-	void addSafeConversion(Type from, Type to);
-	void addCompatibility(Type from, Type to, TypeCompatibleCode by);
+    void addPromotion(Type from, Type to);
+    void addUnsafeConversion(Type from, Type to);
+    void addSafeConversion(Type from, Type to);
+    void addCompatibility(Type from, Type to, TypeCompatibleCode by);
 
-	TypeCompatibleCode isCompatible(Type from, Type to) const;
+    TypeCompatibleCode isCompatible(Type from, Type to) const;
 
-	/**
-	Output stored in selected.
-	Returns
-	    Number of matches
-	*/
-	int selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
-	                   int ovct, bool allow_unsafe) const;
+    /**
+    Output stored in selected.
+    Returns
+        Number of matches
+    */
+    int selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
+                       int ovct, bool allow_unsafe) const;
 
 private:
-	int _selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
-	                    int ovct, bool allow_unsafe, Rating ratings[]) const;
+    int _selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
+                        int ovct, bool allow_unsafe, Rating ratings[]) const;
 
-	TCCMap tccmap;
+    TCCMap tccmap;
 };
 
 

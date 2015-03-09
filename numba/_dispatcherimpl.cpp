@@ -87,7 +87,7 @@ void*
 dispatcher_resolve(dispatcher_t *obj, int sig[], int *count, int allow_unsafe) {
     Dispatcher *disp = static_cast<Dispatcher*>(obj);
     Type *args = reinterpret_cast<Type*>(sig);
-    void *callable = disp->resolve(args, *count, (bool) allow_unsafe );
+    void *callable = disp->resolve(args, *count, (bool) allow_unsafe);
     return callable;
 }
 

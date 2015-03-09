@@ -23,8 +23,21 @@ class ForbiddenConstruct(LoweringError):
     pass
 
 
+def transform_arg_name(arg):
+    if isinstance(arg, types.Record):
+        return "Record_%s" % arg._code
+    elif (isinstance(arg, types.Array) and
+          isinstance(arg.dtype, types.Record)):
+        type_name = "array" if arg.mutable else "readonly array"
+        return ("%s(Record_%s, %sd, %s)"
+                % (type_name, arg.dtype._code, arg.ndim, arg.layout))
+    else:
+        return str(arg)
+
+
 def default_mangler(name, argtypes):
-    codedargs = '.'.join(str(a).replace(' ', '_') for a in argtypes)
+    codedargs = '.'.join(transform_arg_name(a).replace(' ', '_')
+                             for a in argtypes)
     return '.'.join([name, codedargs])
 
 
@@ -216,17 +229,19 @@ class BaseLower(object):
         Called after all blocks are lowered
         """
 
+    def pre_block(self, block):
+        """
+        Called before lowering a block.
+        """
+
     def return_exception(self, exc_class, exc_args=None):
         self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
 
     def lower(self):
-        # Init argument variables
-        fnargs = self.call_conv.get_arguments(self.function)
-        for ak, av in zip(self.fndesc.args, fnargs):
-            at = self.typeof(ak)
-            av = self.context.get_argument_value(self.builder, at, av)
-            av = self.init_argument(av)
-            self.storevar(av, ak)
+        # Init argument values
+        rawfnargs = self.call_conv.get_arguments(self.function)
+        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
+        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
 
         # Init blocks
         for offset in self.blocks:
@@ -268,10 +283,8 @@ class BaseLower(object):
                                             self.call_helper,
                                             release_gil=release_gil)
 
-    def init_argument(self, arg):
-        return arg
-
     def lower_block(self, block):
+        self.pre_block(block)
         for inst in block.body:
             self.loc = inst.loc
             try:
@@ -401,7 +414,11 @@ class Lower(BaseLower):
         value = inst.value
         # In nopython mode, closure vars are frozen like globals
         if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
-            if (isinstance(ty, types.Dummy) or
+            if isinstance(ty, types.ExternalFunctionPointer):
+                return self.context.get_constant_generic(self.builder, ty,
+                                                         value.value)
+
+            elif (isinstance(ty, types.Dummy) or
                     isinstance(ty, types.Module) or
                     isinstance(ty, types.Function) or
                     isinstance(ty, types.Dispatcher)):
@@ -422,6 +439,9 @@ class Lower(BaseLower):
             val = self.loadvar(value.name)
             oty = self.typeof(value.name)
             return self.context.cast(self.builder, val, oty, ty)
+
+        elif isinstance(value, ir.Arg):
+            return self.fnargs[value.index]
 
         else:
             raise NotImplementedError(type(value), value)
@@ -507,12 +527,11 @@ class Lower(BaseLower):
                 res = self.context.call_class_method(self.builder, fnobj,
                                                      signature, castvals)
 
-            elif isinstance(fnty, types.FunctionPointer):
+            elif isinstance(fnty, types.ExternalFunctionPointer):
                 # Handle a C function pointer
-                pointer = fnty.funcptr
+                pointer = self.loadvar(expr.func.name)
                 res = self.context.call_function_pointer(self.builder, pointer,
-                                                         signature, castvals,
-                                                         fnty.cconv)
+                                                         castvals, fnty.cconv)
 
             else:
                 if isinstance(signature.return_type, types.Phantom):
@@ -536,16 +555,12 @@ class Lower(BaseLower):
         elif expr.op == 'pair_first':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            item = self.context.pair_first(self.builder, val, ty)
-            return self.context.get_argument_value(self.builder,
-                                                   ty.first_type, item)
+            return self.context.pair_first(self.builder, val, ty)
 
         elif expr.op == 'pair_second':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            item = self.context.pair_second(self.builder, val, ty)
-            return self.context.get_argument_value(self.builder,
-                                                   ty.second_type, item)
+            return self.context.pair_second(self.builder, val, ty)
 
         elif expr.op in ('getiter', 'iternext'):
             val = self.loadvar(expr.value.name)

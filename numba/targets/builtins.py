@@ -391,7 +391,10 @@ builtin(implement('>', types.boolean, types.boolean)(int_ugt_impl))
 builtin(implement('>=', types.boolean, types.boolean)(int_uge_impl))
 builtin(implement('~', types.boolean)(bool_invert_impl))
 
-for ty in types.integer_domain:
+
+def _implement_integer_operators():
+    ty = types.Kind(types.Integer)
+
     builtin(implement('+', ty, ty)(int_add_impl))
     builtin(implement('-', ty, ty)(int_sub_impl))
     builtin(implement('*', ty, ty)(int_mul_impl))
@@ -410,38 +413,41 @@ for ty in types.integer_domain:
     builtin(implement('~', ty)(int_invert_impl))
     builtin(implement(types.sign_type, ty)(int_sign_impl))
 
-for ty in types.unsigned_domain:
-    builtin(implement('/?', ty, ty)(int_udiv_impl))
-    builtin(implement('//', ty, ty)(int_ufloordiv_impl))
-    builtin(implement('/', ty, ty)(int_utruediv_impl))
-    builtin(implement('%', ty, ty)(int_urem_impl))
-    builtin(implement('<', ty, ty)(int_ult_impl))
-    builtin(implement('<=', ty, ty)(int_ule_impl))
-    builtin(implement('>', ty, ty)(int_ugt_impl))
-    builtin(implement('>=', ty, ty)(int_uge_impl))
-    builtin(implement('**', types.float64, ty)(int_upower_impl))
-    builtin(implement(pow, types.float64, ty)(int_upower_impl))
-    # logical shift for unsigned
-    builtin(implement('>>', ty, types.uint32)(int_lshr_impl))
-    builtin(implement(types.abs_type, ty)(uint_abs_impl))
+    for ty in types.unsigned_domain:
+        builtin(implement('/?', ty, ty)(int_udiv_impl))
+        builtin(implement('//', ty, ty)(int_ufloordiv_impl))
+        builtin(implement('/', ty, ty)(int_utruediv_impl))
+        builtin(implement('%', ty, ty)(int_urem_impl))
+        builtin(implement('<', ty, ty)(int_ult_impl))
+        builtin(implement('<=', ty, ty)(int_ule_impl))
+        builtin(implement('>', ty, ty)(int_ugt_impl))
+        builtin(implement('>=', ty, ty)(int_uge_impl))
+        builtin(implement('**', types.float64, ty)(int_upower_impl))
+        builtin(implement(pow, types.float64, ty)(int_upower_impl))
+        # logical shift for unsigned
+        builtin(implement('>>', ty, types.uint32)(int_lshr_impl))
+        builtin(implement(types.abs_type, ty)(uint_abs_impl))
 
-for ty in types.signed_domain:
-    builtin(implement('/?', ty, ty)(int_sdiv_impl))
-    builtin(implement('//', ty, ty)(int_sfloordiv_impl))
-    builtin(implement('/', ty, ty)(int_struediv_impl))
-    builtin(implement('%', ty, ty)(int_srem_impl))
-    builtin(implement('<', ty, ty)(int_slt_impl))
-    builtin(implement('<=', ty, ty)(int_sle_impl))
-    builtin(implement('>', ty, ty)(int_sgt_impl))
-    builtin(implement('>=', ty, ty)(int_sge_impl))
-    builtin(implement(types.abs_type, ty)(int_abs_impl))
-    builtin(implement('**', types.float64, ty)(int_spower_impl))
-    builtin(implement(pow, types.float64, ty)(int_spower_impl))
-    # arithmetic shift for signed
-    builtin(implement('>>', ty, types.uint32)(int_ashr_impl))
+    for ty in types.signed_domain:
+        builtin(implement('/?', ty, ty)(int_sdiv_impl))
+        builtin(implement('//', ty, ty)(int_sfloordiv_impl))
+        builtin(implement('/', ty, ty)(int_struediv_impl))
+        builtin(implement('%', ty, ty)(int_srem_impl))
+        builtin(implement('<', ty, ty)(int_slt_impl))
+        builtin(implement('<=', ty, ty)(int_sle_impl))
+        builtin(implement('>', ty, ty)(int_sgt_impl))
+        builtin(implement('>=', ty, ty)(int_sge_impl))
+        builtin(implement(types.abs_type, ty)(int_abs_impl))
+        builtin(implement('**', types.float64, ty)(int_spower_impl))
+        builtin(implement(pow, types.float64, ty)(int_spower_impl))
+        # arithmetic shift for signed
+        builtin(implement('>>', ty, types.uint32)(int_ashr_impl))
 
-builtin(implement('**', types.intp, types.intp)(int_spower_impl))
-builtin(implement(pow, types.intp, types.intp)(int_spower_impl))
+    builtin(implement('**', types.intp, types.intp)(int_spower_impl))
+    builtin(implement(pow, types.intp, types.intp)(int_spower_impl))
+
+_implement_integer_operators()
+
 
 def optional_is_none(context, builder, sig, args):
     """Check if an Optional value is invalid
@@ -733,30 +739,33 @@ def real_sign_impl(context, builder, sig, args):
     return builder.load(presult)
 
 
-for ty in types.real_domain:
-    builtin(implement('+', ty, ty)(real_add_impl))
-    builtin(implement('-', ty, ty)(real_sub_impl))
-    builtin(implement('*', ty, ty)(real_mul_impl))
-    builtin(implement('/?', ty, ty)(real_div_impl))
-    builtin(implement('//', ty, ty)(real_floordiv_impl))
-    builtin(implement('/', ty, ty)(real_div_impl))
-    builtin(implement('%', ty, ty)(real_mod_impl))
-    builtin(implement('**', ty, ty)(real_power_impl))
-    builtin(implement(pow, ty, ty)(real_power_impl))
+ty = types.Kind(types.Float)
 
-    builtin(implement('==', ty, ty)(real_eq_impl))
-    builtin(implement('!=', ty, ty)(real_ne_impl))
-    builtin(implement('<', ty, ty)(real_lt_impl))
-    builtin(implement('<=', ty, ty)(real_le_impl))
-    builtin(implement('>', ty, ty)(real_gt_impl))
-    builtin(implement('>=', ty, ty)(real_ge_impl))
+builtin(implement('+', ty, ty)(real_add_impl))
+builtin(implement('-', ty, ty)(real_sub_impl))
+builtin(implement('*', ty, ty)(real_mul_impl))
+builtin(implement('/?', ty, ty)(real_div_impl))
+builtin(implement('//', ty, ty)(real_floordiv_impl))
+builtin(implement('/', ty, ty)(real_div_impl))
+builtin(implement('%', ty, ty)(real_mod_impl))
+builtin(implement('**', ty, ty)(real_power_impl))
+builtin(implement(pow, ty, ty)(real_power_impl))
 
-    builtin(implement(types.abs_type, ty)(real_abs_impl))
+builtin(implement('==', ty, ty)(real_eq_impl))
+builtin(implement('!=', ty, ty)(real_ne_impl))
+builtin(implement('<', ty, ty)(real_lt_impl))
+builtin(implement('<=', ty, ty)(real_le_impl))
+builtin(implement('>', ty, ty)(real_gt_impl))
+builtin(implement('>=', ty, ty)(real_ge_impl))
 
-    builtin(implement('-', ty)(real_negate_impl))
-    builtin(implement('+', ty)(real_positive_impl))
-    builtin(implement(types.neg_type, ty)(real_negate_impl))
-    builtin(implement(types.sign_type, ty)(real_sign_impl))
+builtin(implement(types.abs_type, ty)(real_abs_impl))
+
+builtin(implement('-', ty)(real_negate_impl))
+builtin(implement('+', ty)(real_positive_impl))
+builtin(implement(types.neg_type, ty)(real_negate_impl))
+builtin(implement(types.sign_type, ty)(real_sign_impl))
+
+del ty
 
 
 class Complex64(cgutils.Structure):
@@ -988,20 +997,23 @@ def complex_abs_impl(context, builder, sig, args):
     return context.compile_internal(builder, complex_abs, sig, args)
 
 
-for ty in types.complex_domain:
-    builtin(implement("+", ty, ty)(complex_add_impl))
-    builtin(implement("-", ty, ty)(complex_sub_impl))
-    builtin(implement("*", ty, ty)(complex_mul_impl))
-    builtin(implement("/?", ty, ty)(complex_div_impl))
-    builtin(implement("/", ty, ty)(complex_div_impl))
-    builtin(implement("-", ty)(complex_negate_impl))
-    builtin(implement("+", ty)(complex_positive_impl))
-    # Complex modulo is deprecated in python3
+ty = types.Kind(types.Complex)
 
-    builtin(implement('==', ty, ty)(complex_eq_impl))
-    builtin(implement('!=', ty, ty)(complex_ne_impl))
+builtin(implement("+", ty, ty)(complex_add_impl))
+builtin(implement("-", ty, ty)(complex_sub_impl))
+builtin(implement("*", ty, ty)(complex_mul_impl))
+builtin(implement("/?", ty, ty)(complex_div_impl))
+builtin(implement("/", ty, ty)(complex_div_impl))
+builtin(implement("-", ty)(complex_negate_impl))
+builtin(implement("+", ty)(complex_positive_impl))
+# Complex modulo is deprecated in python3
 
-    builtin(implement(types.abs_type, ty)(complex_abs_impl))
+builtin(implement('==', ty, ty)(complex_eq_impl))
+builtin(implement('!=', ty, ty)(complex_ne_impl))
+
+builtin(implement(types.abs_type, ty)(complex_abs_impl))
+
+del ty
 
 
 #------------------------------------------------------------------------------
@@ -1021,9 +1033,9 @@ def number_as_bool_impl(context, builder, sig, args):
     return istrue
 
 
-for ty in types.number_domain:
-    builtin(implement('not', ty)(number_not_impl))
-    builtin(implement(bool, ty)(number_as_bool_impl))
+for ty in (types.Integer, types.Float, types.Complex):
+    builtin(implement('not', types.Kind(ty))(number_not_impl))
+    builtin(implement(bool, types.Kind(ty))(number_as_bool_impl))
 
 builtin(implement('not', types.boolean)(number_not_impl))
 
@@ -1111,11 +1123,7 @@ def slice0_none_none_impl(context, builder, sig, args):
 
 
 def make_pair(first_type, second_type):
-    class Pair(cgutils.Structure):
-        _fields = [('first', first_type),
-                   ('second', second_type)]
-
-    return Pair
+    return cgutils.create_struct_proxy(types.Pair(first_type, second_type))
 
 
 @struct_factory(types.UniTupleIter)
@@ -1124,13 +1132,7 @@ def make_unituple_iter(tupiter):
     Return the Structure representation of the given *tupiter* (an
     instance of types.UniTupleIter).
     """
-    unituple = tupiter.unituple
-
-    class UniTupleIter(cgutils.Structure):
-        _fields = [('index', types.CPointer(types.intp)),
-                   ('tuple', tupiter.unituple,)]
-
-    return UniTupleIter
+    return cgutils.create_struct_proxy(tupiter)
 
 
 @builtin

@@ -154,6 +154,10 @@ class OpaqueType(Type):
         super(OpaqueType, self).__init__(name)
 
 
+class Boolean(Type):
+    pass
+
+
 @utils.total_ordering
 class Integer(Type):
     def __init__(self, *args, **kws):
@@ -384,15 +388,24 @@ class Dispatcher(WeakType):
         return self.overloaded._pysig
 
 
-class FunctionPointer(Function):
+class ExternalFunctionPointer(Function):
     """
     A pointer to a native function (e.g. exported via ctypes or cffi).
+    *get_pointer* is a Python function taking an object
+    and returning the raw pointer value as an int.
     """
 
-    def __init__(self, template, funcptr, cconv=None):
-        self.funcptr = funcptr
+    def __init__(self, sig, get_pointer, cconv=None):
+        from . import typing
+        self.sig = sig
+        self.get_pointer = get_pointer
         self.cconv = cconv
-        super(FunctionPointer, self).__init__(template)
+        template = typing.make_concrete_template("CFuncPtr", sig, [sig])
+        super(ExternalFunctionPointer, self).__init__(template)
+
+    @property
+    def key(self):
+        return self.sig, self.cconv, self.get_pointer
 
 
 class ExternalFunction(Function):
@@ -629,6 +642,9 @@ class Record(Type):
 
 
 class ArrayIterator(IteratorType):
+    """
+    Type class for iterators of array and buffer objects.
+    """
 
     def __init__(self, array_type):
         self.array_type = array_type
@@ -641,28 +657,103 @@ class ArrayIterator(IteratorType):
         super(ArrayIterator, self).__init__(name, param=True)
 
 
-class Array(IterableType):
-
+class Buffer(IterableType):
+    """
+    Type class for objects providing the buffer protocol.
+    Derived classes exist for more specific cases.
+    """
     mutable = True
+    slice_is_copy = False
 
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
-    def __init__(self, dtype, ndim, layout, const=False):
-        if isinstance(dtype, Array):
-            raise TypeError("Array dtype cannot be Array")
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+        if isinstance(dtype, Buffer):
+            raise TypeError("Buffer dtype cannot be buffer")
         if layout not in self.LAYOUTS:
             raise ValueError("Invalid layout '%s'" % layout)
-
         self.dtype = dtype
         self.ndim = ndim
         self.layout = layout
-        self.const = const
-        name = "array(%s, %sd, %s, %s)" % (dtype, ndim, layout,
-                                           {True: 'const',
-                                            False: 'nonconst'}[const])
-        super(Array, self).__init__(name, param=True)
+        if readonly:
+            self.mutable = False
+        if name is None:
+            type_name = self.__class__.__name__.lower()
+            if readonly:
+                type_name = "readonly %s" % type_name
+            name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
+        super(Buffer, self).__init__(name, param=True)
         self.iterator_type = ArrayIterator(self)
+
+    def copy(self, dtype=None, ndim=None, layout=None):
+        if dtype is None:
+            dtype = self.dtype
+        if ndim is None:
+            ndim = self.ndim
+        if layout is None:
+            layout = self.layout
+        return self.__class__(dtype=dtype, ndim=ndim, layout=layout,
+                              readonly=not self.mutable)
+
+    @property
+    def key(self):
+        return self.dtype, self.ndim, self.layout, self.mutable
+
+    @property
+    def is_c_contig(self):
+        return self.layout == 'C' or (self.ndim <= 1 and self.layout in 'CF')
+
+    @property
+    def is_f_contig(self):
+        return self.layout == 'F' or (self.ndim <= 1 and self.layout in 'CF')
+
+    @property
+    def is_contig(self):
+        return self.layout in 'CF'
+
+
+class Bytes(Buffer):
+    """
+    Type class for Python 3.x bytes objects.
+    """
+    mutable = False
+    # Actually true but doesn't matter since bytes is immutable
+    slice_is_copy = False
+
+
+class ByteArray(Buffer):
+    """
+    Type class for bytearray objects.
+    """
+    slice_is_copy = True
+
+
+class PyArray(Buffer):
+    """
+    Type class for array.array objects.
+    """
+    slice_is_copy = True
+
+
+class MemoryView(Buffer):
+    """
+    Type class for memoryview objects.
+    """
+
+
+class Array(Buffer):
+    """
+    Type class for Numpy arrays.
+    """
+
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+        if readonly:
+            self.mutable = False
+        if name is None:
+            type_name = "array" if self.mutable else "readonly array"
+            name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
+        super(Array, self).__init__(dtype, ndim, layout, name=name)
 
     def post_init(self):
         """
@@ -670,48 +761,64 @@ class Array(IterableType):
         """
         if self.layout != 'A':
             from numba.typeconv.rules import default_casting_rules as tcr
-            ary_any = Array(self.dtype, self.ndim, 'A', const=self.const)
+            ary_any = self.copy(layout='A')
             # XXX This will make the types immortal
             tcr.safe(self, ary_any)
 
-    def copy(self, dtype=None, ndim=None, layout=None, const=None):
+    def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
         if dtype is None:
             dtype = self.dtype
         if ndim is None:
             ndim = self.ndim
         if layout is None:
             layout = self.layout
-        if const is None:
-            const = self.const
-        return Array(dtype=dtype, ndim=ndim, layout=layout, const=const)
-
-    def get_layout(self, dim):
-        assert 0 <= dim < self.ndim
-        if self.layout in 'CFA':
-            return self.layout
-        elif self.layout == 'CS':
-            if dim == self.ndim - 1:
-                return 'C'
-        elif self.layout == 'FS':
-            if dim == 0:
-                return 'F'
-        return 'A'
+        if readonly is None:
+            readonly = not self.mutable
+        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly)
 
     @property
     def key(self):
-        return self.dtype, self.ndim, self.layout, self.const
+        return self.dtype, self.ndim, self.layout, self.mutable
+
+
+class NestedArray(Array):
+    """
+    A NestedArray is an array nested within a structured type (which are "void"
+    type in NumPy parlance). Unlike an Array, the shape, and not just the number
+    of dimenions is part of the type of a NestedArray.
+    """
+
+    def __init__(self, dtype, shape):
+        assert dtype.bitwidth % 8 == 0, \
+            "Dtype bitwidth must be a multiple of bytes"
+        self._shape = shape
+        name = "nestedarray(%s, %s)" % (dtype, shape)
+        ndim = len(shape)
+        super(NestedArray, self).__init__(dtype, ndim, 'C', name=name)
 
     @property
-    def is_c_contig(self):
-        return self.layout == 'C' or (self.ndim == 1 and self.layout in 'CF')
+    def shape(self):
+        return self._shape
 
     @property
-    def is_f_contig(self):
-        return self.layout == 'F' or (self.ndim == 1 and self.layout in 'CF')
+    def nitems(self):
+        l = 1
+        for s in self.shape:
+            l = l * s
+        return l
 
     @property
-    def is_contig(self):
-        return self.layout in 'CF'
+    def size(self):
+        return self.dtype.bitwidth // 8
+
+    @property
+    def strides(self):
+        stride = self.size
+        strides = []
+        for i in reversed(self._shape):
+             strides.append(stride)
+             stride *= i
+        return tuple(reversed(strides))
 
 
 class UniTuple(IterableType):
@@ -914,6 +1021,10 @@ class ExceptionInstance(Phantom):
         return self.exc_class
 
 
+class Slice3Type(Type):
+    pass
+
+
 # Utils
 
 def is_int_tuple(x):
@@ -937,7 +1048,7 @@ string = Dummy('str')
 # Can only pass it around
 voidptr = Opaque('void*')
 
-boolean = bool_ = Type('bool')
+boolean = bool_ = Boolean('bool')
 
 byte = uint8 = Integer('uint8')
 uint16 = Integer('uint16')
@@ -974,7 +1085,7 @@ range_state32_type = RangeType('range_state32', range_iter32_type)
 range_state64_type = RangeType('range_state64', range_iter64_type)
 
 # slice2_type = Type('slice2_type')
-slice3_type = Type('slice3_type')
+slice3_type = Slice3Type('slice3_type')
 
 signed_domain = frozenset([int8, int16, int32, int64])
 unsigned_domain = frozenset([uint8, uint16, uint32, uint64])

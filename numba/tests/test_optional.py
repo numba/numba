@@ -144,7 +144,7 @@ class TestOptional(unittest.TestCase):
         cfunc = njit("(optional(int32[:]),)")(pyfunc)
         with self.assertRaises(TypeError) as raised:
             cfunc(None)
-        self.assertIn('expected array(int32, 1d, A, nonconst), got None',
+        self.assertIn('expected array(int32, 1d, A), got None',
                       str(raised.exception))
 
         y = numpy.array([0xabcd], dtype=numpy.int32)
