@@ -5,7 +5,7 @@ import itertools
 import sys
 from types import ModuleType
 
-from llvmlite.llvmpy.core import Type, Builder
+from llvmlite.llvmpy.core import Constant, Type, Builder
 
 
 from numba import (_dynfunc, ir, types, cgutils, utils, config,
@@ -165,6 +165,29 @@ class PythonFunctionDescriptor(FunctionDescriptor):
                                          native=False)
 
 
+class GeneratorDescriptor(FunctionDescriptor):
+    __slots__ = ()
+
+    @classmethod
+    def from_generator_fndesc(cls, interp, fndesc, mangler):
+        """
+        Build a GeneratorDescriptor for the generator returned by the
+        function described by *fndesc*.
+        """
+        gentype = fndesc.restype
+        assert isinstance(gentype, types.Generator)
+        restype = gentype.yield_type
+        args = ['gen']
+        argtypes = [gentype]
+        qualname = fndesc.qualname + '.next'
+        unique_name = fndesc.unique_name + '.next'
+        self = cls(fndesc.native, fndesc.modname, qualname, unique_name,
+                   fndesc.doc, fndesc.typemap, restype, fndesc.calltypes,
+                   args, fndesc.kws, argtypes=argtypes, mangler=mangler,
+                   inline=True)
+        return self
+
+
 class ExternalFunctionDescriptor(FunctionDescriptor):
     """
     A FunctionDescriptor subclass for opaque external functions
@@ -192,6 +215,7 @@ class BaseLower(object):
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
         self.interp = interp
         self.call_conv = context.call_conv
+        self.generator_info = self.interp.generator_info
 
         # Initialize LLVM
         self.module = self.library.create_ir_module(self.fndesc.unique_name)
@@ -201,17 +225,12 @@ class BaseLower(object):
         self.env = _dynfunc.Environment(
             globals=self.fndesc.lookup_module().__dict__)
 
-        # Setup function
-        self.function = context.declare_function(self.module, fndesc)
-        self.entry_block = self.function.append_basic_block('entry')
-        self.builder = Builder.new(self.entry_block)
-        self.call_helper = self.call_conv.init_call_helper(self.builder)
-
         # Internal states
         self.blkmap = {}
         self.varmap = {}
         self.firstblk = min(self.blocks.keys())
         self.loc = -1
+        self.resume_blocks = {}
 
         # Subclass initialization
         self.init()
@@ -238,9 +257,26 @@ class BaseLower(object):
         self.call_conv.return_user_exc(self.builder, exc_class, exc_args)
 
     def lower(self):
+        if self.generator_info is None:
+            self._lower_normal_function(self.fndesc)
+        else:
+            self._lower_generator_init()
+            self._lower_generator_next()
+
+        if config.DUMP_LLVM:
+            print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
+            print(self.module)
+            print('=' * 80)
+
+        # Materialize LLVM Module
+        self.library.add_ir_module(self.module)
+
+    def _lower_normal_function(self, fndesc):
+        self.setup_function(fndesc)
+
         # Init argument values
         rawfnargs = self.call_conv.get_arguments(self.function)
-        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
+        arginfo = self.context.get_arg_packer(fndesc.argtypes)
         self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
 
         # Init blocks
@@ -267,13 +303,94 @@ class BaseLower(object):
         # Run target specific post lowering transformation
         self.context.post_lowering(self.function)
 
-        if config.DUMP_LLVM:
-            print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
-            print(self.module)
-            print('=' * 80)
+    def _lower_generator_init(self):
+        self.setup_function(self.fndesc)
 
-        # Materialize LLVM Module
-        self.library.add_ir_module(self.module)
+        # Init argument values
+        rawfnargs = self.call_conv.get_arguments(self.function)
+        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
+        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
+
+        gentype = self.fndesc.restype
+        assert isinstance(gentype, types.Generator)
+
+        self.pre_lower()
+
+        model = self.context.data_model_manager[gentype]
+
+        retty = self.context.get_return_type(gentype)
+        argsty = retty.elements[1]
+        argsval = cgutils.make_anonymous_struct(self.builder, self.fnargs,
+                                                argsty)
+        resume_index = self.context.get_constant(types.int32, 0)
+        retval = cgutils.make_anonymous_struct(self.builder, [resume_index, argsval],
+                                               retty)
+        self.call_conv.return_value(self.builder, retval)
+
+        self.post_lower()
+
+    def _lower_generator_next(self):
+        fndesc = GeneratorDescriptor.from_generator_fndesc(
+            self.interp, self.fndesc, self.context.mangler)
+        self.setup_function(fndesc)
+
+        gentype = fndesc.argtypes[0]
+        assert isinstance(gentype, types.Generator)
+
+        # Extract argument values and other information from generator struct
+        genptr, = self.call_conv.get_arguments(self.function)
+        print("genptr =", genptr.type)
+        for i in range(len(gentype.arg_types)):
+            argptr = cgutils.gep(self.builder, genptr, 0, 1, i)
+            argval = self.builder.load(argptr)
+            self.fnargs[i] = argval
+        self.resume_index_ptr = cgutils.gep(self.builder, genptr, 0, 0,
+                                            name='gen.resume_index')
+        self.gen_state_ptr = cgutils.gep(self.builder, genptr, 0, 2,
+                                         name='gen.state')
+
+        prologue = self.function.append_basic_block("generator_prologue")
+
+        # Init Python blocks
+        for offset in self.blocks:
+            bname = "B%s" % offset
+            self.blkmap[offset] = self.function.append_basic_block(bname)
+
+        self.pre_lower()
+
+        # pre_lower() may have changed the current basic block
+        entry_block_tail = self.builder.basic_block
+
+        # Lower all Python blocks
+        for offset, block in self.blocks.items():
+            bb = self.blkmap[offset]
+            self.builder.position_at_end(bb)
+            self.lower_block(block)
+
+        self.post_lower()
+
+        # Add block for StopIteration on entry
+        stop_block = self.function.append_basic_block("stop_iteration")
+        self.builder.position_at_end(stop_block)
+        self.call_conv.return_stop_iteration(self.builder)
+
+        # Add prologue switch to resume blocks
+        self.builder.position_at_end(prologue)
+        # First Python block is also the resume point on first next() call
+        first_block = self.resume_blocks[0] = self.blkmap[self.firstblk]
+
+        # Create resume points
+        switch = self.builder.switch(self.builder.load(self.resume_index_ptr),
+                                     stop_block)
+        for index, block in self.resume_blocks.items():
+            switch.add_case(index, block)
+
+        # Close tail of entry block
+        self.builder.position_at_end(entry_block_tail)
+        self.builder.branch(prologue)
+
+        # Run target specific post lowering transformation
+        self.context.post_lowering(self.function)
 
     def create_cpython_wrapper(self, release_gil=False):
         """
@@ -295,11 +412,19 @@ class BaseLower(object):
                 msg = "Internal error:\n%s: %s" % (type(e).__name__, e)
                 raise LoweringError(msg, inst.loc)
 
+    def setup_function(self, fndesc):
+        # Setup function
+        self.function = self.context.declare_function(self.module, fndesc)
+        self.entry_block = self.function.append_basic_block('entry')
+        self.builder = Builder.new(self.entry_block)
+        self.call_helper = self.call_conv.init_call_helper(self.builder)
+
     def typeof(self, varname):
         return self.fndesc.typemap[varname]
 
 
 class Lower(BaseLower):
+
     def lower_inst(self, inst):
         if config.DEBUG_JIT:
             self.context.debug_print(self.builder, str(inst))
@@ -323,6 +448,10 @@ class Lower(BaseLower):
             self.builder.branch(target)
 
         elif isinstance(inst, ir.Return):
+            if self.generator_info:
+                # StopIteration
+                self.call_conv.return_stop_iteration(self.builder)
+                return
             val = self.loadvar(inst.value.name)
             oty = self.typeof(inst.value.name)
             ty = self.fndesc.restype
@@ -443,6 +572,9 @@ class Lower(BaseLower):
         elif isinstance(value, ir.Arg):
             return self.fnargs[value.index]
 
+        elif isinstance(value, ir.Yield):
+            return self.lower_yield(ty, value)
+
         else:
             raise NotImplementedError(type(value), value)
 
@@ -462,6 +594,33 @@ class Lower(BaseLower):
         res = impl(self.builder, (lhs, rhs))
         return self.context.cast(self.builder, res, signature.return_type,
                                  resty)
+
+    def lower_yield(self, ty, inst):
+        block, _i = self.generator_info.yield_points[inst.index]
+        assert _i is inst
+        # Save live vars in state
+        live_vars = self.interp.get_block_entry_vars(block)
+        indices = [self.generator_info.state_vars.index(v) for v in live_vars]
+        for state_index, name in zip(indices, live_vars):
+            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
+                                     0, state_index)
+            self.builder.store(self.loadvar(name), state_slot)
+        # Save resume index
+        indexval = Constant.int(self.resume_index_ptr.type.pointee, inst.index)
+        self.builder.store(indexval, self.resume_index_ptr)
+        # Yield to caller
+        self.call_conv.return_value(self.builder, self.loadvar(inst.value.name))
+        # Emit resumption point
+        block_name = "generator_resume%d" % (inst.index)
+        block = self.function.append_basic_block(block_name)
+        self.builder.position_at_end(block)
+        self.resume_blocks[inst.index] = block
+        # Reload live vars from state
+        for state_index, name in zip(indices, live_vars):
+            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
+                                     0, state_index)
+            self.storevar(self.builder.load(state_slot), name)
+        return self.context.get_constant_generic(self.builder, ty, None)
 
     def lower_expr(self, resty, expr):
         if expr.op == 'binop':

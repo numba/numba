@@ -59,6 +59,21 @@ class Assigner(object):
         return None
 
 
+class GeneratorInfo(object):
+
+    def __init__(self):
+        # { index: (block, instruction) }
+        self.yield_points = {}
+        # Ordered list of variable names
+        self.state_vars = []
+
+    def get_yield_points(self):
+        """
+        Return a list of Yield instructions.
+        """
+        return [inst for block, inst in self.yield_points.values()]
+
+
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
@@ -87,6 +102,9 @@ class Interpreter(object):
         self.definitions = collections.defaultdict(list)
         # { ir.Block: { variable names (potentially) alive at start of block } }
         self.block_entry_vars = collections.defaultdict(set)
+
+        if self.bytecode.is_generator:
+            self.generator_info = GeneratorInfo()
 
         # Temp states during interpretation
         self.current_block = None
@@ -123,6 +141,8 @@ class Interpreter(object):
         # Post-processing and analysis on generated IR
         self._insert_var_dels()
         self._compute_block_entry_vars()
+        if self.generator_info:
+            self._compute_generator_info()
 
     def _compute_block_entry_vars(self):
         """
@@ -165,6 +185,14 @@ class Interpreter(object):
                     if not succ_entry_vars >= v:
                         succ_entry_vars.update(v)
                         changed = True
+
+    def _compute_generator_info(self):
+        gi = self.generator_info
+        st = set()
+        for ir_block, inst in gi.yield_points.values():
+            st.update(self.block_entry_vars[ir_block])
+        gi.state_vars = sorted(st)
+        print("computed state vars:", gi.state_vars)
 
     def _insert_var_dels(self):
         """
@@ -951,3 +979,13 @@ class Interpreter(object):
             exc = self.get(exc)
         stmt = ir.Raise(exception=exc, loc=self.loc)
         self.current_block.append(stmt)
+
+    def op_YIELD_VALUE(self, inst, value, res):
+        # Yield points should always appear at the beginning of a block
+        assert len(self.current_block.body) == 0
+        dct = self.generator_info.yield_points
+        index = len(dct) + 1
+        value = self.get(value)
+        expr = ir.Yield(value=value, index=index, loc=self.loc)
+        dct[index] = self.current_block, expr
+        return self.store(expr, res)

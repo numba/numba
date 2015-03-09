@@ -501,6 +501,20 @@ class RangeIteratorType(SimpleIteratorType):
     pass
 
 
+class Generator(IteratorType):
+    """
+    Type class for Numba-compiled generator objects.
+    """
+
+    def __init__(self, yield_type, arg_types, state_types):
+        self.arg_types = tuple(arg_types)
+        self.state_types = tuple(state_types)
+        self.yield_type = yield_type
+        name = "%s generator(args=%s, state=%s)" % (
+            self.yield_type, self.arg_types, self.state_types)
+        super(Generator, self).__init__(name, param=True)
+
+
 class NumpyFlatType(IteratorType):
     """
     Type class for `ndarray.flat()` objects.

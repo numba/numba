@@ -3,10 +3,12 @@ From NumbaPro
 
 """
 from __future__ import print_function, division, absolute_import
+
 import dis
 import sys
 import inspect
 from collections import namedtuple
+
 from numba import utils
 from numba.config import PYVERSION
 
@@ -128,6 +130,7 @@ def _make_bytecode_table():
                     ('UNARY_INVERT', 0),
                     ('UNARY_NOT', 0),
                     ('UNPACK_SEQUENCE', 2),
+                    ('YIELD_VALUE', 0),
                 ] + version_specific
 
     return dict((dis.opmap[opname], opcode_info(argsize=argsize))
@@ -265,6 +268,7 @@ class ByteCodeBase(object):
                  co_varnames, co_consts, co_freevars, table, labels):
         self.func = func
         self.module = inspect.getmodule(func)
+        self.is_generator = inspect.isgeneratorfunction(func)
         self.func_qualname = func_qualname
         self.func_name = func_qualname.split('.')[-1]
         self.argspec = argspec

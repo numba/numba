@@ -986,6 +986,11 @@ class PythonAPI(object):
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
             return self.from_native_tuple(val, typ)
 
+        elif isinstance(typ, types.Generator):
+            self.err_set_string("PyExc_NotImplementedError",
+                                "cannot return generator to Python")
+            return self.get_null_object()
+
         raise NotImplementedError(typ)
 
     def to_native_int(self, obj, typ):

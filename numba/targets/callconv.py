@@ -36,6 +36,8 @@ def _const_int(code):
 RETCODE_OK = _const_int(0)
 RETCODE_EXC = _const_int(-1)
 RETCODE_NONE = _const_int(-2)
+# StopIteration
+RETCODE_STOPIT = _const_int(-3)
 
 FIRST_USEREXC = 1
 
@@ -78,6 +80,9 @@ class BaseCallConv(object):
 
     def return_exc(self, builder):
         self._return_errcode_raw(builder, RETCODE_EXC)
+
+    def return_stop_iteration(self, builder):
+        self._return_errcode_raw(builder, RETCODE_STOPIT)
 
     def get_return_type(self, ty):
         """
