@@ -16,12 +16,13 @@ def return_generator_func(x):
 
 class TestLists(TestCase):
 
-    @testing.allow_interpreter_mode
     def test_generator_func(self):
         pyfunc = generator_func
         cr = compile_isolated(pyfunc, ())
         cfunc = cr.entry_point
-        self.assertEqual([x for x in cfunc()], [x for x in pyfunc()])
+        expected = [x for x in pyfunc()]
+        got = [x for x in cfunc()]
+        self.assertEqual(expected, got)
 
     @testing.allow_interpreter_mode
     def test_return_generator_func(self):

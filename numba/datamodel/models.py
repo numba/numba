@@ -704,8 +704,8 @@ class GeneratorModel(CompositeModel):
     def get_return_type(self):
         return self._be_type
 
-    #def get_data_type(self):
-        #return self._be_type
+    def get_data_type(self):
+        return self._be_type
 
     #def as_data(self, builder, value):
         #return builder.load(value)

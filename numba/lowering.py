@@ -392,10 +392,16 @@ class BaseLower(object):
         # Run target specific post lowering transformation
         self.context.post_lowering(self.function)
 
+        self.context.insert_generator(gentype, self.gendesc, [self.library])
+
     def create_cpython_wrapper(self, release_gil=False):
         """
-        Create CPython wrapper.
+        Create CPython wrapper(s).
         """
+        if self.gendesc:
+            self.context.create_cpython_wrapper(self.library, self.gendesc,
+                                                self.call_helper,
+                                                release_gil=release_gil)
         self.context.create_cpython_wrapper(self.library, self.fndesc,
                                             self.call_helper,
                                             release_gil=release_gil)

@@ -253,8 +253,7 @@ closure_new(PyObject *module, PyObject *name, PyObject *doc, PyCFunction fnaddr)
 }
 
 /* Dynamically create a new C function object */
-static
-PyObject*
+static PyObject*
 make_function(PyObject *self, PyObject *args)
 {
     PyObject *module, *fname, *fdoc, *fnaddrobj;
@@ -284,6 +283,105 @@ make_function(PyObject *self, PyObject *args)
 }
 
 
+/*
+ * Python-facing wrapper for Numba-compiled generator.
+ */
+
+typedef struct {
+    PyObject_VAR_HEAD
+    PyCFunctionWithKeywords nextfunc;
+    PyObject *weakreflist;
+    union {
+        double dummy;   /* Force alignment */
+        char state[0];
+    };
+} GeneratorObject;
+
+static int
+generator_traverse(GeneratorObject *clo, visitproc visit, void *arg)
+{
+    return 0;
+}
+
+static void
+generator_dealloc(GeneratorObject *gen)
+{
+    _PyObject_GC_UNTRACK((PyObject *) gen);
+    if (gen->weakreflist != NULL)
+        PyObject_ClearWeakRefs((PyObject *) gen);
+    Py_TYPE(gen)->tp_free((PyObject *) gen);
+}
+
+static PyObject *
+generator_iternext(GeneratorObject *gen)
+{
+    PyObject *res, *args = PyTuple_Pack(1, (PyObject *) gen);
+    if (args == NULL)
+        return NULL;
+    /* XXX first argument should be a Closure object for object mode */
+    res = (*gen->nextfunc)((PyObject *) gen, args, NULL);
+    Py_DECREF(args);
+    return res;
+}
+
+static PyTypeObject GeneratorType = {
+#if (PY_MAJOR_VERSION < 3)
+    PyObject_HEAD_INIT(NULL)
+    0,                                        /* ob_size*/
+#else
+    PyVarObject_HEAD_INIT(NULL, 0)
+#endif
+    "_dynfunc._Generator",                    /* tp_name*/
+    offsetof(GeneratorObject, state),         /* tp_basicsize*/
+    1,                                        /* tp_itemsize*/
+    (destructor) generator_dealloc,           /* tp_dealloc*/
+    0,                                        /* tp_print*/
+    0,                                        /* tp_getattr*/
+    0,                                        /* tp_setattr*/
+    0,                                        /* tp_compare*/
+    0,                                        /* tp_repr*/
+    0,                                        /* tp_as_number*/
+    0,                                        /* tp_as_sequence*/
+    0,                                        /* tp_as_mapping*/
+    0,                                        /* tp_hash */
+    0,                                        /* tp_call*/
+    0,                                        /* tp_str*/
+    0,                                        /* tp_getattro*/
+    0,                                        /* tp_setattro*/
+    0,                                        /* tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,  /* tp_flags*/
+    0,                                        /* tp_doc */
+    (traverseproc) generator_traverse,        /* tp_traverse */
+    0,                                        /* tp_clear */
+    0,                                        /* tp_richcompare */
+    offsetof(GeneratorObject, weakreflist),   /* tp_weaklistoffset */
+    PyObject_SelfIter,                        /* tp_iter */
+    (iternextfunc) generator_iternext,        /* tp_iternext */
+    0,                                        /* tp_methods */
+    0,                                        /* tp_members */
+    0,                                        /* tp_getset */
+    0,                                        /* tp_base */
+    0,                                        /* tp_dict */
+    0,                                        /* tp_descr_get */
+    0,                                        /* tp_descr_set */
+    0,                                        /* tp_dictoffset */
+    0,                                        /* tp_init */
+    0,                                        /* tp_alloc */
+    0,                                        /* tp_new */
+};
+
+/* Dynamically create a new generator object */
+static PyObject *
+Numba_make_generator(Py_ssize_t gen_state_size, PyCFunctionWithKeywords nextfunc)
+{
+    GeneratorObject *gen;
+    gen = (GeneratorObject *) PyType_GenericAlloc(&GeneratorType, gen_state_size);
+    if (gen == NULL)
+        return NULL;
+    gen->nextfunc = nextfunc;
+    return (PyObject *) gen;
+}
+
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(make_function),
@@ -291,6 +389,36 @@ static PyMethodDef ext_methods[] = {
 #undef declmethod
 };
 
+
+static PyObject *
+build_c_helpers_dict(void)
+{
+    PyObject *dct = PyDict_New();
+    if (dct == NULL)
+        goto error;
+
+#define _declpointer(name, value) do {                 \
+    PyObject *o = PyLong_FromVoidPtr(value);           \
+    if (o == NULL) goto error;                         \
+    if (PyDict_SetItemString(dct, name, o)) {          \
+        Py_DECREF(o);                                  \
+        goto error;                                    \
+    }                                                  \
+    Py_DECREF(o);                                      \
+} while (0)
+
+#define declmethod(func) _declpointer(#func, &Numba_##func)
+
+#define declpointer(ptr) _declpointer(#ptr, &ptr)
+
+    declmethod(make_generator);
+
+#undef declmethod
+    return dct;
+error:
+    Py_XDECREF(dct);
+    return NULL;
+}
 
 MOD_INIT(_dynfunc) {
     PyObject *m, *impl_info;
@@ -303,11 +431,14 @@ MOD_INIT(_dynfunc) {
         return MOD_ERROR_VAL;
     if (PyType_Ready(&EnvironmentType))
         return MOD_ERROR_VAL;
+    if (PyType_Ready(&GeneratorType))
+        return MOD_ERROR_VAL;
 
     impl_info = Py_BuildValue(
-        "{snsn}",
-        "offset_closure_body", offsetof(ClosureObject, env),
-        "offset_env_body", offsetof(EnvironmentObject, globals)
+        "{snsnsn}",
+        "offsetof_closure_body", offsetof(ClosureObject, env),
+        "offsetof_env_body", offsetof(EnvironmentObject, globals),
+        "offsetof_generator_state", offsetof(GeneratorObject, state)
         );
     if (impl_info == NULL)
         return MOD_ERROR_VAL;
@@ -317,6 +448,8 @@ MOD_INIT(_dynfunc) {
     PyModule_AddObject(m, "_Closure", (PyObject *) (&ClosureType));
     Py_INCREF(&EnvironmentType);
     PyModule_AddObject(m, "Environment", (PyObject *) (&EnvironmentType));
+
+    PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
 
     return MOD_SUCCESS_VAL(m);
 }

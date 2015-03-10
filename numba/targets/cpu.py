@@ -76,7 +76,7 @@ class CPUContext(BaseContext):
         to the enclosed _dynfunc.Environment.
         """
         clo_body_ptr = cgutils.pointer_add(
-            builder, clo, _dynfunc._impl_info['offset_closure_body'])
+            builder, clo, _dynfunc._impl_info['offsetof_closure_body'])
         clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
         return clo_body.env
 
@@ -86,8 +86,17 @@ class CPUContext(BaseContext):
         get a EnvBody allowing structured access to environment fields.
         """
         body_ptr = cgutils.pointer_add(
-            builder, envptr, _dynfunc._impl_info['offset_env_body'])
+            builder, envptr, _dynfunc._impl_info['offsetof_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
+
+    def get_generator_state(self, builder, genptr, return_type):
+        """
+        From the given *genptr* (a pointer to a _dynfunc.Generator object),
+        get a pointer to its state area.
+        """
+        return cgutils.pointer_add(
+            builder, genptr, _dynfunc._impl_info['offsetof_generator_state'],
+            return_type=return_type)
 
     def remove_native_function(self, func):
         """
@@ -132,12 +141,9 @@ class CPUContext(BaseContext):
         - env
             an execution environment (from _dynfunc)
         """
-        func = library.get_function(fndesc.llvm_func_name)
-        wrapper = library.get_function(fndesc.llvm_cpython_wrapper_name)
-
         # Code generation
-        baseptr = library.get_pointer_to_function(func.name)
-        fnptr = library.get_pointer_to_function(wrapper.name)
+        baseptr = library.get_pointer_to_function(fndesc.llvm_func_name)
+        fnptr = library.get_pointer_to_function(fndesc.llvm_cpython_wrapper_name)
 
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],

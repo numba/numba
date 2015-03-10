@@ -706,8 +706,6 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         # Insert native function for use by other jitted-functions.
         # We also register its library to allow for inlining.
         targetctx.insert_user_function(cfunc, fndesc, [library])
-        if gendesc:
-            targetctx.insert_generator(restype, gendesc, [library])
         return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=None)
 
 

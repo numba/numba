@@ -11,7 +11,8 @@ from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
 import numba
-from numba import types, utils, cgutils, typing, numpy_support, _helperlib
+from numba import types, utils, cgutils, typing, numpy_support
+from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     python_attr_impl,
@@ -111,11 +112,11 @@ def _load_global_helpers():
     ll.add_symbol("Py_None", id(None))
 
     # Add C helper functions
-    c_helpers = _helperlib.c_helpers
-    for py_name in c_helpers:
-        c_name = "numba_" + py_name
-        c_address = c_helpers[py_name]
-        ll.add_symbol(c_name, c_address)
+    for c_helpers in (_helperlib.c_helpers, _dynfunc.c_helpers):
+        for py_name in c_helpers:
+            c_name = "numba_" + py_name
+            c_address = c_helpers[py_name]
+            ll.add_symbol(c_name, c_address)
 
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
@@ -210,10 +211,10 @@ class BaseContext(object):
         impl = user_function(fndesc, libs)
         self.defns[func].append(impl, impl.signature)
 
-    def insert_generator(self, genty, fndesc, libs=()):
+    def insert_generator(self, genty, gendesc, libs=()):
         assert isinstance(genty, types.Generator)
-        impl = user_generator(fndesc, libs)
-        self.gens[genty] = impl
+        impl = user_generator(gendesc, libs)
+        self.gens[genty] = gendesc, impl
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
@@ -450,10 +451,15 @@ class BaseContext(object):
         except NotImplementedError:
             raise Exception("No definition for lowering %s%s" % (key, sig))
 
-    def get_generator(self, genty):
+    def get_generator_desc(self, genty):
         """
         """
-        return self.gens[genty]
+        return self.gens[genty][0]
+
+    def get_generator_impl(self, genty):
+        """
+        """
+        return self.gens[genty][1]
 
     def get_bound_function(self, builder, obj, ty):
         return obj

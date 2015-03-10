@@ -171,6 +171,10 @@ class PyCallWrapper(object):
                 api.raise_object(exc)  # steals ref
             builder.ret(api.get_null_object())
 
+        with cgutils.ifthen(builder, status.is_stop_iteration):
+            api.err_set_none("PyExc_StopIteration")
+            builder.ret(api.get_null_object())
+
         msg = "unknown error in native function: %s" % self.fndesc.mangled_name
         api.err_set_string("PyExc_SystemError", msg)
 
