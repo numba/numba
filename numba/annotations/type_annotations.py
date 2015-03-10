@@ -166,12 +166,13 @@ class TypeAnnotation(object):
             indent_len = len(_getindent(line))
             func_data['llvm_indent'][num].append('&nbsp;' * indent_len)
 
-        func_key = (self.func_attr.filename + ':' + str(self.func_attr.lineno + 1), self.signature)
-        if self.lifted_from is not None and self.lifted_from['num_lifted_loops'] > 0:
+        func_key = (self.func_attr.filename + ':' + str(self.func_attr.lineno + 1),
+                    self.signature)
+        if self.lifted_from is not None and self.lifted_from[1]['num_lifted_loops'] > 0:
             # This is a lifted loop function that is being compiled. Get the
             # llvm instructions for lines in loop function to use for annotating
             # original python function that the loop was lifted from.
-            func_data = self.lifted_from
+            func_data = self.lifted_from[1]
             for num in line_nums:
                 if num not in llvm_lines.keys():
                     continue
@@ -179,19 +180,28 @@ class TypeAnnotation(object):
                 func_data['llvm_indent'][num] = []
                 for line in llvm_lines[num]:
                     add_llvm_line(line)
+                    if line.strip().endswith('pyobject'):
+                        func_data['python_tags'][num] = 'object_tag'
+                        # If any pyobject line is found, make sure original python
+                        # line that was marked as a lifted loop start line is tagged
+                        # as an object line instead. Lifted loop start lines should
+                        # only be marked as lifted loop lines if the lifted loop
+                        # was successfully compiled in nopython mode.
+                        func_data['python_tags'][self.lifted_from[0]] = 'object_tag'
+
             # We're done with this lifted loop, so decrement lfited loop counter.
             # When lifted loop counter hits zero, that means we're ready to write
             # out annotations to html file.
-            self.lifted_from['num_lifted_loops'] -= 1
-        elif func_key not in TypeAnnotation.func_data.keys():
+            self.lifted_from[1]['num_lifted_loops'] -= 1
 
+        elif func_key not in TypeAnnotation.func_data.keys():
             TypeAnnotation.func_data[func_key] = {}
             func_data = TypeAnnotation.func_data[func_key]
             
-            for loop in self.lifted:
+            for i, loop in enumerate(self.lifted):
                 # Make sure that when we process each lifted loop function later,
                 # we'll know where it originally came from.
-                loop.lifted_from = func_data
+                loop.lifted_from = (lifted_lines[i], func_data)
             func_data['num_lifted_loops'] = self.num_lifted_loops
 
             func_data['filename'] = self.filename
@@ -209,6 +219,7 @@ class TypeAnnotation(object):
                 func_data['python_tags'][num] = ''
                 func_data['llvm_lines'][num] = []
                 func_data['llvm_indent'][num] = []
+
                 for line in llvm_lines[num]:
                     add_llvm_line(line)
                     if num in lifted_lines:
@@ -221,7 +232,7 @@ class TypeAnnotation(object):
         # for current function.
         if ((len(self.lifted) == 0 and self.lifted_from is None) or
                 (self.lifted_from is not None and
-                 self.lifted_from['num_lifted_loops'] == 0)):
+                 self.lifted_from[1]['num_lifted_loops'] == 0)):
             try:
                 from jinja2 import Template
             except ImportError:
