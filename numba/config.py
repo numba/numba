@@ -23,6 +23,8 @@ class NumbaWarning(Warning):
 def _readenv(name, ctor, default):
     try:
         res = os.environ[name]
+        if res == '':
+            return default
     except KeyError:
         return default
     else:
