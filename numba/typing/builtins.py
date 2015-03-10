@@ -14,7 +14,7 @@ builtin_global(len, types.len_type)
 builtin_global(slice, types.slice_type)
 builtin_global(abs, types.abs_type)
 builtin_global(print, types.print_type)
-
+builtin_global(tuple, types.tuple_type)
 
 @builtin
 class Print(ConcreteTemplate):
@@ -51,6 +51,22 @@ class Abs(ConcreteTemplate):
     complex_cases = [signature(ty.underlying_float, ty)
                      for ty in types.complex_domain]
     cases = int_cases + real_cases + complex_cases
+
+@builtin
+class Tuple(AbstractTemplate):
+    key = types.tuple_type
+
+    def generic(self, args, kws):
+        # tuples are directly passed through tuple() operator
+        # arrays are converted to ArrayTuple types.
+        assert not kws
+        [obj] = args
+        if isinstance(obj, types.Tuple):
+            return signature(obj, obj)
+        elif isinstance(obj, types.UniTuple):
+            return signature(obj, obj)
+        elif isinstance(obj, types.Array):
+            return signature(types.ArrayTuple(obj), obj)
 
 
 @builtin
@@ -359,6 +375,12 @@ def normalize_index(index):
         elif index.dtype == types.slice3_type:
             return index
 
+    elif isinstance(index, types.ArrayTuple):
+        if index.dtype not in types.integer_domain:
+            raise TypeError('Type %s of index %s is unsupported for indexing'
+                             % (index.dtype, index))
+        return index
+
     elif isinstance(index, types.Tuple):
         for ty in index:
             if (ty not in types.integer_domain and ty != types.slice3_type):
@@ -371,6 +393,7 @@ def normalize_index(index):
 
     elif isinstance(index, types.Integer):
         return types.intp if index.signed else types.uintp
+
 
 
 @builtin
@@ -416,7 +439,12 @@ class GetItemBuffer(AbstractTemplate):
             if ary.ndim != 1:
                 return
             res = ary.dtype
-
+        elif isinstance(idx, types.ArrayTuple):
+            if idx.ndim != 1:
+                return
+            if not isinstance(idx.dtype, types.Integer):
+                return
+            res = ary.dtype
         else:
             raise Exception("unreachable: index type of %s" % idx)
 

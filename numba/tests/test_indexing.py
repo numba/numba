@@ -102,6 +102,9 @@ def none_index_usecase(a):
 def fancy_index_usecase(a, index):
     return a[index]
 
+def fancy_index_tuple_usecase(a, index):
+    return a[tuple(index)]
+
 def boolean_indexing_usecase(a, mask):
     return a[mask]
 
@@ -578,6 +581,38 @@ class TestIndexing(TestCase):
         index = np.array([-1], dtype='i4')
         self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
 
+    def test_fancy_index_tuple(self, flags=enable_pyobj_flags):
+        pyfunc = fancy_index_tuple_usecase
+        arraytype = types.Array(types.int32, 2, 'C')
+        indextype = types.Array(types.int32, 2, 'C')
+        cr = compile_isolated(pyfunc, (arraytype, indextype), flags=flags)
+        cfunc = cr.entry_point
+        
+        a = np.arange(100, dtype='i4').reshape(10, 10)
+        index = np.array([0, 0], dtype='i4')
+        self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
+        index = np.array([0, 1], dtype='i4')
+        self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
+        index = np.array([1, -1], dtype='i4')
+        self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
+        index = np.array([-1, -1], dtype='i4')
+        self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
+
+        # dimension mismatching.
+        arraytype = types.Array(types.int32, 2, 'C')
+        indextype = types.Array(types.int32, 1, 'C')
+        cr = compile_isolated(pyfunc, (arraytype, indextype), flags=flags)
+        cfunc = cr.entry_point
+        index = np.array([0], dtype='i4')
+        try:
+            cfunc(a, index)
+        except IndexError:
+            pass
+
+    def test_fancy_index_tuple_npm(self):
+        with self.assertTypingError():
+            self.test_fancy_index_tuple(flags=Noflags)
+
     def test_fancy_index_npm(self):
         with self.assertTypingError():
             self.test_fancy_index(flags=Noflags)
@@ -674,7 +709,6 @@ class TestIndexing(TestCase):
         """
         with self.assertTypingError():
             self.test_2d_slicing_set(flags=Noflags)
-
 
 if __name__ == '__main__':
     unittest.main()
