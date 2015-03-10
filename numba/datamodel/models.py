@@ -51,30 +51,30 @@ class DataModel(object):
         return self.get_value_type()
 
     def as_data(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def as_argument(self, builder, value):
         """
         Takes one LLVM value
         Return a LLVM value or nested tuple of LLVM value
         """
-        return NotImplemented
+        raise NotImplementedError
 
     def as_return(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def from_data(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def from_argument(self, builder, value):
         """
         Takes a LLVM value or nested tuple of LLVM value
         Returns one LLVM value
         """
-        return NotImplemented
+        raise NotImplementedError
 
     def from_return(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def load_from_data_pointer(self, builder, value):
         """Only the record model this for pass by reference semantic.
@@ -719,11 +719,11 @@ class GeneratorModel(CompositeModel):
     def from_argument(self, builder, value):
         return value
 
-    #def as_return(self, builder, value):
-        #return value
+    def as_return(self, builder, value):
+        return value
 
-    #def from_return(self, builder, value):
-        #return value
+    def from_return(self, builder, value):
+        return value
 
 
 # =============================================================================

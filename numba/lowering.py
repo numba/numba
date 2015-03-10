@@ -450,6 +450,8 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.Return):
             if self.generator_info:
                 # StopIteration
+                indexval = Constant.int(self.resume_index_ptr.type.pointee, -1)
+                self.builder.store(indexval, self.resume_index_ptr)
                 self.call_conv.return_stop_iteration(self.builder)
                 return
             val = self.loadvar(inst.value.name)

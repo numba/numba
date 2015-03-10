@@ -37,14 +37,14 @@ PYTHON_OPMAP = {
 class PyLower(BaseLower):
 
     def init(self):
-        self.pyapi = self.context.get_python_api(self.builder)
-
         # Strings to be frozen into the Environment object
         self._frozen_strings = set()
 
         self._live_vars = set()
 
     def pre_lower(self):
+        self.pyapi = self.context.get_python_api(self.builder)
+
         # Store environment argument for later use
         self.envarg = self.call_conv.get_env_argument(self.function)
         with cgutils.if_unlikely(self.builder, self.is_null(self.envarg)):

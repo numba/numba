@@ -105,6 +105,8 @@ class Interpreter(object):
 
         if self.bytecode.is_generator:
             self.generator_info = GeneratorInfo()
+        else:
+            self.generator_info = None
 
         # Temp states during interpretation
         self.current_block = None
