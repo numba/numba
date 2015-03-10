@@ -233,10 +233,14 @@ class TypeAnnotation(object):
         if ((len(self.lifted) == 0 and self.lifted_from is None) or
                 (self.lifted_from is not None and
                  self.lifted_from[1]['num_lifted_loops'] == 0)):
+
+            # If jinja2 module is not installed we should never get here,
+            # but just in case...
             try:
                 from jinja2 import Template
             except ImportError:
-                return False
+                print('fancy annotations require jinja2 module')
+                sys.exit(1)
 
             root = os.path.join(os.path.dirname(__file__))
             template_filename = os.path.join(root, 'template.html')
@@ -245,17 +249,11 @@ class TypeAnnotation(object):
             with open(self.fancy, 'w') as output:
                 template = Template(html)
                 output.write(template.render(func_data=TypeAnnotation.func_data))                
-            return True
-
-        else:
-            return False
 
     def __str__(self):
         if self.fancy is not None:
-            if not self.html_annotate():
-                return ''
-            else:
-                return self.annotate()
+            self.html_annotate()
+            return self.annotate()
         else:
             return self.annotate()
 
