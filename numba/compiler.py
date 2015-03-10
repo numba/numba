@@ -695,6 +695,7 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         lower.create_cpython_wrapper(flags.release_gil)
     env = lower.env
     call_helper = lower.call_helper
+    gendesc = lower.gendesc
     del lower
 
     if flags.no_compile:
@@ -705,6 +706,8 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         # Insert native function for use by other jitted-functions.
         # We also register its library to allow for inlining.
         targetctx.insert_user_function(cfunc, fndesc, [library])
+        if gendesc:
+            targetctx.insert_generator(restype, gendesc, [library])
         return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=None)
 
 

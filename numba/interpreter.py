@@ -194,7 +194,7 @@ class Interpreter(object):
         for ir_block, inst in gi.yield_points.values():
             st.update(self.block_entry_vars[ir_block])
         gi.state_vars = sorted(st)
-        print("computed state vars:", gi.state_vars)
+        #print("computed state vars:", gi.state_vars)
 
     def _insert_var_dels(self):
         """

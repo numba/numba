@@ -13,7 +13,8 @@ import llvmlite.binding as ll
 import numba
 from numba import types, utils, cgutils, typing, numpy_support, _helperlib
 from numba.pythonapi import PythonAPI
-from numba.targets.imputils import (user_function, python_attr_impl,
+from numba.targets.imputils import (user_function, user_generator,
+                                    python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry, type_registry)
 from . import arrayobj, builtins, iterators, rangeobj, optional
@@ -151,7 +152,8 @@ class BaseContext(object):
 
         self.defns = defaultdict(Overloads)
         self.attrs = defaultdict(Overloads)
-        self.users = utils.UniqueDict()
+        self.gens = utils.UniqueDict()
+        self.users = utils.UniqueDict() # XXX unused
 
         self.install_registry(builtin_registry)
 
@@ -193,7 +195,7 @@ class BaseContext(object):
             self.attrs[impl.attr].append(impl, impl.signature)
 
     def insert_user_function(self, func, fndesc, libs=()):
-        impl = user_function(func, fndesc, libs)
+        impl = user_function(fndesc, libs)
         self.defns[func].append(impl, impl.signature)
 
         baseclses = (typing.templates.ConcreteTemplate,)
@@ -205,8 +207,13 @@ class BaseContext(object):
         if func not in self.users:
             msg = "{func} is not a registered user function"
             raise KeyError(msg.format(func=func))
-        impl = user_function(func, fndesc, libs)
+        impl = user_function(fndesc, libs)
         self.defns[func].append(impl, impl.signature)
+
+    def insert_generator(self, genty, fndesc, libs=()):
+        assert isinstance(genty, types.Generator)
+        impl = user_generator(fndesc, libs)
+        self.gens[genty] = impl
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
@@ -442,6 +449,11 @@ class BaseContext(object):
             return _wrap_impl(overloads.find(sig), self, sig)
         except NotImplementedError:
             raise Exception("No definition for lowering %s%s" % (key, sig))
+
+    def get_generator(self, genty):
+        """
+        """
+        return self.gens[genty]
 
     def get_bound_function(self, builder, obj, ty):
         return obj

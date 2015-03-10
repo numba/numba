@@ -19,6 +19,8 @@ Status = namedtuple("Status",
                      "is_none",
                      # If the function errored out (== not is_ok)
                      "is_error",
+                     # If the generator exited with StopIteration
+                     "is_stop_iteration",
                      # If the function errored with an already set exception
                      "is_python_exc",
                      # If the function errored with a user exception
@@ -152,6 +154,7 @@ class MinimalCallConv(BaseCallConv):
         ok = builder.or_(norm, none)
         err = builder.not_(ok)
         exc = builder.icmp_signed('==', code, RETCODE_EXC)
+        is_stop_iteration = builder.icmp_signed('==', code, RETCODE_STOPIT)
         is_user_exc = builder.icmp_signed('>=', code, RETCODE_USEREXC)
 
         status = Status(code=code,
@@ -160,6 +163,7 @@ class MinimalCallConv(BaseCallConv):
                         is_python_exc=exc,
                         is_none=none,
                         is_user_exc=is_user_exc,
+                        is_stop_iteration=is_stop_iteration,
                         excinfoptr=None)
         return status
 
@@ -295,6 +299,7 @@ class CPUCallConv(BaseCallConv):
         norm = builder.icmp_signed('==', code, RETCODE_OK)
         none = builder.icmp_signed('==', code, RETCODE_NONE)
         exc = builder.icmp_signed('==', code, RETCODE_EXC)
+        is_stop_iteration = builder.icmp_signed('==', code, RETCODE_STOPIT)
         ok = builder.or_(norm, none)
         err = builder.not_(ok)
         is_user_exc = builder.icmp_signed('>=', code, RETCODE_USEREXC)
@@ -307,6 +312,7 @@ class CPUCallConv(BaseCallConv):
                         is_python_exc=exc,
                         is_none=none,
                         is_user_exc=is_user_exc,
+                        is_stop_iteration=is_stop_iteration,
                         excinfoptr=excinfoptr)
         return status
 
@@ -361,6 +367,7 @@ class CPUCallConv(BaseCallConv):
             # This only works with functions that don't use the environment
             # (nopython functions).
             env = cgutils.get_null_value(PYOBJECT)
+        is_generator_function = isinstance(resty, types.Generator)
         retty = self._get_return_argument(callee).type.pointee
         retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value to zeros
@@ -375,6 +382,9 @@ class CPUCallConv(BaseCallConv):
         code = builder.call(callee, realargs)
         status = self._get_return_status(builder, code,
                                          builder.load(excinfoptr))
-        retval = builder.load(retvaltmp)
+        if is_generator_function:
+            retval = retvaltmp
+        else:
+            retval = builder.load(retvaltmp)
         out = self.context.get_returned_value(builder, resty, retval)
         return status, out

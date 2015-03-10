@@ -342,6 +342,7 @@ class TypeInferer(object):
         self.context = context
         self.blocks = interp.blocks
         self.generator_info = interp.generator_info
+        self.py_func = interp.bytecode.func
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constrains = ConstrainNetwork()
@@ -426,13 +427,10 @@ class TypeInferer(object):
         arg_types = [None] * len(self.arg_names)
         for index, name in self.arg_names.items():
             arg_types[index] = typdict[name]
-        print("generator arg types:", arg_types)
         state_types = [typdict[var_name] for var_name in gi.state_vars]
-        print("generator state types:", state_types)
         yield_types = [typdict[y.value.name] for y in gi.get_yield_points()]
-        print("generator yield types:", state_types)
         yield_type = self.context.unify_types(*yield_types)
-        return types.Generator(yield_type, arg_types, state_types)
+        return types.Generator(self.py_func, yield_type, arg_types, state_types)
 
     def get_function_types(self, typemap):
         calltypes = utils.UniqueDict()

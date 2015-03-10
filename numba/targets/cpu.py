@@ -39,7 +39,7 @@ class CPUContext(BaseContext):
         return self._internal_codegen._create_empty_module(name)
 
     def init(self):
-        self.native_funcs = utils.UniqueDict()
+        self.native_funcs = utils.UniqueDict()  # XXX unused
         self.is32bit = (utils.MACHINE_BITS == 32)
 
         # Map external C functions.

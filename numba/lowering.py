@@ -212,6 +212,7 @@ class BaseLower(object):
         self.context = context
         self.library = library
         self.fndesc = fndesc
+        self.gendesc = None
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
         self.interp = interp
         self.call_conv = context.call_conv
@@ -330,16 +331,15 @@ class BaseLower(object):
         self.post_lower()
 
     def _lower_generator_next(self):
-        fndesc = GeneratorDescriptor.from_generator_fndesc(
+        self.gendesc = GeneratorDescriptor.from_generator_fndesc(
             self.interp, self.fndesc, self.context.mangler)
-        self.setup_function(fndesc)
+        self.setup_function(self.gendesc)
 
-        gentype = fndesc.argtypes[0]
+        gentype = self.gendesc.argtypes[0]
         assert isinstance(gentype, types.Generator)
 
         # Extract argument values and other information from generator struct
         genptr, = self.call_conv.get_arguments(self.function)
-        print("genptr =", genptr.type)
         for i in range(len(gentype.arg_types)):
             argptr = cgutils.gep(self.builder, genptr, 0, 1, i)
             argval = self.builder.load(argptr)
