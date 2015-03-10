@@ -808,18 +808,6 @@ class BaseContext(object):
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
 
-    def get_struct_member_type(self, member_type):
-        """
-        Get the LLVM type for struct member of type *member_type*.
-        """
-        # get_struct_type() will:
-        # - represent Records as pointers
-        # - represent everything else as plain data
-        if isinstance(member_type, types.Record):
-            return self.get_value_type(member_type)
-        else:
-            return self.get_data_type(member_type)
-
     def get_struct_type(self, struct):
         """
         Get the LLVM struct type for the given Structure class *struct*.

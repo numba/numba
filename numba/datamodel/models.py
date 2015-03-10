@@ -146,19 +146,19 @@ class PrimitiveModel(DataModel):
         return value
 
     def as_argument(self, builder, value):
-        return self.as_data(builder, value)
+        return value
 
     def as_return(self, builder, value):
-        return self.as_data(builder, value)
+        return value
 
     def from_data(self, builder, value):
         return value
 
     def from_argument(self, builder, value):
-        return self.from_data(builder, value)
+        return value
 
     def from_return(self, builder, value):
-        return self.from_data(builder, value)
+        return value
 
 
 @register_default(types.Opaque)
@@ -201,6 +201,13 @@ class PointerModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
         be_type = dmm.lookup(fe_type.dtype).get_data_type().as_pointer()
         super(PointerModel, self).__init__(dmm, fe_type, be_type)
+
+
+@register_default(types.EphemeralPointer)
+class EphemeralPointerModel(PointerModel):
+
+    def as_data(self, builder, value):
+        1/0
 
 
 @register_default(types.ExternalFunctionPointer)
@@ -485,10 +492,10 @@ class ArrayModel(StructModel):
         super(ArrayModel, self).__init__(dmm, fe_type, members)
 
     def as_data(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def from_data(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
 
 @register_default(types.Optional)
@@ -505,7 +512,7 @@ class OptionalModel(StructModel):
         return self._value_model.get_return_type()
 
     def as_return(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def from_return(self, builder, value):
         return self._value_model.from_return(builder, value)
@@ -669,10 +676,10 @@ class ZipType(StructModel):
 class RangeIteratorType(StructModel):
     def __init__(self, dmm, fe_type):
         int_type = fe_type.yield_type
-        members = [('iter', types.CPointer(int_type)),
+        members = [('iter', types.EphemeralPointer(int_type)),
                    ('stop', int_type),
                    ('step', int_type),
-                   ('count', types.CPointer(int_type))]
+                   ('count', types.EphemeralPointer(int_type))]
         super(RangeIteratorType, self).__init__(dmm, fe_type, members)
 
 
@@ -706,12 +713,6 @@ class GeneratorModel(CompositeModel):
 
     def get_data_type(self):
         return self._be_type
-
-    #def as_data(self, builder, value):
-        #return builder.load(value)
-
-    #def from_data(self, builder, value):
-        #raise NotImplementedError("use load_from_data_pointer() instead")
 
     def as_argument(self, builder, value):
         return value

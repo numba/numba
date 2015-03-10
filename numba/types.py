@@ -950,6 +950,10 @@ class CPointer(Type):
         return self.dtype
 
 
+class EphemeralPointer(CPointer):
+    pass
+
+
 class Object(Type):
     mutable = True
 

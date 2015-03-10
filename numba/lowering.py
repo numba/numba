@@ -261,6 +261,8 @@ class BaseLower(object):
         if self.generator_info is None:
             self._lower_normal_function(self.fndesc)
         else:
+            self.gentype = self.fndesc.restype
+            assert isinstance(self.gentype, types.Generator)
             self._lower_generator_init()
             self._lower_generator_next()
 
@@ -312,14 +314,11 @@ class BaseLower(object):
         arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
         self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
 
-        gentype = self.fndesc.restype
-        assert isinstance(gentype, types.Generator)
-
         self.pre_lower()
 
-        model = self.context.data_model_manager[gentype]
+        model = self.context.data_model_manager[self.gentype]
 
-        retty = self.context.get_return_type(gentype)
+        retty = self.context.get_return_type(self.gentype)
         argsty = retty.elements[1]
         argsval = cgutils.make_anonymous_struct(self.builder, self.fnargs,
                                                 argsty)
@@ -335,15 +334,13 @@ class BaseLower(object):
             self.interp, self.fndesc, self.context.mangler)
         self.setup_function(self.gendesc)
 
-        gentype = self.gendesc.argtypes[0]
-        assert isinstance(gentype, types.Generator)
+        assert self.gendesc.argtypes[0] == self.gentype
 
         # Extract argument values and other information from generator struct
         genptr, = self.call_conv.get_arguments(self.function)
-        for i in range(len(gentype.arg_types)):
+        for i, ty in enumerate(self.gentype.arg_types):
             argptr = cgutils.gep(self.builder, genptr, 0, 1, i)
-            argval = self.builder.load(argptr)
-            self.fnargs[i] = argval
+            self.fnargs[i] = self.context.unpack_value(self.builder, ty, argptr)
         self.resume_index_ptr = cgutils.gep(self.builder, genptr, 0, 0,
                                             name='gen.resume_index')
         self.gen_state_ptr = cgutils.gep(self.builder, genptr, 0, 2,
@@ -392,7 +389,7 @@ class BaseLower(object):
         # Run target specific post lowering transformation
         self.context.post_lowering(self.function)
 
-        self.context.insert_generator(gentype, self.gendesc, [self.library])
+        self.context.insert_generator(self.gentype, self.gendesc, [self.library])
 
     def create_cpython_wrapper(self, release_gil=False):
         """
@@ -612,7 +609,8 @@ class Lower(BaseLower):
         for state_index, name in zip(indices, live_vars):
             state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
                                      0, state_index)
-            self.builder.store(self.loadvar(name), state_slot)
+            ty = self.gentype.state_types[state_index]
+            self.context.pack_value(self.builder, ty, self.loadvar(name), state_slot)
         # Save resume index
         indexval = Constant.int(self.resume_index_ptr.type.pointee, inst.index)
         self.builder.store(indexval, self.resume_index_ptr)
@@ -627,7 +625,9 @@ class Lower(BaseLower):
         for state_index, name in zip(indices, live_vars):
             state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
                                      0, state_index)
-            self.storevar(self.builder.load(state_slot), name)
+            ty = self.gentype.state_types[state_index]
+            val = self.context.unpack_value(self.builder, ty, state_slot)
+            self.storevar(val, name)
         return self.context.get_constant_generic(self.builder, ty, None)
 
     def lower_expr(self, resty, expr):
