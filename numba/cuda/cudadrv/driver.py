@@ -1254,8 +1254,9 @@ def host_pointer(obj):
     if isinstance(obj, (int, long)):
         return obj
 
-    forcewritable = isinstance(obj, np.void)
-    return mviewbuf.memoryview_get_buffer(obj, forcewritable)
+    if isinstance(obj, np.void):
+        obj = mviewbuf.BufferProxy(obj)
+    return mviewbuf.memoryview_get_buffer(obj)
 
 
 def host_memory_extents(obj):
