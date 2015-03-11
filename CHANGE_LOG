@@ -38,6 +38,8 @@ Features:
   Furthermore, some standard attributes on the ``memoryview`` object are
   supported.
 * Issue #1030: Support nested arrays in Numpy structured arrays.
+* Issue #1033: Implement the inspect_types(), inspect_llvm() and inspect_asm()
+  methods for CUDA kernels.
 
 Fixes:
 
