@@ -822,7 +822,7 @@ class NestedArray(Array):
 
     @property
     def key(self):
-         return self.dtype, self.shape
+        return self.dtype, self.shape
 
 class UniTuple(IterableType):
 
