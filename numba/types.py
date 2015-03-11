@@ -938,6 +938,9 @@ class Tuple(Type):
 
 
 class CPointer(Type):
+    """
+    Type class for pointers to other types.
+    """
     mutable = True
 
     def __init__(self, dtype):
@@ -951,7 +954,11 @@ class CPointer(Type):
 
 
 class EphemeralPointer(CPointer):
-    pass
+    """
+    Type class for pointers which aren't guaranteed to last long - e.g.
+    stack-allocated slots.  The data model serializes such pointers
+    by copying the data pointed to.
+    """
 
 
 class Object(Type):

@@ -90,6 +90,7 @@ class DataModelTester(unittest.TestCase):
 class SupportAsDataMixin(object):
     """Test as_data() and from_data()
     """
+    # XXX test load_from_data_pointer() as well
 
     def test_as_data(self):
         fnty = ir.FunctionType(ir.VoidType(), [])

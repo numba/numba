@@ -372,12 +372,15 @@ static PyTypeObject GeneratorType = {
 
 /* Dynamically create a new generator object */
 static PyObject *
-Numba_make_generator(Py_ssize_t gen_state_size, PyCFunctionWithKeywords nextfunc)
+Numba_make_generator(Py_ssize_t gen_state_size,
+                     void *initial_state,
+                     PyCFunctionWithKeywords nextfunc)
 {
     GeneratorObject *gen;
     gen = (GeneratorObject *) PyType_GenericAlloc(&GeneratorType, gen_state_size);
     if (gen == NULL)
         return NULL;
+    memcpy(gen->state, initial_state, gen_state_size);
     gen->nextfunc = nextfunc;
     return (PyObject *) gen;
 }

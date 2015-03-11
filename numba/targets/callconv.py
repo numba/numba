@@ -371,6 +371,7 @@ class CPUCallConv(BaseCallConv):
         retty = self._get_return_argument(callee).type.pointee
         retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value to zeros
+        # XXX why not undef?
         builder.store(cgutils.get_null_value(retty), retvaltmp)
 
         excinfoptr = cgutils.alloca_once(builder, ir.PointerType(excinfo_t),

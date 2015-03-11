@@ -1151,10 +1151,14 @@ class PythonAPI(object):
         genfnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, self.pyobj])
         genfn = self._get_function(genfnty, name=gendesc.llvm_cpython_wrapper_name)
 
-        fnty = Type.function(self.pyobj, [self.py_ssize_t, Type.pointer(genfnty)])
+        # PyObject *numba_make_generator(state_size, initial_state, nextfunc)
+        fnty = Type.function(self.pyobj, [self.py_ssize_t,
+                                          self.voidptr,
+                                          Type.pointer(genfnty)])
         fn = self._get_function(fnty, name="numba_make_generator")
 
         return self.builder.call(fn, (ir.Constant(self.py_ssize_t, gen_struct_size),
+                                      self.builder.bitcast(val, self.voidptr),
                                       genfn))
 
     def numba_array_adaptor(self, ary, ptr):

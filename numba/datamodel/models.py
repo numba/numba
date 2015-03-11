@@ -1,7 +1,8 @@
 from __future__ import print_function, absolute_import
 
 from llvmlite import ir
-from numba import types, numpy_support
+
+from numba import cgutils, types, numpy_support
 from .registry import register_default
 
 
@@ -76,10 +77,12 @@ class DataModel(object):
     def from_return(self, builder, value):
         raise NotImplementedError
 
-    def load_from_data_pointer(self, builder, value):
-        """Only the record model this for pass by reference semantic.
+    def load_from_data_pointer(self, builder, ptr):
         """
-        return NotImplemented
+        Load value from a pointer to data.
+        This is the default implementation, sufficient for most purposes.
+        """
+        return self.from_data(builder, builder.load(ptr))
 
     def _compared_fields(self):
         return (type(self), self._fe_type)
@@ -199,15 +202,27 @@ class FloatModel(PrimitiveModel):
 @register_default(types.CPointer)
 class PointerModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
-        be_type = dmm.lookup(fe_type.dtype).get_data_type().as_pointer()
+        self._pointee_model = dmm.lookup(fe_type.dtype)
+        self._pointee_be_type = self._pointee_model.get_data_type()
+        be_type = self._pointee_be_type.as_pointer()
         super(PointerModel, self).__init__(dmm, fe_type, be_type)
 
 
 @register_default(types.EphemeralPointer)
 class EphemeralPointerModel(PointerModel):
 
+    def get_data_type(self):
+        return self._pointee_be_type
+
     def as_data(self, builder, value):
-        1/0
+        value = builder.load(value)
+        return self._pointee_model.as_data(builder, value)
+
+    def from_data(self, builder, value):
+        raise NotImplementedError("use load_from_data_pointer() instead")
+
+    def load_from_data_pointer(self, builder, ptr):
+        return builder.bitcast(ptr, self.get_value_type())
 
 
 @register_default(types.ExternalFunctionPointer)
@@ -359,6 +374,18 @@ class StructModel(CompositeModel):
         vals = [builder.extract_value(value, [i])
                 for i in range(len(self._members))]
         return self._from("from_data", builder, vals)
+
+    def load_from_data_pointer(self, builder, ptr):
+        values = []
+        for i, model in enumerate(self._models):
+            elem_ptr = cgutils.gep(builder, ptr, 0, i)
+            val = model.load_from_data_pointer(builder, elem_ptr)
+            values.append(val)
+
+        struct = ir.Constant(self.get_value_type(), ir.Undefined)
+        for i, val in enumerate(values):
+            struct = self.set(builder, struct, val, i)
+        return struct
 
     def as_argument(self, builder, value):
         return self._as("as_argument", builder, value)
@@ -691,9 +718,9 @@ class GeneratorModel(CompositeModel):
         self._state_models = [self._dmm.lookup(t) for t in fe_type.state_types]
 
         self._args_be_type = ir.LiteralStructType(
-            [t.get_value_type() for t in self._arg_models])
+            [t.get_data_type() for t in self._arg_models])
         self._state_be_type = ir.LiteralStructType(
-            [t.get_value_type() for t in self._state_models])
+            [t.get_data_type() for t in self._state_models])
         # The whole generator closure
         self._be_type = ir.LiteralStructType(
             [self._dmm.lookup(types.int32).get_value_type(),

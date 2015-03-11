@@ -600,7 +600,7 @@ class Lower(BaseLower):
         return self.context.cast(self.builder, res, signature.return_type,
                                  resty)
 
-    def lower_yield(self, ty, inst):
+    def lower_yield(self, retty, inst):
         block, _i = self.generator_info.yield_points[inst.index]
         assert _i is inst
         # Save live vars in state
@@ -628,7 +628,7 @@ class Lower(BaseLower):
             ty = self.gentype.state_types[state_index]
             val = self.context.unpack_value(self.builder, ty, state_slot)
             self.storevar(val, name)
-        return self.context.get_constant_generic(self.builder, ty, None)
+        return self.context.get_constant_generic(self.builder, retty, None)
 
     def lower_expr(self, resty, expr):
         if expr.op == 'binop':

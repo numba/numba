@@ -10,7 +10,6 @@ import re
 from llvmlite import ir
 from llvmlite.llvmpy.core import Constant, Type
 import llvmlite.llvmpy.core as lc
-from numba import datamodel
 
 from . import utils
 
@@ -76,6 +75,7 @@ class StructProxy(object):
     _fe_type = None
 
     def __init__(self, context, builder, value=None, ref=None):
+        from numba import datamodel   # Avoid circular import
         self._context = context
         self._dmm = self._context.data_model_manager
         self._datamodel = self._dmm[self._fe_type]

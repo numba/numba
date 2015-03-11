@@ -370,8 +370,6 @@ class Yield(Inst):
         self.value = value
         self.loc = loc
         self.index = index
-        # Computed by the interpreter
-        self.state_vars = None
 
     def __str__(self):
         return 'yield %s' % (self.value,)

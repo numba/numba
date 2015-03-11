@@ -317,6 +317,7 @@ class BaseContext(object):
         dm = self.data_model_manager[ty]
         val = dm.load_from_data_pointer(builder, ptr)
         if val is NotImplemented:
+            # XXX does this still happen?
             return dm.from_data(builder, builder.load(ptr))
         else:
             return val
