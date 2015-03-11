@@ -4,6 +4,7 @@ static int get_buffer(PyObject* obj, Py_buffer *buf, int force)
 {
     Py_buffer read_buf;
     int flags = PyBUF_ND|PyBUF_STRIDES|PyBUF_FORMAT;
+    int ret;
 
     /* Attempt to get a writable buffer */
     if (!PyObject_GetBuffer(obj, buf, flags|PyBUF_WRITABLE))
@@ -15,8 +16,10 @@ static int get_buffer(PyObject* obj, Py_buffer *buf, int force)
     PyErr_Clear();
     if(-1 == PyObject_GetBuffer(obj, &read_buf, flags))
         return -1;
-    return PyBuffer_FillInfo(buf, NULL, read_buf.buf, read_buf.len, 0,
+    ret = PyBuffer_FillInfo(buf, NULL, read_buf.buf, read_buf.len, 0,
                              flags|PyBUF_WRITABLE);
+    PyBuffer_Release(&read_buf);
+    return ret;
 }
 
 static void free_buffer(Py_buffer * buf)
