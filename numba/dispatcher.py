@@ -70,7 +70,10 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             # This function must *not* hold any reference to self:
             # we take care to bind the necessary objects in the closure.
             for func in overloads.values():
-                targetctx.remove_user_function(func)
+                try:
+                    targetctx.remove_user_function(func)
+                except KeyError:
+                    pass
 
         return finalizer
 
