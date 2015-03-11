@@ -469,9 +469,6 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_ndim(self, ary):
         return types.intp
 
-    # def resolve_flatten(self, ary):
-    #     return types.Method(Array_flatten, ary)
-
     def resolve_size(self, ary):
         return types.intp
 
@@ -483,6 +480,11 @@ class ArrayAttribute(AttributeTemplate):
             if attr in ary.dtype.fields:
                 return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,
                                    layout='A')
+
+
+@builtin_attr
+class NestedArrayAttribute(ArrayAttribute):
+    key = types.NestedArray
 
 
 def generic_homog(self, args, kws):
