@@ -820,6 +820,9 @@ class NestedArray(Array):
              stride *= i
         return tuple(reversed(strides))
 
+    @property
+    def key(self):
+        return self.dtype, self.shape
 
 class UniTuple(IterableType):
 
