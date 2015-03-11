@@ -37,6 +37,7 @@ Features:
   ``memoryview`` support array-like operations such as indexing and iterating.
   Furthermore, some standard attributes on the ``memoryview`` object are
   supported.
+* Issue #1030: Support nested arrays in Numpy structured arrays.
 
 Fixes:
 
