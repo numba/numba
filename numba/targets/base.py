@@ -153,8 +153,7 @@ class BaseContext(object):
 
         self.defns = defaultdict(Overloads)
         self.attrs = defaultdict(Overloads)
-        self.gens = utils.UniqueDict()
-        self.users = utils.UniqueDict() # XXX unused
+        self.generators = utils.UniqueDict()
 
         self.install_registry(builtin_registry)
 
@@ -199,13 +198,8 @@ class BaseContext(object):
         impl = user_function(fndesc, libs)
         self.defns[func].append(impl, impl.signature)
 
-        baseclses = (typing.templates.ConcreteTemplate,)
-        glbls = dict(key=func, cases=[impl.signature])
-        name = "CallTemplate(%s)" % fndesc.mangled_name
-        self.users[func] = type(name, baseclses, glbls)
-
     def add_user_function(self, func, fndesc, libs=()):
-        if func not in self.users:
+        if func not in self.defns:
             msg = "{func} is not a registered user function"
             raise KeyError(msg.format(func=func))
         impl = user_function(fndesc, libs)
@@ -214,7 +208,7 @@ class BaseContext(object):
     def insert_generator(self, genty, gendesc, libs=()):
         assert isinstance(genty, types.Generator)
         impl = user_generator(gendesc, libs)
-        self.gens[genty] = gendesc, impl
+        self.generators[genty] = gendesc, impl
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
@@ -227,11 +221,7 @@ class BaseContext(object):
         Remove user function *func*.
         KeyError is raised if the function isn't known to us.
         """
-        del self.users[func]
         del self.defns[func]
-
-    def get_user_function(self, func):
-        return self.users[func]
 
     def get_external_function_type(self, fndesc):
         argtypes = [self.get_argument_type(aty)
@@ -315,12 +305,7 @@ class BaseContext(object):
         """Unpack data from array storage
         """
         dm = self.data_model_manager[ty]
-        val = dm.load_from_data_pointer(builder, ptr)
-        if val is NotImplemented:
-            # XXX does this still happen?
-            return dm.from_data(builder, builder.load(ptr))
-        else:
-            return val
+        return dm.load_from_data_pointer(builder, ptr)
 
     def is_struct_type(self, ty):
         return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
@@ -455,12 +440,12 @@ class BaseContext(object):
     def get_generator_desc(self, genty):
         """
         """
-        return self.gens[genty][0]
+        return self.generators[genty][0]
 
     def get_generator_impl(self, genty):
         """
         """
-        return self.gens[genty][1]
+        return self.generators[genty][1]
 
     def get_bound_function(self, builder, obj, ty):
         return obj

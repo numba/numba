@@ -39,7 +39,6 @@ class CPUContext(BaseContext):
         return self._internal_codegen._create_empty_module(name)
 
     def init(self):
-        self.native_funcs = utils.UniqueDict()  # XXX unused
         self.is32bit = (utils.MACHINE_BITS == 32)
 
         # Map external C functions.
@@ -98,13 +97,6 @@ class CPUContext(BaseContext):
             builder, genptr, _dynfunc._impl_info['offsetof_generator_state'],
             return_type=return_type)
 
-    def remove_native_function(self, func):
-        """
-        Remove internal references to nonpython mode function *func*.
-        KeyError is raised if the function isn't known to us.
-        """
-        del self.native_funcs[func]
-
     def post_lowering(self, func):
         mod = func.module
 
@@ -148,9 +140,6 @@ class CPUContext(BaseContext):
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],
                                        fndesc.doc, fnptr, env)
-
-        if fndesc.native:
-            self.native_funcs[cfunc] = fndesc.llvm_func_name, baseptr
 
         return cfunc
 

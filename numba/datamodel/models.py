@@ -637,7 +637,8 @@ class CContiguousFlatIter(StructModel):
         super(CContiguousFlatIter, self).__init__(dmm, fe_type, members)
 
     def get_data_type(self):
-        raise NotImplementedError("FIXME: must flatten indices array")
+        # FIXME: must flatten indices array
+        raise NotImplementedError("cannot serialize flat() iterator")
 
 
 class FlatIter(StructModel):
@@ -653,7 +654,8 @@ class FlatIter(StructModel):
         super(FlatIter, self).__init__(dmm, fe_type, members)
 
     def get_data_type(self):
-        raise NotImplementedError("FIXME: must flatten indices and pointers")
+        # FIXME: must flatten indices and pointers
+        raise NotImplementedError("cannot serialize flat() iterator")
 
 
 @register_default(types.UniTupleIter)
