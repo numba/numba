@@ -143,6 +143,13 @@ def record_read_2d_array01(ary):
     return ary.j[0,1]
 
 
+def record_read_first_arr(ary):
+    return ary.k[2, 2]
+
+def record_read_second_arr(ary):
+    return ary.l[2, 2]
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
                        ('c', np.complex64),
@@ -159,6 +166,9 @@ recordwitharray = np.dtype([('g', np.int32),
 
 recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
+
+recordwith2arrays = np.dtype([('k', np.int32, (10, 20)),
+                              ('l', np.int32, (6, 12))])
 
 class TestRecordDtype(unittest.TestCase):
 
@@ -521,6 +531,26 @@ class TestRecordDtype(unittest.TestCase):
         # Length is usually 34 - 5 chars tolerance as above.
         self.assertLess(len(transformed), 40)
 
+
+    def test_record_two_arrays(self):
+        """
+        Tests that comparison of NestedArrays by key is working correctly. If
+        the two NestedArrays in recordwith2arrays compare equal (same length and
+        ndim but different shape) incorrect code will be generated for one of the
+        functions.
+        """
+        nbrecord = numpy_support.from_dtype(recordwith2arrays)
+        rec = np.recarray(1, dtype=recordwith2arrays)[0]
+        rec.k[:] = np.arange(200).reshape(10,20)
+        rec.l[:] = np.arange(72).reshape(6,12)
+
+        pyfunc = record_read_first_arr
+        cfunc = self.get_cfunc(pyfunc, (nbrecord,))
+        self.assertEqual(cfunc(rec), pyfunc(rec))
+
+        pyfunc = record_read_second_arr
+        cfunc = self.get_cfunc(pyfunc, (nbrecord,))
+        self.assertEqual(cfunc(rec), pyfunc(rec))
 
 def _get_cfunc_nopython(pyfunc, argspec):
     return jit(argspec, nopython=True)(pyfunc)
