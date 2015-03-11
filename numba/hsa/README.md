@@ -1,18 +1,26 @@
- Environment variables
-----------------------
+Setup
+-----
 
+`libhsakmt.so.1`, `libhsa-runtime64.so`, `libhsa-runtime-ext64.so` must be in
+ the `LD_LIBRARY_PATH`.
+ 
+`libhsa-runtime64.so` and `libhsa-runtime-ext64.so` are in `/opt/hsa/lib`
+`libhsakmt.so.1` has no default location and is available from https://github.com/HSAFoundation/HSA-Drivers-Linux-AMD
+ 
+A temporarily libm workaround is required due to certain conda packages are 
+linked with a older version of `libm`:
 
-    export LD_LIBRARY_PATH=/opt/hsa_ld_library_path
     export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-    export NUMBA_HSA_DRIVER=/opt/hsa_ld_library_path/libhsa-runtime64.so
-    export HSA_PATH=/opt/hsa
     
-To enable HSAIL compiling:
+Get and install the deb file from HSAIL-HLC-Stable from https://github
+.com/HSAFoundation/HSAIL-HLC-Stable
 
-    export HSAILBIN=/path/to/HSAIL-HLC-Stable/bin
+Optional.  Change if path is not at default location:
+
+    export NUMBA_HSA_DRIVER=/opt/hsa/lib/libhsa-runtime64.so
+    export HSAILBIN=/opt/amd/bin
     
-Get HSAIL-HLC-Stable from https://github.com/HSAFoundation/HSAIL-HLC-Stable
-
+    
 Run Tests
 ---------
 

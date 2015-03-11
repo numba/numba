@@ -9,6 +9,9 @@ from collections import namedtuple
 from numba import config
 
 
+os.environ['HSAILBIN'] = os.environ.get('HSAILBIN', '/opt/amd/bin')
+
+
 class CmdLine(object):
     CMD_OPT = ("$HSAILBIN/opt "
                "-O3 "

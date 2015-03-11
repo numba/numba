@@ -33,8 +33,11 @@ def _device_type_to_string(device):
         return 'Unknown'
 
 
+DEFAULT_HSA_DRIVER = '/opt/hsa/lib/libhsa-runtime64.so'
+
+
 def _find_driver():
-    envpath = os.environ.get('NUMBA_HSA_DRIVER', None)
+    envpath = os.environ.get('NUMBA_HSA_DRIVER', DEFAULT_HSA_DRIVER)
     if envpath == '0':
         # Force fail
         _raise_driver_not_found()
