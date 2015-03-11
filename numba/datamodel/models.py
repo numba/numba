@@ -629,11 +629,15 @@ class CContiguousFlatIter(StructModel):
         dtype = array_type.dtype
         members = [('array', types.CPointer(array_type)),
                    ('stride', types.intp),
-                   ('pointer', types.CPointer(types.CPointer(dtype))),
-                   ('index', types.CPointer(types.intp)),
-                   ('indices', types.CPointer(types.intp)),
+                   ('pointer', types.EphemeralPointer(types.CPointer(dtype))),
+                   ('index', types.EphemeralPointer(types.intp)),
+                   # NOTE: indices is an array
+                   ('indices', types.EphemeralPointer(types.intp)),
         ]
         super(CContiguousFlatIter, self).__init__(dmm, fe_type, members)
+
+    def get_data_type(self):
+        raise NotImplementedError("FIXME: must flatten indices array")
 
 
 class FlatIter(StructModel):
@@ -641,17 +645,21 @@ class FlatIter(StructModel):
         array_type = fe_type.array_type
         dtype = array_type.dtype
         members = [('array', types.CPointer(array_type)),
-                   ('pointers', types.CPointer(types.CPointer(dtype))),
-                   ('indices', types.CPointer(types.intp)),
-                   ('exhausted', types.CPointer(types.boolean)),
+                   # NOTE: pointers and indices are arrays
+                   ('pointers', types.EphemeralPointer(types.CPointer(dtype))),
+                   ('indices', types.EphemeralPointer(types.intp)),
+                   ('exhausted', types.EphemeralPointer(types.boolean)),
         ]
         super(FlatIter, self).__init__(dmm, fe_type, members)
+
+    def get_data_type(self):
+        raise NotImplementedError("FIXME: must flatten indices and pointers")
 
 
 @register_default(types.UniTupleIter)
 class UniTupleIter(StructModel):
     def __init__(self, dmm, fe_type):
-        members = [('index', types.CPointer(types.intp)),
+        members = [('index', types.EphemeralPointer(types.intp)),
                    ('tuple', fe_type.unituple,)]
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
@@ -677,7 +685,7 @@ class NPDatetimeModel(PrimitiveModel):
 class ArrayIterator(StructModel):
     def __init__(self, dmm, fe_type):
         # We use an unsigned index to avoid the cost of negative index tests.
-        members = [('index', types.CPointer(types.uintp)),
+        members = [('index', types.EphemeralPointer(types.uintp)),
                    ('array', fe_type.array_type)]
         super(ArrayIterator, self).__init__(dmm, fe_type, members)
 
@@ -685,7 +693,7 @@ class ArrayIterator(StructModel):
 @register_default(types.EnumerateType)
 class EnumerateType(StructModel):
     def __init__(self, dmm, fe_type):
-        members = [('count', types.CPointer(types.intp)),
+        members = [('count', types.EphemeralPointer(types.intp)),
                    ('iter', fe_type.source_type)]
 
         super(EnumerateType, self).__init__(dmm, fe_type, members)
