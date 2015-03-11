@@ -37,17 +37,17 @@ static void free_buffer(Py_buffer * buf)
 static PyObject*
 memoryview_get_buffer(PyObject *self, PyObject *args){
     PyObject *obj = NULL;
-    PyObject *force = NULL;
+    int force = 0;
     PyObject *ret = NULL;
     void * ptr = NULL;
     const void* roptr = NULL;
     Py_ssize_t buflen;
     Py_buffer buf;
 
-    if (!PyArg_ParseTuple(args, "O|O", &obj, &force))
+    if (!PyArg_ParseTuple(args, "O|i", &obj, &force))
         return NULL;
 
-    if (!get_buffer(obj, &buf, (force == Py_True))) { /* new buffer api */
+    if (!get_buffer(obj, &buf, force)) { /* new buffer api */
         ret = PyLong_FromVoidPtr(buf.buf);
         free_buffer(&buf);
     } else { /* old buffer api */
