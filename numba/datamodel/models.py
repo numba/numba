@@ -497,7 +497,7 @@ class NestedArrayModel(ArrayModel):
         super(NestedArrayModel, self).__init__(dmm, fe_type)
 
     def get_data_type(self):
-        ret = self._be_type
+        ret = ir.ArrayType(self._be_type, self._fe_type.nitems)
         return ret
 
 
