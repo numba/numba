@@ -415,15 +415,14 @@ class Pipeline(object):
             args=self.args,
             return_type=self.return_type,
             func_attr=self.func_attr,
-            fancy=config.FANCY)
+            html_output=config.HTML)
 
         if config.ANNOTATE:
-            if config.FANCY:
-                self.type_annotation.html_annotate()
-            else:
-                print("ANNOTATION".center(80, '-'))
-                print(self.type_annotation)
-                print('=' * 80)
+            print("ANNOTATION".center(80, '-'))
+            print(self.type_annotation)
+            print('=' * 80)
+        if config.HTML:
+            self.type_annotation.html_annotate()
 
     def backend_object_mode(self):
         """

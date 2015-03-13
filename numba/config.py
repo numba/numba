@@ -83,8 +83,8 @@ DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
 # Force dump of type annotation
 ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
 
-# Dump type annotation in "fancy" html format
-FANCY = _readenv("NUMBA_DUMP_FANCY", str, None)
+# Dump type annotation in html format
+HTML = _readenv("NUMBA_DUMP_HTML", str, None)
 
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]

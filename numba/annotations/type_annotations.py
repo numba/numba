@@ -50,7 +50,7 @@ class SourceLines(Mapping):
 
 class TypeAnnotation(object):
     
-    # func_data dict stores fancy annotation data for all functions that are
+    # func_data dict stores annotation data for all functions that are
     # compiled. We store the data in the TypeAnnotation class since a new
     # TypeAnnotation instance is created for each function that is compiled.
     # For every function that is compiled, we add the type annotation data to
@@ -60,16 +60,16 @@ class TypeAnnotation(object):
     func_data = OrderedDict()
 
     def __init__(self, interp, typemap, calltypes, lifted, lifted_from, args, return_type,
-                 func_attr, fancy=None):
+                 func_attr, html_output=None):
         self.filename = interp.bytecode.filename
         self.func = interp.bytecode.func
         self.blocks = interp.blocks
         self.typemap = typemap
         self.calltypes = calltypes
-        if fancy is None:
-            self.fancy = None
+        if html_output is None:
+            self.html_output = None
         else:
-            self.fancy = os.path.join(os.getcwd(), fancy)
+            self.html_output = os.path.join(os.getcwd(), html_output)
         self.filename = interp.loc.filename
         self.linenum = str(interp.loc.line)
         self.signature = str(args) + ' -> ' + str(return_type)
@@ -253,7 +253,7 @@ class TypeAnnotation(object):
             template_filename = os.path.join(root, 'template.html')
             with open(template_filename, 'r') as template:
                 html = template.read()
-            with open(self.fancy, 'w') as output:
+            with open(self.html_output, 'w') as output:
                 template = Template(html)
                 output.write(template.render(func_data=TypeAnnotation.func_data))                
 
