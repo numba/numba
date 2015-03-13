@@ -58,18 +58,18 @@ window.onload = function() {
 
 {% for func_key in func_data.keys() %}
 
-    $('#func{{loop.index}}_toggle_ir')[0].onclick = function() {
+    $('#func{{loop.index0}}_toggle_ir')[0].onclick = function() {
         if (this.innerHTML == 'show numba IR') {
-            var ir_lines = $('.func{{loop.index}}_ir')
+            var ir_lines = $('.func{{loop.index0}}_ir')
             for (var i = 0; i < ir_lines.length; i++) {
-                ir_lines[i].setAttribute('class', 'ir_code func{{loop.index}}_ir');
+                ir_lines[i].setAttribute('class', 'ir_code func{{loop.index0}}_ir');
             }
             this.innerHTML = 'hide numba IR'
         }
         else {
-            var ir_lines = $('.func{{loop.index}}_ir')
+            var ir_lines = $('.func{{loop.index0}}_ir')
             for (var i = 0; i < ir_lines.length; i++) {
-                ir_lines[i].setAttribute('class', 'ir_code func{{loop.index}}_ir hidden');
+                ir_lines[i].setAttribute('class', 'ir_code func{{loop.index0}}_ir hidden');
             }
             this.innerHTML = 'show numba IR'
         }
@@ -97,7 +97,7 @@ window.onload = function() {
 
         <div class="annotations">
 
-        <span id="func{{loop1.index}}_toggle_ir" class="buttons">show numba IR</span>
+        <span id="func{{loop1.index0}}_toggle_ir" class="buttons">show numba IR</span>
 
         <table class="annotation_table">
 
@@ -116,13 +116,13 @@ window.onload = function() {
 
                 {% for ir_line, ir_line_type in func_data[func_key]['ir_lines'][num] %}
 
-                    <tr class="ir_code func{{loop1.index}}_ir hidden">
+                    <tr class="ir_code func{{loop1.index0}}_ir hidden">
 
                         <td>&nbsp;</td>
 
                         <td>
                         {{func_data[func_key]['python_indent'][num]}}
-                        {{func_data[func_key]['ir_indent'][num][i]}}{{ir_line}}
+                        {{func_data[func_key]['ir_indent'][num][loop.index0]}}{{ir_line}}
                         <span class="object_tag">{{ir_line_type}}</span>
                         </td>
 
