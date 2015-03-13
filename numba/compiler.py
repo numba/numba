@@ -419,7 +419,7 @@ class Pipeline(object):
 
         if config.ANNOTATE:
             if config.FANCY:
-                print(self.type_annotation)
+                self.type_annotation.html_annotate()
             else:
                 print("ANNOTATION".center(80, '-'))
                 print(self.type_annotation)

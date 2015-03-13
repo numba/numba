@@ -22,7 +22,7 @@ def make_parser():
                         help='[Deprecated] Dump the control flow graph')
     parser.add_argument('--dump-ast', action="store_true",
                         help='[Deprecated] Dump the AST')
-    parser.add_argument('--fancy', nargs=1, metavar='html_filename',
+    parser.add_argument('--fancy', nargs=1,
                         help='Try to output source annotation as html')
     parser.add_argument('filename', help='Python source filename')
     return parser

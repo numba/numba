@@ -251,11 +251,7 @@ class TypeAnnotation(object):
                 output.write(template.render(func_data=TypeAnnotation.func_data))                
 
     def __str__(self):
-        if self.fancy is not None:
-            self.html_annotate()
-            return self.annotate()
-        else:
-            return self.annotate()
+        return self.annotate()
 
 
 re_longest_white_prefix = re.compile('^\s*')
