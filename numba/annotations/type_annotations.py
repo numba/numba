@@ -10,6 +10,14 @@ import numba.dispatcher
 import os
 import sys
 
+try:
+    from collections import OrderedDict
+except ImportError:
+    try:
+        from ordereddict import OrderedDict
+    except ImportError:
+        raise ImportError("Please install the 'ordereddict' package")
+
 
 class SourceLines(Mapping):
     def __init__(self, func):
@@ -49,7 +57,7 @@ class TypeAnnotation(object):
     # this dict and write the html annotation file to disk (rewrite the html
     # file for every function since we don't know if this is the last function
     # to be compiled).
-    func_data = {}
+    func_data = OrderedDict()
 
     def __init__(self, interp, typemap, calltypes, lifted, lifted_from, args, return_type,
                  func_attr, fancy=None):
@@ -239,8 +247,7 @@ class TypeAnnotation(object):
             try:
                 from jinja2 import Template
             except ImportError:
-                print('fancy annotations require jinja2 module')
-                sys.exit(1)
+                raise ImportError("please install the 'jinja2' package")
 
             root = os.path.join(os.path.dirname(__file__))
             template_filename = os.path.join(root, 'template.html')

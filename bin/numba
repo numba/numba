@@ -43,8 +43,7 @@ if __name__ == "__main__":
         try:
             from jinja2 import Template
         except ImportError:
-            print("fancy annotations require jinja2 module")
-            sys.exit(1)
+            raise ImportError("Please install the 'jinja2' package")
         os.environ['NUMBA_DUMP_FANCY'] = str(args.fancy[0])
     os.environ['NUMBA_DUMP_LLVM'] = str(int(args.dump_llvm))
     os.environ['NUMBA_DUMP_OPTIMIZED'] = str(int(args.dump_optimized))
