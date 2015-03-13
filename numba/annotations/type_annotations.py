@@ -164,7 +164,7 @@ class TypeAnnotation(object):
         line_nums = [num for num in python_source]
         lifted_lines = [l.bytecode.firstlineno for l in self.lifted]
 
-        def add_llvm_line(line):
+        def add_llvm_line(func_data, line):
             line_str = line.strip()
             line_type = ''
             if line_str.endswith('pyobject'):
@@ -187,7 +187,7 @@ class TypeAnnotation(object):
                 func_data['llvm_lines'][num] = []
                 func_data['llvm_indent'][num] = []
                 for line in llvm_lines[num]:
-                    add_llvm_line(line)
+                    add_llvm_line(func_data, line)
                     if line.strip().endswith('pyobject'):
                         func_data['python_tags'][num] = 'object_tag'
                         # If any pyobject line is found, make sure original python
@@ -229,7 +229,7 @@ class TypeAnnotation(object):
                 func_data['llvm_indent'][num] = []
 
                 for line in llvm_lines[num]:
-                    add_llvm_line(line)
+                    add_llvm_line(func_data, line)
                     if num in lifted_lines:
                         func_data['python_tags'][num] = 'lifted_tag'
                     elif line.strip().endswith('pyobject'):
