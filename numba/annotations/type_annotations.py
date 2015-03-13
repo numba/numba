@@ -160,34 +160,34 @@ class TypeAnnotation(object):
 
     def html_annotate(self):
         python_source = SourceLines(self.func)
-        llvm_lines = self.prepare_annotations()
+        ir_lines = self.prepare_annotations()
         line_nums = [num for num in python_source]
         lifted_lines = [l.bytecode.firstlineno for l in self.lifted]
 
-        def add_llvm_line(func_data, line):
+        def add_ir_line(func_data, line):
             line_str = line.strip()
             line_type = ''
             if line_str.endswith('pyobject'):
                 line_str = line_str.replace('pyobject', '')
                 line_type = 'pyobject'
-            func_data['llvm_lines'][num].append((line_str, line_type))
+            func_data['ir_lines'][num].append((line_str, line_type))
             indent_len = len(_getindent(line))
-            func_data['llvm_indent'][num].append('&nbsp;' * indent_len)
+            func_data['ir_indent'][num].append('&nbsp;' * indent_len)
 
         func_key = (self.func_attr.filename + ':' + str(self.func_attr.lineno + 1),
                     self.signature)
         if self.lifted_from is not None and self.lifted_from[1]['num_lifted_loops'] > 0:
             # This is a lifted loop function that is being compiled. Get the
-            # llvm instructions for lines in loop function to use for annotating
+            # numba ir for lines in loop function to use for annotating
             # original python function that the loop was lifted from.
             func_data = self.lifted_from[1]
             for num in line_nums:
-                if num not in llvm_lines.keys():
+                if num not in ir_lines.keys():
                     continue
-                func_data['llvm_lines'][num] = []
-                func_data['llvm_indent'][num] = []
-                for line in llvm_lines[num]:
-                    add_llvm_line(func_data, line)
+                func_data['ir_lines'][num] = []
+                func_data['ir_indent'][num] = []
+                for line in ir_lines[num]:
+                    add_ir_line(func_data, line)
                     if line.strip().endswith('pyobject'):
                         func_data['python_tags'][num] = 'object_tag'
                         # If any pyobject line is found, make sure original python
@@ -217,19 +217,19 @@ class TypeAnnotation(object):
             func_data['python_lines'] = []
             func_data['python_indent'] = {}
             func_data['python_tags'] = {}
-            func_data['llvm_lines'] = {}
-            func_data['llvm_indent'] = {}
+            func_data['ir_lines'] = {}
+            func_data['ir_indent'] = {}
 
             for num in line_nums:
                 func_data['python_lines'].append((num, python_source[num].strip()))
                 indent_len = len(_getindent(python_source[num]))
                 func_data['python_indent'][num] = '&nbsp;' * indent_len
                 func_data['python_tags'][num] = ''
-                func_data['llvm_lines'][num] = []
-                func_data['llvm_indent'][num] = []
+                func_data['ir_lines'][num] = []
+                func_data['ir_indent'][num] = []
 
-                for line in llvm_lines[num]:
-                    add_llvm_line(func_data, line)
+                for line in ir_lines[num]:
+                    add_ir_line(func_data, line)
                     if num in lifted_lines:
                         func_data['python_tags'][num] = 'lifted_tag'
                     elif line.strip().endswith('pyobject'):
