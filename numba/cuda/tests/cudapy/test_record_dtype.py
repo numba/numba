@@ -89,14 +89,6 @@ recordtype = np.dtype(
     align=True
 )
 
-recordtype2 = np.dtype(
-    [
-        ('e', np.int32),
-        ('f', np.float64)
-    ],
-    align=True
-)
-
 recordwitharray = np.dtype(
     [
         ('g', np.int32),
