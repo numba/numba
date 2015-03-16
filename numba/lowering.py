@@ -601,10 +601,10 @@ class Lower(BaseLower):
                                  resty)
 
     def lower_yield(self, retty, inst):
-        block, _i = self.generator_info.yield_points[inst.index]
-        assert _i is inst
+        yp = self.generator_info.yield_points[inst.index]
+        assert yp.inst is inst
         # Save live vars in state
-        live_vars = self.interp.get_block_entry_vars(block)
+        live_vars = yp.live_vars
         indices = [self.generator_info.state_vars.index(v) for v in live_vars]
         for state_index, name in zip(indices, live_vars):
             state_slot = cgutils.gep(self.builder, self.gen_state_ptr,

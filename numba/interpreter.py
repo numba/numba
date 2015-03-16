@@ -59,19 +59,29 @@ class Assigner(object):
         return None
 
 
+class YieldPoint(object):
+
+    def __init__(self, block, inst):
+        assert isinstance(block, ir.Block)
+        assert isinstance(inst, ir.Yield)
+        self.block = block
+        self.inst = inst
+        self.live_vars = None
+
+
 class GeneratorInfo(object):
 
     def __init__(self):
-        # { index: (block, instruction) }
+        # { index: YieldPoint }
         self.yield_points = {}
         # Ordered list of variable names
         self.state_vars = []
 
     def get_yield_points(self):
         """
-        Return a list of Yield instructions.
+        Return an iterable of YieldPoint instances.
         """
-        return [inst for block, inst in self.yield_points.values()]
+        return self.yield_points.values()
 
 
 class Interpreter(object):
@@ -101,7 +111,7 @@ class Interpreter(object):
         # { name: [definitions] } of local variables
         self.definitions = collections.defaultdict(list)
         # { ir.Block: { variable names (potentially) alive at start of block } }
-        self.block_entry_vars = collections.defaultdict(set)
+        self.block_entry_vars = {}
 
         if self.bytecode.is_generator:
             self.generator_info = GeneratorInfo()
@@ -142,13 +152,14 @@ class Interpreter(object):
             self._dispatch(inst, kws)
         # Post-processing and analysis on generated IR
         self._insert_var_dels()
-        self._compute_block_entry_vars()
+        self._compute_live_variables()
         if self.generator_info:
             self._compute_generator_info()
 
-    def _compute_block_entry_vars(self):
+    def _compute_live_variables(self):
         """
-        Compute the live variables at the beginning of each block.
+        Compute the live variables at the beginning of each block
+        and at each yield point.
         This must be done after insertion of ir.Dels.
         """
         # Scan for variable additions and deletions in each block
@@ -157,6 +168,7 @@ class Interpreter(object):
         cfg = self.cfa.graph
 
         for ir_block in self.blocks.values():
+            self.block_entry_vars[ir_block] = set()
             adds = block_var_adds[ir_block] = set()
             dels = block_var_dels[ir_block] = set()
             for stmt in ir_block.body:
@@ -189,10 +201,35 @@ class Interpreter(object):
                         changed = True
 
     def _compute_generator_info(self):
+        """
+        Compute the generator's state variables as the union of live variables
+        at all yield points.
+        """
         gi = self.generator_info
+        for yp in gi.get_yield_points():
+            live_vars = set(self.block_entry_vars[yp.block])
+            stmts = iter(yp.block.body)
+            for stmt in stmts:
+                if isinstance(stmt, ir.Assign):
+                    if stmt.value is yp.inst:
+                        break
+                    live_vars.add(stmt.target.name)
+                elif isinstance(stmt, ir.Del):
+                    live_vars.remove(stmt.value)
+            else:
+                assert 0, "couldn't find yield point"
+            # Try to optimize out any live vars that are deleted immediately
+            # after the yield point.
+            for stmt in stmts:
+                if isinstance(stmt, ir.Del):
+                    live_vars.discard(stmt.value)
+                else:
+                    break
+            yp.live_vars = live_vars
+
         st = set()
-        for ir_block, inst in gi.yield_points.values():
-            st.update(self.block_entry_vars[ir_block])
+        for yp in gi.get_yield_points():
+            st.update(yp.live_vars)
         gi.state_vars = sorted(st)
 
     def _insert_var_dels(self):
@@ -982,11 +1019,9 @@ class Interpreter(object):
         self.current_block.append(stmt)
 
     def op_YIELD_VALUE(self, inst, value, res):
-        # Yield points should always appear at the beginning of a block
-        assert len(self.current_block.body) == 0
         dct = self.generator_info.yield_points
         index = len(dct) + 1
-        value = self.get(value)
-        expr = ir.Yield(value=value, index=index, loc=self.loc)
-        dct[index] = self.current_block, expr
-        return self.store(expr, res)
+        inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
+        yp = YieldPoint(self.current_block, inst)
+        dct[index] = yp
+        return self.store(inst, res)

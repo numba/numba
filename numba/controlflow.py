@@ -9,7 +9,7 @@ from numba import utils
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
-NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER', 'YIELD_VALUE'])
+NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER'])
 
 
 class CFBlock(object):

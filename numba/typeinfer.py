@@ -428,7 +428,7 @@ class TypeInferer(object):
         for index, name in self.arg_names.items():
             arg_types[index] = typdict[name]
         state_types = [typdict[var_name] for var_name in gi.state_vars]
-        yield_types = [typdict[y.value.name] for y in gi.get_yield_points()]
+        yield_types = [typdict[y.inst.value.name] for y in gi.get_yield_points()]
         yield_type = self.context.unify_types(*yield_types)
         return types.Generator(self.py_func, yield_type, arg_types, state_types)
 
