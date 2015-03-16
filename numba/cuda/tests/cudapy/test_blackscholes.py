@@ -114,14 +114,11 @@ class TestBlackScholes(unittest.TestCase):
         stream.synchronize()
 
         dt = (time1 - time0)
-        print("numbapro.cuda time: %f msec" % ((1000 * dt) / iterations))
 
         delta = np.abs(callResultNumpy - callResultNumbapro)
         L1norm = delta.sum() / np.abs(callResultNumpy).sum()
 
         max_abs_err = delta.max()
-        print('L1norm', L1norm)
-        print('Max absolute error', max_abs_err)
         self.assertTrue(L1norm < 1e-13)
         self.assertTrue(max_abs_err < 1e-13)
 

@@ -25,15 +25,6 @@ class TestCudaPy2Div(unittest.TestCase):
         z = 1.0
         preCalc[1, 15](y, yA, yB, numDataPoints)
 
-        print('y')
-        print(y)
-
-        print('yA')
-        print(yA)
-
-        print('yB')
-        print(yB)
-
         self.assertTrue(np.all(y == yA))
         self.assertTrue(np.all(y == yB))
 

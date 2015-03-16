@@ -14,7 +14,6 @@ is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 class TestNvvmDriver(unittest.TestCase):
     def get_ptx(self):
         nvvm = NVVM()
-        print(nvvm.get_version())
 
         if is64bit:
             return gpu64
@@ -27,15 +26,12 @@ class TestNvvmDriver(unittest.TestCase):
 
         cu.add_module(nvvmir.encode('utf8'))
         ptx = cu.compile().decode('utf8')
-        print(ptx)
         self.assertTrue('simple' in ptx)
         self.assertTrue('ave' in ptx)
-        print(cu.log)
 
     def test_nvvm_compile_simple(self):
         nvvmir = self.get_ptx()
         ptx = llvm_to_ptx(nvvmir).decode('utf8')
-        print(ptx)
         self.assertTrue('simple' in ptx)
         self.assertTrue('ave' in ptx)
 
@@ -45,12 +41,10 @@ class TestNvvmDriver(unittest.TestCase):
         kernel = m.add_function(fty, name='mycudakernel')
         bldr = Builder.new(kernel.append_basic_block('entry'))
         bldr.ret_void()
-        print(m)
         set_cuda_kernel(kernel)
 
         fix_data_layout(m)
         ptx = llvm_to_ptx(str(m)).decode('utf8')
-        print(ptx)
         self.assertTrue('mycudakernel' in ptx)
         if is64bit:
             self.assertTrue('.address_size 64' in ptx)
@@ -62,7 +56,6 @@ class TestNvvmDriver(unittest.TestCase):
         compute_xx = 'compute_{0}{1}'.format(*arch)
         ptx = llvm_to_ptx(nvvmir, arch=compute_xx, ftz=1, prec_sqrt=0,
                           prec_div=0).decode('utf8')
-        print(ptx)
         self.assertIn(".target sm_{0}{1}".format(*arch), ptx)
         self.assertIn('simple', ptx)
         self.assertIn('ave', ptx)

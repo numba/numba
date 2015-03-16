@@ -22,8 +22,7 @@ class TestLinker(unittest.TestCase):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
         link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.ptx')
-        print('link to:', link)
-        
+
         @cuda.jit('void(int32[:], int32[:])', link=[link])
         def foo(x, y):
             i = cuda.grid(1)

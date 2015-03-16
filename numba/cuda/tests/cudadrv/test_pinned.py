@@ -35,14 +35,12 @@ class TestPinned(CUDATestCase):
         with cuda.pinned(A):
             for i in range(REPEAT):
                 total += self._template('pinned', A)
-        print('pinned', total / REPEAT)
 
     def test_unpinned(self):
         A = np.arange(2*1024*1024) # 16 MB
         total = 0
         for i in range(REPEAT):
             total += self._template('unpinned', A)
-        print('unpinned', total / REPEAT)
 
 
 if __name__ == '__main__':
