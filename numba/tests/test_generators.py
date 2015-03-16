@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba import jit, types
 from numba.tests.support import TestCase
 import numba.unittest_support as unittest
 from numba import testing
@@ -14,6 +14,15 @@ forceobj_flags = Flags()
 forceobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
+
+
+def make_consumer(gen_func):
+    def consumer(x):
+        res = 0.0
+        for y in gen_func(x):
+            res += y
+        return res
+    return consumer
 
 
 def gen1(x):
@@ -56,7 +65,7 @@ def return_generator_expr(x):
     return (i*2 for i in x)
 
 
-class TestLists(TestCase):
+class TestGenerators(TestCase):
 
     def check_generator(self, pygen, cgen):
         self.assertEqual(next(cgen), next(pygen))
@@ -109,6 +118,26 @@ class TestLists(TestCase):
         with self.assertRaises(NotImplementedError) as cm:
             compile_isolated(pyfunc, (types.int32,), flags=forceobj_flags)
         self.assertIn("Cannot compile generator in object mode", str(cm.exception))
+
+    def check_consume_generator(self, gen_func):
+        cgen = jit(nopython=True)(gen_func)
+        cfunc = jit(nopython=True)(make_consumer(cgen))
+        pyfunc = make_consumer(gen_func)
+        expected = pyfunc(5)
+        got = cfunc(5)
+        self.assertPreciseEqual(got, expected)
+
+    def test_consume_gen1(self):
+        self.check_consume_generator(gen1)
+
+    def test_consume_gen2(self):
+        self.check_consume_generator(gen2)
+
+    def test_consume_gen3(self):
+        self.check_consume_generator(gen3)
+
+
+class TestGenExprs(TestCase):
 
     @testing.allow_interpreter_mode
     def test_return_generator_expr(self):
