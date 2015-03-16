@@ -40,6 +40,7 @@ Features:
 * Issue #1030: Support nested arrays in Numpy structured arrays.
 * Issue #1033: Implement the inspect_types(), inspect_llvm() and inspect_asm()
   methods for CUDA kernels.
+* Issue #1029: Support Numpy structured arrays with CUDA as well.
 
 Fixes:
 
