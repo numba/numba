@@ -445,6 +445,13 @@ class CUDAKernel(CUDAKernelBase):
             kernelargs.append(ctypes.c_double(val.real))
             kernelargs.append(ctypes.c_double(val.imag))
 
+        elif isinstance(ty, types.Record):
+            devrec, conv = devicearray.auto_device(val, stream=stream)
+            if conv:
+                retr.append(lambda: devrec.copy_to_host(val, stream=stream))
+
+            kernelargs.append(devrec)
+
         else:
             raise NotImplementedError(ty, val)
 

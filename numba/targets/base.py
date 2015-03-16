@@ -868,7 +868,7 @@ class BaseContext(object):
         if self.strict_alignment:
             offset = rectyp.offset(attr)
             elemty = rectyp.typeof(attr)
-            align = self.get_abi_sizeof(self.get_data_type(elemty))
+            align = self.get_abi_alignment(self.get_data_type(elemty))
             if offset % align:
                 msg = "{rec}.{attr} of type {type} is not aligned".format(
                     rec=rectyp, attr=attr, type=elemty)
@@ -929,6 +929,13 @@ class BaseContext(object):
             return ty.get_abi_size(self.target_data)
         # XXX this one unused?
         return self.target_data.get_abi_size(ty)
+
+    def get_abi_alignment(self, ty):
+        """
+        Get the ABI alignment of LLVM type *ty*.
+        """
+        assert isinstance(ty, llvmir.Type), "Expected LLVM type"
+        return ty.get_abi_alignment(self.target_data)
 
     def post_lowering(self, func):
         """Run target specific post-lowering transformation here.
