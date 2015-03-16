@@ -1,11 +1,12 @@
 from __future__ import absolute_import, print_function
 import copy
+import sys
 
 from numba import ctypes_support as ctypes
 from numba.typing.templates import AbstractTemplate
 from numba import config, compiler, types
 from numba.typing.templates import ConcreteTemplate
-from numba import typing, lowering
+from numba import typing, lowering, utils
 
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
@@ -53,6 +54,7 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         name=kernel.name,
                         pretty_name=cres.fndesc.qualname,
                         argtypes=cres.signature.args,
+                        type_annotation=cres.type_annotation,
                         link=link,
                         debug=debug,
                         call_helper=cres.call_helper,
@@ -279,11 +281,13 @@ class CachedCUFunction(object):
 class CUDAKernel(CUDAKernelBase):
     def __init__(self, llvm_module, name, pretty_name,
                  argtypes, call_helper,
-                 link=(), debug=False, fastmath=False):
+                 link=(), debug=False, fastmath=False,
+                 type_annotation=None):
         super(CUDAKernel, self).__init__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
         self.linking = tuple(link)
+        self._type_annotation = type_annotation
 
         options = {}
         if fastmath:
@@ -321,6 +325,24 @@ class CUDAKernel(CUDAKernelBase):
         Get current active context
         """
         return get_current_device()
+
+    def inspect_llvm(self):
+        return str(self._func.ptx.llvmir)
+
+    def inspect_asm(self):
+        return str(self._func.ptx.get())
+
+    def inspect_types(self, file=None):
+        if self._type_annotation is None:
+            raise ValueError("Type annotation is not available")
+
+        if file is None:
+            file = sys.stdout
+
+        print("%s %s" % (self.entry_name, self.argument_types), file=file)
+        print('-' * 80, file=file)
+        print(self._type_annotation, file=file)
+        print('=' * 80, file=file)
 
     def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # Prepare kernel
@@ -423,6 +445,13 @@ class CUDAKernel(CUDAKernelBase):
             kernelargs.append(ctypes.c_double(val.real))
             kernelargs.append(ctypes.c_double(val.imag))
 
+        elif isinstance(ty, types.Record):
+            devrec, conv = devicearray.auto_device(val, stream=stream)
+            if conv:
+                retr.append(lambda: devrec.copy_to_host(val, stream=stream))
+
+            kernelargs.append(devrec)
+
         else:
             raise NotImplementedError(ty, val)
 
@@ -457,3 +486,24 @@ class AutoJitCUDAKernel(CUDAKernelBase):
             if self.bind:
                 kernel.bind()
         return kernel
+
+    def inspect_llvm(self, signature=None):
+        if signature is not None:
+            return self.definitions[signature].inspect_llvm()
+        else:
+            return dict((sig, defn.inspect_llvm())
+                        for sig, defn in self.definitions.items())
+
+    def inspect_asm(self, signature=None):
+        if signature is not None:
+            return self.definitions[signature].inspect_asm()
+        else:
+            return dict((sig, defn.inspect_asm())
+                        for sig, defn in self.definitions.items())
+
+    def inspect_types(self, file=None):
+        if file is None:
+            file = sys.stdout
+
+        for ver, defn in utils.iteritems(self.definitions):
+            defn.inspect_types(file=file)

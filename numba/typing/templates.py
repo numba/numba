@@ -31,11 +31,12 @@ class Signature(object):
         self.return_type, self.args, self.recvr = state
 
     def __hash__(self):
-        return hash(self.args)
+        return hash((self.args, self.return_type))
 
     def __eq__(self, other):
         if isinstance(other, Signature):
             return (self.args == other.args and
+                    self.return_type == other.return_type and
                     self.recvr == other.recvr)
 
     def __ne__(self, other):

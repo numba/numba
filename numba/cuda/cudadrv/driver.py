@@ -23,6 +23,7 @@ import warnings
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
 import contextlib
+import numpy as np
 from collections import namedtuple
 from numba import utils, servicelib, mviewbuf
 from .error import CudaSupportError, CudaDriverError
@@ -1252,7 +1253,9 @@ def host_pointer(obj):
     """
     if isinstance(obj, (int, long)):
         return obj
-    return mviewbuf.memoryview_get_buffer(obj)
+
+    forcewritable = isinstance(obj, np.void)
+    return mviewbuf.memoryview_get_buffer(obj, forcewritable)
 
 
 def host_memory_extents(obj):

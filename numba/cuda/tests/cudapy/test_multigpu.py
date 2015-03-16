@@ -24,14 +24,10 @@ class TestMultiGPUContext(unittest.TestCase):
         with cuda.gpus[0]:
             copy_plus_1[1, N](A, B)
 
-        print(A, B)
         check(A, B)
 
         copy_plus_1[1, N](A, B)
-        print(A, B)
         check(A, B)
-
-        print(len(cuda.gpus))
 
         with cuda.gpus[0]:
             A0 = np.arange(N, dtype=np.float64)
@@ -42,9 +38,6 @@ class TestMultiGPUContext(unittest.TestCase):
                 A1 = np.arange(N, dtype=np.float64)
                 B1 = np.arange(N, dtype=np.float64)
                 copy_plus_1[1, N](A1, B1)
-
-        print(A0, A1)
-        print(B0, B1)
 
         check(A0, B0)
         check(A1, B1)

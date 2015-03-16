@@ -222,6 +222,22 @@ class DeviceNDArrayBase(object):
         return self.gpu_data
 
 
+class DeviceRecord(DeviceNDArrayBase):
+    def __init__(self, dtype, stream=0, gpu_data=None):
+        shape = ()
+        strides = ()
+        super(DeviceRecord, self).__init__(shape, strides, dtype, stream,
+                                           gpu_data)
+
+    @property
+    def _numba_type_(self):
+        """
+        Magic attribute expected by Numba to get the numba type that
+        represents this object.
+        """
+        return numpy_support.from_dtype(self.dtype)
+
+
 class DeviceNDArray(DeviceNDArrayBase):
     def is_f_contiguous(self):
         return self._dummy.is_f_contig
@@ -314,6 +330,11 @@ def from_array_like(ary, stream=0, gpu_data=None):
                          writeback=ary, stream=stream, gpu_data=gpu_data)
 
 
+def from_record_like(rec, stream=0, gpu_data=None):
+    "Create a DeviceRecord object that is like rec."
+    return DeviceRecord(rec.dtype, stream=stream, gpu_data=gpu_data)
+
+
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
                             "be transferred as a single memory region. Please "
                             "ensure contiguous buffer with numpy "
@@ -326,13 +347,21 @@ def sentry_contiguous(ary):
             raise ValueError(errmsg_contiguous_buffer)
 
 
-def auto_device(ary, stream=0, copy=True):
-    if _driver.is_device_memory(ary):
-        return ary, False
+def auto_device(obj, stream=0, copy=True):
+    """
+    Create a DeviceRecord or DeviceArray like obj and optionally copy data from
+    host to device. If obj already represents device memory, it is returned and
+    no copy is made.
+    """
+    if _driver.is_device_memory(obj):
+        return obj, False
     else:
-        sentry_contiguous(ary)
-        devarray = from_array_like(ary, stream=stream)
+        sentry_contiguous(obj)
+        if isinstance(obj, np.void):
+            devobj = from_record_like(obj, stream=stream)
+        else:
+            devobj = from_array_like(obj, stream=stream)
         if copy:
-            devarray.copy_to_device(ary, stream=stream)
-        return devarray, True
+            devobj.copy_to_device(obj, stream=stream)
+        return devobj, True
 
