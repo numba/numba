@@ -44,7 +44,7 @@ def gen3(x):
 def gen4(x, y, z):
     for i in range(3):
         yield z
-        yield y
+        yield y + z
     return
     yield x
 
@@ -77,47 +77,63 @@ class TestGenerators(TestCase):
         with self.assertRaises(StopIteration):
             next(cgen)
 
-    def test_gen1(self):
+    def check_gen1(self, flags=no_pyobj_flags):
         pyfunc = gen1
-        cr = compile_isolated(pyfunc, (types.int32,))
+        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        pygen = pyfunc(8)
+        cgen = cr.entry_point(8)
+        self.check_generator(pygen, cgen)
+
+    def test_gen1(self):
+        self.check_gen1()
+
+    def test_gen1_objmode(self):
+        self.check_gen1(flags=forceobj_flags)
+
+    def check_gen2(self, flags=no_pyobj_flags):
+        pyfunc = gen2
+        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
         pygen = pyfunc(8)
         cgen = cr.entry_point(8)
         self.check_generator(pygen, cgen)
 
     def test_gen2(self):
-        pyfunc = gen2
-        cr = compile_isolated(pyfunc, (types.int32,))
+        self.check_gen2()
+
+    def test_gen2_objmode(self):
+        self.check_gen2(flags=forceobj_flags)
+
+    def check_gen3(self, flags=no_pyobj_flags):
+        pyfunc = gen3
+        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
         pygen = pyfunc(8)
         cgen = cr.entry_point(8)
         self.check_generator(pygen, cgen)
 
     def test_gen3(self):
-        pyfunc = gen3
-        cr = compile_isolated(pyfunc, (types.int32,))
-        pygen = pyfunc(8)
-        cgen = cr.entry_point(8)
-        self.check_generator(pygen, cgen)
+        self.check_gen3()
 
-    def test_gen4(self):
+    def test_gen3_objmode(self):
+        self.check_gen3(flags=forceobj_flags)
+
+    def check_gen4(self, flags=no_pyobj_flags):
         pyfunc = gen4
-        cr = compile_isolated(pyfunc, (types.int32,) * 3)
+        cr = compile_isolated(pyfunc, (types.int32,) * 3, flags=flags)
         pygen = pyfunc(5, 6, 7)
         cgen = cr.entry_point(5, 6, 7)
         self.check_generator(pygen, cgen)
+
+    def test_gen4(self):
+        self.check_gen4()
+
+    def test_gen4_objmode(self):
+        self.check_gen4(flags=forceobj_flags)
 
     def test_gen5(self):
         with self.assertTypingError() as cm:
             cr = compile_isolated(gen5, ())
         self.assertIn("Cannot type generator: it does not yield any value",
                       str(cm.exception))
-
-    def test_objmode(self):
-        pyfunc = genobj
-        with self.assertTypingError():
-            compile_isolated(pyfunc, (types.int32,))
-        with self.assertRaises(NotImplementedError) as cm:
-            compile_isolated(pyfunc, (types.int32,), flags=forceobj_flags)
-        self.assertIn("Cannot compile generator in object mode", str(cm.exception))
 
     def check_consume_generator(self, gen_func):
         cgen = jit(nopython=True)(gen_func)

@@ -169,12 +169,11 @@ class GeneratorDescriptor(FunctionDescriptor):
     __slots__ = ()
 
     @classmethod
-    def from_generator_fndesc(cls, interp, fndesc, mangler):
+    def from_generator_fndesc(cls, interp, fndesc, gentype, mangler):
         """
         Build a GeneratorDescriptor for the generator returned by the
-        function described by *fndesc*.
+        function described by *fndesc*, with type *gentype*.
         """
-        gentype = fndesc.restype
         assert isinstance(gentype, types.Generator)
         restype = gentype.yield_type
         args = ['gen']
@@ -261,10 +260,9 @@ class BaseLower(object):
         if self.generator_info is None:
             self._lower_normal_function(self.fndesc)
         else:
-            self.gentype = self.fndesc.restype
-            if not isinstance(self.gentype, types.Generator):
-                assert self.gentype is types.pyobject
-                raise NotImplementedError("Cannot compile generator in object mode")
+            self.gentype = self.get_generator_type()
+            self.gendesc = GeneratorDescriptor.from_generator_fndesc(
+                self.interp, self.fndesc, self.gentype, self.context.mangler)
             self._lower_generator_init()
             self._lower_generator_next()
 
@@ -311,6 +309,8 @@ class BaseLower(object):
     def _lower_generator_init(self):
         self.setup_function(self.fndesc)
 
+        self.context.insert_generator(self.gentype, self.gendesc, [self.library])
+
         # Init argument values
         rawfnargs = self.call_conv.get_arguments(self.function)
         arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
@@ -325,15 +325,15 @@ class BaseLower(object):
         argsval = cgutils.make_anonymous_struct(self.builder, self.fnargs,
                                                 argsty)
         resume_index = self.context.get_constant(types.int32, 0)
-        retval = cgutils.make_anonymous_struct(self.builder, [resume_index, argsval],
-                                               retty)
+        gen_struct = cgutils.make_anonymous_struct(self.builder,
+                                                   [resume_index, argsval],
+                                                   retty)
+        retval = self.box_generator_struct(gen_struct)
         self.call_conv.return_value(self.builder, retval)
 
         self.post_lower()
 
     def _lower_generator_next(self):
-        self.gendesc = GeneratorDescriptor.from_generator_fndesc(
-            self.interp, self.fndesc, self.context.mangler)
         self.setup_function(self.gendesc)
 
         assert self.gendesc.argtypes[0] == self.gentype
@@ -391,7 +391,11 @@ class BaseLower(object):
         # Run target specific post lowering transformation
         self.context.post_lowering(self.function)
 
-        self.context.insert_generator(self.gentype, self.gendesc, [self.library])
+    def return_from_generator(self):
+        indexval = Constant.int(self.resume_index_ptr.type.pointee, -1)
+        self.builder.store(indexval, self.resume_index_ptr)
+        self.call_conv.return_stop_iteration(self.builder)
+        return
 
     def create_cpython_wrapper(self, release_gil=False):
         """
@@ -455,9 +459,7 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.Return):
             if self.generator_info:
                 # StopIteration
-                indexval = Constant.int(self.resume_index_ptr.type.pointee, -1)
-                self.builder.store(indexval, self.resume_index_ptr)
-                self.call_conv.return_stop_iteration(self.builder)
+                self.return_from_generator()
                 return
             val = self.loadvar(inst.value.name)
             oty = self.typeof(inst.value.name)
@@ -585,23 +587,6 @@ class Lower(BaseLower):
         else:
             raise NotImplementedError(type(value), value)
 
-    def lower_binop(self, resty, expr):
-        lhs = expr.lhs
-        rhs = expr.rhs
-        lty = self.typeof(lhs.name)
-        rty = self.typeof(rhs.name)
-        lhs = self.loadvar(lhs.name)
-        rhs = self.loadvar(rhs.name)
-        # Get function
-        signature = self.fndesc.calltypes[expr]
-        impl = self.context.get_function(expr.fn, signature)
-        # Convert argument to match
-        lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
-        rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
-        res = impl(self.builder, (lhs, rhs))
-        return self.context.cast(self.builder, res, signature.return_type,
-                                 resty)
-
     def lower_yield(self, retty, inst):
         yp = self.generator_info.yield_points[inst.index]
         assert yp.inst is inst
@@ -634,6 +619,23 @@ class Lower(BaseLower):
             val = self.context.unpack_value(self.builder, ty, state_slot)
             self.storevar(val, name)
         return self.context.get_constant_generic(self.builder, retty, None)
+
+    def lower_binop(self, resty, expr):
+        lhs = expr.lhs
+        rhs = expr.rhs
+        lty = self.typeof(lhs.name)
+        rty = self.typeof(rhs.name)
+        lhs = self.loadvar(lhs.name)
+        rhs = self.loadvar(rhs.name)
+        # Get function
+        signature = self.fndesc.calltypes[expr]
+        impl = self.context.get_function(expr.fn, signature)
+        # Convert argument to match
+        lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
+        rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
+        res = impl(self.builder, (lhs, rhs))
+        return self.context.cast(self.builder, res, signature.return_type,
+                                 resty)
 
     def lower_expr(self, resty, expr):
         if expr.op == 'binop':
@@ -854,6 +856,12 @@ class Lower(BaseLower):
             return castval
 
         raise NotImplementedError(expr)
+
+    def get_generator_type(self):
+        return self.fndesc.restype
+
+    def box_generator_struct(self, gen_struct):
+        return gen_struct
 
     def getvar(self, name):
         return self.varmap[name]

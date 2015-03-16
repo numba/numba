@@ -67,6 +67,7 @@ class YieldPoint(object):
         self.block = block
         self.inst = inst
         self.live_vars = None
+        self.weak_live_vars = None
 
 
 class GeneratorInfo(object):
@@ -208,6 +209,7 @@ class Interpreter(object):
         gi = self.generator_info
         for yp in gi.get_yield_points():
             live_vars = set(self.block_entry_vars[yp.block])
+            weak_live_vars = set()
             stmts = iter(yp.block.body)
             for stmt in stmts:
                 if isinstance(stmt, ir.Assign):
@@ -222,14 +224,19 @@ class Interpreter(object):
             # after the yield point.
             for stmt in stmts:
                 if isinstance(stmt, ir.Del):
-                    live_vars.discard(stmt.value)
+                    name = stmt.value
+                    if name in live_vars:
+                        live_vars.remove(name)
+                        weak_live_vars.add(name)
                 else:
                     break
             yp.live_vars = live_vars
+            yp.weak_live_vars = weak_live_vars
 
         st = set()
         for yp in gi.get_yield_points():
-            st.update(yp.live_vars)
+            st |= yp.live_vars
+            st |= yp.weak_live_vars
         gi.state_vars = sorted(st)
 
     def _insert_var_dels(self):

@@ -42,6 +42,18 @@ class PyLower(BaseLower):
 
         self._live_vars = set()
 
+    def get_generator_type(self):
+        return types.Generator(
+            gen_func=self.interp.bytecode.func,
+            yield_type=types.pyobject,
+            arg_types=(types.pyobject,) * len(self.interp.argspec.args),
+            state_types=(types.pyobject,) * len(self.generator_info.state_vars),
+            )
+
+    def box_generator_struct(self, gen_struct):
+        gen_ptr = cgutils.alloca_once_value(self.builder, gen_struct)
+        return self.pyapi.from_native_generator(gen_ptr, self.gentype, self.envarg)
+
     def pre_lower(self):
         self.pyapi = self.context.get_python_api(self.builder)
 
@@ -96,6 +108,13 @@ class PyLower(BaseLower):
 
         elif isinstance(inst, ir.Return):
             retval = self.loadvar(inst.value.name)
+            if self.generator_info:
+                # StopIteration
+                # We own a reference to the "return value", but we
+                # don't return it.
+                self.pyapi.decref(retval)
+                self.return_from_generator()
+                return
             # No need to incref() as the reference is already owned.
             self.call_conv.return_value(self.builder, retval)
 
@@ -147,12 +166,49 @@ class PyLower(BaseLower):
             return self.lower_expr(value)
         elif isinstance(value, ir.Global):
             return self.lower_global(value.name, value.value)
+        elif isinstance(value, ir.Yield):
+            return self.lower_yield(value)
         elif isinstance(value, ir.Arg):
             value = self.fnargs[value.index]
             self.incref(value)
             return value
         else:
             raise NotImplementedError(type(value), value)
+
+    def lower_yield(self, inst):
+        yp = self.generator_info.yield_points[inst.index]
+        assert yp.inst is inst
+        # Save live vars in state
+        # We also need to save live vars that are del'ed afterwards.
+        live_vars = yp.live_vars | yp.weak_live_vars
+        indices = [self.generator_info.state_vars.index(v) for v in live_vars]
+        for state_index, name in zip(indices, live_vars):
+            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
+                                     0, state_index)
+            ty = self.gentype.state_types[state_index]
+            self.context.pack_value(self.builder, ty, self.loadvar(name), state_slot)
+        # Save resume index
+        indexval = Constant.int(self.resume_index_ptr.type.pointee, inst.index)
+        self.builder.store(indexval, self.resume_index_ptr)
+        # Yield to caller
+        val = self.loadvar(inst.value.name)
+        typ = self.typeof(inst.value.name)
+        # Let caller own the reference
+        self.pyapi.incref(val)
+        self.call_conv.return_value(self.builder, val)
+        # Emit resumption point
+        block_name = "generator_resume%d" % (inst.index)
+        block = self.function.append_basic_block(block_name)
+        self.builder.position_at_end(block)
+        self.resume_blocks[inst.index] = block
+        # Reload live vars from state
+        for state_index, name in zip(indices, live_vars):
+            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
+                                     0, state_index)
+            ty = self.gentype.state_types[state_index]
+            val = self.context.unpack_value(self.builder, ty, state_slot)
+            self.storevar(val, name)
+        return self.pyapi.make_none()
 
     def lower_binop(self, expr, inplace=False):
         lhs = self.loadvar(expr.lhs.name)
@@ -488,12 +544,12 @@ class PyLower(BaseLower):
         # and code path.
         self.builder.store(cgutils.get_null_value(ptr.type.pointee), ptr)
 
-    def storevar(self, value, name):
+    def storevar(self, value, name, clobber=False):
         """
         Stores a llvm value and allocate stack slot if necessary.
         The llvm value can be of arbitrary type.
         """
-        is_redefine = name in self._live_vars
+        is_redefine = name in self._live_vars and not clobber
         ptr = self._getvar(name, ltype=value.type)
         if is_redefine:
             old = self.builder.load(ptr)

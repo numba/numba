@@ -132,12 +132,17 @@ static PyTypeObject EnvironmentType = {
          (for example the globals module)
    */
 
+/* Closure is a variable-sized object for binary compatibility with
+   Generator (see below). */
+#define CLOSURE_HEAD          \
+    PyObject_VAR_HEAD         \
+    EnvironmentObject *env;
+
 typedef struct {
-    PyObject_HEAD
+    CLOSURE_HEAD
     /* The dynamically-filled method definition for the PyCFunction object
        using this closure. */
     PyMethodDef def;
-    EnvironmentObject *env;
     PyObject *weakreflist;
     /* We could also store the LLVM function or engine here, to ensure
        generated code is kept alive. */
@@ -285,10 +290,12 @@ make_function(PyObject *self, PyObject *args)
 
 /*
  * Python-facing wrapper for Numba-compiled generator.
+ * Note the Environment's offset inside the struct is the same as in the
+ * Closure object.  This is required to simplify generation of Python wrappers.
  */
 
 typedef struct {
-    PyObject_VAR_HEAD
+    CLOSURE_HEAD
     PyCFunctionWithKeywords nextfunc;
     PyObject *weakreflist;
     union {
@@ -298,8 +305,9 @@ typedef struct {
 } GeneratorObject;
 
 static int
-generator_traverse(GeneratorObject *clo, visitproc visit, void *arg)
+generator_traverse(GeneratorObject *gen, visitproc visit, void *arg)
 {
+    Py_VISIT(gen->env);
     return 0;
 }
 
@@ -309,6 +317,7 @@ generator_dealloc(GeneratorObject *gen)
     _PyObject_GC_UNTRACK((PyObject *) gen);
     if (gen->weakreflist != NULL)
         PyObject_ClearWeakRefs((PyObject *) gen);
+    Py_XDECREF(gen->env);
     Py_TYPE(gen)->tp_free((PyObject *) gen);
 }
 
@@ -318,7 +327,6 @@ generator_iternext(GeneratorObject *gen)
     PyObject *res, *args = PyTuple_Pack(1, (PyObject *) gen);
     if (args == NULL)
         return NULL;
-    /* XXX first argument should be a Closure object for object mode */
     res = (*gen->nextfunc)((PyObject *) gen, args, NULL);
     Py_DECREF(args);
     return res;
@@ -374,7 +382,8 @@ static PyTypeObject GeneratorType = {
 static PyObject *
 Numba_make_generator(Py_ssize_t gen_state_size,
                      void *initial_state,
-                     PyCFunctionWithKeywords nextfunc)
+                     PyCFunctionWithKeywords nextfunc,
+                     EnvironmentObject *env)
 {
     GeneratorObject *gen;
     gen = (GeneratorObject *) PyType_GenericAlloc(&GeneratorType, gen_state_size);
@@ -382,6 +391,8 @@ Numba_make_generator(Py_ssize_t gen_state_size,
         return NULL;
     memcpy(gen->state, initial_state, gen_state_size);
     gen->nextfunc = nextfunc;
+    Py_XINCREF(env);
+    gen->env = env;
     return (PyObject *) gen;
 }
 

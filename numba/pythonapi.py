@@ -1140,7 +1140,13 @@ class PythonAPI(object):
         value = self.context.get_generator_state(self.builder, obj, gen_ptr_ty)
         return NativeValue(value)
 
-    def from_native_generator(self, val, typ):
+    def from_native_generator(self, val, typ, env=None):
+        """
+        Make a Numba generator (a _dynfunc.Generator instance) from a
+        generator structure pointer *val*.
+        *env* is an optional _dynfunc.Environment instance to be wrapped
+        in the generator.
+        """
         llty = self.context.get_data_type(typ)
         assert not llty.is_pointer
         gen_struct_size = self.context.get_abi_sizeof(llty)
@@ -1151,15 +1157,20 @@ class PythonAPI(object):
         genfnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, self.pyobj])
         genfn = self._get_function(genfnty, name=gendesc.llvm_cpython_wrapper_name)
 
-        # PyObject *numba_make_generator(state_size, initial_state, nextfunc)
+        # PyObject *numba_make_generator(state_size, initial_state, nextfunc, env)
         fnty = Type.function(self.pyobj, [self.py_ssize_t,
                                           self.voidptr,
-                                          Type.pointer(genfnty)])
+                                          Type.pointer(genfnty),
+                                          self.voidptr])
         fn = self._get_function(fnty, name="numba_make_generator")
 
-        return self.builder.call(fn, (ir.Constant(self.py_ssize_t, gen_struct_size),
-                                      self.builder.bitcast(val, self.voidptr),
-                                      genfn))
+        state_size = ir.Constant(self.py_ssize_t, gen_struct_size)
+        initial_state = self.builder.bitcast(val, self.voidptr)
+        if env is None:
+            env = self.get_null_object()
+        env = self.builder.bitcast(env, self.voidptr)
+
+        return self.builder.call(fn, (state_size, initial_state, genfn, env))
 
     def numba_array_adaptor(self, ary, ptr):
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
