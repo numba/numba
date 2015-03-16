@@ -49,8 +49,6 @@ class TestCudaMatMul(unittest.TestCase):
         B = np.array(np.random.random((n, n)), dtype=np.float32)
         C = np.empty_like(A)
 
-        print("N = %d x %d" % (n, n))
-
         s = time()
         stream = cuda.stream()
         with stream.auto_synchronize():
@@ -71,10 +69,6 @@ class TestCudaMatMul(unittest.TestCase):
         Cans = Amat * Bmat
         e = time()
         tcpu = e - s
-
-        print('cpu:  %f' % tcpu)
-        print('cuda: %f' % tcuda)
-        print('cuda speedup: %.2fx' % (tcpu / tcuda))
 
         # Check result
         self.assertTrue(np.allclose(C, Cans))

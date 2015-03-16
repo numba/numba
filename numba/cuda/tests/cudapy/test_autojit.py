@@ -16,7 +16,6 @@ class TestCudaAutoJit(unittest.TestCase):
         what(np.empty(1), np.empty(1, dtype=np.int32), 21)
         what(np.empty(1), 1.0, 21)
 
-        print(what.definitions)
         self.assertTrue(len(what.definitions) == 2)
 
 
