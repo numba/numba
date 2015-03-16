@@ -262,7 +262,9 @@ class BaseLower(object):
             self._lower_normal_function(self.fndesc)
         else:
             self.gentype = self.fndesc.restype
-            assert isinstance(self.gentype, types.Generator)
+            if not isinstance(self.gentype, types.Generator):
+                assert self.gentype is types.pyobject
+                raise NotImplementedError("Cannot compile generator in object mode")
             self._lower_generator_init()
             self._lower_generator_next()
 
@@ -615,7 +617,10 @@ class Lower(BaseLower):
         indexval = Constant.int(self.resume_index_ptr.type.pointee, inst.index)
         self.builder.store(indexval, self.resume_index_ptr)
         # Yield to caller
-        self.call_conv.return_value(self.builder, self.loadvar(inst.value.name))
+        val = self.loadvar(inst.value.name)
+        typ = self.typeof(inst.value.name)
+        val = self.context.cast(self.builder, val, typ, self.gentype.yield_type)
+        self.call_conv.return_value(self.builder, val)
         # Emit resumption point
         block_name = "generator_resume%d" % (inst.index)
         block = self.function.append_basic_block(block_name)
