@@ -153,7 +153,7 @@ class BaseContext(object):
 
         self.defns = defaultdict(Overloads)
         self.attrs = defaultdict(Overloads)
-        self.generators = utils.UniqueDict()
+        self.generators = {}
 
         self.install_registry(builtin_registry)
 
