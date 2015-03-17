@@ -135,6 +135,13 @@ class TestGenerators(TestCase):
         self.assertIn("Cannot type generator: it does not yield any value",
                       str(cm.exception))
 
+    def test_gen5_objmode(self):
+        cr = compile_isolated(gen5, (), flags=forceobj_flags)
+        cgen = cr.entry_point()
+        self.assertEqual(list(cgen), [])
+        with self.assertRaises(StopIteration):
+            next(cgen)
+
     def check_consume_generator(self, gen_func):
         cgen = jit(nopython=True)(gen_func)
         cfunc = jit(nopython=True)(make_consumer(cgen))
