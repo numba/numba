@@ -41,6 +41,7 @@ def lift_loop(bytecode, dispatcher_factory):
     codetable = utils.SortedMap((i.offset, i) for i in outer)
     outerbc = CustomByteCode(func=bytecode.func,
                              func_qualname=bytecode.func_qualname,
+                             is_generator=bytecode.is_generator,
                              argspec=bytecode.argspec,
                              filename=bytecode.filename,
                              co_names=outernames,
@@ -240,6 +241,8 @@ def make_loop_bytecode(bytecode, loop, args, returns):
     # Custom bytecode object
     lbc = CustomByteCode(func=bytecode.func,
                          func_qualname=loop_qualname,
+                         # Enforced in separate_loops()
+                         is_generator=False,
                          argspec=argspec,
                          filename=bytecode.filename,
                          co_names=bytecode.co_names,
