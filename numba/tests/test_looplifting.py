@@ -84,6 +84,18 @@ def reject_gen1(x):
         # Inner is a generator => cannot loop-lift
         yield a[i]
 
+def reject_gen2(x):
+    # Outer needs object mode because of np.empty()
+    a = np.arange(3)
+    for i in range(a.size):
+        # Middle has a yield => cannot loop-lift
+        res = a[i] + x
+        for j in range(i):
+            # Inner is nopython-compliant, but the current algorithm isn't
+            # able to separate it.
+            res = res ** 2
+        yield res
+
 def reject_npm1(x):
     a = np.empty(3, dtype=np.int32)
     for i in range(a.size):
@@ -194,6 +206,9 @@ class TestLoopLifting(TestCase):
 
     def test_reject_gen1(self):
         self.check_no_lift_generator(reject_gen1, (types.intp,), (123,))
+
+    def test_reject_gen2(self):
+        self.check_no_lift_generator(reject_gen2, (types.intp,), (123,))
 
     def test_reject_npm1(self):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))

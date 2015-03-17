@@ -362,6 +362,8 @@ def separate_loops(bytecode, outer, loops):
     Stores list of loop instructions into `loops`.
     Both `outer` and `loops` are list-like (`append(item)` defined).
     """
+    # XXX When an outer loop is rejected, there may be an inner loop
+    # which would still allow lifting.
     endloop = None
     cur = None
     for inst in bytecode:
