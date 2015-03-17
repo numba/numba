@@ -186,6 +186,10 @@ class GeneratorDescriptor(FunctionDescriptor):
                    inline=True)
         return self
 
+    @property
+    def llvm_finalizer_name(self):
+        return 'finalize_' + self.mangled_name
+
 
 class ExternalFunctionDescriptor(FunctionDescriptor):
     """
@@ -258,13 +262,15 @@ class BaseLower(object):
 
     def lower(self):
         if self.generator_info is None:
-            self._lower_normal_function(self.fndesc)
+            self.lower_normal_function(self.fndesc)
         else:
             self.gentype = self.get_generator_type()
             self.gendesc = GeneratorDescriptor.from_generator_fndesc(
                 self.interp, self.fndesc, self.gentype, self.context.mangler)
-            self._lower_generator_init()
-            self._lower_generator_next()
+            self.lower_generator_init_func()
+            self.lower_generator_next_func()
+            if self.gentype.has_finalizer:
+                self.lower_generator_finalize_func()
 
         if config.DUMP_LLVM:
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
@@ -274,15 +280,8 @@ class BaseLower(object):
         # Materialize LLVM Module
         self.library.add_ir_module(self.module)
 
-    def _lower_normal_function(self, fndesc):
-        self.setup_function(fndesc)
-
-        # Init argument values
-        rawfnargs = self.call_conv.get_arguments(self.function)
-        arginfo = self.context.get_arg_packer(fndesc.argtypes)
-        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
-
-        # Init blocks
+    def _lower_function_body(self):
+        # Init Python blocks
         for offset in self.blocks:
             bname = "B%s" % offset
             self.blkmap[offset] = self.function.append_basic_block(bname)
@@ -298,6 +297,20 @@ class BaseLower(object):
             self.lower_block(block)
 
         self.post_lower()
+        return entry_block_tail
+
+    def lower_normal_function(self, fndesc):
+        """
+        Lower non-generator *fndesc*.
+        """
+        self.setup_function(fndesc)
+
+        # Init argument values
+        rawfnargs = self.call_conv.get_arguments(self.function)
+        arginfo = self.context.get_arg_packer(fndesc.argtypes)
+        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
+
+        entry_block_tail = self._lower_function_body()
 
         # Close tail of entry block
         self.builder.position_at_end(entry_block_tail)
@@ -306,7 +319,11 @@ class BaseLower(object):
         # Run target specific post lowering transformation
         self.context.post_lowering(self.function)
 
-    def _lower_generator_init(self):
+    def lower_generator_init_func(self):
+        """
+        Lower the generator's initialization function (which will fill up
+        the passed-by-reference generator structure).
+        """
         self.setup_function(self.fndesc)
 
         self.context.insert_generator(self.gentype, self.gendesc, [self.library])
@@ -333,7 +350,11 @@ class BaseLower(object):
 
         self.post_lower()
 
-    def _lower_generator_next(self):
+    def lower_generator_next_func(self):
+        """
+        Lower the generator's next() function (which takes the
+        passed-by-reference generator structure).
+        """
         self.setup_function(self.gendesc)
 
         assert self.gendesc.argtypes[0] == self.gentype
@@ -350,23 +371,8 @@ class BaseLower(object):
 
         prologue = self.function.append_basic_block("generator_prologue")
 
-        # Init Python blocks
-        for offset in self.blocks:
-            bname = "B%s" % offset
-            self.blkmap[offset] = self.function.append_basic_block(bname)
-
-        self.pre_lower()
-
-        # pre_lower() may have changed the current basic block
-        entry_block_tail = self.builder.basic_block
-
-        # Lower all Python blocks
-        for offset, block in self.blocks.items():
-            bb = self.blkmap[offset]
-            self.builder.position_at_end(bb)
-            self.lower_block(block)
-
-        self.post_lower()
+        # Lower the generator's Python code
+        entry_block_tail = self._lower_function_body()
 
         # Add block for StopIteration on entry
         stop_block = self.function.append_basic_block("stop_iteration")
@@ -390,6 +396,21 @@ class BaseLower(object):
 
         # Run target specific post lowering transformation
         self.context.post_lowering(self.function)
+
+    def lower_generator_finalize_func(self):
+        """
+        Lower the generator's finalizer.
+        """
+        fnty = Type.function(Type.void(),
+                             [self.context.get_value_type(self.gentype)])
+        self.function = self.module.get_or_insert_function(
+            fnty, name=self.gendesc.llvm_finalizer_name)
+        self.entry_block = self.function.append_basic_block('entry')
+        self.builder = Builder.new(self.entry_block)
+
+        genptrty = self.context.get_value_type(self.gentype)
+        genptr = self.builder.bitcast(self.function.args[0], genptrty)
+        self.lower_generator_finalize_body(genptr)
 
     def return_from_generator(self):
         indexval = Constant.int(self.resume_index_ptr.type.pointee, -1)

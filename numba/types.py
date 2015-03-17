@@ -506,18 +506,21 @@ class Generator(IteratorType):
     Type class for Numba-compiled generator objects.
     """
 
-    def __init__(self, gen_func, yield_type, arg_types, state_types):
+    def __init__(self, gen_func, yield_type, arg_types, state_types,
+                 has_finalizer):
         self.gen_func = gen_func
         self.arg_types = tuple(arg_types)
         self.state_types = tuple(state_types)
         self.yield_type = yield_type
-        name = "%s generator(func=%s, args=%s)" % (
-            self.yield_type, self.gen_func, self.arg_types)
+        self.has_finalizer = has_finalizer
+        name = "%s generator(func=%s, args=%s, has_finalizer=%s)" % (
+            self.yield_type, self.gen_func, self.arg_types,
+            self.has_finalizer)
         super(Generator, self).__init__(name, param=True)
 
     @property
     def key(self):
-        return self.gen_func, self.arg_types, self.yield_type
+        return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
 
 
 class NumpyFlatType(IteratorType):

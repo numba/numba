@@ -48,11 +48,45 @@ class PyLower(BaseLower):
             yield_type=types.pyobject,
             arg_types=(types.pyobject,) * len(self.interp.argspec.args),
             state_types=(types.pyobject,) * len(self.generator_info.state_vars),
+            has_finalizer=True,
             )
 
     def box_generator_struct(self, gen_struct):
         gen_ptr = cgutils.alloca_once_value(self.builder, gen_struct)
         return self.pyapi.from_native_generator(gen_ptr, self.gentype, self.envarg)
+
+    def init_generator_state(self):
+        """
+        NULL-initialize all generator state variables, to avoid spurious
+        decref's on cleanup.
+        """
+        self.builder.store(Constant.null(self.gen_state_ptr.type.pointee),
+                           self.gen_state_ptr)
+
+    def lower_generator_finalize_body(self, genptr):
+        self.pyapi = self.context.get_python_api(self.builder)
+        resume_index_ptr = cgutils.gep(self.builder, genptr, 0, 0,
+                                       name='gen.resume_index')
+        resume_index = self.builder.load(resume_index_ptr)
+        # If resume_index is 0, next() was never called
+        # If resume_index is -1, generator terminated cleanly
+        # (note function arguments are saved in state variables,
+        #  so they don't need a separate cleanup step)
+        need_cleanup = self.builder.icmp_signed(
+            '>', resume_index, Constant.int(resume_index.type, 0))
+
+        with cgutils.if_unlikely(self.builder, need_cleanup):
+            # Decref all live vars (some may be NULL)
+            gen_state_ptr = cgutils.gep(self.builder, genptr, 0, 2,
+                                        name='gen.state')
+            for state_index in range(len(self.gentype.state_types)):
+                state_slot = cgutils.gep(self.builder, gen_state_ptr,
+                                         0, state_index)
+                ty = self.gentype.state_types[state_index]
+                val = self.context.unpack_value(self.builder, ty, state_slot)
+                self.pyapi.decref(val)
+
+        self.builder.ret_void()
 
     def pre_lower(self):
         self.pyapi = self.context.get_python_api(self.builder)
@@ -182,6 +216,7 @@ class PyLower(BaseLower):
         # We also need to save live vars that are del'ed afterwards.
         live_vars = yp.live_vars | yp.weak_live_vars
         indices = [self.generator_info.state_vars.index(v) for v in live_vars]
+        self.init_generator_state()
         for state_index, name in zip(indices, live_vars):
             state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
                                      0, state_index)

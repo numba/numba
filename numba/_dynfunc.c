@@ -143,9 +143,12 @@ typedef struct {
     /* The dynamically-filled method definition for the PyCFunction object
        using this closure. */
     PyMethodDef def;
+    /* Arbitrary object to keep alive during the closure's lifetime.
+       (put a tuple to put several objects alive).
+       In practice, this helps keep the LLVM module and its generated
+       code alive. */
+    PyObject *keepalive;
     PyObject *weakreflist;
-    /* We could also store the LLVM function or engine here, to ensure
-       generated code is kept alive. */
 } ClosureObject;
 
 
@@ -153,6 +156,7 @@ static int
 closure_traverse(ClosureObject *clo, visitproc visit, void *arg)
 {
     Py_VISIT(clo->env);
+    Py_VISIT(clo->keepalive);
     return 0;
 }
 
@@ -165,6 +169,7 @@ closure_dealloc(ClosureObject *clo)
     PyObject_Free((void *) clo->def.ml_name);
     PyObject_Free((void *) clo->def.ml_doc);
     Py_XDECREF(clo->env);
+    Py_XDECREF(clo->keepalive);
     Py_TYPE(clo)->tp_free((PyObject *) clo);
 }
 
@@ -266,9 +271,11 @@ make_function(PyObject *self, PyObject *args)
     ClosureObject *closure;
     PyObject *funcobj;
     EnvironmentObject *env;
+    PyObject *keepalive;
 
-    if (!PyArg_ParseTuple(args, "OOOOO!",
-            &module, &fname, &fdoc, &fnaddrobj, &EnvironmentType, &env)) {
+    if (!PyArg_ParseTuple(args, "OOOOO!|O",
+            &module, &fname, &fdoc, &fnaddrobj, &EnvironmentType, &env,
+            &keepalive)) {
         return NULL;
     }
 
@@ -281,6 +288,8 @@ make_function(PyObject *self, PyObject *args)
         return NULL;
     Py_INCREF(env);
     closure->env = env;
+    Py_XINCREF(keepalive);
+    closure->keepalive = keepalive;
 
     funcobj = PyCFunction_NewEx(&closure->def, (PyObject *) closure, module);
     Py_DECREF(closure);
@@ -294,9 +303,12 @@ make_function(PyObject *self, PyObject *args)
  * Closure object.  This is required to simplify generation of Python wrappers.
  */
 
+typedef void (*gen_finalizer_t)(void *);
+
 typedef struct {
     CLOSURE_HEAD
     PyCFunctionWithKeywords nextfunc;
+    gen_finalizer_t finalizer;
     PyObject *weakreflist;
     union {
         double dummy;   /* Force alignment */
@@ -307,7 +319,21 @@ typedef struct {
 static int
 generator_traverse(GeneratorObject *gen, visitproc visit, void *arg)
 {
+    /* XXX this doesn't traverse the state, which can own references to
+       PyObjects */
     Py_VISIT(gen->env);
+    return 0;
+}
+
+static int
+generator_clear(GeneratorObject *gen)
+{
+    if (gen->finalizer != NULL) {
+        gen->finalizer(gen->state);
+        gen->finalizer = NULL;
+    }
+    Py_CLEAR(gen->env);
+    gen->nextfunc = NULL;
     return 0;
 }
 
@@ -317,6 +343,13 @@ generator_dealloc(GeneratorObject *gen)
     _PyObject_GC_UNTRACK((PyObject *) gen);
     if (gen->weakreflist != NULL)
         PyObject_ClearWeakRefs((PyObject *) gen);
+    /* XXX The finalizer may be called after the LLVM module has been
+       destroyed (typically at interpreter shutdown) */
+#if PY_MAJOR_VERSION >= 3
+    if (!_Py_Finalizing)
+#endif
+        if (gen->finalizer != NULL)
+            gen->finalizer(gen->state);
     Py_XDECREF(gen->env);
     Py_TYPE(gen)->tp_free((PyObject *) gen);
 }
@@ -324,7 +357,13 @@ generator_dealloc(GeneratorObject *gen)
 static PyObject *
 generator_iternext(GeneratorObject *gen)
 {
-    PyObject *res, *args = PyTuple_Pack(1, (PyObject *) gen);
+    PyObject *res, *args;
+    if (gen->nextfunc == NULL) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "cannot call next() on finalized generator");
+        return NULL;
+    }
+    args = PyTuple_Pack(1, (PyObject *) gen);
     if (args == NULL)
         return NULL;
     res = (*gen->nextfunc)((PyObject *) gen, args, NULL);
@@ -357,10 +396,11 @@ static PyTypeObject GeneratorType = {
     0,                                        /* tp_getattro*/
     0,                                        /* tp_setattro*/
     0,                                        /* tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,  /* tp_flags*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC
+                       | Py_TPFLAGS_BASETYPE,  /* tp_flags*/
     0,                                        /* tp_doc */
     (traverseproc) generator_traverse,        /* tp_traverse */
-    0,                                        /* tp_clear */
+    (inquiry) generator_clear,                /* tp_clear */
     0,                                        /* tp_richcompare */
     offsetof(GeneratorObject, weakreflist),   /* tp_weaklistoffset */
     PyObject_SelfIter,                        /* tp_iter */
@@ -383,6 +423,7 @@ static PyObject *
 Numba_make_generator(Py_ssize_t gen_state_size,
                      void *initial_state,
                      PyCFunctionWithKeywords nextfunc,
+                     gen_finalizer_t finalizer,
                      EnvironmentObject *env)
 {
     GeneratorObject *gen;
@@ -393,6 +434,7 @@ Numba_make_generator(Py_ssize_t gen_state_size,
     gen->nextfunc = nextfunc;
     Py_XINCREF(env);
     gen->env = env;
+    gen->finalizer = finalizer;
     return (PyObject *) gen;
 }
 

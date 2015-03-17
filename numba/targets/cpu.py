@@ -139,7 +139,10 @@ class CPUContext(BaseContext):
 
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],
-                                       fndesc.doc, fnptr, env)
+                                       fndesc.doc, fnptr, env,
+                                       # objects to keepalive with the function
+                                       (library,)
+                                       )
 
         return cfunc
 
