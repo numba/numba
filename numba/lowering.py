@@ -1,15 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import defaultdict
-import itertools
 import sys
-from types import ModuleType
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 
-from numba import (_dynfunc, ir, types, cgutils, utils, config,
-                   cffi_support, typing, six)
+from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
+               typing, utils)
 
 
 class LoweringError(Exception):
@@ -21,190 +18,6 @@ class LoweringError(Exception):
 
 class ForbiddenConstruct(LoweringError):
     pass
-
-
-def transform_arg_name(arg):
-    if isinstance(arg, types.Record):
-        return "Record_%s" % arg._code
-    elif (isinstance(arg, types.Array) and
-          isinstance(arg.dtype, types.Record)):
-        type_name = "array" if arg.mutable else "readonly array"
-        return ("%s(Record_%s, %sd, %s)"
-                % (type_name, arg.dtype._code, arg.ndim, arg.layout))
-    else:
-        return str(arg)
-
-
-def default_mangler(name, argtypes):
-    codedargs = '.'.join(transform_arg_name(a).replace(' ', '_')
-                             for a in argtypes)
-    return '.'.join([name, codedargs])
-
-
-# A dummy module for dynamically-generated functions
-_dynamic_modname = '<dynamic>'
-_dynamic_module = ModuleType(_dynamic_modname)
-_dynamic_module.__builtins__ = six.moves.builtins
-
-
-class FunctionDescriptor(object):
-    __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
-                 'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'mangled_name', 'unique_name', 'inline')
-
-    _unique_ids = itertools.count(1)
-
-    def __init__(self, native, modname, qualname, unique_name, doc,
-                 typemap, restype, calltypes, args, kws, mangler=None,
-                 argtypes=None, inline=False):
-        self.native = native
-        self.modname = modname
-        self.qualname = qualname
-        self.unique_name = unique_name
-        self.doc = doc
-        self.typemap = typemap
-        self.calltypes = calltypes
-        self.args = args
-        self.kws = kws
-        self.restype = restype
-        # Argument types
-        self.argtypes = argtypes or [self.typemap[a] for a in args]
-        mangler = default_mangler if mangler is None else mangler
-        # The mangled name *must* be unique, else the wrong function can
-        # be chosen at link time.
-        if self.modname:
-            self.mangled_name = mangler('%s.%s' % (self.modname, self.unique_name),
-                                        self.argtypes)
-        else:
-            self.mangled_name = mangler(self.unique_name, self.argtypes)
-        self.inline = inline
-
-    def lookup_module(self):
-        """
-        Return the module in which this function is supposed to exist.
-        This may be a dummy module if the function was dynamically
-        generated.
-        """
-        if self.modname == _dynamic_modname:
-            return _dynamic_module
-        else:
-            return sys.modules[self.modname]
-
-    @property
-    def llvm_func_name(self):
-        return self.mangled_name
-
-    @property
-    def llvm_cpython_wrapper_name(self):
-        return 'wrapper.' + self.mangled_name
-
-    def __repr__(self):
-        return "<function descriptor %r>" % (self.unique_name)
-
-    @classmethod
-    def _get_function_info(cls, interp):
-        """
-        Returns
-        -------
-        qualname, unique_name, modname, doc, args, kws, globals
-
-        ``unique_name`` must be a unique name.
-        """
-        func = interp.bytecode.func
-        qualname = interp.bytecode.func_qualname
-        modname = func.__module__
-        doc = func.__doc__ or ''
-        args = interp.argspec.args
-        kws = ()        # TODO
-
-        if modname is None:
-            # Dynamically generated function.
-            modname = _dynamic_modname
-
-        # Even the same function definition can be compiled into
-        # several different function objects with distinct closure
-        # variables, so we make sure to disambiguish using an unique id.
-        unique_name = "%s$%d" % (qualname, next(cls._unique_ids))
-
-        return qualname, unique_name, modname, doc, args, kws
-
-    @classmethod
-    def _from_python_function(cls, interp, typemap, restype, calltypes,
-                              native, mangler=None, inline=False):
-        (qualname, unique_name, modname, doc, args, kws,
-         )= cls._get_function_info(interp)
-        self = cls(native, modname, qualname, unique_name, doc,
-                   typemap, restype, calltypes,
-                   args, kws, mangler=mangler, inline=inline)
-        return self
-
-
-class PythonFunctionDescriptor(FunctionDescriptor):
-    __slots__ = ()
-
-    @classmethod
-    def from_specialized_function(cls, interp, typemap, restype, calltypes,
-                                  mangler, inline):
-        """
-        Build a FunctionDescriptor for a specialized Python function.
-        """
-        return cls._from_python_function(interp, typemap, restype, calltypes,
-                                         native=True, mangler=mangler,
-                                         inline=inline)
-
-    @classmethod
-    def from_object_mode_function(cls, interp):
-        """
-        Build a FunctionDescriptor for a Python function to be compiled
-        and executed in object mode.
-        """
-        typemap = defaultdict(lambda: types.pyobject)
-        calltypes = typemap.copy()
-        restype = types.pyobject
-        return cls._from_python_function(interp, typemap, restype, calltypes,
-                                         native=False)
-
-
-class GeneratorDescriptor(FunctionDescriptor):
-    __slots__ = ()
-
-    @classmethod
-    def from_generator_fndesc(cls, interp, fndesc, gentype, mangler):
-        """
-        Build a GeneratorDescriptor for the generator returned by the
-        function described by *fndesc*, with type *gentype*.
-        """
-        assert isinstance(gentype, types.Generator)
-        restype = gentype.yield_type
-        args = ['gen']
-        argtypes = [gentype]
-        qualname = fndesc.qualname + '.next'
-        unique_name = fndesc.unique_name + '.next'
-        self = cls(fndesc.native, fndesc.modname, qualname, unique_name,
-                   fndesc.doc, fndesc.typemap, restype, fndesc.calltypes,
-                   args, fndesc.kws, argtypes=argtypes, mangler=mangler,
-                   inline=True)
-        return self
-
-    @property
-    def llvm_finalizer_name(self):
-        return 'finalize_' + self.mangled_name
-
-
-class ExternalFunctionDescriptor(FunctionDescriptor):
-    """
-    A FunctionDescriptor subclass for opaque external functions
-    (e.g. raw C functions).
-    """
-    __slots__ = ()
-
-    def __init__(self, name, restype, argtypes):
-        args = ["arg%d" % i for i in range(len(argtypes))]
-        super(ExternalFunctionDescriptor, self).__init__(native=True,
-                modname=None, qualname=name, unique_name=name, doc='',
-                typemap=None, restype=restype, calltypes=None,
-                args=args, kws=None, mangler=lambda a, x: a,
-                argtypes=argtypes)
 
 
 class BaseLower(object):
@@ -363,190 +176,9 @@ class BaseLower(object):
         return self.fndesc.typemap[varname]
 
 
-class BaseGeneratorLower(object):
-
-    def __init__(self, lower):
-        self.context = lower.context
-        self.fndesc = lower.fndesc
-        self.library = lower.library
-        self.call_conv = lower.call_conv
-        self.interp = lower.interp
-
-        self.geninfo = lower.generator_info
-        self.gentype = self.get_generator_type()
-        self.gendesc = GeneratorDescriptor.from_generator_fndesc(
-            lower.interp, self.fndesc, self.gentype, self.context.mangler)
-
-        self.resume_blocks = {}
-
-    def lower_init_func(self, lower):
-        """
-        Lower the generator's initialization function (which will fill up
-        the passed-by-reference generator structure).
-        """
-        lower.setup_function(self.fndesc)
-        builder = lower.builder
-
-        # Insert the generator into the target context in order to allow
-        # calling from other Numba-compiled functions.
-        lower.context.insert_generator(self.gentype, self.gendesc,
-                                       [self.library])
-
-        # Init argument values
-        lower.extract_function_arguments()
-
-        lower.pre_lower()
-
-        # Initialize the return structure (i.e. the generator structure).
-        retty = self.context.get_return_type(self.gentype)
-        # Structure index #0: the initial resume index (0 == start of generator)
-        resume_index = self.context.get_constant(types.int32, 0)
-        # Structure index #1: the function arguments
-        argsty = retty.elements[1]
-        argsval = cgutils.make_anonymous_struct(builder, lower.fnargs,
-                                                argsty)
-        gen_struct = cgutils.make_anonymous_struct(builder,
-                                                   [resume_index, argsval],
-                                                   retty)
-        retval = self.box_generator_struct(lower, gen_struct)
-        self.call_conv.return_value(builder, retval)
-
-        lower.post_lower()
-
-    def lower_next_func(self, lower):
-        """
-        Lower the generator's next() function (which takes the
-        passed-by-reference generator structure and returns the next
-        yielded value).
-        """
-        lower.setup_function(self.gendesc)
-        assert self.gendesc.argtypes[0] == self.gentype
-        builder = lower.builder
-        function = lower.function
-
-        # Extract argument values and other information from generator struct
-        genptr, = self.call_conv.get_arguments(function)
-        for i, ty in enumerate(self.gentype.arg_types):
-            argptr = cgutils.gep(builder, genptr, 0, 1, i)
-            lower.fnargs[i] = self.context.unpack_value(builder, ty, argptr)
-        self.resume_index_ptr = cgutils.gep(builder, genptr, 0, 0,
-                                            name='gen.resume_index')
-        self.gen_state_ptr = cgutils.gep(builder, genptr, 0, 2,
-                                         name='gen.state')
-
-        prologue = function.append_basic_block("generator_prologue")
-
-        # Lower the generator's Python code
-        entry_block_tail = lower.lower_function_body()
-
-        # Add block for StopIteration on entry
-        stop_block = function.append_basic_block("stop_iteration")
-        builder.position_at_end(stop_block)
-        self.call_conv.return_stop_iteration(builder)
-
-        # Add prologue switch to resume blocks
-        builder.position_at_end(prologue)
-        # First Python block is also the resume point on first next() call
-        first_block = self.resume_blocks[0] = lower.blkmap[lower.firstblk]
-
-        # Create front switch to resume points
-        switch = builder.switch(builder.load(self.resume_index_ptr),
-                                stop_block)
-        for index, block in self.resume_blocks.items():
-            switch.add_case(index, block)
-
-        # Close tail of entry block
-        builder.position_at_end(entry_block_tail)
-        builder.branch(prologue)
-
-        # Run target specific post lowering transformation
-        self.context.post_lowering(function)
-
-    def lower_finalize_func(self, lower):
-        """
-        Lower the generator's finalizer.
-        """
-        fnty = Type.function(Type.void(),
-                             [self.context.get_value_type(self.gentype)])
-        function = lower.module.get_or_insert_function(
-            fnty, name=self.gendesc.llvm_finalizer_name)
-        entry_block = function.append_basic_block('entry')
-        builder = Builder.new(entry_block)
-
-        genptrty = self.context.get_value_type(self.gentype)
-        genptr = builder.bitcast(function.args[0], genptrty)
-        self.lower_finalize_func_body(builder, genptr)
-
-    def return_from_generator(self, lower):
-        """
-        Emit a StopIteration at generator end and mark the generator exhausted.
-        """
-        indexval = Constant.int(self.resume_index_ptr.type.pointee, -1)
-        lower.builder.store(indexval, self.resume_index_ptr)
-        self.call_conv.return_stop_iteration(lower.builder)
-
-    def create_resumption_block(self, lower, index):
-        block_name = "generator_resume%d" % (index,)
-        block = lower.function.append_basic_block(block_name)
-        lower.builder.position_at_end(block)
-        self.resume_blocks[index] = block
-
-
-
-class GeneratorLower(BaseGeneratorLower):
-
-    def get_generator_type(self):
-        return self.fndesc.restype
-
-    def box_generator_struct(self, lower, gen_struct):
-        return gen_struct
-
-
-class LowerYield(object):
-
-    def __init__(self, lower, yield_point, live_vars):
-        self.lower = lower
-        self.context = lower.context
-        self.builder = lower.builder
-        self.genlower = lower.genlower
-        self.gentype = self.genlower.gentype
-
-        self.gen_state_ptr = self.genlower.gen_state_ptr
-        self.resume_index_ptr = self.genlower.resume_index_ptr
-        self.yp = yield_point
-        self.inst = self.yp.inst
-        self.live_vars = live_vars
-        self.live_var_indices = [lower.generator_info.state_vars.index(v)
-                                 for v in live_vars]
-
-    def lower_yield_suspend(self):
-        # Save live vars in state
-        for state_index, name in zip(self.live_var_indices, self.live_vars):
-            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
-                                     0, state_index)
-            ty = self.gentype.state_types[state_index]
-            val = self.lower.loadvar(name)
-            self.context.pack_value(self.builder, ty, val, state_slot)
-        # Save resume index
-        indexval = Constant.int(self.resume_index_ptr.type.pointee,
-                                self.inst.index)
-        self.builder.store(indexval, self.resume_index_ptr)
-
-    def lower_yield_resume(self):
-        # Emit resumption point
-        self.genlower.create_resumption_block(self.lower, self.inst.index)
-        # Reload live vars from state
-        for state_index, name in zip(self.live_var_indices, self.live_vars):
-            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
-                                     0, state_index)
-            ty = self.gentype.state_types[state_index]
-            val = self.context.unpack_value(self.builder, ty, state_slot)
-            self.lower.storevar(val, name)
-
-
 class Lower(BaseLower):
 
-    GeneratorLower = GeneratorLower
+    GeneratorLower = generators.GeneratorLower
 
     def lower_inst(self, inst):
         if config.DEBUG_JIT:
@@ -704,7 +336,7 @@ class Lower(BaseLower):
     def lower_yield(self, retty, inst):
         yp = self.generator_info.yield_points[inst.index]
         assert yp.inst is inst
-        y = LowerYield(self, yp, yp.live_vars)
+        y = generators.LowerYield(self, yp, yp.live_vars)
         y.lower_yield_suspend()
         # Yield to caller
         val = self.loadvar(inst.value.name)
@@ -785,7 +417,7 @@ class Lower(BaseLower):
 
             if isinstance(fnty, types.ExternalFunction):
                 # Handle a named external function
-                fndesc = ExternalFunctionDescriptor(
+                fndesc = funcdesc.ExternalFunctionDescriptor(
                     fnty.symbol, fnty.sig.return_type, fnty.sig.args)
                 func = self.context.declare_external_function(
                         cgutils.get_module(self.builder), fndesc)
@@ -953,12 +585,6 @@ class Lower(BaseLower):
             return castval
 
         raise NotImplementedError(expr)
-
-    def get_generator_type(self):
-        return self.fndesc.restype
-
-    def box_generator_struct(self, gen_struct):
-        return gen_struct
 
     def getvar(self, name):
         return self.varmap[name]

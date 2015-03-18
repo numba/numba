@@ -7,9 +7,10 @@ from pprint import pprint
 import sys
 import warnings
 
-from numba import (bytecode, interpreter, typing, typeinfer, lowering,
-                   objmode, irpasses, utils, config, type_annotations,
-                   types, ir, assume, looplifting, macro, types)
+from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
+                   lowering, objmode, irpasses, utils, config,
+                   type_annotations, types, ir, assume, looplifting, macro,
+                   types)
 from numba.targets import cpu
 
 
@@ -685,7 +686,7 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 def native_lowering_stage(targetctx, library, interp, typemap, restype,
                           calltypes, flags):
     # Lowering
-    fndesc = lowering.PythonFunctionDescriptor.from_specialized_function(
+    fndesc = funcdesc.PythonFunctionDescriptor.from_specialized_function(
         interp, typemap, restype, calltypes, mangler=targetctx.mangler,
         inline=flags.forceinline)
 
@@ -709,7 +710,7 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
-    fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
+    fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(interp)
     lower = objmode.PyLower(targetctx, library, fndesc, interp)
     lower.lower()
     if not flags.no_cpython_wrapper:

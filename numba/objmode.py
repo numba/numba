@@ -7,9 +7,8 @@ from __future__ import print_function, division, absolute_import
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import cgutils, ir, types, utils
-from .lowering import (BaseLower, BaseGeneratorLower,
-                       ForbiddenConstruct, LowerYield)
+from . import cgutils, generators, ir, types, utils
+from .lowering import BaseLower, ForbiddenConstruct
 from .utils import builtins
 
 
@@ -35,62 +34,9 @@ PYTHON_OPMAP = {
 }
 
 
-class PyGeneratorLower(BaseGeneratorLower):
-
-    def get_generator_type(self):
-        return types.Generator(
-            gen_func=self.interp.bytecode.func,
-            yield_type=types.pyobject,
-            arg_types=(types.pyobject,) * len(self.interp.argspec.args),
-            state_types=(types.pyobject,) * len(self.geninfo.state_vars),
-            has_finalizer=True,
-            )
-
-    def box_generator_struct(self, lower, gen_struct):
-        gen_ptr = cgutils.alloca_once_value(lower.builder, gen_struct)
-        return lower.pyapi.from_native_generator(gen_ptr, self.gentype, lower.envarg)
-
-    def init_generator_state(self, lower):
-        """
-        NULL-initialize all generator state variables, to avoid spurious
-        decref's on cleanup.
-        """
-        lower.builder.store(Constant.null(self.gen_state_ptr.type.pointee),
-                            self.gen_state_ptr)
-
-    def lower_finalize_func_body(self, builder, genptr):
-        """
-        Lower the body of the generator's finalizer: decref all live
-        state variables.
-        """
-        pyapi = self.context.get_python_api(builder)
-        resume_index_ptr = cgutils.gep(builder, genptr, 0, 0,
-                                       name='gen.resume_index')
-        resume_index = builder.load(resume_index_ptr)
-        # If resume_index is 0, next() was never called
-        # If resume_index is -1, generator terminated cleanly
-        # (note function arguments are saved in state variables,
-        #  so they don't need a separate cleanup step)
-        need_cleanup = builder.icmp_signed(
-            '>', resume_index, Constant.int(resume_index.type, 0))
-
-        with cgutils.if_unlikely(builder, need_cleanup):
-            # Decref all live vars (some may be NULL)
-            gen_state_ptr = cgutils.gep(builder, genptr, 0, 2,
-                                        name='gen.state')
-            for state_index in range(len(self.gentype.state_types)):
-                state_slot = cgutils.gep(builder, gen_state_ptr,
-                                         0, state_index)
-                ty = self.gentype.state_types[state_index]
-                val = self.context.unpack_value(builder, ty, state_slot)
-                pyapi.decref(val)
-
-        builder.ret_void()
-
-
 class PyLower(BaseLower):
 
-    GeneratorLower = PyGeneratorLower
+    GeneratorLower = generators.PyGeneratorLower
 
     def init(self):
         # Strings to be frozen into the Environment object
@@ -226,7 +172,7 @@ class PyLower(BaseLower):
 
         # Save live vars in state
         # We also need to save live vars that are del'ed afterwards.
-        y = LowerYield(self, yp, yp.live_vars | yp.weak_live_vars)
+        y = generators.LowerYield(self, yp, yp.live_vars | yp.weak_live_vars)
         y.lower_yield_suspend()
         # Yield to caller
         val = self.loadvar(inst.value.name)
