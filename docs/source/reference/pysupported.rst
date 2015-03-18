@@ -23,6 +23,7 @@ some language features are not available inside Numba-compiled functions:
 * Class definition
 * Exception handling (``try .. except``, ``try .. finally``)
 * Context management (the ``with`` statement)
+* Generator delegation (``yield from``)
 
 The ``raise`` statement is supported in several forms:
 
@@ -39,6 +40,13 @@ Function calls
 
 Numba supports function calls using positional and named arguments.
 ``*args`` and ``**kwargs`` are not supported.
+
+Generators
+----------
+
+Numba supports generator functions and is able to compile them in
+:term:`object mode` and :term:`nopython mode`.  The returned generator
+can be used both from Numba-compiled code and from regular Python code.
 
 
 Built-in types
