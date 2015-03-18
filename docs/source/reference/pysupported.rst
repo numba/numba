@@ -23,6 +23,7 @@ some language features are not available inside Numba-compiled functions:
 * Class definition
 * Exception handling (``try .. except``, ``try .. finally``)
 * Context management (the ``with`` statement)
+* Comprehensions (either list, dict, set or generator comprehensions)
 * Generator delegation (``yield from``)
 
 The ``raise`` statement is supported in several forms:
