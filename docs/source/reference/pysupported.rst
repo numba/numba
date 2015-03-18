@@ -48,6 +48,10 @@ Numba supports generator functions and is able to compile them in
 :term:`object mode` and :term:`nopython mode`.  The returned generator
 can be used both from Numba-compiled code and from regular Python code.
 
+Coroutine features of generators are not supported (i.e. the
+:meth:`generator.send`, :meth:`generator.throw`, :meth:`generator.close`
+methods).
+
 
 Built-in types
 ==============
