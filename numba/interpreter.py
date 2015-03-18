@@ -464,6 +464,16 @@ class Interpreter(object):
             print('label %s:' % (offset,), file=file)
             block.dump(file=file)
 
+    def dump_generator_info(self, file=None):
+        file = file or sys.stdout
+        gi = self.generator_info
+        print("generator state variables:", sorted(gi.state_vars), file=file)
+        for index, yp in sorted(gi.yield_points.items()):
+            print("yield point #%d: live variables = %s, weak live variables = %s"
+                  % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
+                  file=file)
+
+
     # --- Scope operations ---
 
     def store(self, value, name, redefine=False):

@@ -642,6 +642,9 @@ def translate_stage(bytecode):
     if config.DEBUG or config.DUMP_IR:
         print(("IR DUMP: %s" % interp.bytecode.func_qualname).center(80, "-"))
         interp.dump()
+        if interp.generator_info:
+            print(("GENERATOR INFO: %s" % interp.bytecode.func_qualname).center(80, "-"))
+            interp.dump_generator_info()
 
     expanded = macro.expand_macros(interp.blocks)
 
