@@ -12,7 +12,7 @@ document explains some of the implementation choices.
 Terminology
 ===========
 
-For clarity, we will distinguish between *generator functions* and
+For clarity, we distinguish between *generator functions* and
 *generators*.  A generator function is a function containing one or
 several ``yield`` statements.  A generator (sometimes also called "generator
 iterator") is the return value of a generator function; it resumes
@@ -99,8 +99,8 @@ the generator simply involves the inverse operation: the live variables
 are restored from the saved generator state.
 
 .. note::
-   It is the same analysis which inserts Numba ``del`` instructions where
-   appropriate.
+   It is the same analysis which helps insert Numba ``del`` instructions
+   where appropriate.
 
 Let's go over the generator info again::
 
@@ -108,9 +108,10 @@ Let's go over the generator info again::
    yield point #1: live variables = ['x', 'y'], weak live variables = ['$0.3']
    yield point #2: live variables = [], weak live variables = ['$0.7']
 
-Numba has computed the union of all state variables.  This will help
-define the layout of the :ref:`generator structure <generator-structure>`.
-Also, for each yield point, we have computed two sets of variables:
+Numba has computed the union of all live variables (denoted as "state
+variables").  This will help define the layout of the :ref:`generator
+structure <generator-structure>`.  Also, for each yield point, we have
+computed two sets of variables:
 
 * the *live variables* are the variables which are used by code following
   the resumption point (i.e. after the ``yield`` statement)
@@ -183,12 +184,12 @@ function is called with floating-point numbers) is then::
       }
    }
 
-Note that here, the storage for ``x`` and ``y`` is redundant: Numba isn't
-able to recognize that the state variables ``x`` and ``y`` are already
-stored in the arguments structure.
+Note that here, saving ``x`` and ``y`` is redundant: Numba isn't able to
+recognize that the state variables ``x`` and ``y`` have the same value
+as ``arg0`` and ``arg1``.
 
-Persistence
------------
+Allocation
+----------
 
 How does Numba ensure the generator structure is preserved long enough?
 There are two cases:
@@ -253,8 +254,7 @@ structure.  Here is how the function start may look like in our example:
 
      ; rest of the function snipped
 
-(I've trimmed uninteresting stuff from the LLVM IR to make it more
-readable)
+(uninteresting stuff trimmed from the LLVM IR to make it more readable)
 
 We recognize the pointer to the generator structure in ``%arg.gen``.
 The trampoline switch has three targets (one for each *resume index* 0, 1
