@@ -99,10 +99,8 @@ the generator simply involves the inverse operation: the live variables
 are restored from the saved generator state.
 
 .. note::
-   It is the same analysis which allows us to insert Numba ``del``
-   instructions where appropriate: those instructions ensure references are
-   not leaked in :term:`object mode`, where each value is an owned reference
-   to a PyObject.
+   It is the same analysis which inserts Numba ``del`` instructions where
+   appropriate.
 
 Let's go over the generator info again::
 
@@ -270,8 +268,9 @@ may look like this (on x86-64):
 
 .. code-block:: asm
 
-           .globl  "__main__.gen.next"
+           .globl  __main__.gen.next
            .align  16, 0x90
+   __main__.gen.next:
            movl    (%rcx), %eax
            cmpl    $2, %eax
            je      .LBB1_5
