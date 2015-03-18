@@ -695,7 +695,6 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         lower.create_cpython_wrapper(flags.release_gil)
     env = lower.env
     call_helper = lower.call_helper
-    gendesc = lower.gendesc
     del lower
 
     if flags.no_compile:

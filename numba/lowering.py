@@ -215,7 +215,6 @@ class BaseLower(object):
         self.context = context
         self.library = library
         self.fndesc = fndesc
-        self.gendesc = None
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
         self.interp = interp
         self.call_conv = context.call_conv
@@ -234,7 +233,6 @@ class BaseLower(object):
         self.varmap = {}
         self.firstblk = min(self.blocks.keys())
         self.loc = -1
-        self.resume_blocks = {}
 
         # Subclass initialization
         self.init()
@@ -262,15 +260,16 @@ class BaseLower(object):
 
     def lower(self):
         if self.generator_info is None:
+            self.genlower = None
             self.lower_normal_function(self.fndesc)
         else:
-            self.gentype = self.get_generator_type()
-            self.gendesc = GeneratorDescriptor.from_generator_fndesc(
-                self.interp, self.fndesc, self.gentype, self.context.mangler)
-            self.lower_generator_init_func()
-            self.lower_generator_next_func()
+            self.genlower = self.GeneratorLower(self)
+            self.gentype = self.genlower.gentype
+
+            self.genlower.lower_init_func(self)
+            self.genlower.lower_next_func(self)
             if self.gentype.has_finalizer:
-                self.lower_generator_finalize_func()
+                self.genlower.lower_finalize_func(self)
 
         if config.DUMP_LLVM:
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
@@ -280,7 +279,33 @@ class BaseLower(object):
         # Materialize LLVM Module
         self.library.add_ir_module(self.module)
 
-    def _lower_function_body(self):
+    def extract_function_arguments(self):
+        rawfnargs = self.call_conv.get_arguments(self.function)
+        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
+        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
+        return self.fnargs
+
+    def lower_normal_function(self, fndesc):
+        """
+        Lower non-generator *fndesc*.
+        """
+        self.setup_function(fndesc)
+
+        # Init argument values
+        self.extract_function_arguments()
+        entry_block_tail = self.lower_function_body()
+
+        # Close tail of entry block
+        self.builder.position_at_end(entry_block_tail)
+        self.builder.branch(self.blkmap[self.firstblk])
+
+        # Run target specific post lowering transformation
+        self.context.post_lowering(self.function)
+
+    def lower_function_body(self):
+        """
+        Lower the current function's body, and return the entry block.
+        """
         # Init Python blocks
         for offset in self.blocks:
             bname = "B%s" % offset
@@ -299,138 +324,10 @@ class BaseLower(object):
         self.post_lower()
         return entry_block_tail
 
-    def lower_normal_function(self, fndesc):
-        """
-        Lower non-generator *fndesc*.
-        """
-        self.setup_function(fndesc)
-
-        # Init argument values
-        rawfnargs = self.call_conv.get_arguments(self.function)
-        arginfo = self.context.get_arg_packer(fndesc.argtypes)
-        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
-
-        entry_block_tail = self._lower_function_body()
-
-        # Close tail of entry block
-        self.builder.position_at_end(entry_block_tail)
-        self.builder.branch(self.blkmap[self.firstblk])
-
-        # Run target specific post lowering transformation
-        self.context.post_lowering(self.function)
-
-    def lower_generator_init_func(self):
-        """
-        Lower the generator's initialization function (which will fill up
-        the passed-by-reference generator structure).
-        """
-        self.setup_function(self.fndesc)
-
-        self.context.insert_generator(self.gentype, self.gendesc, [self.library])
-
-        # Init argument values
-        rawfnargs = self.call_conv.get_arguments(self.function)
-        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
-        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
-
-        self.pre_lower()
-
-        model = self.context.data_model_manager[self.gentype]
-
-        retty = self.context.get_return_type(self.gentype)
-        argsty = retty.elements[1]
-        argsval = cgutils.make_anonymous_struct(self.builder, self.fnargs,
-                                                argsty)
-        resume_index = self.context.get_constant(types.int32, 0)
-        gen_struct = cgutils.make_anonymous_struct(self.builder,
-                                                   [resume_index, argsval],
-                                                   retty)
-        retval = self.box_generator_struct(gen_struct)
-        self.call_conv.return_value(self.builder, retval)
-
-        self.post_lower()
-
-    def lower_generator_next_func(self):
-        """
-        Lower the generator's next() function (which takes the
-        passed-by-reference generator structure).
-        """
-        self.setup_function(self.gendesc)
-
-        assert self.gendesc.argtypes[0] == self.gentype
-
-        # Extract argument values and other information from generator struct
-        genptr, = self.call_conv.get_arguments(self.function)
-        for i, ty in enumerate(self.gentype.arg_types):
-            argptr = cgutils.gep(self.builder, genptr, 0, 1, i)
-            self.fnargs[i] = self.context.unpack_value(self.builder, ty, argptr)
-        self.resume_index_ptr = cgutils.gep(self.builder, genptr, 0, 0,
-                                            name='gen.resume_index')
-        self.gen_state_ptr = cgutils.gep(self.builder, genptr, 0, 2,
-                                         name='gen.state')
-
-        prologue = self.function.append_basic_block("generator_prologue")
-
-        # Lower the generator's Python code
-        entry_block_tail = self._lower_function_body()
-
-        # Add block for StopIteration on entry
-        stop_block = self.function.append_basic_block("stop_iteration")
-        self.builder.position_at_end(stop_block)
-        self.call_conv.return_stop_iteration(self.builder)
-
-        # Add prologue switch to resume blocks
-        self.builder.position_at_end(prologue)
-        # First Python block is also the resume point on first next() call
-        first_block = self.resume_blocks[0] = self.blkmap[self.firstblk]
-
-        # Create resume points
-        switch = self.builder.switch(self.builder.load(self.resume_index_ptr),
-                                     stop_block)
-        for index, block in self.resume_blocks.items():
-            switch.add_case(index, block)
-
-        # Close tail of entry block
-        self.builder.position_at_end(entry_block_tail)
-        self.builder.branch(prologue)
-
-        # Run target specific post lowering transformation
-        self.context.post_lowering(self.function)
-
-    def lower_generator_finalize_func(self):
-        """
-        Lower the generator's finalizer.
-        """
-        fnty = Type.function(Type.void(),
-                             [self.context.get_value_type(self.gentype)])
-        self.function = self.module.get_or_insert_function(
-            fnty, name=self.gendesc.llvm_finalizer_name)
-        self.entry_block = self.function.append_basic_block('entry')
-        self.builder = Builder.new(self.entry_block)
-
-        genptrty = self.context.get_value_type(self.gentype)
-        genptr = self.builder.bitcast(self.function.args[0], genptrty)
-        self.lower_generator_finalize_body(genptr)
-
-    def return_from_generator(self):
-        indexval = Constant.int(self.resume_index_ptr.type.pointee, -1)
-        self.builder.store(indexval, self.resume_index_ptr)
-        self.call_conv.return_stop_iteration(self.builder)
-        return
-
-    def create_cpython_wrapper(self, release_gil=False):
-        """
-        Create CPython wrapper(s).
-        """
-        if self.gendesc:
-            self.context.create_cpython_wrapper(self.library, self.gendesc,
-                                                self.call_helper,
-                                                release_gil=release_gil)
-        self.context.create_cpython_wrapper(self.library, self.fndesc,
-                                            self.call_helper,
-                                            release_gil=release_gil)
-
     def lower_block(self, block):
+        """
+        Lower the given block.
+        """
         self.pre_block(block)
         for inst in block.body:
             self.loc = inst.loc
@@ -441,6 +338,19 @@ class BaseLower(object):
             except Exception as e:
                 msg = "Internal error:\n%s: %s" % (type(e).__name__, e)
                 raise LoweringError(msg, inst.loc)
+
+    def create_cpython_wrapper(self, release_gil=False):
+        """
+        Create CPython wrapper(s) around this function (or generator).
+        """
+        if self.genlower:
+            self.context.create_cpython_wrapper(self.library,
+                                                self.genlower.gendesc,
+                                                self.call_helper,
+                                                release_gil=release_gil)
+        self.context.create_cpython_wrapper(self.library, self.fndesc,
+                                            self.call_helper,
+                                            release_gil=release_gil)
 
     def setup_function(self, fndesc):
         # Setup function
@@ -453,7 +363,190 @@ class BaseLower(object):
         return self.fndesc.typemap[varname]
 
 
+class BaseGeneratorLower(object):
+
+    def __init__(self, lower):
+        self.context = lower.context
+        self.fndesc = lower.fndesc
+        self.library = lower.library
+        self.call_conv = lower.call_conv
+        self.interp = lower.interp
+
+        self.geninfo = lower.generator_info
+        self.gentype = self.get_generator_type()
+        self.gendesc = GeneratorDescriptor.from_generator_fndesc(
+            lower.interp, self.fndesc, self.gentype, self.context.mangler)
+
+        self.resume_blocks = {}
+
+    def lower_init_func(self, lower):
+        """
+        Lower the generator's initialization function (which will fill up
+        the passed-by-reference generator structure).
+        """
+        lower.setup_function(self.fndesc)
+        builder = lower.builder
+
+        # Insert the generator into the target context in order to allow
+        # calling from other Numba-compiled functions.
+        lower.context.insert_generator(self.gentype, self.gendesc,
+                                       [self.library])
+
+        # Init argument values
+        lower.extract_function_arguments()
+
+        lower.pre_lower()
+
+        # Initialize the return structure (i.e. the generator structure).
+        retty = self.context.get_return_type(self.gentype)
+        # Structure index #0: the initial resume index (0 == start of generator)
+        resume_index = self.context.get_constant(types.int32, 0)
+        # Structure index #1: the function arguments
+        argsty = retty.elements[1]
+        argsval = cgutils.make_anonymous_struct(builder, lower.fnargs,
+                                                argsty)
+        gen_struct = cgutils.make_anonymous_struct(builder,
+                                                   [resume_index, argsval],
+                                                   retty)
+        retval = self.box_generator_struct(lower, gen_struct)
+        self.call_conv.return_value(builder, retval)
+
+        lower.post_lower()
+
+    def lower_next_func(self, lower):
+        """
+        Lower the generator's next() function (which takes the
+        passed-by-reference generator structure and returns the next
+        yielded value).
+        """
+        lower.setup_function(self.gendesc)
+        assert self.gendesc.argtypes[0] == self.gentype
+        builder = lower.builder
+        function = lower.function
+
+        # Extract argument values and other information from generator struct
+        genptr, = self.call_conv.get_arguments(function)
+        for i, ty in enumerate(self.gentype.arg_types):
+            argptr = cgutils.gep(builder, genptr, 0, 1, i)
+            lower.fnargs[i] = self.context.unpack_value(builder, ty, argptr)
+        self.resume_index_ptr = cgutils.gep(builder, genptr, 0, 0,
+                                            name='gen.resume_index')
+        self.gen_state_ptr = cgutils.gep(builder, genptr, 0, 2,
+                                         name='gen.state')
+
+        prologue = function.append_basic_block("generator_prologue")
+
+        # Lower the generator's Python code
+        entry_block_tail = lower.lower_function_body()
+
+        # Add block for StopIteration on entry
+        stop_block = function.append_basic_block("stop_iteration")
+        builder.position_at_end(stop_block)
+        self.call_conv.return_stop_iteration(builder)
+
+        # Add prologue switch to resume blocks
+        builder.position_at_end(prologue)
+        # First Python block is also the resume point on first next() call
+        first_block = self.resume_blocks[0] = lower.blkmap[lower.firstblk]
+
+        # Create front switch to resume points
+        switch = builder.switch(builder.load(self.resume_index_ptr),
+                                stop_block)
+        for index, block in self.resume_blocks.items():
+            switch.add_case(index, block)
+
+        # Close tail of entry block
+        builder.position_at_end(entry_block_tail)
+        builder.branch(prologue)
+
+        # Run target specific post lowering transformation
+        self.context.post_lowering(function)
+
+    def lower_finalize_func(self, lower):
+        """
+        Lower the generator's finalizer.
+        """
+        fnty = Type.function(Type.void(),
+                             [self.context.get_value_type(self.gentype)])
+        function = lower.module.get_or_insert_function(
+            fnty, name=self.gendesc.llvm_finalizer_name)
+        entry_block = function.append_basic_block('entry')
+        builder = Builder.new(entry_block)
+
+        genptrty = self.context.get_value_type(self.gentype)
+        genptr = builder.bitcast(function.args[0], genptrty)
+        self.lower_finalize_func_body(builder, genptr)
+
+    def return_from_generator(self, lower):
+        """
+        Emit a StopIteration at generator end and mark the generator exhausted.
+        """
+        indexval = Constant.int(self.resume_index_ptr.type.pointee, -1)
+        lower.builder.store(indexval, self.resume_index_ptr)
+        self.call_conv.return_stop_iteration(lower.builder)
+
+    def create_resumption_block(self, lower, index):
+        block_name = "generator_resume%d" % (index,)
+        block = lower.function.append_basic_block(block_name)
+        lower.builder.position_at_end(block)
+        self.resume_blocks[index] = block
+
+
+
+class GeneratorLower(BaseGeneratorLower):
+
+    def get_generator_type(self):
+        return self.fndesc.restype
+
+    def box_generator_struct(self, lower, gen_struct):
+        return gen_struct
+
+
+class LowerYield(object):
+
+    def __init__(self, lower, yield_point, live_vars):
+        self.lower = lower
+        self.context = lower.context
+        self.builder = lower.builder
+        self.genlower = lower.genlower
+        self.gentype = self.genlower.gentype
+
+        self.gen_state_ptr = self.genlower.gen_state_ptr
+        self.resume_index_ptr = self.genlower.resume_index_ptr
+        self.yp = yield_point
+        self.inst = self.yp.inst
+        self.live_vars = live_vars
+        self.live_var_indices = [lower.generator_info.state_vars.index(v)
+                                 for v in live_vars]
+
+    def lower_yield_suspend(self):
+        # Save live vars in state
+        for state_index, name in zip(self.live_var_indices, self.live_vars):
+            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
+                                     0, state_index)
+            ty = self.gentype.state_types[state_index]
+            val = self.lower.loadvar(name)
+            self.context.pack_value(self.builder, ty, val, state_slot)
+        # Save resume index
+        indexval = Constant.int(self.resume_index_ptr.type.pointee,
+                                self.inst.index)
+        self.builder.store(indexval, self.resume_index_ptr)
+
+    def lower_yield_resume(self):
+        # Emit resumption point
+        self.genlower.create_resumption_block(self.lower, self.inst.index)
+        # Reload live vars from state
+        for state_index, name in zip(self.live_var_indices, self.live_vars):
+            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
+                                     0, state_index)
+            ty = self.gentype.state_types[state_index]
+            val = self.context.unpack_value(self.builder, ty, state_slot)
+            self.lower.storevar(val, name)
+
+
 class Lower(BaseLower):
+
+    GeneratorLower = GeneratorLower
 
     def lower_inst(self, inst):
         if config.DEBUG_JIT:
@@ -480,7 +573,7 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.Return):
             if self.generator_info:
                 # StopIteration
-                self.return_from_generator()
+                self.genlower.return_from_generator(self)
                 return
             val = self.loadvar(inst.value.name)
             oty = self.typeof(inst.value.name)
@@ -611,34 +704,17 @@ class Lower(BaseLower):
     def lower_yield(self, retty, inst):
         yp = self.generator_info.yield_points[inst.index]
         assert yp.inst is inst
-        # Save live vars in state
-        live_vars = yp.live_vars
-        indices = [self.generator_info.state_vars.index(v) for v in live_vars]
-        for state_index, name in zip(indices, live_vars):
-            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
-                                     0, state_index)
-            ty = self.gentype.state_types[state_index]
-            self.context.pack_value(self.builder, ty, self.loadvar(name), state_slot)
-        # Save resume index
-        indexval = Constant.int(self.resume_index_ptr.type.pointee, inst.index)
-        self.builder.store(indexval, self.resume_index_ptr)
+        y = LowerYield(self, yp, yp.live_vars)
+        y.lower_yield_suspend()
         # Yield to caller
         val = self.loadvar(inst.value.name)
         typ = self.typeof(inst.value.name)
         val = self.context.cast(self.builder, val, typ, self.gentype.yield_type)
         self.call_conv.return_value(self.builder, val)
-        # Emit resumption point
-        block_name = "generator_resume%d" % (inst.index)
-        block = self.function.append_basic_block(block_name)
-        self.builder.position_at_end(block)
-        self.resume_blocks[inst.index] = block
-        # Reload live vars from state
-        for state_index, name in zip(indices, live_vars):
-            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
-                                     0, state_index)
-            ty = self.gentype.state_types[state_index]
-            val = self.context.unpack_value(self.builder, ty, state_slot)
-            self.storevar(val, name)
+
+        # Resumption point
+        y.lower_yield_resume()
+        # None is returned by the yield expression
         return self.context.get_constant_generic(self.builder, retty, None)
 
     def lower_binop(self, resty, expr):
