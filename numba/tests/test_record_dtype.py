@@ -6,7 +6,7 @@ import numpy as np
 from numba import jit, numpy_support, types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba.lowering import transform_arg_name
+from numba.funcdesc import transform_arg_name
 from numba.utils import IS_PY3
 
 
