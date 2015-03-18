@@ -504,6 +504,8 @@ MOD_INIT(_dynfunc) {
     PyModule_AddObject(m, "_Closure", (PyObject *) (&ClosureType));
     Py_INCREF(&EnvironmentType);
     PyModule_AddObject(m, "Environment", (PyObject *) (&EnvironmentType));
+    Py_INCREF(&GeneratorType);
+    PyModule_AddObject(m, "_Generator", (PyObject *) (&GeneratorType));
 
     PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
 
