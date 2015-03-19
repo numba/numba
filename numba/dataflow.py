@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import collections
 from pprint import pprint
 import warnings
+import sys
 
 from numba import utils
 
@@ -190,6 +191,9 @@ class DataFlowAnalysis(object):
         target = info.pop()
         info.append(inst, target=target)
 
+    def op_DELETE_FAST(self, info, inst):
+        info.append(inst)
+
     def op_STORE_FAST(self, info, inst):
         value = info.pop()
         info.append(inst, value=value)
@@ -201,9 +205,13 @@ class DataFlowAnalysis(object):
         info.append(inst, dct=dct, key=key, value=value)
 
     def op_LIST_APPEND(self, info, inst):
-       index = inst.arg - 1
        value = info.pop()
-       target = info.peek(index)
+       # Python 2.7+ added an argument to LIST_APPEND.
+       if sys.version_info[:2] == (2, 6):
+          target = info.pop()
+       else:
+          index = inst.arg - 1
+          target = info.peek(index)
        appendvar = info.make_temp()
        res = info.make_temp()
        info.append(inst, target=target, value=value, appendvar=appendvar,

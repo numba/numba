@@ -162,8 +162,8 @@ class TestLists(TestCase):
             l = range(10)
             self.assertEqual(cfunc(l), pyfunc(l))
 
-    @unittest.skipUnless(sys.version_info == (2,7),
-                         "Only supported for Python 2.7.")
+    @unittest.skipIf(sys.version_info >= (3,),
+                     "Only supported for Python 2.x.")
     def test_list_comprehension(self):
         list_tests = [list_comprehension1,
                       list_comprehension2,

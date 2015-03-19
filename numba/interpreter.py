@@ -748,6 +748,10 @@ class Interpreter(object):
         sa = ir.DelAttr(target=self.get(target), attr=attr, loc=self.loc)
         self.current_block.append(sa)
 
+    def op_DELETE_FAST(self, inst):
+        var_name = self.code_locals[inst.arg]
+        ir.Del(var_name, loc=self.loc)
+
     def op_LOAD_ATTR(self, inst, item, res):
         item = self.get(item)
         attr = self.code_names[inst.arg]
