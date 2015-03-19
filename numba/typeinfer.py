@@ -18,8 +18,7 @@ from pprint import pprint
 import itertools
 
 from numba import ir, types, utils, config, six
-from numba.config import PYVERSION
-from numba.utils import builtins, RANGE_ITER_OBJECTS
+from numba.utils import RANGE_ITER_OBJECTS
 
 
 class TypingError(Exception):
