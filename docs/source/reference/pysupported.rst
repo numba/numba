@@ -37,8 +37,9 @@ message.
 Function calls
 --------------
 
-Numba supports function calls using positional and named arguments.
-``*args`` and ``**kwargs`` are not supported.
+Numba supports function calls using positional and named arguments, as well
+as arguments with default values.  Explicit ``*args`` and ``**kwargs`` are
+not supported.
 
 
 Built-in types
