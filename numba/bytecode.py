@@ -109,6 +109,7 @@ def _make_bytecode_table():
                     ('INPLACE_RSHIFT', 0),
                     ('JUMP_ABSOLUTE', 2),
                     ('JUMP_FORWARD', 2),
+                    ('LIST_APPEND', 2),
                     ('LOAD_ATTR', 2),
                     ('LOAD_CONST', 2),
                     ('LOAD_FAST', 2),

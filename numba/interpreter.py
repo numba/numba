@@ -864,6 +864,16 @@ class Interpreter(object):
                            value=self.get(value), loc=self.loc)
         self.current_block.append(stmt)
 
+    def op_LIST_APPEND(self, inst, target, value, appendvar, res):
+        target = self.get(target)
+        value = self.get(value)
+
+        appendattr = ir.Expr.getattr(target, 'append', loc=self.loc)
+        self.store(value=appendattr, name=appendvar)
+        appendinst = ir.Expr.call(self.get(appendvar), (value,), (),
+                                  loc=self.loc)
+        self.store(value=appendinst, name=res)
+
     def op_UNARY_NEGATIVE(self, inst, value, res):
         value = self.get(value)
         expr = ir.Expr.unary('-', value=value, loc=self.loc)
