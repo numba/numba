@@ -37,9 +37,11 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self.__code__ = self.func_code
 
         self._pysig = utils.pysignature(self.py_func)
-        _argnames = tuple(self._pysig.parameters)
+        argnames = tuple(self._pysig.parameters)
+        defargs = self.py_func.__defaults__ or ()
         _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(),
-                                        arg_count, _argnames)
+                                        arg_count, self.fold_args,
+                                        argnames, defargs)
 
         self.doc = py_func.__doc__
         self._compile_lock = utils.NonReentrantLock()
@@ -221,6 +223,7 @@ class Overloaded(_OverloadedBase):
     This is an abstract base class. Subclasses should define the targetdescr
     class attribute.
     """
+    fold_args = True
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         """
@@ -327,6 +330,7 @@ class LiftedLoop(_OverloadedBase):
     Implementation of the hidden dispatcher objects used for lifted loop
     (a lifted loop is really compiled as a separate function).
     """
+    fold_args = False
 
     def __init__(self, bytecode, typingctx, targetctx, locals, flags):
         self.typingctx = typingctx
