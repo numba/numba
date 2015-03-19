@@ -3,14 +3,21 @@ Testing object mode specifics.
 
 """
 from __future__ import print_function
+
 import numpy
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import utils, jit
+from .support import TestCase
+
 
 def complex_constant(n):
     tmp = n + 4
     return tmp + 3j
+
+def long_constant(n):
+    return n + 100000000000000000000000000000000000000000000000
 
 
 forceobj = Flags()
@@ -31,12 +38,19 @@ def array_of_object(x):
     return x
 
 
-class TestObjectMode(unittest.TestCase):
+class TestObjectMode(TestCase):
+
     def test_complex_constant(self):
         pyfunc = complex_constant
         cres = compile_isolated(pyfunc, (), flags=forceobj)
         cfunc = cres.entry_point
-        self.assertEqual(pyfunc(12), cfunc(12))
+        self.assertPreciseEqual(pyfunc(12), cfunc(12))
+
+    def test_long_constant(self):
+        pyfunc = long_constant
+        cres = compile_isolated(pyfunc, (), flags=forceobj)
+        cfunc = cres.entry_point
+        self.assertPreciseEqual(pyfunc(12), cfunc(12))
 
     def test_loop_nest(self):
         """
