@@ -112,19 +112,24 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
     def get_call_template(self, args, kws):
         """
-        Get a typing.ConcreteTemplate for this dispatcher and the given *args*
-        and *kws*.  This allows to resolve the return type.
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This allows to resolve the return type.
         """
-        # Fold keyword arguments
-        if kws:
-            ba = self._pysig.bind(*args, **kws)
-            if ba.kwargs:
-                # There's a remaining keyword argument, e.g. if omitting
-                # some argument with a default value before it.
-                raise NotImplementedError("unhandled keyword argument: %s"
-                                          % list(ba.kwargs))
-            args = ba.args
-            kws = {}
+        # Fold keyword arguments and resolve default values
+        ba = self._pysig.bind(*args, **kws)
+        for param in self._pysig.parameters.values():
+            name = param.name
+            default = param.default
+            if (default is not param.empty and
+                name not in ba.arguments):
+                ba.arguments[name] = self.typeof_pyval(default)
+        if ba.kwargs:
+            # There's a remaining keyword argument, e.g. if omitting
+            # some argument with a default value before it.
+            raise NotImplementedError("unhandled keyword argument: %s"
+                                      % list(ba.kwargs))
+        args = ba.args
+        kws = {}
         # Ensure an overload is available, but avoid compiler re-entrance
         if self._can_compile and not self.is_compiling:
             self.compile(tuple(args))
