@@ -9,10 +9,6 @@ import threading
 import timeit
 import math
 import sys
-try:
-    import builtins
-except ImportError:
-    import __builtin__ as builtins
 
 import numpy
 
@@ -23,11 +19,13 @@ from numba.config import PYVERSION, MACHINE_BITS
 IS_PY3 = PYVERSION >= (3, 0)
 
 if IS_PY3:
+    import builtins
     INT_TYPES = (int,)
     longint = int
     get_ident = threading.get_ident
 else:
     import thread
+    import __builtin__ as builtins
     INT_TYPES = (int, long)
     longint = long
     get_ident = thread.get_ident
