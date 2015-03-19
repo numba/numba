@@ -268,6 +268,11 @@ def benchmark(func, maxsec=1):
 RANGE_ITER_OBJECTS = (builtins.range,)
 if PYVERSION < (3, 0):
     RANGE_ITER_OBJECTS += (builtins.xrange,)
+    try:
+        from future.types.newrange import newrange
+        RANGE_ITER_OBJECTS += (newrange,)
+    except ImportError:
+        pass
 
 
 # Backported from Python 3.4: functools.total_ordering()
