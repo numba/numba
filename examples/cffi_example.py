@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-from numba import cffi_support, jit, double
-from cffi import FFI
+
 from math import pi
+
+from cffi import FFI
+
+from numba import jit
 
 
 ffi = FFI()

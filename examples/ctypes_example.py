@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, absolute_import, division
-from ctypes import *
-import sys
+
 from math import pi
-from numba import jit, double
+import sys
+
+from ctypes import *
+
+from numba import jit
 
 
 is_windows = sys.platform.startswith('win32')
@@ -27,10 +30,10 @@ def use_ctype_wrapping(x):
     return ctype_wrapping(x)
 
 
-cfunc = jit(double(double))(use_c_sin)
+cfunc = jit(nopython=True)(use_c_sin)
 print(cfunc(pi))
 
-cfunc = jit(double(double))(use_ctype_wrapping)
+cfunc = jit(nopython=True)(use_ctype_wrapping)
 print(cfunc(pi))
 
 
