@@ -10,6 +10,11 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
 builtin_global(range, types.range_type)
 if PYVERSION < (3, 0):
     builtin_global(xrange, types.range_type)
+    try:
+        from future.types.newrange import newrange
+        builtin_global(newrange, types.range_type)
+    except ImportError:
+        pass
 builtin_global(len, types.len_type)
 builtin_global(slice, types.slice_type)
 builtin_global(abs, types.abs_type)
