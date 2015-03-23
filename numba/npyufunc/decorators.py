@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+import inspect
 
 from . import _internal
 from .ufuncbuilder import UFuncBuilder, GUFuncBuilder
@@ -39,17 +40,25 @@ class GUVectorize(_BaseVectorize):
         return imp(func, signature, identity, kws)
 
 
-def vectorize(ftylist, **kws):
-    """vectorize(ftylist, target='cpu', identity=None, **kws)
+def vectorize(ftylist_or_function=(), **kws):
+    """vectorize(ftylist_or_function=(), target='cpu', identity=None, **kws)
 
-    A decorator to create numpy ufunc object from Numba compiled code.
+    A decorator to create numpy ufunc object from Numba compiled code.  When n
 
     Args
     -----
-    ftylist: iterable
-        An iterable of type signatures, which are either
-        function type object or a string describing the
-        function type.
+    ftylist_or_function: function or iterable
+
+        When the first argument is a function, signatures are delt
+        with at call-time.
+
+        When the first argument is an iterable of type signatures,
+        which are either function type object or a string describing
+        the function type, signatures are finalized at decoration
+        time.
+
+    Keyword Args
+    ------------
 
     target: str
             A string for code generation target.  Default to "cpu".
@@ -64,17 +73,29 @@ def vectorize(ftylist, **kws):
 
     A NumPy universal function
 
-    Example
+    Examples
     -------
         @vectorize(['float32(float32, float32)',
                     'float64(float64, float64)'], identity=1)
         def sum(a, b):
             return a + b
 
+        @vectorize
+        def sum(a, b):
+            return a + b
+
+        @vectorize(identity=1)
+        def mul(a, b):
+            return a * b
+
     """
-    if isinstance(ftylist, str):
+    if isinstance(ftylist_or_function, str):
         # Common user mistake
-        ftylist = [ftylist]
+        ftylist = [ftylist_or_function]
+    elif inspect.isfunction(ftylist_or_function):
+        return Vectorize(ftylist_or_function, **kws).build_ufunc()
+    elif ftylist_or_function is not None:
+        ftylist = ftylist_or_function
 
     def wrap(func):
         vec = Vectorize(func, **kws)
