@@ -46,9 +46,9 @@ class TestCasting(unittest.TestCase):
         cfunc = cr.entry_point
 
         self.assertEqual(cr.signature.return_type, types.uint32)
-        self.assertEqual(cfunc(-3.21), pyfunc(-3.21))
-        self.assertEqual(cfunc(-3.21), struct.unpack('I', struct.pack('i',
-                                                                      -3))[0])
+        self.assertEqual(cfunc(3.21), pyfunc(3.21))
+        self.assertEqual(cfunc(3.21), struct.unpack('I', struct.pack('i',
+                                                                      3))[0])
 
     def test_float_to_complex(self):
         pyfunc = float_to_complex
