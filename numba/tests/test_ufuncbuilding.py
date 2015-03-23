@@ -17,6 +17,10 @@ def add(a, b):
 def equals(a, b):
     return a == b
 
+def mul(a, b):
+    """A multiplication"""
+    return a * b
+
 def guadd(a, b, c):
     """A generalized addition"""
     x, y = c.shape
@@ -200,6 +204,12 @@ class TestVectorizeDecor(unittest.TestCase):
         b = numpy.linspace(1,2,10)
         ufunc = vectorize(add)
         self.assertTrue(numpy.all(ufunc(a,b) == (a + b)))
+
+    def test_vectorize_only_kws(self):
+        a = numpy.linspace(0,1,10)
+        b = numpy.linspace(1,2,10)
+        ufunc = vectorize(identity=1)(mul)
+        self.assertTrue(numpy.all(ufunc(a,b) == (a * b)))
 
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],

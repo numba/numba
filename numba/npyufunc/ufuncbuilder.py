@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 import warnings
+import inspect
 import numpy as np
 
 from numba.decorators import jit
@@ -133,6 +134,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
 
         # Get signature in the order they are added
         keepalive = []
+        cres = None
         for sig in self._sigs:
             cres = self._cres[sig]
             dtypenums, ptr, env = self.build(cres, sig)
@@ -142,7 +144,11 @@ class UFuncBuilder(_BaseUFuncBuilder):
 
         datlist = [None] * len(ptrlist)
 
-        inct = len(cres.signature.args)
+        if cres is None:
+            argspec = inspect.getargspec(self.py_func)
+            inct = len(argspec.args)
+        else:
+            inct = len(cres.signature.args)
         outct = 1
 
         # Becareful that fromfunc does not provide full error checking yet.
