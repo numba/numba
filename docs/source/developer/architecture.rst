@@ -198,11 +198,20 @@ to a string for debugging.  If you set the environment variable
 ``NUMBA_DUMP_IR`` equal to 1, the Numba IR will be dumped to the screen.  For
 the ``add()`` function described above, the Numba IR looks like::
 
-    label 0:
-        a.1 = a
-        b.1 = b
-        $0.3 = a.1 + b.1
-        return $0.3
+   label 0:
+       a = arg(0, name=a)                       ['a']
+       b = arg(1, name=b)                       ['b']
+       $0.3 = a + b                             ['$0.3', 'a', 'b']
+       del b                                    []
+       del a                                    []
+       $0.4 = cast(value=$0.3)                  ['$0.3', '$0.4']
+       del $0.3                                 []
+       return $0.4                              ['$0.4']
+
+The ``del`` instructions are produced by live variable analysis.  Those
+instructions ensure references are not leaked in :term:`object mode`,
+where each variable contains an owned reference to a PyObject.  They are
+no-ops in :term:`nopython mode`.
 
 Stage 3: Macro expansion
 ------------------------
@@ -252,30 +261,34 @@ when the function is first called.
 
 The type inference engine is found in ``numba.typeinfer``.  Its job is to
 assign a type to every intermediate variable in the Numba IR.  The result of
-this pass can be seen by setting the ``NUMBA_DUMP_ANNOTATION`` environment
-variable to 1::
+this pass can be seen by setting the :envvar:`NUMBA_DUMP_ANNOTATION`
+environment variable to 1:
 
-    -----------------------------------ANNOTATION-----------------------------------
-    # File: test.py
-    # --- LINE 3 ---
+.. code-block:: python
 
-    @numba.jit()
+   -----------------------------------ANNOTATION-----------------------------------
+   # File: archex.py
+   # --- LINE 4 ---
 
-    # --- LINE 4 ---
+   @jit(nopython=True)
 
-    def add(a, b):
+   # --- LINE 5 ---
 
-        # --- LINE 5 ---
-        # label 0
-        #   a.1 = a  :: int64
-        #   b.1 = b  :: int64
-        #   $0.3 = a.1 + b.1  :: int64
-        #   return $0.3
+   def add(a, b):
 
-        return a + b
+       # --- LINE 6 ---
+       # label 0
+       #   a = arg(0, name=a)  :: int64
+       #   b = arg(1, name=b)  :: int64
+       #   $0.3 = a + b  :: int64
+       #   del b
+       #   del a
+       #   $0.4 = cast(value=$0.3)  :: int64
+       #   del $0.3
+       #   return $0.4
 
+       return a + b
 
-    ================================================================================
 
 If type inference fails to find a consistent type assignment for all the
 intermediate variables, it will label every variable as type ``pyobject`` and
@@ -298,51 +311,52 @@ Numba IR nodes are translated to LLVM instructions is handled by the
 target context selected for compilation.  The default target context is
 the "cpu" context, defined in ``numba.targets.cpu``.
 
-The LLVM IR can be displayed by setting the ``NUMBA_DUMP_LLVM`` environment
+The LLVM IR can be displayed by setting the :envvar:`NUMBA_DUMP_LLVM` environment
 variable to 1.  For the "cpu" context, our ``add()`` example would look like:
 
 .. code-block:: llvm
 
-    ; ModuleID = 'module.add$3'
+   define i32 @"__main__.add$1.int64.int64"(i64* %"retptr",
+                                            {i8*, i32}** %"excinfo",
+                                            i8* %"env",
+                                            i64 %"arg.a", i64 %"arg.b")
+   {
+      entry:
+        %"a" = alloca i64
+        %"b" = alloca i64
+        %"$0.3" = alloca i64
+        %"$0.4" = alloca i64
+        br label %"B0"
+      B0:
+        store i64 %"arg.a", i64* %"a"
+        store i64 %"arg.b", i64* %"b"
+        %".8" = load i64* %"a"
+        %".9" = load i64* %"b"
+        %".10" = add i64 %".8", %".9"
+        store i64 %".10", i64* %"$0.3"
+        %".12" = load i64* %"$0.3"
+        store i64 %".12", i64* %"$0.4"
+        %".14" = load i64* %"$0.4"
+        store i64 %".14", i64* %"retptr"
+        ret i32 0
+   }
 
-    define i32 @add.int64.int64(i64*, i8* %env, i64 %arg.a, i64 %arg.b) {
-    entry:
-      %a = alloca i64
-      store i64 %arg.a, i64* %a
-      %b = alloca i64
-      store i64 %arg.b, i64* %b
-      %a.1 = alloca i64
-      %b.1 = alloca i64
-      %"$0.3" = alloca i64
-      br label %B0
-
-    B0:                                               ; preds = %entry
-      %1 = load i64* %a
-      store i64 %1, i64* %a.1
-      %2 = load i64* %b
-      store i64 %2, i64* %b.1
-      %3 = load i64* %a.1
-      %4 = load i64* %b.1
-      %5 = add i64 %3, %4
-      store i64 %5, i64* %"$0.3"
-      %6 = load i64* %"$0.3"
-      store i64 %6, i64* %0
-      ret i32 0
-    }
-
-The post-optimization LLVM IR can be output by setting ``NUMBA_DUMP_FUNC_OPT``
-to 1.  The optimizer shortens the code generated above quite significantly:
+The post-optimization LLVM IR can be output by setting
+:envvar:`NUMBA_DUMP_OPTIMIZED` to 1.  The optimizer shortens the code
+generated above quite significantly:
 
 .. code-block:: llvm
 
-    ; ModuleID = 'module.add$3'
-
-    define i32 @add.int64.int64(i64*, i8* %env, i64 %arg.a, i64 %arg.b) {
-    entry:
-      %1 = add i64 %arg.a, %arg.b
-      store i64 %1, i64* %0
-      ret i32 0
-    }
+   define i32 @"__main__.add$1.int64.int64"(i64* nocapture %retptr,
+                                            { i8*, i32 }** nocapture readnone %excinfo,
+                                            i8* nocapture readnone %env,
+                                            i64 %arg.a, i64 %arg.b)
+   {
+      entry:
+        %.10 = add i64 %arg.b, %arg.a
+        store i64 %.10, i64* %retptr, align 8
+        ret i32 0
+   }
 
 Stage 5b: Generate Object Mode LLVM IR
 --------------------------------------
@@ -355,71 +369,74 @@ operations.  The optimized LLVM for our example ``add()`` function is:
 
 .. code-block:: llvm
 
-    ; ModuleID = 'module.add$3'
+   @PyExc_SystemError = external global i8
+   @".const.Numba_internal_error:_object_mode_function_called_without_an_environment" = internal constant [73 x i8] c"Numba internal error: object mode function called without an environment\00"
+   @".const.name_'a'_is_not_defined" = internal constant [24 x i8] c"name 'a' is not defined\00"
+   @PyExc_NameError = external global i8
+   @".const.name_'b'_is_not_defined" = internal constant [24 x i8] c"name 'b' is not defined\00"
 
-    @PyExc_SystemError = external global i8
-    @".const.Numba internal error: object mode function called without an environment" = internal constant [73 x i8] c"Numba internal error: object mode function called without an environment\00"
+   define i32 @"__main__.add$1.pyobject.pyobject"(i8** nocapture %retptr, { i8*, i32 }** nocapture readnone %excinfo, i8* readnone %env, i8* %arg.a, i8* %arg.b) {
+   entry:
+     %.6 = icmp eq i8* %env, null
+     br i1 %.6, label %entry.if, label %entry.endif, !prof !0
 
-    define i32 @add.pyobject.pyobject(i8**, i8* %env, i8* %arg.a, i8* %arg.b) {
-    entry:
-      call void @Py_IncRef(i8* %arg.a)
-      call void @Py_DecRef(i8* null)
-      call void @Py_IncRef(i8* %arg.b)
-      call void @Py_DecRef(i8* null)
-      %1 = icmp eq i8* null, %env
-      br i1 %1, label %entry.if, label %entry.endif, !prof !0
+   entry.if:                                         ; preds = %entry
+     tail call void @PyErr_SetString(i8* @PyExc_SystemError, i8* getelementptr inbounds ([73 x i8]* @".const.Numba_internal_error:_object_mode_function_called_without_an_environment", i64 0, i64 0))
+     ret i32 -1
 
-    error:                                            ; preds = %entry.endif, %entry.if
-      %a.1.0 = phi i8* [ null, %entry.if ], [ %arg.a, %entry.endif ]
-      %b.1.0 = phi i8* [ null, %entry.if ], [ %arg.b, %entry.endif ]
-      call void @Py_DecRef(i8* %arg.a)
-      call void @Py_DecRef(i8* null)
-      call void @Py_DecRef(i8* %b.1.0)
-      call void @Py_DecRef(i8* %arg.b)
-      call void @Py_DecRef(i8* %a.1.0)
-      ret i32 -1
+   entry.endif:                                      ; preds = %entry
+     tail call void @Py_IncRef(i8* %arg.a)
+     tail call void @Py_IncRef(i8* %arg.b)
+     %.21 = icmp eq i8* %arg.a, null
+     br i1 %.21, label %B0.if, label %B0.endif, !prof !0
 
-    entry.if:                                         ; preds = %entry
-      call void @PyErr_SetString(i8* @PyExc_SystemError, i8* getelementptr inbounds ([73 x i8]* @".const.Numba internal error: object mode function called without an environment", i32 0, i32 0))
-      br label %error
+   B0.if:                                            ; preds = %entry.endif
+     tail call void @PyErr_SetString(i8* @PyExc_NameError, i8* getelementptr inbounds ([24 x i8]* @".const.name_'a'_is_not_defined", i64 0, i64 0))
+     tail call void @Py_DecRef(i8* null)
+     tail call void @Py_DecRef(i8* %arg.b)
+     ret i32 -1
 
-    entry.endif:                                      ; preds = %entry
-      %2 = ptrtoint i8* %env to i64
-      %3 = add i64 %2, 16
-      %4 = inttoptr i64 %3 to i8*
-      call void @Py_IncRef(i8* %arg.a)
-      call void @Py_DecRef(i8* null)
-      call void @Py_IncRef(i8* %arg.b)
-      call void @Py_DecRef(i8* null)
-      %5 = call i8* @PyNumber_Add(i8* %arg.a, i8* %arg.b)
-      %6 = icmp eq i8* null, %5
-      br i1 %6, label %error, label %B0.endif, !prof !0
+   B0.endif:                                         ; preds = %entry.endif
+     %.30 = icmp eq i8* %arg.b, null
+     br i1 %.30, label %B0.endif1, label %B0.endif1.1, !prof !0
 
-    B0.endif:                                         ; preds = %entry.endif
-      call void @Py_DecRef(i8* null)
-      call void @Py_IncRef(i8* %5)
-      call void @Py_DecRef(i8* %arg.a)
-      call void @Py_DecRef(i8* %5)
-      call void @Py_DecRef(i8* %arg.b)
-      call void @Py_DecRef(i8* %arg.b)
-      call void @Py_DecRef(i8* %arg.a)
-      store i8* %5, i8** %0
-      ret i32 0
-    }
+   B0.endif1:                                        ; preds = %B0.endif
+     tail call void @PyErr_SetString(i8* @PyExc_NameError, i8* getelementptr inbounds ([24 x i8]* @".const.name_'b'_is_not_defined", i64 0, i64 0))
+     tail call void @Py_DecRef(i8* %arg.a)
+     tail call void @Py_DecRef(i8* null)
+     ret i32 -1
 
-    declare void @Py_IncRef(i8*)
+   B0.endif1.1:                                      ; preds = %B0.endif
+     %.38 = tail call i8* @PyNumber_Add(i8* %arg.a, i8* %arg.b)
+     %.39 = icmp eq i8* %.38, null
+     br i1 %.39, label %B0.endif1.1.if, label %B0.endif1.1.endif, !prof !0
 
-    declare void @Py_DecRef(i8*)
+   B0.endif1.1.if:                                   ; preds = %B0.endif1.1
+     tail call void @Py_DecRef(i8* %arg.a)
+     tail call void @Py_DecRef(i8* %arg.b)
+     ret i32 -1
 
-    declare void @PyErr_SetString(i8*, i8*)
+   B0.endif1.1.endif:                                ; preds = %B0.endif1.1
+     tail call void @Py_DecRef(i8* %arg.b)
+     tail call void @Py_DecRef(i8* %arg.a)
+     tail call void @Py_IncRef(i8* %.38)
+     tail call void @Py_DecRef(i8* %.38)
+     store i8* %.38, i8** %retptr, align 8
+     ret i32 0
+   }
 
-    declare i8* @PyNumber_Add(i8*, i8*)
+   declare void @PyErr_SetString(i8*, i8*)
 
-    !0 = metadata !{metadata !"branch_weights", i32 1, i32 99}
+   declare void @Py_IncRef(i8*)
 
-The careful reader might notice a lot of unnecessary calls to ``Py_IncRef``
-and ``Py_DecRef`` in the generated code.  A special pass is run after the
-LLVM optimizer to identify and remove these extra reference count calls.
+   declare void @Py_DecRef(i8*)
+
+   declare i8* @PyNumber_Add(i8*, i8*)
+
+
+The careful reader might notice several unnecessary calls to ``Py_IncRef``
+and ``Py_DecRef`` in the generated code.  Currently Numba isn't able to
+optimize those away.
 
 Object mode compilation will also attempt to identify loops which can be
 extracted and statically-typed for "nopython" compilation.  This process is
@@ -440,18 +457,18 @@ multiple type specializations were generated (for example, for both
 ``float32`` and ``float64`` versions of the same function).
 
 The machine assembly code generated by LLVM can be dumped to the screen by
-setting the ``NUMBA_DUMP_ASSEMBLY`` environment variable to 1:
+setting the :envvar:`NUMBA_DUMP_ASSEMBLY` environment variable to 1:
 
 .. code-block:: gas
 
-      .section  __TEXT,__text,regular,pure_instructions
-      .globl  _add.int64.int64
-      .align  4, 0x90
-    _add.int64.int64:
-      addq  %rcx, %rdx
-      movq  %rdx, (%rdi)
-      xorl  %eax, %eax
-      ret
+           .globl  __main__.add$1.int64.int64
+           .align  16, 0x90
+           .type   __main__.add$1.int64.int64,@function
+   __main__.add$1.int64.int64:
+           addq    %r8, %rcx
+           movq    %rcx, (%rdi)
+           xorl    %eax, %eax
+           retq
 
 
 The assembly output will also include the generated wrapper function that

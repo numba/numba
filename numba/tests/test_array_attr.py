@@ -51,10 +51,8 @@ class TestArrayAttr(unittest.TestCase):
         self.a = np.arange(10).reshape(2, 5)
 
     def get_cfunc(self, pyfunc, argspec):
-        # Need to keep a reference to the compile result for the
-        # wrapper function object to remain valid (!)
-        self.__cres = compile_isolated(pyfunc, argspec)
-        return self.__cres.entry_point
+        cres = compile_isolated(pyfunc, argspec)
+        return cres.entry_point
 
     def test_shape(self):
         pyfunc = array_shape
@@ -96,10 +94,8 @@ class TestNestedArrayAttr(unittest.TestCase):
         self.nbrecord = from_dtype(self.a.dtype)
 
     def get_cfunc(self, pyfunc):
-        # Need to keep a reference to the compile result for the
-        # wrapper function object to remain valid (!)
-        self.__cres = compile_isolated(pyfunc, (self.nbrecord,))
-        return self.__cres.entry_point
+        cres = compile_isolated(pyfunc, (self.nbrecord,))
+        return cres.entry_point
 
     def test_shape(self):
         pyfunc = nested_array_shape

@@ -1,7 +1,8 @@
 from __future__ import print_function, absolute_import
 
 from llvmlite import ir
-from numba import types, numpy_support
+
+from numba import cgutils, types, numpy_support
 from .registry import register_default
 
 
@@ -51,35 +52,37 @@ class DataModel(object):
         return self.get_value_type()
 
     def as_data(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def as_argument(self, builder, value):
         """
         Takes one LLVM value
         Return a LLVM value or nested tuple of LLVM value
         """
-        return NotImplemented
+        raise NotImplementedError
 
     def as_return(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def from_data(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def from_argument(self, builder, value):
         """
         Takes a LLVM value or nested tuple of LLVM value
         Returns one LLVM value
         """
-        return NotImplemented
+        raise NotImplementedError
 
     def from_return(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
-    def load_from_data_pointer(self, builder, value):
-        """Only the record model this for pass by reference semantic.
+    def load_from_data_pointer(self, builder, ptr):
         """
-        return NotImplemented
+        Load value from a pointer to data.
+        This is the default implementation, sufficient for most purposes.
+        """
+        return self.from_data(builder, builder.load(ptr))
 
     def _compared_fields(self):
         return (type(self), self._fe_type)
@@ -146,19 +149,19 @@ class PrimitiveModel(DataModel):
         return value
 
     def as_argument(self, builder, value):
-        return self.as_data(builder, value)
+        return value
 
     def as_return(self, builder, value):
-        return self.as_data(builder, value)
+        return value
 
     def from_data(self, builder, value):
         return value
 
     def from_argument(self, builder, value):
-        return self.from_data(builder, value)
+        return value
 
     def from_return(self, builder, value):
-        return self.from_data(builder, value)
+        return value
 
 
 @register_default(types.Opaque)
@@ -199,8 +202,27 @@ class FloatModel(PrimitiveModel):
 @register_default(types.CPointer)
 class PointerModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
-        be_type = dmm.lookup(fe_type.dtype).get_data_type().as_pointer()
+        self._pointee_model = dmm.lookup(fe_type.dtype)
+        self._pointee_be_type = self._pointee_model.get_data_type()
+        be_type = self._pointee_be_type.as_pointer()
         super(PointerModel, self).__init__(dmm, fe_type, be_type)
+
+
+@register_default(types.EphemeralPointer)
+class EphemeralPointerModel(PointerModel):
+
+    def get_data_type(self):
+        return self._pointee_be_type
+
+    def as_data(self, builder, value):
+        value = builder.load(value)
+        return self._pointee_model.as_data(builder, value)
+
+    def from_data(self, builder, value):
+        raise NotImplementedError("use load_from_data_pointer() instead")
+
+    def load_from_data_pointer(self, builder, ptr):
+        return builder.bitcast(ptr, self.get_value_type())
 
 
 @register_default(types.ExternalFunctionPointer)
@@ -353,6 +375,18 @@ class StructModel(CompositeModel):
                 for i in range(len(self._members))]
         return self._from("from_data", builder, vals)
 
+    def load_from_data_pointer(self, builder, ptr):
+        values = []
+        for i, model in enumerate(self._models):
+            elem_ptr = cgutils.gep(builder, ptr, 0, i)
+            val = model.load_from_data_pointer(builder, elem_ptr)
+            values.append(val)
+
+        struct = ir.Constant(self.get_value_type(), ir.Undefined)
+        for i, val in enumerate(values):
+            struct = self.set(builder, struct, val, i)
+        return struct
+
     def as_argument(self, builder, value):
         return self._as("as_argument", builder, value)
 
@@ -484,10 +518,10 @@ class ArrayModel(StructModel):
         super(ArrayModel, self).__init__(dmm, fe_type, members)
 
     def as_data(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def from_data(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
 
 @register_default(types.NestedArray)
@@ -515,7 +549,7 @@ class OptionalModel(StructModel):
         return self._value_model.get_return_type()
 
     def as_return(self, builder, value):
-        return NotImplemented
+        raise NotImplementedError
 
     def from_return(self, builder, value):
         return self._value_model.from_return(builder, value)
@@ -605,11 +639,16 @@ class CContiguousFlatIter(StructModel):
         dtype = array_type.dtype
         members = [('array', types.CPointer(array_type)),
                    ('stride', types.intp),
-                   ('pointer', types.CPointer(types.CPointer(dtype))),
-                   ('index', types.CPointer(types.intp)),
-                   ('indices', types.CPointer(types.intp)),
+                   ('pointer', types.EphemeralPointer(types.CPointer(dtype))),
+                   ('index', types.EphemeralPointer(types.intp)),
+                   # NOTE: indices is an array
+                   ('indices', types.EphemeralPointer(types.intp)),
         ]
         super(CContiguousFlatIter, self).__init__(dmm, fe_type, members)
+
+    def get_data_type(self):
+        # FIXME: must flatten indices array
+        raise NotImplementedError("cannot serialize flat() iterator")
 
 
 class FlatIter(StructModel):
@@ -617,17 +656,22 @@ class FlatIter(StructModel):
         array_type = fe_type.array_type
         dtype = array_type.dtype
         members = [('array', types.CPointer(array_type)),
-                   ('pointers', types.CPointer(types.CPointer(dtype))),
-                   ('indices', types.CPointer(types.intp)),
-                   ('exhausted', types.CPointer(types.boolean)),
+                   # NOTE: pointers and indices are arrays
+                   ('pointers', types.EphemeralPointer(types.CPointer(dtype))),
+                   ('indices', types.EphemeralPointer(types.intp)),
+                   ('exhausted', types.EphemeralPointer(types.boolean)),
         ]
         super(FlatIter, self).__init__(dmm, fe_type, members)
+
+    def get_data_type(self):
+        # FIXME: must flatten indices and pointers
+        raise NotImplementedError("cannot serialize flat() iterator")
 
 
 @register_default(types.UniTupleIter)
 class UniTupleIter(StructModel):
     def __init__(self, dmm, fe_type):
-        members = [('index', types.CPointer(types.intp)),
+        members = [('index', types.EphemeralPointer(types.intp)),
                    ('tuple', fe_type.unituple,)]
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
@@ -653,7 +697,7 @@ class NPDatetimeModel(PrimitiveModel):
 class ArrayIterator(StructModel):
     def __init__(self, dmm, fe_type):
         # We use an unsigned index to avoid the cost of negative index tests.
-        members = [('index', types.CPointer(types.uintp)),
+        members = [('index', types.EphemeralPointer(types.uintp)),
                    ('array', fe_type.array_type)]
         super(ArrayIterator, self).__init__(dmm, fe_type, members)
 
@@ -661,7 +705,7 @@ class ArrayIterator(StructModel):
 @register_default(types.EnumerateType)
 class EnumerateType(StructModel):
     def __init__(self, dmm, fe_type):
-        members = [('count', types.CPointer(types.intp)),
+        members = [('count', types.EphemeralPointer(types.intp)),
                    ('iter', fe_type.source_type)]
 
         super(EnumerateType, self).__init__(dmm, fe_type, members)
@@ -679,11 +723,55 @@ class ZipType(StructModel):
 class RangeIteratorType(StructModel):
     def __init__(self, dmm, fe_type):
         int_type = fe_type.yield_type
-        members = [('iter', types.CPointer(int_type)),
+        members = [('iter', types.EphemeralPointer(int_type)),
                    ('stop', int_type),
                    ('step', int_type),
-                   ('count', types.CPointer(int_type))]
+                   ('count', types.EphemeralPointer(int_type))]
         super(RangeIteratorType, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.Generator)
+class GeneratorModel(CompositeModel):
+    def __init__(self, dmm, fe_type):
+        super(GeneratorModel, self).__init__(dmm, fe_type)
+        self._arg_models = [self._dmm.lookup(t) for t in fe_type.arg_types]
+        self._state_models = [self._dmm.lookup(t) for t in fe_type.state_types]
+
+        self._args_be_type = ir.LiteralStructType(
+            [t.get_data_type() for t in self._arg_models])
+        self._state_be_type = ir.LiteralStructType(
+            [t.get_data_type() for t in self._state_models])
+        # The whole generator closure
+        self._be_type = ir.LiteralStructType(
+            [self._dmm.lookup(types.int32).get_value_type(),
+             self._args_be_type, self._state_be_type])
+
+    def get_value_type(self):
+        """
+        The generator closure is passed around as a reference.
+        """
+        return self._be_type.as_pointer()
+
+    def get_argument_type(self):
+        return self.get_value_type()
+
+    def get_return_type(self):
+        return self._be_type
+
+    def get_data_type(self):
+        return self._be_type
+
+    def as_argument(self, builder, value):
+        return value
+
+    def from_argument(self, builder, value):
+        return value
+
+    def as_return(self, builder, value):
+        return value
+
+    def from_return(self, builder, value):
+        return value
 
 
 # =============================================================================

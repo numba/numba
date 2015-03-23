@@ -6,7 +6,7 @@ import numpy as np
 from numba import jit, numpy_support, types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba.lowering import transform_arg_name
+from numba.funcdesc import transform_arg_name
 from numba.utils import IS_PY3
 
 
@@ -214,10 +214,8 @@ class TestRecordDtype(unittest.TestCase):
                 ary3[i]['d'] = "%d" % x
 
     def get_cfunc(self, pyfunc, argspec):
-        # Need to keep a reference to the compile result for the
-        # wrapper function object to remain valid (!)
-        self.__cres = compile_isolated(pyfunc, argspec)
-        return self.__cres.entry_point
+        cres = compile_isolated(pyfunc, argspec)
+        return cres.entry_point
 
     def test_from_dtype(self):
         rec = numpy_support.from_dtype(recordtype)

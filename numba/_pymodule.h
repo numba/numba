@@ -23,7 +23,7 @@
 #endif
 
 
-#if (PY_MAJOR_VERSION >= 3)
+#if PY_MAJOR_VERSION >= 3
     #define PyString_AsString PyUnicode_AsUTF8
     #define PyString_Check PyUnicode_Check
     #define PyString_FromString PyUnicode_FromString

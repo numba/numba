@@ -74,9 +74,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             for func in overloads.values():
                 try:
                     targetctx.remove_user_function(func)
-                    targetctx.remove_native_function(func)
-                except KeyError as e:
-                    # Not a native function (object mode presumably)
+                except KeyError:
                     pass
 
         return finalizer

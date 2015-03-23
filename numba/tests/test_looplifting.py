@@ -53,6 +53,16 @@ def lift4(x):
     return c + d
 
 
+def lift_gen1(x):
+    # Outer needs object mode because of np.empty()
+    a = np.empty(3)
+    yield 0
+    for i in range(a.size):
+        # Inner is nopython-compliant
+        a[i] = x
+    yield np.sum(a)
+
+
 def reject1(x):
     a = np.arange(4)
     for i in range(a.shape[0]):
@@ -60,14 +70,31 @@ def reject1(x):
         return a
     return a
 
-
 def reject2(x):
     a = np.arange(4)
     for i in range(a.shape[0]):
+        # Inner has a break statement => cannot loop-lift
         if i > 2:
             break
     return a
 
+def reject_gen1(x):
+    a = np.arange(4)
+    for i in range(a.shape[0]):
+        # Inner is a generator => cannot loop-lift
+        yield a[i]
+
+def reject_gen2(x):
+    # Outer needs object mode because of np.empty()
+    a = np.arange(3)
+    for i in range(a.size):
+        # Middle has a yield => cannot loop-lift
+        res = a[i] + x
+        for j in range(i):
+            # Inner is nopython-compliant, but the current algorithm isn't
+            # able to separate it.
+            res = res ** 2
+        yield res
 
 def reject_npm1(x):
     a = np.empty(3, dtype=np.int32)
@@ -80,21 +107,42 @@ def reject_npm1(x):
 
 
 class TestLoopLifting(TestCase):
-    def check_lift_ok(self, pyfunc, argtypes, args):
-        """
-        Check that pyfunc can loop-lift even in nopython mode.
-        """
+
+    def try_lift(self, pyfunc, argtypes):
         cres = compile_isolated(pyfunc, argtypes,
                                 flags=looplift_flags)
         # One lifted loop
         self.assertEqual(len(cres.lifted), 1)
-        expected = pyfunc(*args)
-        got = cres.entry_point(*args)
-        self.assertTrue(np.all(expected == got))
+        return cres
+
+    def assert_lifted_native(self, cres):
         # Check if we have lifted in nopython mode
         jitloop = cres.lifted[0]
         [loopcres] = jitloop._compileinfos.values()
         self.assertTrue(loopcres.fndesc.native)  # Lifted function is native
+
+    def check_lift_ok(self, pyfunc, argtypes, args):
+        """
+        Check that pyfunc can loop-lift even in nopython mode.
+        """
+        cres = self.try_lift(pyfunc, argtypes)
+        expected = pyfunc(*args)
+        got = cres.entry_point(*args)
+        self.assert_lifted_native(cres)
+        # Check return values
+        self.assertTrue(np.all(expected == got))
+
+    def check_lift_generator_ok(self, pyfunc, argtypes, args):
+        """
+        Check that pyfunc (a generator function) can loop-lift even in
+        nopython mode.
+        """
+        cres = self.try_lift(pyfunc, argtypes)
+        expected = list(pyfunc(*args))
+        got = list(cres.entry_point(*args))
+        self.assert_lifted_native(cres)
+        # Check return values
+        self.assertEqual(got, expected)
 
     def check_no_lift(self, pyfunc, argtypes, args):
         """
@@ -106,6 +154,17 @@ class TestLoopLifting(TestCase):
         expected = pyfunc(*args)
         got = cres.entry_point(*args)
         self.assertTrue(np.all(expected == got))
+
+    def check_no_lift_generator(self, pyfunc, argtypes, args):
+        """
+        Check that pyfunc (a generator function) can't loop-lift.
+        """
+        cres = compile_isolated(pyfunc, argtypes,
+                                flags=looplift_flags)
+        self.assertFalse(cres.lifted)
+        expected = list(pyfunc(*args))
+        got = list(cres.entry_point(*args))
+        self.assertEqual(got, expected)
 
     def check_no_lift_nopython(self, pyfunc, argtypes, args):
         """
@@ -136,11 +195,20 @@ class TestLoopLifting(TestCase):
     def test_lift4(self):
         self.check_lift_ok(lift4, (types.intp,), (123,))
 
+    def test_lift_gen1(self):
+        self.check_lift_generator_ok(lift_gen1, (types.intp,), (123,))
+
     def test_reject1(self):
         self.check_no_lift(reject1, (types.intp,), (123,))
 
     def test_reject2(self):
         self.check_no_lift(reject2, (types.intp,), (123,))
+
+    def test_reject_gen1(self):
+        self.check_no_lift_generator(reject_gen1, (types.intp,), (123,))
+
+    def test_reject_gen2(self):
+        self.check_no_lift_generator(reject_gen2, (types.intp,), (123,))
 
     def test_reject_npm1(self):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
