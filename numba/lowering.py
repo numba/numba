@@ -366,6 +366,89 @@ class Lower(BaseLower):
         return self.context.cast(self.builder, res, signature.return_type,
                                  resty)
 
+    def lower_call(self, resty, expr):
+        signature = self.fndesc.calltypes[expr]
+        if isinstance(signature.return_type, types.Phantom):
+            return self.context.get_dummy_value()
+
+        if isinstance(expr.func, ir.Intrinsic):
+            fnty = expr.func.name
+            argvals = expr.func.args
+        else:
+            fnty = self.typeof(expr.func.name)
+
+            # Fold keyword arguments and resolve default argument values
+            defargs = set()
+            try:
+                pysig = fnty.pysig
+            except AttributeError:
+                if expr.kws:
+                    raise NotImplementedError("unsupported keyword arguments "
+                                              "when calling %s" % (fnty,))
+                args = expr.args
+            else:
+                ba = pysig.bind(*expr.args, **dict(expr.kws))
+                for i, param in enumerate(pysig.parameters.values()):
+                    name = param.name
+                    default = param.default
+                    if (default is not param.empty and
+                        name not in ba.arguments):
+                        value = self.context.get_constant_generic(
+                            self.builder, signature.args[i], default)
+                        ba.arguments[name] = value
+                        defargs.add(i)
+                # This is ensured in Dispatcher.get_call_template()
+                assert not ba.kwargs
+                args = ba.args
+
+            # Fetch and cast non-default arguments
+            argvals = list(args)
+            for i, a in enumerate(argvals):
+                if i not in defargs:
+                    ty = self.typeof(a.name)
+                    val = self.loadvar(a.name)
+                    a = self.context.cast(self.builder, val, ty,
+                                          signature.args[i])
+                    argvals[i] = a
+
+        if isinstance(fnty, types.ExternalFunction):
+            # Handle a named external function
+            fndesc = funcdesc.ExternalFunctionDescriptor(
+                fnty.symbol, fnty.sig.return_type, fnty.sig.args)
+            func = self.context.declare_external_function(
+                    cgutils.get_module(self.builder), fndesc)
+            res = self.context.call_external_function(
+                self.builder, func, fndesc.argtypes, argvals)
+
+        elif isinstance(fnty, types.Method):
+            # Method of objects are handled differently
+            fnobj = self.loadvar(expr.func.name)
+            res = self.context.call_class_method(self.builder, fnobj,
+                                                 signature, argvals)
+
+        elif isinstance(fnty, types.ExternalFunctionPointer):
+            # Handle a C function pointer
+            pointer = self.loadvar(expr.func.name)
+            res = self.context.call_function_pointer(self.builder, pointer,
+                                                     argvals, fnty.cconv)
+
+        else:
+            # Normal function resolution (for Numba-compiled functions)
+            impl = self.context.get_function(fnty, signature)
+            if signature.recvr:
+                # The "self" object is passed as the function object
+                # for bounded function
+                the_self = self.loadvar(expr.func.name)
+                # Prepend the self reference
+                argvals = [the_self] + argvals
+
+            res = impl(self.builder, argvals)
+            libs = getattr(impl, "libs", ())
+            for lib in libs:
+                self.library.add_linking_library(lib)
+        return self.context.cast(self.builder, res, signature.return_type,
+                                 resty)
+
     def lower_expr(self, resty, expr):
         if expr.op == 'binop':
             return self.lower_binop(resty, expr)
@@ -388,72 +471,7 @@ class Lower(BaseLower):
                                      resty)
 
         elif expr.op == 'call':
-            signature = self.fndesc.calltypes[expr]
-
-            if isinstance(expr.func, ir.Intrinsic):
-                fnty = expr.func.name
-                castvals = expr.func.args
-            else:
-                fnty = self.typeof(expr.func.name)
-                if expr.kws:
-                    # Fold keyword arguments
-                    try:
-                        pysig = fnty.pysig
-                    except AttributeError:
-                        raise NotImplementedError("unsupported keyword arguments "
-                                                  "when calling %s" % (fnty,))
-                    ba = pysig.bind(*expr.args, **dict(expr.kws))
-                    assert not ba.kwargs
-                    args = ba.args
-                else:
-                    args = expr.args
-
-                argvals = [self.loadvar(a.name) for a in args]
-                argtyps = [self.typeof(a.name) for a in args]
-
-                castvals = [self.context.cast(self.builder, av, at, ft)
-                            for av, at, ft in zip(argvals, argtyps,
-                                                  signature.args)]
-
-            if isinstance(fnty, types.ExternalFunction):
-                # Handle a named external function
-                fndesc = funcdesc.ExternalFunctionDescriptor(
-                    fnty.symbol, fnty.sig.return_type, fnty.sig.args)
-                func = self.context.declare_external_function(
-                        cgutils.get_module(self.builder), fndesc)
-                res = self.context.call_external_function(
-                    self.builder, func, fndesc.argtypes, castvals)
-
-            elif isinstance(fnty, types.Method):
-                # Method of objects are handled differently
-                fnobj = self.loadvar(expr.func.name)
-                res = self.context.call_class_method(self.builder, fnobj,
-                                                     signature, castvals)
-
-            elif isinstance(fnty, types.ExternalFunctionPointer):
-                # Handle a C function pointer
-                pointer = self.loadvar(expr.func.name)
-                res = self.context.call_function_pointer(self.builder, pointer,
-                                                         castvals, fnty.cconv)
-
-            else:
-                if isinstance(signature.return_type, types.Phantom):
-                    return self.context.get_dummy_value()
-                # Normal function resolution (for Numba-compiled functions)
-                impl = self.context.get_function(fnty, signature)
-                if signature.recvr:
-                    # The "self" object is passed as the function object
-                    # for bounded function
-                    the_self = self.loadvar(expr.func.name)
-                    # Prepend the self reference
-                    castvals = [the_self] + castvals
-
-                res = impl(self.builder, castvals)
-                libs = getattr(impl, "libs", ())
-                for lib in libs:
-                    self.library.add_linking_library(lib)
-            return self.context.cast(self.builder, res, signature.return_type,
-                                     resty)
+            return self.lower_call(resty, expr)
 
         elif expr.op == 'pair_first':
             val = self.loadvar(expr.value.name)
