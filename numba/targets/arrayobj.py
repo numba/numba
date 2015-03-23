@@ -130,7 +130,11 @@ def getitem_arraynd_intp(context, builder, sig, args):
         in_strides = cgutils.unpack_tuple(builder, adapted_ary.strides,
                                           count=ndim)
         out_ary.parent = adapted_ary.parent
-        out_ary.nitems = builder.udiv(adapted_ary.nitems, in_shapes[0])
+        adapted_ary_nitems = adapted_ary.nitems
+        zero = lc.Constant.int(adapted_ary_nitems.type, 0)
+        out_ary.nitems = builder.select(
+            builder.icmp(lc.ICMP_EQ, adapted_ary_nitems, zero),
+            zero, builder.udiv(adapted_ary_nitems, in_shapes[0]))
         out_ary.itemsize = adapted_ary.itemsize
         data_p = cgutils.get_item_pointer2(builder, adapted_ary.data, in_shapes,
                                            in_strides, aryty.layout, [idx],
