@@ -193,6 +193,10 @@ unary_math_intr(math.cos, lc.INTR_COS)
 unary_math_extern(math.log1p, "log1pf", "log1p")
 if utils.PYVERSION > (2, 6):
     unary_math_extern(math.expm1, "expm1f", "expm1")
+    unary_math_extern(math.erf, "numba_erff", "numba_erf")
+    unary_math_extern(math.erfc, "numba_erfcf", "numba_erfc")
+    unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma")
+    unary_math_extern(math.lgamma, "numba_lgammaf", "numba_lgamma")
 unary_math_extern(math.tan, "tanf", "tan")
 unary_math_extern(math.asin, "asinf", "asin")
 unary_math_extern(math.acos, "acosf", "acos")
@@ -272,6 +276,40 @@ def copysign_f64_impl(context, builder, sig, args):
     b = builder.and_(b, lc.Constant.int(b.type, DOUBLE_SIGN_MASK))
     res = builder.or_(a, b)
     return int64_as_f64(builder, res)
+
+
+# -----------------------------------------------------------------------------
+
+
+@register
+@implement(math.frexp, types.Kind(types.Float))
+def frexp_impl(context, builder, sig, args):
+    val, = args
+    fltty = context.get_data_type(sig.args[0])
+    intty = context.get_data_type(sig.return_type[1])
+    expptr = cgutils.alloca_once(builder, intty, name='exp')
+    fnty = Type.function(fltty, (fltty, Type.pointer(intty)))
+    fname = {
+        "float": "numba_frexpf",
+        "double": "numba_frexp",
+        }[str(fltty)]
+    fn = cgutils.get_module(builder).get_or_insert_function(fnty, name=fname)
+    res = builder.call(fn, (val, expptr))
+    return cgutils.make_anonymous_struct(builder, (res, builder.load(expptr)))
+
+
+@register
+@implement(math.ldexp, types.Kind(types.Float), types.intc)
+def ldexp_impl(context, builder, sig, args):
+    val, exp = args
+    fltty, intty = map(context.get_data_type, sig.args)
+    fnty = Type.function(fltty, (fltty, intty))
+    fname = {
+        "float": "numba_ldexpf",
+        "double": "numba_ldexp",
+        }[str(fltty)]
+    fn = cgutils.get_module(builder).get_or_insert_function(fnty, name=fname)
+    return builder.call(fn, (val, exp))
 
 
 # -----------------------------------------------------------------------------
@@ -406,6 +444,7 @@ for ty in types.unsigned_domain:
     register(implement(math.pow, types.float64, ty)(builtins.int_upower_impl))
 for ty in types.signed_domain:
     register(implement(math.pow, types.float64, ty)(builtins.int_spower_impl))
-for ty in types.real_domain:
-    register(implement(math.pow, ty, ty)(builtins.real_power_impl))
+
+ty = types.Kind(types.Float)
+register(implement(math.pow, ty, ty)(builtins.real_power_impl))
 

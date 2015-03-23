@@ -188,10 +188,22 @@ class CompilationUnit(object):
         if options.get('arch'):
             opts.append('-arch=%s' % options.pop('arch'))
 
-        for k in ('ftz', 'prec_sqrt', 'prec_div', 'fma'):
+        other_options = (
+            'ftz',
+            'prec_sqrt',
+            'prec_div',
+            'fma',
+        )
+
+        for k in other_options:
             if k in options:
-                v = bool(options.pop(k))
+                v = int(bool(options.pop(k)))
                 opts.append('-%s=%d' % (k.replace('_', '-'), v))
+
+        # If there are any option left
+        if options:
+            optstr = ', '.join(map(repr, options.keys()))
+            raise NvvmError("unsupported option {0}".format(optstr))
 
         # compile
         c_opts = (c_char_p * len(opts))(*[c_char_p(x.encode('utf8'))
@@ -211,9 +223,6 @@ class CompilationUnit(object):
 
         # get log
         self.log = self.get_log()
-
-        if config.DUMP_ASSEMBLY:
-            print(ptxbuf[:].decode('ascii'))
 
         return ptxbuf[:]
 
@@ -245,7 +254,7 @@ default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
 
 # List of supported compute capability in sorted order
-SUPPORTED_CC = (2, 0), (3, 0), (3, 5)
+SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0)
 
 
 def _find_arch(mycc):
@@ -286,14 +295,29 @@ files in the installation of CUDA.  (requires CUDA >=5.5)
 
 class LibDevice(object):
     _cache_ = {}
+    _known_arch = [
+        "compute_20",
+        "compute_30",
+        "compute_35",
+    ]
 
     def __init__(self, arch):
-        '''
+        """
         arch --- must be result from get_arch_option()
-        '''
+        """
         if arch not in self._cache_:
+            arch = self._get_closest_arch(arch)
             self._cache_[arch] = open_libdevice(arch)
+
+        self.arch = arch
         self.bc = self._cache_[arch]
+
+    def _get_closest_arch(self, arch):
+        res = self._known_arch[0]
+        for potential in self._known_arch:
+            if arch >= potential:
+                res = potential
+        return res
 
     def get(self):
         return self.bc
@@ -306,6 +330,58 @@ define internal i32 @___numba_cas_hack(i32* %ptr, i32 %cmp, i32 %val) alwaysinli
 }
 """
 
+# Translation of code from CUDA Programming Guide v6.5, section B.12
+ir_numba_atomic_double_add = """
+define internal double @___numba_atomic_double_add(double* %ptr, double %val) alwaysinline {
+entry:
+    %iptr = bitcast double* %ptr to i64*
+    %old2 = load volatile i64* %iptr
+    br label %attempt
+
+attempt:
+    %old = phi i64 [ %old2, %entry ], [ %cas, %attempt ]
+    %dold = bitcast i64 %old to double
+    %dnew = fadd double %dold, %val
+    %new = bitcast double %dnew to i64
+    %cas = cmpxchg volatile i64* %iptr, i64 %old, i64 %new monotonic
+    %repeat = icmp ne i64 %cas, %old
+    br i1 %repeat, label %attempt, label %done
+
+done:
+    %result = bitcast i64 %old to double
+    ret double %result
+}
+"""
+
+ir_numba_atomic_double_max = """
+define internal double @___numba_atomic_double_max(double* %ptr, double %val) alwaysinline {
+entry:
+    %ptrval = load volatile double* %ptr
+    ; Check if val is a NaN and return *ptr early if so
+    %valnan = fcmp uno double %val, %val
+    br i1 %valnan, label %done, label %lt_check
+
+lt_check:
+    %dold = phi double [ %ptrval, %entry ], [ %dcas, %attempt ]
+    ; Continue attempts if dold < val or dold is NaN (using ult semantics)
+    %lt = fcmp ult double %dold, %val
+    br i1 %lt, label %attempt, label %done
+
+attempt:
+    ; Attempt to swap in the larger value
+    %iold = bitcast double %dold to i64
+    %iptr = bitcast double* %ptr to i64*
+    %ival = bitcast double %val to i64
+    %cas = cmpxchg volatile i64* %iptr, i64 %iold, i64 %ival monotonic
+    %dcas = bitcast i64 %cas to double
+    br label %lt_check
+
+done:
+    ; Return max
+    %ret = phi double [ %ptrval, %entry ], [ %dold, %lt_check ]
+    ret double %ret
+}
+"""
 
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
@@ -313,10 +389,19 @@ def llvm_to_ptx(llvmir, **opts):
     # New LLVM generate a shorthand for datalayout that NVVM does not know
     llvmir = llvmir.replace('e-i64:64-v16:16-v32:32-n16:32:64',
                             default_data_layout)
-    # Replace with our cmpxchg implementation because LLVM 3.5 has a new
-    # semantic for cmpxchg.
-    llvmir = llvmir.replace('declare i32 @___numba_cas_hack(i32*, i32, i32)',
-                            ir_numba_cas_hack)
+
+    # Replace with our cmpxchg and atomic implementations because LLVM 3.5 has
+    # a new semantic for cmpxchg.
+    replacements = [
+        ('declare i32 @___numba_cas_hack(i32*, i32, i32)',
+            ir_numba_cas_hack),
+        ('declare double @___numba_atomic_double_add(double*, double)',
+            ir_numba_atomic_double_add),
+        ('declare double @___numba_atomic_double_max(double*, double)',
+            ir_numba_atomic_double_max)]
+
+    for decl, fn in replacements:
+        llvmir = llvmir.replace(decl, fn)
 
     llvmir = llvm33_to_32_ir(llvmir)
     cu.add_module(llvmir.encode('utf8'))

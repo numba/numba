@@ -3,25 +3,19 @@ from __future__ import print_function, division, absolute_import
 from llvmlite.llvmpy.core import Type, Builder, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils, errcode
+from numba import types, cgutils
 
 
 class _ArgManager(object):
     """
     A utility class to handle argument unboxing and cleanup
     """
-    def __init__(self, builder, api, nargs):
+    def __init__(self, builder, api, endblk, nargs):
         self.builder = builder
         self.api = api
         self.arg_count = 0  # how many function arguments have been processed
         self.cleanups = []
-
-        # Block that returns after erroneous argument unboxing/cleanup
-        self.endblk = cgutils.append_basic_block(self.builder, "arg.end")
-        with cgutils.goto_block(self.builder, self.endblk):
-            self.builder.ret(self.api.get_null_object())
-
-        self.nextblk = self.endblk
+        self.nextblk = endblk
 
     def add_arg(self, obj, ty):
         """
@@ -33,29 +27,25 @@ class _ArgManager(object):
             arg2.err -> arg1.err -> arg0.err -> arg.end (returns)
         """
         # Unbox argument
-        val, dtor = self.api.to_native_arg(self.builder.load(obj), ty)
+        native = self.api.to_native_value(self.builder.load(obj), ty)
 
-        # check for Python C-API Error
-        error_check = self.api.err_occurred()
-        err_happened = self.builder.icmp(lc.ICMP_NE, error_check,
-                                         self.api.get_null_object())
+        # If an error occurred, go to the cleanup block for the previous argument.
+        with cgutils.if_unlikely(self.builder, native.is_error):
+            self.builder.branch(self.nextblk)
 
-        # Write the cleanup block
+        # Write the cleanup block for this argument
         cleanupblk = cgutils.append_basic_block(self.builder,
                                                 "arg%d.err" % self.arg_count)
         with cgutils.goto_block(self.builder, cleanupblk):
-            dtor()
+            if native.cleanup is not None:
+                native.cleanup()
+                self.cleanups.append(native.cleanup)
             # Go to next cleanup block
             self.builder.branch(self.nextblk)
 
-        # If an error occurred, go to the cleanup block
-        with cgutils.if_unlikely(self.builder, err_happened):
-            self.builder.branch(cleanupblk)
-
-        self.cleanups.append(dtor)
         self.nextblk = cleanupblk
         self.arg_count += 1
-        return val
+        return native.value
 
     def emit_cleanup(self):
         """Emit the cleanup code after we are done with the arguments
@@ -64,13 +54,31 @@ class _ArgManager(object):
             dtor()
 
 
+class _GilManager(object):
+    """
+    A utility class to handle releasing the GIL and then re-acquiring it
+    again.
+    """
+
+    def __init__(self, builder, api, argman):
+        self.builder = builder
+        self.api = api
+        self.argman = argman
+        self.thread_state = api.save_thread()
+
+    def emit_cleanup(self):
+        self.api.restore_thread(self.thread_state)
+        self.argman.emit_cleanup()
+
+
 class PyCallWrapper(object):
-    def __init__(self, context, module, func, fndesc, exceptions):
+    def __init__(self, context, module, func, fndesc, call_helper,
+                 release_gil):
         self.context = context
         self.module = module
         self.func = func
         self.fndesc = fndesc
-        self.exceptions = exceptions
+        self.release_gil = release_gil
 
     def build(self):
         wrapname = "wrapper.%s" % self.func.name
@@ -109,75 +117,66 @@ class PyCallWrapper(object):
         with cgutils.if_unlikely(builder, pred):
             builder.ret(api.get_null_object())
 
-        argman = _ArgManager(builder, api, nargs)
+        # Block that returns after erroneous argument unboxing/cleanup
+        endblk = cgutils.append_basic_block(builder, "arg.end")
+        with cgutils.goto_block(builder, endblk):
+            builder.ret(api.get_null_object())
+
+        cleanup_manager = _ArgManager(builder, api, endblk, nargs)
 
         innerargs = []
         for obj, ty in zip(objs, self.fndesc.argtypes):
-            val = argman.add_arg(obj, ty)
+            val = cleanup_manager.add_arg(obj, ty)
             innerargs.append(val)
+
+        if self.release_gil:
+            cleanup_manager = _GilManager(builder, api, cleanup_manager)
 
         # The wrapped function doesn't take a full closure, only
         # the Environment object.
         env = self.context.get_env_from_closure(builder, closure)
 
-        status, res = self.context.call_function(builder, self.func,
-                                                 self.fndesc.restype,
-                                                 self.fndesc.argtypes,
-                                                 innerargs, env)
+        status, res = self.context.call_conv.call_function(
+            builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
+            innerargs, env)
         # Do clean up
-        argman.emit_cleanup()
+        cleanup_manager.emit_cleanup()
 
         # Determine return status
-        with cgutils.if_likely(builder, status.ok):
-            with cgutils.ifthen(builder, status.none):
+        with cgutils.if_likely(builder, status.is_ok):
+            # Ok => return boxed Python value
+            with cgutils.ifthen(builder, status.is_none):
                 api.return_none()
 
             retval = api.from_native_return(res, self.fndesc.restype)
             builder.ret(retval)
 
-        with cgutils.ifthen(builder, builder.not_(status.exc)):
-            # !ok && !exc
+        with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
             # User exception raised
-            self.make_exception_switch(api, builder, status.code)
+            self.make_exception_switch(api, builder, status)
 
-        # !ok && exc
+        # Error out
         builder.ret(api.get_null_object())
 
-    def make_exception_switch(self, api, builder, code):
-        """Handle user defined exceptions.
-        Build a switch to check which exception class was raised.
+    def make_exception_switch(self, api, builder, status):
         """
-        nexc = len(self.exceptions)
-        elseblk = cgutils.append_basic_block(builder, ".invalid.user.exception")
-        swt = builder.switch(code, elseblk, n=nexc)
-        for num, exc in self.exceptions.items():
-            bb = cgutils.append_basic_block(builder,
-                                            ".user.exception.%d" % num)
-            swt.add_case(Constant.int(code.type, num), bb)
-            builder.position_at_end(bb)
-            api.raise_exception(exc, exc)
+        Handle user exceptions.  Unserialize the exception info and raise it.
+        """
+        code = status.code
+        # Handle user exceptions
+        with cgutils.ifthen(builder, status.is_user_exc):
+            exc = api.unserialize(status.excinfoptr)
+            with cgutils.if_likely(builder,
+                                   cgutils.is_not_null(builder, exc)):
+                api.raise_object(exc)  # steals ref
             builder.ret(api.get_null_object())
 
-        builder.position_at_end(elseblk)
-
-        # Handle native error
-        elseblk = cgutils.append_basic_block(builder, ".invalid.native.error")
-        swt = builder.switch(code, elseblk, n=len(errcode.error_names))
-
-        msgfmt = "{error} in native function: {fname}"
-        for errnum, errname in errcode.error_names.items():
-            bb = cgutils.append_basic_block(builder,
-                                            ".native.error.%d" % errnum)
-            swt.add_case(Constant.int(code.type, errnum), bb)
-            builder.position_at_end(bb)
-
-            api.raise_native_error(msgfmt.format(error=errname,
-                                                 fname=self.fndesc.mangled_name))
+        with cgutils.ifthen(builder, status.is_stop_iteration):
+            api.err_set_none("PyExc_StopIteration")
             builder.ret(api.get_null_object())
 
-        builder.position_at_end(elseblk)
         msg = "unknown error in native function: %s" % self.fndesc.mangled_name
-        api.raise_native_error(msg)
+        api.err_set_string("PyExc_SystemError", msg)
 
     def make_const_string(self, string):
         return self.context.insert_const_string(self.module, string)

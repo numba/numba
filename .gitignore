@@ -7,7 +7,6 @@
 .coverage
 build/
 docs/_build/
-docs/source/modules/
 dist/
 htmlcov/
 *.egg-info

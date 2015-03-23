@@ -24,6 +24,8 @@ class Assigner(object):
     def __init__(self):
         # { destination variable name -> source Var object }
         self.dest_to_src = {}
+        # Basically a reverse mapping of dest_to_src:
+        # { source variable name -> all destination names in dest_to_src }
         self.src_invalidate = collections.defaultdict(list)
         self.unused_dests = set()
 
@@ -34,9 +36,9 @@ class Assigner(object):
         """
         srcname = srcvar.name
         destname = destvar.name
-        if srcname in self.src_invalidate:
-            # Invalidate all previously known simplifications
-            for d in self.src_invalidate.pop(srcname):
+        if destname in self.src_invalidate:
+            # destvar will change, invalidate all previously known simplifications
+            for d in self.src_invalidate.pop(destname):
                 self.dest_to_src.pop(d)
         if srcname in self.dest_to_src:
             srcvar = self.dest_to_src[srcname]
@@ -55,6 +57,32 @@ class Assigner(object):
             return self.dest_to_src[destname]
         self.unused_dests.discard(destname)
         return None
+
+
+class YieldPoint(object):
+
+    def __init__(self, block, inst):
+        assert isinstance(block, ir.Block)
+        assert isinstance(inst, ir.Yield)
+        self.block = block
+        self.inst = inst
+        self.live_vars = None
+        self.weak_live_vars = None
+
+
+class GeneratorInfo(object):
+
+    def __init__(self):
+        # { index: YieldPoint }
+        self.yield_points = {}
+        # Ordered list of variable names
+        self.state_vars = []
+
+    def get_yield_points(self):
+        """
+        Return an iterable of YieldPoint instances.
+        """
+        return self.yield_points.values()
 
 
 class Interpreter(object):
@@ -81,13 +109,21 @@ class Interpreter(object):
         self.blocks = {}
         # { name: value } of global variables used by the bytecode
         self.used_globals = {}
+        # { name: [definitions] } of local variables
+        self.definitions = collections.defaultdict(list)
+        # { ir.Block: { variable names (potentially) alive at start of block } }
+        self.block_entry_vars = {}
+
+        if self.bytecode.is_generator:
+            self.generator_info = GeneratorInfo()
+        else:
+            self.generator_info = None
 
         # Temp states during interpretation
         self.current_block = None
         self.current_block_offset = None
         self.syntax_blocks = []
         self.dfainfo = None
-        self.constants = {}
 
     def _fill_global_scope(self, scope):
         """TODO
@@ -100,21 +136,108 @@ class Interpreter(object):
         """
         return self.used_globals
 
-    def _fill_args_into_scope(self, scope):
-        for arg in self.argspec.args:
-            scope.define(name=arg, loc=self.loc)
+    def get_block_entry_vars(self, block):
+        """
+        Return a set of variable names possibly alive at the beginning of
+        the block.
+        """
+        return self.block_entry_vars[block]
 
     def interpret(self):
         firstblk = min(self.cfa.blocks.keys())
         self.loc = ir.Loc(filename=self.bytecode.filename,
                           line=self.bytecode[firstblk].lineno)
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
-        self._fill_args_into_scope(self.current_scope)
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        # Clean up
+        # Post-processing and analysis on generated IR
         self._insert_var_dels()
+        self._compute_live_variables()
+        if self.generator_info:
+            self._compute_generator_info()
+
+    def _compute_live_variables(self):
+        """
+        Compute the live variables at the beginning of each block
+        and at each yield point.
+        This must be done after insertion of ir.Dels.
+        """
+        # Scan for variable additions and deletions in each block
+        block_var_adds = {}
+        block_var_dels = {}
+        cfg = self.cfa.graph
+
+        for ir_block in self.blocks.values():
+            self.block_entry_vars[ir_block] = set()
+            adds = block_var_adds[ir_block] = set()
+            dels = block_var_dels[ir_block] = set()
+            for stmt in ir_block.body:
+                if isinstance(stmt, ir.Assign):
+                    name = stmt.target.name
+                    adds.add(name)
+                    dels.discard(name)
+                elif isinstance(stmt, ir.Del):
+                    name = stmt.value
+                    adds.discard(name)
+                    dels.add(name)
+
+        # Propagate defined variables from every block to its successors.
+        # (note the entry block automatically gets an empty set)
+        changed = True
+        while changed:
+            # We iterate until the result stabilizes.  This is necessary
+            # because of loops in the graph.
+            changed = False
+            for i in cfg.topo_order():
+                ir_block = self.blocks[i]
+                v = self.block_entry_vars[ir_block].copy()
+                v |= block_var_adds[ir_block]
+                v -= block_var_dels[ir_block]
+                for j, _ in cfg.successors(i):
+                    succ = self.blocks[j]
+                    succ_entry_vars = self.block_entry_vars[succ]
+                    if not succ_entry_vars >= v:
+                        succ_entry_vars.update(v)
+                        changed = True
+
+    def _compute_generator_info(self):
+        """
+        Compute the generator's state variables as the union of live variables
+        at all yield points.
+        """
+        gi = self.generator_info
+        for yp in gi.get_yield_points():
+            live_vars = set(self.block_entry_vars[yp.block])
+            weak_live_vars = set()
+            stmts = iter(yp.block.body)
+            for stmt in stmts:
+                if isinstance(stmt, ir.Assign):
+                    if stmt.value is yp.inst:
+                        break
+                    live_vars.add(stmt.target.name)
+                elif isinstance(stmt, ir.Del):
+                    live_vars.remove(stmt.value)
+            else:
+                assert 0, "couldn't find yield point"
+            # Try to optimize out any live vars that are deleted immediately
+            # after the yield point.
+            for stmt in stmts:
+                if isinstance(stmt, ir.Del):
+                    name = stmt.value
+                    if name in live_vars:
+                        live_vars.remove(name)
+                        weak_live_vars.add(name)
+                else:
+                    break
+            yp.live_vars = live_vars
+            yp.weak_live_vars = weak_live_vars
+
+        st = set()
+        for yp in gi.get_yield_points():
+            st |= yp.live_vars
+            st |= yp.weak_live_vars
+        gi.state_vars = sorted(st)
 
     def _insert_var_dels(self):
         """
@@ -128,7 +251,7 @@ class Interpreter(object):
         for offset, ir_block in self.blocks.items():
             for stmt in ir_block.body:
                 for var_name in stmt.list_vars():
-                    if stmt.is_terminator and not isinstance(stmt, ir.Return):
+                    if stmt.is_terminator and not stmt.is_exit:
                         # Move the "last use" at the beginning of successor
                         # blocks.
                         for succ, _ in cfg.successors(offset):
@@ -155,9 +278,9 @@ class Interpreter(object):
             if stmt is None:
                 ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
             else:
-                # If the variable is used in a Return statement, we
-                # don't insert anything.
-                if not isinstance(stmt, ir.Return):
+                # If the variable is used in an exiting statement
+                # (e.g. raise or return), we don't insert anything.
+                if not stmt.is_exit:
                     ir_block.insert_after(ir.Del(var_name, loc=stmt.loc), stmt)
 
     def _compute_var_disposal(self, var_name, use_map):
@@ -220,11 +343,10 @@ class Interpreter(object):
         return tails
 
     def init_first_block(self):
-        # Duplicate arguments so that these values can be casted into different
-        # types.
-        for aname in self.argspec.args:
-            aval = self.get(aname)
-            self.store(aval, aname, redefine=True)
+        # Define variables receiving the function arguments
+        for index, name in enumerate(self.argspec.args):
+            val = ir.Arg(index=index, name=name, loc=self.loc)
+            self.store(val, name)
 
     def _iter_inst(self):
         for blkct, block in enumerate(self.cfa.iterliveblocks()):
@@ -342,11 +464,21 @@ class Interpreter(object):
             print('label %s:' % (offset,), file=file)
             block.dump(file=file)
 
+    def dump_generator_info(self, file=None):
+        file = file or sys.stdout
+        gi = self.generator_info
+        print("generator state variables:", sorted(gi.state_vars), file=file)
+        for index, yp in sorted(gi.yield_points.items()):
+            print("yield point #%d: live variables = %s, weak live variables = %s"
+                  % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
+                  file=file)
+
+
     # --- Scope operations ---
 
     def store(self, value, name, redefine=False):
         """
-        Store *value* (a Var instance) into the variable named *name*
+        Store *value* (a Expr or Var instance) into the variable named *name*
         (a str object).
         """
         if redefine or self.current_block_offset in self.cfa.backbone:
@@ -357,6 +489,7 @@ class Interpreter(object):
             value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
+        self.definitions[name].append(value)
 
     def get(self, name):
         """
@@ -368,6 +501,23 @@ class Interpreter(object):
         if var is None:
             var = self.current_scope.get(name)
         return var
+
+    def get_definition(self, value):
+        """
+        Get the definition site for the given Var instance.
+        A Expr instance is returned.
+        """
+        while True:
+            if not isinstance(value, ir.Var):
+                return value
+            defs = self.definitions[value.name]
+            if len(defs) == 0:
+                raise KeyError("no definition for %r"
+                               % (value.name,))
+            if len(defs) > 1:
+                raise KeyError("more than one definition for %r"
+                               % (value.name,))
+            value = defs[0]
 
     # --- Block operations ---
 
@@ -615,7 +765,6 @@ class Interpreter(object):
         self.used_globals[name] = value
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
-        self.constants[res] = value
 
     def op_LOAD_DEREF(self, inst, res):
         name = self.code_freevars[inst.arg]
@@ -881,5 +1030,15 @@ class Interpreter(object):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
     def op_RAISE_VARARGS(self, inst, exc):
-        stmt = ir.Raise(exception=self.constants[exc], loc=self.loc)
+        if exc is not None:
+            exc = self.get(exc)
+        stmt = ir.Raise(exception=exc, loc=self.loc)
         self.current_block.append(stmt)
+
+    def op_YIELD_VALUE(self, inst, value, res):
+        dct = self.generator_info.yield_points
+        index = len(dct) + 1
+        inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
+        yp = YieldPoint(self.current_block, inst)
+        dct[index] = yp
+        return self.store(inst, res)

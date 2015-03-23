@@ -7,15 +7,20 @@ import numpy
 
 from llvmlite import ir as llvmir
 import llvmlite.llvmpy.core as lc
-from llvmlite.llvmpy.core import Type, Constant
+from llvmlite.llvmpy.core import Type, Constant, LLVMException
+import llvmlite.binding as ll
 
 import numba
-from numba import types, utils, cgutils, typing, numpy_support, errcode
+from numba import types, utils, cgutils, typing, numpy_support
+from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
-from numba.targets.imputils import (user_function, python_attr_impl,
+from numba.targets.imputils import (user_function, user_generator,
+                                    python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry, type_registry)
 from . import arrayobj, builtins, iterators, rangeobj, optional
+from numba import datamodel
+
 try:
     from . import npdatetime
 except NotImplementedError:
@@ -50,44 +55,39 @@ STRUCT_TYPES = {
     types.slice3_type: builtins.Slice,
 }
 
-Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
-
-RETCODE_OK = Constant.int_signextend(Type.int(), 0)
-RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
-RETCODE_EXC = Constant.int_signextend(Type.int(), -1)
-
 
 class Overloads(object):
     def __init__(self):
+        # A list of (signature, implementation)
         self.versions = []
 
     def find(self, sig):
-        for i, ver in enumerate(self.versions):
-            if ver.signature == sig:
-                return ver
+        for ver_sig, impl in self.versions:
+            if ver_sig == sig:
+                return impl
 
             # As generic type
-            nargs_matches = len(ver.signature.args) == len(sig.args)
-            varargs_matches = (ver.signature.args and
-                               ver.signature.args[-1] == types.VarArg)
-            if nargs_matches or varargs_matches:
-                match = True
-                for formal, actual in zip(ver.signature.args, sig.args):
-                    if formal == types.VarArg:
-                        # vararg argument matches everything
-                        break
-
-                    match = self._match(formal, actual)
-                    if not match:
-                        break
-
-                if match:
-                    return ver
+            if self._match_arglist(ver_sig.args, sig.args):
+                return impl
 
         raise NotImplementedError(self, sig)
 
-    @staticmethod
-    def _match(formal, actual):
+    def _match_arglist(self, formal_args, actual_args):
+        if formal_args and isinstance(formal_args[-1], types.VarArg):
+            formal_args = (
+                formal_args[:-1] +
+                (formal_args[-1].dtype,) * (len(actual_args) - len(formal_args) + 1))
+
+        if len(formal_args) != len(actual_args):
+            return False
+
+        for formal, actual in zip(formal_args, actual_args):
+            if not self._match(formal, actual):
+                return False
+
+        return True
+
+    def _match(self, formal, actual):
         if formal == actual:
             # formal argument matches actual arguments
             return True
@@ -100,8 +100,28 @@ class Overloads(object):
             # is of that kind
             return True
 
-    def append(self, impl):
-        self.versions.append(impl)
+    def append(self, impl, sig):
+        self.versions.append((sig, impl))
+
+
+@utils.runonce
+def _load_global_helpers():
+    """
+    Execute once to install special symbols into the LLVM symbol table.
+    """
+    ll.add_symbol("Py_None", id(None))
+
+    # Add C helper functions
+    for c_helpers in (_helperlib.c_helpers, _dynfunc.c_helpers):
+        for py_name in c_helpers:
+            c_name = "numba_" + py_name
+            c_address = c_helpers[py_name]
+            ll.add_symbol(c_name, c_address)
+
+    # Add all built-in exception classes
+    for obj in utils.builtins.__dict__.values():
+        if isinstance(obj, type) and issubclass(obj, BaseException):
+            ll.add_symbol("PyExc_%s" % (obj.__name__), id(obj))
 
 
 class BaseContext(object):
@@ -127,17 +147,19 @@ class BaseContext(object):
     implement_pow_as_math_call = False
 
     def __init__(self, typing_context):
+        _load_global_helpers()
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
 
         self.defns = defaultdict(Overloads)
         self.attrs = defaultdict(Overloads)
-        self.users = utils.UniqueDict()
+        self.generators = {}
 
-        self.insert_func_defn(builtin_registry.functions)
-        self.insert_attr_defn(builtin_registry.attributes)
+        self.install_registry(builtin_registry)
 
         self.cached_internal_func = {}
+
+        self.data_model_manager = datamodel.default_manager
 
         # Initialize
         self.init()
@@ -148,66 +170,58 @@ class BaseContext(object):
         """
         pass
 
+    def get_arg_packer(self, fe_args):
+        return datamodel.ArgPacker(self.data_model_manager, fe_args)
+
     @property
     def target_data(self):
         raise NotImplementedError
 
+    def install_registry(self, registry):
+        """
+        Install a *registry* (a imputils.Registry instance) of function
+        and attribute implementations.
+        """
+        self.insert_func_defn(registry.functions)
+        self.insert_attr_defn(registry.attributes)
+
     def insert_func_defn(self, defns):
-        for defn in defns:
-            self.defns[defn.key].append(defn)
+        for impl, func_sigs in defns:
+            for func, sig in func_sigs:
+                self.defns[func].append(impl, sig)
 
     def insert_attr_defn(self, defns):
-        for imp in defns:
-            self.attrs[imp.attr].append(imp)
+        for impl in defns:
+            self.attrs[impl.attr].append(impl, impl.signature)
 
     def insert_user_function(self, func, fndesc, libs=()):
-        imp = user_function(func, fndesc, libs)
-        self.defns[func].append(imp)
+        impl = user_function(fndesc, libs)
+        self.defns[func].append(impl, impl.signature)
 
-        baseclses = (typing.templates.ConcreteTemplate,)
-        glbls = dict(key=func, cases=[imp.signature])
-        name = "CallTemplate(%s)" % fndesc.mangled_name
-        self.users[func] = type(name, baseclses, glbls)
+    def add_user_function(self, func, fndesc, libs=()):
+        if func not in self.defns:
+            msg = "{func} is not a registered user function"
+            raise KeyError(msg.format(func=func))
+        impl = user_function(fndesc, libs)
+        self.defns[func].append(impl, impl.signature)
+
+    def insert_generator(self, genty, gendesc, libs=()):
+        assert isinstance(genty, types.Generator)
+        impl = user_generator(gendesc, libs)
+        self.generators[genty] = gendesc, impl
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
         for name, vtype in utils.iteritems(attrs):
-            imp = python_attr_impl(clsty, name, vtype)
-            self.attrs[imp.attr].append(imp)
+            impl = python_attr_impl(clsty, name, vtype)
+            self.attrs[impl.attr].append(impl, impl.signature)
 
     def remove_user_function(self, func):
         """
         Remove user function *func*.
         KeyError is raised if the function isn't known to us.
         """
-        del self.users[func]
         del self.defns[func]
-
-    def get_user_function(self, func):
-        return self.users[func]
-
-    def get_function_type(self, fndesc):
-        """
-        Get the implemented Function type for the high-level *fndesc*.
-        Some parameters can be added or shuffled around.
-        This is kept in sync with call_function() and get_arguments().
-
-        Calling Convention
-        ------------------
-        Returns: -2 for return none in native function;
-                 -1 for failure with python exception set;
-                  0 for success;
-                 >0 for user error code.
-        Return value is passed by reference as the first argument.
-
-        Actual arguments starts at the 2rd argument position.
-        Caller is responsible to allocate space for return value.
-        """
-        argtypes = [self.get_argument_type(aty)
-                    for aty in fndesc.argtypes]
-        resptr = self.get_return_type(fndesc.restype)
-        fnty = Type.function(Type.int(), [resptr] + argtypes)
-        return fnty
 
     def get_external_function_type(self, fndesc):
         argtypes = [self.get_argument_type(aty)
@@ -218,12 +232,12 @@ class BaseContext(object):
         return fnty
 
     def declare_function(self, module, fndesc):
-        fnty = self.get_function_type(fndesc)
+        fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
         assert fn.is_declaration
-        for ak, av in zip(fndesc.args, self.get_arguments(fn)):
-            av.name = "arg.%s" % ak
-        fn.args[0].name = ".ret"
+        self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes)
+        if fndesc.inline:
+            fn.attributes.add('alwaysinline')
         return fn
 
     def declare_external_function(self, module, fndesc):
@@ -235,40 +249,31 @@ class BaseContext(object):
         return fn
 
     def insert_const_string(self, mod, string):
+        """
+        Insert constant *string* (a str object) into module *mod*.
+        """
         stringtype = GENERIC_POINTER
-        text = Constant.stringz(string)
         name = ".const.%s" % string
-        for gv in mod.global_variables:
-            if gv.name == name and gv.type.pointee == text.type:
-                break
-        else:
-            gv = cgutils.global_constant(mod, name, text)
-            gv.linkage = lc.LINKAGE_INTERNAL
+        text = cgutils.make_bytearray(string.encode("utf-8") + b"\x00")
+        gv = self.insert_unique_const(mod, name, text)
         return Constant.bitcast(gv, stringtype)
 
-    def get_arguments(self, func):
+    def insert_unique_const(self, mod, name, val):
         """
-        Get the Python-level arguments of LLVM *func*.
-        See get_function_type() for the calling convention.
+        Insert a unique internal constant named *name*, with LLVM value
+        *val*, into module *mod*.
         """
-        return func.args[1:]
+        gv = mod.get_global(name)
+        if gv is not None:
+            return gv
+        else:
+            return cgutils.global_constant(mod, name, val)
 
     def get_argument_type(self, ty):
-        if ty == types.boolean:
-            return self.get_data_type(ty)
-        elif self.is_struct_type(ty):
-            return Type.pointer(self.get_value_type(ty))
-        else:
-            return self.get_value_type(ty)
+        return self.data_model_manager[ty].get_argument_type()
 
     def get_return_type(self, ty):
-        if isinstance(ty, types.Optional):
-            return self.get_return_type(ty.type)
-        elif self.is_struct_type(ty):
-            return self.get_argument_type(ty)
-        else:
-            argty = self.get_argument_type(ty)
-            return Type.pointer(argty)
+        return self.data_model_manager[ty].get_return_type()
 
     def get_data_type(self, ty):
         """
@@ -285,109 +290,25 @@ class BaseContext(object):
         else:
             return fac(self, ty)
 
-        if (isinstance(ty, types.Dummy) or
-                isinstance(ty, types.Module) or
-                isinstance(ty, types.Function) or
-                isinstance(ty, types.Dispatcher) or
-                isinstance(ty, types.Object) or
-                isinstance(ty, types.Macro)):
-            return PYOBJECT
-
-        elif isinstance(ty, types.CPointer):
-            dty = self.get_data_type(ty.dtype)
-            return Type.pointer(dty)
-
-        elif isinstance(ty, types.Optional):
-            return self.get_struct_type(self.make_optional(ty))
-
-        elif isinstance(ty, types.Array):
-            return self.get_struct_type(self.make_array(ty))
-
-        elif isinstance(ty, types.UniTuple):
-            dty = self.get_value_type(ty.dtype)
-            return Type.array(dty, ty.count)
-
-        elif isinstance(ty, types.Tuple):
-            dtys = [self.get_value_type(t) for t in ty]
-            return Type.struct(dtys)
-
-        elif isinstance(ty, types.Record):
-            # Record are represented as byte array
-            return Type.struct([Type.array(Type.int(8), ty.size)])
-
-        elif isinstance(ty, types.UnicodeCharSeq):
-            charty = Type.int(numpy_support.sizeof_unicode_char * 8)
-            return Type.struct([Type.array(charty, ty.count)])
-
-        elif isinstance(ty, types.CharSeq):
-            charty = Type.int(8)
-            return Type.struct([Type.array(charty, ty.count)])
-
-        elif ty in STRUCT_TYPES:
-            return self.get_struct_type(STRUCT_TYPES[ty])
-
-        else:
-            try:
-                impl = struct_registry.match(ty)
-            except KeyError:
-                pass
-            else:
-                return self.get_struct_type(impl(ty))
-
-        if isinstance(ty, types.Pair):
-            pairty = self.make_pair(ty.first_type, ty.second_type)
-            return self.get_struct_type(pairty)
-
-        else:
-            return LTYPEMAP[ty]
+        return self.data_model_manager[ty].get_data_type()
 
     def get_value_type(self, ty):
-        if ty == types.boolean:
-            return Type.int(1)
-        dataty = self.get_data_type(ty)
-
-        if isinstance(ty, types.Record):
-            # Record data are passed by refrence
-            memory = dataty.elements[0]
-            return Type.struct([Type.pointer(memory)])
-
-        return dataty
+        return self.data_model_manager[ty].get_value_type()
 
     def pack_value(self, builder, ty, value, ptr):
         """Pack data for array storage
         """
-        if isinstance(ty, types.Record):
-            pdata = cgutils.get_record_data(builder, value)
-            databuf = builder.load(pdata)
-            casted = builder.bitcast(ptr, Type.pointer(databuf.type))
-            builder.store(databuf, casted)
-            return
-
-        if ty == types.boolean:
-            value = cgutils.as_bool_byte(builder, value)
-        assert value.type == ptr.type.pointee
-        builder.store(value, ptr)
+        dataval = self.data_model_manager[ty].as_data(builder, value)
+        builder.store(dataval, ptr)
 
     def unpack_value(self, builder, ty, ptr):
         """Unpack data from array storage
         """
-
-        if isinstance(ty, types.Record):
-            vt = self.get_value_type(ty)
-            tmp = cgutils.alloca_once(builder, vt)
-            dataptr = cgutils.inbound_gep(builder, ptr, 0, 0)
-            builder.store(dataptr, cgutils.inbound_gep(builder, tmp, 0, 0))
-            return builder.load(tmp)
-
-        assert cgutils.is_pointer(ptr.type)
-        value = builder.load(ptr)
-        if ty == types.boolean:
-            return builder.trunc(value, Type.int(1))
-        else:
-            return value
+        dm = self.data_model_manager[ty]
+        return dm.load_from_data_pointer(builder, ptr)
 
     def is_struct_type(self, ty):
-        return cgutils.is_struct(self.get_data_type(ty))
+        return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
 
     def get_constant_generic(self, builder, ty, val):
         """
@@ -395,14 +316,18 @@ class BaseContext(object):
         """
         if self.is_struct_type(ty):
             return self.get_constant_struct(builder, ty, val)
-        elif ty == types.string:
-            return self.get_constant_string(builder, ty, val)
+
+        elif isinstance(ty, types.ExternalFunctionPointer):
+            ptrty = self.get_function_pointer_type(ty)
+            ptrval = ty.get_pointer(val)
+            return builder.inttoptr(self.get_constant(types.intp, ptrval),
+                                    ptrty)
+
         else:
             return self.get_constant(ty, val)
 
     def get_constant_struct(self, builder, ty, val):
         assert self.is_struct_type(ty)
-        module = cgutils.get_module(builder)
 
         if ty in types.complex_domain:
             if ty == types.complex64:
@@ -422,8 +347,13 @@ class BaseContext(object):
                       for i, v in enumerate(val)]
             return Constant.struct(consts)
 
+        elif isinstance(ty, types.Record):
+            consts = [self.get_constant(types.int8, b)
+                      for b in bytearray(val.tostring())]
+            return Constant.array(consts[0].type, consts)
+
         else:
-            raise NotImplementedError(ty)
+            raise NotImplementedError("%s as constant unsupported" % ty)
 
     def get_constant(self, ty, val):
         assert not self.is_struct_type(ty)
@@ -450,7 +380,7 @@ class BaseContext(object):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
 
-        raise NotImplementedError(ty)
+        raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
 
     def get_constant_undef(self, ty):
         lty = self.get_value_type(ty)
@@ -479,6 +409,10 @@ class BaseContext(object):
             return _wrap_impl(imp, self, sig)
 
     def get_function(self, fn, sig):
+        """
+        Return the implementation of function *fn* for signature *sig*.
+        The return value is a callable with the signature (builder, args).
+        """
         if isinstance(fn, types.Function):
             key = fn.template.key
 
@@ -503,6 +437,16 @@ class BaseContext(object):
         except NotImplementedError:
             raise Exception("No definition for lowering %s%s" % (key, sig))
 
+    def get_generator_desc(self, genty):
+        """
+        """
+        return self.generators[genty][0]
+
+    def get_generator_impl(self, genty):
+        """
+        """
+        return self.generators[genty][1]
+
     def get_bound_function(self, builder, obj, ty):
         return obj
 
@@ -513,11 +457,31 @@ class BaseContext(object):
             offset = typ.offset(attr)
             elemty = typ.typeof(attr)
 
-            @impl_attribute(typ, attr, elemty)
-            def imp(context, builder, typ, val):
-                dptr = cgutils.get_record_member(builder, val, offset,
-                                                 self.get_data_type(elemty))
-                return self.unpack_value(builder, elemty, dptr)
+            if isinstance(elemty, types.NestedArray):
+                # Inside a structured type only the array data is stored, so we
+                # create an array structure to point to that data.
+                aryty = arrayobj.make_array(elemty)
+                @impl_attribute(typ, attr, elemty)
+                def imp(context, builder, typ, val):
+                    ary = aryty(context, builder)
+                    dtype = elemty.dtype
+                    ary.nitems = context.get_constant(types.intp, elemty.nitems)
+                    ary.itemsize = context.get_constant(types.intp, elemty.size)
+                    ary.data = cgutils.get_record_member(builder, val, offset,
+                                                         self.get_data_type(dtype))
+                    ary.shape = cgutils.pack_array(builder,
+                                                   [ self.get_constant(types.intp, s)
+                                                     for s in elemty.shape ])
+                    ary.strides = cgutils.pack_array(builder,
+                                                     [self.get_constant(types.intp, s)
+                                                     for s in elemty.strides ])
+                    return ary._getvalue()
+            else:
+                @impl_attribute(typ, attr, elemty)
+                def imp(context, builder, typ, val):
+                    dptr = cgutils.get_record_member(builder, val, offset,
+                                                     self.get_data_type(elemty))
+                    return self.unpack_value(builder, elemty, dptr)
             return imp
 
         if isinstance(typ, types.Module):
@@ -558,99 +522,30 @@ class BaseContext(object):
         """
         Argument representation to local value representation
         """
-        if ty == types.boolean:
-            return builder.trunc(val, self.get_value_type(ty))
-        elif cgutils.is_struct_ptr(val.type):
-            return builder.load(val)
-        return val
+        return self.data_model_manager[ty].from_argument(builder, val)
+
+    def get_returned_value(self, builder, ty, val):
+        """
+        Return value representation to local value representation
+        """
+        return self.data_model_manager[ty].from_return(builder, val)
 
     def get_return_value(self, builder, ty, val):
         """
         Local value representation to return type representation
         """
-
-        if ty is types.boolean:
-            r = self.get_return_type(ty).pointee
-            return builder.zext(val, r)
-        else:
-            return val
-
-    def get_struct_member_value(self, builder, ty, val):
-        """
-        Local value representation to struct member representation
-        """
-        # Currently same as get_return_value.
-        # TODO: make a "TypeLayout" class that describe the layout at
-        #       different situations for a value of a type.
-        return self.get_return_value(builder, ty, val)
+        return self.data_model_manager[ty].as_return(builder, val)
 
     def get_value_as_argument(self, builder, ty, val):
         """Prepare local value representation as argument type representation
         """
-        argty = self.get_argument_type(ty)
-        if argty == val.type:
-            return val
+        return self.data_model_manager[ty].as_argument(builder, val)
 
-        elif self.is_struct_type(ty):
-            # Arguments are passed by pointer
-            assert argty.pointee == val.type
-            tmp = cgutils.alloca_once(builder, val.type)
-            builder.store(val, tmp)
-            return tmp
+    def get_value_as_data(self, builder, ty, val):
+        return self.data_model_manager[ty].as_data(builder, val)
 
-        elif ty == types.boolean:
-            return builder.zext(val, argty)
-
-        raise NotImplementedError("value %s -> arg %s" % (val.type, argty))
-
-    def return_optional_value(self, builder, retty, valty, value):
-        if valty == types.none:
-            self.return_native_none(builder)
-
-        elif retty == valty:
-            optcls = self.make_optional(retty)
-            optval = optcls(self, builder, value=value)
-
-            validbit = builder.trunc(optval.valid, lc.Type.int(1))
-            with cgutils.ifthen(builder, validbit):
-                self.return_value(builder, optval.data)
-
-            self.return_native_none(builder)
-
-        elif not isinstance(valty, types.Optional):
-            if valty != retty.type:
-                value = self.cast(builder, value, fromty=valty,
-                                  toty=retty.type)
-            self.return_value(builder, value)
-
-        else:
-            raise NotImplementedError("returning {0} for {1}".format(valty,
-                                                                     retty))
-
-    def return_value(self, builder, retval):
-        fn = cgutils.get_function(builder)
-        retptr = fn.args[0]
-        assert retval.type == retptr.type.pointee, \
-            (str(retval.type), str(retptr.type.pointee))
-        builder.store(retval, retptr)
-        builder.ret(RETCODE_OK)
-
-    def return_native_none(self, builder):
-        builder.ret(RETCODE_NONE)
-
-    def return_errcode(self, builder, code):
-        assert code > 0
-        builder.ret(Constant.int(Type.int(), code))
-
-    def return_errcode_propagate(self, builder, code):
-        builder.ret(code)
-
-    def return_exc(self, builder):
-        builder.ret(RETCODE_EXC)
-
-    def return_user_exc(self, builder, code):
-        assert code > 0
-        builder.ret(Constant.int(Type.int(), code))
+    def get_data_as_value(self, builder, ty, val):
+        return self.data_model_manager[ty].from_data(builder, val)
 
     def pair_first(self, builder, val, ty):
         """
@@ -658,7 +553,7 @@ class BaseContext(object):
         """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
-        return self.get_argument_value(builder, ty.first_type, pair.first)
+        return pair.first
 
     def pair_second(self, builder, val, ty):
         """
@@ -666,7 +561,7 @@ class BaseContext(object):
         """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
-        return self.get_argument_value(builder, ty.second_type, pair.second)
+        return pair.second
 
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
@@ -765,11 +660,13 @@ class BaseContext(object):
                 tup = builder.insert_value(tup, val, idx)
             return tup
 
-        elif (types.is_int_tuple(toty) and types.is_int_tuple(fromty) and
-                len(toty) == len(fromty)):
+        elif (isinstance(fromty, (types.UniTuple, types.Tuple)) and
+                  isinstance(toty, (types.UniTuple, types.Tuple)) and
+                      len(toty) == len(fromty)):
+
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
-            items = [self.cast(builder, i, t, toty.dtype)
-                     for i, t in zip(olditems, fromty.types)]
+            items = [self.cast(builder, i, f, t)
+                     for i, f, t in zip(olditems, fromty, toty)]
             tup = self.get_constant_undef(toty)
             for idx, val in enumerate(items):
                 tup = builder.insert_value(tup, val, idx)
@@ -796,7 +693,8 @@ class BaseContext(object):
             optval = optty(self, builder, value=val)
             validbit = cgutils.as_bool_bit(builder, optval.valid)
             with cgutils.if_unlikely(builder, builder.not_(validbit)):
-                self.return_errcode(builder, errcode.NONE_TYPE_ERROR)
+                msg = "expected %s, got None" % (fromty.type,)
+                self.call_conv.return_user_exc(builder, TypeError, (msg,))
 
             return optval.data
 
@@ -828,31 +726,25 @@ class BaseContext(object):
         if typ in types.integer_domain:
             return builder.icmp(lc.ICMP_NE, val, Constant.null(val.type))
         elif typ in types.real_domain:
-            return builder.fcmp(lc.FCMP_ONE, val, Constant.real(val.type, 0))
+            return builder.fcmp(lc.FCMP_UNE, val, Constant.real(val.type, 0))
         elif typ in types.complex_domain:
             cmplx = self.make_complex(typ)(self, builder, val)
-            fty = types.float32 if typ == types.complex64 else types.float64
-            real_istrue = self.is_true(builder, fty, cmplx.real)
-            imag_istrue = self.is_true(builder, fty, cmplx.imag)
+            real_istrue = self.is_true(builder, typ.underlying_float, cmplx.real)
+            imag_istrue = self.is_true(builder, typ.underlying_float, cmplx.imag)
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
 
-    def call_function(self, builder, callee, resty, argtys, args, env=None):
+    def get_c_value(self, builder, typ, name):
         """
-        Call the Numba-compiled *callee*, using the same calling
-        convention as in get_function_type().
+        Get a global value through its C-accessible *name*, with the given
+        LLVM type.
         """
-        assert env is None
-        retty = callee.args[0].type.pointee
-        retval = cgutils.alloca_once(builder, retty)
-        # initialize return value
-        builder.store(lc.Constant.null(retty), retval)
-        args = [self.get_value_as_argument(builder, ty, arg)
-                for ty, arg in zip(argtys, args)]
-        realargs = [retval] + list(args)
-        code = builder.call(callee, realargs)
-        status = self.get_return_status(builder, code)
-        return status, builder.load(retval)
+        module = builder.function.module
+        try:
+            gv = module.get_global_variable_named(name)
+        except LLVMException:
+            gv = module.add_global_variable(typ, name)
+        return gv
 
     def call_external_function(self, builder, callee, argtys, args):
         args = [self.get_value_as_argument(builder, ty, arg)
@@ -860,23 +752,11 @@ class BaseContext(object):
         retval = builder.call(callee, args)
         return retval
 
-    def get_return_status(self, builder, code):
-        norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
-        none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
-        exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
-        ok = builder.or_(norm, none)
-        err = builder.not_(ok)
+    def get_function_pointer_type(self, typ):
+        return self.data_model_manager[typ].get_data_type()
 
-        status = Status(code=code, ok=ok, err=err, exc=exc, none=none)
-        return status
-
-    def call_function_pointer(self, builder, funcptr, signature, args):
-        retty = self.get_value_type(signature.return_type)
-        fnty = Type.function(retty, [a.type for a in args])
-        fnptrty = Type.pointer(fnty)
-        addr = self.get_constant(types.intp, funcptr)
-        ptr = builder.inttoptr(addr, fnptrty)
-        return builder.call(ptr, args)
+    def call_function_pointer(self, builder, funcptr, args, cconv=None):
+        return builder.call(funcptr, args, cconv=cconv)
 
     def call_class_method(self, builder, func, signature, args):
         api = self.get_python_api(builder)
@@ -891,15 +771,16 @@ class BaseContext(object):
             api.decref(obj)
 
         with cgutils.ifthen(builder, cgutils.is_null(builder, res)):
-            self.return_exc(builder)
+            self.call_conv.return_exc(builder)
 
         if retty == types.none:
             api.decref(res)
             return self.get_dummy_value()
         else:
-            nativeresult = api.to_native_value(res, retty)
+            native = api.to_native_value(res, retty)
+            assert native.cleanup is None
             api.decref(res)
-            return nativeresult
+            return native.value
 
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module
@@ -913,23 +794,11 @@ class BaseContext(object):
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
 
-    def get_struct_member_type(self, member_type):
-        """
-        Get the LLVM type for struct member of type *member_type*.
-        """
-        # get_struct_type() will:
-        # - represent Records as pointers
-        # - represent everything else as plain data
-        if isinstance(member_type, types.Record):
-            return self.get_value_type(member_type)
-        else:
-            return self.get_data_type(member_type)
-
     def get_struct_type(self, struct):
         """
         Get the LLVM struct type for the given Structure class *struct*.
         """
-        fields = [self.get_struct_member_type(v) for _, v in struct._fields]
+        fields = [self.get_value_type(v) for _, v in struct._fields]
         return Type.struct(fields)
 
     def get_dummy_value(self):
@@ -942,6 +811,10 @@ class BaseContext(object):
         """Invoke compiler to implement a function for a nopython function
         """
         cache_key = (impl.__code__, sig)
+        if impl.__closure__:
+            # XXX This obviously won't work if a cell's value is
+            # unhashable.
+            cache_key += tuple(c.cell_contents for c in impl.__closure__)
         fndesc = self.cached_internal_func.get(cache_key)
 
         if fndesc is None:
@@ -967,9 +840,11 @@ class BaseContext(object):
         # Add call to the generated function
         llvm_mod = cgutils.get_module(builder)
         fn = self.declare_function(llvm_mod, fndesc)
-        status, res = self.call_function(builder, fn, sig.return_type,
-                                         sig.args, args)
+        status, res = self.call_conv.call_function(builder, fn, sig.return_type,
+                                                   sig.args, args)
 
+        with cgutils.if_unlikely(builder, status.is_error):
+            self.call_conv.return_status_propagate(builder, status)
         return res
 
     def get_executable(self, func, fndesc):
@@ -985,7 +860,7 @@ class BaseContext(object):
         if self.strict_alignment:
             offset = rectyp.offset(attr)
             elemty = rectyp.typeof(attr)
-            align = self.get_abi_sizeof(self.get_data_type(elemty))
+            align = self.get_abi_alignment(self.get_data_type(elemty))
             if offset % align:
                 msg = "{rec}.{attr} of type {type} is not aligned".format(
                     rec=rectyp, attr=attr, type=elemty)
@@ -1011,12 +886,11 @@ class BaseContext(object):
 
         # Handle data
         if self.is_struct_type(typ.dtype):
-            # FIXME
-            raise TypeError("Do not support structure dtype as constant "
-                            "array, yet.")
-
-        values = [self.get_constant(typ.dtype, flat[i])
-                  for i in range(flat.size)]
+            values = [self.get_constant_struct(builder, typ.dtype, flat[i])
+                      for i in range(flat.size)]
+        else:
+            values = [self.get_constant(typ.dtype, flat[i])
+                      for i in range(flat.size)]
 
         lldtype = values[0].type
         consts = Constant.array(lldtype, values)
@@ -1047,6 +921,13 @@ class BaseContext(object):
             return ty.get_abi_size(self.target_data)
         # XXX this one unused?
         return self.target_data.get_abi_size(ty)
+
+    def get_abi_alignment(self, ty):
+        """
+        Get the ABI alignment of LLVM type *ty*.
+        """
+        assert isinstance(ty, llvmir.Type), "Expected LLVM type"
+        return ty.get_abi_alignment(self.target_data)
 
     def post_lowering(self, func):
         """Run target specific post-lowering transformation here.

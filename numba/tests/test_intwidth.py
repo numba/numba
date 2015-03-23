@@ -15,13 +15,8 @@ def usecase_uint64_global():
 def usecase_uint64_constant():
     return 18446744073709551615
 
-def usecase_uint64_floor():
-    # This function will only work due to LLVM optimization
-    # The following code converts max i64 to f64.
-    # Round-to-even will increase the value.
-    # When converted back to i64, it can no longer fit into 64-bit.
-    # As a result, zero is returned.
-    return math.floor(18446744073709551615)
+def usecase_uint64_func():
+    return max(18446744073709551614, 18446744073709551615)
 
 
 class IntWidthTest(TestCase):
@@ -45,7 +40,7 @@ class IntWidthTest(TestCase):
         self.test_constant_uint64(nopython=True)
 
     def test_constant_uint64_function_call(self, nopython=False):
-        pyfunc = usecase_uint64_floor
+        pyfunc = usecase_uint64_func
         self.check_nullary_func(pyfunc, nopython=nopython)
 
     def test_constant_uint64_function_call_npm(self):

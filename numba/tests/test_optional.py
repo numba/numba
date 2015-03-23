@@ -1,10 +1,12 @@
 from __future__ import print_function, absolute_import
+
 import numpy
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, typeof, njit
-from numba.pythonapi import NativeError
 from numba import lowering
+
 
 def return_double_or_none(x):
     if x:
@@ -140,12 +142,14 @@ class TestOptional(unittest.TestCase):
             return y[0]
 
         cfunc = njit("(optional(int32[:]),)")(pyfunc)
-        with self.assertRaises(NativeError) as raised:
+        with self.assertRaises(TypeError) as raised:
             cfunc(None)
-        self.assertIn('NONE_TYPE_ERROR', str(raised.exception))
+        self.assertIn('expected array(int32, 1d, A), got None',
+                      str(raised.exception))
 
         y = numpy.array([0xabcd], dtype=numpy.int32)
         self.assertEqual(cfunc(y), pyfunc(y))
+
 
 if __name__ == '__main__':
     unittest.main()

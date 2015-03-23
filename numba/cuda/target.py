@@ -6,7 +6,10 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
 from numba import typing, types, cgutils
+from numba.utils import cached_property
 from numba.targets.base import BaseContext
+from numba.targets.callconv import MinimalCallConv
+from numba.funcdesc import transform_arg_name
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
 
@@ -32,13 +35,17 @@ class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
 
+    # Overrides
+    def create_module(self, name):
+        return self._internal_codegen._create_empty_module(name)
+
     def init(self):
         from . import cudaimpl, libdevice
 
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
 
-        self.insert_func_defn(cudaimpl.registry.functions)
-        self.insert_func_defn(libdevice.registry.functions)
+        self.install_registry(cudaimpl.registry)
+        self.install_registry(libdevice.registry)
         self._target_data = ll.create_target_data(nvvm.default_data_layout)
 
     def jit_codegen(self):
@@ -48,12 +55,16 @@ class CUDATargetContext(BaseContext):
     def target_data(self):
         return self._target_data
 
+    @cached_property
+    def call_conv(self):
+        return CUDACallConv(self)
+
     def mangler(self, name, argtypes):
         def repl(m):
             ch = m.group(0)
             return "_%X_" % ord(ch)
 
-        qualified = name + '.' + '.'.join(str(a) for a in argtypes)
+        qualified = name + '.' + '.'.join(transform_arg_name(a) for a in argtypes)
         mangled = VALID_CHARS.sub(repl, qualified)
         return mangled
 
@@ -67,11 +78,13 @@ class CUDATargetContext(BaseContext):
 
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
-        argtys = [self.get_argument_type(ty) for ty in argtypes]
+
+        arginfo = self.get_arg_packer(argtypes)
+        argtys = list(arginfo.argument_types)
         wrapfnty = Type.function(Type.void(), argtys)
         wrapper_module = self.create_module("cuda.kernel.wrapper")
         fnty = Type.function(Type.int(),
-                             [self.get_return_type(types.pyobject)] + argtys)
+                             [self.call_conv.get_return_type(types.pyobject)] + argtys)
         func = wrapper_module.add_function(fnty, name=func.name)
         wrapfn = wrapper_module.add_function(wrapfnty, name="cudaPy_" + func.name)
         builder = Builder.new(wrapfn.append_basic_block(''))
@@ -90,19 +103,15 @@ class CUDATargetContext(BaseContext):
             gv_tid.append(define_error_gv("__tid%s__" % i))
             gv_ctaid.append(define_error_gv("__ctaid%s__" % i))
 
-        callargs = []
-        for at, av in zip(argtypes, wrapfn.args):
-            av = self.get_argument_value(builder, at, av)
-            callargs.append(av)
-
-        status, _ = self.call_function(builder, func, types.void, argtypes,
-                                       callargs)
+        callargs = arginfo.from_arguments(builder, wrapfn.args)
+        status, _ = self.call_conv.call_function(
+            builder, func, types.void, argtypes, callargs)
 
         # Check error status
-        with cgutils.if_likely(builder, status.ok):
+        with cgutils.if_likely(builder, status.is_ok):
             builder.ret_void()
 
-        with cgutils.ifthen(builder, builder.not_(status.exc)):
+        with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
             # User exception raised
             old = Constant.null(gv_exc.type.pointee)
 
@@ -160,7 +169,7 @@ class CUDATargetContext(BaseContext):
         name = "__conststring__.%s" % string
         charty = Type.int(8)
 
-        for gv in lmod.global_variables:
+        for gv in lmod.global_values:
             if gv.name == name and gv.type.pointee == text.type:
                 break
         else:
@@ -189,3 +198,8 @@ class CUDATargetContext(BaseContext):
         # fpm.initialize()
         # fpm.run(func)
         # fpm.finalize()
+
+
+class CUDACallConv(MinimalCallConv):
+    pass
+

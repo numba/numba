@@ -7,10 +7,13 @@ import sys
 from numba import utils
 
 
+# List of bytecodes creating a new block in the control flow graph
+# (in addition to explicit jump labels).
 NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER'])
 
 
 class CFBlock(object):
+
     def __init__(self, offset):
         self.offset = offset
         self.body = []
@@ -144,6 +147,13 @@ class CFGraph(object):
         order (ignoring back edges).
         """
         return self._descs[node]
+
+    def entry_point(self):
+        """
+        Return the entry point node.
+        """
+        assert self._entry_point is not None
+        return self._entry_point
 
     def exit_points(self):
         """

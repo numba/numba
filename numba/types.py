@@ -137,6 +137,13 @@ class Type(object):
     __iter__ = NotImplemented
     cast_python_value = NotImplemented
 
+    def coerce(self, typingctx, other):
+        """Override this method to implement specialized coercion logic
+        for extending unify_pairs().  Only use this if the coercion logic cannot
+        be expressed as simple casting rules.
+        """
+        return NotImplemented
+
 
 class OpaqueType(Type):
     """
@@ -145,6 +152,10 @@ class OpaqueType(Type):
 
     def __init__(self, name):
         super(OpaqueType, self).__init__(name)
+
+
+class Boolean(Type):
+    pass
 
 
 @utils.total_ordering
@@ -276,6 +287,22 @@ class Kind(Type):
         return self.of
 
 
+class VarArg(Type):
+    """
+    Special type representing a variable number of arguments at the
+    end of a function's signature.  Only used for signature matching,
+    not for actual values.
+    """
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        super(VarArg, self).__init__("*%s" % dtype)
+
+    @property
+    def key(self):
+        return self.dtype
+
+
 class Module(Type):
     def __init__(self, pymod):
         self.pymod = pymod
@@ -300,9 +327,9 @@ class Macro(Type):
 class Function(Type):
     def __init__(self, template):
         self.template = template
-        cls = type(self)
+        name = "%s(%s)" % (self.__class__.__name__, template.key)
         # TODO template is mutable.  Should use different naming scheme
-        super(Function, self).__init__("%s(%s)" % (cls.__name__, template.key))
+        super(Function, self).__init__(name)
 
     @property
     def key(self):
@@ -353,11 +380,45 @@ class Dispatcher(WeakType):
         """
         return self._get_object()
 
+    @property
+    def pysig(self):
+        """
+        A inspect.Signature object corresponding to this type.
+        """
+        return self.overloaded._pysig
 
-class FunctionPointer(Function):
-    def __init__(self, template, funcptr):
-        self.funcptr = funcptr
-        super(FunctionPointer, self).__init__(template)
+
+class ExternalFunctionPointer(Function):
+    """
+    A pointer to a native function (e.g. exported via ctypes or cffi).
+    *get_pointer* is a Python function taking an object
+    and returning the raw pointer value as an int.
+    """
+
+    def __init__(self, sig, get_pointer, cconv=None):
+        from . import typing
+        self.sig = sig
+        self.get_pointer = get_pointer
+        self.cconv = cconv
+        template = typing.make_concrete_template("CFuncPtr", sig, [sig])
+        super(ExternalFunctionPointer, self).__init__(template)
+
+    @property
+    def key(self):
+        return self.sig, self.cconv, self.get_pointer
+
+
+class ExternalFunction(Function):
+    """
+    A named native function (resolvable by LLVM).
+    """
+
+    def __init__(self, symbol, sig):
+        from . import typing
+        self.symbol = symbol
+        self.sig = sig
+        template = typing.make_concrete_template(symbol, symbol, [sig])
+        super(ExternalFunction, self).__init__(template)
 
 
 class BoundFunction(Function):
@@ -440,6 +501,28 @@ class RangeIteratorType(SimpleIteratorType):
     pass
 
 
+class Generator(IteratorType):
+    """
+    Type class for Numba-compiled generator objects.
+    """
+
+    def __init__(self, gen_func, yield_type, arg_types, state_types,
+                 has_finalizer):
+        self.gen_func = gen_func
+        self.arg_types = tuple(arg_types)
+        self.state_types = tuple(state_types)
+        self.yield_type = yield_type
+        self.has_finalizer = has_finalizer
+        name = "%s generator(func=%s, args=%s, has_finalizer=%s)" % (
+            self.yield_type, self.gen_func, self.arg_types,
+            self.has_finalizer)
+        super(Generator, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
+
+
 class NumpyFlatType(IteratorType):
     """
     Type class for `ndarray.flat()` objects.
@@ -454,6 +537,40 @@ class NumpyFlatType(IteratorType):
     @property
     def key(self):
         return self.array_type
+
+
+class NumpyNdEnumerateType(IteratorType):
+    """
+    Type class for `np.ndenumerate()` objects.
+    """
+
+    def __init__(self, arrty):
+        self.array_type = arrty
+        # XXX making this a uintp has the side effect of forcing some
+        # arithmetic operations to return a float result.
+        self.yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
+        name = "ndenumerate({arrayty})".format(arrayty=arrty)
+        super(NumpyNdEnumerateType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.array_type
+
+
+class NumpyNdIndexType(IteratorType):
+    """
+    Type class for `np.ndindex()` objects.
+    """
+
+    def __init__(self, ndim):
+        self.ndim = ndim
+        self.yield_type = UniTuple(intp, self.ndim)
+        name = "ndindex(dims={ndim})".format(ndim=ndim)
+        super(NumpyNdIndexType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.ndim
 
 
 class EnumerateType(IteratorType):
@@ -547,6 +664,9 @@ class Record(Type):
 
 
 class ArrayIterator(IteratorType):
+    """
+    Type class for iterators of array and buffer objects.
+    """
 
     def __init__(self, array_type):
         self.array_type = array_type
@@ -559,92 +679,172 @@ class ArrayIterator(IteratorType):
         super(ArrayIterator, self).__init__(name, param=True)
 
 
-class Array(IterableType):
-
+class Buffer(IterableType):
+    """
+    Type class for objects providing the buffer protocol.
+    Derived classes exist for more specific cases.
+    """
     mutable = True
+    slice_is_copy = False
 
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
-    def __init__(self, dtype, ndim, layout, const=False):
-        if isinstance(dtype, Array):
-            raise TypeError("Array dtype cannot be Array")
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+        if isinstance(dtype, Buffer):
+            raise TypeError("Buffer dtype cannot be buffer")
         if layout not in self.LAYOUTS:
             raise ValueError("Invalid layout '%s'" % layout)
-
         self.dtype = dtype
         self.ndim = ndim
         self.layout = layout
-        self.const = const
-        name = "array(%s, %sd, %s, %s)" % (dtype, ndim, layout,
-                                           {True: 'const',
-                                            False: 'nonconst'}[const])
-        super(Array, self).__init__(name, param=True)
+        if readonly:
+            self.mutable = False
+        if name is None:
+            type_name = self.__class__.__name__.lower()
+            if readonly:
+                type_name = "readonly %s" % type_name
+            name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
+        super(Buffer, self).__init__(name, param=True)
         self.iterator_type = ArrayIterator(self)
 
-    def post_init(self):
-        """
-        Install conversion from this layout (if non-'A') to 'A' layout.
-        """
-        if self.layout != 'A':
-            from numba.typeconv.rules import default_type_manager as tm
-            ary_any = Array(self.dtype, self.ndim, 'A', const=self.const)
-            # XXX This will make the types immortal
-            tm.set_safe_convert(self, ary_any)
-
-    def copy(self, dtype=None, ndim=None, layout=None, const=None):
+    def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
             dtype = self.dtype
         if ndim is None:
             ndim = self.ndim
         if layout is None:
             layout = self.layout
-        if const is None:
-            const = self.const
-        return Array(dtype=dtype, ndim=ndim, layout=layout, const=const)
-
-    def get_layout(self, dim):
-        assert 0 <= dim < self.ndim
-        if self.layout in 'CFA':
-            return self.layout
-        elif self.layout == 'CS':
-            if dim == self.ndim - 1:
-                return 'C'
-        elif self.layout == 'FS':
-            if dim == 0:
-                return 'F'
-        return 'A'
-
-    def getitem(self, ind):
-        """Returns (return-type, index-type)
-        """
-        if isinstance(ind, UniTuple):
-            idxty = UniTuple(intp, ind.count)
-        else:
-            idxty = intp
-        return self.dtype, idxty
-
-    def setitem(self):
-        """Returns (index-type, value-type)
-        """
-        return intp, self.dtype
+        return self.__class__(dtype=dtype, ndim=ndim, layout=layout,
+                              readonly=not self.mutable)
 
     @property
     def key(self):
-        return self.dtype, self.ndim, self.layout, self.const
+        return self.dtype, self.ndim, self.layout, self.mutable
 
     @property
     def is_c_contig(self):
-        return self.layout == 'C' or (self.ndim == 1 and self.layout in 'CF')
+        return self.layout == 'C' or (self.ndim <= 1 and self.layout in 'CF')
 
     @property
     def is_f_contig(self):
-        return self.layout == 'F' or (self.ndim == 1 and self.layout in 'CF')
+        return self.layout == 'F' or (self.ndim <= 1 and self.layout in 'CF')
 
     @property
     def is_contig(self):
         return self.layout in 'CF'
 
+
+class Bytes(Buffer):
+    """
+    Type class for Python 3.x bytes objects.
+    """
+    mutable = False
+    # Actually true but doesn't matter since bytes is immutable
+    slice_is_copy = False
+
+
+class ByteArray(Buffer):
+    """
+    Type class for bytearray objects.
+    """
+    slice_is_copy = True
+
+
+class PyArray(Buffer):
+    """
+    Type class for array.array objects.
+    """
+    slice_is_copy = True
+
+
+class MemoryView(Buffer):
+    """
+    Type class for memoryview objects.
+    """
+
+
+class Array(Buffer):
+    """
+    Type class for Numpy arrays.
+    """
+
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+        if readonly:
+            self.mutable = False
+        if name is None:
+            type_name = "array" if self.mutable else "readonly array"
+            name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
+        super(Array, self).__init__(dtype, ndim, layout, name=name)
+
+    def post_init(self):
+        """
+        Install conversion from this layout (if non-'A') to 'A' layout.
+        """
+        if self.layout != 'A':
+            from numba.typeconv.rules import default_casting_rules as tcr
+            ary_any = self.copy(layout='A')
+            # XXX This will make the types immortal
+            tcr.safe(self, ary_any)
+
+    def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
+        if dtype is None:
+            dtype = self.dtype
+        if ndim is None:
+            ndim = self.ndim
+        if layout is None:
+            layout = self.layout
+        if readonly is None:
+            readonly = not self.mutable
+        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly)
+
+    @property
+    def key(self):
+        return self.dtype, self.ndim, self.layout, self.mutable
+
+
+class NestedArray(Array):
+    """
+    A NestedArray is an array nested within a structured type (which are "void"
+    type in NumPy parlance). Unlike an Array, the shape, and not just the number
+    of dimenions is part of the type of a NestedArray.
+    """
+
+    def __init__(self, dtype, shape):
+        assert dtype.bitwidth % 8 == 0, \
+            "Dtype bitwidth must be a multiple of bytes"
+        self._shape = shape
+        name = "nestedarray(%s, %s)" % (dtype, shape)
+        ndim = len(shape)
+        super(NestedArray, self).__init__(dtype, ndim, 'C', name=name)
+
+    @property
+    def shape(self):
+        return self._shape
+
+    @property
+    def nitems(self):
+        l = 1
+        for s in self.shape:
+            l = l * s
+        return l
+
+    @property
+    def size(self):
+        return self.dtype.bitwidth // 8
+
+    @property
+    def strides(self):
+        stride = self.size
+        strides = []
+        for i in reversed(self._shape):
+             strides.append(stride)
+             stride *= i
+        return tuple(reversed(strides))
+
+    @property
+    def key(self):
+        return self.dtype, self.shape
 
 class UniTuple(IterableType):
 
@@ -656,10 +856,6 @@ class UniTuple(IterableType):
         self.iterator_type = UniTupleIter(self)
 
     def getitem(self, ind):
-        if isinstance(ind, UniTuple):
-            idxty = UniTuple(intp, ind.count)
-        else:
-            idxty = intp
         return self.dtype, intp
 
     def __getitem__(self, i):
@@ -677,6 +873,20 @@ class UniTuple(IterableType):
     @property
     def key(self):
         return self.dtype, self.count
+
+    @property
+    def types(self):
+        return (self.dtype,) * self.count
+
+    def coerce(self, typingctx, other):
+        """
+        Unify UniTuples with their dtype
+        """
+        if isinstance(other, UniTuple) and len(self) == len(other):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            return UniTuple(dtype=dtype, count=self.count)
+
+        return NotImplemented
 
 
 class UniTupleIter(IteratorType):
@@ -706,6 +916,7 @@ class Tuple(Type):
         return self.types[i]
 
     def __len__(self):
+        # Beware: this makes Tuple(()) false-ish
         return len(self.types)
 
     @property
@@ -715,8 +926,27 @@ class Tuple(Type):
     def __iter__(self):
         return iter(self.types)
 
+    def coerce(self, typingctx, other):
+        """
+        Unify elements of Tuples/UniTuples
+        """
+        # Other is UniTuple or Tuple
+        if isinstance(other, (UniTuple, Tuple)) and len(self) == len(other):
+            unified = [typingctx.unify_pairs(ta, tb)
+                       for ta, tb in zip(self, other)]
+
+            if any(t == pyobject for t in unified):
+                return NotImplemented
+
+            return Tuple(unified)
+
+        return NotImplemented
+
 
 class CPointer(Type):
+    """
+    Type class for pointers to other types.
+    """
     mutable = True
 
     def __init__(self, dtype):
@@ -727,6 +957,14 @@ class CPointer(Type):
     @property
     def key(self):
         return self.dtype
+
+
+class EphemeralPointer(CPointer):
+    """
+    Type class for pointers which aren't guaranteed to last long - e.g.
+    stack-allocated slots.  The data model serializes such pointers
+    by copying the data pointed to.
+    """
 
 
 class Object(Type):
@@ -754,35 +992,73 @@ class Optional(Type):
         """
         Install conversion from optional(T) to T
         """
-        from numba.typeconv.rules import default_type_manager as tm
-
-        # TODO make type manager remember all cast relation
-        #      so that new rule will propagate
-        tm.set_safe_convert(self, self.type)
-        tm.set_promote(self.type, self)
-        tm.set_promote(none, self)
-
-        if self.type in number_domain:
-            for t in number_domain - set([self.type]):
-                tcc = tm.check_compatible(t, self.type)
-                if tcc == 'promote':
-                    tm.set_promote(t, self)
-                elif tcc == 'safe':
-                    tm.set_safe_convert(t, self)
-                elif tcc == 'unsafe':
-                    tm.set_unsafe_convert(t, self)
-                else:
-                    assert tcc is None, tcc
-
-        if isinstance(self.type, Array):
-            if self.type.layout == 'A':
-                tm.set_promote(self.type.copy(layout='C'), self)
-                tm.set_promote(self.type.copy(layout='F'), self)
-
+        from numba.typeconv.rules import default_casting_rules as tcr
+        tcr.safe(self, self.type)
+        tcr.promote(self.type, self)
+        tcr.promote(none, self)
 
     @property
     def key(self):
         return self.type
+
+    def coerce(self, typingctx, other):
+        if isinstance(other, Optional):
+            unified = typingctx.unify_pairs(self.type, other.type)
+
+        else:
+            unified = typingctx.unify_pairs(self.type, other)
+
+        if unified != pyobject:
+            return Optional(unified)
+
+        return NotImplemented
+
+
+class NoneType(Opaque):
+    def coerce(self, typingctx, other):
+        """Turns anything to a Optional type
+        """
+        if isinstance(other, Optional):
+            return other
+
+        return Optional(other)
+
+
+class ExceptionType(Phantom):
+    """
+    The type of exception classes (not instances).
+    """
+
+    def __init__(self, exc_class):
+        assert issubclass(exc_class, BaseException)
+        name = "%s" % (exc_class.__name__)
+        self.exc_class = exc_class
+        super(ExceptionType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.exc_class
+
+
+class ExceptionInstance(Phantom):
+    """
+    The type of exception instances.  *exc_class* should be the
+    exception class.
+    """
+
+    def __init__(self, exc_class):
+        assert issubclass(exc_class, BaseException)
+        name = "%s(...)" % (exc_class.__name__,)
+        self.exc_class = exc_class
+        super(ExceptionInstance, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.exc_class
+
+
+class Slice3Type(Type):
+    pass
 
 
 # Utils
@@ -795,20 +1071,20 @@ def is_int_tuple(x):
     else:
         return False
 
+
 # Short names
 
 
 pyobject = Opaque('pyobject')
-none = Opaque('none')
+none = NoneType('none')
 Any = Phantom('any')
-VarArg = Phantom('...')
-string = Opaque('str')
+string = Dummy('str')
 
 # No operation is defined on voidptr
 # Can only pass it around
 voidptr = Opaque('void*')
 
-boolean = bool_ = Type('bool')
+boolean = bool_ = Boolean('bool')
 
 byte = uint8 = Integer('uint8')
 uint16 = Integer('uint16')
@@ -838,7 +1114,6 @@ neg_type = Phantom('neg')
 print_type = Phantom('print')
 print_item_type = Phantom('print-item')
 sign_type = Phantom('sign')
-exception_type = Phantom('exception')
 
 range_iter32_type = RangeIteratorType('range_iter32', int32)
 range_iter64_type = RangeIteratorType('range_iter64', int64)
@@ -846,7 +1121,7 @@ range_state32_type = RangeType('range_state32', range_iter32_type)
 range_state64_type = RangeType('range_state64', range_iter64_type)
 
 # slice2_type = Type('slice2_type')
-slice3_type = Type('slice3_type')
+slice3_type = Slice3Type('slice3_type')
 
 signed_domain = frozenset([int8, int16, int32, int64])
 unsigned_domain = frozenset([uint8, uint16, uint32, uint64])
@@ -896,6 +1171,35 @@ ulonglong = _make_unsigned(numpy.longlong)
 # optional types
 optional = Optional
 
+
+def is_numeric(ty):
+    return ty in number_domain
+
+_type_promote_map = {
+    int8: (int16, False),
+    uint8: (uint16, False),
+    int16: (int32, False),
+    uint16: (uint32, False),
+    int32: (int64, False),
+    uint32: (uint64, False),
+    int64: (float64, True),
+    uint64: (float64, True),
+    float32: (float64, False),
+    complex64: (complex128, True),
+}
+
+
+def promote_numeric_type(ty):
+    res = _type_promote_map.get(ty)
+    if res is None:
+        if ty not in number_domain:
+            raise TypeError(ty)
+        else:
+            return None, None  # no promote available
+
+    return res
+
+
 __all__ = '''
 int8
 int16
@@ -906,7 +1210,9 @@ uint16
 uint32
 uint64
 intp
+uintp
 intc
+uintc
 boolean
 float32
 float64

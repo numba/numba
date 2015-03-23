@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import
 from collections import defaultdict
 import functools
 import types as pytypes
+import sys
 import weakref
 
 import numpy
@@ -10,10 +11,13 @@ import numpy
 from numba import types
 from numba.typeconv import rules
 from . import templates
+
 # Initialize declarations
-from . import builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl
+from . import (
+    builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl,
+    randomdecl)
 from numba import numpy_support, utils
-from . import ctypes_utils, cffi_utils
+from . import ctypes_utils, cffi_utils, bufproto
 
 
 class BaseContext(object):
@@ -49,12 +53,20 @@ class BaseContext(object):
             raise NotImplementedError(type(num), num)
 
     def resolve_function_type(self, func, args, kws):
+        """
+        Resolve function type *func* for argument types *args* and *kws*.
+        A signature is returned.
+        """
         if isinstance(func, types.Function):
             return func.template(self).apply(args, kws)
 
         if isinstance(func, types.Dispatcher):
-            template = func.overloaded.get_call_template(args, kws)
+            template, args, kws = func.overloaded.get_call_template(args, kws)
             return template(self).apply(args, kws)
+
+        if isinstance(func, types.ExceptionType):
+            return_type = types.ExceptionInstance(func.exc_class)
+            return templates.signature(return_type)
 
         defns = self.functions[func]
         for defn in defns:
@@ -82,7 +94,8 @@ class BaseContext(object):
                 raise
 
         ret = attrinfo.resolve(value, attr)
-        assert ret
+        if ret is None:
+            raise KeyError(attr)
         return ret
 
     def resolve_setitem(self, target, index, value):
@@ -117,10 +130,6 @@ class BaseContext(object):
         if isinstance(val, utils.INT_TYPES):
             # Force all integers to be 64-bit
             return types.int64
-        elif numpy_support.is_array(val):
-            dtype = numpy_support.from_dtype(val.dtype)
-            layout = numpy_support.map_layout(val)
-            return types.Array(dtype, val.ndim, layout)
 
         tp = self.resolve_data_type(val)
         if tp is None:
@@ -162,26 +171,45 @@ class BaseContext(object):
             else:
                 return types.Tuple(tys)
 
-        else:
-            try:
-                return numpy_support.map_arrayscalar_type(val)
-            except NotImplementedError:
-                pass
+        elif ctypes_utils.is_ctypes_funcptr(val):
+            return ctypes_utils.make_function_type(val)
 
-        if numpy_support.is_array(val):
+        elif cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
+            return cffi_utils.make_function_type(val)
+
+        elif numpy_support.is_array(val):
             ary = val
             try:
                 dtype = numpy_support.from_dtype(ary.dtype)
             except NotImplementedError:
                 return
-
-            if ary.flags.c_contiguous:
-                layout = 'C'
-            elif ary.flags.f_contiguous:
-                layout = 'F'
-            else:
-                layout = 'A'
+            layout = numpy_support.map_layout(ary)
             return types.Array(dtype, ary.ndim, layout)
+
+        elif sys.version_info >= (2, 7) and not isinstance(val, numpy.generic):
+            try:
+                m = memoryview(val)
+            except TypeError:
+                pass
+            else:
+                # Object has the buffer protocol
+                try:
+                    dtype = bufproto.decode_pep3118_format(m.format, m.itemsize)
+                except ValueError:
+                    pass
+                else:
+                    type_class = bufproto.get_type_class(type(val))
+                    layout = bufproto.infer_layout(m)
+                    return type_class(dtype, m.ndim, layout=layout,
+                                      readonly=m.readonly)
+
+        else:
+            # Matching here is quite broad, so we have to do it after
+            # the more specific matches above.
+            try:
+                return numpy_support.map_arrayscalar_type(val)
+            except NotImplementedError:
+                pass
 
         return
 
@@ -194,19 +222,11 @@ class BaseContext(object):
         if tp is not None:
             return tp
 
-        elif ctypes_utils.is_ctypes_funcptr(val):
-            cfnptr = val
-            return ctypes_utils.make_function_type(cfnptr)
-
-        elif cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
-            return cffi_utils.make_function_type(val)
-
-        elif (cffi_utils.SUPPORTED and
-                  isinstance(val, cffi_utils.ExternCFunction)):
+        elif isinstance(val, types.ExternalFunction):
             return val
 
-        elif type(val) is type and issubclass(val, BaseException):
-            return types.exception_type
+        elif isinstance(val, type) and issubclass(val, BaseException):
+            return types.ExceptionType(val)
 
         else:
             try:
@@ -312,7 +332,7 @@ class BaseContext(object):
     def type_compatibility(self, fromty, toty):
         """
         Returns None or a string describing the conversion e.g. exact, promote,
-        unsafe, safe, tuple-coerce
+        unsafe, safe.
         """
         if fromty == toty:
             return 'exact'
@@ -322,11 +342,8 @@ class BaseContext(object):
                       len(fromty) == len(toty)):
             return self.type_compatibility(fromty.dtype, toty.dtype)
 
-        elif (types.is_int_tuple(fromty) and types.is_int_tuple(toty) and
-                      len(fromty) == len(toty)):
-            return 'int-tuple-coerce'
-
-        return self.tm.check_compatible(fromty, toty)
+        else:
+            return self.tm.check_compatible(fromty, toty)
 
     def unify_types(self, *typelist):
         # Sort the type list according to bit width before doing
@@ -336,6 +353,7 @@ class BaseContext(object):
             Fallback to hash() for arbitary ordering.
             """
             return getattr(obj, 'bitwidth', hash(obj))
+
         return functools.reduce(
             self.unify_pairs, sorted(typelist, key=keyfunc))
 
@@ -344,64 +362,47 @@ class BaseContext(object):
         Choose PyObject type as the abstract if we fail to determine a concrete
         type.
         """
-        # TODO: should add an option to reject unsafe type conversion
-        if types.none in (first, second):
-            if first == types.none:
-                return types.Optional(second)
-            elif second == types.none:
-                return types.Optional(first)
-
-        # Handle optional type
-        # XXX: really need to refactor type infer to reduce the number of
-        #      special cases
-        if (isinstance(first, types.Optional) or
-                isinstance(second, types.Optional)):
-            a = (first.type
-                 if isinstance(first, types.Optional)
-                 else first)
-            b = (second.type
-                 if isinstance(second, types.Optional)
-                 else second)
-            return types.Optional(self.unify_pairs(a, b))
-
-        d = self.type_compatibility(fromty=first, toty=second)
-        if d is None:
-            # Complex is not allowed to downcast implicitly.
-            # Need to try the other direction of implicit cast to find the
-            # most general type of the two.
-            first, second = second, first   # swap operand order
-            d = self.type_compatibility(fromty=first, toty=second)
-
-        if d is None:
-            return types.pyobject
-        elif d == 'exact':
-            # Same type
+        if first == second:
             return first
-        elif d == 'promote':
+
+        # Types with special coercion rule
+        first_coerce = first.coerce(self, second)
+        second_coerce = second.coerce(self, first)
+
+        if first_coerce is not NotImplemented:
+            return first_coerce
+
+        elif second_coerce is not NotImplemented:
+            return second_coerce
+
+        # TODO: should add an option to reject unsafe type conversion
+
+        # Types with simple coercion rule
+        forward = self.type_compatibility(fromty=first, toty=second)
+        backward = self.type_compatibility(fromty=second, toty=first)
+
+        strong = ('exact', 'promote')
+        weak = ('safe', 'unsafe')
+        if forward in strong:
             return second
-        elif d in ('safe', 'unsafe'):
+        elif backward in strong:
+            return first
+        elif forward is None and backward is None:
+            return types.pyobject
+        elif forward in weak or backward in weak:
+            # Use numpy to pick a type that
             if first in types.number_domain and second in types.number_domain:
                 a = numpy.dtype(str(first))
                 b = numpy.dtype(str(second))
-                # Just use NumPy coercion rules
                 sel = numpy.promote_types(a, b)
-                # Convert NumPy dtype back to Numba types
                 return getattr(types, str(sel))
-            elif (isinstance(first, types.UniTuple) and
-                      isinstance(second, types.UniTuple)):
-                a = numpy.dtype(str(first.dtype))
-                b = numpy.dtype(str(second.dtype))
-                if a > b:
-                    return first
-                else:
-                    return second
-            else:
-                msg = "unrecognized '{0}' unify for {1} and {2}"
-                raise TypeError(msg.format(d, first, second))
-        elif d in 'int-tuple-coerce':
-            return types.UniTuple(dtype=types.intp, count=len(first))
-        else:
-            raise Exception("type_compatibility returned %s" % d)
+
+
+        # Failed to unify
+        msg = ("Cannot unify {{{first}, {second}}}\n"
+               "{first}->{second}::{forward}\n"
+               "{second}->{first}::{backward} ")
+        raise AssertionError(msg.format(**locals()))
 
 
 class Context(BaseContext):
@@ -410,6 +411,7 @@ class Context(BaseContext):
         self.install(mathdecl.registry)
         self.install(npydecl.registry)
         self.install(operatordecl.registry)
+        self.install(randomdecl.registry)
 
 
 def new_method(fn, sig):

@@ -6,6 +6,7 @@ import numpy as np
 from numba import jit, numpy_support, types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
+from numba.funcdesc import transform_arg_name
 from numba.utils import IS_PY3
 
 
@@ -111,6 +112,44 @@ def record_return(ary, i):
     return ary[i]
 
 
+def record_write_array(ary):
+    ary.g = 2
+    ary.h[0] = 3.0
+    ary.h[1] = 4.0
+
+def record_write_2d_array(ary):
+    ary.i = 3
+    ary.j[0, 0] = 5.0
+    ary.j[0, 1] = 6.0
+    ary.j[1, 0] = 7.0
+    ary.j[1, 1] = 8.0
+    ary.j[2, 0] = 9.0
+    ary.j[2, 1] = 10.0
+
+
+def record_read_array0(ary):
+    return ary.h[0]
+
+def record_read_array1(ary):
+    return ary.h[1]
+
+def record_read_2d_array00(ary):
+    return ary.j[0,0]
+
+def record_read_2d_array10(ary):
+    return ary.j[1,0]
+
+def record_read_2d_array01(ary):
+    return ary.j[0,1]
+
+
+def record_read_first_arr(ary):
+    return ary.k[2, 2]
+
+def record_read_second_arr(ary):
+    return ary.l[2, 2]
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
                        ('c', np.complex64),
@@ -119,6 +158,17 @@ recordtype = np.dtype([('a', np.float64),
 recordtype2 = np.dtype([('e', np.int32),
                         ('f', np.float64)])
 
+recordtype3 = np.dtype([('first', np.float32),
+                        ('second', np.float64)])
+
+recordwitharray = np.dtype([('g', np.int32),
+                            ('h', np.float32, 2)])
+
+recordwith2darray = np.dtype([('i', np.int32),
+                              ('j', np.float32, (3, 2))])
+
+recordwith2arrays = np.dtype([('k', np.int32, (10, 20)),
+                              ('l', np.int32, (6, 12))])
 
 class TestRecordDtype(unittest.TestCase):
 
@@ -164,10 +214,8 @@ class TestRecordDtype(unittest.TestCase):
                 ary3[i]['d'] = "%d" % x
 
     def get_cfunc(self, pyfunc, argspec):
-        # Need to keep a reference to the compile result for the
-        # wrapper function object to remain valid (!)
-        self.__cres = compile_isolated(pyfunc, argspec)
-        return self.__cres.entry_point
+        cres = compile_isolated(pyfunc, argspec)
+        return cres.entry_point
 
     def test_from_dtype(self):
         rec = numpy_support.from_dtype(recordtype)
@@ -346,6 +394,7 @@ class TestRecordDtype(unittest.TestCase):
             got = cfunc(nbval1, nbval2)
             self.assertEqual(expected, got)
 
+
     def test_two_distinct_records(self):
         '''
         Testing the use of two scalar records of differing type
@@ -360,6 +409,77 @@ class TestRecordDtype(unittest.TestCase):
 
         got = cfunc(nbval1, nbval2)
         self.assertEqual(expected, got)
+
+
+    def test_record_write_array(self):
+        '''
+        Testing writing to a 1D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwitharray)
+        nbrecord = numpy_support.from_dtype(recordwitharray)
+        cfunc = self.get_cfunc(record_write_array, (nbrecord,))
+        cfunc(nbval[0])
+
+        expected = np.recarray(1, dtype=recordwitharray)
+        expected[0].g = 2
+        expected[0].h[0] = 3.0
+        expected[0].h[1] = 4.0
+        np.testing.assert_equal(expected, nbval)
+
+
+    def test_record_write_2d_array(self):
+        '''
+        Test writing to a 2D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwith2darray)
+        nbrecord = numpy_support.from_dtype(recordwith2darray)
+        cfunc = self.get_cfunc(record_write_2d_array, (nbrecord,))
+        cfunc(nbval[0])
+
+        expected = np.recarray(1, dtype=recordwith2darray)
+        expected[0].i = 3
+        expected[0].j[:] = np.asarray([5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+                                      np.float32).reshape(3, 2)
+        np.testing.assert_equal(expected, nbval)
+
+
+    def test_record_read_array(self):
+        '''
+        Test reading from a 1D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwitharray)
+        nbval[0].h[0] = 15.0
+        nbval[0].h[1] = 25.0
+        nbrecord = numpy_support.from_dtype(recordwitharray)
+        cfunc = self.get_cfunc(record_read_array0, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].h[0])
+
+        cfunc = self.get_cfunc(record_read_array1, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].h[1])
+
+
+    def test_record_read_2d_array(self):
+        '''
+        Test reading from a 2D array within a structured type
+        '''
+        nbval = np.recarray(1, dtype=recordwith2darray)
+        nbval[0].j = np.asarray([1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
+                                np.float32).reshape(3, 2)
+        nbrecord = numpy_support.from_dtype(recordwith2darray)
+        cfunc = self.get_cfunc(record_read_2d_array00, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].j[0, 0])
+
+        cfunc = self.get_cfunc(record_read_2d_array01, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].j[0, 1])
+
+        cfunc = self.get_cfunc(record_read_2d_array10, (nbrecord,))
+        res = cfunc(nbval[0])
+        np.testing.assert_equal(res, nbval[0].j[1, 0])
+
 
     def test_record_return(self):
         """
@@ -384,6 +504,51 @@ class TestRecordDtype(unittest.TestCase):
             del res
             # Check for potential leaks
             self.assertEqual(sys.getrefcount(nbary), old_refcnt)
+
+    def test_record_arg_transform(self):
+        """
+        Testing that transforming the name of a record type argument to a
+        function does not result in the fields of the record being used to
+        uniquely identify them, and that no other condition results in the
+        transformed name being excessively long.
+        """
+        rec = numpy_support.from_dtype(recordtype3)
+        transformed = transform_arg_name(rec)
+        self.assertNotIn('first', transformed)
+        self.assertNotIn('second', transformed)
+        # len(transformed) is generally 10, but could be longer if a large
+        # number of typecodes are in use. Checking <16 should provide enough
+        # tolerance.
+        self.assertLess(len(transformed), 16)
+
+        struct_arr = types.Array(rec, 1, 'C')
+        transformed = transform_arg_name(struct_arr)
+        self.assertIn('array', transformed)
+        self.assertNotIn('first', transformed)
+        self.assertNotIn('second', transformed)
+        # Length is usually 34 - 5 chars tolerance as above.
+        self.assertLess(len(transformed), 40)
+
+
+    def test_record_two_arrays(self):
+        """
+        Tests that comparison of NestedArrays by key is working correctly. If
+        the two NestedArrays in recordwith2arrays compare equal (same length and
+        ndim but different shape) incorrect code will be generated for one of the
+        functions.
+        """
+        nbrecord = numpy_support.from_dtype(recordwith2arrays)
+        rec = np.recarray(1, dtype=recordwith2arrays)[0]
+        rec.k[:] = np.arange(200).reshape(10,20)
+        rec.l[:] = np.arange(72).reshape(6,12)
+
+        pyfunc = record_read_first_arr
+        cfunc = self.get_cfunc(pyfunc, (nbrecord,))
+        self.assertEqual(cfunc(rec), pyfunc(rec))
+
+        pyfunc = record_read_second_arr
+        cfunc = self.get_cfunc(pyfunc, (nbrecord,))
+        self.assertEqual(cfunc(rec), pyfunc(rec))
 
 def _get_cfunc_nopython(pyfunc, argspec):
     return jit(argspec, nopython=True)(pyfunc)

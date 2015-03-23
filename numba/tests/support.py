@@ -9,7 +9,7 @@ import sys
 
 import numpy as np
 
-from numba import config, types, typing, utils
+from numba import config, typing, utils
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.lowering import LoweringError
 from numba.targets import cpu
@@ -89,11 +89,36 @@ class TestCase(unittest.TestCase):
             (LoweringError, TypingError, TypeError, NotImplementedError)) as cm:
             yield cm
 
-    _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
+    _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
-    _sequence_typesets = [(tuple,)]
+    _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
     _complex_types = (complex, np.complexfloating)
+
+    def _detect_family(self, numeric_object):
+        """
+        This function returns a string description of the type family
+        that the object in question belongs to.  Possible return values
+        are: "exact", "complex", "approximate", "sequence", and "unknown"
+        """
+
+        for tp in self._sequence_typesets:
+            if isinstance(numeric_object, tp):
+                return "sequence"
+
+        for tp in self._exact_typesets:
+            if isinstance(numeric_object, tp):
+                return "exact"
+
+        for tp in self._complex_types:
+            if isinstance(numeric_object, tp):
+                return "complex"
+
+        for tp in self._approx_typesets:
+            if isinstance(numeric_object, tp):
+                return "approximate"
+
+        return "unknown"
 
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                            msg=None):
@@ -117,7 +142,6 @@ class TestCase(unittest.TestCase):
             failure_msg = str(exc)
             # Fall off of the 'except' scope to avoid Python 3 exception
             # chaining.
-            self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
         else:
             return
         # Decorate the failure message with more information
@@ -142,35 +166,35 @@ class TestCase(unittest.TestCase):
             else:
                 self.assertAlmostEqual(first, second, delta=delta, msg=msg)
 
-        for tp in self._sequence_typesets:
-            # For recognized sequences, recurse
-            if isinstance(first, tp) or isinstance(second, tp):
-                self.assertIsInstance(first, tp)
-                self.assertIsInstance(second, tp)
-                self.assertEqual(len(first), len(second), msg=msg)
-                for a, b in zip(first, second):
-                    self._assertPreciseEqual(a, b, prec, ulps, msg)
-                return
-        for tp in self._exact_typesets:
-            # One or another could be the expected, the other the actual;
-            # test both.
-            if isinstance(first, tp) or isinstance(second, tp):
-                self.assertIsInstance(first, tp)
-                self.assertIsInstance(second, tp)
-                exact_comparison = True
-                break
-        else:
-            for tp in self._approx_typesets:
-                if isinstance(first, tp) or isinstance(second, tp):
-                    self.assertIsInstance(first, tp)
-                    self.assertIsInstance(second, tp)
-                    exact_comparison = False
-                    break
-            else:
-                # Assume these are non-numeric types: we will fall back
-                # on regular unittest comparison.
-                self.assertIs(first.__class__, second.__class__)
-                exact_comparison = True
+        first_family = self._detect_family(first)
+        second_family = self._detect_family(second)
+
+        assertion_message = "Type Family mismatch. (%s != %s)" % (first_family, second_family)
+        if msg:
+            assertion_message += ': %s' % (msg,)
+        self.assertEqual(first_family, second_family, msg=assertion_message)
+
+        # We now know they are in the same comparison family
+        compare_family = first_family
+
+        # For recognized sequences, recurse
+        if compare_family == "sequence":
+            self.assertEqual(len(first), len(second), msg=msg)
+            for a, b in zip(first, second):
+                self._assertPreciseEqual(a, b, prec, ulps, msg)
+            return
+
+        if compare_family == "exact":
+            exact_comparison = True
+
+        if compare_family in ["complex", "approximate"]:
+            exact_comparison = False
+
+        if compare_family == "unknown":
+            # Assume these are non-numeric types: we will fall back
+            # on regular unittest comparison.
+            self.assertIs(first.__class__, second.__class__)
+            exact_comparison = True
 
         # If a Numpy scalar, check the dtype is exactly the same too
         # (required for datetime64 and timedelta64).
@@ -217,7 +241,6 @@ class TestCase(unittest.TestCase):
         self.assertPreciseEqual(got, expected)
         return got, expected
 
-
 # Various helpers
 
 @contextlib.contextmanager
@@ -233,6 +256,17 @@ def override_config(name, value):
         yield
     finally:
         setattr(config, name, old_value)
+
+
+def compile_function(name, code, globs):
+    """
+    Given a *code* string, compile it with globals *globs* and return
+    the function named *name*.
+    """
+    co = compile(code, "<string>", "exec")
+    ns = {}
+    eval(co, globs, ns)
+    return ns[name]
 
 
 # From CPython

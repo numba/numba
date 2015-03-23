@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import itertools
 import functools
+import sys
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
@@ -119,8 +120,11 @@ def ord_usecase(x):
 def reduce_usecase(reduce_func, x):
     return functools.reduce(reduce_func, x)
 
-def round_usecase(x):
+def round_usecase1(x):
     return round(x)
+
+def round_usecase2(x, n):
+    return round(x, n)
 
 def sum_usecase(x):
     return sum(x)
@@ -232,6 +236,14 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cr.entry_point
         for x in [-1, 0, 1]:
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
+        cr = compile_isolated(pyfunc, (types.float64,), flags=flags)
+        cfunc = cr.entry_point
+        for x in [0.0, -0.0, 1.5, float('inf'), float('nan')]:
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
+        cr = compile_isolated(pyfunc, (types.complex128,), flags=flags)
+        cfunc = cr.entry_point
+        for x in [complex(0, float('inf')), complex(0, float('nan'))]:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_bool_npm(self):
@@ -622,17 +634,44 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_reduce(flags=no_pyobj_flags)
 
-    def test_round(self, flags=enable_pyobj_flags):
-        pyfunc = round_usecase
+    # Under Windows, the LLVM "round" intrinsic (used for Python 2)
+    # mistreats signed zeros.
+    _relax_round = sys.platform == 'win32' and sys.version_info < (3,)
 
-        cr = compile_isolated(pyfunc, (types.float64,), flags=flags)
-        cfunc = cr.entry_point
-        for x in [-0.5, -0.1, 0.0, 0.1, 0.5, 1.5, 5.0]:
-            # XXX round() doesn't return the right type under Python 3
-            self.assertEqual(cfunc(x), pyfunc(x))
+    def test_round1(self, flags=enable_pyobj_flags):
+        pyfunc = round_usecase1
 
-    def test_round_npm(self):
-        self.test_round(flags=no_pyobj_flags)
+        for tp in (types.float64, types.float32):
+            cr = compile_isolated(pyfunc, (tp,), flags=flags)
+            cfunc = cr.entry_point
+            values = [-1.6, -1.5, -1.4, -0.5, 0.0, 0.1, 0.5, 0.6, 1.4, 1.5, 5.0]
+            if not self._relax_round:
+                values += [-0.1, -0.0]
+            for x in values:
+                self.assertPreciseEqual(cfunc(x), pyfunc(x))
+
+    def test_round1_npm(self):
+        self.test_round1(flags=no_pyobj_flags)
+
+    def test_round2(self, flags=enable_pyobj_flags):
+        pyfunc = round_usecase2
+
+        for tp in (types.float64, types.float32):
+            prec = 'single' if tp is types.float32 else 'exact'
+            cr = compile_isolated(pyfunc, (tp, types.int32), flags=flags)
+            cfunc = cr.entry_point
+            for x in [0.0, 0.1, 0.125, 0.25, 0.5, 0.75, 1.25,
+                      1.5, 1.75, 2.25, 2.5, 2.75, 12.5, 15.0, 22.5]:
+                for n in (-1, 0, 1, 2):
+                    self.assertPreciseEqual(cfunc(x, n), pyfunc(x, n),
+                                            prec=prec)
+                    expected = pyfunc(-x, n)
+                    if not (expected == 0.0 and self._relax_round):
+                        self.assertPreciseEqual(cfunc(-x, n), pyfunc(-x, n),
+                                                prec=prec)
+
+    def test_round2_npm(self):
+        self.test_round2(flags=no_pyobj_flags)
 
     def test_sum(self, flags=enable_pyobj_flags):
         pyfunc = sum_usecase

@@ -4,7 +4,6 @@ Implementation of the range object for fixed-size integers.
 
 import llvmlite.llvmpy.core as lc
 
-from numba import errcode
 from numba import types, typing, cgutils
 from numba.targets.imputils import (builtin, implement, iterator_impl,
                                     struct_factory)
@@ -16,16 +15,7 @@ def make_range_iterator(typ):
     Return the Structure representation of the given *typ* (an
     instance of types.RangeIteratorType).
     """
-    int_type = typ.yield_type
-
-    class RangeIter(cgutils.Structure):
-
-        _fields = [('iter', types.CPointer(int_type)),
-                   ('stop', int_type),
-                   ('step', int_type),
-                   ('count', types.CPointer(int_type))]
-
-    return RangeIter
+    return cgutils.create_struct_proxy(typ)
 
 
 def make_range_impl(range_state_type, range_iter_type, int_type):
@@ -117,7 +107,8 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
 
             with cgutils.if_unlikely(builder, zero_step):
                 # step shouldn't be zero
-                context.return_errcode(builder, errcode.ASSERTION_ERROR)
+                context.call_conv.return_user_exc(builder, ValueError,
+                                                  ("range() arg 3 must not be zero",))
 
             with cgutils.ifelse(builder, sign_differs) as (then, orelse):
                 with then:

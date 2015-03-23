@@ -31,6 +31,14 @@ def ptx_grid2d(context, builder, sig, args):
 
 
 @register
+@implement('ptx.grid.3d', types.intp)
+def ptx_grid3d(context, builder, sig, args):
+    assert len(args) == 1
+    r1, r2, r3 = nvvmutils.get_global_id(builder, dim=3)
+    return cgutils.pack_array(builder, [r1, r2, r3])
+
+
+@register
 @implement('ptx.gridsize.1d', types.intp)
 def ptx_gridsize1d(context, builder, sig, args):
     assert len(args) == 1
@@ -54,6 +62,25 @@ def ptx_gridsize2d(context, builder, sig, args):
     r1 = builder.mul(ntidx, nctaidx)
     r2 = builder.mul(ntidy, nctaidy)
     return cgutils.pack_array(builder, [r1, r2])
+
+
+@register
+@implement('ptx.gridsize.3d', types.intp)
+def ptx_gridsize3d(context, builder, sig, args):
+    assert len(args) == 1
+    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
+    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
+
+    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
+    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
+
+    ntidz = nvvmutils.call_sreg(builder, "ntid.z")
+    nctaidz = nvvmutils.call_sreg(builder, "nctaid.z")
+
+    r1 = builder.mul(ntidx, nctaidx)
+    r2 = builder.mul(ntidy, nctaidy)
+    r3 = builder.mul(ntidz, nctaidz)
+    return cgutils.pack_array(builder, [r1, r2, r3])
 
 
 # -----------------------------------------------------------------------------
@@ -127,12 +154,25 @@ def ptx_cmem_arylike(context, builder, sig, args):
     return ary._getvalue()
 
 
+_unique_smem_id = 0
+
+
+def _get_unique_smem_id(name):
+    """Due to bug with NVVM invalid internalizing of shared memory in the
+    PTX output.  We can't mark shared memory to be internal. We have to
+    ensure unique name is generated for shared memory symbol.
+    """
+    global _unique_smem_id
+    _unique_smem_id += 1
+    return "{0}_{1}".format(name, _unique_smem_id)
+
+
 @register
 @implement('ptx.smem.alloc', types.intp, types.Any)
 def ptx_smem_alloc_intp(context, builder, sig, args):
     length, dtype = args
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
-                          symbol_name='_cudapy_smem',
+                          symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
@@ -142,7 +182,7 @@ def ptx_smem_alloc_intp(context, builder, sig, args):
 def ptx_smem_alloc_array(context, builder, sig, args):
     shape, dtype = args
     return _generic_array(context, builder, shape=shape, dtype=dtype,
-                          symbol_name='_cudapy_smem',
+                          symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
@@ -197,6 +237,9 @@ def ptx_atomic_add_intp(context, builder, sig, args):
     if aryty.dtype == types.float32:
         lmod = cgutils.get_module(builder)
         return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
+    elif aryty.dtype == types.float64:
+        lmod = cgutils.get_module(builder)
+        return builder.call(nvvmutils.declare_atomic_add_float64(lmod), (ptr, val))
     else:
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
@@ -204,33 +247,6 @@ def ptx_atomic_add_intp(context, builder, sig, args):
 @register
 @implement(stubs.atomic.add, types.Kind(types.Array),
            types.Kind(types.UniTuple), types.Any)
-def ptx_atomic_add_unituple(context, builder, sig, args):
-    aryty, indty, valty = sig.args
-    ary, inds, val = args
-    dtype = aryty.dtype
-
-    indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(indty, indices)]
-
-    if dtype != valty:
-        raise TypeError("expect %s but got %s" % (dtype, valty))
-
-    if aryty.ndim != len(indty):
-        raise TypeError("indexing %d-D array with %d-D index" %
-                        (aryty.ndim, len(indty)))
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
-
-    if aryty.dtype == types.float32:
-        lmod = cgutils.get_module(builder)
-        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
-    else:
-        return builder.atomic_rmw('add', ptr, val, 'monotonic')
-
-
-@register
 @implement(stubs.atomic.add, types.Kind(types.Array),
            types.Kind(types.Tuple), types.Any)
 def ptx_atomic_add_tuple(context, builder, sig, args):
@@ -255,8 +271,65 @@ def ptx_atomic_add_tuple(context, builder, sig, args):
     if aryty.dtype == types.float32:
         lmod = cgutils.get_module(builder)
         return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
+    elif aryty.dtype == types.float64:
+        lmod = cgutils.get_module(builder)
+        return builder.call(nvvmutils.declare_atomic_add_float64(lmod), (ptr, val))
     else:
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
+
+
+@register
+@implement(stubs.atomic.max, types.Kind(types.Array), types.intp, types.Any)
+def ptx_atomic_max_intp(context, builder, sig, args):
+    aryty, indty, valty = sig.args
+    ary, ind, val = args
+    dtype = aryty.dtype
+
+    if dtype != valty:
+        raise TypeError("expect %s but got %s" % (dtype, valty))
+    if aryty.ndim != 1:
+        raise TypeError("indexing %d-D array with 1-D index" % (aryty.ndim,))
+
+    lary = context.make_array(aryty)(context, builder, ary)
+    ptr = cgutils.get_item_pointer(builder, aryty, lary, [ind])
+
+    if dtype == types.float64:
+        lmod = cgutils.get_module(builder)
+        return builder.call(nvvmutils.declare_atomic_max_float64(lmod), (ptr, val))
+    else:
+        raise TypeError('Unimplemented atomic max with %s array' % dtype)
+
+
+@register
+@implement(stubs.atomic.max, types.Kind(types.Array),
+           types.Kind(types.Tuple), types.Any)
+@implement(stubs.atomic.max, types.Kind(types.Array),
+           types.Kind(types.UniTuple), types.Any)
+def ptx_atomic_max_tuple(context, builder, sig, args):
+    aryty, indty, valty = sig.args
+    ary, inds, val = args
+    dtype = aryty.dtype
+
+    indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
+    indices = [context.cast(builder, i, t, types.intp)
+               for t, i in zip(indty, indices)]
+
+    if dtype != valty:
+        raise TypeError("expect %s but got %s" % (dtype, valty))
+
+    if aryty.ndim != len(indty):
+        raise TypeError("indexing %d-D array with %d-D index" %
+                        (aryty.ndim, len(indty)))
+
+    lary = context.make_array(aryty)(context, builder, ary)
+    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
+
+    if aryty.dtype == types.float64:
+        lmod = cgutils.get_module(builder)
+        return builder.call(nvvmutils.declare_atomic_max_float64(lmod), (ptr, val))
+    else:
+        raise TypeError('Unimplemented atomic max with %s array' % dtype)
+
 
 
 # -----------------------------------------------------------------------------
@@ -292,7 +365,9 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
             ## Comment out the following line to workaround a NVVM bug
             ## which generates a invalid symbol name when the linkage
             ## is internal and in some situation.
+            ## See _get_unique_smem_id()
             # gvmem.linkage = lc.LINKAGE_INTERNAL
+
             gvmem.initializer = lc.Constant.undef(laryty)
 
         if dtype not in types.number_domain:

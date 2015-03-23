@@ -18,12 +18,7 @@ from pprint import pprint
 import itertools
 
 from numba import ir, types, utils, config, six
-from numba.config import PYVERSION
-from numba.utils import builtins
-
-RANGE_ITER_OBJECTS = (builtins.range,)
-if PYVERSION < (3, 0):
-    RANGE_ITER_OBJECTS += (builtins.xrange,)
+from numba.utils import RANGE_ITER_OBJECTS
 
 
 class TypingError(Exception):
@@ -142,9 +137,10 @@ class BuildTupleConstrain(object):
         tsets = [typevars[i.name].get() for i in self.items]
         oset = typevars[self.target]
         for vals in itertools.product(*tsets):
-            if all(vals[0] == v for v in vals):
+            if vals and all(vals[0] == v for v in vals):
                 tup = types.UniTuple(dtype=vals[0], count=len(vals))
             else:
+                # empty tuples fall here as well
                 tup = types.Tuple(vals)
             oset.add_types(tup)
 
@@ -229,14 +225,17 @@ class CallConstrain(object):
         self.resolve(context, typevars, fnty)
 
     def resolve(self, context, typevars, fnty):
-        assert not self.kws, "Keyword argument is not supported, yet"
         assert fnty
+        n_pos_args = len(self.args)
+        kwds = [kw for (kw, var) in self.kws]
         argtypes = [typevars[a.name].get() for a in self.args]
+        argtypes += [typevars[var.name].get() for (kw, var) in self.kws]
         restypes = []
         # Case analysis for each combination of argument types.
         for args in itertools.product(*argtypes):
-            # TODO handling keyword arguments
-            sig = context.resolve_function_type(fnty, args, ())
+            pos_args = args[:n_pos_args]
+            kw_args = dict(zip(kwds, args[n_pos_args:]))
+            sig = context.resolve_function_type(fnty, pos_args, kw_args)
             if sig is None:
                 msg = "Undeclared %s%s" % (fnty, args)
                 raise TypingError(msg, loc=self.loc)
@@ -268,7 +267,6 @@ class GetAttrConstrain(object):
                 msg = "Unknown attribute '%s' for %s %s %s" % args
                 raise TypingError(msg, loc=self.inst.loc)
             else:
-                assert attrty
                 restypes.append(attrty)
         typevars[self.target].add_types(*restypes)
 
@@ -335,12 +333,16 @@ class TypeInferer(object):
     Operates on block that shares the same ir.Scope.
     """
 
-    def __init__(self, context, blocks):
+    def __init__(self, context, interp):
         self.context = context
-        self.blocks = blocks
+        self.blocks = interp.blocks
+        self.generator_info = interp.generator_info
+        self.py_func = interp.bytecode.func
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constrains = ConstrainNetwork()
+        # { index: mangled name }
+        self.arg_names = {}
         self.return_type = None
         # Set of assumed immutable globals
         self.assumed_immutables = set()
@@ -353,6 +355,15 @@ class TypeInferer(object):
     def dump(self):
         print('---- type variables ----')
         pprint(list(six.itervalues(self.typevars)))
+
+    def _mangle_arg_name(self, name):
+        # Disambiguise argument name
+        return "arg.%s" % (name,)
+
+    def seed_argument(self, name, index, typ):
+        name = self._mangle_arg_name(name)
+        self.seed_type(name, typ)
+        self.arg_names[index] = name
 
     def seed_type(self, name, typ):
         """All arguments should be seeded.
@@ -377,7 +388,7 @@ class TypeInferer(object):
         oldtoken = None
         if config.DEBUG:
             self.dump()
-            # Since the number of types are finite, the typesets will eventually
+        # Since the number of types are finite, the typesets will eventually
         # stop growing.
         while newtoken != oldtoken:
             if config.DEBUG:
@@ -402,7 +413,23 @@ class TypeInferer(object):
             typdict[var] = unified
         retty = self.get_return_type(typdict)
         fntys = self.get_function_types(typdict)
+        if self.generator_info:
+            retty = self.get_generator_type(typdict, retty)
         return typdict, retty, fntys
+
+    def get_generator_type(self, typdict, retty):
+        gi = self.generator_info
+        arg_types = [None] * len(self.arg_names)
+        for index, name in self.arg_names.items():
+            arg_types[index] = typdict[name]
+        state_types = [typdict[var_name] for var_name in gi.state_vars]
+        yield_types = [typdict[y.inst.value.name] for y in gi.get_yield_points()]
+        if not yield_types:
+            raise TypingError("Cannot type generator: it does not yield any value")
+        yield_type = self.context.unify_types(*yield_types)
+        # No finalizer in nopython mode
+        return types.Generator(self.py_func, yield_type, arg_types, state_types,
+                               has_finalizer=False)
 
     def get_function_types(self, typemap):
         calltypes = utils.UniqueDict()
@@ -419,14 +446,14 @@ class TypeInferer(object):
 
         for call, args, kws in self.usercalls:
             args = tuple(typemap[a.name] for a in args)
+            kws = dict((kw, typemap[var.name]) for (kw, var) in kws)
 
             if isinstance(call.func, ir.Intrinsic):
                 signature = call.func.type
             else:
-                assert not kws
                 fnty = typemap[call.func.name]
-                signature = self.context.resolve_function_type(fnty, args, ())
-                assert signature is not None, (fnty, args)
+                signature = self.context.resolve_function_type(fnty, args, kws)
+                assert signature is not None, (fnty, args, kws)
             calltypes[call] = signature
 
         for inst in self.setitemcalls:
@@ -508,10 +535,14 @@ class TypeInferer(object):
                                              src=value.name, loc=inst.loc))
         elif isinstance(value, (ir.Global, ir.FreeVar)):
             self.typeof_global(inst, inst.target, value)
+        elif isinstance(value, ir.Arg):
+            self.typeof_arg(inst, inst.target, value)
         elif isinstance(value, ir.Expr):
             self.typeof_expr(inst, inst.target, value)
+        elif isinstance(value, ir.Yield):
+            self.typeof_yield(inst, inst.target, value)
         else:
-            raise NotImplementedError(type(value), value)
+            raise NotImplementedError(type(value), str(value))
 
     def resolve_value_type(self, inst, val):
         """
@@ -525,8 +556,18 @@ class TypeInferer(object):
         else:
             return ty
 
+    def typeof_arg(self, inst, target, arg):
+        src_name = self._mangle_arg_name(arg.name)
+        self.constrains.append(Propagate(dst=target.name,
+                                         src=src_name,
+                                         loc=inst.loc))
+
     def typeof_const(self, inst, target, const):
         self.typevars[target.name].lock(self.resolve_value_type(inst, const))
+
+    def typeof_yield(self, inst, target, yield_):
+        # Sending values into generators isn't supported.
+        self.typevars[target.name].add_types(types.none)
 
     def sentry_modified_builtin(self, inst, gvar):
         """Ensure that builtins are modified.
@@ -549,7 +590,8 @@ class TypeInferer(object):
         typ = self.context.resolve_value_type(gvar.value)
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
-            typ = typ.copy(layout='C', const=True)
+            # XXX why layout='C'?
+            typ = typ.copy(layout='C', readonly=True)
 
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)

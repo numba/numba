@@ -16,12 +16,10 @@ class TestException(unittest.TestCase):
 
         unsafe_foo[1, 2](numpy.array([0,1]))
 
-        try:
+        with self.assertRaises(IndexError) as cm:
             safe_foo[1, 2](numpy.array([0,1]))
-        except cuda.KernelRuntimeError as e:
-            print("error raised as expected:\n%s" % e)
-        else:
-            raise AssertionError("expecting an exception")
+        self.assertIn("tuple index out of range", str(cm.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

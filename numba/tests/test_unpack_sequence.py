@@ -73,11 +73,18 @@ def chained_unpack_assign1(x, y):
     return d + e + b + c
 
 
+def conditional_swap(x, y):
+    # Used to produce invalid code (issue #977)
+    if x > 0:
+        x, y = y, x
+    return x, y
+
+
 class TestUnpack(TestCase):
 
     def test_unpack_list(self):
         pyfunc = unpack_list
-        cr = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
+        cr = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
         cfunc = cr.entry_point
         l = [1, 2, 3]
         self.assertEqual(cfunc(l), pyfunc(l))
@@ -160,7 +167,20 @@ class TestUnpack(TestCase):
     def test_unpack_range_too_large_npm(self):
         self.check_unpack_error(unpack_range_too_large, no_pyobj_flags)
 
+    def check_conditional_swap(self, flags=force_pyobj_flags):
+        cr = compile_isolated(conditional_swap, (types.int32, types.int32),
+                              flags=flags)
+        cfunc = cr.entry_point
+        self.assertPreciseEqual(cfunc(4, 5), (5, 4))
+        self.assertPreciseEqual(cfunc(0, 5), (0, 5))
+
+    def test_conditional_swap(self):
+        self.check_conditional_swap()
+
+    def test_conditional_swap_npm(self):
+        self.check_conditional_swap(no_pyobj_flags)
+
 
 if __name__ == '__main__':
-    unittest.main(buffer=True)
+    unittest.main()
 

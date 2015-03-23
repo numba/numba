@@ -14,6 +14,8 @@ register = registry.register
 #        nopython mode.
 
 
+@register
+@implement(types.print_item_type, types.Kind(types.Integer))
 def int_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -24,10 +26,8 @@ def int_print_impl(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-for ty in types.integer_domain:
-    register(implement(types.print_item_type, ty)(int_print_impl))
-
-
+@register
+@implement(types.print_item_type, types.Kind(types.Float))
 def real_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -38,19 +38,16 @@ def real_print_impl(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-for ty in types.real_domain:
-    register(implement(types.print_item_type, ty)(real_print_impl))
-
-
 @register
 @implement(types.print_item_type, types.Kind(types.CharSeq))
 def print_charseq(context, builder, sig, args):
+    [tx] = sig.args
     [x] = args
     py = context.get_python_api(builder)
     xp = cgutils.alloca_once(builder, x.type)
     builder.store(x, xp)
     byteptr = builder.bitcast(xp, Type.pointer(Type.int(8)))
-    size = context.get_constant(types.intp, x.type.elements[0].count)
+    size = context.get_constant(types.intp, tx.count)
     cstr = py.bytes_from_string_and_size(byteptr, size)
     py.print_object(cstr)
     py.decref(cstr)
@@ -58,7 +55,7 @@ def print_charseq(context, builder, sig, args):
 
 
 @register
-@implement(types.print_type, types.VarArg)
+@implement(types.print_type, types.VarArg(types.Any))
 def print_varargs(context, builder, sig, args):
     py = context.get_python_api(builder)
     for i, (argtype, argval) in enumerate(zip(sig.args, args)):

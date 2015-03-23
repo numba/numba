@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import functools
 import sys
 
 import llvmlite.llvmpy.core as lc
@@ -7,7 +8,7 @@ import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
-from numba import config
+from numba import config, utils
 
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
@@ -16,6 +17,12 @@ _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
 def _is_x86(triple):
     arch = triple.split('-')[0]
     return arch in _x86arch
+
+
+def dump(header, body):
+    print(header.center(80, '-'))
+    print(body)
+    print('=' * 80)
 
 
 class CodeLibrary(object):
@@ -134,10 +141,8 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
 
-        if config.NUMBA_DUMP_FUNC_OPT:
-            print(("FUNCTION OPTIMIZED DUMP %s" % self._name).center(80, '-'))
-            print(self._final_module)
-            print('=' * 80)
+        if config.DUMP_FUNC_OPT:
+            dump("FUNCTION OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
 
         # Link libraries for shared code
         for library in self._linking_libraries:
@@ -158,20 +163,22 @@ class CodeLibrary(object):
         # It seems add_module() must be done only here and not before
         # linking in other modules, otherwise get_pointer_to_function()
         # could fail.
-        self._codegen._add_module(self._final_module)
+        cleanup = self._codegen._add_module(self._final_module)
+        if cleanup:
+            utils.finalize(self, cleanup)
         self._finalize_specific()
 
         self._finalized = True
 
         if config.DUMP_OPTIMIZED:
-            print(("OPTIMIZED DUMP %s" % self._name).center(80, '-'))
-            print(self._final_module)
-            print('=' * 80)
+            dump("OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
 
         if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % self._name).center(80, '-'))
-            print(self._codegen._tm.emit_assembly(self._final_module))
-            print('=' * 80)
+            # CUDA backend cannot return assembly this early, so don't
+            # attempt to dump assembly if nothing is produced.
+            asm = self.get_asm_str()
+            if asm:
+                dump("ASSEMBLY %s" % self._name, self.get_asm_str())
 
     def get_function(self, name):
         return self._final_module.get_function(name)
@@ -188,6 +195,18 @@ class CodeLibrary(object):
         self._final_module = ll.parse_bitcode(bitcode)
         self._finalize_final_module()
         return self
+
+    def get_llvm_str(self):
+        """
+        Get the human-readable form of the LLVM module.
+        """
+        return str(self._final_module)
+
+    def get_asm_str(self):
+        """
+        Get the human-readable assembly.
+        """
+        return str(self._codegen._tm.emit_assembly(self._final_module))
 
 
 class AOTCodeLibrary(CodeLibrary):
@@ -236,6 +255,7 @@ class BaseCPUCodegen(object):
 
     def __init__(self, module_name):
         self._libraries = set()
+        self._data_layout = None
         self._llvm_module = ll.parse_assembly(
             str(self._create_empty_module(module_name)))
         self._init(self._llvm_module)
@@ -266,6 +286,8 @@ class BaseCPUCodegen(object):
     def _create_empty_module(self, name):
         ir_module = lc.Module.new(name)
         ir_module.triple = ll.get_default_triple()
+        if self._data_layout:
+            ir_module.data_layout = self._data_layout
         return ir_module
 
     @property
@@ -373,3 +395,5 @@ class JITCPUCodegen(BaseCPUCodegen):
 
     def _add_module(self, module):
         self._engine.add_module(module)
+        # Early bind the engine method to avoid keeping a reference to self.
+        return functools.partial(self._engine.remove_module, module)

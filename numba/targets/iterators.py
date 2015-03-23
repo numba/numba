@@ -24,12 +24,7 @@ def make_enumerate_cls(enum_type):
     Return the Structure representation of the given *enum_type* (an
     instance of types.EnumerateType).
     """
-
-    class Enumerate(cgutils.Structure):
-        _fields = [('count', types.CPointer(types.intp)),
-                   ('iter', enum_type.source_type)]
-
-    return Enumerate
+    return cgutils.create_struct_proxy(enum_type)
 
 
 @builtin
@@ -91,15 +86,10 @@ def make_zip_cls(zip_type):
     Return the Structure representation of the given *zip_type* (an
     instance of types.ZipType).
     """
-
-    class Zip(cgutils.Structure):
-        _fields = [('iter%d' % i, source_type.iterator_type)
-                   for i, source_type in enumerate(zip_type.source_types)]
-
-    return Zip
+    return cgutils.create_struct_proxy(zip_type)
 
 @builtin
-@implement(zip, types.VarArg)
+@implement(zip, types.VarArg(types.Any))
 def make_zip_object(context, builder, sig, args):
     zip_type = sig.return_type
 
@@ -139,3 +129,28 @@ def iternext_zip(context, builder, sig, args, result):
     result.set_valid(is_valid)
     with cgutils.ifthen(builder, is_valid):
         result.yield_(cgutils.make_anonymous_struct(builder, values))
+
+
+#-------------------------------------------------------------------------------
+# generator implementation
+
+@builtin
+@implement('iternext', types.Kind(types.Generator))
+@iternext_impl
+def iternext_zip(context, builder, sig, args, result):
+    genty, = sig.args
+    gen, = args
+    # XXX We should link with the generator's library.
+    # Currently, this doesn't make a difference as the library has already
+    # been linked for the generator init function.
+    impl = context.get_generator_impl(genty)
+    status, retval = impl(context, builder, sig, args)
+    with cgutils.if_likely(builder, status.is_ok):
+        result.set_valid(True)
+        result.yield_(retval)
+    with cgutils.if_unlikely(builder, status.is_stop_iteration):
+        result.set_exhausted()
+    with cgutils.if_unlikely(builder,
+                             builder.and_(status.is_error,
+                                          builder.not_(status.is_stop_iteration))):
+        context.call_conv.return_status_propagate(builder, status)

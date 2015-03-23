@@ -9,7 +9,6 @@ import math
 import copy
 from ctypes import c_void_p
 import numpy as np
-from .ndarray import (ndarray_populate_head, ArrayHeaderManager)
 from . import driver as _driver
 from . import devices
 from numba import dummyarray, types, numpy_support
@@ -51,10 +50,10 @@ class DeviceNDArrayBase(object):
     """A on GPU NDArray representation
     """
     __cuda_memory__ = True
-    __cuda_ndarray__ = True # There must be a gpu_head and gpu_data attribute
+    __cuda_ndarray__ = True     # There must be gpu_data attribute
 
     def __init__(self, shape, strides, dtype, stream=0, writeback=None,
-                 gpu_head=None, gpu_data=None):
+                 gpu_data=None):
         """
         Args
         ----
@@ -69,8 +68,6 @@ class DeviceNDArrayBase(object):
             cuda stream.
         writeback
             Deprecated.
-        gpu_head
-            user provided device memory for the ndarray head structure
         gpu_data
             user provided device memory for the ndarray data buffer
         """
@@ -100,13 +97,6 @@ class DeviceNDArrayBase(object):
             gpu_data = None
             self.alloc_size = 0
 
-        self.gpu_mem = ArrayHeaderManager(devices.get_context())
-
-        if gpu_head is None:
-            gpu_head = ndarray_populate_head(self.gpu_mem, gpu_data,
-                                             self.shape, self.strides,
-                                             stream=stream)
-        self.gpu_head = gpu_head
         self.gpu_data = gpu_data
 
         self.__writeback = writeback    # should deprecate the use of this
@@ -119,12 +109,6 @@ class DeviceNDArrayBase(object):
         clone = copy.copy(self)
         clone.stream = stream
         return clone
-
-    def __del__(self):
-        try:
-            self.gpu_mem.free(self.gpu_head)
-        except:
-            pass
 
     def _default_stream(self, stream):
         return self.stream if not stream else stream
@@ -146,7 +130,6 @@ class DeviceNDArrayBase(object):
             return c_void_p(0)
         else:
             return self.gpu_data.device_ctypes_pointer
-
 
     def copy_to_device(self, ary, stream=0):
         """Copy `ary` to `self`.
@@ -196,8 +179,12 @@ class DeviceNDArrayBase(object):
             _driver.device_to_host(hostary, self, self.alloc_size, stream=stream)
 
         if ary is None:
-            hostary = np.ndarray(shape=self.shape, strides=self.strides,
-                                 dtype=self.dtype, buffer=hostary)
+            if self.size == 0:
+                hostary = np.ndarray(shape=self.shape, dtype=self.dtype,
+                                     buffer=hostary)
+            else:
+                hostary = np.ndarray(shape=self.shape, dtype=self.dtype,
+                                     strides=self.strides, buffer=hostary)
         return hostary
 
     def to_host(self, stream=0):
@@ -232,7 +219,23 @@ class DeviceNDArrayBase(object):
     def as_cuda_arg(self):
         """Returns a device memory object that is used as the argument.
         """
-        return self.gpu_head
+        return self.gpu_data
+
+
+class DeviceRecord(DeviceNDArrayBase):
+    def __init__(self, dtype, stream=0, gpu_data=None):
+        shape = ()
+        strides = ()
+        super(DeviceRecord, self).__init__(shape, strides, dtype, stream,
+                                           gpu_data)
+
+    @property
+    def _numba_type_(self):
+        """
+        Magic attribute expected by Numba to get the numba type that
+        represents this object.
+        """
+        return numpy_support.from_dtype(self.dtype)
 
 
 class DeviceNDArray(DeviceNDArrayBase):
@@ -272,7 +275,7 @@ class DeviceNDArray(DeviceNDArrayBase):
         if extents == [self._dummy.extent]:
             return cls(shape=newarr.shape, strides=newarr.strides,
                        dtype=self.dtype, gpu_data=self.gpu_data,
-                       gpu_head=self.gpu_head, stream=stream)
+                       stream=stream)
 
         else:
             raise NotImplementedError("operation requires copying")
@@ -316,26 +319,20 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
     """
 
     def device_setup(self, gpu_data, stream=0):
-        self.gpu_mem = ArrayHeaderManager(devices.get_context())
-        gpu_head = ndarray_populate_head(self.gpu_mem, gpu_data, self.shape,
-                                         self.strides, stream=stream)
         self.gpu_data = gpu_data
-        self.gpu_head = gpu_head
-
-    def __del__(self):
-        try:
-            self.gpu_mem.free(self.gpu_head)
-        except:
-            pass
 
 
-def from_array_like(ary, stream=0, gpu_head=None, gpu_data=None):
+def from_array_like(ary, stream=0, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
     if ary.ndim == 0:
         ary = ary.reshape(1)
     return DeviceNDArray(ary.shape, ary.strides, ary.dtype,
-                         writeback=ary, stream=stream, gpu_head=gpu_head,
-                         gpu_data=gpu_data)
+                         writeback=ary, stream=stream, gpu_data=gpu_data)
+
+
+def from_record_like(rec, stream=0, gpu_data=None):
+    "Create a DeviceRecord object that is like rec."
+    return DeviceRecord(rec.dtype, stream=stream, gpu_data=gpu_data)
 
 
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
@@ -350,13 +347,21 @@ def sentry_contiguous(ary):
             raise ValueError(errmsg_contiguous_buffer)
 
 
-def auto_device(ary, stream=0, copy=True):
-    if _driver.is_device_memory(ary):
-        return ary, False
+def auto_device(obj, stream=0, copy=True):
+    """
+    Create a DeviceRecord or DeviceArray like obj and optionally copy data from
+    host to device. If obj already represents device memory, it is returned and
+    no copy is made.
+    """
+    if _driver.is_device_memory(obj):
+        return obj, False
     else:
-        sentry_contiguous(ary)
-        devarray = from_array_like(ary, stream=stream)
+        sentry_contiguous(obj)
+        if isinstance(obj, np.void):
+            devobj = from_record_like(obj, stream=stream)
+        else:
+            devobj = from_array_like(obj, stream=stream)
         if copy:
-            devarray.copy_to_device(ary, stream=stream)
-        return devarray, True
+            devobj.copy_to_device(obj, stream=stream)
+        return devobj, True
 

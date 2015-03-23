@@ -4,30 +4,32 @@ Utilities to simplify the boilerplate for native lowering.
 
 from __future__ import print_function, absolute_import, division
 
+import collections
 import functools
 
 from .. import typing, cgutils, types
 
 def implement(func, *argtys):
     def wrapper(impl):
-        @functools.wraps(impl)
-        def res(context, builder, sig, args):
-            ret = impl(context, builder, sig, args)
-            return ret
-
-        res.signature = typing.signature(types.Any, *argtys)
-        res.key = func
-        res.__wrapped__ = impl
-        return res
+        try:
+            sigs = impl.function_signatures
+        except AttributeError:
+            sigs = impl.function_signatures = []
+        sigs.append((func, typing.signature(types.Any, *argtys)))
+        return impl
 
     return wrapper
 
 
 def impl_attribute(ty, attr, rtype=None):
     def wrapper(impl):
+        real_impl = impl
+        while hasattr(real_impl, "__wrapped__"):
+            real_impl = real_impl.__wrapped__
+
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = impl(context, builder, typ, value)
+            ret = real_impl(context, builder, typ, value)
             return ret
 
         if rtype is None:
@@ -43,9 +45,13 @@ def impl_attribute(ty, attr, rtype=None):
 
 def impl_attribute_generic(ty):
     def wrapper(impl):
+        real_impl = impl
+        while hasattr(real_impl, "__wrapped__"):
+            real_impl = real_impl.__wrapped__
+
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = impl(context, builder, typ, value, attr)
+            ret = real_impl(context, builder, typ, value, attr)
             return ret
 
         res.signature = typing.signature(types.Any, ty)
@@ -56,18 +62,38 @@ def impl_attribute_generic(ty):
     return wrapper
 
 
-def user_function(func, fndesc, libs):
+def user_function(fndesc, libs):
+    """
+    A wrapper inserting code calling Numba-compiled *fndesc*.
+    """
+
     def imp(context, builder, sig, args):
         func = context.declare_function(cgutils.get_module(builder), fndesc)
         # env=None assumes this is a nopython function
-        status, retval = context.call_function(builder, func, fndesc.restype,
-                                               fndesc.argtypes, args, env=None)
-        with cgutils.if_unlikely(builder, status.err):
-            context.return_errcode_propagate(builder, status.code)
+        status, retval = context.call_conv.call_function(
+            builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
+        with cgutils.if_unlikely(builder, status.is_error):
+            context.call_conv.return_status_propagate(builder, status)
         return retval
 
     imp.signature = typing.signature(fndesc.restype, *fndesc.argtypes)
-    imp.key = func
+    imp.libs = tuple(libs)
+    return imp
+
+
+def user_generator(gendesc, libs):
+    """
+    A wrapper inserting code calling Numba-compiled *gendesc*.
+    """
+
+    def imp(context, builder, sig, args):
+        func = context.declare_function(cgutils.get_module(builder), gendesc)
+        # env=None assumes this is a nopython function
+        status, retval = context.call_conv.call_function(
+            builder, func, gendesc.restype, gendesc.argtypes, args, env=None)
+        # Return raw status for caller to process StopIteration
+        return status, retval
+
     imp.libs = tuple(libs)
     return imp
 
@@ -78,14 +104,15 @@ def python_attr_impl(cls, attr, atyp):
         api = context.get_python_api(builder)
         aval = api.object_getattr_string(value, attr)
         with cgutils.ifthen(builder, cgutils.is_null(builder, aval)):
-            context.return_exc(builder)
+            context.call_conv.return_exc(builder)
 
         if isinstance(atyp, types.Method):
             return aval
         else:
-            nativevalue = api.to_native_value(aval, atyp)
+            native = api.to_native_value(aval, atyp)
+            assert native.cleanup is None
             api.decref(aval)
-            return nativevalue
+            return native.value
 
     return imp
 
@@ -210,18 +237,17 @@ class Registry(object):
         self.functions = []
         self.attributes = []
 
-    def register(self, item):
-        curr_item = item
-        while hasattr(curr_item, '__wrapped__'):
-            self.functions.append(curr_item)
-            curr_item = curr_item.__wrapped__
-        return item
+    def register(self, impl):
+        sigs = impl.function_signatures
+        impl.function_signatures = []
+        self.functions.append((impl, sigs))
+        return impl
 
     def register_attr(self, item):
         curr_item = item
         while hasattr(curr_item, '__wrapped__'):
             self.attributes.append(curr_item)
-            curr_item=curr_item.__wrapped__
+            curr_item = curr_item.__wrapped__
         return item
 
 

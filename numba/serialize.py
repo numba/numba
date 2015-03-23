@@ -33,6 +33,8 @@ class _ModuleRef(object):
 
 
 def _rebuild_module(name):
+    if name is None:
+        raise ImportError("cannot import None")
     __import__(name)
     return sys.modules[name]
 
@@ -51,6 +53,9 @@ def _get_function_globals_for_reduction(func):
         # Make modules picklable by name
         if isinstance(v, ModuleType):
             globs[k] = _ModuleRef(k)
+    # Remember the module name so that the function gets a proper __module__
+    # when rebuilding.  This is used to recreate the environment.
+    globs['__name__'] = func.__module__
     return globs
 
 def _reduce_function(func):
@@ -87,6 +92,13 @@ def _rebuild_function(code_reduced, globals, name, cell_values):
     else:
         cells = ()
     code = _rebuild_code(*code_reduced)
+    modname = globals['__name__']
+    try:
+        _rebuild_module(modname)
+    except ImportError:
+        # If the module can't be found, avoid passing it (it would produce
+        # errors when lowering).
+        del globals['__name__']
     return FunctionType(code, globals, name, (), cells)
 
 def _rebuild_code(marshal_version, bytecode_magic, marshalled):

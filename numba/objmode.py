@@ -7,7 +7,7 @@ from __future__ import print_function, division, absolute_import
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import cgutils, ir, types, utils
+from . import cgutils, generators, ir, types, utils
 from .lowering import BaseLower, ForbiddenConstruct
 from .utils import builtins
 
@@ -35,15 +35,20 @@ PYTHON_OPMAP = {
 
 
 class PyLower(BaseLower):
-    def init(self):
-        self.pyapi = self.context.get_python_api(self.builder)
 
-        # Add error handling block
-        self.ehblock = self.function.append_basic_block('error')
+    GeneratorLower = generators.PyGeneratorLower
+
+    def init(self):
+        # Strings to be frozen into the Environment object
+        self._frozen_strings = set()
+
+        self._live_vars = set()
 
     def pre_lower(self):
+        self.pyapi = self.context.get_python_api(self.builder)
+
         # Store environment argument for later use
-        self.envarg = self.context.get_env_argument(self.function)
+        self.envarg = self.call_conv.get_env_argument(self.function)
         with cgutils.if_unlikely(self.builder, self.is_null(self.envarg)):
             self.pyapi.err_set_string(
                 "PyExc_SystemError",
@@ -53,13 +58,10 @@ class PyLower(BaseLower):
         self.env_body = self.context.get_env_body(self.builder, self.envarg)
 
     def post_lower(self):
-        with cgutils.goto_block(self.builder, self.ehblock):
-            self.cleanup()
-            self.context.return_exc(self.builder)
+        self._finalize_frozen_string()
 
-    def init_argument(self, arg):
-        self.incref(arg)
-        return arg
+    def pre_block(self, block):
+        self.init_vars(block)
 
     def lower_inst(self, inst):
         if isinstance(inst, ir.Assign):
@@ -76,12 +78,15 @@ class PyLower(BaseLower):
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
             value = self.loadvar(inst.value.name)
-            ok = self.pyapi.object_setattr_string(target, inst.attr, value)
+            ok = self.pyapi.object_setattr(target,
+                                           self._freeze_string(inst.attr),
+                                           value)
             self.check_int_status(ok)
 
         elif isinstance(inst, ir.DelAttr):
             target = self.loadvar(inst.target.name)
-            ok = self.pyapi.object_delattr_string(target, inst.attr)
+            ok = self.pyapi.object_delattr(target,
+                                           self._freeze_string(inst.attr))
             self.check_int_status(ok)
 
         elif isinstance(inst, ir.StoreMap):
@@ -93,9 +98,15 @@ class PyLower(BaseLower):
 
         elif isinstance(inst, ir.Return):
             retval = self.loadvar(inst.value.name)
+            if self.generator_info:
+                # StopIteration
+                # We own a reference to the "return value", but we
+                # don't return it.
+                self.pyapi.decref(retval)
+                self.genlower.return_from_generator(self)
+                return
             # No need to incref() as the reference is already owned.
-            self.cleanup()
-            self.context.return_value(self.builder, retval)
+            self.call_conv.return_value(self.builder, retval)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -117,7 +128,14 @@ class PyLower(BaseLower):
             self.delvar(inst.value)
 
         elif isinstance(inst, ir.Raise):
-            self.pyapi.raise_exception(inst.exception, inst.exception)
+            if inst.exception is not None:
+                exc = self.loadvar(inst.exception.name)
+                # A reference will be stolen by raise_object() and another
+                # by return_exception_raised().
+                self.incref(exc)
+            else:
+                exc = None
+            self.pyapi.raise_object(exc)
             self.return_exception_raised()
 
         else:
@@ -138,8 +156,34 @@ class PyLower(BaseLower):
             return self.lower_expr(value)
         elif isinstance(value, ir.Global):
             return self.lower_global(value.name, value.value)
+        elif isinstance(value, ir.Yield):
+            return self.lower_yield(value)
+        elif isinstance(value, ir.Arg):
+            value = self.fnargs[value.index]
+            self.incref(value)
+            return value
         else:
             raise NotImplementedError(type(value), value)
+
+    def lower_yield(self, inst):
+        yp = self.generator_info.yield_points[inst.index]
+        assert yp.inst is inst
+        self.genlower.init_generator_state(self)
+
+        # Save live vars in state
+        # We also need to save live vars that are del'ed afterwards.
+        y = generators.LowerYield(self, yp, yp.live_vars | yp.weak_live_vars)
+        y.lower_yield_suspend()
+        # Yield to caller
+        val = self.loadvar(inst.value.name)
+        # Let caller own the reference
+        self.pyapi.incref(val)
+        self.call_conv.return_value(self.builder, val)
+
+        # Resumption point
+        y.lower_yield_resume()
+        # None is returned by the yield expression
+        return self.pyapi.make_none()
 
     def lower_binop(self, expr, inplace=False):
         lhs = self.loadvar(expr.lhs.name)
@@ -195,7 +239,7 @@ class PyLower(BaseLower):
             return ret
         elif expr.op == 'getattr':
             obj = self.loadvar(expr.value.name)
-            res = self.pyapi.object_getattr_string(obj, expr.attr)
+            res = self.pyapi.object_getattr(obj, self._freeze_string(expr.attr))
             self.check_error(res)
             return res
         elif expr.op == 'build_tuple':
@@ -260,8 +304,7 @@ class PyLower(BaseLower):
             has_wrong_size = self.builder.icmp(lc.ICMP_NE,
                                                tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
-                excid = self.add_exception(ValueError)
-                self.context.return_user_exc(self.builder, excid)
+                self.return_exception(ValueError)
             return tup
         elif expr.op == 'getitem':
             value = self.loadvar(expr.value.name)
@@ -302,43 +345,13 @@ class PyLower(BaseLower):
             raise NotImplementedError(expr)
 
     def lower_const(self, const):
-        from numba import dispatcher   # Avoiding toplevel circular imports
-        if isinstance(const, str):
-            ret = self.pyapi.string_from_constant_string(const)
-            self.check_error(ret)
-            return ret
-        elif isinstance(const, complex):
-            real = self.context.get_constant(types.float64, const.real)
-            imag = self.context.get_constant(types.float64, const.imag)
-            ret = self.pyapi.complex_from_doubles(real, imag)
-            self.check_error(ret)
-            return ret
-        elif isinstance(const, float):
-            fval = self.context.get_constant(types.float64, const)
-            ret = self.pyapi.float_from_double(fval)
-            self.check_error(ret)
-            return ret
-        elif isinstance(const, utils.INT_TYPES):
-            if utils.bit_length(const) >= 64:
-                raise ValueError("Integer is too big to be lowered")
-            ival = self.context.get_constant(types.intp, const)
-            return self.pyapi.long_from_ssize_t(ival)
-        elif isinstance(const, tuple):
-            items = [self.lower_const(i) for i in const]
-            return self.pyapi.tuple_pack(items)
-        elif const is Ellipsis:
-            return self.get_builtin_obj("Ellipsis")
-        elif const is None:
-            return self.pyapi.make_none()
-        else:
-            # Constants which can't be reconstructed are frozen inside
-            # the environment (e.g. callables, lifted loops).
-            index = len(self.env.consts)
-            self.env.consts.append(const)
-            ret = self.get_env_const(index)
-            self.check_error(ret)
-            self.incref(ret)
-            return ret
+        # All constants are frozen inside the environment
+        index = len(self.env.consts)
+        self.env.consts.append(const)
+        ret = self.get_env_const(index)
+        self.check_error(ret)
+        self.incref(ret)
+        return ret
 
     def lower_global(self, name, value):
         """
@@ -348,7 +361,7 @@ class PyLower(BaseLower):
             2b) is it a module (for __main__ module)
         """
         moddict = self.get_module_dict()
-        obj = self.pyapi.dict_getitem_string(moddict, name)
+        obj = self.pyapi.dict_getitem(moddict, self._freeze_string(name))
         self.incref(obj)  # obj is borrowed
 
         try:
@@ -364,7 +377,8 @@ class PyLower(BaseLower):
             bbelse = self.builder.basic_block
 
             with cgutils.ifthen(self.builder, obj_is_null):
-                mod = self.pyapi.dict_getitem_string(moddict, "__builtins__")
+                mod = self.pyapi.dict_getitem(moddict,
+                                          self._freeze_string("__builtins__"))
                 builtin = self.builtin_lookup(mod, name)
                 bbif = self.builder.basic_block
 
@@ -388,7 +402,8 @@ class PyLower(BaseLower):
     def get_builtin_obj(self, name):
         # XXX The builtins dict could be bound into the environment
         moddict = self.get_module_dict()
-        mod = self.pyapi.dict_getitem_string(moddict, "__builtins__")
+        mod = self.pyapi.dict_getitem(moddict,
+                                      self._freeze_string("__builtins__"))
         return self.builtin_lookup(mod, name)
 
     def get_env_const(self, index):
@@ -408,13 +423,13 @@ class PyLower(BaseLower):
         name: str
             The object to lookup
         """
-        fromdict = self.pyapi.dict_getitem_string(mod, name)
+        fromdict = self.pyapi.dict_getitem(mod, self._freeze_string(name))
         self.incref(fromdict)       # fromdict is borrowed
         bbifdict = self.builder.basic_block
 
         with cgutils.if_unlikely(self.builder, self.is_null(fromdict)):
             # This happen if we are using the __main__ module
-            frommod = self.pyapi.object_getattr_string(mod, name)
+            frommod = self.pyapi.object_getattr(mod, self._freeze_string(name))
 
             with cgutils.if_unlikely(self.builder, self.is_null(frommod)):
                 self.pyapi.raise_missing_global_error(name)
@@ -429,6 +444,9 @@ class PyLower(BaseLower):
         return builtin
 
     def check_occurred(self):
+        """
+        Return if an exception occurred.
+        """
         err_occurred = cgutils.is_not_null(self.builder,
                                            self.pyapi.err_occurred())
 
@@ -436,6 +454,9 @@ class PyLower(BaseLower):
             self.return_exception_raised()
 
     def check_error(self, obj):
+        """
+        Return if *obj* is NULL.
+        """
         with cgutils.if_unlikely(self.builder, self.is_null(obj)):
             self.return_exception_raised()
 
@@ -454,11 +475,17 @@ class PyLower(BaseLower):
         return cgutils.is_null(self.builder, obj)
 
     def return_exception_raised(self):
-        self.builder.branch(self.ehblock)
+        """
+        Return with the currently raised exception.
+        """
+        self.cleanup_vars()
+        self.call_conv.return_exc(self.builder)
 
-    def return_error_occurred(self):
-        self.cleanup()
-        self.context.return_exc(self.builder)
+    def init_vars(self, block):
+        """
+        Initialize live variables for *block*.
+        """
+        self._live_vars = set(self.interp.get_block_entry_vars(block))
 
     def _getvar(self, name, ltype=None):
         if name not in self.varmap:
@@ -469,11 +496,13 @@ class PyLower(BaseLower):
         """
         Load the llvm value of the variable named *name*.
         """
+        # If this raises then the live variables analysis is wrong
+        assert name in self._live_vars, name
         ptr = self.varmap[name]
         val = self.builder.load(ptr)
         with cgutils.if_unlikely(self.builder, self.is_null(val)):
             self.pyapi.raise_missing_name_error(name)
-            self.return_error_occurred()
+            self.return_exception_raised()
         return val
 
     def delvar(self, name):
@@ -481,6 +510,8 @@ class PyLower(BaseLower):
         Delete the variable slot with the given name. This will decref
         the corresponding Python object.
         """
+        # If this raises then the live variables analysis is wrong
+        self._live_vars.remove(name)
         ptr = self._getvar(name)  # initializes `name` if not already
         self.decref(self.builder.load(ptr))
         # This is a safety guard against double decref's, but really
@@ -488,22 +519,31 @@ class PyLower(BaseLower):
         # and code path.
         self.builder.store(cgutils.get_null_value(ptr.type.pointee), ptr)
 
-    def storevar(self, value, name):
+    def storevar(self, value, name, clobber=False):
         """
         Stores a llvm value and allocate stack slot if necessary.
         The llvm value can be of arbitrary type.
         """
+        is_redefine = name in self._live_vars and not clobber
         ptr = self._getvar(name, ltype=value.type)
-        old = self.builder.load(ptr)
+        if is_redefine:
+            old = self.builder.load(ptr)
+        else:
+            self._live_vars.add(name)
         assert value.type == ptr.type.pointee, (str(value.type),
                                                 str(ptr.type.pointee))
         self.builder.store(value, ptr)
         # Safe to call decref even on non python object
-        self.decref(old)
+        if is_redefine:
+            self.decref(old)
 
-    def cleanup(self):
-        # Nothing to do.
-        pass
+    def cleanup_vars(self):
+        """
+        Cleanup live variables.
+        """
+        for name in self._live_vars:
+            ptr = self._getvar(name)
+            self.decref(self.builder.load(ptr))
 
     def alloca(self, name, ltype=None):
         """
@@ -533,3 +573,17 @@ class PyLower(BaseLower):
                 pass
             else:
                 self.pyapi.decref(value)
+
+    def _freeze_string(self, string):
+        """Freeze a python string object into the code.
+        Insert a reference to the Environment object later.
+        """
+        self._frozen_strings.add(string)
+        return self.context.get_constant(types.intp, id(string)).inttoptr(
+            self.pyapi.pyobj)
+
+    def _finalize_frozen_string(self):
+        """Insert all referenced string into the Environment object.
+        """
+        for fs in self._frozen_strings:
+            self.env.consts.append(fs)

@@ -43,8 +43,6 @@ class TestArgRetCasting(unittest.TestCase):
         typemap = cres.type_annotation.typemap
         # Argument "iters" must be uint32
         self.assertEqual(typemap['iters'], types.uint32)
-        # Localized "iters" must be uint32
-        self.assertEqual(typemap['iters.1'], types.uint32)
 
 
 class TestTupleUnify(unittest.TestCase):
@@ -181,6 +179,72 @@ class TestIssue(object):
         foo = jit(nopython=True)(issue_797)
         g = np.zeros(shape=(10, 10), dtype=np.int32)
         foo(np.int32(0), np.int32(0), np.int32(1), np.int32(1), g)
+
+
+class TestCoercion(unittest.TestCase):
+    """
+    Test coercion of binary operations.
+    """
+    references = {
+        ('uint8', 'uint8'): 'uint8',
+        ('int8', 'int8'): 'int8',
+        ('uint16', 'uint16'): 'uint16',
+        ('int16', 'int16'): 'int16',
+        ('uint32', 'uint32'): 'uint32',
+        ('int32', 'int32'): 'int32',
+        ('uint64', 'uint64'): 'uint64',
+        ('int64', 'int64'): 'int64',
+
+        ('int8', 'uint8'): 'int16',
+        ('int8', 'uint16'): 'int32',
+        ('int8', 'uint32'): 'int64',
+
+        ('uint8', 'int32'): 'int32',
+        ('uint8', 'uint64'): 'uint64',
+
+        ('int16', 'int8'): 'int16',
+        ('int16', 'uint8'): 'int16',
+        ('int16', 'uint16'): 'int32',
+        ('int16', 'uint32'): 'int64',
+        ('int16', 'int64'): 'int64',
+        ('int16', 'uint64'): 'float64',
+
+        ('uint16', 'uint8'): 'uint16',
+        ('uint16', 'uint32'): 'uint32',
+        ('uint16', 'int32'): 'int32',
+        ('uint16', 'uint64'): 'uint64',
+
+        ('int32', 'int8'): 'int32',
+        ('int32', 'int16'): 'int32',
+        ('int32', 'uint32'): 'int64',
+        ('int32', 'int64'): 'int64',
+
+        ('uint32', 'uint8'): 'uint32',
+        ('uint32', 'int64'): 'int64',
+        ('uint32', 'uint64'): 'uint64',
+
+        ('int64', 'int8'): 'int64',
+        ('int64', 'uint8'): 'int64',
+        ('int64', 'uint16'): 'int64',
+
+        ('uint64', 'int8'): 'float64',
+        ('uint64', 'int32'): 'float64',
+        ('uint64', 'int64'): 'float64',
+    }
+
+    def test_integer(self):
+        ctx = typing.Context()
+        for ut, st in itertools.product(types.integer_domain,
+                                        types.integer_domain):
+            unified = ctx.unify_types(ut, st)
+            self._check_unify(ut, st, unified)
+
+    def _check_unify(self, aty, bty, unified):
+        key = (str(aty), str(bty))
+        expect = self.references.get(key,
+                                     self.references.get(tuple(reversed(key))))
+        msg = "{0}, {1} -> {2} != {3}".format(aty, bty, unified, expect)
+        self.assertEqual(str(unified), expect, msg=msg)
 
 
 if __name__ == '__main__':

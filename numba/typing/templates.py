@@ -31,11 +31,12 @@ class Signature(object):
         self.return_type, self.args, self.recvr = state
 
     def __hash__(self):
-        return hash(self.args)
+        return hash((self.args, self.return_type))
 
     def __eq__(self, other):
         if isinstance(other, Signature):
             return (self.args == other.args and
+                    self.return_type == other.return_type and
                     self.recvr == other.recvr)
 
     def __ne__(self, other):
@@ -325,7 +326,8 @@ class Registry(object):
     def register_global(self, v, t):
         self.globals.append((v, t))
 
-    def resolves_global(self, global_value, wrapper_type=types.Function):
+    def resolves_global(self, global_value, wrapper_type=types.Function,
+                        typing_key=None):
         """
         Decorate a FunctionTemplate subclass so that it gets registered
         as resolving *global_value* with the *wrapper_type* (by default
@@ -336,9 +338,11 @@ class Registry(object):
             class Math(ConcreteTemplate):
                 cases = [signature(types.float64, types.float64)]
         """
+        if typing_key is None:
+            typing_key = global_value
         def decorate(cls):
             class Template(cls):
-                key = global_value
+                key = typing_key
             self.register_global(global_value, wrapper_type(Template))
             return cls
         return decorate

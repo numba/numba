@@ -1,5 +1,5 @@
 from __future__ import print_function, division, absolute_import
-import contextlib
+
 import functools
 import inspect
 import sys
@@ -20,8 +20,8 @@ class _OverloadedBase(_dispatcher.Dispatcher):
     __numba__ = "py_func"
 
     def __init__(self, arg_count, py_func):
-        self.tm = default_type_manager
-        _dispatcher.Dispatcher.__init__(self, self.tm.get_pointer(), arg_count)
+        self._tm = default_type_manager
+        #_dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(), arg_count)
 
         # A mapping of signatures to entry points
         self.overloads = {}
@@ -36,10 +36,23 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
 
+        self._pysig = utils.pysignature(self.py_func)
+        argnames = tuple(self._pysig.parameters)
+        defargs = self.py_func.__defaults__ or ()
+        _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(),
+                                        arg_count, self.fold_args,
+                                        argnames, defargs)
+
         self.doc = py_func.__doc__
-        self._compiling = False
+        self._compile_lock = utils.NonReentrantLock()
 
         utils.finalize(self, self._make_finalizer())
+
+    def _reset_overloads(self):
+        self._clear()
+        self.overloads.clear()
+        self._compileinfos.clear()
+        self._npsigs[:] = []
 
     def _make_finalizer(self):
         """
@@ -48,6 +61,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         """
         overloads = self.overloads
         targetctx = self.targetctx
+
         # Early-bind utils.shutting_down() into the function's local namespace
         # (see issue #689)
         def finalizer(shutting_down=utils.shutting_down):
@@ -60,9 +74,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             for func in overloads.values():
                 try:
                     targetctx.remove_user_function(func)
-                    targetctx.remove_native_function(func)
                 except KeyError:
-                    # Not a native function (object mode presumably)
                     pass
 
         return finalizer
@@ -85,7 +97,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         assert val or len(self.signatures) > 0
         self._can_compile = not val
 
-
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
         sig = [a._code for a in args]
@@ -99,11 +110,24 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
     def get_call_template(self, args, kws):
         """
-        Get a typing.ConcreteTemplate for this dispatcher and the given *args*
-        and *kws*.  This allows to resolve the return type.
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This allows to resolve the return type.
         """
-        if kws:
-            raise TypeError("kwargs not supported")
+        # Fold keyword arguments and resolve default values
+        ba = self._pysig.bind(*args, **kws)
+        for param in self._pysig.parameters.values():
+            name = param.name
+            default = param.default
+            if (default is not param.empty and
+                name not in ba.arguments):
+                ba.arguments[name] = self.typeof_pyval(default)
+        if ba.kwargs:
+            # There's a remaining keyword argument, e.g. if omitting
+            # some argument with a default value before it.
+            raise NotImplementedError("unhandled keyword argument: %s"
+                                      % list(ba.kwargs))
+        args = ba.args
+        kws = {}
         # Ensure an overload is available, but avoid compiler re-entrance
         if self._can_compile and not self.is_compiling:
             self.compile(tuple(args))
@@ -115,30 +139,18 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # so avoid keeping a reference to `cfunc`.
         call_template = typing.make_concrete_template(
             name, key=func_name, signatures=self.nopython_signatures)
-        return call_template
+        return call_template, args, kws
 
     def get_overload(self, sig):
         args, return_type = sigutils.normalize_signature(sig)
         return self.overloads[tuple(args)]
 
-    @contextlib.contextmanager
-    def _compile_lock(self):
-        if self._compiling:
-            raise RuntimeError("Compiler re-entrant")
-        self._compiling = True
-        try:
-            yield
-        finally:
-            self._compiling = False
-
     @property
     def is_compiling(self):
-        return self._compiling
-
-    def jit(self, sig, **kws):
-        """Alias of compile(sig, **kws)
         """
-        return self.compile(sig, **kws)
+        Whether a specialization is currently being compiled.
+        """
+        return self._compile_lock.is_owned()
 
     def _compile_for_args(self, *args, **kws):
         """
@@ -147,7 +159,21 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         """
         assert not kws
         sig = tuple([self.typeof_pyval(a) for a in args])
-        return self.jit(sig)
+        return self.compile(sig)
+
+    def inspect_llvm(self, signature=None):
+        if signature is not None:
+            lib = self._compileinfos[signature].library
+            return lib.get_llvm_str()
+
+        return dict((sig, self.inspect_llvm(sig)) for sig in self.signatures)
+
+    def inspect_asm(self, signature=None):
+        if signature is not None:
+            lib = self._compileinfos[signature].library
+            return lib.get_asm_str()
+
+        return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 
     def inspect_types(self, file=None):
         if file is None:
@@ -163,7 +189,15 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         assert not kws, "kwargs not handled"
         args = tuple([self.typeof_pyval(a) for a in args])
         sigs = [cr.signature for cr in self._compileinfos.values()]
-        resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
+        res = resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
+        print("res =", res)
+
+    def _explain_matching_error(self, *args, **kws):
+        assert not kws, "kwargs not handled"
+        args = [self.typeof_pyval(a) for a in args]
+        msg = ("No matching definition for argument type(s) %s"
+               % ', '.join(map(str, args)))
+        raise TypeError(msg)
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
@@ -179,7 +213,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             # typecode() function in _dispatcher.c.
             return types.int64
 
-        tp = self.typingctx.resolve_data_type(val)
+        tp = self.typingctx.resolve_argument_type(val)
         if tp is None:
             tp = types.pyobject
         return tp
@@ -192,6 +226,7 @@ class Overloaded(_OverloadedBase):
     This is an abstract base class. Subclasses should define the targetdescr
     class attribute.
     """
+    fold_args = True
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         """
@@ -252,28 +287,22 @@ class Overloaded(_OverloadedBase):
         self._can_compile = can_compile
         return self
 
-    def compile(self, sig, locals={}, **targetoptions):
-        with self._compile_lock():
-            locs = self.locals.copy()
-            locs.update(locals)
-
-            topt = self.targetoptions.copy()
-            topt.update(targetoptions)
-
-            flags = compiler.Flags()
-            self.targetdescr.options.parse_as_flags(flags, topt)
-
+    def compile(self, sig):
+        with self._compile_lock:
             args, return_type = sigutils.normalize_signature(sig)
-
-            # Don't recompile if signature already exist.
+            # Don't recompile if signature already exists
+            # (e.g. if another thread compiled it before we got the lock)
             existing = self.overloads.get(tuple(args))
             if existing is not None:
                 return existing
 
+            flags = compiler.Flags()
+            self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
+
             cres = compiler.compile_extra(self.typingctx, self.targetctx,
                                           self.py_func,
                                           args=args, return_type=return_type,
-                                          flags=flags, locals=locs)
+                                          flags=flags, locals=self.locals)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:
@@ -282,12 +311,29 @@ class Overloaded(_OverloadedBase):
             self.add_overload(cres)
             return cres.entry_point
 
+    def recompile(self):
+        """
+        Recompile all signatures afresh.
+        """
+        sigs = [cr.signature for cr in self._compileinfos.values()]
+        old_can_compile = self._can_compile
+        # Ensure the old overloads are disposed of, including compiled functions.
+        self._make_finalizer()()
+        self._reset_overloads()
+        self._can_compile = True
+        try:
+            for sig in sigs:
+                self.compile(sig)
+        finally:
+            self._can_compile = old_can_compile
+
 
 class LiftedLoop(_OverloadedBase):
     """
     Implementation of the hidden dispatcher objects used for lifted loop
     (a lifted loop is really compiled as a separate function).
     """
+    fold_args = False
 
     def __init__(self, bytecode, typingctx, targetctx, locals, flags):
         self.typingctx = typingctx
@@ -308,12 +354,13 @@ class LiftedLoop(_OverloadedBase):
         return next(iter(self.bytecode)).lineno
 
     def compile(self, sig):
-        with self._compile_lock():
+        with self._compile_lock:
             # FIXME this is mostly duplicated from Overloaded
             flags = self.flags
             args, return_type = sigutils.normalize_signature(sig)
 
-            # Don't recompile if signature already exist.
+            # Don't recompile if signature already exists
+            # (e.g. if another thread compiled it before we got the lock)
             existing = self.overloads.get(tuple(args))
             if existing is not None:
                 return existing.entry_point

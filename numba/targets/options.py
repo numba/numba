@@ -52,6 +52,9 @@ class TargetOptions(object):
         if kws.pop('debug', False):
             flags.set("boundcheck")
 
+        if kws.pop('nogil', False):
+            flags.set("release_gil")
+
         flags.set("enable_pyobject_looplift")
 
         if kws:

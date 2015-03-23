@@ -34,7 +34,6 @@ def cuconst3d(A):
 class TestCudaConstantMemory(unittest.TestCase):
     def test_const_array(self):
         jcuconst = cuda.jit('void(float64[:])')(cuconst)
-        print(jcuconst.ptx)
         self.assertTrue('.const' in jcuconst.ptx)
         A = numpy.empty_like(CONST1D)
         jcuconst[2, 5](A)
@@ -42,22 +41,16 @@ class TestCudaConstantMemory(unittest.TestCase):
 
     def test_const_array_2d(self):
         jcuconst2d = cuda.jit('void(int32[:,:])')(cuconst2d)
-        print(jcuconst2d.ptx)
         self.assertTrue('.const' in jcuconst2d.ptx)
         A = numpy.empty_like(CONST2D, order='C')
         jcuconst2d[(2,2), (5,5)](A)
-        print(CONST2D)
-        print(A)
         self.assertTrue(numpy.all(A == CONST2D))
 
     def test_const_array_3d(self):
         jcuconst3d = cuda.jit('void(complex64[:,:,:])')(cuconst3d)
-        print(jcuconst3d.ptx)
         self.assertTrue('.const' in jcuconst3d.ptx)
         A = numpy.empty_like(CONST3D, order='F')
         jcuconst3d[1, (5, 5, 5)](A)
-        print(CONST3D)
-        print(A)
         self.assertTrue(numpy.all(A == CONST3D))
 
 

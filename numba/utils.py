@@ -5,13 +5,10 @@ import collections
 import functools
 import io
 import itertools
+import threading
 import timeit
 import math
 import sys
-try:
-    import builtins
-except ImportError:
-    import __builtin__ as builtins
 
 import numpy
 
@@ -22,11 +19,25 @@ from numba.config import PYVERSION, MACHINE_BITS
 IS_PY3 = PYVERSION >= (3, 0)
 
 if IS_PY3:
+    import builtins
     INT_TYPES = (int,)
     longint = int
+    get_ident = threading.get_ident
 else:
+    import thread
+    import __builtin__ as builtins
     INT_TYPES = (int, long)
     longint = long
+    get_ident = thread.get_ident
+
+try:
+    from inspect import signature as pysignature
+except ImportError:
+    try:
+        from funcsigs import signature as pysignature
+    except ImportError:
+        raise ImportError("please install the 'funcsigs' package "
+                          "('pip install funcsigs')")
 
 
 _shutting_down = False
@@ -127,8 +138,43 @@ class SortedSet(collections.Set):
 
 class UniqueDict(dict):
     def __setitem__(self, key, value):
-        assert key not in self
+        if key in self:
+            raise AssertionError("key already in dictionary: %r" % (key,))
         super(UniqueDict, self).__setitem__(key, value)
+
+
+class NonReentrantLock(object):
+    """
+    A lock class which explicitly forbids reentrancy.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._owner = None
+
+    def acquire(self):
+        me = get_ident()
+        if me == self._owner:
+            raise RuntimeError("cannot re-acquire lock from same thread")
+        self._lock.acquire()
+        self._owner = me
+
+    def release(self):
+        if self._owner != get_ident():
+            raise RuntimeError("cannot release un-acquired lock")
+        self._owner = None
+        self._lock.release()
+
+    def is_owned(self):
+        """
+        Whether the lock is owned by the current thread.
+        """
+        return self._owner == get_ident()
+
+    __enter__ = acquire
+
+    def __exit__(self, t, v, tb):
+        self.release()
 
 
 # Django's cached_property
@@ -222,6 +268,11 @@ def benchmark(func, maxsec=1):
 RANGE_ITER_OBJECTS = (builtins.range,)
 if PYVERSION < (3, 0):
     RANGE_ITER_OBJECTS += (builtins.xrange,)
+    try:
+        from future.types.newrange import newrange
+        RANGE_ITER_OBJECTS += (newrange,)
+    except ImportError:
+        pass
 
 
 # Backported from Python 3.4: functools.total_ordering()

@@ -2,10 +2,10 @@ from __future__ import print_function
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
+from numba import types, from_dtype, utils
 import numba.unittest_support as unittest
-from . import usecases
-from .support import TestCase
+from numba.tests import usecases
+from numba.tests.support import TestCase
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -38,6 +38,15 @@ def add_axis1(a, expected):
 def add_axis2(a, expected):
     return a[np.newaxis,:].shape == expected.shape
 
+def bad_index(arr, arr2d):
+    x = arr.x,
+    y = arr.y
+    arr2d[x, y] = 1.0
+
+def bad_float_index(arr):
+    # 2D index required for this function because 1D index
+    # fails typing
+    return arr[1, 2.0]
 
 class TestArrayManipulation(TestCase):
 
@@ -168,6 +177,23 @@ class TestArrayManipulation(TestCase):
     def test_add_axis2_npm(self):
         with self.assertTypingError():
             self.test_add_axis2(flags=no_pyobj_flags)
+
+    def test_bad_index_npm(self):
+        with self.assertTypingError() as raises:
+            arraytype1 = from_dtype(np.dtype([('x', np.int32),
+                                              ('y', np.int32)]))
+            arraytype2 = types.Array(types.int32, 2, 'C')
+            compile_isolated(bad_index, (arraytype1, arraytype2),
+                             flags=no_pyobj_flags)
+        self.assertIn('is unsupported for indexing', str(raises.exception))
+
+    def test_bad_float_index_npm(self):
+        with self.assertTypingError() as raises:
+            compile_isolated(bad_float_index,
+                             (types.Array(types.float64, 2, 'C'),))
+        self.assertIn('Type float', str(raises.exception))
+        self.assertIn('is unsupported for indexing', str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -21,10 +21,10 @@ gpus = devices.gpus
 
 
 @require_context
-def to_device(ary, stream=0, copy=True, to=None):
-    """to_device(ary, stream=0, copy=True, to=None)
+def to_device(obj, stream=0, copy=True, to=None):
+    """to_device(obj, stream=0, copy=True, to=None)
 
-    Allocate and transfer a numpy ndarray to the device.
+    Allocate and transfer a numpy ndarray or structured scalar to the device.
 
     To copy host->device a numpy array::
 
@@ -52,12 +52,11 @@ def to_device(ary, stream=0, copy=True, to=None):
         hary = d_ary.copy_to_host(stream=stream)
     """
     if to is None:
-        devarray = devicearray.from_array_like(ary, stream=stream)
-    else:
-        devarray = to
+        to, new = devicearray.auto_device(obj, stream=stream, copy=copy)
+        return to
     if copy:
-        devarray.copy_to_device(ary, stream=stream)
-    return devarray
+        to.copy_to_device(obj, stream=stream)
+    return to
 
 
 @require_context
@@ -213,7 +212,7 @@ def event(timing=True):
 def select_device(device_id):
     """Creates a new CUDA context with the selected device.
     The context is associated with the current thread.
-    NumbaPro currently allows only one context per thread.
+    Numba currently allows only one context per thread.
 
     Returns a device instance
 
