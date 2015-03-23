@@ -41,6 +41,9 @@ Features:
 * Issue #1033: Implement the inspect_types(), inspect_llvm() and inspect_asm()
   methods for CUDA kernels.
 * Issue #1029: Support Numpy structured arrays with CUDA as well.
+* Issue #1034: Support for generators in nopython and object mode.
+* Issue #1044: Support default argument values when calling Numba-compiled
+  functions.
 
 Fixes:
 
@@ -54,6 +57,8 @@ Fixes:
 * Issue #1008: Generate shorter LLVM type names to avoid segfaults with CUDA.
 * Issue #1005: Properly clean up references when raising an exception from
   object mode.
+* Issue #1041: Fix incompatibility between Numba and the third-party
+  library "future".
 
 
 Version 0.17.0
