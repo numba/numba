@@ -195,6 +195,12 @@ class TestVectorizeDecor(unittest.TestCase):
         with self.assertRaises(ValueError):
             vectorize([sig], identity=2)(add)
 
+    def test_vectorize_no_args(self):
+        a = numpy.linspace(0,1,10)
+        b = numpy.linspace(1,2,10)
+        ufunc = vectorize(add)
+        self.assertTrue(numpy.all(ufunc(a,b) == (a + b)))
+
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)")(guadd)
