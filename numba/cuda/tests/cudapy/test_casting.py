@@ -43,6 +43,8 @@ class TestCasting(unittest.TestCase):
 
         self.assertEqual(cfunc(12.3), pyfunc(12.3))
         self.assertEqual(cfunc(12.3), int(12.3))
+        self.assertEqual(cfunc(-12.3), pyfunc(-12.3))
+        self.assertEqual(cfunc(-12.3), int(-12.3))
 
     def test_int_to_float(self):
         pyfunc = int_to_float
