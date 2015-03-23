@@ -6,7 +6,7 @@ from numba import ctypes_support as ctypes
 from numba.typing.templates import AbstractTemplate
 from numba import config, compiler, types
 from numba.typing.templates import ConcreteTemplate
-from numba import typing, lowering, utils
+from numba import funcdesc, typing, utils
 
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
@@ -142,7 +142,7 @@ def declare_device_function(name, restype, argtypes):
         key = extfn
         cases = [sig]
 
-    fndesc = lowering.ExternalFunctionDescriptor(
+    fndesc = funcdesc.ExternalFunctionDescriptor(
         name=name, restype=restype, argtypes=argtypes)
     typingctx.insert_user_function(extfn, device_function_template)
     targetctx.insert_user_function(extfn, fndesc)

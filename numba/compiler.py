@@ -7,9 +7,10 @@ from pprint import pprint
 import sys
 import warnings
 
-from numba import (bytecode, interpreter, typing, typeinfer, lowering,
-                   objmode, irpasses, utils, config, type_annotations,
-                   types, ir, assume, looplifting, macro, types)
+from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
+                   lowering, objmode, irpasses, utils, config,
+                   type_annotations, types, ir, assume, looplifting, macro,
+                   types)
 from numba.targets import cpu
 
 
@@ -641,6 +642,9 @@ def translate_stage(bytecode):
     if config.DEBUG or config.DUMP_IR:
         print(("IR DUMP: %s" % interp.bytecode.func_qualname).center(80, "-"))
         interp.dump()
+        if interp.generator_info:
+            print(("GENERATOR INFO: %s" % interp.bytecode.func_qualname).center(80, "-"))
+            interp.dump_generator_info()
 
     expanded = macro.expand_macros(interp.blocks)
 
@@ -656,11 +660,11 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     if len(args) != len(interp.argspec.args):
         raise TypeError("Mismatch number of argument types")
 
-    infer = typeinfer.TypeInferer(typingctx, interp.blocks)
+    infer = typeinfer.TypeInferer(typingctx, interp)
 
     # Seed argument types
-    for name, ty in zip(interp.argspec.args, args):
-        infer.seed_argument(name, ty)
+    for index, (name, ty) in enumerate(zip(interp.argspec.args, args)):
+        infer.seed_argument(name, index, ty)
 
     # Seed return type
     if return_type is not None:
@@ -685,7 +689,7 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 def native_lowering_stage(targetctx, library, interp, typemap, restype,
                           calltypes, flags):
     # Lowering
-    fndesc = lowering.PythonFunctionDescriptor.from_specialized_function(
+    fndesc = funcdesc.PythonFunctionDescriptor.from_specialized_function(
         interp, typemap, restype, calltypes, mangler=targetctx.mangler,
         inline=flags.forceinline)
 
@@ -709,7 +713,7 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
-    fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
+    fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(interp)
     lower = objmode.PyLower(targetctx, library, fndesc, interp)
     lower.lower()
     if not flags.no_cpython_wrapper:

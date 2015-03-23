@@ -28,7 +28,7 @@ from numba import int32, int64
 #     return result
 
 
-@jit((int64[:,::1], int32[:,::1], int64[:,::1]), nopython=True)
+@jit(nopython=True)
 def filter2d_core(image, filt, result):
     M, N = image.shape
     Mf, Nf = filt.shape
@@ -64,7 +64,7 @@ start = time.time()
 result2 = convolve(image, filter)
 duration2 = time.time() - start
 
-print("Time for LLVM code = %f\nTime for convolve = %f" % (duration, duration2))
+print("Time for Numba filter = %f\nTime for scipy convolve = %f" % (duration, duration2))
 
 from pylab import subplot, imshow, show, title, gray
 subplot(1,2,1)

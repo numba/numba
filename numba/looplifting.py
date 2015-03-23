@@ -41,6 +41,7 @@ def lift_loop(bytecode, dispatcher_factory):
     codetable = utils.SortedMap((i.offset, i) for i in outer)
     outerbc = CustomByteCode(func=bytecode.func,
                              func_qualname=bytecode.func_qualname,
+                             is_generator=bytecode.is_generator,
                              argspec=bytecode.argspec,
                              filename=bytecode.filename,
                              co_names=outernames,
@@ -240,6 +241,8 @@ def make_loop_bytecode(bytecode, loop, args, returns):
     # Custom bytecode object
     lbc = CustomByteCode(func=bytecode.func,
                          func_qualname=loop_qualname,
+                         # Enforced in separate_loops()
+                         is_generator=False,
                          argspec=argspec,
                          filename=bytecode.filename,
                          co_names=bytecode.co_names,
@@ -359,6 +362,8 @@ def separate_loops(bytecode, outer, loops):
     Stores list of loop instructions into `loops`.
     Both `outer` and `loops` are list-like (`append(item)` defined).
     """
+    # XXX When an outer loop is rejected, there may be an inner loop
+    # which would still allow lifting.
     endloop = None
     cur = None
     for inst in bytecode:
@@ -375,8 +380,9 @@ def separate_loops(bytecode, outer, loops):
             cur.append(inst)
             if inst.next == endloop:
                 for inst in cur:
-                    if inst.opname in ['RETURN_VALUE', 'BREAK_LOOP']:
-                        # Reject if return or break inside loop
+                    if inst.opname in ['RETURN_VALUE', 'YIELD_VALUE',
+                                       'BREAK_LOOP']:
+                        # Reject if return, yield or break inside loop
                         outer.extend(cur)
                         break
                 else:

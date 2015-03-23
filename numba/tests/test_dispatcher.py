@@ -21,7 +21,18 @@ def addsub(x, y, z):
     return x - y + z
 
 
+def addsub_defaults(x, y=2, z=3):
+    return x - y + z
+
+
 class TestDispatcher(TestCase):
+
+    def compile_func(self, pyfunc):
+        def check(*args, **kwargs):
+            result = f(*args, **kwargs)
+            self.assertPreciseEqual(result, pyfunc(*args, **kwargs))
+        f = jit(pyfunc)
+        return f, check
 
     def test_numba_interface(self):
         """
@@ -36,15 +47,6 @@ class TestDispatcher(TestCase):
 
         # Just make sure this doesn't crash
         foo()
-
-    def test_inspect_types(self):
-        @jit
-        def foo(a, b):
-            return a + b
-
-        foo(1, 2)
-        # Exercise the method
-        foo.inspect_types(utils.StringIO())
 
     def test_coerce_input_types(self):
         # Issue #486: do not allow unsafe conversions if we can still
@@ -114,10 +116,7 @@ class TestDispatcher(TestCase):
         """
         Test passing named arguments to a dispatcher.
         """
-        def check(*args, **kwargs):
-            result = f(*args, **kwargs)
-            self.assertEqual(result, addsub(*args, **kwargs))
-        f = jit(addsub)
+        f, check = self.compile_func(addsub)
         check(3, z=10, y=4)
         check(3, 4, 10)
         check(x=3, y=4, z=10)
@@ -129,8 +128,41 @@ class TestDispatcher(TestCase):
         self.assertIn("too many arguments: expected 3, got 4",
                       str(cm.exception))
         with self.assertRaises(TypeError) as cm:
+            f()
+        self.assertIn("not enough arguments: expected 3, got 0",
+                      str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
             f(3, 4, y=6)
         self.assertIn("missing argument 'z'", str(cm.exception))
+
+    def test_default_args(self):
+        """
+        Test omitting arguments with a default value.
+        """
+        f, check = self.compile_func(addsub_defaults)
+        check(3, z=10, y=4)
+        check(3, 4, 10)
+        check(x=3, y=4, z=10)
+        # Now omitting some values
+        check(3, z=10)
+        check(3, 4)
+        check(x=3, y=4)
+        check(3)
+        check(x=3)
+        # All calls above fall under the same specialization
+        self.assertEqual(len(f.overloads), 1)
+        # Errors
+        with self.assertRaises(TypeError) as cm:
+            f(3, 4, y=6, z=7)
+        self.assertIn("too many arguments: expected 3, got 4",
+                      str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f()
+        self.assertIn("not enough arguments: expected at least 1, got 0",
+                      str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(y=6, z=7)
+        self.assertIn("missing argument 'x'", str(cm.exception))
 
     def test_explicit_signatures(self):
         f = jit("(int64,int64)")(add)
@@ -177,6 +209,9 @@ class TestDispatcher(TestCase):
         self.assertEqual(str(cm.exception),
                          "No matching definition for argument type(s) "
                          "complex128, complex128")
+
+
+class TestDispatcherMethods(TestCase):
 
     def test_recompile(self):
         closure = 1
@@ -255,6 +290,15 @@ class TestDispatcher(TestCase):
         for asm in asms.values():
             # Look for the function name
             self.assertTrue("foo" in asm)
+
+    def test_inspect_types(self):
+        @jit
+        def foo(a, b):
+            return a + b
+
+        foo(1, 2)
+        # Exercise the method
+        foo.inspect_types(utils.StringIO())
 
 
 if __name__ == '__main__':
