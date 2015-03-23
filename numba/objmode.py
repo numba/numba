@@ -4,6 +4,8 @@ Lowering implementation for object mode.
 
 from __future__ import print_function, division, absolute_import
 
+import sys
+
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
@@ -55,10 +57,11 @@ class PyLower(BaseLower):
                 "Numba internal error: object mode function called "
                 "without an environment")
             self.return_exception_raised()
+
         self.env_body = self.context.get_env_body(self.builder, self.envarg)
 
     def post_lower(self):
-        self._finalize_frozen_string()
+        pass
 
     def pre_block(self, block):
         self.init_vars(block)
@@ -346,8 +349,14 @@ class PyLower(BaseLower):
 
     def lower_const(self, const):
         # All constants are frozen inside the environment
-        index = len(self.env.consts)
-        self.env.consts.append(const)
+        if isinstance(const, str):
+            const = sys.intern(const)
+        for index, val in enumerate(self.env.consts):
+            if val is const:
+                break
+        else:
+            index = len(self.env.consts)
+            self.env.consts.append(const)
         ret = self.get_env_const(index)
         self.check_error(ret)
         self.incref(ret)
@@ -575,15 +584,7 @@ class PyLower(BaseLower):
                 self.pyapi.decref(value)
 
     def _freeze_string(self, string):
-        """Freeze a python string object into the code.
-        Insert a reference to the Environment object later.
         """
-        self._frozen_strings.add(string)
-        return self.context.get_constant(types.intp, id(string)).inttoptr(
-            self.pyapi.pyobj)
-
-    def _finalize_frozen_string(self):
-        """Insert all referenced string into the Environment object.
+        Freeze a Python string object into the code.
         """
-        for fs in self._frozen_strings:
-            self.env.consts.append(fs)
+        return self.lower_const(string)

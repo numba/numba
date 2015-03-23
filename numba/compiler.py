@@ -54,7 +54,46 @@ CR_FIELDS = ["typing_context",
              "environment"]
 
 
-CompileResult = namedtuple("CompileResult", CR_FIELDS)
+class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
+    __slots__ = ()
+
+    def _reduce(self):
+        """
+        Reduce a CompileResult to picklable components.
+        """
+        libdata = self.library.serialize()
+        # Make it (un)picklable efficiently
+        typeann = str(self.type_annotation)
+        # FIXME pickling types (in signature and fndesc) doesn't work reliably
+        fndesc = self.fndesc
+        #fndesc.argtypes = fndesc.restype = None
+        fndesc.typemap = fndesc.calltypes = None
+
+        return (libdata, self.fndesc, self.environment, self.signature,
+                self.objectmode, self.interpmode, self.lifted, typeann)
+
+    @classmethod
+    def _rebuild(cls, target_context, libdata, fndesc, env,
+                 signature, objectmode, interpmode, lifted, typeann):
+        library = target_context.jit_codegen().unserialize_library(libdata)
+        cfunc = target_context.get_executable(library, fndesc, env)
+        cr = cls(target_context=target_context,
+                 typing_context=target_context.typing_context,
+                 library=library,
+                 environment=env,
+                 entry_point=cfunc,
+                 fndesc=fndesc,
+                 type_annotation=typeann,
+                 signature=signature,
+                 objectmode=objectmode,
+                 interpmode=interpmode,
+                 lifted=lifted,
+                 typing_error=None,
+                 call_helper=None,
+                 )
+        return cr
+
+
 FunctionAttributes = namedtuple("FunctionAttributes",
                                 ['name', 'filename', 'lineno'])
 DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
@@ -702,14 +741,14 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
     del lower
 
     if flags.no_compile:
-        return _LowerResult(fndesc, call_helper, cfunc=None, env=None)
+        return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         # Insert native function for use by other jitted-functions.
         # We also register its library to allow for inlining.
         targetctx.insert_user_function(cfunc, fndesc, [library])
-        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=None)
+        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
