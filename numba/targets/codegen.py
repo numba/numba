@@ -347,6 +347,15 @@ class BaseCPUCodegen(object):
             opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
         return pmb
 
+    def magic_tuple(self):
+        """
+        Return a tuple unambiguously describing the codegen behaviour.
+        """
+        # Increment this when codegen's output changes significantly
+        version = 1
+        return (version, self._llvm_module.triple, ll.get_host_cpu_name(),
+                config.ENABLE_AVX)
+
 
 class AOTCPUCodegen(BaseCPUCodegen):
     """

@@ -72,6 +72,12 @@ class JITCPUCodegenTestCase(TestCase):
             """ % dict(test_class=self.__class__.__name__)
         subprocess.check_call([sys.executable, '-c', code, arg])
 
+    def test_magic_tuple(self):
+        tup = self.codegen.magic_tuple()
+        pickle.dumps(tup)
+        cg2 = JITCPUCodegen('xxx')
+        self.assertEqual(cg2.magic_tuple(), tup)
+
 
 if __name__ == '__main__':
     unittest.main()
