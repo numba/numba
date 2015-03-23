@@ -4,7 +4,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
+from numba import types, utils, njit
 from numba.tests import usecases
 from .support import TestCase
 
@@ -527,6 +527,18 @@ class TestIndexing(TestCase):
         self.test_2d_integer_indexing(pyfunc=integer_indexing_2d_usecase2)
         self.test_2d_integer_indexing(flags=Noflags,
                                       pyfunc=integer_indexing_2d_usecase2)
+
+    def test_2d_integer_indexing_via_call(self):
+        @njit
+        def index1(X, i0):
+            return X[i0]
+        @njit
+        def index2(X, i0, i1):
+            return index1(X[i0], i1)
+        a = np.arange(10).reshape(2, 5)
+        self.assertEqual(index2(a, 0, 0), a[0][0])
+        self.assertEqual(index2(a, 1, 1), a[1][1])
+        self.assertEqual(index2(a, -1, -1), a[-1][-1])
 
     def test_2d_float_indexing(self, flags=enable_pyobj_flags):
         a = np.arange(100, dtype='i4').reshape(10, 10)
