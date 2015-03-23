@@ -413,7 +413,7 @@ class GetItemBuffer(AbstractTemplate):
                 res = ary.dtype
         elif isinstance(idx, types.Integer):
             if ary.ndim == 1:
-                res = arg.dtype
+                res = ary.dtype
             elif not ary.slice_is_copy and ary.ndim > 1:
                 res = ary.copy(ndim=ary.ndim - 1)
             else:
