@@ -1,7 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
+import contextlib
 import functools
+import errno
+import itertools
 import inspect
+import os
+from .six.moves import cPickle as pickle
 import sys
 
 from numba import _dispatcher, compiler, utils
@@ -21,7 +26,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
     def __init__(self, arg_count, py_func):
         self._tm = default_type_manager
-        #_dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(), arg_count)
 
         # A mapping of signatures to entry points
         self.overloads = {}
@@ -107,6 +111,13 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # Add native function for correct typing the code generation
         if not cres.objectmode and not cres.interpmode:
             self._npsigs.append(cres.signature)
+
+    def unserialize_overload(self, tup):
+        cr = compiler.CompileResult._rebuild(self.targetctx, *tup)
+        self.add_overload(cr)
+
+    def serialize_overload(self, cr):
+        return cr._reduce()
 
     def get_call_template(self, args, kws):
         """
@@ -251,8 +262,12 @@ class Overloaded(_OverloadedBase):
 
         self.targetoptions = targetoptions
         self.locals = locals
+        self._cache = FunctionCache(self.py_func)
 
         self.typingctx.insert_overloaded(self)
+
+    def enable_caching(self):
+        self._cache.enable()
 
     def __get__(self, obj, objtype=None):
         '''Allow a JIT function to be bound as a method to an object'''
@@ -289,6 +304,14 @@ class Overloaded(_OverloadedBase):
 
     def compile(self, sig):
         with self._compile_lock:
+            cres = self._cache.load_overload(sig, self.targetctx)
+            if cres is not None:
+                if not cres.objectmode and not cres.interpmode:
+                    self.targetctx.insert_user_function(cres.entry_point,
+                                                   cres.fndesc, [cres.library])
+                self.add_overload(cres)
+                return cres.entry_point
+
             args, return_type = sigutils.normalize_signature(sig)
             # Don't recompile if signature already exists
             # (e.g. if another thread compiled it before we got the lock)
@@ -309,6 +332,7 @@ class Overloaded(_OverloadedBase):
                 raise cres.typing_error
 
             self.add_overload(cres)
+            self._cache.save_overload(sig, cres)
             return cres.entry_point
 
     def recompile(self):
@@ -384,3 +408,141 @@ class LiftedLoop(_OverloadedBase):
 
 # Initialize dispatcher
 _dispatcher.init_types(dict((str(t), t._code) for t in types.number_domain))
+
+
+class NullCache(object):
+
+    def load_overload(self, sig, target_context):
+        return
+
+    def save_overload(self, sig, cres):
+        return
+
+
+class FunctionCache(object):
+
+    _version = 1
+    _enabled = False
+
+    def __init__(self, py_func):
+        try:
+            qualname = py_func.__qualname__
+        except AttributeError:
+            qualname = py_func.__name__
+        self._fullname = "%s.%s" % (py_func.__module__, qualname)
+        self._source_path = inspect.getfile(py_func)
+        self._cache_path = os.path.join(os.path.dirname(self._source_path),
+                                       '__pycache__')
+        abiflags = sys.abiflags if sys.version_info >= (3,) else ''
+        filename_base = '%s.py%d%d%s' % (self._fullname, sys.version_info[0],
+                                         sys.version_info[1], abiflags)
+        self._index_name = '%s.nbi' % (filename_base,)
+        self._index_path = os.path.join(self._cache_path, self._index_name)
+        self._data_name_pattern = '%s.{number:d}.nbc' % (filename_base,)
+
+        # FIXME try to import the name instead?
+        self._can_cache = '<locals>' not in qualname
+
+    def __repr__(self):
+        return "<%s fullname=%r>" % (self.__class__.__name__, self._fullname)
+
+    def enable(self):
+        self._enabled = True
+
+    def load_overload(self, sig, target_context):
+        if not self._enabled or not self._can_cache:
+            return
+        overloads = self._load_index()
+        key = self._index_key(sig, target_context.jit_codegen())
+        data_name = overloads.get(key)
+        if data_name is None:
+            return
+        return self._load_data(data_name, target_context)
+
+    def save_overload(self, sig, cres):
+        if not self._enabled or not self._can_cache:
+            return
+        overloads = self._load_index()
+        key = self._index_key(sig, cres.library.codegen)
+        try:
+            # If key already exists, we will overwrite the file
+            data_name = overloads[key]
+        except KeyError:
+            # Find an available name for the data file
+            existing = set(overloads.values())
+            for i in itertools.count(1):
+                data_name = self._data_name(i)
+                if data_name not in existing:
+                    break
+            overloads[key] = data_name
+            self._save_index(overloads)
+
+        self._save_data(data_name, cres)
+
+    def _index_key(self, sig, codegen):
+        """
+        Compute index key for the given signature and codegen.
+        """
+        return (sig, codegen.magic_tuple())
+
+    def _data_name(self, number):
+        return self._data_name_pattern.format(number=number)
+
+    def _data_path(self, name):
+        return os.path.join(self._cache_path, name)
+
+    @contextlib.contextmanager
+    def _open_for_write(self, filepath):
+        """
+        Open *filepath* for writing in a race condition-free way
+        (hopefully).
+        """
+        tmpname = '%s.tmp.%d' % (filepath, os.getpid())
+        try:
+            with open(tmpname, "wb") as f:
+                yield f
+            utils.file_replace(tmpname, filepath)
+        except Exception:
+            # In case of error, remove dangling tmp file
+            try:
+                os.unlink(tmpname)
+            except OSError:
+                pass
+            raise
+
+    def _load_index(self):
+        try:
+            with open(self._index_path, "rb") as f:
+                data = f.read()
+        except EnvironmentError as e:
+            # Index doesn't exist yet?
+            if e.errno in (errno.ENOENT,):
+                return {}
+            raise
+        version, overloads = pickle.loads(data)
+        if version != self._version:
+            # XXX remove stale data files?
+            return {}
+        else:
+            return overloads
+
+    def _load_data(self, name, target_context):
+        with open(self._data_path(name), "rb") as f:
+            data = f.read()
+        tup = pickle.loads(data)
+        return compiler.CompileResult._rebuild(target_context, *tup)
+
+    def _save_index(self, overloads):
+        data = self._version, overloads
+        data = self._dump(data)
+        with self._open_for_write(self._index_path) as f:
+            f.write(data)
+
+    def _save_data(self, name, cres):
+        data = cres._reduce()
+        data = self._dump(data)
+        with self._open_for_write(self._data_path(name)) as f:
+            f.write(data)
+
+    def _dump(self, obj):
+        return pickle.dumps(obj, protocol=-1)

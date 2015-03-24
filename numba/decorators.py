@@ -28,7 +28,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
 
-def jit(signature_or_function=None, locals={}, target='cpu', **options):
+def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **options):
     """
     This decorator is used to compile a Python function into native code.
     
@@ -126,35 +126,41 @@ def jit(signature_or_function=None, locals={}, target='cpu', **options):
     # Handle signature
     if signature_or_function is None:
         # No signature, no function
-        def configured_jit(func):
-            return jit(func, locals=locals, target=target, **options)
-        return configured_jit
+        pyfunc = None
+        sigs = None
     elif isinstance(signature_or_function, list):
         # A list of signatures is passed
-        return _jit(signature_or_function, locals=locals, target=target,
-                    targetoptions=options)
+        pyfunc = None
+        sigs = signature_or_function
     elif sigutils.is_signature(signature_or_function):
         # A single signature is passed
-        return _jit([signature_or_function], locals=locals, target=target,
-                    targetoptions=options)
+        pyfunc = None
+        sigs = [signature_or_function]
     else:
         # A function is passed
         pyfunc = signature_or_function
-        dispatcher = registry.target_registry[target]
-        dispatcher = dispatcher(py_func=pyfunc, locals=locals,
-                                targetoptions=options)
-        return dispatcher
+        sigs = None
+
+    wrapper = _jit(sigs, locals=locals, target=target, cache=cache,
+                   targetoptions=options)
+    if pyfunc is not None:
+        return wrapper(pyfunc)
+    else:
+        return wrapper
 
 
-def _jit(sigs, locals, target, targetoptions):
+def _jit(sigs, locals, target, cache, targetoptions):
     dispatcher = registry.target_registry[target]
 
     def wrapper(func):
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions)
-        for sig in sigs:
-            disp.compile(sig)
-        disp.disable_compile()
+        if cache:
+            disp.enable_caching()
+        if sigs is not None:
+            for sig in sigs:
+                disp.compile(sig)
+            disp.disable_compile()
         return disp
 
     return wrapper
