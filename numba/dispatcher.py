@@ -112,13 +112,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         if not cres.objectmode and not cres.interpmode:
             self._npsigs.append(cres.signature)
 
-    def unserialize_overload(self, tup):
-        cr = compiler.CompileResult._rebuild(self.targetctx, *tup)
-        self.add_overload(cr)
-
-    def serialize_overload(self, cr):
-        return cr._reduce()
-
     def get_call_template(self, args, kws):
         """
         Get a typing.ConcreteTemplate for this dispatcher and the given
@@ -410,15 +403,6 @@ class LiftedLoop(_OverloadedBase):
 _dispatcher.init_types(dict((str(t), t._code) for t in types.number_domain))
 
 
-class NullCache(object):
-
-    def load_overload(self, sig, target_context):
-        return
-
-    def save_overload(self, sig, cres):
-        return
-
-
 class FunctionCache(object):
 
     _version = 1
@@ -440,9 +424,6 @@ class FunctionCache(object):
         self._index_path = os.path.join(self._cache_path, self._index_name)
         self._data_name_pattern = '%s.{number:d}.nbc' % (filename_base,)
 
-        # FIXME try to import the name instead?
-        self._can_cache = '<locals>' not in qualname
-
     def __repr__(self):
         return "<%s fullname=%r>" % (self.__class__.__name__, self._fullname)
 
@@ -450,7 +431,7 @@ class FunctionCache(object):
         self._enabled = True
 
     def load_overload(self, sig, target_context):
-        if not self._enabled or not self._can_cache:
+        if not self._enabled:
             return
         overloads = self._load_index()
         key = self._index_key(sig, target_context.jit_codegen())
@@ -460,7 +441,7 @@ class FunctionCache(object):
         return self._load_data(data_name, target_context)
 
     def save_overload(self, sig, cres):
-        if not self._enabled or not self._can_cache:
+        if not self._enabled:
             return
         overloads = self._load_index()
         key = self._index_key(sig, cres.library.codegen)

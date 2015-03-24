@@ -160,6 +160,9 @@ class CodeLibrary(object):
         self._finalize_final_module()
 
     def _finalize_final_module(self):
+        """
+        Make the underlying LLVM module ready to use.
+        """
         # It seems add_module() must be done only here and not before
         # linking in other modules, otherwise get_pointer_to_function()
         # could fail.
@@ -192,6 +195,7 @@ class CodeLibrary(object):
         name, bitcode = state
         self = codegen.create_library(name)
         assert isinstance(self, cls)
+        # No need to re-run optimizations, just make the module ready
         self._final_module = ll.parse_bitcode(bitcode)
         self._finalize_final_module()
         return self

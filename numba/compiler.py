@@ -64,9 +64,8 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         libdata = self.library.serialize()
         # Make it (un)picklable efficiently
         typeann = str(self.type_annotation)
-        # FIXME pickling types (in signature and fndesc) doesn't work reliably
         fndesc = self.fndesc
-        #fndesc.argtypes = fndesc.restype = None
+        # Those don't need to be pickled and may fail
         fndesc.typemap = fndesc.calltypes = None
 
         return (libdata, self.fndesc, self.environment, self.signature,
