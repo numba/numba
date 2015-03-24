@@ -4,6 +4,7 @@ the targets to choose their representation.
 """
 from __future__ import print_function, division, absolute_import
 
+from .six.moves import copyreg
 import itertools
 import struct
 import weakref
@@ -41,13 +42,7 @@ class _TypeMetaclass(type):
     and hashing), then looking it up in the _typecache registry.
     """
 
-    def __call__(cls, *args, **kwargs):
-        """
-        Instantiate *cls* (a Type subclass, presumably) and intern it.
-        If an interned instance already exists, it is returned, otherwise
-        the new instance is returned.
-        """
-        inst = type.__call__(cls, *args, **kwargs)
+    def _intern(cls, inst):
         # Try to intern the created instance
         wr = weakref.ref(inst, _on_type_disposal)
         orig = _typecache.get(wr)
@@ -59,6 +54,25 @@ class _TypeMetaclass(type):
             _typecache[wr] = wr
             inst.post_init()
             return inst
+
+    def __call__(cls, *args, **kwargs):
+        """
+        Instantiate *cls* (a Type subclass, presumably) and intern it.
+        If an interned instance already exists, it is returned, otherwise
+        the new instance is returned.
+        """
+        inst = type.__call__(cls, *args, **kwargs)
+        return cls._intern(inst)
+
+
+def _type_reconstructor(reconstructor_args, state):
+    """
+    Rebuild function for unpickling types.
+    """
+    obj = copyreg._reconstructor(*reconstructor_args)
+    if state:
+        obj.__dict__.update(state)
+    return type(obj)._intern(obj)
 
 
 @add_metaclass(_TypeMetaclass)
@@ -106,6 +120,11 @@ class Type(object):
         if len(args) == 1 and not isinstance(args[0], Type):
             return self.cast_python_value(args[0])
         return Prototype(args=args, return_type=self)
+
+    def __reduce__(self):
+        rec, args, state = super(Type, self).__reduce__()
+        assert rec is copyreg._reconstructor
+        return (_type_reconstructor, (args, state))
 
     def __getitem__(self, args):
         assert not isinstance(self, Array)
@@ -482,8 +501,13 @@ class IteratorType(IterableType):
     """
 
     def __init__(self, name, **kwargs):
-        self.iterator_type = self
         super(IteratorType, self).__init__(name, **kwargs)
+
+    # This is a property to avoid recursivity (for pickling)
+
+    @property
+    def iterator_type(self):
+        return self
 
 
 class SimpleIteratorType(IteratorType):
@@ -647,7 +671,9 @@ class Record(Type):
 
     @property
     def key(self):
-        return (self.dtype, self.size, self.aligned)
+        # Numpy dtype equality doesn't always succeed, use the id() instead
+        # (https://github.com/numpy/numpy/issues/5715)
+        return (self.id, self.size, self.aligned)
 
     def __len__(self):
         return len(self.fields)
@@ -706,7 +732,10 @@ class Buffer(IterableType):
                 type_name = "readonly %s" % type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Buffer, self).__init__(name, param=True)
-        self.iterator_type = ArrayIterator(self)
+
+    @property
+    def iterator_type(self):
+        return ArrayIterator(self)
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
@@ -846,14 +875,21 @@ class NestedArray(Array):
     def key(self):
         return self.dtype, self.shape
 
+
 class UniTuple(IterableType):
+    """
+    Type class for homogenous tuples.
+    """
 
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
         name = "(%s x %d)" % (dtype, count)
         super(UniTuple, self).__init__(name, param=True)
-        self.iterator_type = UniTupleIter(self)
+
+    @property
+    def iterator_type(self):
+        return UniTupleIter(self)
 
     def getitem(self, ind):
         return self.dtype, intp

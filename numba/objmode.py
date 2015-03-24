@@ -11,7 +11,7 @@ import llvmlite.llvmpy.core as lc
 
 from . import cgutils, generators, ir, types, utils
 from .lowering import BaseLower, ForbiddenConstruct
-from .utils import builtins
+from .utils import builtins, intern
 
 
 # Issue #475: locals() is unsupported as calling it naively would give
@@ -350,7 +350,7 @@ class PyLower(BaseLower):
     def lower_const(self, const):
         # All constants are frozen inside the environment
         if isinstance(const, str):
-            const = sys.intern(const)
+            const = intern(const)
         for index, val in enumerate(self.env.consts):
             if val is const:
                 break
