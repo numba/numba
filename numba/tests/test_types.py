@@ -197,8 +197,6 @@ class TestPickling(TestCase):
     def test_predefined_types(self):
         tys = list(self.predefined_types())
         self.assertIn(types.int16, tys)
-        red = types.int16.__reduce_ex__(pickle.HIGHEST_PROTOCOL)
-        rec = red[0]
         for ty in tys:
             self.check_pickling(ty)
 
