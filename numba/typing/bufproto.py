@@ -41,9 +41,12 @@ def decode_pep3118_format(fmt, itemsize):
             name = 'u' + name
         return types.Integer(name)
     try:
-        return _pep3118_scalar_map[fmt]
+        # For the hard-coded types above, consider "=" the same as "@"
+        # (the default).  This is because Numpy sometimes adds "="
+        # in front of the PEP 3118 format string.
+        return _pep3118_scalar_map[fmt.lstrip('=')]
     except KeyError:
-        raise ValueError("unsupported PEP 3118 format %r" % (format,))
+        raise ValueError("unsupported PEP 3118 format %r" % (fmt,))
 
 
 def get_type_class(typ):

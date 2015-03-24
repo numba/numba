@@ -8,7 +8,7 @@ import gc
 import weakref
 
 from numba.utils import IS_PY3
-from numba import types
+from numba import types, typing
 from numba import unittest_support as unittest
 
 
@@ -33,6 +33,22 @@ class TestTypeNames(unittest.TestCase):
         self.assertNotEqual(types.int64, types.float64)
         self.assertNotEqual(types.uint64, types.float64)
         self.assertNotEqual(types.complex64, types.float64)
+        # Same arguments but different return types
+        get_pointer = None
+        sig_a = typing.signature(types.intp, types.intp)
+        sig_b = typing.signature(types.voidptr, types.intp)
+        a = types.ExternalFunctionPointer(sig=sig_a, get_pointer=get_pointer)
+        b = types.ExternalFunctionPointer(sig=sig_b, get_pointer=get_pointer)
+        self.assertNotEqual(a, b)
+        # Different call convention
+        a = types.ExternalFunctionPointer(sig=sig_a, get_pointer=get_pointer)
+        b = types.ExternalFunctionPointer(sig=sig_a, get_pointer=get_pointer,
+                                          cconv='stdcall')
+        self.assertNotEqual(a, b)
+        # Different get_pointer
+        a = types.ExternalFunctionPointer(sig=sig_a, get_pointer=get_pointer)
+        b = types.ExternalFunctionPointer(sig=sig_a, get_pointer=object())
+        self.assertNotEqual(a, b)
 
     def test_ordering(self):
         def check_order(values):

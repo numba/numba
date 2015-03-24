@@ -365,6 +365,19 @@ class Assign(Stmt):
         return '%s = %s' % (self.target, self.value)
 
 
+class Yield(Inst):
+    def __init__(self, value, loc, index):
+        self.value = value
+        self.loc = loc
+        self.index = index
+
+    def __str__(self):
+        return 'yield %s' % (self.value,)
+
+    def list_vars(self):
+        return [self.value]
+
+
 class Arg(object):
     def __init__(self, name, index, loc):
         self.name = name

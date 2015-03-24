@@ -11,9 +11,11 @@ from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
 import numba
-from numba import types, utils, cgutils, typing, numpy_support, _helperlib
+from numba import types, utils, cgutils, typing, numpy_support
+from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
-from numba.targets.imputils import (user_function, python_attr_impl,
+from numba.targets.imputils import (user_function, user_generator,
+                                    python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry, type_registry)
 from . import arrayobj, builtins, iterators, rangeobj, optional
@@ -110,11 +112,11 @@ def _load_global_helpers():
     ll.add_symbol("Py_None", id(None))
 
     # Add C helper functions
-    c_helpers = _helperlib.c_helpers
-    for py_name in c_helpers:
-        c_name = "numba_" + py_name
-        c_address = c_helpers[py_name]
-        ll.add_symbol(c_name, c_address)
+    for c_helpers in (_helperlib.c_helpers, _dynfunc.c_helpers):
+        for py_name in c_helpers:
+            c_name = "numba_" + py_name
+            c_address = c_helpers[py_name]
+            ll.add_symbol(c_name, c_address)
 
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
@@ -151,7 +153,7 @@ class BaseContext(object):
 
         self.defns = defaultdict(Overloads)
         self.attrs = defaultdict(Overloads)
-        self.users = utils.UniqueDict()
+        self.generators = {}
 
         self.install_registry(builtin_registry)
 
@@ -193,20 +195,20 @@ class BaseContext(object):
             self.attrs[impl.attr].append(impl, impl.signature)
 
     def insert_user_function(self, func, fndesc, libs=()):
-        impl = user_function(func, fndesc, libs)
+        impl = user_function(fndesc, libs)
         self.defns[func].append(impl, impl.signature)
-
-        baseclses = (typing.templates.ConcreteTemplate,)
-        glbls = dict(key=func, cases=[impl.signature])
-        name = "CallTemplate(%s)" % fndesc.mangled_name
-        self.users[func] = type(name, baseclses, glbls)
 
     def add_user_function(self, func, fndesc, libs=()):
-        if func not in self.users:
+        if func not in self.defns:
             msg = "{func} is not a registered user function"
             raise KeyError(msg.format(func=func))
-        impl = user_function(func, fndesc, libs)
+        impl = user_function(fndesc, libs)
         self.defns[func].append(impl, impl.signature)
+
+    def insert_generator(self, genty, gendesc, libs=()):
+        assert isinstance(genty, types.Generator)
+        impl = user_generator(gendesc, libs)
+        self.generators[genty] = gendesc, impl
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
@@ -219,11 +221,7 @@ class BaseContext(object):
         Remove user function *func*.
         KeyError is raised if the function isn't known to us.
         """
-        del self.users[func]
         del self.defns[func]
-
-    def get_user_function(self, func):
-        return self.users[func]
 
     def get_external_function_type(self, fndesc):
         argtypes = [self.get_argument_type(aty)
@@ -307,11 +305,7 @@ class BaseContext(object):
         """Unpack data from array storage
         """
         dm = self.data_model_manager[ty]
-        val = dm.load_from_data_pointer(builder, ptr)
-        if val is NotImplemented:
-            return dm.from_data(builder, builder.load(ptr))
-        else:
-            return val
+        return dm.load_from_data_pointer(builder, ptr)
 
     def is_struct_type(self, ty):
         return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
@@ -442,6 +436,16 @@ class BaseContext(object):
             return _wrap_impl(overloads.find(sig), self, sig)
         except NotImplementedError:
             raise Exception("No definition for lowering %s%s" % (key, sig))
+
+    def get_generator_desc(self, genty):
+        """
+        """
+        return self.generators[genty][0]
+
+    def get_generator_impl(self, genty):
+        """
+        """
+        return self.generators[genty][1]
 
     def get_bound_function(self, builder, obj, ty):
         return obj
@@ -790,18 +794,6 @@ class BaseContext(object):
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
 
-    def get_struct_member_type(self, member_type):
-        """
-        Get the LLVM type for struct member of type *member_type*.
-        """
-        # get_struct_type() will:
-        # - represent Records as pointers
-        # - represent everything else as plain data
-        if isinstance(member_type, types.Record):
-            return self.get_value_type(member_type)
-        else:
-            return self.get_data_type(member_type)
-
     def get_struct_type(self, struct):
         """
         Get the LLVM struct type for the given Structure class *struct*.
@@ -868,7 +860,7 @@ class BaseContext(object):
         if self.strict_alignment:
             offset = rectyp.offset(attr)
             elemty = rectyp.typeof(attr)
-            align = self.get_abi_sizeof(self.get_data_type(elemty))
+            align = self.get_abi_alignment(self.get_data_type(elemty))
             if offset % align:
                 msg = "{rec}.{attr} of type {type} is not aligned".format(
                     rec=rectyp, attr=attr, type=elemty)
@@ -929,6 +921,13 @@ class BaseContext(object):
             return ty.get_abi_size(self.target_data)
         # XXX this one unused?
         return self.target_data.get_abi_size(ty)
+
+    def get_abi_alignment(self, ty):
+        """
+        Get the ABI alignment of LLVM type *ty*.
+        """
+        assert isinstance(ty, llvmir.Type), "Expected LLVM type"
+        return ty.get_abi_alignment(self.target_data)
 
     def post_lowering(self, func):
         """Run target specific post-lowering transformation here.

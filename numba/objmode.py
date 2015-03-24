@@ -7,7 +7,7 @@ from __future__ import print_function, division, absolute_import
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import cgutils, ir, types, utils
+from . import cgutils, generators, ir, types, utils
 from .lowering import BaseLower, ForbiddenConstruct
 from .utils import builtins
 
@@ -36,15 +36,17 @@ PYTHON_OPMAP = {
 
 class PyLower(BaseLower):
 
-    def init(self):
-        self.pyapi = self.context.get_python_api(self.builder)
+    GeneratorLower = generators.PyGeneratorLower
 
+    def init(self):
         # Strings to be frozen into the Environment object
         self._frozen_strings = set()
 
         self._live_vars = set()
 
     def pre_lower(self):
+        self.pyapi = self.context.get_python_api(self.builder)
+
         # Store environment argument for later use
         self.envarg = self.call_conv.get_env_argument(self.function)
         with cgutils.if_unlikely(self.builder, self.is_null(self.envarg)):
@@ -96,6 +98,13 @@ class PyLower(BaseLower):
 
         elif isinstance(inst, ir.Return):
             retval = self.loadvar(inst.value.name)
+            if self.generator_info:
+                # StopIteration
+                # We own a reference to the "return value", but we
+                # don't return it.
+                self.pyapi.decref(retval)
+                self.genlower.return_from_generator(self)
+                return
             # No need to incref() as the reference is already owned.
             self.call_conv.return_value(self.builder, retval)
 
@@ -147,12 +156,34 @@ class PyLower(BaseLower):
             return self.lower_expr(value)
         elif isinstance(value, ir.Global):
             return self.lower_global(value.name, value.value)
+        elif isinstance(value, ir.Yield):
+            return self.lower_yield(value)
         elif isinstance(value, ir.Arg):
             value = self.fnargs[value.index]
             self.incref(value)
             return value
         else:
             raise NotImplementedError(type(value), value)
+
+    def lower_yield(self, inst):
+        yp = self.generator_info.yield_points[inst.index]
+        assert yp.inst is inst
+        self.genlower.init_generator_state(self)
+
+        # Save live vars in state
+        # We also need to save live vars that are del'ed afterwards.
+        y = generators.LowerYield(self, yp, yp.live_vars | yp.weak_live_vars)
+        y.lower_yield_suspend()
+        # Yield to caller
+        val = self.loadvar(inst.value.name)
+        # Let caller own the reference
+        self.pyapi.incref(val)
+        self.call_conv.return_value(self.builder, val)
+
+        # Resumption point
+        y.lower_yield_resume()
+        # None is returned by the yield expression
+        return self.pyapi.make_none()
 
     def lower_binop(self, expr, inplace=False):
         lhs = self.loadvar(expr.lhs.name)
@@ -488,12 +519,12 @@ class PyLower(BaseLower):
         # and code path.
         self.builder.store(cgutils.get_null_value(ptr.type.pointee), ptr)
 
-    def storevar(self, value, name):
+    def storevar(self, value, name, clobber=False):
         """
         Stores a llvm value and allocate stack slot if necessary.
         The llvm value can be of arbitrary type.
         """
-        is_redefine = name in self._live_vars
+        is_redefine = name in self._live_vars and not clobber
         ptr = self._getvar(name, ltype=value.type)
         if is_redefine:
             old = self.builder.load(ptr)

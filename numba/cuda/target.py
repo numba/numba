@@ -9,7 +9,7 @@ from numba import typing, types, cgutils
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
-from numba.lowering import transform_arg_name
+from numba.funcdesc import transform_arg_name
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
 

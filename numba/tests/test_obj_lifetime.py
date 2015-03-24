@@ -6,7 +6,7 @@ import weakref
 
 import numba.unittest_support as unittest
 from numba.controlflow import CFGraph, Loop
-from numba.compiler import compile_isolated, Flags
+from numba.compiler import compile_extra, compile_isolated, Flags
 from numba import types
 from .support import TestCase
 
@@ -164,6 +164,19 @@ def looping_usecase2(rec):
     rec.mark('--outer loop exit--')
     return cum
 
+def generator_usecase1(rec):
+    a = rec('a')
+    b = rec('b')
+    yield a
+    yield b
+
+def generator_usecase2(rec):
+    a = rec('a')
+    b = rec('b')
+    for x in a:
+        yield x
+    yield b
+
 
 class MyError(RuntimeError):
     pass
@@ -225,18 +238,17 @@ class TestObjLifetime(TestCase):
     """
 
     def compile(self, pyfunc):
-        cr = compile_isolated(pyfunc, (), flags=forceobj_flags)
-        self.__cres = cr
+        cr = compile_isolated(pyfunc, (types.pyobject,), flags=forceobj_flags)
         return cr.entry_point
 
     def compile_and_record(self, pyfunc, raises=None):
         rec = RefRecorder()
-        cr = compile_isolated(pyfunc, (), flags=forceobj_flags)
+        cfunc = self.compile(pyfunc)
         if raises is not None:
             with self.assertRaises(raises):
-                cr.entry_point(rec)
+                cfunc(rec)
         else:
-            cr.entry_point(rec)
+            cfunc(rec)
         return rec
 
     def assertRecordOrder(self, rec, expected):
@@ -301,6 +313,38 @@ class TestObjLifetime(TestCase):
         self.assertRecordOrder(rec, ['iter(a)#1 + iter(a)#1',
                                      '--outer loop bottom #1--',
                                      ])
+
+    def exercise_generator(self, genfunc):
+        cfunc = self.compile(genfunc)
+        # Exhaust the generator
+        rec = RefRecorder()
+        old_refcnt = sys.getrefcount(rec)
+        gen = cfunc(rec)
+        next(gen)
+        self.assertTrue(rec.alive)
+        list(gen)
+        self.assertFalse(rec.alive)
+        self.assertEqual(sys.getrefcount(rec), old_refcnt)
+        # Instantiate the generator but never iterate
+        rec = RefRecorder()
+        gen = cfunc(rec)
+        del gen
+        self.assertFalse(rec.alive)
+        self.assertEqual(sys.getrefcount(rec), old_refcnt)
+        # Stop iterating before exhaustion
+        rec = RefRecorder()
+        gen = cfunc(rec)
+        next(gen)
+        self.assertTrue(rec.alive)
+        del gen
+        self.assertFalse(rec.alive)
+        self.assertEqual(sys.getrefcount(rec), old_refcnt)
+
+    def test_generator1(self):
+        self.exercise_generator(generator_usecase1)
+
+    def test_generator2(self):
+        self.exercise_generator(generator_usecase2)
 
     def test_del_before_definition(self):
         rec = self.compile_and_record(del_before_definition)

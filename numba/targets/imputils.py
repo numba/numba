@@ -62,9 +62,9 @@ def impl_attribute_generic(ty):
     return wrapper
 
 
-def user_function(func, fndesc, libs):
+def user_function(fndesc, libs):
     """
-    A wrapper inserting code calling Numba-compiled *func*.
+    A wrapper inserting code calling Numba-compiled *fndesc*.
     """
 
     def imp(context, builder, sig, args):
@@ -77,7 +77,23 @@ def user_function(func, fndesc, libs):
         return retval
 
     imp.signature = typing.signature(fndesc.restype, *fndesc.argtypes)
-    imp.key = func
+    imp.libs = tuple(libs)
+    return imp
+
+
+def user_generator(gendesc, libs):
+    """
+    A wrapper inserting code calling Numba-compiled *gendesc*.
+    """
+
+    def imp(context, builder, sig, args):
+        func = context.declare_function(cgutils.get_module(builder), gendesc)
+        # env=None assumes this is a nopython function
+        status, retval = context.call_conv.call_function(
+            builder, func, gendesc.restype, gendesc.argtypes, args, env=None)
+        # Return raw status for caller to process StopIteration
+        return status, retval
+
     imp.libs = tuple(libs)
     return imp
 

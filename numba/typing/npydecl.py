@@ -252,21 +252,24 @@ np_types.add(numpy.intp)
 np_types.add(numpy.uintc)
 np_types.add(numpy.uintp)
 
-for np_type in np_types:
-    nb_type = getattr(types, np_type.__name__)
 
-    class Caster(AbstractTemplate):
-        key = np_type
-        restype = nb_type
+def register_casters(register_global):
+    for np_type in np_types:
+        nb_type = getattr(types, np_type.__name__)
 
-        def generic(self, args, kws):
-            assert not kws
-            [a] = args
-            if a in types.number_domain:
-                return signature(self.restype, a)
+        class Caster(AbstractTemplate):
+            key = np_type
+            restype = nb_type
 
-    builtin_global(np_type, types.Function(Caster))
+            def generic(self, args, kws):
+                assert not kws
+                [a] = args
+                if a in types.number_domain:
+                    return signature(self.restype, a)
 
+        register_global(np_type, types.Function(Caster))
+
+register_casters(builtin_global)
 
 # -----------------------------------------------------------------------------
 # Miscellaneous functions

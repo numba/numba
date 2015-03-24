@@ -132,15 +132,23 @@ static PyTypeObject EnvironmentType = {
          (for example the globals module)
    */
 
+/* Closure is a variable-sized object for binary compatibility with
+   Generator (see below). */
+#define CLOSURE_HEAD          \
+    PyObject_VAR_HEAD         \
+    EnvironmentObject *env;
+
 typedef struct {
-    PyObject_HEAD
+    CLOSURE_HEAD
     /* The dynamically-filled method definition for the PyCFunction object
        using this closure. */
     PyMethodDef def;
-    EnvironmentObject *env;
+    /* Arbitrary object to keep alive during the closure's lifetime.
+       (put a tuple to put several objects alive).
+       In practice, this helps keep the LLVM module and its generated
+       code alive. */
+    PyObject *keepalive;
     PyObject *weakreflist;
-    /* We could also store the LLVM function or engine here, to ensure
-       generated code is kept alive. */
 } ClosureObject;
 
 
@@ -148,6 +156,7 @@ static int
 closure_traverse(ClosureObject *clo, visitproc visit, void *arg)
 {
     Py_VISIT(clo->env);
+    Py_VISIT(clo->keepalive);
     return 0;
 }
 
@@ -160,6 +169,7 @@ closure_dealloc(ClosureObject *clo)
     PyObject_Free((void *) clo->def.ml_name);
     PyObject_Free((void *) clo->def.ml_doc);
     Py_XDECREF(clo->env);
+    Py_XDECREF(clo->keepalive);
     Py_TYPE(clo)->tp_free((PyObject *) clo);
 }
 
@@ -253,8 +263,7 @@ closure_new(PyObject *module, PyObject *name, PyObject *doc, PyCFunction fnaddr)
 }
 
 /* Dynamically create a new C function object */
-static
-PyObject*
+static PyObject*
 make_function(PyObject *self, PyObject *args)
 {
     PyObject *module, *fname, *fdoc, *fnaddrobj;
@@ -262,9 +271,11 @@ make_function(PyObject *self, PyObject *args)
     ClosureObject *closure;
     PyObject *funcobj;
     EnvironmentObject *env;
+    PyObject *keepalive;
 
-    if (!PyArg_ParseTuple(args, "OOOOO!",
-            &module, &fname, &fdoc, &fnaddrobj, &EnvironmentType, &env)) {
+    if (!PyArg_ParseTuple(args, "OOOOO!|O",
+            &module, &fname, &fdoc, &fnaddrobj, &EnvironmentType, &env,
+            &keepalive)) {
         return NULL;
     }
 
@@ -277,12 +288,155 @@ make_function(PyObject *self, PyObject *args)
         return NULL;
     Py_INCREF(env);
     closure->env = env;
+    Py_XINCREF(keepalive);
+    closure->keepalive = keepalive;
 
     funcobj = PyCFunction_NewEx(&closure->def, (PyObject *) closure, module);
     Py_DECREF(closure);
     return funcobj;
 }
 
+
+/*
+ * Python-facing wrapper for Numba-compiled generator.
+ * Note the Environment's offset inside the struct is the same as in the
+ * Closure object.  This is required to simplify generation of Python wrappers.
+ */
+
+typedef void (*gen_finalizer_t)(void *);
+
+typedef struct {
+    CLOSURE_HEAD
+    PyCFunctionWithKeywords nextfunc;
+    gen_finalizer_t finalizer;
+    PyObject *weakreflist;
+    union {
+        double dummy;   /* Force alignment */
+        char state[0];
+    };
+} GeneratorObject;
+
+static int
+generator_traverse(GeneratorObject *gen, visitproc visit, void *arg)
+{
+    /* XXX this doesn't traverse the state, which can own references to
+       PyObjects */
+    Py_VISIT(gen->env);
+    return 0;
+}
+
+static int
+generator_clear(GeneratorObject *gen)
+{
+    if (gen->finalizer != NULL) {
+        gen->finalizer(gen->state);
+        gen->finalizer = NULL;
+    }
+    Py_CLEAR(gen->env);
+    gen->nextfunc = NULL;
+    return 0;
+}
+
+static void
+generator_dealloc(GeneratorObject *gen)
+{
+    _PyObject_GC_UNTRACK((PyObject *) gen);
+    if (gen->weakreflist != NULL)
+        PyObject_ClearWeakRefs((PyObject *) gen);
+    /* XXX The finalizer may be called after the LLVM module has been
+       destroyed (typically at interpreter shutdown) */
+#if PY_MAJOR_VERSION >= 3
+    if (!_Py_Finalizing)
+#endif
+        if (gen->finalizer != NULL)
+            gen->finalizer(gen->state);
+    Py_XDECREF(gen->env);
+    Py_TYPE(gen)->tp_free((PyObject *) gen);
+}
+
+static PyObject *
+generator_iternext(GeneratorObject *gen)
+{
+    PyObject *res, *args;
+    if (gen->nextfunc == NULL) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "cannot call next() on finalized generator");
+        return NULL;
+    }
+    args = PyTuple_Pack(1, (PyObject *) gen);
+    if (args == NULL)
+        return NULL;
+    res = (*gen->nextfunc)((PyObject *) gen, args, NULL);
+    Py_DECREF(args);
+    return res;
+}
+
+static PyTypeObject GeneratorType = {
+#if (PY_MAJOR_VERSION < 3)
+    PyObject_HEAD_INIT(NULL)
+    0,                                        /* ob_size*/
+#else
+    PyVarObject_HEAD_INIT(NULL, 0)
+#endif
+    "_dynfunc._Generator",                    /* tp_name*/
+    offsetof(GeneratorObject, state),         /* tp_basicsize*/
+    1,                                        /* tp_itemsize*/
+    (destructor) generator_dealloc,           /* tp_dealloc*/
+    0,                                        /* tp_print*/
+    0,                                        /* tp_getattr*/
+    0,                                        /* tp_setattr*/
+    0,                                        /* tp_compare*/
+    0,                                        /* tp_repr*/
+    0,                                        /* tp_as_number*/
+    0,                                        /* tp_as_sequence*/
+    0,                                        /* tp_as_mapping*/
+    0,                                        /* tp_hash */
+    0,                                        /* tp_call*/
+    0,                                        /* tp_str*/
+    0,                                        /* tp_getattro*/
+    0,                                        /* tp_setattro*/
+    0,                                        /* tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC
+                       | Py_TPFLAGS_BASETYPE,  /* tp_flags*/
+    0,                                        /* tp_doc */
+    (traverseproc) generator_traverse,        /* tp_traverse */
+    (inquiry) generator_clear,                /* tp_clear */
+    0,                                        /* tp_richcompare */
+    offsetof(GeneratorObject, weakreflist),   /* tp_weaklistoffset */
+    PyObject_SelfIter,                        /* tp_iter */
+    (iternextfunc) generator_iternext,        /* tp_iternext */
+    0,                                        /* tp_methods */
+    0,                                        /* tp_members */
+    0,                                        /* tp_getset */
+    0,                                        /* tp_base */
+    0,                                        /* tp_dict */
+    0,                                        /* tp_descr_get */
+    0,                                        /* tp_descr_set */
+    0,                                        /* tp_dictoffset */
+    0,                                        /* tp_init */
+    0,                                        /* tp_alloc */
+    0,                                        /* tp_new */
+};
+
+/* Dynamically create a new generator object */
+static PyObject *
+Numba_make_generator(Py_ssize_t gen_state_size,
+                     void *initial_state,
+                     PyCFunctionWithKeywords nextfunc,
+                     gen_finalizer_t finalizer,
+                     EnvironmentObject *env)
+{
+    GeneratorObject *gen;
+    gen = (GeneratorObject *) PyType_GenericAlloc(&GeneratorType, gen_state_size);
+    if (gen == NULL)
+        return NULL;
+    memcpy(gen->state, initial_state, gen_state_size);
+    gen->nextfunc = nextfunc;
+    Py_XINCREF(env);
+    gen->env = env;
+    gen->finalizer = finalizer;
+    return (PyObject *) gen;
+}
 
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
@@ -291,6 +445,36 @@ static PyMethodDef ext_methods[] = {
 #undef declmethod
 };
 
+
+static PyObject *
+build_c_helpers_dict(void)
+{
+    PyObject *dct = PyDict_New();
+    if (dct == NULL)
+        goto error;
+
+#define _declpointer(name, value) do {                 \
+    PyObject *o = PyLong_FromVoidPtr(value);           \
+    if (o == NULL) goto error;                         \
+    if (PyDict_SetItemString(dct, name, o)) {          \
+        Py_DECREF(o);                                  \
+        goto error;                                    \
+    }                                                  \
+    Py_DECREF(o);                                      \
+} while (0)
+
+#define declmethod(func) _declpointer(#func, &Numba_##func)
+
+#define declpointer(ptr) _declpointer(#ptr, &ptr)
+
+    declmethod(make_generator);
+
+#undef declmethod
+    return dct;
+error:
+    Py_XDECREF(dct);
+    return NULL;
+}
 
 MOD_INIT(_dynfunc) {
     PyObject *m, *impl_info;
@@ -303,11 +487,14 @@ MOD_INIT(_dynfunc) {
         return MOD_ERROR_VAL;
     if (PyType_Ready(&EnvironmentType))
         return MOD_ERROR_VAL;
+    if (PyType_Ready(&GeneratorType))
+        return MOD_ERROR_VAL;
 
     impl_info = Py_BuildValue(
-        "{snsn}",
-        "offset_closure_body", offsetof(ClosureObject, env),
-        "offset_env_body", offsetof(EnvironmentObject, globals)
+        "{snsnsn}",
+        "offsetof_closure_body", offsetof(ClosureObject, env),
+        "offsetof_env_body", offsetof(EnvironmentObject, globals),
+        "offsetof_generator_state", offsetof(GeneratorObject, state)
         );
     if (impl_info == NULL)
         return MOD_ERROR_VAL;
@@ -317,6 +504,10 @@ MOD_INIT(_dynfunc) {
     PyModule_AddObject(m, "_Closure", (PyObject *) (&ClosureType));
     Py_INCREF(&EnvironmentType);
     PyModule_AddObject(m, "Environment", (PyObject *) (&EnvironmentType));
+    Py_INCREF(&GeneratorType);
+    PyModule_AddObject(m, "_Generator", (PyObject *) (&GeneratorType));
+
+    PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
 
     return MOD_SUCCESS_VAL(m);
 }

@@ -6,6 +6,7 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.ee as le
 import llvmlite.binding as ll
 from numba.targets.imputils import implement, Registry
+from numba.targets.npyimpl import register_casters
 from numba import cgutils
 from numba import types
 from .cudadrv import nvvm
@@ -14,6 +15,7 @@ from . import nvvmutils, stubs
 registry = Registry()
 register = registry.register
 
+register_casters(register)
 
 @register
 @implement('ptx.grid.1d', types.intp)

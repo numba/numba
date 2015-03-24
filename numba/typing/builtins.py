@@ -2,14 +2,13 @@ from __future__ import print_function, division, absolute_import
 
 
 from numba import types, intrinsics
-from numba.utils import PYVERSION
+from numba.utils import PYVERSION, RANGE_ITER_OBJECTS
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
                                     builtin_attr, signature, bound_function)
 
-builtin_global(range, types.range_type)
-if PYVERSION < (3, 0):
-    builtin_global(xrange, types.range_type)
+for obj in RANGE_ITER_OBJECTS:
+    builtin_global(obj, types.range_type)
 builtin_global(len, types.len_type)
 builtin_global(slice, types.slice_type)
 builtin_global(abs, types.abs_type)
@@ -413,9 +412,12 @@ class GetItemBuffer(AbstractTemplate):
             else:
                 res = ary.dtype
         elif isinstance(idx, types.Integer):
-            if ary.ndim != 1:
+            if ary.ndim == 1:
+                res = ary.dtype
+            elif not ary.slice_is_copy and ary.ndim > 1:
+                res = ary.copy(ndim=ary.ndim - 1)
+            else:
                 return
-            res = ary.dtype
 
         else:
             raise Exception("unreachable: index type of %s" % idx)

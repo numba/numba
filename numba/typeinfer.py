@@ -18,12 +18,7 @@ from pprint import pprint
 import itertools
 
 from numba import ir, types, utils, config, six
-from numba.config import PYVERSION
-from numba.utils import builtins
-
-RANGE_ITER_OBJECTS = (builtins.range,)
-if PYVERSION < (3, 0):
-    RANGE_ITER_OBJECTS += (builtins.xrange,)
+from numba.utils import RANGE_ITER_OBJECTS
 
 
 class TypingError(Exception):
@@ -338,12 +333,16 @@ class TypeInferer(object):
     Operates on block that shares the same ir.Scope.
     """
 
-    def __init__(self, context, blocks):
+    def __init__(self, context, interp):
         self.context = context
-        self.blocks = blocks
+        self.blocks = interp.blocks
+        self.generator_info = interp.generator_info
+        self.py_func = interp.bytecode.func
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constrains = ConstrainNetwork()
+        # { index: mangled name }
+        self.arg_names = {}
         self.return_type = None
         # Set of assumed immutable globals
         self.assumed_immutables = set()
@@ -361,8 +360,10 @@ class TypeInferer(object):
         # Disambiguise argument name
         return "arg.%s" % (name,)
 
-    def seed_argument(self, name, typ):
-        self.seed_type(self._mangle_arg_name(name), typ)
+    def seed_argument(self, name, index, typ):
+        name = self._mangle_arg_name(name)
+        self.seed_type(name, typ)
+        self.arg_names[index] = name
 
     def seed_type(self, name, typ):
         """All arguments should be seeded.
@@ -387,7 +388,7 @@ class TypeInferer(object):
         oldtoken = None
         if config.DEBUG:
             self.dump()
-            # Since the number of types are finite, the typesets will eventually
+        # Since the number of types are finite, the typesets will eventually
         # stop growing.
         while newtoken != oldtoken:
             if config.DEBUG:
@@ -412,7 +413,23 @@ class TypeInferer(object):
             typdict[var] = unified
         retty = self.get_return_type(typdict)
         fntys = self.get_function_types(typdict)
+        if self.generator_info:
+            retty = self.get_generator_type(typdict, retty)
         return typdict, retty, fntys
+
+    def get_generator_type(self, typdict, retty):
+        gi = self.generator_info
+        arg_types = [None] * len(self.arg_names)
+        for index, name in self.arg_names.items():
+            arg_types[index] = typdict[name]
+        state_types = [typdict[var_name] for var_name in gi.state_vars]
+        yield_types = [typdict[y.inst.value.name] for y in gi.get_yield_points()]
+        if not yield_types:
+            raise TypingError("Cannot type generator: it does not yield any value")
+        yield_type = self.context.unify_types(*yield_types)
+        # No finalizer in nopython mode
+        return types.Generator(self.py_func, yield_type, arg_types, state_types,
+                               has_finalizer=False)
 
     def get_function_types(self, typemap):
         calltypes = utils.UniqueDict()
@@ -522,8 +539,10 @@ class TypeInferer(object):
             self.typeof_arg(inst, inst.target, value)
         elif isinstance(value, ir.Expr):
             self.typeof_expr(inst, inst.target, value)
+        elif isinstance(value, ir.Yield):
+            self.typeof_yield(inst, inst.target, value)
         else:
-            raise NotImplementedError(type(value), value)
+            raise NotImplementedError(type(value), str(value))
 
     def resolve_value_type(self, inst, val):
         """
@@ -545,6 +564,10 @@ class TypeInferer(object):
 
     def typeof_const(self, inst, target, const):
         self.typevars[target.name].lock(self.resolve_value_type(inst, const))
+
+    def typeof_yield(self, inst, target, yield_):
+        # Sending values into generators isn't supported.
+        self.typevars[target.name].add_types(types.none)
 
     def sentry_modified_builtin(self, inst, gvar):
         """Ensure that builtins are modified.

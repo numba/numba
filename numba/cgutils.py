@@ -10,7 +10,6 @@ import re
 from llvmlite import ir
 from llvmlite.llvmpy.core import Constant, Type
 import llvmlite.llvmpy.core as lc
-from numba import datamodel
 
 from . import utils
 
@@ -29,11 +28,12 @@ def as_bool_bit(builder, value):
     return builder.icmp(lc.ICMP_NE, value, Constant.null(value.type))
 
 
-def make_anonymous_struct(builder, values):
+def make_anonymous_struct(builder, values, struct_type=None):
     """
     Create an anonymous struct containing the given LLVM *values*.
     """
-    struct_type = Type.struct([v.type for v in values])
+    if struct_type is None:
+        struct_type = Type.struct([v.type for v in values])
     struct_val = Constant.undef(struct_type)
     for i, v in enumerate(values):
         struct_val = builder.insert_value(struct_val, v, i)
@@ -75,6 +75,7 @@ class StructProxy(object):
     _fe_type = None
 
     def __init__(self, context, builder, value=None, ref=None):
+        from numba import datamodel   # Avoid circular import
         self._context = context
         self._dmm = self._context.data_model_manager
         self._datamodel = self._dmm[self._fe_type]
@@ -732,7 +733,8 @@ def inbound_gep(builder, ptr, *inds):
     return builder.gep(ptr, idx, inbounds=True)
 
 
-def gep(builder, ptr, *inds):
+def gep(builder, ptr, *inds, **kws):
+    name = kws.pop('name', '')
     idx = []
     for i in inds:
         if isinstance(i, int):
@@ -741,7 +743,7 @@ def gep(builder, ptr, *inds):
         else:
             ind = i
         idx.append(ind)
-    return builder.gep(ptr, idx)
+    return builder.gep(ptr, idx, name=name)
 
 
 def pointer_add(builder, ptr, offset, return_type=None):

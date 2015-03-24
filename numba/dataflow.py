@@ -506,6 +506,12 @@ class DataFlowAnalysis(object):
         info.append(inst, retval=info.pop(), castval=info.make_temp())
         info.terminator = inst
 
+    def op_YIELD_VALUE(self, info, inst):
+        val = info.pop()
+        res = info.make_temp()
+        info.append(inst, value=val, res=res)
+        info.push(res)
+
     def op_SETUP_LOOP(self, info, inst):
         self.add_syntax_block(info, LoopBlock())
         info.append(inst)
