@@ -72,8 +72,10 @@ Operations
 ----------
 
 Arrays support iteration and full indexing (i.e. indexing that yields
-scalar values).  Partial indexing (for example indexing a 2-d array with
-integers, which would give a 1-d subarray in pure Python) isn't supported.
+scalar values).  Partial indexing by a single integer is supported,
+but the resulting views can not be returned to Python.  Other kinds of
+partial indexing (for example indexing a 3-d array with a 2-tuple)
+isn't supported.
 
 Attributes
 ----------
