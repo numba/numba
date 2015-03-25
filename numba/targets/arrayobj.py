@@ -114,18 +114,40 @@ def iternext_array(context, builder, sig, args, result):
 
 @builtin
 @implement('getitem', types.Kind(types.Buffer), types.Kind(types.Integer))
-def getitem_array1d_intp(context, builder, sig, args):
+def getitem_arraynd_intp(context, builder, sig, args):
     aryty, idxty = sig.args
-    if aryty.ndim != 1:
-        # TODO
-        raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
-
     ary, idx = args
-
     arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
-    return _getitem_array1d(context, builder, aryty, ary, idx,
-                            wraparound=idxty.signed)
+    adapted_ary = arystty(context, builder, ary)
+    ndim = aryty.ndim
+    if ndim == 1:
+        result = _getitem_array1d(context, builder, aryty, adapted_ary, idx,
+                                  wraparound=idxty.signed)
+    elif ndim > 1:
+        out_ary_ty = make_array(aryty.copy(ndim = ndim - 1))
+        out_ary = out_ary_ty(context, builder)
+        in_shapes = cgutils.unpack_tuple(builder, adapted_ary.shape, count=ndim)
+        in_strides = cgutils.unpack_tuple(builder, adapted_ary.strides,
+                                          count=ndim)
+        out_ary.parent = adapted_ary.parent
+        adapted_ary_nitems = adapted_ary.nitems
+        zero = lc.Constant.int(adapted_ary_nitems.type, 0)
+        out_ary.nitems = builder.select(
+            builder.icmp(lc.ICMP_EQ, adapted_ary_nitems, zero),
+            zero, builder.udiv(adapted_ary_nitems, in_shapes[0]))
+        out_ary.itemsize = adapted_ary.itemsize
+        data_p = cgutils.get_item_pointer2(builder, adapted_ary.data, in_shapes,
+                                           in_strides, aryty.layout, [idx],
+                                           wraparound=idxty.signed)
+        out_ary.data = data_p
+        for idx, shape in enumerate(in_shapes[1:]):
+            out_ary.shape = builder.insert_value(out_ary.shape, shape, idx)
+        for idx, stride in enumerate(in_strides[1:]):
+            out_ary.strides = builder.insert_value(out_ary.strides, stride, idx)
+        result = out_ary._getvalue()
+    else:
+        raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
+    return result
 
 @builtin
 @implement('getitem', types.Kind(types.Buffer), types.slice3_type)
