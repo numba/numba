@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Continuum Analytics, Inc.
+ * Copyright (c) 2012-2015 Continuum Analytics, Inc.
  * All Rights reserved.
  */
 
@@ -111,8 +111,8 @@ PyTypeObject PyUFuncCleaner_Type = {
 
 typedef struct {
     PyObject_HEAD
-    PyUFuncObject * ufunc;
     PyObject * dispatcher;
+    PyUFuncObject * ufunc;
     PyObject * keepalive;
 } PyDUFuncObject;
 
@@ -129,33 +129,184 @@ static PyObject *
 dufunc_repr(PyDUFuncObject *dufunc)
 {
 #if PY_MAJOR_VERSION >= 3
-    return PyUnicode_FromFormat("<numba.dufunc '%s'>", dufunc->ufunc->name);
+    return PyUnicode_FromFormat("<numba._DUFunc '%s'>", dufunc->ufunc->name);
 #else
-    return PyString_FromFormat("<numba.dufunc '%s'>", dufunc->ufunc->name);
+    return PyString_FromFormat("<numba._DUFunc '%s'>", dufunc->ufunc->name);
 #endif
 }
 
 static PyObject *
 dufunc_call(PyDUFuncObject *self, PyObject *args, PyObject *kws)
 {
-    PyObject *result = (PyObject *)NULL;
+    PyObject *result=NULL;
 
     result = PyUFunc_Type.tp_call((PyObject *)self->ufunc, args, kws);
-    if (result == NULL) {
-        /* TODO */
+    if ((result == NULL) &&
+            (PyErr_Occurred()) &&
+            (PyErr_ExceptionMatches(PyExc_TypeError))) {
+
+        /* Break back into Python when we fail at dispatch. */
+        PyErr_Clear();
+        PyObject *method = PyObject_GetAttrString(
+            (PyObject*)self, "_compile_and_invoke");
+
+        if (method) {
+            result = PyObject_Call(method, args, kws);
+        }
+        Py_XDECREF(method);
     }
     return result;
 }
+
+static Py_ssize_t
+_get_nin(PyObject * py_func_obj)
+{
+    int result = -1;
+    PyObject *inspect=NULL, *getargspec=NULL, *argspec=NULL, *args=NULL;
+
+    inspect = PyImport_ImportModule("inspect");
+    if (!inspect) goto _get_nin_cleanup;
+    getargspec = PyObject_GetAttrString(inspect, "getargspec");
+    if (!getargspec) goto _get_nin_cleanup;
+    argspec = PyObject_CallFunctionObjArgs(getargspec, py_func_obj, NULL);
+    if (!argspec) goto _get_nin_cleanup;
+    args = PyObject_GetAttrString(argspec, "args");
+    if (!args) goto _get_nin_cleanup;
+    result = PyList_Size(args);
+
+  _get_nin_cleanup:
+    Py_XDECREF(args);
+    Py_XDECREF(argspec);
+    Py_XDECREF(getargspec);
+    Py_XDECREF(inspect);
+    return result;
+}
+
+static int
+dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
+{
+    PyObject *dispatcher=NULL, *keepalive=NULL, *py_func_obj=NULL, *tmp;
+    PyUFuncObject *ufunc=NULL;
+    int identity=PyUFunc_None;
+    int nin=-1, nout=1;
+    char *name=NULL, *doc=NULL;
+
+    if (!PyArg_ParseTuple(args, "O|iO!",
+                          &dispatcher, &identity,
+                          &PyList_Type, &keepalive)) {
+        return -1;
+    }
+    py_func_obj = PyObject_GetAttrString(dispatcher, "py_func");
+    if (!py_func_obj) {
+        return -1;
+    }
+
+    if (PyMapping_HasKeyString(kws, "identity")) {
+        PyObject * identity_obj = PyMapping_GetItemString(kws, "identity");
+        if (identity_obj) {
+            identity = (int)PyNumber_AsSsize_t(identity_obj, NULL);
+        }
+        Py_XDECREF(identity_obj);
+    }
+    if (PyMapping_HasKeyString(kws, "nin")) {
+        PyObject * nin_obj = PyMapping_GetItemString(kws, "nin");
+        if (nin_obj) {
+            nin = (int)PyNumber_AsSsize_t(nin_obj, NULL);
+        }
+        Py_XDECREF(nin_obj);
+    } else {
+        nin = (int)_get_nin(py_func_obj);
+        if ((nin < 0) || (PyErr_Occurred())) {
+            Py_XDECREF(py_func_obj);
+            return -1;
+        }
+    }
+    if (PyMapping_HasKeyString(kws, "nout")) {
+        PyObject * nout_obj = PyMapping_GetItemString(kws, "nout");
+        if (nout_obj) {
+            nout = (int)PyNumber_AsSsize_t(nout_obj, NULL);
+        }
+        Py_XDECREF(nout_obj);
+    }
+
+    /* Construct the UFunc. */
+    tmp = PyObject_GetAttrString(py_func_obj, "__name__");
+    if (tmp) {
+#if PY_MAJOR_VERSION >= 3
+        name = PyUnicode_AsUTF8(tmp);
+#else
+        name = PyString_AsString(tmp);
+#endif
+    }
+    Py_XDECREF(tmp);
+    tmp = PyObject_GetAttrString(py_func_obj, "__doc__");
+    if (tmp && (tmp != Py_None)) {
+#if PY_MAJOR_VERSION >= 3
+        doc = PyUnicode_AsUTF8(tmp);
+#else
+        doc = PyString_AsString(tmp);
+#endif
+    }
+    Py_XDECREF(tmp);
+    tmp = NULL;
+    Py_XDECREF(py_func_obj);
+    py_func_obj = NULL;
+    if (!name) {
+        return -1;
+    }
+    ufunc = (PyUFuncObject *)PyUFunc_FromFuncAndData(NULL, NULL, NULL, 0,
+                                                     nin, nout, identity,
+                                                     name, doc, 0);
+    if (!ufunc) {
+        return -1;
+    }
+
+    /* Construct a keepalive list if none was given. */
+    if (!keepalive) {
+        keepalive = PyList_New(0);
+        if (!keepalive) {
+            Py_XDECREF(ufunc);
+            return -1;
+        }
+    } else {
+        Py_INCREF(keepalive);
+    }
+
+    tmp = self->dispatcher;
+    Py_INCREF(dispatcher);
+    self->dispatcher = dispatcher;
+    Py_XDECREF(tmp);
+
+    tmp = (PyObject*)self->ufunc;
+    self->ufunc = ufunc;
+    Py_XDECREF(tmp);
+
+    tmp = self->keepalive;
+    /* Already incref'ed, either by PyList_New(), or else clause, both above. */
+    self->keepalive = keepalive;
+    Py_XDECREF(tmp);
+
+    return 0;
+}
+
+static PyMemberDef dufunc_members[] = {
+    {"dispatcher", T_OBJECT_EX, offsetof(PyDUFuncObject, dispatcher), 0,
+         "Dispatcher object for the core Python function."},
+    {"ufunc", T_OBJECT_EX, offsetof(PyDUFuncObject, ufunc), 0,
+         "Numpy Ufunc for the dynamic ufunc."},
+    {"keepalive", T_OBJECT_EX, offsetof(PyDUFuncObject, keepalive), 0,
+         "List of objects to keep alive during life of dufunc."},
+};
 
 /* ____________________________________________________________
  * Shims to expose ufunc methods.
  */
 
 static struct _ufunc_dispatch {
-    PyCFunction ufunc_reduce;
-    PyCFunction ufunc_accumulate;
-    PyCFunction ufunc_reduceat;
-    PyCFunction ufunc_outer;
+    PyCFunctionWithKeywords ufunc_reduce;
+    PyCFunctionWithKeywords ufunc_accumulate;
+    PyCFunctionWithKeywords ufunc_reduceat;
+    PyCFunctionWithKeywords ufunc_outer;
     PyCFunction ufunc_at;
 } ufunc_dispatch = {NULL, NULL, NULL, NULL, NULL};
 
@@ -172,23 +323,27 @@ init_ufunc_dispatch(void)
             if (strncmp(crnt_name, "at", 3) == 0) {
                 ufunc_dispatch.ufunc_at = crnt->ml_meth;
             } else if (strncmp(crnt_name, "accumulate", 11) == 0) {
-                ufunc_dispatch.ufunc_accumulate = crnt->ml_meth;
+                ufunc_dispatch.ufunc_accumulate =
+                    (PyCFunctionWithKeywords)crnt->ml_meth;
             } else {
                 result = -1;
             }
             break;
         case 'o':
             if (strncmp(crnt_name, "outer", 6) == 0) {
-                ufunc_dispatch.ufunc_outer = crnt->ml_meth;
+                ufunc_dispatch.ufunc_outer =
+                    (PyCFunctionWithKeywords)crnt->ml_meth;
             } else {
                 result = -1;
             }
             break;
         case 'r':
             if (strncmp(crnt_name, "reduce", 7) == 0) {
-                ufunc_dispatch.ufunc_reduce = crnt->ml_meth;
+                ufunc_dispatch.ufunc_reduce =
+                    (PyCFunctionWithKeywords)crnt->ml_meth;
             } else if (strncmp(crnt_name, "reduceat", 9) == 0) {
-                ufunc_dispatch.ufunc_reduceat = crnt->ml_meth;
+                ufunc_dispatch.ufunc_reduceat =
+                    (PyCFunctionWithKeywords)crnt->ml_meth;
             } else {
                 result = -1;
             }
@@ -208,6 +363,114 @@ init_ufunc_dispatch(void)
     }
     return result;
 }
+
+static PyObject *
+dufunc_reduce(PyDUFuncObject * self, PyObject * args, PyObject *kws)
+{
+    return ufunc_dispatch.ufunc_reduce((PyObject*)self->ufunc, args, kws);
+}
+
+static PyObject *
+dufunc_accumulate(PyDUFuncObject * self, PyObject * args, PyObject *kws)
+{
+    return ufunc_dispatch.ufunc_accumulate((PyObject*)self->ufunc, args, kws);
+}
+
+static PyObject *
+dufunc_reduceat(PyDUFuncObject * self, PyObject * args, PyObject *kws)
+{
+    return ufunc_dispatch.ufunc_reduceat((PyObject*)self->ufunc, args, kws);
+}
+
+static PyObject *
+dufunc_outer(PyDUFuncObject * self, PyObject * args, PyObject *kws)
+{
+    return ufunc_dispatch.ufunc_outer((PyObject*)self->ufunc, args, kws);
+}
+
+static PyObject *
+dufunc_at(PyDUFuncObject * self, PyObject * args)
+{
+    return ufunc_dispatch.ufunc_at((PyObject*)self->ufunc, args);
+}
+
+static PyObject *
+dufunc__compile_and_invoke(PyDUFuncObject * self, PyObject * args,
+                           PyObject * kws)
+{
+    PyErr_SetString(PyExc_NotImplementedError,
+                    "Abstract method _DUFunc._compile_and_invoke() called!");
+    return NULL;
+}
+
+static PyObject *
+dufunc__add_loop(PyDUFuncObject * self, PyObject * args, PyObject *kws)
+{
+    PyUFuncObject *ufunc=self->ufunc;
+    unsigned long loop_ptr=0, data_ptr=0;
+    int idx, usertype=NPY_VOID;
+    int *arg_types_arr=NULL;
+    PyObject *arg_types=NULL;
+
+    if (!PyArg_ParseTuple(args, "ik|O!k", &usertype, &loop_ptr, &PyList_Type,
+                          &arg_types, &data_ptr)) {
+        return NULL;
+    }
+    /* Deal with the input type signature, if given. */
+    if (arg_types) {
+        Py_ssize_t arg_types_size = PyList_Size(arg_types);
+        if (arg_types_size != (Py_ssize_t)(ufunc->nargs)) {
+            PyErr_SetString(
+                PyExc_ValueError,
+                "argument type list size does not equal ufunc argument count");
+            return NULL;
+        }
+        arg_types_arr = PyArray_malloc(sizeof(int) * ufunc->nargs);
+        for (idx = 0; idx < ufunc->nargs; idx++) {
+            arg_types_arr[idx] = (int)PyLong_AsLong(PyList_GET_ITEM(arg_types,
+                                                                    idx));
+        }
+        if (PyErr_Occurred()) goto _dufunc__add_loop_fail;
+    }
+    /* Actually make the call. */
+    if (PyUFunc_RegisterLoopForType(ufunc, usertype,
+                                    (PyUFuncGenericFunction)loop_ptr,
+                                    arg_types_arr, (void *)data_ptr) < 0)
+        goto _dufunc__add_loop_fail;
+
+    PyArray_free(arg_types_arr);
+    Py_INCREF(Py_None);
+    return Py_None;
+
+  _dufunc__add_loop_fail:
+    PyArray_free(arg_types_arr);
+    return NULL;
+}
+
+static struct PyMethodDef dufunc_methods[] = {
+    {"reduce",
+        (PyCFunction)dufunc_reduce,
+        METH_VARARGS | METH_KEYWORDS, NULL },
+    {"accumulate",
+        (PyCFunction)dufunc_accumulate,
+        METH_VARARGS | METH_KEYWORDS, NULL },
+    {"reduceat",
+        (PyCFunction)dufunc_reduceat,
+        METH_VARARGS | METH_KEYWORDS, NULL },
+    {"outer",
+        (PyCFunction)dufunc_outer,
+        METH_VARARGS | METH_KEYWORDS, NULL},
+    {"at",
+        (PyCFunction)dufunc_at,
+        METH_VARARGS, NULL},
+    {"_compile_and_invoke",
+        (PyCFunction)dufunc__compile_and_invoke,
+        METH_VARARGS | METH_KEYWORDS, NULL},
+    {"_add_loop",
+        (PyCFunction)dufunc__add_loop,
+        METH_VARARGS, NULL},
+    {NULL, NULL, 0, NULL}           /* sentinel */
+};
 
 PyTypeObject PyDUFunc_Type = {
 #if PY_MAJOR_VERSION >= 3
@@ -239,7 +502,7 @@ PyTypeObject PyDUFunc_Type = {
     0,                                          /* tp_getattro */
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,                         /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
     0,                                          /* tp_doc */
     0,                                          /* tp_traverse */
     0,                                          /* tp_clear */
@@ -247,15 +510,15 @@ PyTypeObject PyDUFunc_Type = {
     0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
-    0,                                          /* tp_methods */
-    0,                                          /* tp_members */
+    dufunc_methods,                             /* tp_methods */
+    dufunc_members,                             /* tp_members */
     0,                                          /* tp_getset */
     0,                                          /* tp_base */
     0,                                          /* tp_dict */
     0,                                          /* tp_descr_get */
     0,                                          /* tp_descr_set */
     0,                                          /* tp_dictoffset */
-    0,                                          /* tp_init */
+    (initproc) dufunc_init,                     /* tp_init */
     0,                                          /* tp_alloc */
     0,                                          /* tp_new */
     0,                                          /* tp_free */
@@ -269,20 +532,12 @@ PyTypeObject PyDUFunc_Type = {
     0,                                          /* tp_version_tag */
 };
 
-static PyObject *
-dufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
-{
-    PyDUFuncObject * dufunc = (PyDUFuncObject *)NULL;
-    return (PyObject *)dufunc;
-}
-
 /* ______________________________________________________________________
  * Module initialization boilerplate follows.
  */
 
 static PyMethodDef ext_methods[] = {
     {"fromfunc", (PyCFunction) ufunc_fromfunc, METH_VARARGS, NULL},
-    {"dufunc", (PyCFunction) dufunc_fromfunc, METH_VARARGS, NULL},
     { NULL }
 };
 
@@ -309,9 +564,12 @@ MOD_INIT(_internal)
         return MOD_ERROR_VAL;
 
     PyDUFunc_Type.tp_new = PyType_GenericNew;
-    if (init_ufunc_dispatch() != 0)
+    if (init_ufunc_dispatch() <= 0)
         return MOD_ERROR_VAL;
     if (PyType_Ready(&PyDUFunc_Type) < 0)
+        return MOD_ERROR_VAL;
+    Py_INCREF(&PyDUFunc_Type);
+    if (PyModule_AddObject(m, "_DUFunc", (PyObject *)&PyDUFunc_Type) < 0)
         return MOD_ERROR_VAL;
 
     if (PyModule_AddIntMacro(m, PyUFunc_One)
