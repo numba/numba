@@ -455,7 +455,7 @@ class FunctionCache(object):
         self._source_path = inspect.getfile(py_func)
         self._cache_path = os.path.join(os.path.dirname(self._source_path),
                                         '__pycache__')
-        abiflags = sys.abiflags if sys.version_info >= (3,) else ''
+        abiflags = getattr(sys, 'abiflags', '')
         filename_base = '%s.py%d%d%s' % (self._fullname, sys.version_info[0],
                                          sys.version_info[1], abiflags)
         self._index_name = '%s.nbi' % (filename_base,)
