@@ -355,9 +355,7 @@ class BaseCPUCodegen(object):
         """
         Return a tuple unambiguously describing the codegen behaviour.
         """
-        # Increment this when codegen's output changes significantly
-        version = 1
-        return (version, self._llvm_module.triple, ll.get_host_cpu_name(),
+        return (self._llvm_module.triple, ll.get_host_cpu_name(),
                 config.ENABLE_AVX)
 
 
