@@ -10,7 +10,7 @@ import llvmlite.llvmpy.core as lc
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
-from numba import types, utils, cgutils, _helperlib, assume
+from numba import types, utils, cgutils, _helperlib, assume, lowering
 
 
 class NativeValue(object):
@@ -23,6 +23,38 @@ class NativeValue(object):
         self.value = value
         self.is_error = is_error if is_error is not None else cgutils.false_bit
         self.cleanup = cleanup
+
+
+class EnvironmentManager(object):
+
+    def __init__(self, pyapi, env, env_body):
+        assert isinstance(env, lowering.Environment)
+        self.pyapi = pyapi
+        self.env = env
+        self.env_body = env_body
+
+    def add_const(self, const):
+        """
+        Add a constant to the environment, return its index.
+        """
+        # All constants are frozen inside the environment
+        if isinstance(const, str):
+            const = utils.intern(const)
+        for index, val in enumerate(self.env.consts):
+            if val is const:
+                break
+        else:
+            index = len(self.env.consts)
+            self.env.consts.append(const)
+        return index
+
+    def read_const(self, index):
+        """
+        Look up constant number *index* inside the environment body.
+        A borrowed reference is returned.
+        """
+        assert index < len(self.env.consts)
+        return self.pyapi.list_getitem(self.env_body.consts, index)
 
 
 class PythonAPI(object):
@@ -56,6 +88,9 @@ class PythonAPI(object):
         self.cstring = Type.pointer(Type.int(8))
         self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
+
+    def get_env_manager(self, env, env_body):
+        return EnvironmentManager(self, env, env_body)
 
     # ------ Python API -----
 

@@ -10,7 +10,7 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from . import cgutils, generators, ir, types, utils
-from .lowering import BaseLower, ForbiddenConstruct, EnvironmentManager
+from .lowering import BaseLower, ForbiddenConstruct
 from .utils import builtins, intern
 
 
@@ -59,7 +59,7 @@ class PyLower(BaseLower):
             self.return_exception_raised()
 
         self.env_body = self.context.get_env_body(self.builder, self.envarg)
-        self.env_manager = EnvironmentManager(self.pyapi, self.env, self.env_body)
+        self.env_manager = self.pyapi.get_env_manager(self.env, self.env_body)
 
     def post_lower(self):
         pass

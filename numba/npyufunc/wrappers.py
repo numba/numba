@@ -4,7 +4,7 @@ import numpy as np
 from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
                                   ICMP_EQ, Constant)
 
-from numba import types, cgutils, lowering
+from numba import types, cgutils
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
@@ -71,7 +71,7 @@ def build_slow_loop_body(context, func, builder, arrays, out, offsets,
 def build_obj_loop_body(context, func, builder, arrays, out, offsets,
                         store_offset, signature, pyapi, envptr, env):
     env_body = context.get_env_body(builder, envptr)
-    env_manager = lowering.EnvironmentManager(pyapi, env, env_body)
+    env_manager = pyapi.get_env_manager(env, env_body)
 
     def load():
         # Load

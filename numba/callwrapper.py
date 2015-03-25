@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from llvmlite.llvmpy.core import Type, Builder, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils, lowering
+from numba import types, cgutils
 
 
 class _ArgManager(object):
@@ -136,7 +136,7 @@ class PyCallWrapper(object):
         # Extract the Environment object from the Closure
         envptr = self.context.get_env_from_closure(builder, closure)
         env_body = self.context.get_env_body(builder, envptr)
-        env_manager = lowering.EnvironmentManager(api, self.env, env_body)
+        env_manager = api.get_env_manager(self.env, env_body)
 
         status, res = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
