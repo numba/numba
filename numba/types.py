@@ -4,7 +4,6 @@ the targets to choose their representation.
 """
 from __future__ import print_function, division, absolute_import
 
-from .six.moves import copyreg
 import itertools
 import struct
 import weakref
@@ -65,11 +64,11 @@ class _TypeMetaclass(type):
         return cls._intern(inst)
 
 
-def _type_reconstructor(reconstructor_args, state):
+def _type_reconstructor(reconstructor, reconstructor_args, state):
     """
     Rebuild function for unpickling types.
     """
-    obj = copyreg._reconstructor(*reconstructor_args)
+    obj = reconstructor(*reconstructor_args)
     if state:
         obj.__dict__.update(state)
     return type(obj)._intern(obj)
@@ -122,9 +121,8 @@ class Type(object):
         return Prototype(args=args, return_type=self)
 
     def __reduce__(self):
-        rec, args, state = super(Type, self).__reduce__()
-        assert rec is copyreg._reconstructor
-        return (_type_reconstructor, (args, state))
+        reconstructor, args, state = super(Type, self).__reduce__()
+        return (_type_reconstructor, (reconstructor, args, state))
 
     def __getitem__(self, args):
         assert not isinstance(self, Array)
