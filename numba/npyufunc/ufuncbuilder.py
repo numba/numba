@@ -174,7 +174,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
             envptr = None
 
         wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature,
-                                      cres.objectmode, envptr)
+                                      cres.objectmode, envptr, env)
         ptr = library.get_pointer_to_function(wrapper.name)
 
         # Get dtypes

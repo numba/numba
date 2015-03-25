@@ -450,18 +450,6 @@ class BoundFunction(Function):
         return (self.template.__name__, self.this)
 
 
-class Method(Function):
-    def __init__(self, template, this):
-        self.this = this
-        newcls = type(template.__name__ + '.' + str(this), (template,),
-                      dict(this=this))
-        super(Method, self).__init__(newcls)
-
-    @property
-    def key(self):
-        return (self.template.__name__, self.this)
-
-
 class Pair(Type):
     """
     A heterogenous pair.

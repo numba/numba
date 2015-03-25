@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from llvmlite.llvmpy.core import Type, Builder, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils
+from numba import types, cgutils, lowering
 
 
 class _ArgManager(object):
@@ -72,12 +72,13 @@ class _GilManager(object):
 
 
 class PyCallWrapper(object):
-    def __init__(self, context, module, func, fndesc, call_helper,
+    def __init__(self, context, module, func, fndesc, env, call_helper,
                  release_gil):
         self.context = context
         self.module = module
         self.func = func
         self.fndesc = fndesc
+        self.env = env
         self.release_gil = release_gil
 
     def build(self):
@@ -132,13 +133,14 @@ class PyCallWrapper(object):
         if self.release_gil:
             cleanup_manager = _GilManager(builder, api, cleanup_manager)
 
-        # The wrapped function doesn't take a full closure, only
-        # the Environment object.
-        env = self.context.get_env_from_closure(builder, closure)
+        # Extract the Environment object from the Closure
+        envptr = self.context.get_env_from_closure(builder, closure)
+        env_body = self.context.get_env_body(builder, envptr)
+        env_manager = lowering.EnvironmentManager(api, self.env, env_body)
 
         status, res = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
-            innerargs, env)
+            innerargs, envptr)
         # Do clean up
         cleanup_manager.emit_cleanup()
 
@@ -148,7 +150,8 @@ class PyCallWrapper(object):
             with cgutils.ifthen(builder, status.is_none):
                 api.return_none()
 
-            retval = api.from_native_return(res, self.fndesc.restype)
+            retval = api.from_native_return(res, self.fndesc.restype,
+                                            env_manager)
             builder.ret(retval)
 
         with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):

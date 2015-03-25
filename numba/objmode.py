@@ -10,7 +10,7 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from . import cgutils, generators, ir, types, utils
-from .lowering import BaseLower, ForbiddenConstruct
+from .lowering import BaseLower, ForbiddenConstruct, EnvironmentManager
 from .utils import builtins, intern
 
 
@@ -59,6 +59,7 @@ class PyLower(BaseLower):
             self.return_exception_raised()
 
         self.env_body = self.context.get_env_body(self.builder, self.envarg)
+        self.env_manager = EnvironmentManager(self.pyapi, self.env, self.env_body)
 
     def post_lower(self):
         pass
@@ -349,15 +350,8 @@ class PyLower(BaseLower):
 
     def lower_const(self, const):
         # All constants are frozen inside the environment
-        if isinstance(const, str):
-            const = intern(const)
-        for index, val in enumerate(self.env.consts):
-            if val is const:
-                break
-        else:
-            index = len(self.env.consts)
-            self.env.consts.append(const)
-        ret = self.get_env_const(index)
+        index = self.env_manager.add_const(const)
+        ret = self.env_manager.read_const(index)
         self.check_error(ret)
         self.incref(ret)
         return ret
@@ -414,13 +408,6 @@ class PyLower(BaseLower):
         mod = self.pyapi.dict_getitem(moddict,
                                       self._freeze_string("__builtins__"))
         return self.builtin_lookup(mod, name)
-
-    def get_env_const(self, index):
-        """
-        Look up constant number *index* inside the environment body.
-        A borrowed reference is returned.
-        """
-        return self.pyapi.list_getitem(self.env_body.consts, index)
 
     def builtin_lookup(self, mod, name):
         """

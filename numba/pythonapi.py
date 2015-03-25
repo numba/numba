@@ -934,10 +934,10 @@ class PythonAPI(object):
 
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
-    def from_native_return(self, val, typ):
-        return self.from_native_value(val, typ)
+    def from_native_return(self, val, typ, env_manager):
+        return self.from_native_value(val, typ, env_manager)
 
-    def from_native_value(self, val, typ):
+    def from_native_value(self, val, typ, env_manager=None):
         if typ == types.pyobject:
             return val
 
@@ -985,7 +985,7 @@ class PythonAPI(object):
             return ret
 
         elif isinstance(typ, types.Optional):
-            return self.from_native_return(val, typ.type)
+            return self.from_native_return(val, typ.type, env_manager)
 
         elif isinstance(typ, types.Array):
             return self.from_native_array(val, typ)
@@ -995,10 +995,10 @@ class PythonAPI(object):
             # This is the only safe way.
             size = Constant.int(Type.int(), val.type.pointee.count)
             ptr = self.builder.bitcast(val, Type.pointer(Type.int(8)))
-            return self.recreate_record(ptr, size, typ.dtype)
+            return self.recreate_record(ptr, size, typ.dtype, env_manager)
 
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
-            return self.from_native_tuple(val, typ)
+            return self.from_native_tuple(val, typ, env_manager)
 
         elif isinstance(typ, types.Generator):
             return self.from_native_generator(val, typ)
@@ -1120,7 +1120,7 @@ class PythonAPI(object):
             value = cgutils.make_anonymous_struct(self.builder, values)
         return NativeValue(value, is_error=is_error, cleanup=cleanup)
 
-    def from_native_tuple(self, val, typ):
+    def from_native_tuple(self, val, typ, env_manager):
         """
         Convert native array or structure *val* to a tuple object.
         """
@@ -1128,7 +1128,7 @@ class PythonAPI(object):
 
         for i, dtype in enumerate(typ):
             item = self.builder.extract_value(val, i)
-            obj = self.from_native_value(item,  dtype)
+            obj = self.from_native_value(item, dtype, env_manager)
             self.tuple_setitem(tuple_val, i, obj)
 
         return tuple_val
@@ -1242,11 +1242,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="numba_create_np_timedelta")
         return self.builder.call(fn, [val, unit_code])
 
-    def recreate_record(self, pdata, size, dtype):
+    def recreate_record(self, pdata, size, dtype, env_manager):
         fnty = Type.function(self.pyobj, [Type.pointer(Type.int(8)),
                                           Type.int(), self.pyobj])
         fn = self._get_function(fnty, name="numba_recreate_record")
-        dtypeaddr = self.unserialize(self.serialize_object(dtype))
+        dtypeaddr = env_manager.read_const(env_manager.add_const(dtype))
         return self.builder.call(fn, [pdata, size, dtypeaddr])
 
     def string_from_constant_string(self, string):

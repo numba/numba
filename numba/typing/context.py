@@ -324,11 +324,6 @@ class BaseContext(object):
         else:
             gty.extend(ft)
 
-    def insert_class(self, cls, attrs):
-        clsty = types.Object(cls)
-        at = templates.ClassAttrTemplate(self, clsty, attrs)
-        self.insert_attributes(at)
-
     def type_compatibility(self, fromty, toty):
         """
         Returns None or a string describing the conversion e.g. exact, promote,
@@ -412,10 +407,4 @@ class Context(BaseContext):
         self.install(npydecl.registry)
         self.install(operatordecl.registry)
         self.install(randomdecl.registry)
-
-
-def new_method(fn, sig):
-    name = "UserFunction_%s" % fn
-    ft = templates.make_concrete_template(name, fn, [sig])
-    return types.Method(ft, this=sig.recvr)
 

@@ -40,6 +40,38 @@ def _rebuild_env(modname, consts):
     return env
 
 
+class EnvironmentManager(object):
+
+    def __init__(self, pyapi, env, env_body):
+        assert isinstance(env, Environment)
+        self.pyapi = pyapi
+        self.env = env
+        self.env_body = env_body
+
+    def add_const(self, const):
+        """
+        Add a constant to the environment, return its index.
+        """
+        # All constants are frozen inside the environment
+        if isinstance(const, str):
+            const = utils.intern(const)
+        for index, val in enumerate(self.env.consts):
+            if val is const:
+                break
+        else:
+            index = len(self.env.consts)
+            self.env.consts.append(const)
+        return index
+
+    def read_const(self, index):
+        """
+        Look up constant number *index* inside the environment body.
+        A borrowed reference is returned.
+        """
+        assert index < len(self.env.consts)
+        return self.pyapi.list_getitem(self.env_body.consts, index)
+
+
 class BaseLower(object):
     """
     Lower IR to LLVM
@@ -178,10 +210,10 @@ class BaseLower(object):
         if self.genlower:
             self.context.create_cpython_wrapper(self.library,
                                                 self.genlower.gendesc,
-                                                self.call_helper,
+                                                self.env, self.call_helper,
                                                 release_gil=release_gil)
         self.context.create_cpython_wrapper(self.library, self.fndesc,
-                                            self.call_helper,
+                                            self.env, self.call_helper,
                                             release_gil=release_gil)
 
     def setup_function(self, fndesc):
@@ -438,12 +470,6 @@ class Lower(BaseLower):
                     cgutils.get_module(self.builder), fndesc)
             res = self.context.call_external_function(
                 self.builder, func, fndesc.argtypes, argvals)
-
-        elif isinstance(fnty, types.Method):
-            # Method of objects are handled differently
-            fnobj = self.loadvar(expr.func.name)
-            res = self.context.call_class_method(self.builder, fnobj,
-                                                 signature, argvals)
 
         elif isinstance(fnty, types.ExternalFunctionPointer):
             # Handle a C function pointer

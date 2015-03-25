@@ -15,7 +15,6 @@ from numba import types, utils, cgutils, typing, numpy_support
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
-                                    python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry, type_registry)
 from . import arrayobj, builtins, iterators, rangeobj, optional
@@ -209,12 +208,6 @@ class BaseContext(object):
         assert isinstance(genty, types.Generator)
         impl = user_generator(gendesc, libs)
         self.generators[genty] = gendesc, impl
-
-    def insert_class(self, cls, attrs):
-        clsty = types.Object(cls)
-        for name, vtype in utils.iteritems(attrs):
-            impl = python_attr_impl(clsty, name, vtype)
-            self.attrs[impl.attr].append(impl, impl.signature)
 
     def remove_user_function(self, func):
         """
@@ -757,30 +750,6 @@ class BaseContext(object):
 
     def call_function_pointer(self, builder, funcptr, args, cconv=None):
         return builder.call(funcptr, args, cconv=cconv)
-
-    def call_class_method(self, builder, func, signature, args):
-        api = self.get_python_api(builder)
-        tys = signature.args
-        retty = signature.return_type
-        pyargs = [api.from_native_value(av, at) for av, at in zip(args, tys)]
-        res = api.call_function_objargs(func, pyargs)
-
-        # clean up
-        api.decref(func)
-        for obj in pyargs:
-            api.decref(obj)
-
-        with cgutils.ifthen(builder, cgutils.is_null(builder, res)):
-            self.call_conv.return_exc(builder)
-
-        if retty == types.none:
-            api.decref(res)
-            return self.get_dummy_value()
-        else:
-            native = api.to_native_value(res, retty)
-            assert native.cleanup is None
-            api.decref(res)
-            return native.value
 
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module
