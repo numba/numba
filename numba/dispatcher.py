@@ -255,12 +255,12 @@ class Overloaded(_OverloadedBase):
 
         self.targetoptions = targetoptions
         self.locals = locals
-        self._cache = FunctionCache(self.py_func)
+        self._cache = NullCache()
 
         self.typingctx.insert_overloaded(self)
 
     def enable_caching(self):
-        self._cache.enable()
+        self._cache = FunctionCache(self.py_func)
 
     def __get__(self, obj, objtype=None):
         '''Allow a JIT function to be bound as a method to an object'''
@@ -299,6 +299,7 @@ class Overloaded(_OverloadedBase):
         with self._compile_lock:
             cres = self._cache.load_overload(sig, self.targetctx)
             if cres is not None:
+                # XXX fold this in add_overload()? (also see compiler.py)
                 if not cres.objectmode and not cres.interpmode:
                     self.targetctx.insert_user_function(cres.entry_point,
                                                    cres.fndesc, [cres.library])
@@ -403,17 +404,35 @@ class LiftedLoop(_OverloadedBase):
 _dispatcher.init_types(dict((str(t), t._code) for t in types.number_domain))
 
 
+class NullCache(object):
+
+    def load_overload(self, sig, target_context):
+        pass
+
+    def save_overload(self, sig, cres):
+        pass
+
+    def enable(self):
+        pass
+
+    def disable(self):
+        pass
+
+
 class FunctionCache(object):
 
     _version = 1
-    _enabled = False
+    _source_stamp = None
 
     def __init__(self, py_func):
         try:
             qualname = py_func.__qualname__
         except AttributeError:
             qualname = py_func.__name__
-        self._fullname = "%s.%s" % (py_func.__module__, qualname)
+        # Keep the last dotted component, since the package name is already
+        # encoded in the directory.
+        modname = py_func.__module__.split('.')[-1]
+        self._fullname = "%s.%s" % (modname, qualname)
         self._source_path = inspect.getfile(py_func)
         self._cache_path = os.path.join(os.path.dirname(self._source_path),
                                        '__pycache__')
@@ -424,11 +443,20 @@ class FunctionCache(object):
         self._index_path = os.path.join(self._cache_path, self._index_name)
         self._data_name_pattern = '%s.{number:d}.nbc' % (filename_base,)
 
+        self.enable()
+
     def __repr__(self):
         return "<%s fullname=%r>" % (self.__class__.__name__, self._fullname)
 
     def enable(self):
         self._enabled = True
+        st = os.stat(self._source_path)
+        # We use both timestamp and size as some filesystems only have second
+        # granularity.
+        self._source_stamp = st.st_mtime, st.st_size
+
+    def disable(self):
+        self._enabled = False
 
     def load_overload(self, sig, target_context):
         if not self._enabled:
@@ -443,6 +471,11 @@ class FunctionCache(object):
     def save_overload(self, sig, cres):
         if not self._enabled:
             return
+        try:
+            os.mkdir(self._cache_path)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
         overloads = self._load_index()
         key = self._index_key(sig, cres.library.codegen)
         try:
@@ -500,9 +533,10 @@ class FunctionCache(object):
             if e.errno in (errno.ENOENT,):
                 return {}
             raise
-        version, overloads = pickle.loads(data)
-        if version != self._version:
-            # XXX remove stale data files?
+        version, stamp, overloads = pickle.loads(data)
+        if version != self._version or stamp != self._source_stamp:
+            # Cache is not fresh.  Stale data files will be eventually
+            # overwritten, since they are numbered in incrementing order.
             return {}
         else:
             return overloads
@@ -514,7 +548,7 @@ class FunctionCache(object):
         return compiler.CompileResult._rebuild(target_context, *tup)
 
     def _save_index(self, overloads):
-        data = self._version, overloads
+        data = self._version, self._source_stamp, overloads
         data = self._dump(data)
         with self._open_for_write(self._index_path) as f:
             f.write(data)
