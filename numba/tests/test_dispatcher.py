@@ -467,6 +467,16 @@ class TestCache(TestCase):
         f = mod.add_objmode_usecase
         self.assertPreciseEqual(f(2, 3), 15)
 
+    def test_recompile(self):
+        # Explicit call to recompile() should overwrite the cache
+        mod = self.import_module()
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        mod.Z = 10
+        self.assertPreciseEqual(f(2, 3), 6)
+        f.recompile()
+        self.assertPreciseEqual(f(2, 3), 15)
+
 
 if __name__ == '__main__':
     unittest.main()

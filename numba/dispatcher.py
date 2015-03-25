@@ -338,6 +338,7 @@ class Overloaded(_OverloadedBase):
         # Ensure the old overloads are disposed of, including compiled functions.
         self._make_finalizer()()
         self._reset_overloads()
+        self._cache.flush()
         self._can_compile = True
         try:
             for sig in sigs:
@@ -418,6 +419,9 @@ class NullCache(object):
     def disable(self):
         pass
 
+    def flush(self):
+        pass
+
 
 class FunctionCache(object):
 
@@ -457,6 +461,9 @@ class FunctionCache(object):
 
     def disable(self):
         self._enabled = False
+
+    def flush(self):
+        self._save_index({})
 
     def load_overload(self, sig, target_context):
         if not self._enabled:
