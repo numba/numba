@@ -333,7 +333,10 @@ class Overloaded(_OverloadedBase):
         """
         Recompile all signatures afresh.
         """
-        sigs = [cr.signature for cr in self._compileinfos.values()]
+        # A subtle point: self.overloads has argument type tuples, while
+        # while self._compileinfos has full signatures including return
+        # types.  This has an effect on cache lookups...
+        sigs = list(self.overloads)
         old_can_compile = self._can_compile
         # Ensure the old overloads are disposed of, including compiled functions.
         self._make_finalizer()()

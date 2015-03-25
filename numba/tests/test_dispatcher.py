@@ -472,9 +472,17 @@ class TestCache(TestCase):
         mod = self.import_module()
         f = mod.add_usecase
         self.assertPreciseEqual(f(2, 3), 6)
+
+        mod = self.import_module()
+        f = mod.add_usecase
         mod.Z = 10
         self.assertPreciseEqual(f(2, 3), 6)
         f.recompile()
+        self.assertPreciseEqual(f(2, 3), 15)
+
+        # Freshly recompiled version is re-used from other imports
+        mod = self.import_module()
+        f = mod.add_usecase
         self.assertPreciseEqual(f(2, 3), 15)
 
 
