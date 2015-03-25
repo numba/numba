@@ -367,6 +367,9 @@ class TestCache(TestCase):
         c = self.cache_contents()
         self.assertEqual(len(c), n, c)
 
+    def dummy_test(self):
+        pass
+
     def run_in_separate_process(self):
         # Cached functions can be run from a distinct process
         code = """if 1:
@@ -377,7 +380,12 @@ class TestCache(TestCase):
             assert mod.add_usecase(2, 3) == 6
             assert mod.add_objmode_usecase(2, 3) == 6
             assert mod.outer(3, 2) == 2
-            """ % dict(tempdir=self.tempdir, modname=self.modname)
+            packed_rec = mod.record_return(mod.packed_arr, 1)
+            assert tuple(packed_rec) == (2, 43.5), packed_rec
+            aligned_rec = mod.record_return(mod.aligned_arr, 1)
+            assert tuple(aligned_rec) == (2, 43.5), aligned_rec
+            """ % dict(tempdir=self.tempdir, modname=self.modname,
+                       test_class=self.__class__.__name__)
 
         popen = subprocess.Popen([sys.executable, "-c", code],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -385,6 +393,20 @@ class TestCache(TestCase):
         if popen.returncode != 0:
             raise AssertionError("process failed with code %s: stderr follows\n%s\n"
                                  % (popen.returncode, err.decode()))
+
+    def check_module(self, mod):
+        self.check_cache(0)
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_cache(2)  # 1 index, 1 data
+        self.assertPreciseEqual(f(2.5, 3), 6.5)
+        self.check_cache(3)  # 1 index, 2 data
+
+        f = mod.add_objmode_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_cache(5)  # 2 index, 3 data
+        self.assertPreciseEqual(f(2.5, 3), 6.5)
+        self.check_cache(6)  # 2 index, 4 data
 
     def test_caching(self):
         self.check_cache(0)
@@ -402,6 +424,13 @@ class TestCache(TestCase):
         self.check_cache(5)  # 2 index, 3 data
         self.assertPreciseEqual(f(2.5, 3), 6.5)
         self.check_cache(6)  # 2 index, 4 data
+
+        f = mod.record_return
+        rec = f(mod.aligned_arr, 1)
+        self.assertPreciseEqual(tuple(rec), (2, 43.5))
+        rec = f(mod.packed_arr, 1)
+        self.assertPreciseEqual(tuple(rec), (2, 43.5))
+        self.check_cache(9)  # 3 index, 6 data
 
         # Check the code runs ok from another process
         self.run_in_separate_process()
@@ -439,6 +468,8 @@ class TestCache(TestCase):
         mod.add_usecase(2, 3)
         mod.add_objmode_usecase(2, 3)
         mod.outer(2, 3)
+        mod.record_return(mod.packed_arr, 0)
+        mod.record_return(mod.aligned_arr, 1)
         mtimes = self.get_cache_mtimes()
 
         mod2 = self.import_module()

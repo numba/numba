@@ -995,11 +995,7 @@ class PythonAPI(object):
             # This is the only safe way.
             size = Constant.int(Type.int(), val.type.pointee.count)
             ptr = self.builder.bitcast(val, Type.pointer(Type.int(8)))
-            # Note: this will only work for CPU mode
-            #       The following requires access to python object
-            dtype_addr = Constant.int(self.py_ssize_t, id(typ.dtype))
-            dtypeobj = dtype_addr.inttoptr(self.pyobj)
-            return self.recreate_record(ptr, size, dtypeobj)
+            return self.recreate_record(ptr, size, typ.dtype)
 
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
             return self.from_native_tuple(val, typ)
@@ -1246,10 +1242,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="numba_create_np_timedelta")
         return self.builder.call(fn, [val, unit_code])
 
-    def recreate_record(self, pdata, size, dtypeaddr):
+    def recreate_record(self, pdata, size, dtype):
         fnty = Type.function(self.pyobj, [Type.pointer(Type.int(8)),
                                           Type.int(), self.pyobj])
         fn = self._get_function(fnty, name="numba_recreate_record")
+        dtypeaddr = self.unserialize(self.serialize_object(dtype))
         return self.builder.call(fn, [pdata, size, dtypeaddr])
 
     def string_from_constant_string(self, string):

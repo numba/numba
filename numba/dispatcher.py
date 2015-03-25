@@ -7,8 +7,10 @@ import itertools
 import inspect
 import os
 from .six.moves import cPickle as pickle
+import struct
 import sys
 
+import numba
 from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, types, typing
@@ -427,8 +429,18 @@ class NullCache(object):
 
 
 class FunctionCache(object):
+    """
+    A per-function compilation cache.  The cache saves data in separate
+    data files and maintains information in an index file.
 
-    _version = 1
+    There is one data file ("function_name.<number>.nbc") per function
+    signature and target architecture.
+
+    The index file ("function_name.nbi") contains a mapping of signatures
+    and architectures to data files.  It is prefixed by a versioning key
+    and a timestamp of the Python source file containing the function.
+    """
+
     _source_stamp = None
 
     def __init__(self, py_func):
@@ -442,7 +454,7 @@ class FunctionCache(object):
         self._fullname = "%s.%s" % (modname, qualname)
         self._source_path = inspect.getfile(py_func)
         self._cache_path = os.path.join(os.path.dirname(self._source_path),
-                                       '__pycache__')
+                                        '__pycache__')
         abiflags = sys.abiflags if sys.version_info >= (3,) else ''
         filename_base = '%s.py%d%d%s' % (self._fullname, sys.version_info[0],
                                          sys.version_info[1], abiflags)
@@ -458,6 +470,8 @@ class FunctionCache(object):
     def enable(self):
         self._enabled = True
         st = os.stat(self._source_path)
+        # This may be a bit strict but avoids us maintaining a magic number
+        self._version = numba.__version__
         # We use both timestamp and size as some filesystems only have second
         # granularity.
         self._source_stamp = st.st_mtime, st.st_size
@@ -535,16 +549,25 @@ class FunctionCache(object):
             raise
 
     def _load_index(self):
+        """
+        Load the cache index and return it as a dictionary (possibly
+        empty if cache is empty or obsolete).
+        """
         try:
             with open(self._index_path, "rb") as f:
+                version = pickle.load(f)
                 data = f.read()
         except EnvironmentError as e:
             # Index doesn't exist yet?
             if e.errno in (errno.ENOENT,):
                 return {}
             raise
-        version, stamp, overloads = pickle.loads(data)
-        if version != self._version or stamp != self._source_stamp:
+        if version != self._version:
+            # This is another version.  Avoid trying to unpickling the
+            # rest of the stream, as that may fail.
+            return {}
+        stamp, overloads = pickle.loads(data)
+        if stamp != self._source_stamp:
             # Cache is not fresh.  Stale data files will be eventually
             # overwritten, since they are numbered in incrementing order.
             return {}
@@ -558,9 +581,10 @@ class FunctionCache(object):
         return compiler.CompileResult._rebuild(target_context, *tup)
 
     def _save_index(self, overloads):
-        data = self._version, self._source_stamp, overloads
+        data = self._source_stamp, overloads
         data = self._dump(data)
         with self._open_for_write(self._index_path) as f:
+            pickle.dump(self._version, f, protocol=-1)
             f.write(data)
 
     def _save_data(self, name, cres):
