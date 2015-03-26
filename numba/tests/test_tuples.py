@@ -19,6 +19,9 @@ def tuple_second(tup):
     a, b = tup
     return b
 
+def len_usecase(tup):
+    return len(tup)
+
 
 class TestTupleReturn(TestCase):
 
@@ -74,6 +77,18 @@ class TestTuplePassing(TestCase):
         cr_second = compile_isolated(tuple_second, (tuple_type,))
         self.assertPreciseEqual(cr_first.entry_point((2**61, 1.5)), 2**61)
         self.assertPreciseEqual(cr_second.entry_point((2**61, 1.5)), 1.5)
+
+
+class TestOperations(TestCase):
+
+    def test_len(self):
+        pyfunc = len_usecase
+        cr = compile_isolated(pyfunc,
+                              [types.Tuple((types.int64, types.float32))])
+        self.assertPreciseEqual(cr.entry_point((4, 5)), 2)
+        cr = compile_isolated(pyfunc,
+                              [types.UniTuple(types.int64, 3)])
+        self.assertPreciseEqual(cr.entry_point((4, 5, 6)), 3)
 
 
 if __name__ == '__main__':
