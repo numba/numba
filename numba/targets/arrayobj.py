@@ -623,7 +623,7 @@ def array_itemsize(context, builder, typ, value):
 
 @builtin_attr
 @impl_attribute(types.Kind(types.MemoryView), "nbytes", types.intp)
-def array_size(context, builder, typ, value):
+def array_nbytes(context, builder, typ, value):
     """
     nbytes = size * itemsize
     """
