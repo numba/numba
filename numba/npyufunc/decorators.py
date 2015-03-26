@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import inspect
 
-from . import _internal
+from . import _internal, dufunc
 from .ufuncbuilder import UFuncBuilder, GUFuncBuilder
 
 from numba.targets.registry import TargetRegistry
@@ -93,15 +93,17 @@ def vectorize(ftylist_or_function=(), **kws):
         # Common user mistake
         ftylist = [ftylist_or_function]
     elif inspect.isfunction(ftylist_or_function):
-        return Vectorize(ftylist_or_function, **kws).build_ufunc()
+        return dufunc.DUFunc(ftylist_or_function, **kws)
     elif ftylist_or_function is not None:
         ftylist = ftylist_or_function
 
     def wrap(func):
-        vec = Vectorize(func, **kws)
-        for fty in ftylist:
-            vec.add(fty)
-        return vec.build_ufunc()
+        if len(ftylist) > 0:
+            vec = Vectorize(func, **kws)
+            for fty in ftylist:
+                vec.add(fty)
+            return vec.build_ufunc()
+        return dufunc.DUFunc(func, **kws)
 
     return wrap
 
