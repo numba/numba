@@ -479,7 +479,7 @@ PyTypeObject PyDUFunc_Type = {
     PyObject_HEAD_INIT(NULL)
     0,                                          /* ob_size */
 #endif
-    "numba.DUFunc",                             /* tp_name*/
+    "numba._DUFunc",                            /* tp_name*/
     sizeof(PyDUFuncObject),                     /* tp_basicsize*/
     0,                                          /* tp_itemsize */
     /* methods */
