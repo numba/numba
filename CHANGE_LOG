@@ -47,6 +47,7 @@ Features:
 * Issue #1048: Allow calling Numpy scalar constructors from CUDA functions.
 * Issue #1047: Allow indexing a multi-dimensional array with a single integer,
   to take a view.
+* Issue #1050: Support len() on tuples.
 
 Fixes:
 
@@ -62,6 +63,7 @@ Fixes:
   object mode.
 * Issue #1041: Fix incompatibility between Numba and the third-party
   library "future".
+* Issue #1053: Fix the size attribute of CUDA shared arrays.
 
 
 Version 0.17.0
