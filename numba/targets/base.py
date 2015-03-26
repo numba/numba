@@ -869,6 +869,12 @@ class BaseContext(object):
     def make_array(self, typ):
         return arrayobj.make_array(typ)
 
+    def populate_array(self, arr, **kwargs):
+        """
+        Populate array structure.
+        """
+        return arrayobj.populate_array(arr, **kwargs)
+
     def make_complex(self, typ):
         cls, _ = builtins.get_complex_info(typ)
         return cls

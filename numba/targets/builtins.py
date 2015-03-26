@@ -1420,6 +1420,13 @@ def array_ravel_impl(context, builder, sig, args):
     flatarr.shape = cgutils.pack_array(builder, [size])
     flatarr.strides = cgutils.pack_array(builder, [unit_stride])
 
+    context.populate_array(flatarr,
+                           data=arr.data,
+                           shape=cgutils.pack_array(builder, [size]),
+                           strides=cgutils.pack_array(builder, [unit_stride]),
+                           itemsize=arr.itemsize,
+                           parent=arr.parent)
+
     return flatarr._getvalue()
 
 
