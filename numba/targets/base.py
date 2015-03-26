@@ -465,16 +465,21 @@ class BaseContext(object):
                 def imp(context, builder, typ, val):
                     ary = aryty(context, builder)
                     dtype = elemty.dtype
-                    ary.nitems = context.get_constant(types.intp, elemty.nitems)
-                    ary.itemsize = context.get_constant(types.intp, elemty.size)
-                    ary.data = cgutils.get_record_member(builder, val, offset,
-                                                         self.get_data_type(dtype))
-                    ary.shape = cgutils.pack_array(builder,
-                                                   [ self.get_constant(types.intp, s)
-                                                     for s in elemty.shape ])
-                    ary.strides = cgutils.pack_array(builder,
-                                                     [self.get_constant(types.intp, s)
-                                                     for s in elemty.strides ])
+                    newshape = [self.get_constant(types.intp, s) for s in
+                                elemty.shape]
+                    newstrides = [self.get_constant(types.intp, s) for s in
+                                  elemty.strides]
+                    newdata = cgutils.get_record_member(builder, val, offset,
+                                                    self.get_data_type(dtype))
+                    arrayobj.populate_array(
+                        ary,
+                        data=newdata,
+                        shape=cgutils.pack_array(builder, newshape),
+                        strides=cgutils.pack_array(builder, newstrides),
+                        itemsize=context.get_constant(types.intp, elemty.size),
+                        parent=ary.parent
+                    )
+                    
                     return ary._getvalue()
             else:
                 @impl_attribute(typ, attr, elemty)
