@@ -88,6 +88,17 @@ def _compile_ewise_function(nb_func, targetoptions, sig=None,
 
     return cres, args, return_type
 
+def _check_ufunc_signature(cres, args, return_type):
+    if return_type is None:
+        if cres.objectmode:
+            # Object mode is used and return type is not specified
+            raise TypeError("return type must be specified for object mode")
+        else:
+            return_type = cres.signature.return_type
+
+    assert return_type != types.pyobject
+    return return_type(*args)
+
 def _build_ewise_ufunc_wrapper(cres, signature):
     # Buider wrapper for ufunc entry point
     ctx = cres.target_context
@@ -155,15 +166,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
         self._cres = {}
 
     def _finalize_signature(self, cres, args, return_type):
-        if return_type is None:
-            if cres.objectmode:
-                # Object mode is used and return type is not specified
-                raise TypeError("return type must be specified for object mode")
-            else:
-                return_type = cres.signature.return_type
-
-        assert return_type != types.pyobject
-        return return_type(*args)
+        return _check_ufunc_signature(cres, args, return_type)
 
     def build_ufunc(self):
         dtypelist = []
