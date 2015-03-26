@@ -404,5 +404,6 @@ def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
 
     ary.shape = cgutils.pack_array(builder, kshape)
     ary.strides = cgutils.pack_array(builder, kstrides)
+    ary.nitems = reduce(builder.mul, kshape[1:], kshape[0])
 
     return ary._getvalue()
