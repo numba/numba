@@ -7,6 +7,7 @@ import numpy
 from numba import unittest_support as unittest
 from numba.npyufunc.ufuncbuilder import UFuncBuilder, GUFuncBuilder
 from numba import vectorize, guvectorize
+from numba.npyufunc import PyUFunc_One
 from . import support
 
 
@@ -210,7 +211,7 @@ class TestVectorizeDecor(unittest.TestCase):
     def test_vectorize_only_kws(self):
         a = numpy.linspace(0,1,10)
         b = numpy.linspace(1,2,10)
-        ufunc = vectorize(identity=1)(mul)
+        ufunc = vectorize(identity=PyUFunc_One, nopython=True)(mul)
         self.assertTrue(numpy.all(ufunc(a,b) == (a * b)))
 
     def test_guvectorize(self):
