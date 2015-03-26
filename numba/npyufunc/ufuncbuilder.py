@@ -67,6 +67,54 @@ class UFuncDispatcher(object):
 
 target_registry['npyufunc'] = UFuncDispatcher
 
+# Utility functions
+
+def _compile_ewise_function(nb_func, targetoptions, sig=None,
+                            argtypes=None, restype=None):
+    # Handle argtypes
+    if argtypes is not None:
+        warnings.warn("Keyword argument argtypes is deprecated",
+                      DeprecationWarning)
+        assert sig is None
+        if restype is None:
+            sig = tuple(argtypes)
+        else:
+            sig = restype(*argtypes)
+
+    # Do compilation
+    # Return CompileResult to test
+    cres = nb_func.compile(sig, **targetoptions)
+    args, return_type = sigutils.normalize_signature(sig)
+
+    return cres, args, return_type
+
+def _build_ewise_ufunc_wrapper(cres, signature):
+    # Buider wrapper for ufunc entry point
+    ctx = cres.target_context
+    library = cres.library
+    llvm_func = library.get_function(cres.fndesc.llvm_func_name)
+
+    env = None
+    if cres.objectmode:
+        # Get env
+        env = cres.environment
+        assert env is not None
+        ll_intp = cres.target_context.get_value_type(types.intp)
+        ll_pyobj = cres.target_context.get_value_type(types.pyobject)
+        envptr = lc.Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
+    else:
+        envptr = None
+
+    wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature,
+                                  cres.objectmode, envptr)
+    ptr = library.get_pointer_to_function(wrapper.name)
+
+    # Get dtypes
+    dtypenums = [as_dtype(a).num for a in signature.args]
+    dtypenums.append(as_dtype(signature.return_type).num)
+    return dtypenums, ptr, env
+
+# Class definitions
 
 class _BaseUFuncBuilder(object):
 
@@ -85,6 +133,17 @@ class _BaseUFuncBuilder(object):
             raise ValueError("Invalid identity value %r" % (identity,))
         return identity
 
+    def add(self, sig=None, argtypes=None, restype=None):
+        if hasattr(self, 'targetoptions'):
+            targetoptions = self.targetoptions
+        else:
+            targetoptions = self.nb_func.targetoptions
+        cres, args, return_type = _compile_ewise_function(
+            self.nb_func, targetoptions, sig, argtypes, restype)
+        sig = self._finalize_signature(cres, args, return_type)
+        self._sigs.append(sig)
+        self._cres[sig] = cres
+        return cres
 
 class UFuncBuilder(_BaseUFuncBuilder):
 
@@ -95,23 +154,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
         self._sigs = []
         self._cres = {}
 
-    def add(self, sig=None, argtypes=None, restype=None):
-        # Handle argtypes
-        if argtypes is not None:
-            warnings.warn("Keyword argument argtypes is deprecated",
-                          DeprecationWarning)
-            assert sig is None
-            if restype is None:
-                sig = tuple(argtypes)
-            else:
-                sig = restype(*argtypes)
-
-        # Do compilation
-        # Return CompileResult to test
-        cres = self.nb_func.compile(sig)
-
-        args, return_type = sigutils.normalize_signature(sig)
-
+    def _finalize_signature(self, cres, args, return_type):
         if return_type is None:
             if cres.objectmode:
                 # Object mode is used and return type is not specified
@@ -120,11 +163,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
                 return_type = cres.signature.return_type
 
         assert return_type != types.pyobject
-        sig = return_type(*args)
-        # Store the final signature
-        self._sigs.append(sig)
-        self._cres[sig] = cres
-        return cres
+        return return_type(*args)
 
     def build_ufunc(self):
         dtypelist = []
@@ -163,30 +202,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
         return ufunc
 
     def build(self, cres, signature):
-        # Buider wrapper for ufunc entry point
-        ctx = cres.target_context
-        library = cres.library
-        llvm_func = library.get_function(cres.fndesc.llvm_func_name)
-
-        env = None
-        if cres.objectmode:
-            # Get env
-            env = cres.environment
-            assert env is not None
-            ll_intp = cres.target_context.get_value_type(types.intp)
-            ll_pyobj = cres.target_context.get_value_type(types.pyobject)
-            envptr = lc.Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
-        else:
-            envptr = None
-
-        wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature,
-                                      cres.objectmode, envptr)
-        ptr = library.get_pointer_to_function(wrapper.name)
-
-        # Get dtypes
-        dtypenums = [as_dtype(a).num for a in signature.args]
-        dtypenums.append(as_dtype(signature.return_type).num)
-        return dtypenums, ptr, env
+        return _build_ewise_ufunc_wrapper(cres, signature)
 
 
 class GUFuncBuilder(_BaseUFuncBuilder):
@@ -202,35 +218,14 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         self._sigs = []
         self._cres = {}
 
-    def add(self, sig=None, argtypes=None, restype=None):
-        # Handle argtypes
-        if argtypes is not None:
-            warnings.warn("Keyword argument argtypes is deprecated",
-                          DeprecationWarning)
-            assert sig is None
-            if restype is None:
-                sig = tuple(argtypes)
-            else:
-                sig = restype(*argtypes)
-
-        # Do compilation
-        # Return CompileResult to test
-        cres = self.nb_func.compile(sig, **self.targetoptions)
-
-        args, return_type = sigutils.normalize_signature(sig)
-
+    def _finalize_signature(self, cres, args, return_type):
         if not cres.objectmode and cres.signature.return_type != types.void:
             raise TypeError("gufunc kernel must have void return type")
 
         if return_type is None:
             return_type = types.void
 
-        # Store the final signature
-        sig = return_type(*args)
-        self._sigs.append(sig)
-        self._cres[sig] = cres
-
-        return cres
+        return return_type(*args)
 
     def build_ufunc(self):
         dtypelist = []
