@@ -450,8 +450,9 @@ class Len(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         (val,) = args
-        if isinstance(val, types.Buffer):
+        if isinstance(val, (types.Buffer, types.Tuple, types.UniTuple)):
             return signature(types.intp, val)
+
 
 #-------------------------------------------------------------------------------
 

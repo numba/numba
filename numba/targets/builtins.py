@@ -1422,3 +1422,19 @@ def array_ravel_impl(context, builder, sig, args):
 
     return flatarr._getvalue()
 
+
+# -----------------------------------------------------------------------------
+
+@builtin
+@implement(types.len_type, types.Kind(types.Tuple))
+def array_len(context, builder, sig, args):
+    tupty, = sig.args
+    retty = sig.return_type
+    return context.get_constant(retty, len(tupty.types))
+
+@builtin
+@implement(types.len_type, types.Kind(types.UniTuple))
+def array_len(context, builder, sig, args):
+    tupty, = sig.args
+    retty = sig.return_type
+    return context.get_constant(retty, tupty.count)
