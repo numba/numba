@@ -1,4 +1,71 @@
 
+Version 0.18.0
+--------------
+
+This version removes the old deprecated and undocumented ``argtypes`` and
+``restype`` arguments to the ``@jit`` decorator.  Function signatures
+should always be passed as the first argument to ``@jit``.
+
+Features:
+
+* Issue #960: Add inspect_llvm() and inspect_asm() methods to JIT-compiled
+  functions: they output the LLVM IR and the native assembler source of the
+  compiled function, respectively.
+* Issue #990: Allow passing tuples as arguments to JIT-compiled functions
+  in ``nopython`` mode.
+* Issue #774: Support two-argument round() in ``nopython`` mode.
+* Issue #987: Support missing functions from the math module in nopython
+  mode: frexp(), ldexp(), gamma(), lgamma(), erf(), erfc().
+* Issue #995: Improve code generation for round() on Python 3.
+* Issue #981: Support functions from the random and numpy.random modules
+  in ``nopython`` mode.
+* Issue #979: Add cuda.atomic.max().
+* Issue #1006: Improve exception raising and reporting.  It is now allowed
+  to raise an exception with an error message in ``nopython`` mode.
+* Issue #821: Allow ctypes- and cffi-defined functions as arguments to
+  ``nopython`` functions.
+* Issue #901: Allow multiple explicit signatures with ``@jit``.  The
+  signatures must be passed in a list, as with ``@vectorize``.
+* Issue #884: Better error message when a JIT-compiled function is called
+  with the wrong types.
+* Issue #1010: Simpler and faster CUDA argument marshalling thanks to a
+  refactoring of the data model.
+* Issue #1018: Support arrays of scalars inside Numpy structured types.
+* Issue #808: Reduce Numba import time by half.
+* Issue #1021: Support the buffer protocol in ``nopython`` mode.
+  Buffer-providing objects, such as ``bytearray``, ``array.array`` or
+  ``memoryview`` support array-like operations such as indexing and iterating.
+  Furthermore, some standard attributes on the ``memoryview`` object are
+  supported.
+* Issue #1030: Support nested arrays in Numpy structured arrays.
+* Issue #1033: Implement the inspect_types(), inspect_llvm() and inspect_asm()
+  methods for CUDA kernels.
+* Issue #1029: Support Numpy structured arrays with CUDA as well.
+* Issue #1034: Support for generators in nopython and object mode.
+* Issue #1044: Support default argument values when calling Numba-compiled
+  functions.
+* Issue #1048: Allow calling Numpy scalar constructors from CUDA functions.
+* Issue #1047: Allow indexing a multi-dimensional array with a single integer,
+  to take a view.
+* Issue #1050: Support len() on tuples.
+
+Fixes:
+
+* Issue #977: Assignment optimization was too aggressive.
+* Issue #561: One-argument round() now returns an int on Python 3.
+* Issue #1001: Fix an unlikely bug where two closures with the same name
+  and id() would compile to the same LLVM function name, despite different
+  closure values.
+* Issue #1006: Fix reference leak when a JIT-compiled function is disposed of.
+* Issue #1017: Update instructions for CUDA in the README.
+* Issue #1008: Generate shorter LLVM type names to avoid segfaults with CUDA.
+* Issue #1005: Properly clean up references when raising an exception from
+  object mode.
+* Issue #1041: Fix incompatibility between Numba and the third-party
+  library "future".
+* Issue #1053: Fix the size attribute of CUDA shared arrays.
+
+
 Version 0.17.0
 --------------
 
