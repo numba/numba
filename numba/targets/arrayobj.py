@@ -28,6 +28,51 @@ def make_array(array_type):
     return cgutils.create_struct_proxy(array_type)
 
 
+def populate_array(array, data, shape, strides, itemsize, parent=None):
+    """
+    Helper function for populating array structures.
+    This avoids forgetting to set fields.
+    """
+    context = array._context
+    builder = array._builder
+    datamodel = array._datamodel
+    required_fields = set(datamodel._fields)
+
+    attrs = dict(shape=shape,
+                 strides=strides,
+                 data=data,
+                 itemsize=itemsize)
+
+    # Set `parent` attribute
+    if parent is None:
+        attrs['parent'] = Constant.null(context.get_value_type(
+            datamodel.get_type('parent')))
+    else:
+        attrs['parent'] = parent
+    # Calc num of items from shape
+    nitems = context.get_constant(types.intp, 1)
+    unpacked_shape = cgutils.unpack_tuple(builder, shape, shape.type.count)
+    if unpacked_shape:
+        # Shape is not empty
+        for axlen in unpacked_shape:
+            nitems = builder.mul(nitems, axlen)
+    else:
+        # Shape is empty
+        nitems = context.get_constant(types.intp, 0)
+    attrs['nitems'] = nitems
+
+    # Make sure that we have all the fields
+    got_fields = set(attrs.keys())
+    if got_fields != required_fields:
+        raise ValueError("missing {0}".format(required_fields - got_fields))
+
+    # Set field value
+    for k, v in attrs.items():
+        setattr(array, k, v)
+
+    return array
+
+
 def make_array_ctype(ndim):
     """Create a ctypes representation of an array_type.
 
@@ -129,21 +174,15 @@ def getitem_arraynd_intp(context, builder, sig, args):
         in_shapes = cgutils.unpack_tuple(builder, adapted_ary.shape, count=ndim)
         in_strides = cgutils.unpack_tuple(builder, adapted_ary.strides,
                                           count=ndim)
-        out_ary.parent = adapted_ary.parent
-        adapted_ary_nitems = adapted_ary.nitems
-        zero = lc.Constant.int(adapted_ary_nitems.type, 0)
-        out_ary.nitems = builder.select(
-            builder.icmp(lc.ICMP_EQ, adapted_ary_nitems, zero),
-            zero, builder.udiv(adapted_ary_nitems, in_shapes[0]))
-        out_ary.itemsize = adapted_ary.itemsize
         data_p = cgutils.get_item_pointer2(builder, adapted_ary.data, in_shapes,
                                            in_strides, aryty.layout, [idx],
                                            wraparound=idxty.signed)
-        out_ary.data = data_p
-        for idx, shape in enumerate(in_shapes[1:]):
-            out_ary.shape = builder.insert_value(out_ary.shape, shape, idx)
-        for idx, stride in enumerate(in_strides[1:]):
-            out_ary.strides = builder.insert_value(out_ary.strides, stride, idx)
+        populate_array(out_ary,
+                       data=data_p,
+                       shape=cgutils.pack_array(builder, in_shapes[1:]),
+                       strides=cgutils.pack_array(builder, in_strides[1:]),
+                       itemsize=adapted_ary.itemsize,
+                       parent=adapted_ary.parent,)
         result = out_ary._getvalue()
     else:
         raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
@@ -175,12 +214,15 @@ def getitem_array1d_slice(context, builder, sig, args):
     retary = retstty(context, builder)
 
     shape = cgutils.get_range_from_slice(builder, slicestruct)
-    retary.shape = cgutils.pack_array(builder, [shape])
-
     stride = cgutils.get_strides_from_slice(builder, aryty.ndim, ary.strides,
                                             slicestruct, 0)
-    retary.strides = cgutils.pack_array(builder, [stride])
-    retary.data = dataptr
+
+    populate_array(retary,
+                   data=dataptr,
+                   shape=cgutils.pack_array(builder, [shape]),
+                   strides=cgutils.pack_array(builder, [stride]),
+                   itemsize=ary.itemsize,
+                   parent=ary.parent)
 
     return retary._getvalue()
 
@@ -209,16 +251,17 @@ def getitem_array_unituple(context, builder, sig, args):
         # Build array
         retstty = make_array(sig.return_type)
         retary = retstty(context, builder)
-        retary.data = dataptr
         shapes = [cgutils.get_range_from_slice(builder, sl)
                   for sl in slices]
-        retary.shape = cgutils.pack_array(builder, shapes)
         strides = [cgutils.get_strides_from_slice(builder, ndim, ary.strides,
                                                   sl, i)
                    for i, sl in enumerate(slices)]
-
-        retary.strides = cgutils.pack_array(builder, strides)
-
+        populate_array(retary,
+                       data=dataptr,
+                       shape=cgutils.pack_array(builder, shapes),
+                       strides=cgutils.pack_array(builder, strides),
+                       itemsize=ary.itemsize,
+                       parent=ary.parent)
         return retary._getvalue()
     else:
         # Indexing
@@ -269,9 +312,12 @@ def getitem_array_tuple(context, builder, sig, args):
         # Build array
         retstty = make_array(sig.return_type)
         retary = retstty(context, builder)
-        retary.data = dataptr
-        retary.shape = cgutils.pack_array(builder, shapes)
-        retary.strides = cgutils.pack_array(builder, strides)
+        populate_array(retary,
+                       data=dataptr,
+                       shape=cgutils.pack_array(builder, shapes),
+                       strides=cgutils.pack_array(builder, strides),
+                       itemsize=ary.itemsize,
+                       parent=ary.parent)
         return retary._getvalue()
     else:
         # Indexing
@@ -671,19 +717,20 @@ def array_record_getattr(context, builder, typ, value, attr):
     raryty = make_array(resty)
 
     rary = raryty(context, builder)
-    rary.shape = array.shape
 
     constoffset = context.get_constant(types.intp, offset)
-    unpackedstrides = cgutils.unpack_tuple(builder, array.strides, typ.ndim)
-    newstrides = [builder.add(s, constoffset) for s in unpackedstrides]
-
-    rary.strides = array.strides
 
     llintp = context.get_value_type(types.intp)
     newdata = builder.add(builder.ptrtoint(array.data, llintp), constoffset)
     newdataptr = builder.inttoptr(newdata, rary.data.type)
-    rary.data = newdataptr
 
+    datasize = context.get_abi_sizeof(context.get_data_type(dtype))
+    populate_array(rary,
+                   data=newdataptr,
+                   shape=array.shape,
+                   strides=array.strides,
+                   itemsize=context.get_constant(types.intp, datasize),
+                   parent=array.parent)
     return rary._getvalue()
 
 

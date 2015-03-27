@@ -3,7 +3,7 @@ import numba.unittest_support as unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba.numpy_support import from_dtype
-from numba import types
+from numba import types, njit
 
 
 def array_itemsize(a):
@@ -44,6 +44,12 @@ def nested_array_ndim(a):
 
 def nested_array_size(a):
     return a.f.size
+
+
+def size_after_slicing_usecase(buf, i):
+    sliced = buf[i]
+    # Make sure size attribute is not lost
+    return sliced.size
 
 
 class TestArrayAttr(unittest.TestCase):
@@ -126,6 +132,18 @@ class TestNestedArrayAttr(unittest.TestCase):
         cfunc = self.get_cfunc(pyfunc)
 
         self.assertEqual(pyfunc(self.a), cfunc(self.a))
+
+
+class TestSlicedArrayAttr(unittest.TestCase):
+    def test_size_after_slicing(self):
+        pyfunc = size_after_slicing_usecase
+        cfunc = njit(pyfunc)
+        arr = np.arange(2 * 5).reshape(2, 5)
+        for i in range(arr.shape[0]):
+            self.assertEqual(pyfunc(arr, i), cfunc(arr, i))
+        arr = np.arange(2 * 5 * 3).reshape(2, 5, 3)
+        for i in range(arr.shape[0]):
+            self.assertEqual(pyfunc(arr, i), cfunc(arr, i))
 
 
 if __name__ == '__main__':

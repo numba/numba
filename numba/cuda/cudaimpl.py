@@ -145,13 +145,14 @@ def ptx_cmem_arylike(context, builder, sig, args):
 
     # Create array object
     ary = context.make_array(aryty)(context, builder)
-    ary.data = builder.bitcast(genptr, ary.data.type)
-
     kshape = [context.get_constant(types.intp, s) for s in arr.shape]
     kstrides = [context.get_constant(types.intp, s) for s in arr.strides]
-
-    ary.shape = cgutils.pack_array(builder, kshape)
-    ary.strides = cgutils.pack_array(builder, kstrides)
+    context.populate_array(ary,
+                           data=builder.bitcast(genptr, ary.data.type),
+                           shape=cgutils.pack_array(builder, kshape),
+                           strides=cgutils.pack_array(builder, kstrides),
+                           itemsize=ary.itemsize,
+                           parent=ary.parent)
 
     return ary._getvalue()
 
@@ -388,7 +389,6 @@ def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
     # Create array object
     aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
     ary = context.make_array(aryty)(context, builder)
-    ary.data = builder.bitcast(dataptr, ary.data.type)
 
     targetdata = _get_target_data(context)
     lldtype = context.get_data_type(dtype)
@@ -402,8 +402,9 @@ def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
     kshape = [context.get_constant(types.intp, s) for s in shape]
     kstrides = [context.get_constant(types.intp, s) for s in strides]
 
-    ary.shape = cgutils.pack_array(builder, kshape)
-    ary.strides = cgutils.pack_array(builder, kstrides)
-    ary.nitems = reduce(builder.mul, kshape[1:], kshape[0])
-
+    context.populate_array(ary,
+                           data=builder.bitcast(dataptr, ary.data.type),
+                           shape=cgutils.pack_array(builder, kshape),
+                           strides = cgutils.pack_array(builder, kstrides),
+                           itemsize=context.get_constant(types.intp, itemsize))
     return ary._getvalue()

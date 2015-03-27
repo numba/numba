@@ -343,7 +343,11 @@ errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
 
 def sentry_contiguous(ary):
     if not ary.flags['C_CONTIGUOUS'] and not ary.flags['F_CONTIGUOUS']:
-        if ary.ndim != 1 or ary.shape[0] != 1 or ary.strides[0] != 0:
+        if ary.strides[0] == 0:
+            # Broadcasted, ensure inner contiguous
+            return sentry_contiguous(ary[0])
+
+        else:
             raise ValueError(errmsg_contiguous_buffer)
 
 
