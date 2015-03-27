@@ -48,6 +48,7 @@ Features:
 * Issue #1047: Allow indexing a multi-dimensional array with a single integer,
   to take a view.
 * Issue #1050: Support len() on tuples.
+* Issue #1011: Revive HTML annotation.
 
 Fixes:
 
