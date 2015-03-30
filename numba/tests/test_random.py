@@ -12,7 +12,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import jit, _helperlib, types
 from numba.compiler import compile_isolated
-from .support import TestCase
+from .support import TestCase, compile_function
 
 
 # State size of the Mersenne Twister
@@ -42,13 +42,11 @@ def random_randrange3(a, b, c):
 
 
 def jit_with_args(name, argstring):
-    s = """def func(%(argstring)s):
+    code = """def func(%(argstring)s):
         return %(name)s(%(argstring)s)
 """ % locals()
-    co = compile(s, "<string>", "exec")
-    ns = {}
-    eval(co, globals(), ns)
-    return jit(nopython=True)(ns['func'])
+    pyfunc = compile_function("func", code, globals())
+    return jit(nopython=True)(pyfunc)
 
 def jit_nullary(name):
     return jit_with_args(name, "")
@@ -786,6 +784,15 @@ class TestRandom(TestCase):
                 self.assertFalse(np.all(a == b))
                 self.assertEqual(sorted(a), sorted(b))
                 a = b
+        if sys.version_info >= (2, 7):
+            # Test with an arbitrary buffer-providing object
+            b = a.copy()
+            func(memoryview(b))
+            self.assertFalse(np.all(a == b))
+            self.assertEqual(sorted(a), sorted(b))
+            # Read-only object
+            with self.assertTypingError():
+                func(memoryview(b"xyz"))
 
     def test_random_shuffle(self):
         self._check_shuffle(jit_unary("random.shuffle"), py_state_ptr)

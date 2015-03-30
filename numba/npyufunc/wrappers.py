@@ -89,9 +89,10 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
                 pyapi.decref(msgobj)
             with if_ok:
                 # Unbox
-                retval = pyapi.to_native_value(retval, signature.return_type)
+                native = pyapi.to_native_value(retval, signature.return_type)
+                assert native.cleanup is None
                 # Store
-                out.store_direct(retval, builder.load(store_offset))
+                out.store_direct(native.value, builder.load(store_offset))
 
     return _build_ufunc_loop_body_objmode(load, store, context, func, builder,
                                           arrays, out, offsets, store_offset,
@@ -547,16 +548,23 @@ class GUArrayArg(object):
                                             self.data,
                                             self.builder.mul(self.core_step,
                                                              ind))
-        array.data = builder.bitcast(offseted_data, array.data.type)
-
         if not self.as_scalar:
-            array.shape = cgutils.pack_array(builder, self.shape)
-            array.strides = cgutils.pack_array(builder, self.strides)
+            shape = cgutils.pack_array(builder, self.shape)
+            strides = cgutils.pack_array(builder, self.strides)
         else:
             one = context.get_constant(types.intp, 1)
             zero = context.get_constant(types.intp, 0)
-            array.shape = cgutils.pack_array(builder, [one])
-            array.strides = cgutils.pack_array(builder, [zero])
+            shape = cgutils.pack_array(builder, [one])
+            strides = cgutils.pack_array(builder, [zero])
+
+        itemsize = context.get_abi_sizeof(context.get_data_type(self.dtype))
+        context.populate_array(array,
+                               data=builder.bitcast(offseted_data,
+                                                    array.data.type),
+                               shape=shape,
+                               strides=strides,
+                               itemsize=context.get_constant(types.intp,
+                                                             itemsize))
 
         return array._getvalue()
 

@@ -1104,12 +1104,12 @@ def zipf_impl(context, builder, sig, args):
 
 
 @register
-@implement("random.shuffle", types.Kind(types.Array))
+@implement("random.shuffle", types.Kind(types.Buffer))
 def shuffle_impl(context, builder, sig, args):
     return _shuffle_impl(context, builder, sig, args, random.randrange)
 
 @register
-@implement("np.random.shuffle", types.Kind(types.Array))
+@implement("np.random.shuffle", types.Kind(types.Buffer))
 def shuffle_impl(context, builder, sig, args):
     return _shuffle_impl(context, builder, sig, args, np.random.randint)
 

@@ -171,14 +171,18 @@ class TestBlackScholes(TestCase):
     def test_scalar(self):
         flags = Flags()
 
+        # Compile the inner function
         global cnd_jitted
         cr1 = compile_isolated(cnd, (types.float64,))
         cnd_jitted = cr1.entry_point
+        # Manually type the compiled function for calling into
         tyctx = cr1.typing_context
         ctx = cr1.target_context
-        tyctx.insert_user_function(cnd_jitted,
-                                   ctx.get_user_function(cnd_jitted))
+        signature = typing.make_concrete_template("cnd_jitted", cnd_jitted,
+                                                  [cr1.signature])
+        tyctx.insert_user_function(cnd_jitted, signature)
 
+        # Compile the outer function
         array = types.Array(types.float64, 1, 'C')
         argtys = (array,) * 5 + (types.float64, types.float64)
         cr2 = compile_extra(tyctx, ctx, blackscholes_scalar_jitted,

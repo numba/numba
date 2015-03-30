@@ -1,6 +1,7 @@
 """
-This file fixes portability issues for ctypes
+Support for typing ctypes function pointers.
 """
+
 from __future__ import absolute_import
 
 import ctypes
@@ -8,6 +9,7 @@ import sys
 
 from numba import types
 from . import templates
+
 
 CTYPES_MAP = {
     None: types.none,
@@ -46,7 +48,18 @@ def is_ctypes_funcptr(obj):
         return hasattr(obj, 'argtypes') and hasattr(obj, 'restype')
 
 
+def get_pointer(ctypes_func):
+    """
+    Get a pointer to the underlying function for a ctypes function as an
+    integer.
+    """
+    return ctypes.cast(ctypes_func, ctypes.c_void_p).value
+
+
 def make_function_type(cfnptr):
+    """
+    Return a Numba type for the given ctypes function pointer.
+    """
     if cfnptr.argtypes is None:
         raise TypeError("ctypes function %r doesn't define its argument types; "
                         "consider setting the `argtypes` attribute"
@@ -61,8 +74,6 @@ def make_function_type(cfnptr):
         # Default C calling convention
         cconv = None
 
-    cases = [templates.signature(cret, *cargs)]
-    template = templates.make_concrete_template("CFuncPtr", cfnptr, cases)
-
-    pointer = ctypes.cast(cfnptr, ctypes.c_void_p).value
-    return types.FunctionPointer(template, pointer, cconv=cconv)
+    sig = templates.signature(cret, *cargs)
+    return types.ExternalFunctionPointer(sig, cconv=cconv,
+                                         get_pointer=get_pointer)

@@ -165,9 +165,16 @@ class Array(object):
         self.flags = self._compute_layout()
 
     def _compute_layout(self):
+        flags = {}
+
+        if not self.dims:
+            # Records have no dims, and we can treat them as contiguous
+            flags['F_CONTIGUOUS'] = True
+            flags['C_CONTIGUOUS'] = True
+            return flags
+
         leftmost = self.dims[0].is_contiguous(self.itemsize)
         rightmost = self.dims[-1].is_contiguous(self.itemsize)
-        flags = {}
 
         def is_contig(traverse):
             last = next(traverse)

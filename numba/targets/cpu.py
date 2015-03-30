@@ -39,7 +39,6 @@ class CPUContext(BaseContext):
         return self._internal_codegen._create_empty_module(name)
 
     def init(self):
-        self.native_funcs = utils.UniqueDict()
         self.is32bit = (utils.MACHINE_BITS == 32)
 
         # Map external C functions.
@@ -47,12 +46,12 @@ class CPUContext(BaseContext):
         externals.c_numpy_functions.install()
 
         # Add target specific implementations
-        self.insert_func_defn(cmathimpl.registry.functions)
-        self.insert_func_defn(mathimpl.registry.functions)
-        self.insert_func_defn(npyimpl.registry.functions)
-        self.insert_func_defn(operatorimpl.registry.functions)
-        self.insert_func_defn(printimpl.registry.functions)
-        self.insert_func_defn(randomimpl.registry.functions)
+        self.install_registry(cmathimpl.registry)
+        self.install_registry(mathimpl.registry)
+        self.install_registry(npyimpl.registry)
+        self.install_registry(operatorimpl.registry)
+        self.install_registry(printimpl.registry)
+        self.install_registry(randomimpl.registry)
 
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
@@ -76,7 +75,7 @@ class CPUContext(BaseContext):
         to the enclosed _dynfunc.Environment.
         """
         clo_body_ptr = cgutils.pointer_add(
-            builder, clo, _dynfunc._impl_info['offset_closure_body'])
+            builder, clo, _dynfunc._impl_info['offsetof_closure_body'])
         clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
         return clo_body.env
 
@@ -86,15 +85,17 @@ class CPUContext(BaseContext):
         get a EnvBody allowing structured access to environment fields.
         """
         body_ptr = cgutils.pointer_add(
-            builder, envptr, _dynfunc._impl_info['offset_env_body'])
+            builder, envptr, _dynfunc._impl_info['offsetof_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
-    def remove_native_function(self, func):
+    def get_generator_state(self, builder, genptr, return_type):
         """
-        Remove internal references to nonpython mode function *func*.
-        KeyError is raised if the function isn't known to us.
+        From the given *genptr* (a pointer to a _dynfunc.Generator object),
+        get a pointer to its state area.
         """
-        del self.native_funcs[func]
+        return cgutils.pointer_add(
+            builder, genptr, _dynfunc._impl_info['offsetof_generator_state'],
+            return_type=return_type)
 
     def post_lowering(self, func):
         mod = func.module
@@ -132,19 +133,16 @@ class CPUContext(BaseContext):
         - env
             an execution environment (from _dynfunc)
         """
-        func = library.get_function(fndesc.llvm_func_name)
-        wrapper = library.get_function(fndesc.llvm_cpython_wrapper_name)
-
         # Code generation
-        baseptr = library.get_pointer_to_function(func.name)
-        fnptr = library.get_pointer_to_function(wrapper.name)
+        baseptr = library.get_pointer_to_function(fndesc.llvm_func_name)
+        fnptr = library.get_pointer_to_function(fndesc.llvm_cpython_wrapper_name)
 
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],
-                                       fndesc.doc, fnptr, env)
-
-        if fndesc.native:
-            self.native_funcs[cfunc] = fndesc.llvm_func_name, baseptr
+                                       fndesc.doc, fnptr, env,
+                                       # objects to keepalive with the function
+                                       (library,)
+                                       )
 
         return cfunc
 

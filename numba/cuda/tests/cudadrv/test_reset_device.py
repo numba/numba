@@ -16,13 +16,10 @@ class TestResetDevice(CUDATestCase):
         def newthread(exception_queue):
             try:
                 devices = range(driver.get_device_count())
-                print('Devices', devices)
                 for _ in range(2):
                     for d in devices:
                         cuda.select_device(d)
-                        print('Selected device', d)
                         cuda.close()
-                        print('Closed device', d)
             except Exception as e:
                 exception_queue.put(e)
 

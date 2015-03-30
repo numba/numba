@@ -2,14 +2,13 @@ from __future__ import print_function, division, absolute_import
 
 
 from numba import types, intrinsics
-from numba.utils import PYVERSION
+from numba.utils import PYVERSION, RANGE_ITER_OBJECTS
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
                                     builtin_attr, signature, bound_function)
 
-builtin_global(range, types.range_type)
-if PYVERSION < (3, 0):
-    builtin_global(xrange, types.range_type)
+for obj in RANGE_ITER_OBJECTS:
+    builtin_global(obj, types.range_type)
 builtin_global(len, types.len_type)
 builtin_global(slice, types.slice_type)
 builtin_global(abs, types.abs_type)
@@ -384,13 +383,13 @@ class GetItemUniTuple(AbstractTemplate):
 
 
 @builtin
-class GetItemArray(AbstractTemplate):
+class GetItemBuffer(AbstractTemplate):
     key = "getitem"
 
     def generic(self, args, kws):
         assert not kws
         [ary, idx] = args
-        if not isinstance(ary, types.Array):
+        if not isinstance(ary, types.Buffer):
             return
 
         idx = normalize_index(idx)
@@ -413,44 +412,56 @@ class GetItemArray(AbstractTemplate):
             else:
                 res = ary.dtype
         elif isinstance(idx, types.Integer):
-            if ary.ndim != 1:
+            if ary.ndim == 1:
+                res = ary.dtype
+            elif not ary.slice_is_copy and ary.ndim > 1:
+                res = ary.copy(ndim=ary.ndim - 1)
+            else:
                 return
-            res = ary.dtype
 
         else:
             raise Exception("unreachable: index type of %s" % idx)
+
+        if isinstance(res, types.Buffer) and res.slice_is_copy:
+            # Avoid view semantics when the original type creates a copy
+            # when slicing.
+            return
 
         return signature(res, ary, idx)
 
 
 @builtin
-class SetItemArray(AbstractTemplate):
+class SetItemBuffer(AbstractTemplate):
     key = "setitem"
 
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args
-        if isinstance(ary, types.Array):
-            if ary.const:
-                raise TypeError("Constant array")
+        if isinstance(ary, types.Buffer):
+            if not ary.mutable:
+                raise TypeError("Immutable array")
             return signature(types.none, ary, normalize_index(idx), ary.dtype)
 
 
 @builtin
-class LenArray(AbstractTemplate):
+class Len(AbstractTemplate):
     key = types.len_type
 
     def generic(self, args, kws):
         assert not kws
-        (ary,) = args
-        if isinstance(ary, types.Array):
-            return signature(types.intp, ary)
+        (val,) = args
+        if isinstance(val, (types.Buffer, types.Tuple, types.UniTuple)):
+            return signature(types.intp, val)
+
 
 #-------------------------------------------------------------------------------
 
 @builtin_attr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
+
+    def resolve_itemsize(self, ary):
+        return types.intp
 
     def resolve_shape(self, ary):
         return types.UniTuple(types.intp, ary.ndim)
@@ -460,9 +471,6 @@ class ArrayAttribute(AttributeTemplate):
 
     def resolve_ndim(self, ary):
         return types.intp
-
-    # def resolve_flatten(self, ary):
-    #     return types.Method(Array_flatten, ary)
 
     def resolve_size(self, ary):
         return types.intp
@@ -475,6 +483,11 @@ class ArrayAttribute(AttributeTemplate):
             if attr in ary.dtype.fields:
                 return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,
                                    layout='A')
+
+
+@builtin_attr
+class NestedArrayAttribute(ArrayAttribute):
+    key = types.NestedArray
 
 
 def generic_homog(self, args, kws):
@@ -538,6 +551,41 @@ class CmpOpEqArray(AbstractTemplate):
         [va, vb] = args
         if isinstance(va, types.Array) and va == vb:
             return signature(va.copy(dtype=types.boolean), va, vb)
+
+
+#-------------------------------------------------------------------------------
+
+@builtin_attr
+class MemoryViewAttribute(AttributeTemplate):
+    key = types.MemoryView
+
+    if PYVERSION >= (3,):
+        def resolve_contiguous(self, buf):
+            return types.boolean
+
+        def resolve_c_contiguous(self, buf):
+            return types.boolean
+
+        def resolve_f_contiguous(self, buf):
+            return types.boolean
+
+    def resolve_itemsize(self, buf):
+        return types.intp
+
+    def resolve_nbytes(self, buf):
+        return types.intp
+
+    def resolve_readonly(self, buf):
+        return types.boolean
+
+    def resolve_shape(self, buf):
+        return types.UniTuple(types.intp, buf.ndim)
+
+    def resolve_strides(self, buf):
+        return types.UniTuple(types.intp, buf.ndim)
+
+    def resolve_ndim(self, buf):
+        return types.intp
 
 
 #-------------------------------------------------------------------------------

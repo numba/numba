@@ -43,12 +43,13 @@ Numba supports the following Numpy scalar types:
 * **Complex numbers:** single-precision (2x32-bit) and double-precision (2x64-bit) complex numbers
 * **Datetimes and timestamps:** of any unit
 * **Character sequences** (but no operations are available on them)
-* **Structured scalars:** structured scalars made of any of the types above
+* **Structured scalars:** structured scalars made of any of the types above and arrays of the types above
 
 The following scalar types and features are not supported:
 
 * **Arbitrary Python objects**
 * **Half-precision and extended-precision** real and complex numbers
+* **Nested structured scalars** the fields of structured scalars may not contain other structured scalars
 
 The operations supported on scalar Numpy numbers are the same as on the
 equivalent built-in types such as ``int`` or ``float``.  You can use
@@ -71,8 +72,10 @@ Operations
 ----------
 
 Arrays support iteration and full indexing (i.e. indexing that yields
-scalar values).  Partial indexing (for example indexing a 2-d array with
-integers, which would give a 1-d subarray in pure Python) isn't supported.
+scalar values).  Partial indexing by a single integer is supported,
+but the resulting views can not be returned to Python.  Other kinds of
+partial indexing (for example indexing a 3-d array with a 2-tuple)
+isn't supported.
 
 Attributes
 ----------
@@ -80,6 +83,7 @@ Attributes
 The following attributes of Numpy arrays are supported:
 
 * :attr:`~numpy.ndarray.flat`
+* :attr:`~numpy.ndarray.itemsize`
 * :attr:`~numpy.ndarray.ndim`
 * :attr:`~numpy.ndarray.shape`
 * :attr:`~numpy.ndarray.size`
@@ -171,7 +175,9 @@ Simple random data
 Permutations
 ''''''''''''
 
-* :func:`numpy.random.shuffle`: the sequence argument must be a 1D Numpy array
+* :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
+  Numpy array or buffer-providing object (such as a :class:`bytearray`
+  or :class:`array.array`)
 
 Distributions
 '''''''''''''

@@ -9,7 +9,7 @@ from numba import typing, types, cgutils
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
-from numba.lowering import transform_arg_name
+from numba.funcdesc import transform_arg_name
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
 
@@ -44,8 +44,8 @@ class CUDATargetContext(BaseContext):
 
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
 
-        self.insert_func_defn(cudaimpl.registry.functions)
-        self.insert_func_defn(libdevice.registry.functions)
+        self.install_registry(cudaimpl.registry)
+        self.install_registry(libdevice.registry)
         self._target_data = ll.create_target_data(nvvm.default_data_layout)
 
     def jit_codegen(self):

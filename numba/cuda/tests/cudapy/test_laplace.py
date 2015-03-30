@@ -79,8 +79,6 @@ class TestCudaLaplace(unittest.TestCase):
             A[j, 0] = 1.0
             Anew[j, 0] = 1.0
 
-        print("Jacobi relaxation Calculation: %d x %d mesh" % (n, m))
-
         timer = time.time()
         iter = 0
 
@@ -113,14 +111,9 @@ class TestCudaLaplace(unittest.TestCase):
             dA = dAnew
             dAnew = tmp
 
-            if iter % 100 == 0:
-                print("%5d, %0.6f (elapsed: %f s)" %
-                      (iter, error, time.time() - timer))
-
             iter += 1
 
         runtime = time.time() - timer
-        print(" total: %f s" % runtime)
 
 
 if __name__ == '__main__':

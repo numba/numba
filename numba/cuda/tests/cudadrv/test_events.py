@@ -16,7 +16,8 @@ class TestCudaEvent(unittest.TestCase):
         evtend.record()
         evtend.wait()
         evtend.synchronize()
-        print(evtstart.elapsed_time(evtend))
+        # Exercise the code path
+        evtstart.elapsed_time(evtend)
 
     def test_event_elapsed_stream(self):
         N = 32
@@ -30,7 +31,8 @@ class TestCudaEvent(unittest.TestCase):
         evtend.record(stream=stream)
         evtend.wait(stream=stream)
         evtend.synchronize()
-        print(evtstart.elapsed_time(evtend))
+        # Exercise the code path
+        evtstart.elapsed_time(evtend)
 
 if __name__ == '__main__':
     unittest.main()

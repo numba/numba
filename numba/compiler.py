@@ -7,10 +7,11 @@ from pprint import pprint
 import sys
 import warnings
 
-from numba import (bytecode, interpreter, typing, typeinfer, lowering,
-                   objmode, irpasses, utils, config, type_annotations,
+from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
+                   lowering, objmode, irpasses, utils, config,
                    types, ir, assume, looplifting, macro, types)
 from numba.targets import cpu
+from numba.annotations import type_annotations
 
 
 class Flags(utils.ConfigOptions):
@@ -299,11 +300,12 @@ class Pipeline(object):
 
         return self.compile_bytecode(bc, func_attr=self.func_attr)
 
-    def compile_bytecode(self, bc, lifted=(),
+    def compile_bytecode(self, bc, lifted=(), lifted_from=None,
                          func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
         self.bc = bc
         self.func = bc.func
         self.lifted = lifted
+        self.lifted_from = lifted_from
         self.func_attr = func_attr
         return self._compile_bytecode()
 
@@ -361,7 +363,7 @@ class Pipeline(object):
             cres = compile_bytecode(self.typingctx, self.targetctx, entry,
                                     self.args, self.return_type,
                                     outer_flags, self.locals,
-                                    lifted=tuple(loops),
+                                    lifted=tuple(loops), lifted_from=None,
                                     func_attr=self.func_attr)
             return cres
 
@@ -408,12 +410,19 @@ class Pipeline(object):
             interp=self.interp,
             typemap=self.typemap,
             calltypes=self.calltypes,
-            lifted=self.lifted)
+            lifted=self.lifted,
+            lifted_from=self.lifted_from,
+            args=self.args,
+            return_type=self.return_type,
+            func_attr=self.func_attr,
+            html_output=config.HTML)
 
         if config.ANNOTATE:
             print("ANNOTATION".center(80, '-'))
             print(self.type_annotation)
             print('=' * 80)
+        if config.HTML:
+            self.type_annotation.html_annotate()
 
     def backend_object_mode(self):
         """
@@ -555,12 +564,12 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
 
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
-                     locals, lifted=(),
+                     locals, lifted=(), lifted_from=None,
                      func_attr=DEFAULT_FUNCTION_ATTRIBUTES, library=None):
 
     pipeline = Pipeline(typingctx, targetctx, library,
                         args, return_type, flags, locals)
-    return pipeline.compile_bytecode(bc=bc, lifted=lifted, func_attr=func_attr)
+    return pipeline.compile_bytecode(bc=bc, lifted=lifted, lifted_from=lifted_from, func_attr=func_attr)
 
 
 def compile_internal(typingctx, targetctx, library,
@@ -596,17 +605,20 @@ def legalize_return_type(return_type, interp, targetctx):
     assert assume.return_argument_array_only
 
     if isinstance(return_type, types.Array):
-        # Walk IR to discover all return statements
+        # Walk IR to discover all arguments and all return statements
         retstmts = []
         caststmts = {}
+        argvars = set()
         for bid, blk in interp.blocks.items():
             for inst in blk.body:
                 if isinstance(inst, ir.Return):
                     retstmts.append(inst.value.name)
-                if (isinstance(inst, ir.Assign)
-                        and isinstance(inst.value, ir.Expr)
+                elif isinstance(inst, ir.Assign):
+                    if (isinstance(inst.value, ir.Expr)
                         and inst.value.op == 'cast'):
-                    caststmts[inst.target.name] = inst.value
+                        caststmts[inst.target.name] = inst.value
+                    elif isinstance(inst.value, ir.Arg):
+                        argvars.add(inst.target.name)
 
         assert retstmts, "No return statements?"
 
@@ -615,11 +627,10 @@ def legalize_return_type(return_type, interp, targetctx):
         #        must be statically resolvable.
 
         # The return value must be the first modification of the value.
-        arguments = set("{0}.1".format(a) for a in interp.argspec.args)
 
         for var in retstmts:
             cast = caststmts.get(var)
-            if cast is None or cast.value.name not in arguments:
+            if cast is None or cast.value.name not in argvars:
                 raise TypeError("Only accept returning of array passed into the "
                                 "function as argument")
 
@@ -639,6 +650,9 @@ def translate_stage(bytecode):
     if config.DEBUG or config.DUMP_IR:
         print(("IR DUMP: %s" % interp.bytecode.func_qualname).center(80, "-"))
         interp.dump()
+        if interp.generator_info:
+            print(("GENERATOR INFO: %s" % interp.bytecode.func_qualname).center(80, "-"))
+            interp.dump_generator_info()
 
     expanded = macro.expand_macros(interp.blocks)
 
@@ -654,11 +668,11 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     if len(args) != len(interp.argspec.args):
         raise TypeError("Mismatch number of argument types")
 
-    infer = typeinfer.TypeInferer(typingctx, interp.blocks)
+    infer = typeinfer.TypeInferer(typingctx, interp)
 
     # Seed argument types
-    for arg, ty in zip(interp.argspec.args, args):
-        infer.seed_type(arg, ty)
+    for index, (name, ty) in enumerate(zip(interp.argspec.args, args)):
+        infer.seed_argument(name, index, ty)
 
     # Seed return type
     if return_type is not None:
@@ -683,7 +697,7 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 def native_lowering_stage(targetctx, library, interp, typemap, restype,
                           calltypes, flags):
     # Lowering
-    fndesc = lowering.PythonFunctionDescriptor.from_specialized_function(
+    fndesc = funcdesc.PythonFunctionDescriptor.from_specialized_function(
         interp, typemap, restype, calltypes, mangler=targetctx.mangler,
         inline=flags.forceinline)
 
@@ -707,7 +721,7 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
-    fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
+    fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(interp)
     lower = objmode.PyLower(targetctx, library, fndesc, interp)
     lower.lower()
     if not flags.no_cpython_wrapper:

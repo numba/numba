@@ -365,6 +365,29 @@ class Assign(Stmt):
         return '%s = %s' % (self.target, self.value)
 
 
+class Yield(Inst):
+    def __init__(self, value, loc, index):
+        self.value = value
+        self.loc = loc
+        self.index = index
+
+    def __str__(self):
+        return 'yield %s' % (self.value,)
+
+    def list_vars(self):
+        return [self.value]
+
+
+class Arg(object):
+    def __init__(self, name, index, loc):
+        self.name = name
+        self.index = index
+        self.loc = loc
+
+    def __repr__(self):
+        return 'arg(%d, name=%s)' % (self.index, self.name)
+
+
 class Const(object):
     def __init__(self, value, loc):
         self.value = value
@@ -594,6 +617,9 @@ class Block(object):
         assert isinstance(stmt, Stmt)
         assert self.is_terminated
         self.body.insert(-1, stmt)
+
+    def __repr__(self):
+        return "<ir.Block at %s>" % (self.loc,)
 
 
 class Loop(object):

@@ -97,7 +97,12 @@ class Test0DArrayOfInt32(test_factory(support_as_data=False)):
 
 
 class TestArgInfo(unittest.TestCase):
+
     def _test_as_arguments(self, fe_args):
+        """
+        Test round-tripping types *fe_args* through the default data model's
+        argument conversion and unpacking logic.
+        """
         dmm = datamodel.default_manager
         fi = datamodel.ArgPacker(dmm, fe_args)
 
@@ -110,6 +115,7 @@ class TestArgInfo(unittest.TestCase):
         args = [ir.Constant(dmm.lookup(t).get_value_type(), None)
                 for t in fe_args]
 
+        # Roundtrip
         values = fi.as_arguments(builder, args)
         asargs = fi.from_arguments(builder, values)
 
@@ -134,6 +140,19 @@ class TestArgInfo(unittest.TestCase):
 
     def test_two_arrays(self):
         fe_args = [types.Array(types.int32, 1, 'C')] * 2
+        self._test_as_arguments(fe_args)
+
+    def test_tuples(self):
+        fe_args = [types.UniTuple(types.int32, 2),
+                   types.UniTuple(types.int32, 3)]
+        self._test_as_arguments(fe_args)
+        # Tuple of struct-likes
+        arrty = types.Array(types.int32, 1, 'C')
+        fe_args = [types.UniTuple(arrty, 2),
+                   types.UniTuple(arrty, 3)]
+        self._test_as_arguments(fe_args)
+        # Nested tuple
+        fe_args = [types.UniTuple(types.UniTuple(types.int32, 2), 3)]
         self._test_as_arguments(fe_args)
 
 

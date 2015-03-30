@@ -120,6 +120,7 @@ packages = [
     "numba.cuda.tests.cudadrv",
     "numba.cuda.tests.cudadrv.data",
     "numba.cuda.tests.cudapy",
+    "numba.annotations",
     "numba.hsa",
     "numba.hsa.hsadrv",
     "numba.hsa.hlc",

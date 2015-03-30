@@ -90,6 +90,7 @@ class DataModelTester(unittest.TestCase):
 class SupportAsDataMixin(object):
     """Test as_data() and from_data()
     """
+    # XXX test load_from_data_pointer() as well
 
     def test_as_data(self):
         fnty = ir.FunctionType(ir.VoidType(), [])
@@ -116,7 +117,7 @@ class SupportAsDataMixin(object):
 
 
 class NotSupportAsDataMixin(object):
-    """Ensure as_data() and from_data() returns NotImplemented
+    """Ensure as_data() and from_data() raise NotImplementedError.
     """
 
     def test_as_data_not_supported(self):
@@ -126,10 +127,10 @@ class NotSupportAsDataMixin(object):
         builder.position_at_end(function.append_basic_block())
 
         undef_value = ir.Constant(self.datamodel.get_value_type(), None)
-        data = self.datamodel.as_data(builder, undef_value)
-        self.assertIs(data, NotImplemented)
-        rev_data = self.datamodel.from_data(builder, undef_value)
-        self.assertIs(rev_data, NotImplemented)
+        with self.assertRaises(NotImplementedError):
+            data = self.datamodel.as_data(builder, undef_value)
+        with self.assertRaises(NotImplementedError):
+            rev_data = self.datamodel.from_data(builder, undef_value)
 
 
 class DataModelTester_SupportAsDataMixin(DataModelTester,

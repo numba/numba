@@ -74,7 +74,6 @@ class TestCudaDriver(unittest.TestCase):
 
     def test_cuda_driver_basic(self):
         module = self.context.create_module_ptx(self.ptx)
-        print(module.info_log)
         function = module.get_function('_Z10helloworldPi')
 
         array = (c_int * 100)()
@@ -94,7 +93,6 @@ class TestCudaDriver(unittest.TestCase):
 
     def test_cuda_driver_stream(self):
         module = self.context.create_module_ptx(self.ptx)
-        print(module.info_log)
         function = module.get_function('_Z10helloworldPi')
 
         array = (c_int * 100)()

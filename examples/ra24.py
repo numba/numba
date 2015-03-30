@@ -3,37 +3,30 @@ import numpy as np
 import math
 import time
 
-@jit('f4[:,:](i2,f4[:,:])')
+
+@jit
 def ra_numba(doy, lat):
-    
-    M, N = lat.shape
-    
     ra = np.zeros_like(lat)
     Gsc = 0.0820
     
-    # math.pi doesnt work?
-    # NumbaError: 11:31: Binary operations mul on values typed object_ and object_ not (yet) supported)
     pi = math.pi
-    #pi = 3.1415926535897932384626433832795
 
     dr = 1 + 0.033 * math.cos( 2 * pi / 365 * doy)
     decl = 0.409 * math.sin( 2 * pi / 365 * doy - 1.39 )
+    tan_decl = math.tan(decl)
+    cos_decl = math.cos(decl)
+    sin_decl = math.sin(decl)
     
-    for i in range(M):
-        for j in range(N):
-            
-            # it crashes without the float() wrapped around the array slicing?!
-            ws = math.acos(-1 * math.tan(float(lat[i,j])) * math.tan(decl))
-            ra[i,j] = 24 * 60 / pi * Gsc * dr * ( ws * math.sin(float(lat[i,j])) * math.sin(decl) + math.cos(float(lat[i,j])) * math.cos(decl) * math.sin(ws)) * 11.6
+    for idx, latval in np.ndenumerate(lat):
+        ws = math.acos(-math.tan(latval) * tan_decl)
+        ra[idx] = 24 * 60 / pi * Gsc * dr * ( ws * math.sin(latval) * sin_decl + math.cos(latval) * cos_decl * math.sin(ws)) * 11.6
 
-    
     return ra
 
 
 def ra_numpy(doy, lat):
-
     Gsc = 0.0820
-    
+
     pi = math.pi
     
     dr = 1 + 0.033 * np.cos( 2 * pi / 365 * doy)
@@ -44,6 +37,7 @@ def ra_numpy(doy, lat):
     
     return ra
 
+
 ra_python = ra_numba.py_func
 
 doy = 120 # day of year
@@ -51,14 +45,13 @@ doy = 120 # day of year
 py = []
 nump = []
 numb = []
-dims = []
 
-for dim in [25,50,100,200,400,800,1600]:
-    
-    dims.append(dim)
-    
+for dim in [50, 100, 400, 1600]:
     lat = np.deg2rad(np.ones((dim,dim), dtype=np.float32) * 45.) # array of 45 degrees latitude converted to rad
-    
+
+    # JIT warmup
+    ra_numba(doy, lat)
+
     tic = time.clock()
     ra_nb = ra_numba(doy, lat)
     numb.append(time.clock() - tic)
@@ -71,7 +64,7 @@ for dim in [25,50,100,200,400,800,1600]:
     ra_py = ra_python(doy, lat)
     py.append(time.clock() - tic)
     
-dims = np.array(dims)**2
-py = np.array(py)
-numb = np.array(numb)
-nump = np.array(nump)
+
+print("pure Python times:", py)
+print("Numpy times:", nump)
+print("Numba times:", numb)
