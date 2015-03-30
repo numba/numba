@@ -8,6 +8,8 @@ from .stubs import (
     get_local_id,
     get_local_size,
     get_group_id,
+    get_work_dim,
+    get_num_groups,
     barrier,
     shared,
 )

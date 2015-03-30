@@ -113,6 +113,25 @@ def get_group_id_impl(context, builder, sig, args):
 
 
 @register
+@implement(stubs.get_num_groups, types.uint32)
+def get_num_groups_impl(context, builder, sig, args):
+    [dim] = args
+    get_num_groups = _declare_function(context, builder, 'get_num_groups', sig,
+                                     ['unsigned int'])
+    res = builder.call(get_num_groups, [dim])
+    return context.cast(builder, res, types.uintp, types.intp)
+
+
+@register
+@implement(stubs.get_work_dim)
+def get_work_dim_impl(context, builder, sig, args):
+    get_work_dim = _declare_function(context, builder, 'get_work_dim', sig,
+                                     ["void"])
+    res = builder.call(get_work_dim, [])
+    return context.cast(builder, res, types.uintp, types.intp)
+
+
+@register
 @implement(stubs.get_global_size, types.uint32)
 def get_global_size_impl(context, builder, sig, args):
     [dim] = args

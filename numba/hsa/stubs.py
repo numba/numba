@@ -37,6 +37,20 @@ def get_group_id(*args, **kargs):
     raise NotImplementedError("This is a stub.")
 
 
+def get_num_groups(*args, **kargs):
+    """
+    OpenCL get_num_groups()
+    """
+    raise NotImplementedError("This is a stub.")
+
+
+def get_work_dim(*args, **kargs):
+    """
+    OpenCL get_work_dim()
+    """
+    raise NotImplementedError("This is a stub.")
+
+
 def barrier(*args, **kargs):
     """
     OpenCL barrier()
