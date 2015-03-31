@@ -517,12 +517,6 @@ class ArrayModel(StructModel):
         ]
         super(ArrayModel, self).__init__(dmm, fe_type, members)
 
-    def as_data(self, builder, value):
-        raise NotImplementedError
-
-    def from_data(self, builder, value):
-        raise NotImplementedError
-
 
 @register_default(types.NestedArray)
 class NestedArrayModel(ArrayModel):

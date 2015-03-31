@@ -295,6 +295,7 @@ class Interpreter(object):
 
         # Find the loops the variable is used in
         loops = set()
+        # Each enclosing loop encloses *all* use points
         enclosing_loops = None
         for block in use_map:
             block_loops = cfg.in_loops(block)
@@ -325,20 +326,32 @@ class Interpreter(object):
         # reverse topo order.
         todo = list(cfg.topo_sort(live_points))
         seen = set()
+        infinite_loops = set()
         while todo:
             b = todo.pop()
             if b in seen:
                 continue
             seen.add(b)
             block_loops = cfg.in_loops(b)
-            if block_loops and block_loops[0] not in enclosing_loops:
-                continue
+            if block_loops:
+                loop = block_loops[0]
+                if loop not in enclosing_loops:
+                    if not loop.exits:
+                        # Fix-up for infinite loops: we temporarily add
+                        # the loop header to the tails, so that the variable
+                        # isn't del'ed before the loop.
+                        tails.add(loop.header)
+                        infinite_loops.add(loop.header)
+                    continue
             if cfg.descendents(b) & tails:
                 for succ, _ in cfg.successors(b):
                     if succ not in tails:
                         todo.append(succ)
             else:
                 tails.add(b)
+
+        # Remove temporary entries for infinite loops
+        tails -= infinite_loops
 
         return tails
 
