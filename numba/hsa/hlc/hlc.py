@@ -87,7 +87,7 @@ class Module(object):
         self._finalized = False
 
     def __del__(self):
-        return
+        # return
         self.close()
 
     def close(self):
