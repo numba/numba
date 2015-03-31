@@ -22,7 +22,10 @@ class DataModelManager(object):
     def lookup(self, fetype):
         """Returns the corresponding datamodel given the frontend-type instance
         """
-        handler = self._handlers[type(fetype)]
+        try:
+            handler = self._handlers[type(fetype)]
+        except KeyError:
+            raise NotImplementedError
         return handler(self, fetype)
 
     def __getitem__(self, fetype):
