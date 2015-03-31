@@ -1,6 +1,6 @@
 package:
   name: numba-hsa
-  version: "0.17.1"
+  version: "0.18.0"
 
 source:
   path: ../..
@@ -19,7 +19,7 @@ requirements:
     - argparse        [py26]
     - numpy
     # On channel https://binstar.org/numba/
-    - llvmlite
+    - llvmlite 0.4.0
     - funcsigs       [py26 or py27]
     - system 5.8 2
 test:
