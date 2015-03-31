@@ -119,6 +119,14 @@ typedef struct {
 static void
 dufunc_dealloc(PyDUFuncObject *self)
 {
+    if (self->ufunc) {
+        if (self->ufunc->functions)
+            PyArray_free(self->ufunc->functions);
+        if (self->ufunc->types)
+            PyArray_free(self->ufunc->types);
+        if (self->ufunc->data)
+            PyArray_free(self->ufunc->data);
+    }
     Py_XDECREF(self->ufunc);
     Py_XDECREF(self->dispatcher);
     Py_XDECREF(self->keepalive);
@@ -148,10 +156,15 @@ dufunc_call(PyDUFuncObject *self, PyObject *args, PyObject *kws)
         /* Break back into Python when we fail at dispatch. */
         PyErr_Clear();
         PyObject *method = PyObject_GetAttrString(
-            (PyObject*)self, "_compile_and_invoke");
+            (PyObject*)self, "_compile_at_args");
 
         if (method) {
             result = PyObject_Call(method, args, kws);
+            if (result) {
+                Py_DECREF(result);
+                result = PyUFunc_Type.tp_call((PyObject *)self->ufunc, args,
+                                              kws);
+            }
         }
         Py_XDECREF(method);
     }
@@ -395,54 +408,128 @@ dufunc_at(PyDUFuncObject * self, PyObject * args)
 }
 
 static PyObject *
-dufunc__compile_and_invoke(PyDUFuncObject * self, PyObject * args,
-                           PyObject * kws)
+dufunc__compile_at_args(PyDUFuncObject * self, PyObject * args,
+                        PyObject * kws)
 {
     PyErr_SetString(PyExc_NotImplementedError,
-                    "Abstract method _DUFunc._compile_and_invoke() called!");
+                    "Abstract method _DUFunc._compile_at_args() called!");
     return NULL;
 }
 
-static PyObject *
-dufunc__add_loop(PyDUFuncObject * self, PyObject * args, PyObject *kws)
+static int *
+_build_arg_types_array(PyObject * type_list, Py_ssize_t nargs)
 {
-    PyUFuncObject *ufunc=self->ufunc;
-    unsigned long loop_ptr=0, data_ptr=0;
-    int idx, usertype=NPY_VOID;
-    int *arg_types_arr=NULL;
-    PyObject *arg_types=NULL;
+    int *arg_types_array=NULL;
+    Py_ssize_t idx, arg_types_size = PyList_Size(type_list);
 
-    if (!PyArg_ParseTuple(args, "ik|O!k", &usertype, &loop_ptr, &PyList_Type,
-                          &arg_types, &data_ptr)) {
+    if (arg_types_size != nargs) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "argument type list size does not equal ufunc argument count");
         return NULL;
     }
-    /* Deal with the input type signature, if given. */
-    if (arg_types) {
-        Py_ssize_t arg_types_size = PyList_Size(arg_types);
-        if (arg_types_size != (Py_ssize_t)(ufunc->nargs)) {
-            PyErr_SetString(
-                PyExc_ValueError,
-                "argument type list size does not equal ufunc argument count");
-            return NULL;
-        }
-        arg_types_arr = PyArray_malloc(sizeof(int) * ufunc->nargs);
-        for (idx = 0; idx < ufunc->nargs; idx++) {
-            arg_types_arr[idx] = (int)PyLong_AsLong(PyList_GET_ITEM(arg_types,
-                                                                    idx));
-        }
-        if (PyErr_Occurred()) goto _dufunc__add_loop_fail;
+    arg_types_array = PyArray_malloc(sizeof(int) * nargs);
+    if (!arg_types_array) {
+        PyErr_NoMemory();
+        return NULL;
     }
-    /* Actually make the call. */
-    if (PyUFunc_RegisterLoopForType(ufunc, usertype,
-                                    (PyUFuncGenericFunction)loop_ptr,
-                                    arg_types_arr, (void *)data_ptr) < 0)
-        goto _dufunc__add_loop_fail;
+    for (idx = 0; idx < nargs; idx++) {
+        arg_types_array[idx] = (int)PyLong_AsLong(PyList_GET_ITEM(type_list,
+                                                                  idx));
+    }
+    if (PyErr_Occurred()) {
+        PyArray_free(arg_types_array);
+        arg_types_array = NULL;
+    }
+    return arg_types_array;
+}
+
+static PyObject *
+dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
+{
+    PyUFuncObject * ufunc=self->ufunc;
+    unsigned long loop_ptr=0, data_ptr=0;
+    int idx=-1, usertype=NPY_VOID;
+    int *arg_types_arr=NULL;
+    PyObject *arg_types=NULL;
+    PyUFuncGenericFunction old_func=NULL;
+
+    if (!PyArg_ParseTuple(args, "kO!|k", &loop_ptr, &PyList_Type, &arg_types,
+                          &data_ptr)) {
+        return NULL;
+    }
+
+    arg_types_arr = _build_arg_types_array(arg_types, (Py_ssize_t)ufunc->nargs);
+    if (!arg_types_arr) goto _dufunc__add_loop_fail;
+    for (idx = 0; idx < ufunc->nargs; idx++) {
+        if (arg_types_arr[idx] >= NPY_USERDEF) {
+            usertype = arg_types_arr[idx];
+        }
+    }
+
+    if (usertype != NPY_VOID) {
+        if (PyUFunc_RegisterLoopForType(ufunc, usertype,
+                                        (PyUFuncGenericFunction)loop_ptr,
+                                        arg_types_arr, (void *)data_ptr) < 0) {
+            goto _dufunc__add_loop_fail;
+        }
+    } else if (PyUFunc_ReplaceLoopBySignature(ufunc,
+                                              (PyUFuncGenericFunction)loop_ptr,
+                                              arg_types_arr, &old_func) == 0) {
+        /* TODO: Consider freeing any memory held by the old loop (somehow) */
+        for (idx = 0; idx < ufunc->ntypes; idx++) {
+            if (ufunc->functions[idx] == (PyUFuncGenericFunction)loop_ptr) {
+                ufunc->data[idx] = (void *)data_ptr;
+                break;
+            }
+        }
+    } else {
+        int ntypes=0, type_ofs=-1;
+        PyUFuncGenericFunction *functions=NULL;
+        char *types=NULL;
+        void **data=NULL;
+
+        ntypes = ufunc->ntypes + 1;
+        functions = PyArray_realloc(ufunc->functions,
+                                    sizeof(PyUFuncGenericFunction) * ntypes);
+        if (!functions) {
+            ufunc->functions = NULL;
+            PyErr_NoMemory();
+            goto _dufunc__add_loop_fail;
+        }
+        functions[ntypes - 1] = (PyUFuncGenericFunction)loop_ptr;
+
+        types = PyArray_realloc(ufunc->types,
+                                sizeof(char) * ntypes * ufunc->nargs);
+        if (!types) {
+            ufunc->types = NULL;
+            PyErr_NoMemory();
+            goto _dufunc__add_loop_fail;
+        }
+        type_ofs = (ufunc->ntypes * ufunc->nargs);
+        for (idx = 0; idx < ufunc->nargs; idx++) {
+            types[idx + type_ofs] = (char)arg_types_arr[idx];
+        }
+
+        data = PyArray_realloc(ufunc->data, sizeof(void *) * idx);
+        if (!data) {
+            ufunc->data = NULL;
+            PyErr_NoMemory();
+            goto _dufunc__add_loop_fail;
+        }
+        data[ntypes - 1] = (void *)data_ptr;
+
+        ufunc->ntypes = ntypes;
+        ufunc->functions = functions;
+        ufunc->types = types;
+        ufunc->data = data;
+    }
 
     PyArray_free(arg_types_arr);
     Py_INCREF(Py_None);
     return Py_None;
 
-  _dufunc__add_loop_fail:
+ _dufunc__add_loop_fail:
     PyArray_free(arg_types_arr);
     return NULL;
 }
@@ -463,12 +550,14 @@ static struct PyMethodDef dufunc_methods[] = {
     {"at",
         (PyCFunction)dufunc_at,
         METH_VARARGS, NULL},
-    {"_compile_and_invoke",
-        (PyCFunction)dufunc__compile_and_invoke,
-        METH_VARARGS | METH_KEYWORDS, NULL},
+    {"_compile_at_args",
+        (PyCFunction)dufunc__compile_at_args,
+        METH_VARARGS | METH_KEYWORDS,
+        "Abstract method: subclasses should overload _compile_at_args() to compile the ufunc at the given arguments' types."},
     {"_add_loop",
         (PyCFunction)dufunc__add_loop,
-        METH_VARARGS, NULL},
+        METH_VARARGS,
+        NULL},
     {NULL, NULL, 0, NULL}           /* sentinel */
 };
 
