@@ -59,8 +59,8 @@ def global_two_rec_arrs(a, b, c, d):
 
 
 @jit(nopython=True)
-def global_module_func(s, e):
-    return usecases.sum1dnopython(s, e)
+def global_module_func(x, y):
+    return usecases.andornopython(x, y)
 
 
 class TestGlobals(unittest.TestCase):
@@ -144,8 +144,8 @@ class TestGlobals(unittest.TestCase):
 
     def test_global_module(self):
         # (see github issue #1059)
-        res = global_module_func(0, 10)
-        np.testing.assert_equal(45, res)
+        res = global_module_func(5, 6)
+        self.assertEqual(True, res)
 
 if __name__ == '__main__':
     unittest.main()

@@ -8,7 +8,6 @@ def sum1d(s, e):
         c += i
     return c
 
-sum1dnopython = jit(nopython=True)(sum1d)
 
 def sum2d(s, e):
     c = 0
@@ -50,6 +49,8 @@ def redefine1():
 
 def andor(x, y):
     return (x > 0 and x < 10) or (y > 0 and y < 10)
+
+andornopython = jit(nopython=True)(andor)
 
 
 def ifelse1(x, y):
