@@ -200,14 +200,12 @@ class TestVectorizeDecor(unittest.TestCase):
         with self.assertRaises(ValueError):
             vectorize([sig], identity=2)(add)
 
-    @unittest.skipIf(__name__ != '__main__', "Work in progress.")
     def test_vectorize_no_args(self):
         a = numpy.linspace(0,1,10)
         b = numpy.linspace(1,2,10)
         ufunc = vectorize(add)
         self.assertTrue(numpy.all(ufunc(a,b) == (a + b)))
 
-    @unittest.skipIf(__name__ != '__main__', "Work in progress.")
     def test_vectorize_only_kws(self):
         a = numpy.linspace(0,1,10)
         b = numpy.linspace(1,2,10)
