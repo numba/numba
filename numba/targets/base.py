@@ -487,6 +487,7 @@ class BaseContext(object):
         if isinstance(typ, types.Module):
             # Implement getattr for module-level globals.
             # We are treating them as constants.
+            # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
             if attrty is not None and not isinstance(attrty, (types.Dispatcher,
                                                               types.Function,
