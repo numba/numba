@@ -1,6 +1,6 @@
 import math
 import numpy as np
-
+from numba import jit
 
 def sum1d(s, e):
     c = 0
@@ -8,6 +8,7 @@ def sum1d(s, e):
         c += i
     return c
 
+sum1dnopython = jit(nopython=True)(sum1d)
 
 def sum2d(s, e):
     c = 0
