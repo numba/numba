@@ -84,15 +84,15 @@ class TestTupleEmpty(test_factory()):
     fe_type = types.Tuple([])
 
 
-class Test1DArrayOfInt32(test_factory(support_as_data=False)):
+class Test1DArrayOfInt32(test_factory()):
     fe_type = types.Array(types.int32, 1, 'C')
 
 
-class Test2DArrayOfComplex128(test_factory(support_as_data=False)):
+class Test2DArrayOfComplex128(test_factory()):
     fe_type = types.Array(types.complex128, 2, 'C')
 
 
-class Test0DArrayOfInt32(test_factory(support_as_data=False)):
+class Test0DArrayOfInt32(test_factory()):
     fe_type = types.Array(types.int32, 0, 'C')
 
 
