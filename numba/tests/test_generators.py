@@ -175,7 +175,7 @@ class TestGenerators(TestCase):
         pyfunc = gen7
         cr = compile_isolated(pyfunc, (types.Array(types.float64, 1, 'C'),),
                               flags=flags)
-        arr = np.linspace(1, 10, 7, dtype=np.float64)
+        arr = np.linspace(1, 10, 7)
         pygen = pyfunc(arr.copy())
         cgen = cr.entry_point(arr)
         self.check_generator(pygen, cgen)
