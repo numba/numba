@@ -1,9 +1,12 @@
-import os
-import numba.testing
-if int(os.environ.get("NUMBA_MULTITEST", 1)):
-    testfn = numba.testing.multitest
+import sys
+import numba
+
+if sys.platform.startswith('win32'):
+    sys.argv += ['-b']
 else:
-    testfn = numba.testing.test
-if not testfn():
-    raise RuntimeError("Test failed")
+    sys.argv += ['-m', '-b']
+
+if not numba.test():
+    print("Test failed")
+    sys.exit(1)
 print('numba.__version__: %s' % numba.__version__)
