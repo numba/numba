@@ -1,6 +1,8 @@
 
-Version 0.18.0
+Version 0.18.1
 --------------
+
+Version 0.18.0 is not officially released.
 
 This version removes the old deprecated and undocumented ``argtypes`` and
 ``restype`` arguments to the ``@jit`` decorator.  Function signatures
