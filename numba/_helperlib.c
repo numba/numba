@@ -399,10 +399,12 @@ static
 i128 umul64(uint64_t a, uint64_t b) {
     /* Adapted from __mulddi in compiler-rt */
     i128 r;
+    uint64_t t;
     const int bits_in_dword_2 = 32;
     const uint64_t lower_mask = (uint64_t)~0 >> bits_in_dword_2;
+
     r.s.low = (a & lower_mask) * (b & lower_mask);
-    uint64_t t = r.s.low >> bits_in_dword_2;
+    t = r.s.low >> bits_in_dword_2;
     r.s.low &= lower_mask;
     t += (a >> bits_in_dword_2) * (b & lower_mask);
     r.s.low += (t & lower_mask) << bits_in_dword_2;
