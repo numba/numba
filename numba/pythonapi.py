@@ -240,9 +240,11 @@ class PythonAPI(object):
         return self.builder.call(fn, [fval])
 
     def number_as_ssize_t(self, numobj):
-        fnty = Type.function(self.py_ssize_t, [self.pyobj])
+        fnty = Type.function(self.py_ssize_t, [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_AsSsize_t")
-        return self.builder.call(fn, [numobj])
+        # We don't want any clipping, so pass OverflowError as the 2nd arg
+        exc_class = self.get_c_object("PyExc_OverflowError")
+        return self.builder.call(fn, [numobj, exc_class])
 
     def number_long(self, numobj):
         fnty = Type.function(self.pyobj, [self.pyobj])
@@ -257,6 +259,15 @@ class PythonAPI(object):
     def long_as_longlong(self, numobj):
         fnty = Type.function(self.ulonglong, [self.pyobj])
         fn = self._get_function(fnty, name="PyLong_AsLongLong")
+        return self.builder.call(fn, [numobj])
+
+    def long_as_voidptr(self, numobj):
+        """
+        Convert the given Python integer to a void*.  This is recommended
+        over number_as_ssize_t as it isn't affected by signedness.
+        """
+        fnty = Type.function(self.voidptr, [self.pyobj])
+        fn = self._get_function(fnty, name="PyLong_AsVoidPtr")
         return self.builder.call(fn, [numobj])
 
     def _long_from_native_int(self, ival, func_name, native_int_type,
@@ -927,9 +938,9 @@ class PythonAPI(object):
                     self.decref(get_pointer)
                     with cgutils.if_likely(builder,
                                            cgutils.is_not_null(builder, intobj)):
-                        intval = self.number_as_ssize_t(intobj)
+                        ptr = self.long_as_voidptr(intobj)
                         self.decref(intobj)
-                        builder.store(builder.inttoptr(intval, ptrty), ret)
+                        builder.store(builder.bitcast(ptr, ptrty), ret)
                 return NativeValue(builder.load(ret), is_error=c_api_error())
 
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
