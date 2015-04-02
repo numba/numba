@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from numba import jit
 from numba import unittest_support as unittest
-
+from numba.tests import usecases
 
 X = np.arange(10)
 
@@ -56,6 +56,11 @@ def global_two_rec_arrs(a, b, c, d):
         b[i] = rec_X[i].b
         c[i] = rec_Y[i].c
         d[i] = rec_Y[i].d
+
+
+@jit(nopython=True)
+def global_module_func(x, y):
+    return usecases.andornopython(x, y)
 
 
 class TestGlobals(unittest.TestCase):
@@ -137,6 +142,10 @@ class TestGlobals(unittest.TestCase):
     def test_two_global_rec_arrs_npm(self):
         self.check_two_global_rec_arrs(nopython=True)
 
+    def test_global_module(self):
+        # (see github issue #1059)
+        res = global_module_func(5, 6)
+        self.assertEqual(True, res)
 
 if __name__ == '__main__':
     unittest.main()

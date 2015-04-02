@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+import numpy as np
+
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
 from numba.tests.support import TestCase
@@ -54,6 +56,18 @@ def gen5():
     # is entirely undefined.
     if 0:
         yield 1
+
+def gen6(a, b):
+    # Infinite loop: exercise computation of state variables
+    x = a + 1
+    while True:
+        y = b + 2
+        yield x + y
+
+def gen7(arr):
+    # Array variable in generator state
+    for i in range(arr.size):
+        yield arr[i]
 
 
 def genobj(x):
@@ -141,6 +155,36 @@ class TestGenerators(TestCase):
         self.assertEqual(list(cgen), [])
         with self.assertRaises(StopIteration):
             next(cgen)
+
+    def check_gen6(self, flags=no_pyobj_flags):
+        pyfunc = gen6
+        cr = compile_isolated(pyfunc, (types.int32,) * 2, flags=flags)
+        cgen = cr.entry_point(5, 6)
+        l = []
+        for i in range(3):
+            l.append(next(cgen))
+        self.assertEqual(l, [14] * 3)
+
+    def test_gen6(self):
+        self.check_gen6()
+
+    def test_gen6_objmode(self):
+        self.check_gen6(flags=forceobj_flags)
+
+    def check_gen7(self, flags=no_pyobj_flags):
+        pyfunc = gen7
+        cr = compile_isolated(pyfunc, (types.Array(types.float64, 1, 'C'),),
+                              flags=flags)
+        arr = np.linspace(1, 10, 7)
+        pygen = pyfunc(arr.copy())
+        cgen = cr.entry_point(arr)
+        self.check_generator(pygen, cgen)
+
+    def test_gen7(self):
+        self.check_gen7()
+
+    def test_gen7_objmode(self):
+        self.check_gen7(flags=forceobj_flags)
 
     def check_consume_generator(self, gen_func):
         cgen = jit(nopython=True)(gen_func)

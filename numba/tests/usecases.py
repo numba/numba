@@ -1,6 +1,6 @@
 import math
 import numpy as np
-
+from numba import jit
 
 def sum1d(s, e):
     c = 0
@@ -49,6 +49,8 @@ def redefine1():
 
 def andor(x, y):
     return (x > 0 and x < 10) or (y > 0 and y < 10)
+
+andornopython = jit(nopython=True)(andor)
 
 
 def ifelse1(x, y):

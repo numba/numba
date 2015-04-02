@@ -494,20 +494,17 @@ class BaseContext(object):
             # We are treating them as constants.
             # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
-            if attrty is not None:
-                try:
-                    pyval = getattr(typ.pymod, attr)
-                    llval = self.get_constant(attrty, pyval)
-                except NotImplementedError:
-                    # Module attribute is not a simple constant
-                    # (e.g. it's a function), it will be handled later on.
-                    pass
-                else:
-                    @impl_attribute(typ, attr, attrty)
-                    def imp(context, builder, typ, val):
-                        return llval
-                    return imp
-            # No implementation
+            if attrty is not None and not isinstance(attrty, (types.Dispatcher,
+                                                              types.Function,
+                                                              types.Module)):
+                pyval = getattr(typ.pymod, attr)
+                llval = self.get_constant(attrty, pyval)
+                @impl_attribute(typ, attr, attrty)
+                def imp(context, builder, typ, val):
+                    return llval
+                return imp
+            # No implementation required for functions/modules, which are
+            # dealt with later
             return None
 
         # Lookup specific attribute implementation for this type
