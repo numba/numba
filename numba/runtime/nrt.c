@@ -1,4 +1,5 @@
 #include <stdarg.h>
+#include <string.h> /* for memset */
 #include "nrt.h"
 
 
@@ -24,11 +25,26 @@ union MemInfo{
 
 
 struct MemSys{
+    /* Ununsed MemInfo are recycled here */
     MemInfo *mi_freelist;
+    /* MemInfo with deferred dtor */
+    MemInfo *mi_deferlist;
+    /* Atomic increment and decrement function */
     atomic_inc_dec_func atomic_inc, atomic_dec;
+
 };
 
+/* The Memory System object */
 static MemSys TheMSys;
+
+static
+void nrt_meminfo_call_dtor(MemInfo *mi) {
+    NRT_Debug("nrt_meminfo_call_dtor\n");
+    /* call dtor */
+    mi->payload.dtor(mi->payload.data, mi->payload.dtor_info);
+    /* Clear and release MemInfo */
+    NRT_MemSys_insert_meminfo(mi);
+}
 
 static
 MemInfo* meminfo_malloc() {
@@ -37,12 +53,27 @@ MemInfo* meminfo_malloc() {
     return p;
 }
 
+void NRT_MemSys_init() {
+    memset(&TheMSys, 0, sizeof(MemSys));
+}
+
+void NRT_MemSys_process_defer_dtor() {
+    while (TheMSys.mi_deferlist) {
+        /* Pop one */
+        MemInfo *mi = TheMSys.mi_deferlist;
+        TheMSys.mi_deferlist = mi->freelist;
+        NRT_Debug("Defer dtor %p\n", mi);
+        nrt_meminfo_call_dtor(mi);
+    }
+}
+
 void NRT_MemSys_insert_meminfo(MemInfo *newnode) {
     MemInfo *prev = TheMSys.mi_freelist;
     if (NULL == newnode) {
         newnode = meminfo_malloc();
     }
     NRT_Debug("NRT_MemSys_insert_meminfo newnode=%p\n", newnode);
+    memset(newnode, 0, sizeof(MemInfo));
     TheMSys.mi_freelist = newnode;
     newnode->freelist = prev;
 }
@@ -69,6 +100,7 @@ void NRT_MemSys_set_atomic_inc_dec(atomic_inc_dec_func inc,
 
 static
 size_t nrt_testing_atomic_inc(size_t *ptr){
+    /* non atomic */
     size_t out = *ptr;
     out += 1;
     *ptr = out;
@@ -77,6 +109,7 @@ size_t nrt_testing_atomic_inc(size_t *ptr){
 
 static
 size_t nrt_testing_atomic_dec(size_t *ptr){
+    /* non atomic */
     size_t out = *ptr;
     out -= 1;
     *ptr = out;
@@ -119,15 +152,28 @@ void NRT_MemInfo_acquire(MemInfo *mi) {
     TheMSys.atomic_inc(&mi->payload.refct);
 }
 
-void NRT_MemInfo_release(MemInfo *mi) {
+void NRT_MemInfo_release(MemInfo *mi, int defer) {
+    /* RefCt drop to zero */
     if (TheMSys.atomic_dec(&mi->payload.refct) == 0) {
-        mi->payload.dtor(mi->payload.data, mi->payload.dtor_info);
-        NRT_MemSys_insert_meminfo(mi);
+        /* We have a destructor */
+        if (mi->payload.dtor) {
+            if (defer) {
+                NRT_MemInfo_defer_dtor(mi);
+            } else {
+                nrt_meminfo_call_dtor(mi);
+            }
+        }
     }
 }
 
 void* NRT_MemInfo_data(MemInfo* mi) {
     return mi->payload.data;
+}
+
+void NRT_MemInfo_defer_dtor(MemInfo *mi) {
+    NRT_Debug("NRT_MemInfo_defer_dtor\n");
+    mi->freelist = TheMSys.mi_deferlist;
+    TheMSys.mi_deferlist = mi;
 }
 
 void* NRT_Allocate(size_t size) {

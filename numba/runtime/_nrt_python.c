@@ -13,6 +13,16 @@ memsys_set_atomic_inc_dec(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+static
+PyObject*
+memsys_process_defer_dtor(PyObject *self, PyObject *args) {
+    if (!PyArg_ParseTuple(args, "")) {
+        return NULL;
+    }
+    NRT_MemSys_process_defer_dtor();
+    Py_RETURN_NONE;
+}
+
 
 static
 PyObject*
@@ -29,10 +39,16 @@ static
 PyObject*
 meminfo_release(PyObject *self, PyObject *args) {
     PY_LONG_LONG mi_addr;
-    if (!PyArg_ParseTuple(args, "K", &mi_addr)) {
+    PyObject *should_defer;
+    int defer;
+    if (!PyArg_ParseTuple(args, "KO", &mi_addr, &should_defer)) {
         return NULL;
     }
-    NRT_MemInfo_release((MemInfo*)mi_addr);
+    defer = PyObject_IsTrue(should_defer);
+    if (defer == -1) {
+        return NULL;
+    }
+    NRT_MemInfo_release((MemInfo*)mi_addr, defer);
     Py_RETURN_NONE;
 }
 
@@ -48,6 +64,9 @@ void pyobject_dtor(void *ptr, void* info) {
 }
 
 
+/*
+ * Create a new MemInfo with a owner PyObject
+ */
 static
 PyObject*
 meminfo_new(PyObject *self, PyObject *args) {
@@ -65,6 +84,7 @@ meminfo_new(PyObject *self, PyObject *args) {
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(memsys_set_atomic_inc_dec),
+    declmethod(memsys_process_defer_dtor),
     declmethod(meminfo_new),
     declmethod(meminfo_acquire),
     declmethod(meminfo_release),
