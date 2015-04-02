@@ -15,7 +15,7 @@ class DUFunc(_internal._DUFunc):
         kws.pop('nout', None)
         self.targetoptions = kws
 
-    def _compile_at_args(self, *args, **kws):
+    def _compile_for_args(self, *args, **kws):
         assert len(kws) == 0
         ewise_sig = tuple(typeof(arg).dtype for arg in args)
         cres, args, return_type = ufuncbuilder._compile_ewise_function(

@@ -156,7 +156,7 @@ dufunc_call(PyDUFuncObject *self, PyObject *args, PyObject *kws)
         /* Break back into Python when we fail at dispatch. */
         PyErr_Clear();
         PyObject *method = PyObject_GetAttrString(
-            (PyObject*)self, "_compile_at_args");
+            (PyObject*)self, "_compile_for_args");
 
         if (method) {
             result = PyObject_Call(method, args, kws);
@@ -408,11 +408,11 @@ dufunc_at(PyDUFuncObject * self, PyObject * args)
 }
 
 static PyObject *
-dufunc__compile_at_args(PyDUFuncObject * self, PyObject * args,
+dufunc__compile_for_args(PyDUFuncObject * self, PyObject * args,
                         PyObject * kws)
 {
     PyErr_SetString(PyExc_NotImplementedError,
-                    "Abstract method _DUFunc._compile_at_args() called!");
+                    "Abstract method _DUFunc._compile_for_args() called!");
     return NULL;
 }
 
@@ -550,10 +550,10 @@ static struct PyMethodDef dufunc_methods[] = {
     {"at",
         (PyCFunction)dufunc_at,
         METH_VARARGS, NULL},
-    {"_compile_at_args",
-        (PyCFunction)dufunc__compile_at_args,
+    {"_compile_for_args",
+        (PyCFunction)dufunc__compile_for_args,
         METH_VARARGS | METH_KEYWORDS,
-        "Abstract method: subclasses should overload _compile_at_args() to compile the ufunc at the given arguments' types."},
+        "Abstract method: subclasses should overload _compile_for_args() to compile the ufunc at the given arguments' types."},
     {"_add_loop",
         (PyCFunction)dufunc__add_loop,
         METH_VARARGS,
