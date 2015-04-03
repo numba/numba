@@ -17,9 +17,11 @@ class DUFunc(_internal._DUFunc):
 
     def _compile_for_args(self, *args, **kws):
         assert len(kws) == 0
-        ewise_sig = tuple(typeof(arg).dtype for arg in args)
+        argtys = tuple(typeof(arg) for arg in args)
+        if all(hasattr(argty, 'dtype') for argty in argtys):
+            argtys = tuple(argty.dtype for argty in argtys)
         cres, args, return_type = ufuncbuilder._compile_ewise_function(
-            self.dispatcher, self.targetoptions, ewise_sig)
+            self.dispatcher, self.targetoptions, argtys)
         sig = ufuncbuilder._check_ufunc_signature(cres, args, return_type)
         dtypenums, ptr, env = ufuncbuilder._build_ewise_ufunc_wrapper(cres, sig)
         self._add_loop(utils.longint(ptr), dtypenums)
