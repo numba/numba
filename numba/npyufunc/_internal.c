@@ -111,9 +111,10 @@ PyTypeObject PyUFuncCleaner_Type = {
 
 typedef struct {
     PyObject_HEAD
-    PyObject * dispatcher;
+    PyObject      * dispatcher;
     PyUFuncObject * ufunc;
-    PyObject * keepalive;
+    PyObject      * keepalive;
+    int             frozen;
 } PyDUFuncObject;
 
 static void
@@ -149,7 +150,8 @@ dufunc_call(PyDUFuncObject *self, PyObject *args, PyObject *kws)
     PyObject *result=NULL;
 
     result = PyUFunc_Type.tp_call((PyObject *)self->ufunc, args, kws);
-    if ((result == NULL) &&
+    if ((!self->frozen) &&
+            (result == NULL) &&
             (PyErr_Occurred()) &&
             (PyErr_ExceptionMatches(PyExc_TypeError))) {
 
@@ -298,6 +300,8 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
     /* Already incref'ed, either by PyList_New(), or else clause, both above. */
     self->keepalive = keepalive;
     Py_XDECREF(tmp);
+
+    self->frozen = 0;
 
     return 0;
 }
@@ -454,6 +458,12 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
     PyObject *arg_types=NULL;
     PyUFuncGenericFunction old_func=NULL;
 
+    if (self->frozen) {
+        PyErr_SetString(PyExc_ValueError,
+                        "_DUFunc._add_loop() called for frozen dufunc");
+        return NULL;
+    }
+
     if (!PyArg_ParseTuple(args, "kO!|k", &loop_ptr, &PyList_Type, &arg_types,
                           &data_ptr)) {
         return NULL;
@@ -561,6 +571,36 @@ static struct PyMethodDef dufunc_methods[] = {
     {NULL, NULL, 0, NULL}           /* sentinel */
 };
 
+static PyObject *
+dufunc_getfrozen(PyDUFuncObject * self, void * closure)
+{
+    PyObject *result=(self->frozen) ? Py_True : Py_False;
+    Py_INCREF(result);
+    return result;
+}
+
+static int
+dufunc_setfrozen(PyDUFuncObject * self, PyObject * value, void * closure)
+{
+    int result=0;
+    if (PyObject_IsTrue(value)) {
+        self->frozen = 1;
+    } else {
+        PyErr_SetString(PyExc_ValueError,
+                        "cannot clear the _DUFunc.frozen flag");
+        result = -1;
+    }
+    return result;
+}
+
+static PyGetSetDef dufunc_getsets[] = {
+    {"frozen",
+     (getter)dufunc_getfrozen, (setter)dufunc_setfrozen,
+     "flag indicating call-time compilation has been disabled",
+     NULL},
+    {NULL}  /* Sentinel */
+};
+
 PyTypeObject PyDUFunc_Type = {
 #if PY_MAJOR_VERSION >= 3
     PyVarObject_HEAD_INIT(NULL, 0)
@@ -601,7 +641,7 @@ PyTypeObject PyDUFunc_Type = {
     0,                                          /* tp_iternext */
     dufunc_methods,                             /* tp_methods */
     dufunc_members,                             /* tp_members */
-    0,                                          /* tp_getset */
+    dufunc_getsets,                             /* tp_getset */
     0,                                          /* tp_base */
     0,                                          /* tp_dict */
     0,                                          /* tp_descr_get */
