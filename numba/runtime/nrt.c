@@ -18,6 +18,7 @@ union MemInfo{
         dtor_function  dtor;
         void          *dtor_info;
         void          *data;
+        size_t         size;
     } payload;
 
     MemInfo *freelist;
@@ -39,7 +40,7 @@ static MemSys TheMSys;
 
 static
 void nrt_meminfo_call_dtor(MemInfo *mi) {
-    NRT_Debug("nrt_meminfo_call_dtor\n");
+    NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor\n"));
     /* call dtor */
     mi->payload.dtor(mi->payload.data, mi->payload.dtor_info);
     /* Clear and release MemInfo */
@@ -49,7 +50,7 @@ void nrt_meminfo_call_dtor(MemInfo *mi) {
 static
 MemInfo* meminfo_malloc() {
     void *p = malloc(sizeof(MemInfo));;
-    NRT_Debug("meminfo_malloc %p\n", p);
+    NRT_Debug(nrt_debug_print("meminfo_malloc %p\n", p));
     return p;
 }
 
@@ -62,7 +63,7 @@ void NRT_MemSys_process_defer_dtor() {
         /* Pop one */
         MemInfo *mi = TheMSys.mi_deferlist;
         TheMSys.mi_deferlist = mi->freelist;
-        NRT_Debug("Defer dtor %p\n", mi);
+        NRT_Debug(nrt_debug_print("Defer dtor %p\n", mi));
         nrt_meminfo_call_dtor(mi);
     }
 }
@@ -72,7 +73,8 @@ void NRT_MemSys_insert_meminfo(MemInfo *newnode) {
     if (NULL == newnode) {
         newnode = meminfo_malloc();
     }
-    NRT_Debug("NRT_MemSys_insert_meminfo newnode=%p\n", newnode);
+    NRT_Debug(nrt_debug_print("NRT_MemSys_insert_meminfo newnode=%p\n",
+                              newnode));
     memset(newnode, 0, sizeof(MemInfo));
     TheMSys.mi_freelist = newnode;
     newnode->freelist = prev;
@@ -87,7 +89,7 @@ MemInfo* NRT_MemSys_pop_meminfo() {
         node = TheMSys.mi_freelist;
         TheMSys.mi_freelist = node->freelist;
     }
-    NRT_Debug("NRT_MemSys_pop_meminfo: return %p\n", node);
+    NRT_Debug(nrt_debug_print("NRT_MemSys_pop_meminfo: return %p\n", node));
     return node;
 }
 
@@ -122,25 +124,39 @@ void NRT_MemSys_set_atomic_inc_dec_stub(){
 }
 
 
-MemInfo* NRT_MemInfo_new(void *data, dtor_function dtor, void *dtor_info) {
+MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
+                         void *dtor_info)
+{
     MemInfo * mi = NRT_MemSys_pop_meminfo();
     mi->payload.refct = 0;
     mi->payload.dtor = dtor;
     mi->payload.dtor_info = dtor_info;
     mi->payload.data = data;
+    mi->payload.size = size;
     return mi;
 }
 
 static
 void nrt_internal_dtor(void *ptr, void *info) {
-    NRT_Debug("nrt_internal_dtor %p, %p\n", ptr, info);
+    NRT_Debug(nrt_debug_print("nrt_internal_dtor %p, %p\n", ptr, info));
+    if (info != NULL) {
+        memset(ptr, 0, (size_t)info);  /* for safety */
+    }
     NRT_Free(ptr);
 }
 
 MemInfo* NRT_MemInfo_alloc(size_t size) {
     void *data = NRT_Allocate(size);
-    NRT_Debug("NRT_MemInfo_alloc %p\n", data);
-    void *meminfo = NRT_MemInfo_new(data, nrt_internal_dtor, NULL);
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc %p\n", data));
+    void *meminfo = NRT_MemInfo_new(data, size, nrt_internal_dtor, NULL);
+    return meminfo;
+}
+
+MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
+    void *data = NRT_Allocate(size);
+    memset(data, 0, size);
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p\n", data));
+    void *meminfo = NRT_MemInfo_new(data, size, nrt_internal_dtor, (void*)size);
     return meminfo;
 }
 
@@ -170,20 +186,24 @@ void* NRT_MemInfo_data(MemInfo* mi) {
     return mi->payload.data;
 }
 
+size_t NRT_MemInfo_size(MemInfo* mi) {
+    return mi->payload.size;
+}
+
 void NRT_MemInfo_defer_dtor(MemInfo *mi) {
-    NRT_Debug("NRT_MemInfo_defer_dtor\n");
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_defer_dtor\n"));
     mi->freelist = TheMSys.mi_deferlist;
     TheMSys.mi_deferlist = mi;
 }
 
 void* NRT_Allocate(size_t size) {
     void *ptr = malloc(size);
-    NRT_Debug("NRT_Allocate bytes=%llu ptr=%p\n", size, ptr);
+    NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%llu ptr=%p\n", size, ptr));
     return ptr;
 }
 
 void NRT_Free(void *ptr) {
-    NRT_Debug("NRT_Free %p\n", ptr);
+    NRT_Debug(nrt_debug_print("NRT_Free %p\n", ptr));
     free(ptr);
 }
 
