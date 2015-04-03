@@ -508,12 +508,14 @@ class ArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
         members = [
+            ('meminfo', types.meminfo_pointer),
             ('parent', types.pyobject),
             ('nitems', types.intp),
             ('itemsize', types.intp),
             ('data', types.CPointer(fe_type.dtype)),
             ('shape', types.UniTuple(types.intp, ndim)),
             ('strides', types.UniTuple(types.intp, ndim)),
+
         ]
         super(ArrayModel, self).__init__(dmm, fe_type, members)
 

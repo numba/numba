@@ -89,7 +89,7 @@ ext_nrt_python = Extension(name='numba.runtime._nrt_python',
                                     'numba/runtime/nrt.c'],
                            depends=['numba/runtime/nrt.h',
                                     'numba/_pymodule.h'],
-                           include_dirs=["numba"])
+                           include_dirs=["numba"] + npymath_info['include_dirs'])
 
 ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
                ext_helperlib, ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf,

@@ -1200,7 +1200,7 @@ class PythonAPI(object):
 
     def numba_array_adaptor(self, ary, ptr):
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
-        fn = self._get_function(fnty, name="numba_adapt_ndarray")
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
         return self.builder.call(fn, (ary, ptr))
@@ -1208,7 +1208,7 @@ class PythonAPI(object):
     def numba_buffer_adaptor(self, buf, ptr):
         fnty = Type.function(Type.void(),
                              [ir.PointerType(self.py_buffer_t), self.voidptr])
-        fn = self._get_function(fnty, name="numba_adapt_buffer")
+        fn = self._get_function(fnty, name="NRT_adapt_buffer")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
         return self.builder.call(fn, (buf, ptr))
