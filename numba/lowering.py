@@ -187,6 +187,7 @@ class Lower(BaseLower):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
             self.storevar(val, inst.target.name)
+            self.incref(ty, val)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -247,7 +248,7 @@ class Lower(BaseLower):
             return impl(self.builder, (target, index, value))
 
         elif isinstance(inst, ir.Del):
-            pass
+            self.decref(self.typeof(inst.value), self.loadvar(inst.value))
 
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
@@ -625,3 +626,11 @@ class Lower(BaseLower):
 
     def alloca_lltype(self, name, lltype):
         return cgutils.alloca_once(self.builder, lltype, name=name)
+
+    def incref(self, typ, val):
+        if isinstance(typ, types.Array):
+            self.context.array_incref(self.builder, typ, val)
+
+    def decref(self, typ, val):
+        if isinstance(typ, types.Array):
+            self.context.array_decref(self.builder, typ, val)

@@ -909,7 +909,12 @@ class PythonAPI(object):
 
         elif isinstance(typ, types.Array):
             val, failed = self.to_native_array(obj, typ)
-            return NativeValue(val, is_error=failed)
+
+            def cleanup_array():
+                self.context.array_decref(self.builder, typ, val)
+
+            return NativeValue(val, is_error=failed,
+                               cleanup=cleanup_array)
 
         elif isinstance(typ, types.Buffer):
             return self.to_native_buffer(obj, typ)

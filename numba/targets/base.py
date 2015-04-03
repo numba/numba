@@ -968,6 +968,14 @@ class BaseContext(object):
         fn = mod.get_or_insert_function(fnty, name="NRT_decref")
         builder.call(fn, [meminfo])
 
+    def array_incref(self, builder, typ, array):
+        ary = self.make_array(typ)(self, builder, value=array)
+        self.nrt_incref(builder, ary.meminfo)
+
+    def array_decref(self, builder, typ, array):
+        ary = self.make_array(typ)(self, builder, value=array)
+        self.nrt_decref(builder, ary.meminfo)
+
 
 class _wrap_impl(object):
     def __init__(self, imp, context, sig):
