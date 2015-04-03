@@ -2,8 +2,11 @@
 #include <stdio.h>
 
 /* Debugging facilities */
-void nrt_debug_print(char *fmt, ...);
-#define NRT_Debug nrt_debug_print
+#ifndef NDEBUG
+#   define NRT_Debug(X) X
+#else
+#   define NRT_Debug(X)
+#endif
 
 /* TypeDefs */
 typedef void (*dtor_function)(void *ptr, void *info);
@@ -29,12 +32,15 @@ void NRT_MemSys_process_defer_dtor();
  * dtor: destructor to execute
  * dtor_info: additional information to pass to the destructor
  */
-MemInfo* NRT_MemInfo_new(void *data, dtor_function dtor, void *dtor_info);
+MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
+                         void *dtor_info);
 MemInfo* NRT_MemInfo_alloc(size_t size);
+MemInfo* NRT_MemInfo_alloc_safe(size_t size);
 void NRT_MemInfo_destroy(MemInfo *mi);
 void NRT_MemInfo_acquire(MemInfo* mi);
 void NRT_MemInfo_release(MemInfo* mi, int defer);
 void* NRT_MemInfo_data(MemInfo* mi);
+size_t NRT_MemInfo_size(MemInfo* mi);
 void NRT_MemInfo_defer_dtor(MemInfo* mi);
 
 /* General allocator */
