@@ -38,9 +38,9 @@ class DUFunc(_internal._DUFunc):
                     argty = argty.dtype
                 argtys.append(argty)
         element_wise_signature = tuple(argtys)
-        cres, args, return_type = ufuncbuilder._compile_element_wise_function(
+        cres, argtys, return_type = ufuncbuilder._compile_element_wise_function(
             self.dispatcher, self.targetoptions, element_wise_signature)
-        sig = ufuncbuilder._finalize_ufunc_signature(cres, args, return_type)
+        sig = ufuncbuilder._finalize_ufunc_signature(cres, argtys, return_type)
         dtypenums, ptr, env = ufuncbuilder._build_element_wise_ufunc_wrapper(
             cres, sig)
         self._add_loop(utils.longint(ptr), dtypenums)
