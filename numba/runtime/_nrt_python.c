@@ -35,6 +35,14 @@ void pyobject_dtor(void *ptr, void* info) {
 }
 
 
+static
+MemInfo* meminfo_new_from_pyobject(void *data, PyObject *ownerobj) {
+    size_t dummy_size = 0;
+    Py_INCREF(ownerobj);
+    return NRT_MemInfo_new(data, dummy_size, pyobject_dtor, ownerobj);
+}
+
+
 /*
  * Create a new MemInfo with a owner PyObject
  */
@@ -44,12 +52,10 @@ meminfo_new(PyObject *self, PyObject *args) {
     unsigned PY_LONG_LONG addr_data;
     PyObject* ownerobj;
     MemInfo *mi;
-    Py_ssize_t size;
-    if (!PyArg_ParseTuple(args, "KnO", &addr_data, &size, &ownerobj)) {
+    if (!PyArg_ParseTuple(args, "KO", &addr_data, &ownerobj)) {
         return NULL;
     }
-    Py_INCREF(ownerobj);
-    mi = NRT_MemInfo_new((void*)addr_data, size, pyobject_dtor, ownerobj);
+    mi = meminfo_new_from_pyobject((void*)addr_data, ownerobj);
     return Py_BuildValue("K", mi);
 }
 

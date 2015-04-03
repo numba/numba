@@ -12,8 +12,8 @@ class Runtime(object):
         # Install atomic ops to NRT
         _nrt.memsys_set_atomic_inc_dec(self._ptr_inc, self._ptr_dec)
 
-    def meminfo_new(self, data, size, pyobj):
-        mi = _nrt.meminfo_new(data, size, pyobj)
+    def meminfo_new(self, data, pyobj):
+        mi = _nrt.meminfo_new(data, pyobj)
         return MemInfo(mi)
 
     def meminfo_alloc(self, size, safe=False):
