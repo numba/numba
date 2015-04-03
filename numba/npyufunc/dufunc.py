@@ -1,7 +1,8 @@
 from __future__ import absolute_import, print_function, division
 import numpy
 
-from .. import jit, typeof, numpy_support, utils
+from .. import jit, typeof, utils, types, numpy_support
+from ..typing.templates import AbstractTemplate, signature
 from . import _internal, ufuncbuilder
 
 class DUFunc(_internal._DUFunc):
@@ -21,6 +22,8 @@ class DUFunc(_internal._DUFunc):
         kws['identity'] = ufuncbuilder._BaseUFuncBuilder.parse_identity(
             kws.pop('identity', None))
         super(DUFunc, self).__init__(dispatcher, **kws)
+        self._install_type()
+        self._install_cg()
 
     def _compile_for_args(self, *args, **kws):
         assert len(kws) == 0
@@ -46,3 +49,29 @@ class DUFunc(_internal._DUFunc):
         self._add_loop(utils.longint(ptr), dtypenums)
         self.keepalive.append((ptr, cres.library, env))
         return
+
+    def _install_type(self, typingctx=None):
+        if typingctx is None:
+            typingctx = self.dispatcher.targetdescr.typing_context
+        _ty_cls = type('DUFuncTyping_' + self.ufunc.__name__,
+                       (AbstractTemplate,),
+                       dict(key=self, generic=self._type_me))
+        typingctx.insert_user_function(self, _ty_cls)
+
+    def _type_me(self, args, kws):
+        raise NotImplementedError()
+
+    def _install_cg(self, targetctx=None):
+        if targetctx is None:
+            targetctx = self.dispatcher.targetdescr.target_context
+        _any = types.Any
+        _arr = types.Kind(types.Array)
+        sig0 = _any(*((_any,) * self.ufunc.nin + (_arr,) * self.ufunc.nout))
+        sig1 = _any(*((_any,) * self.ufunc.nin))
+        targetctx.insert_func_defn([(self._lower_me, [
+            (self, sig0),
+            (self, sig1),
+        ])])
+
+    def _lower_me(self, *args, **kws):
+        raise NotImplementedError()
