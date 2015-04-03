@@ -28,7 +28,8 @@ def make_array(array_type):
     return cgutils.create_struct_proxy(array_type)
 
 
-def populate_array(array, data, shape, strides, itemsize, parent=None):
+def populate_array(array, data, shape, strides, itemsize, meminfo,
+                   parent=None):
     """
     Helper function for populating array structures.
     This avoids forgetting to set fields.
@@ -38,10 +39,15 @@ def populate_array(array, data, shape, strides, itemsize, parent=None):
     datamodel = array._datamodel
     required_fields = set(datamodel._fields)
 
+    if meminfo is None:
+        meminfo = Constant.null(context.get_value_type(
+            datamodel.get_type('meminfo')))
+
     attrs = dict(shape=shape,
                  strides=strides,
                  data=data,
-                 itemsize=itemsize)
+                 itemsize=itemsize,
+                 meminfo=meminfo,)
 
     # Set `parent` attribute
     if parent is None:
@@ -70,6 +76,8 @@ def populate_array(array, data, shape, strides, itemsize, parent=None):
     for k, v in attrs.items():
         setattr(array, k, v)
 
+    # Incref
+    context.nrt_incref(builder, meminfo)
     return array
 
 
@@ -156,7 +164,9 @@ def getitem_arraynd_intp(context, builder, sig, args):
                        shape=cgutils.pack_array(builder, in_shapes[1:]),
                        strides=cgutils.pack_array(builder, in_strides[1:]),
                        itemsize=adapted_ary.itemsize,
+                       meminfo=adapted_ary.meminfo,
                        parent=adapted_ary.parent,)
+
         result = out_ary._getvalue()
     else:
         raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
@@ -196,6 +206,7 @@ def getitem_array1d_slice(context, builder, sig, args):
                    shape=cgutils.pack_array(builder, [shape]),
                    strides=cgutils.pack_array(builder, [stride]),
                    itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
                    parent=ary.parent)
 
     return retary._getvalue()
@@ -235,6 +246,7 @@ def getitem_array_unituple(context, builder, sig, args):
                        shape=cgutils.pack_array(builder, shapes),
                        strides=cgutils.pack_array(builder, strides),
                        itemsize=ary.itemsize,
+                       meminfo=ary.meminfo,
                        parent=ary.parent)
         return retary._getvalue()
     else:
@@ -291,6 +303,7 @@ def getitem_array_tuple(context, builder, sig, args):
                        shape=cgutils.pack_array(builder, shapes),
                        strides=cgutils.pack_array(builder, strides),
                        itemsize=ary.itemsize,
+                       meminfo=ary.meminfo,
                        parent=ary.parent)
         return retary._getvalue()
     else:
@@ -704,6 +717,7 @@ def array_record_getattr(context, builder, typ, value, attr):
                    shape=array.shape,
                    strides=array.strides,
                    itemsize=context.get_constant(types.intp, datasize),
+                   meminfo=array.meminfo,
                    parent=array.parent)
     return rary._getvalue()
 

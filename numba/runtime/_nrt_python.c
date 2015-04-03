@@ -1,6 +1,15 @@
 #include "_pymodule.h"
 #include "nrt.h"
 
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+#include <numpy/ndarrayobject.h>
+#include <numpy/arrayscalars.h>
+
+/* For Numpy 1.6 */
+#ifndef NPY_ARRAY_BEHAVED
+    #define NPY_ARRAY_BEHAVED NPY_BEHAVED
+#endif
+
 
 static
 PyObject*
@@ -89,17 +98,6 @@ meminfo_alloc_safe(PyObject *self, PyObject *args) {
     mi = NRT_MemInfo_alloc_safe(size);
     return Py_BuildValue("K", mi);
 }
-
-static PyMethodDef ext_methods[] = {
-#define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
-    declmethod(memsys_set_atomic_inc_dec),
-    declmethod(memsys_process_defer_dtor),
-    declmethod(meminfo_new),
-    declmethod(meminfo_alloc),
-    declmethod(meminfo_alloc_safe),
-    { NULL },
-#undef declmethod
-};
 
 typedef struct {
     PyObject_HEAD
@@ -298,11 +296,143 @@ static PyTypeObject MemInfoType = {
 };
 
 
+/****** Array adaptor code ******/
+
+
+/*
+ * Fill in the *arystruct* with information from the Numpy array *obj*.
+ * *arystruct*'s layout is defined in numba.targets.arrayobj (look
+ * for the ArrayTemplate class).
+ */
+
+typedef struct {
+    void     *meminfo;
+    PyObject *parent;
+    npy_intp nitems;
+    npy_intp itemsize;
+    void *data;
+
+    npy_intp shape_and_strides[];
+} arystruct_t;
+
+static
+int NRT_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
+    PyArrayObject *ndary;
+    int i, ndim;
+    npy_intp *p;
+    void *data;
+
+    if (!PyArray_Check(obj)) {
+        return -1;
+    }
+
+    ndary = (PyArrayObject*)obj;
+    ndim = PyArray_NDIM(ndary);
+    data = PyArray_DATA(ndary);
+
+    arystruct->meminfo = meminfo_new_from_pyobject((void*)data, obj);
+    arystruct->data = data;
+    arystruct->nitems = PyArray_SIZE(ndary);
+    arystruct->itemsize = PyArray_ITEMSIZE(ndary);
+    arystruct->parent = obj;
+    p = arystruct->shape_and_strides;
+    for (i = 0; i < ndim; i++, p++) {
+        *p = PyArray_DIM(ndary, i);
+    }
+    for (i = 0; i < ndim; i++, p++) {
+        *p = PyArray_STRIDE(ndary, i);
+    }
+    NRT_MemInfo_acquire(arystruct->meminfo);
+    return 0;
+}
+
+static void
+NRT_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
+{
+    int i;
+    npy_intp *p;
+
+    arystruct->meminfo = meminfo_new_from_pyobject((void*)buf->buf, buf->obj);
+    arystruct->data = buf->buf;
+    arystruct->itemsize = buf->itemsize;
+    arystruct->parent = buf->obj;
+    arystruct->nitems = 1;
+    p = arystruct->shape_and_strides;
+    for (i = 0; i < buf->ndim; i++, p++) {
+        *p = buf->shape[i];
+        arystruct->nitems *= buf->shape[i];
+    }
+    for (i = 0; i < buf->ndim; i++, p++) {
+        *p = buf->strides[i];
+    }
+
+    NRT_MemInfo_acquire(arystruct->meminfo);
+}
+
+static void
+NRT_incref(MemInfo* mi) {
+    if (mi) {
+        NRT_MemInfo_acquire(mi);
+    }
+}
+
+static void
+NRT_decref(MemInfo* mi) {
+    if (mi) {
+        NRT_MemInfo_release(mi, 0);
+    }
+}
+
+static PyMethodDef ext_methods[] = {
+#define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
+    declmethod(memsys_set_atomic_inc_dec),
+    declmethod(memsys_process_defer_dtor),
+    declmethod(meminfo_new),
+    declmethod(meminfo_alloc),
+    declmethod(meminfo_alloc_safe),
+    { NULL },
+#undef declmethod
+};
+
+
+
+static PyObject *
+build_c_helpers_dict(void)
+{
+    PyObject *dct = PyDict_New();
+    if (dct == NULL)
+        goto error;
+
+#define _declpointer(name, value) do {                 \
+    PyObject *o = PyLong_FromVoidPtr(value);           \
+    if (o == NULL) goto error;                         \
+    if (PyDict_SetItemString(dct, name, o)) {          \
+        Py_DECREF(o);                                  \
+        goto error;                                    \
+    }                                                  \
+    Py_DECREF(o);                                      \
+} while (0)
+
+#define declmethod(func) _declpointer(#func, &NRT_##func)
+
+declmethod(adapt_ndarray);
+declmethod(adapt_buffer);
+declmethod(incref);
+declmethod(decref);
+
+#undef declmethod
+    return dct;
+error:
+    Py_XDECREF(dct);
+    return NULL;
+}
+
 MOD_INIT(_nrt_python) {
     PyObject *m;
     MOD_DEF(m, "_nrt_python", "No docs", ext_methods)
     if (m == NULL)
         return MOD_ERROR_VAL;
+    import_array();
 
     MemInfoType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&MemInfoType))
@@ -310,6 +440,8 @@ MOD_INIT(_nrt_python) {
 
     Py_INCREF(&MemInfoType);
     PyModule_AddObject(m, "_MemInfo", (PyObject *) (&MemInfoType));
+
+    PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
 
     return MOD_SUCCESS_VAL(m);
 }
