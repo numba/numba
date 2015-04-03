@@ -4,7 +4,6 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.runtime import rtsys
 from numba.config import PYVERSION
-import weakref
 
 
 class Dummy(object):
@@ -27,7 +26,7 @@ class TestNrtMemInfo(unittest.TestCase):
         self.assertEqual(Dummy.alive, 1)
         addr = 0xdeadcafe  # some made up location
 
-        mi = rtsys.meminfo_new(addr, 0, d)
+        mi = rtsys.meminfo_new(addr, d)
         del d
         self.assertEqual(Dummy.alive, 1)
         mi.acquire()
@@ -41,7 +40,7 @@ class TestNrtMemInfo(unittest.TestCase):
         self.assertEqual(Dummy.alive, 1)
         addr = 0xdeadcafe  # some made up location
 
-        mi = rtsys.meminfo_new(addr, 0, d)
+        mi = rtsys.meminfo_new(addr, d)
         del d
         self.assertEqual(Dummy.alive, 1)
         for _ in range(100):
@@ -57,7 +56,7 @@ class TestNrtMemInfo(unittest.TestCase):
         self.assertEqual(Dummy.alive, 1)
         addr = 0xdeadcafe  # some made up location
 
-        mi = rtsys.meminfo_new(addr, 0, d)
+        mi = rtsys.meminfo_new(addr, d)
         # Set defer flag
         mi.defer = True
         del d
@@ -77,10 +76,9 @@ class TestNrtMemInfo(unittest.TestCase):
         self.assertEqual(Dummy.alive, 1)
         addr = 0xdeadcafe  # some made up location
 
-        mi = rtsys.meminfo_new(addr, 10, d)
+        mi = rtsys.meminfo_new(addr, d)
         mview = memoryview(mi)
         self.assertEqual(addr, mi.data)
-        self.assertEqual(mview.nbytes, 10)
         self.assertFalse(mview.readonly)
         self.assertIs(mi, mview.obj)
         self.assertTrue(mview.c_contiguous)

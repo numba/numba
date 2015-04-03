@@ -18,7 +18,7 @@ union MemInfo{
         dtor_function  dtor;
         void          *dtor_info;
         void          *data;
-        size_t         size;
+        size_t         size;    /* only used for NRT allocated memory */
     } payload;
 
     MemInfo *freelist;
@@ -206,4 +206,3 @@ void NRT_Free(void *ptr) {
     NRT_Debug(nrt_debug_print("NRT_Free %p\n", ptr));
     free(ptr);
 }
-
