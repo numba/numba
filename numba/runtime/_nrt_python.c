@@ -127,7 +127,36 @@ int MemInfo_getbuffer(PyObject *exporter, Py_buffer *view, int flags) {
     return PyBuffer_FillInfo(view, exporter, buf, len, readonly, flags);
 }
 
+Py_ssize_t MemInfo_rdwrbufferproc(PyObject *self, Py_ssize_t segment,
+                                  void **ptrptr)
+{
+    MemInfoObject *mio = (MemInfoObject *)self;
+    MemInfo *mi = mio->meminfo;
+    if (segment != 0) {
+        PyErr_SetString(PyExc_TypeError, "MemInfo only has 1 segment");
+        return -1;
+    }
+    *ptrptr = NRT_MemInfo_data(mi);
+    return NRT_MemInfo_size(mi);
+}
+
+Py_ssize_t MemInfo_segcountproc(PyObject *self, Py_ssize_t *lenp) {
+    MemInfoObject *mio = (MemInfoObject *)self;
+    MemInfo *mi = mio->meminfo;
+    if (lenp) {
+        *lenp = NRT_MemInfo_size(mi);
+    }
+    return 1;
+}
+
+#if (PY_MAJOR_VERSION < 3)
+static PyBufferProcs MemInfo_bufferProcs = {MemInfo_rdwrbufferproc,
+                                            MemInfo_rdwrbufferproc,
+                                            MemInfo_segcountproc,
+                                            NULL};
+#else
 static PyBufferProcs MemInfo_bufferProcs = {MemInfo_getbuffer, NULL};
+#endif
 
 static
 PyObject*
