@@ -70,6 +70,14 @@ def test(**kwargs):
 
     suite = discover_tests("numba.tests")
     ok = run_tests(suite, **kwargs).wasSuccessful()
+    if not ok:
+        return ok
+
+    # Test no cuda tests
+    from numba.cuda.tests.nocuda.runtests import test as nocuda_test
+    ok = nocuda_test()
+
+    # Test CUDA
     if ok:
         if cuda.is_available():
             gpus = cuda.list_devices()

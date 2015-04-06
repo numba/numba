@@ -5,7 +5,16 @@ from numba.cuda.cudadrv import nvvm
 from numba import unittest_support as unittest
 from numba import types
 
+def has_nvvm_lib():
+    try:
+        nvvm.NVVM()
+    except nvvm.NvvmSupportError:
+        return False
+    else:
+        return True
 
+
+@unittest.skipIf(not has_nvvm_lib(), "No libNVVM")
 class TestNvvmWithoutCuda(unittest.TestCase):
     def test_nvvm_llvm_to_ptx(self):
         """
