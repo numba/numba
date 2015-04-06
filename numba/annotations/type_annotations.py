@@ -49,7 +49,7 @@ class SourceLines(Mapping):
 
 
 class TypeAnnotation(object):
-    
+
     # func_data dict stores annotation data for all functions that are
     # compiled. We store the data in the TypeAnnotation class since a new
     # TypeAnnotation instance is created for each function that is compiled.
@@ -74,7 +74,7 @@ class TypeAnnotation(object):
         self.linenum = str(interp.loc.line)
         self.signature = str(args) + ' -> ' + str(return_type)
         self.func_attr = func_attr
-        
+
         # lifted loop information
         self.lifted = lifted
         self.num_lifted_loops = len(lifted)
@@ -158,7 +158,7 @@ class TypeAnnotation(object):
 
             return io.getvalue()
 
-    def html_annotate(self):
+    def html_annotate(self, outfile=None):
         python_source = SourceLines(self.func)
         ir_lines = self.prepare_annotations()
         line_nums = [num for num in python_source]
@@ -205,7 +205,7 @@ class TypeAnnotation(object):
         elif func_key not in TypeAnnotation.func_data.keys():
             TypeAnnotation.func_data[func_key] = {}
             func_data = TypeAnnotation.func_data[func_key]
-            
+
             for i, loop in enumerate(self.lifted):
                 # Make sure that when we process each lifted loop function later,
                 # we'll know where it originally came from.
@@ -234,7 +234,7 @@ class TypeAnnotation(object):
                         func_data['python_tags'][num] = 'lifted_tag'
                     elif line.strip().endswith('pyobject'):
                         func_data['python_tags'][num] = 'object_tag'
-        
+
         # If there are no lifted loops to compile, or if there are lifted loops
         # to compiled and they've all been compiled, then write annotations
         # for current function.
@@ -253,9 +253,14 @@ class TypeAnnotation(object):
             template_filename = os.path.join(root, 'template.html')
             with open(template_filename, 'r') as template:
                 html = template.read()
-            with open(self.html_output, 'w') as output:
-                template = Template(html)
-                output.write(template.render(func_data=TypeAnnotation.func_data))                
+
+            template = Template(html)
+            rendered = template.render(func_data=TypeAnnotation.func_data)
+            if outfile is None:
+                with open(self.html_output, 'w') as output:
+                    output.write(rendered)
+            else:
+                outfile.write(rendered)
 
     def __str__(self):
         return self.annotate()
