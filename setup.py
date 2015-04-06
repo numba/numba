@@ -103,6 +103,7 @@ packages = [
     "numba.cuda.tests.cudadrv",
     "numba.cuda.tests.cudadrv.data",
     "numba.cuda.tests.cudapy",
+    "numba.cuda.tests.nocuda",
     "numba.annotations",
 ]
 
