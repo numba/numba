@@ -384,13 +384,25 @@ done:
 }
 """
 
+
+def _replace_datalayout(llvmir):
+    """
+    Find the line containing the datalayout and replace it
+    """
+    lines = llvmir.splitlines()
+    for i, ln in enumerate(lines):
+        if ln.startswith("target datalayout"):
+            tmp = 'target datalayout = "{0}"'
+            lines[i] = tmp.format(default_data_layout)
+            break
+    return '\n'.join(lines)
+
+
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
     # New LLVM generate a shorthand for datalayout that NVVM does not know
-    llvmir = llvmir.replace('e-i64:64-v16:16-v32:32-n16:32:64',
-                            default_data_layout)
-
+    llvmir = _replace_datalayout(llvmir)
     # Replace with our cmpxchg and atomic implementations because LLVM 3.5 has
     # a new semantic for cmpxchg.
     replacements = [
