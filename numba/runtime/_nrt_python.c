@@ -349,6 +349,34 @@ int NRT_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     return 0;
 }
 
+
+static
+PyObject* NRT_adapt_native_array(arystruct_t* arystruct, int ndim,
+                                 int type_num) {
+    PyObject *array;
+    MemInfoObject *miobj;
+    PyObject *args;
+    npy_intp *shape, *strides;
+    int flags=NPY_ARRAY_WRITEABLE;
+
+    miobj = PyObject_New(MemInfoObject, &MemInfoType);
+    PyObject_Init((PyObject*)miobj, &MemInfoType);
+    args = Py_BuildValue("(K)", (unsigned PY_LONG_LONG)arystruct->meminfo);
+    if(MemInfo_init(miobj, args, NULL)) {
+        return NULL;
+    }
+    Py_DECREF(args);
+
+    shape = arystruct->shape_and_strides;
+    strides = shape + ndim;
+    array = PyArray_New(&PyArray_Type, ndim, shape, type_num,
+                        strides, NRT_MemInfo_data(arystruct->meminfo),
+                        arystruct->itemsize, flags, (PyObject*)miobj);
+    /* Set the MemInfoObject as the base object */
+    PyArray_SetBaseObject((PyArrayObject*)array, (PyObject *)miobj);
+    return array;
+}
+
 static void
 NRT_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
 {
@@ -419,9 +447,13 @@ build_c_helpers_dict(void)
 #define declmethod(func) _declpointer(#func, &NRT_##func)
 
 declmethod(adapt_ndarray);
+declmethod(adapt_native_array);
 declmethod(adapt_buffer);
 declmethod(incref);
 declmethod(decref);
+declmethod(MemInfo_data);
+declmethod(MemInfo_alloc);
+
 
 #undef declmethod
     return dct;

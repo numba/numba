@@ -1137,3 +1137,30 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditer = nditercls(context, builder, value=nditer)
 
     nditer.iternext_specific(context, builder, result)
+
+
+@builtin
+@implement(numpy.empty, types.Kind(types.Integer))
+def numpy_empty(context, builder, sig, args):
+    [arrlen] = args
+    arrtype = sig.return_type
+    arycls = make_array(arrtype)
+    ary = arycls(context, builder)
+
+    datatype = context.get_data_type(arrtype.dtype)
+    itemsize = context.get_constant(types.intp,
+                                    context.get_abi_sizeof(datatype))
+    meminfo = context.nrt_meminfo_alloc(builder,
+                                        size=builder.mul(itemsize, arrlen))
+    data = context.nrt_meminfo_data(builder, meminfo)
+
+    populate_array(ary,
+                   data=builder.bitcast(data, datatype.as_pointer()),
+                   shape=cgutils.pack_array(builder, [arrlen]),
+                   strides=cgutils.pack_array(builder, [itemsize]),
+                   itemsize=itemsize,
+                   meminfo=meminfo)
+    return ary._getvalue()
+
+
+

@@ -308,4 +308,19 @@ class NdIndex(AbstractTemplate):
 builtin_global(numpy.ndindex, types.Function(NdIndex))
 
 
+class NdEmpty(AbstractTemplate):
+    key = numpy.empty
+
+    def generic(self, args, kws):
+        assert not kws
+        [shape] = args
+
+        if isinstance(shape, types.Integer):
+            return signature(types.double[::1], *args)
+
+
+builtin_global(numpy.empty, types.Function(NdEmpty))
+
+
 builtin_global(numpy, types.Module(numpy))
+

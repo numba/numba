@@ -9,7 +9,7 @@ import warnings
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
                    lowering, objmode, irpasses, utils, config,
-                   types, ir, assume, looplifting, macro, types)
+                   types, ir, looplifting, macro, types)
 from numba.targets import cpu
 from numba.annotations import type_annotations
 
@@ -602,8 +602,6 @@ def legalize_return_type(return_type, interp, targetctx):
     Only accept array return type iff it is passed into the function.
     Reject function object return types if in nopython mode.
     """
-    assert assume.return_argument_array_only
-
     if isinstance(return_type, types.Array):
         # Walk IR to discover all arguments and all return statements
         retstmts = []
