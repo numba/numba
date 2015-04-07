@@ -120,14 +120,8 @@ typedef struct {
 static void
 dufunc_dealloc(PyDUFuncObject *self)
 {
-    if (self->ufunc) {
-        if (self->ufunc->functions)
-            PyArray_free(self->ufunc->functions);
-        if (self->ufunc->types)
-            PyArray_free(self->ufunc->types);
-        if (self->ufunc->data)
-            PyArray_free(self->ufunc->data);
-    }
+    /* Note: There is no need to call PyArray_free() on
+       self->ufunc->ptr, since ufunc_dealloc() will do it for us. */
     Py_XDECREF(self->ufunc);
     Py_XDECREF(self->dispatcher);
     Py_XDECREF(self->keepalive);
@@ -494,45 +488,42 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
             }
         }
     } else {
-        int ntypes=0, type_ofs=-1;
+        int ntypes=ufunc->ntypes + 1;
         PyUFuncGenericFunction *functions=NULL;
-        char *types=NULL;
         void **data=NULL;
+        char *types=NULL;
+        void *newptr=NULL, *oldptr=NULL;
+        size_t functions_size=sizeof(PyUFuncGenericFunction) * ntypes;
+        size_t data_size=sizeof(void *) * ntypes;
+        size_t type_ofs=sizeof(char) * ufunc->ntypes * ufunc->nargs;
+        size_t newsize=(functions_size + data_size +
+                        (sizeof(char) * ntypes * ufunc->nargs) +
+                        (sizeof(void *) - 1)); /* Alignment fudge... */
 
-        ntypes = ufunc->ntypes + 1;
-        functions = PyArray_realloc(ufunc->functions,
-                                    sizeof(PyUFuncGenericFunction) * ntypes);
-        if (!functions) {
-            ufunc->functions = NULL;
-            PyErr_NoMemory();
-            goto _dufunc__add_loop_fail;
-        }
+        oldptr = ufunc->ptr;
+        newptr = PyArray_malloc(newsize);
+        functions =
+          (PyUFuncGenericFunction*)((char *)newptr +
+                                    ((size_t)newptr % sizeof(void *)));
+        memcpy(functions, ufunc->functions,
+               sizeof(PyUFuncGenericFunction) * ufunc->ntypes);
         functions[ntypes - 1] = (PyUFuncGenericFunction)loop_ptr;
-
-        types = PyArray_realloc(ufunc->types,
-                                sizeof(char) * ntypes * ufunc->nargs);
-        if (!types) {
-            ufunc->types = NULL;
-            PyErr_NoMemory();
-            goto _dufunc__add_loop_fail;
-        }
-        type_ofs = (ufunc->ntypes * ufunc->nargs);
+        data = (void **)((char *)functions + functions_size);
+        memcpy(data, ufunc->data, sizeof(void *) * ufunc->ntypes);
+        data[ntypes - 1] = (void *)data_ptr;
+        types = (char *)data + data_size;
+        memcpy(types, ufunc->types, sizeof(char) * ufunc->ntypes *
+               ufunc->nargs);
         for (idx = 0; idx < ufunc->nargs; idx++) {
             types[idx + type_ofs] = (char)arg_types_arr[idx];
         }
-
-        data = PyArray_realloc(ufunc->data, sizeof(void *) * idx);
-        if (!data) {
-            ufunc->data = NULL;
-            PyErr_NoMemory();
-            goto _dufunc__add_loop_fail;
-        }
-        data[ntypes - 1] = (void *)data_ptr;
 
         ufunc->ntypes = ntypes;
         ufunc->functions = functions;
         ufunc->types = types;
         ufunc->data = data;
+        ufunc->ptr = newptr;
+        PyArray_free(oldptr);
     }
 
     PyArray_free(arg_types_arr);
