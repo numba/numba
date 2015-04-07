@@ -954,6 +954,20 @@ class BaseContext(object):
         """
         return lc.Module.new(name)
 
+    def nrt_meminfo_alloc(self, builder, size):
+        mod = cgutils.get_module(builder)
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+            [self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc")
+        return builder.call(fn, [size])
+
+    def nrt_meminfo_data(self, builder, meminfo):
+        mod = cgutils.get_module(builder)
+        voidptr = llvmir.IntType(8).as_pointer()
+        fnty = llvmir.FunctionType(voidptr, [voidptr])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
+        return builder.call(fn, [meminfo])
+
     def nrt_incref(self, builder, meminfo):
         mod = cgutils.get_module(builder)
         fnty = llvmir.FunctionType(llvmir.VoidType(),

@@ -10,7 +10,8 @@ import llvmlite.llvmpy.core as lc
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
-from numba import types, utils, cgutils, _helperlib, assume
+from numba import numpy_support
+from numba import types, utils, cgutils, _helperlib
 
 
 class NativeValue(object):
@@ -1072,12 +1073,24 @@ class PythonAPI(object):
         return self.builder.load(aryptr), failed
 
     def from_native_array(self, ary, typ):
-        assert assume.return_argument_array_only
+        builder = self.builder
         nativearycls = self.context.make_array(typ)
-        nativeary = nativearycls(self.context, self.builder, value=ary)
+        nativeary = nativearycls(self.context, builder, value=ary)
         parent = nativeary.parent
-        self.incref(parent)
-        return parent
+
+        retval = cgutils.alloca_once_value(builder, parent)
+        with cgutils.ifelse(builder, cgutils.is_null(builder, parent)) as (
+                then, orelse):
+            with then:
+                # Wrap it with MemInfoObject
+                newary = self.nrt_adapt_native_array(typ, ary)
+                builder.store(newary, retval)
+                self.context.nrt_decref(builder, nativeary.meminfo)
+
+            with orelse:
+                self.incref(parent)
+
+        return builder.load(retval)
 
     def to_native_optional(self, obj, typ):
         """
@@ -1204,6 +1217,21 @@ class PythonAPI(object):
 
         return self.builder.call(fn,
                                  (state_size, initial_state, genfn, finalizer, env))
+
+    def nrt_adapt_native_array(self, aryty, ary):
+        intty = ir.IntType(32)
+        fnty = Type.function(self.pyobj, [self.voidptr, intty, intty])
+        fn = self._get_function(fnty, name="NRT_adapt_native_array")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        dtype = numpy_support.as_dtype(aryty.dtype)
+
+        ndim = self.context.get_constant(types.int32, aryty.ndim)
+        typenum = self.context.get_constant(types.int32, dtype.num)
+
+        aryptr = cgutils.alloca_once_value(self.builder, ary)
+        return self.builder.call(fn, [self.builder.bitcast(aryptr,
+                                                           self.voidptr),
+                                      ndim, typenum])
 
     def numba_array_adaptor(self, ary, ptr):
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
