@@ -2,11 +2,23 @@
 #include <stdio.h>
 
 /* Debugging facilities */
+#undef NDEBUG
 #ifndef NDEBUG
 #   define NRT_Debug(X) X
 #else
 #   define NRT_Debug(X)
 #endif
+
+static
+void nrt_debug_print(char *fmt, ...) {
+
+   va_list args;
+
+   va_start(args, fmt);
+   vfprintf(stderr, fmt, args);
+   va_end(args);
+}
+
 
 /* TypeDefs */
 typedef void (*dtor_function)(void *ptr, void *info);
