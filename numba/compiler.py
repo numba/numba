@@ -622,18 +622,6 @@ def legalize_return_type(return_type, interp, targetctx):
 
         assert retstmts, "No return statements?"
 
-        # FIXME: In the future, we can return an array that is either a dynamically
-        #        allocated array or an array that is passed as argument.  This
-        #        must be statically resolvable.
-
-        # The return value must be the first modification of the value.
-
-        for var in retstmts:
-            cast = caststmts.get(var)
-            if cast is None or cast.value.name not in argvars:
-                raise TypeError("Only accept returning of array passed into the "
-                                "function as argument")
-
     elif (isinstance(return_type, types.Function) or
             isinstance(return_type, types.Phantom)):
         raise TypeError("Can't return function object in nopython mode")
