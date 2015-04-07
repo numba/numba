@@ -349,31 +349,78 @@ int NRT_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     return 0;
 }
 
+static
+PyObject* try_to_return_parent(arystruct_t *arystruct, int ndim, int typenum)
+{
+    int i;
+    PyArrayObject *array = (PyArrayObject *)arystruct->parent;
+
+    if (PyArray_DATA(array) != arystruct->data)
+        goto RETURN_ARRAY_COPY;
+
+    if (PyArray_TYPE(array) != typenum)
+        goto RETURN_ARRAY_COPY;
+
+    if (PyArray_NDIM(array) != ndim)
+        goto RETURN_ARRAY_COPY;
+
+    if (PyArray_ITEMSIZE(array) != arystruct->itemsize)
+        goto RETURN_ARRAY_COPY;
+
+    for(i = 0; i < ndim; ++i) {
+        if (PyArray_DIMS(array)[i] != arystruct->shape_and_strides[i])
+            goto RETURN_ARRAY_COPY;
+        if (PyArray_STRIDES(array)[i] != arystruct->shape_and_strides[ndim + i])
+            goto RETURN_ARRAY_COPY;
+    }
+
+    /* Yes, it is the same array
+       Return new reference */
+    Py_INCREF((PyObject *)array);
+    return (PyObject *)array;
+
+RETURN_ARRAY_COPY:
+    return NULL;
+
+}
 
 static
 PyObject* NRT_adapt_native_array(arystruct_t* arystruct, int ndim,
                                  int type_num) {
     PyObject *array;
-    MemInfoObject *miobj;
+    MemInfoObject *miobj = NULL;
     PyObject *args;
     npy_intp *shape, *strides;
-    int flags=NPY_ARRAY_WRITEABLE;
+    int flags=0;
 
-    miobj = PyObject_New(MemInfoObject, &MemInfoType);
-    PyObject_Init((PyObject*)miobj, &MemInfoType);
-    args = Py_BuildValue("(K)", (unsigned PY_LONG_LONG)arystruct->meminfo);
-    if(MemInfo_init(miobj, args, NULL)) {
-        return NULL;
+    if (arystruct->parent) {
+        array = try_to_return_parent(arystruct, ndim, type_num);
+        if (array) return array;
     }
-    Py_DECREF(args);
+
+    if (arystruct->meminfo) {
+        /* wrap into MemInfoObject */
+        miobj = PyObject_New(MemInfoObject, &MemInfoType);
+        PyObject_Init((PyObject*)miobj, &MemInfoType);
+        args = Py_BuildValue("(K)", (unsigned PY_LONG_LONG)arystruct->meminfo);
+        if(MemInfo_init(miobj, args, NULL)) {
+            return NULL;
+        }
+        Py_DECREF(args);
+        /* Set writable */
+        flags |= NPY_ARRAY_WRITEABLE;
+    }
 
     shape = arystruct->shape_and_strides;
     strides = shape + ndim;
     array = PyArray_New(&PyArray_Type, ndim, shape, type_num,
-                        strides, NRT_MemInfo_data(arystruct->meminfo),
+                        strides, arystruct->data,
                         arystruct->itemsize, flags, (PyObject*)miobj);
-    /* Set the MemInfoObject as the base object */
-    PyArray_SetBaseObject((PyArrayObject*)array, (PyObject *)miobj);
+
+    if (miobj) {
+        /* Set the MemInfoObject as the base object */
+        PyArray_SetBaseObject((PyArrayObject*)array, (PyObject *)miobj);
+    }
     return array;
 }
 
@@ -468,7 +515,7 @@ MOD_INIT(_nrt_python) {
     if (m == NULL)
         return MOD_ERROR_VAL;
     import_array();
-
+    NRT_MemSys_init();
     MemInfoType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&MemInfoType))
         return MOD_ERROR_VAL;

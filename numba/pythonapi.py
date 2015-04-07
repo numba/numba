@@ -1076,21 +1076,10 @@ class PythonAPI(object):
         builder = self.builder
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, builder, value=ary)
-        parent = nativeary.parent
 
-        retval = cgutils.alloca_once_value(builder, parent)
-        with cgutils.ifelse(builder, cgutils.is_null(builder, parent)) as (
-                then, orelse):
-            with then:
-                # Wrap it with MemInfoObject
-                newary = self.nrt_adapt_native_array(typ, ary)
-                builder.store(newary, retval)
-                self.context.nrt_decref(builder, nativeary.meminfo)
-
-            with orelse:
-                self.incref(parent)
-
-        return builder.load(retval)
+        newary = self.nrt_adapt_native_array(typ, ary)
+        self.context.nrt_decref(builder, nativeary.meminfo)
+        return newary
 
     def to_native_optional(self, obj, typ):
         """
