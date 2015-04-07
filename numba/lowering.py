@@ -248,7 +248,13 @@ class Lower(BaseLower):
             return impl(self.builder, (target, index, value))
 
         elif isinstance(inst, ir.Del):
-            self.decref(self.typeof(inst.value), self.loadvar(inst.value))
+            try:
+                # XXX: incorrect Del injection?
+                val = self.loadvar(inst.value)
+            except KeyError:
+                pass
+            else:
+                self.decref(self.typeof(inst.value), val)
 
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
