@@ -3,15 +3,6 @@
 #include "nrt.h"
 
 
-void nrt_debug_print(char *fmt, ...) {
-
-   va_list args;
-
-   va_start(args, fmt);
-   vfprintf(stderr, fmt, args);
-   va_end(args);
-}
-
 union MemInfo{
     struct {
         size_t         refct;
@@ -40,7 +31,7 @@ static MemSys TheMSys;
 
 static
 void nrt_meminfo_call_dtor(MemInfo *mi) {
-    NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor\n"));
+    NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
     /* call dtor */
     mi->payload.dtor(mi->payload.data, mi->payload.dtor_info);
     /* Clear and release MemInfo */
@@ -165,10 +156,12 @@ void NRT_MemInfo_destroy(MemInfo *mi) {
 }
 
 void NRT_MemInfo_acquire(MemInfo *mi) {
+    NRT_Debug(nrt_debug_print("NRT_acquire %p\n", mi));
     TheMSys.atomic_inc(&mi->payload.refct);
 }
 
 void NRT_MemInfo_release(MemInfo *mi, int defer) {
+    NRT_Debug(nrt_debug_print("NRT_release %p\n", mi));
     /* RefCt drop to zero */
     if (TheMSys.atomic_dec(&mi->payload.refct) == 0) {
         /* We have a destructor */

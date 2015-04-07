@@ -342,6 +342,9 @@ int NRT_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     for (i = 0; i < ndim; i++, p++) {
         *p = PyArray_STRIDE(ndary, i);
     }
+
+    NRT_Debug(nrt_debug_print("NRT_adapt_ndarray %p\n", arystruct->meminfo));
+
     NRT_MemInfo_acquire(arystruct->meminfo);
     return 0;
 }
@@ -352,7 +355,7 @@ NRT_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
     int i;
     npy_intp *p;
 
-    arystruct->meminfo = meminfo_new_from_pyobject((void*)buf->buf, buf->obj);
+    arystruct->meminfo = NULL; /* meminfo_new_from_pyobject((void*)buf->buf, buf->obj); */
     arystruct->data = buf->buf;
     arystruct->itemsize = buf->itemsize;
     arystruct->parent = buf->obj;
@@ -366,7 +369,7 @@ NRT_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
         *p = buf->strides[i];
     }
 
-    NRT_MemInfo_acquire(arystruct->meminfo);
+    /* NRT_MemInfo_acquire(arystruct->meminfo); */
 }
 
 static void

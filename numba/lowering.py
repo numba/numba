@@ -634,9 +634,11 @@ class Lower(BaseLower):
         return cgutils.alloca_once(self.builder, lltype, name=name)
 
     def incref(self, typ, val):
-        if isinstance(typ, types.Array):
+        if (isinstance(typ, types.Array) and
+                not isinstance(typ, types.NestedArray)):
             self.context.array_incref(self.builder, typ, val)
 
     def decref(self, typ, val):
-        if isinstance(typ, types.Array):
+        if (isinstance(typ, types.Array) and
+                not isinstance(typ, types.NestedArray)):
             self.context.array_decref(self.builder, typ, val)

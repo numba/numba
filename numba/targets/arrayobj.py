@@ -76,8 +76,6 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     for k, v in attrs.items():
         setattr(array, k, v)
 
-    # Incref
-    context.nrt_incref(builder, meminfo)
     return array
 
 
