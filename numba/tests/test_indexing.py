@@ -138,11 +138,7 @@ class TestIndexing(TestCase):
         self.assertTrue((pyfunc(a, 0, 10, 2) == cfunc(a, 0, 10, 2)).all())
 
     def test_1d_slicing_npm(self):
-        """
-        Return of arbitrary array is not supported yet
-        """
-        with self.assertTypingError():
-            self.test_1d_slicing(flags=Noflags)
+        self.test_1d_slicing(flags=Noflags)
 
     def test_1d_slicing2(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase2
@@ -456,7 +452,7 @@ class TestIndexing(TestCase):
         arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(10, dtype='i4')
         self.assertEqual(pyfunc(a, 0), cfunc(a, 0))
         self.assertEqual(pyfunc(a, 9), cfunc(a, 9))
@@ -482,7 +478,7 @@ class TestIndexing(TestCase):
         arraytype = types.Array(types.int32, 2, 'C')
         cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(100, dtype='i4').reshape(10, 10)
         self.assertTrue((pyfunc(a, 0) == cfunc(a, 0)).all())
         self.assertTrue((pyfunc(a, 9) == cfunc(a, 9)).all())
@@ -558,7 +554,7 @@ class TestIndexing(TestCase):
         # TODO should be enable to handle this in NoPython mode
         cr = compile_isolated(pyfunc, (arraytype,), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(100, dtype='i4').reshape(10, 10)
         self.assertTrue((pyfunc(a) == cfunc(a)).all())
 
@@ -572,7 +568,7 @@ class TestIndexing(TestCase):
         # TODO should be enable to handle this in NoPython mode
         cr = compile_isolated(pyfunc, (arraytype,), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(100, dtype='i4').reshape(10, 10)
         self.assertTrue((pyfunc(a) == cfunc(a)).all())
 
@@ -586,7 +582,7 @@ class TestIndexing(TestCase):
         indextype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype, indextype), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(100, dtype='i4').reshape(10, 10)
         index = np.array([], dtype='i4')
         self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
@@ -607,7 +603,7 @@ class TestIndexing(TestCase):
         masktype = types.Array(types.boolean, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype, masktype), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(100, dtype='i4').reshape(10, 10)
         mask = np.array([True, False, True])
         self.assertTrue((pyfunc(a, mask) == cfunc(a, mask)).all())
