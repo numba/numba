@@ -27,6 +27,19 @@ class TestDynArray(unittest.TestCase):
         np.testing.assert_equal(123, arr)
         del arr
 
+    def test_return_global_array(self):
+        y = np.ones(4, dtype=np.float32)
+
+        def return_external_array():
+            return y
+
+        cfunc = njit(return_external_array)
+        out = cfunc()
+
+        self.assertIs(y, out)
+        np.testing.assert_equal(y, np.ones(4, dtype=np.float32))
+        np.testing.assert_equal(out, np.ones(4, dtype=np.float32))
+
 
 if __name__ == "__main__":
     unittest.main()

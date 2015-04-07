@@ -923,9 +923,19 @@ class BaseContext(object):
 
         # Create array structure
         cary = self.make_array(typ)(self, builder)
-        cary.data = builder.bitcast(data, cary.data.type)
-        cary.shape = cshape
-        cary.strides = cstrides
+
+        rt_addr = self.get_constant(types.uintp, id(ary)).inttoptr(
+            self.get_value_type(types.pyobject))
+
+        intp_itemsize = self.get_constant(types.intp, ary.dtype.itemsize)
+        self.populate_array(cary,
+                            data=builder.bitcast(data, cary.data.type),
+                            shape=cshape,
+                            strides=cstrides,
+                            itemsize=intp_itemsize,
+                            parent=rt_addr,
+                            meminfo=None)
+
         return cary._getvalue()
 
     def get_abi_sizeof(self, ty):
