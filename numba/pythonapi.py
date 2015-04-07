@@ -909,8 +909,10 @@ class PythonAPI(object):
 
         elif isinstance(typ, types.Array):
             val, failed = self.to_native_array(obj, typ)
+            val_on_stack = cgutils.alloca_once_value(builder, val)
 
             def cleanup_array():
+                val = self.builder.load(val_on_stack)
                 self.context.array_decref(self.builder, typ, val)
 
             return NativeValue(val, is_error=failed,
