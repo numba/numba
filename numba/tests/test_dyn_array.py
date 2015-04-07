@@ -36,7 +36,7 @@ class TestDynArray(unittest.TestCase):
         cfunc = njit(return_external_array)
         out = cfunc()
 
-        self.assertIs(y, out)
+        np.testing.assert_equal(y, out)
         np.testing.assert_equal(y, np.ones(4, dtype=np.float32))
         np.testing.assert_equal(out, np.ones(4, dtype=np.float32))
 
