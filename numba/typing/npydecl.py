@@ -1,13 +1,13 @@
 from __future__ import absolute_import, print_function
 
 import numpy
-import itertools
 from .. import types
 from .templates import (AttributeTemplate, AbstractTemplate,
                                     Registry, signature)
 
 from ..numpy_support import (ufunc_find_matching_loop,
-                             supported_ufunc_loop, as_dtype)
+                             supported_ufunc_loop, as_dtype,
+                             from_dtype)
 
 from ..typeinfer import TypingError
 
@@ -307,20 +307,23 @@ class NdIndex(AbstractTemplate):
 
 builtin_global(numpy.ndindex, types.Function(NdIndex))
 
-
+@builtin
 class NdEmpty(AbstractTemplate):
     key = numpy.empty
 
     def generic(self, args, kws):
         assert not kws
-
         shape = args[0]
+        dtype = types.double
+        if len(args) >= 2:
+            npy_dtype = args[1]
+            dtype = from_dtype(numpy.dtype(npy_dtype.template.key))
 
         if isinstance(shape, types.Integer):
             return signature(types.double[::1], *args)
-        if isinstance(shape, (types.Tuple, types.UniTuple)):
+        elif isinstance(shape, (types.Tuple, types.UniTuple)):
             if all(isinstance(s, types.Integer) for s in shape):
-                aryty = types.Array(dtype=types.double,
+                aryty = types.Array(dtype=dtype,
                                     ndim=len(shape),
                                     layout='C')
                 return signature(aryty, *args)
