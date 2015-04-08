@@ -596,6 +596,8 @@ class Lower(BaseLower):
         elif expr.op == "build_tuple":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
+            for ty, val in zip(itemtys, itemvals):
+                self.incref(ty, val)
             castvals = [self.context.cast(self.builder, val, fromty, toty)
                         for val, toty, fromty in zip(itemvals, resty, itemtys)]
             tup = self.context.get_constant_undef(resty)
