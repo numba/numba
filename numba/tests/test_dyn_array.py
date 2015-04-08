@@ -27,6 +27,28 @@ class TestDynArray(unittest.TestCase):
         np.testing.assert_equal(123, arr)
         del arr
 
+    def test_empty_2d(self):
+        def pyfunc(m, n):
+            arr = np.empty((m, n))
+            for i in range(m):
+                for j in range(n):
+                    arr[i, j] = i + j
+
+            return arr
+
+        cfunc = njit(pyfunc)
+        m = 4
+        n = 3
+        expected_arr = pyfunc(m, n)
+        got_arr = cfunc(m, n)
+        np.testing.assert_equal(expected_arr, got_arr)
+
+        self.assertEqual(expected_arr.size, got_arr.size)
+        self.assertEqual(expected_arr.shape, got_arr.shape)
+        self.assertEqual(expected_arr.strides, got_arr.strides)
+
+        del got_arr
+
     def test_return_global_array(self):
         y = np.ones(4, dtype=np.float32)
 

@@ -318,14 +318,20 @@ class NdEmpty(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-        [shape] = args
+
+        shape = args[0]
 
         if isinstance(shape, types.Integer):
             return signature(types.double[::1], *args)
+        if isinstance(shape, (types.Tuple, types.UniTuple)):
+            if all(isinstance(s, types.Integer) for s in shape):
+                aryty = types.Array(dtype=types.double,
+                                    ndim=len(shape),
+                                    layout='C')
+                return signature(aryty, *args)
 
 
 builtin_global(numpy.empty, types.Function(NdEmpty))
-
 
 builtin_global(numpy, types.Module(numpy))
 

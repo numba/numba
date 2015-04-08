@@ -1141,8 +1141,11 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
 
 @builtin
 @implement(numpy.empty, types.Kind(types.Integer))
-def numpy_empty(context, builder, sig, args):
-    [arrlen] = args
+@implement(numpy.empty, types.Kind(types.Tuple))
+@implement(numpy.empty, types.Kind(types.UniTuple))
+def numpy_empty_nd(context, builder, sig, args):
+    [arrshapetype] = sig.args
+    [arrshape] = args
     arrtype = sig.return_type
     arycls = make_array(arrtype)
     ary = arycls(context, builder)
@@ -1150,14 +1153,30 @@ def numpy_empty(context, builder, sig, args):
     datatype = context.get_data_type(arrtype.dtype)
     itemsize = context.get_constant(types.intp,
                                     context.get_abi_sizeof(datatype))
+
+    if isinstance(arrshapetype, types.Integer):
+        shapes = [arrshape]
+    else:
+        shapes = cgutils.unpack_tuple(builder, arrshape, count=len(arrshapetype))
+
+    # compute array length
+    arrlen = context.get_constant(types.intp, 1)
+    for s in shapes:
+        arrlen = builder.mul(arrlen, s)
+
+    strides = [itemsize]
+    for i, s in enumerate(shapes[1:]):
+        strides.append(builder.mul(strides[i], s))
+
     meminfo = context.nrt_meminfo_alloc(builder,
                                         size=builder.mul(itemsize, arrlen))
     data = context.nrt_meminfo_data(builder, meminfo)
 
     populate_array(ary,
                    data=builder.bitcast(data, datatype.as_pointer()),
-                   shape=cgutils.pack_array(builder, [arrlen]),
-                   strides=cgutils.pack_array(builder, [itemsize]),
+                   shape=cgutils.pack_array(builder, shapes),
+                   strides=cgutils.pack_array(builder,
+                                              tuple(reversed(strides))),
                    itemsize=itemsize,
                    meminfo=meminfo)
     return ary._getvalue()
