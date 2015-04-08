@@ -1,7 +1,7 @@
 #include <stdarg.h>
 #include <string.h> /* for memset */
 #include "nrt.h"
-
+#include "assert.h"
 
 union MemInfo{
     struct {
@@ -35,7 +35,7 @@ void nrt_meminfo_call_dtor(MemInfo *mi) {
     /* call dtor */
     mi->payload.dtor(mi->payload.data, mi->payload.dtor_info);
     /* Clear and release MemInfo */
-    NRT_MemSys_insert_meminfo(mi);
+    NRT_MemInfo_destroy(mi);
 }
 
 static
@@ -61,12 +61,13 @@ void NRT_MemSys_process_defer_dtor() {
 
 void NRT_MemSys_insert_meminfo(MemInfo *newnode) {
     MemInfo *prev = TheMSys.mi_freelist;
+    assert(newnode->payload.refct == 0 && "RefCt must be 0");
     if (NULL == newnode) {
         newnode = meminfo_malloc();
     }
     NRT_Debug(nrt_debug_print("NRT_MemSys_insert_meminfo newnode=%p\n",
                               newnode));
-    memset(newnode, 0, sizeof(MemInfo));
+    memset(newnode, 0, sizeof(MemInfo));  /* to catch bugs; not required */
     TheMSys.mi_freelist = newnode;
     newnode->freelist = prev;
 }
@@ -80,6 +81,8 @@ MemInfo* NRT_MemSys_pop_meminfo() {
         node = TheMSys.mi_freelist;
         TheMSys.mi_freelist = node->freelist;
     }
+
+    memset(node, 0, sizeof(MemInfo));   /* to catch bugs; not required */
     NRT_Debug(nrt_debug_print("NRT_MemSys_pop_meminfo: return %p\n", node));
     return node;
 }
@@ -162,6 +165,7 @@ void NRT_MemInfo_acquire(MemInfo *mi) {
 
 void NRT_MemInfo_release(MemInfo *mi, int defer) {
     NRT_Debug(nrt_debug_print("NRT_release %p\n", mi));
+    assert (mi->payload.refct > 0 && "RefCt cannot be 0");
     /* RefCt drop to zero */
     if (TheMSys.atomic_dec(&mi->payload.refct) == 0) {
         /* We have a destructor */
