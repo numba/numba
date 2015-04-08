@@ -29,7 +29,7 @@ class TestDynArray(unittest.TestCase):
 
     def test_empty_2d(self):
         def pyfunc(m, n):
-            arr = np.empty((m, n))
+            arr = np.empty((m, n), np.int32)
             for i in range(m):
                 for j in range(n):
                     arr[i, j] = i + j
