@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, division
 import numpy
 
 from numba import jit, typeof, utils
+from .. import numpy_support
 from . import _internal, ufuncbuilder
 
 class DUFunc(_internal._DUFunc):
@@ -17,7 +18,10 @@ class DUFunc(_internal._DUFunc):
 
     def _compile_for_args(self, *args, **kws):
         assert len(kws) == 0
-        argtys = tuple(typeof(arg) for arg in args)
+        argtys = tuple(numpy_support.map_arrayscalar_type(arg)
+                       if numpy_support.is_arrayscalar(arg)
+                       else typeof(arg)
+                       for arg in args)
         if all(hasattr(argty, 'dtype') for argty in argtys):
             argtys = tuple(argty.dtype for argty in argtys)
         cres, args, return_type = ufuncbuilder._compile_ewise_function(
