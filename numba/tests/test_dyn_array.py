@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import sys
 import numpy as np
 
 from numba import unittest_support as unittest
@@ -120,12 +121,22 @@ class TestDynArray(unittest.TestCase):
 
         arr = np.ones(4, dtype=np.float32)
 
+        initrefct = sys.getrefcount(arr)
+
         cfunc = njit(pyfunc)
-        expected = cfunc(arr)
-        got = pyfunc(arr)
+        got = cfunc(arr)
+        self.assertEqual(initrefct + 1, sys.getrefcount(arr))
+        expected = pyfunc(arr)
+        self.assertEqual(initrefct + 2, sys.getrefcount(arr))
 
         np.testing.assert_equal(expected, arr[arr.size // 2])
         np.testing.assert_equal(expected, got)
+
+        del expected
+        self.assertEqual(initrefct + 1, sys.getrefcount(arr))
+        del got
+        self.assertEqual(initrefct, sys.getrefcount(arr))
+
 
 
 if __name__ == "__main__":
