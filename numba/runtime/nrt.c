@@ -149,7 +149,7 @@ MemInfo* NRT_MemInfo_alloc(size_t size) {
 MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
     void *data = NRT_Allocate(size);
     memset(data, 0, size);
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p\n", data));
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p %llu\n", data, size));
     void *meminfo = NRT_MemInfo_new(data, size, nrt_internal_dtor, (void*)size);
     return meminfo;
 }
