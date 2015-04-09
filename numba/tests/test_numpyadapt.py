@@ -4,7 +4,7 @@ import numpy
 
 import numba.unittest_support as unittest
 from numba.ctypes_support import *
-from numba.runtime import _nrt_python
+from numba import _helperlib
 
 
 class ArrayStruct3D(Structure):
@@ -24,7 +24,7 @@ class TestArrayAdaptor(unittest.TestCase):
     def test_array_adaptor(self):
         arystruct = ArrayStruct3D()
 
-        adaptorptr = _nrt_python.c_helpers['adapt_ndarray']
+        adaptorptr = _helperlib.c_helpers['adapt_ndarray']
         adaptor = PYFUNCTYPE(c_int, py_object, c_void_p)(adaptorptr)
 
         ary = numpy.arange(60).reshape(2, 3, 10)
