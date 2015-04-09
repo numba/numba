@@ -114,6 +114,7 @@ packages = [
     "numba.cuda.tests.cudapy",
     "numba.cuda.tests.nocuda",
     "numba.annotations",
+    "numba.runtime",
 ]
 
 setup(name='numba',
