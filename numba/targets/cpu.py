@@ -165,6 +165,7 @@ class CPUTargetOptions(TargetOptions):
         "looplift": bool,
         "wraparound": bool,
         "boundcheck": bool,
+        "nrt": bool,
     }
 
 

@@ -138,7 +138,11 @@ class TestIndexing(TestCase):
         self.assertTrue((pyfunc(a, 0, 10, 2) == cfunc(a, 0, 10, 2)).all())
 
     def test_1d_slicing_npm(self):
-        self.test_1d_slicing(flags=Noflags)
+        """
+        Return of arbitrary array is not supported yet
+        """
+        with self.assertTypingError():
+            self.test_1d_slicing(flags=Noflags)
 
     def test_1d_slicing2(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase2

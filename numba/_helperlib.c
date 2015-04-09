@@ -12,6 +12,8 @@
 #include <numpy/ndarrayobject.h>
 #include <numpy/arrayscalars.h>
 
+#include "_arraystruct.h"
+
 /* For Numpy 1.6 */
 #ifndef NPY_ARRAY_BEHAVED
     #define NPY_ARRAY_BEHAVED NPY_BEHAVED
@@ -1118,11 +1120,59 @@ CLEANUP:
     return record;
 }
 
+static
+int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
+    PyArrayObject *ndary;
+    int i, ndim;
+    npy_intp *p;
+
+    if (!PyArray_Check(obj)) {
+        return -1;
+    }
+
+    ndary = (PyArrayObject*)obj;
+    ndim = PyArray_NDIM(ndary);
+
+    arystruct->data = PyArray_DATA(ndary);
+    arystruct->nitems = PyArray_SIZE(ndary);
+    arystruct->itemsize = PyArray_ITEMSIZE(ndary);
+    arystruct->parent = obj;
+    p = arystruct->shape_and_strides;
+    for (i = 0; i < ndim; i++, p++) {
+        *p = PyArray_DIM(ndary, i);
+    }
+    for (i = 0; i < ndim; i++, p++) {
+        *p = PyArray_STRIDE(ndary, i);
+    }
+    arystruct->meminfo = NULL;
+    return 0;
+}
+
 static int
 Numba_get_buffer(PyObject *obj, Py_buffer *buf)
 {
     /* Ask for shape and strides, but no suboffsets */
     return PyObject_GetBuffer(obj, buf, PyBUF_RECORDS_RO);
+}
+
+static void
+Numba_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
+{
+    int i;
+    npy_intp *p;
+
+    arystruct->data = buf->buf;
+    arystruct->itemsize = buf->itemsize;
+    arystruct->parent = buf->obj;
+    arystruct->nitems = 1;
+    p = arystruct->shape_and_strides;
+    for (i = 0; i < buf->ndim; i++, p++) {
+        *p = buf->shape[i];
+        arystruct->nitems *= buf->shape[i];
+    }
+    for (i = 0; i < buf->ndim; i++, p++) {
+        *p = buf->strides[i];
+    }
 }
 
 static void
@@ -1382,9 +1432,11 @@ build_c_helpers_dict(void)
     declmethod(lgamma);
     declmethod(lgammaf);
     declmethod(complex_adaptor);
+    declmethod(adapt_ndarray);
     declmethod(ndarray_new);
     declmethod(extract_record_data);
     declmethod(get_buffer);
+    declmethod(adapt_buffer);
     declmethod(release_buffer);
     declmethod(extract_np_datetime);
     declmethod(create_np_datetime);
