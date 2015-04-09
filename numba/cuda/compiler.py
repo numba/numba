@@ -408,10 +408,12 @@ class CUDAKernel(CUDAKernelBase):
 
             c_intp = ctypes.c_ssize_t
 
+            meminfo = ctypes.c_void_p(0)
             parent = ctypes.c_void_p(0)
             nitems = c_intp(devary.size)
             itemsize = c_intp(devary.dtype.itemsize)
             data = ctypes.c_void_p(driver.device_pointer(devary))
+            kernelargs.append(meminfo)
             kernelargs.append(parent)
             kernelargs.append(nitems)
             kernelargs.append(itemsize)
