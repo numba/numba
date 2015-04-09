@@ -112,6 +112,7 @@ packages = [
     "numba.cuda.tests.cudadrv",
     "numba.cuda.tests.cudadrv.data",
     "numba.cuda.tests.cudapy",
+    "numba.cuda.tests.nocuda",
     "numba.annotations",
 ]
 
@@ -136,6 +137,7 @@ setup(name='numba',
         "numba.npyufunc": ["*.c", "*.h"],
         "numba.typeconv": ["*.cpp", "*.hpp"],
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
+        "numba.annotations": ["*.html"],
       },
       scripts=["numba/pycc/pycc", "bin/numba"],
       author="Continuum Analytics, Inc.",

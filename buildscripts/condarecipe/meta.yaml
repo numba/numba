@@ -27,6 +27,7 @@ test:
     - argparse       [py26]
     - unittest2      [py26]
     - cudatoolkit
+    - jinja2
   files:
     - mandel.py
   commands:
