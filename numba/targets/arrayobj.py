@@ -1158,9 +1158,12 @@ def numpy_empty_nd(context, builder, sig, args):
                                     context.get_abi_sizeof(datatype))
 
     if isinstance(arrshapetype, types.Integer):
-        shapes = [arrshape]
+        shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
     else:
-        shapes = cgutils.unpack_tuple(builder, arrshape, count=len(arrshapetype))
+        arrshape = context.cast(builder, arrshape, arrshapetype,
+                                types.UniTuple(types.intp, len(arrshapetype)))
+        shapes = cgutils.unpack_tuple(builder, arrshape,
+                                      count=len(arrshapetype))
 
     # compute array length
     arrlen = context.get_constant(types.intp, 1)

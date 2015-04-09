@@ -65,7 +65,7 @@ meminfo_new(PyObject *self, PyObject *args) {
         return NULL;
     }
     mi = meminfo_new_from_pyobject((void*)addr_data, ownerobj);
-    return Py_BuildValue("K", mi);
+    return PyLong_FromVoidPtr(mi);
 }
 
 /*
@@ -80,7 +80,7 @@ meminfo_alloc(PyObject *self, PyObject *args) {
         return NULL;
     }
     mi = NRT_MemInfo_alloc(size);
-    return Py_BuildValue("K", mi);
+    return PyLong_FromVoidPtr(mi);
 }
 
 /*
@@ -96,7 +96,7 @@ meminfo_alloc_safe(PyObject *self, PyObject *args) {
         return NULL;
     }
     mi = NRT_MemInfo_alloc_safe(size);
-    return Py_BuildValue("K", mi);
+    return PyLong_FromVoidPtr(mi);
 }
 
 typedef struct {
@@ -214,7 +214,7 @@ MemInfo_get_defer(MemInfoObject *self) {
 static
 PyObject*
 MemInfo_get_data(MemInfoObject *self) {
-    return Py_BuildValue("K", NRT_MemInfo_data(self->meminfo));
+    return PyLong_FromVoidPtr(NRT_MemInfo_data(self->meminfo));
 }
 
 static void
