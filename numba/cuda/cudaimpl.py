@@ -152,7 +152,8 @@ def ptx_cmem_arylike(context, builder, sig, args):
                            shape=cgutils.pack_array(builder, kshape),
                            strides=cgutils.pack_array(builder, kstrides),
                            itemsize=ary.itemsize,
-                           parent=ary.parent)
+                           parent=ary.parent,
+                           meminfo=None)
 
     return ary._getvalue()
 
