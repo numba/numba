@@ -152,6 +152,12 @@ class BaseContext(object):
     implement_powi_as_math_call = False
     implement_pow_as_math_call = False
 
+    # Bound checking
+    enable_boundcheck = False
+
+    # NRT
+    enable_nrt = False
+
     def __init__(self, typing_context):
         _load_global_helpers()
         self.address_size = utils.MACHINE_BITS
@@ -182,6 +188,14 @@ class BaseContext(object):
     @property
     def target_data(self):
         raise NotImplementedError
+
+    def subtarget(self, **kws):
+        obj = copy.copy(self)  # shallow copy
+        for k, v in kws.items():
+            if not hasattr(obj, k):
+                raise NameError("unknown option {0!r}".format(k))
+            setattr(obj, k, v)
+        return obj
 
     def install_registry(self, registry):
         """
@@ -965,6 +979,8 @@ class BaseContext(object):
         return lc.Module.new(name)
 
     def nrt_meminfo_alloc(self, builder, size):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
         mod = cgutils.get_module(builder)
         fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
             [self.get_value_type(types.intp)])
@@ -972,6 +988,8 @@ class BaseContext(object):
         return builder.call(fn, [size])
 
     def nrt_meminfo_data(self, builder, meminfo):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
         mod = cgutils.get_module(builder)
         voidptr = llvmir.IntType(8).as_pointer()
         fnty = llvmir.FunctionType(voidptr, [voidptr])
@@ -979,6 +997,8 @@ class BaseContext(object):
         return builder.call(fn, [meminfo])
 
     def nrt_incref(self, builder, meminfo):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
         mod = cgutils.get_module(builder)
         fnty = llvmir.FunctionType(llvmir.VoidType(),
             [llvmir.IntType(8).as_pointer()])
@@ -986,6 +1006,8 @@ class BaseContext(object):
         builder.call(fn, [meminfo])
 
     def nrt_decref(self, builder, meminfo):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
         mod = cgutils.get_module(builder)
         fnty = llvmir.FunctionType(llvmir.VoidType(),
             [llvmir.IntType(8).as_pointer()])
@@ -993,10 +1015,14 @@ class BaseContext(object):
         builder.call(fn, [meminfo])
 
     def array_incref(self, builder, typ, array):
+        if not self.enable_nrt:
+            return
         ary = self.make_array(typ)(self, builder, value=array)
         self.nrt_incref(builder, ary.meminfo)
 
     def array_decref(self, builder, typ, array):
+        if not self.enable_nrt:
+            return
         ary = self.make_array(typ)(self, builder, value=array)
         self.nrt_decref(builder, ary.meminfo)
 

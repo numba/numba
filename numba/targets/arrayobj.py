@@ -1188,4 +1188,3 @@ def numpy_empty_nd(context, builder, sig, args):
     return ary._getvalue()
 
 
-

@@ -33,6 +33,7 @@ class Flags(utils.ConfigOptions):
         'boundcheck',
         'forceinline',
         'no_cpython_wrapper',
+        'nrt',
     ])
 
 
@@ -219,7 +220,14 @@ class Pipeline(object):
     def __init__(self, typingctx, targetctx, library, args, return_type, flags,
                  locals):
         self.typingctx = typingctx
-        self.targetctx = targetctx
+
+        subtargetoptions = {}
+        if flags.boundcheck:
+            subtargetoptions['enable_boundcheck'] = True
+        if flags.nrt:
+            subtargetoptions['enable_nrt'] = True
+
+        self.targetctx = targetctx.subtarget(**subtargetoptions)
         self.library = library
         self.args = args
         self.return_type = return_type
@@ -602,7 +610,7 @@ def legalize_return_type(return_type, interp, targetctx):
     Only accept array return type iff it is passed into the function.
     Reject function object return types if in nopython mode.
     """
-    if isinstance(return_type, types.Array):
+    if not targetctx.enable_nrt and isinstance(return_type, types.Array):
         # Walk IR to discover all arguments and all return statements
         retstmts = []
         caststmts = {}
@@ -619,6 +627,12 @@ def legalize_return_type(return_type, interp, targetctx):
                         argvars.add(inst.target.name)
 
         assert retstmts, "No return statements?"
+
+        for var in retstmts:
+            cast = caststmts.get(var)
+            if cast is None or cast.value.name not in argvars:
+                raise TypeError("Only accept returning of array passed into the "
+                                "function as argument")
 
     elif (isinstance(return_type, types.Function) or
             isinstance(return_type, types.Phantom)):

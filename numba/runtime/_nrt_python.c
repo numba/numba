@@ -5,6 +5,8 @@
 #include <numpy/ndarrayobject.h>
 #include <numpy/arrayscalars.h>
 
+#include "_arraystruct.h"
+
 /* For Numpy 1.6 */
 #ifndef NPY_ARRAY_BEHAVED
     #define NPY_ARRAY_BEHAVED NPY_BEHAVED
@@ -298,22 +300,6 @@ static PyTypeObject MemInfoType = {
 
 /****** Array adaptor code ******/
 
-
-/*
- * Fill in the *arystruct* with information from the Numpy array *obj*.
- * *arystruct*'s layout is defined in numba.targets.arrayobj (look
- * for the ArrayTemplate class).
- */
-
-typedef struct {
-    void     *meminfo;
-    PyObject *parent;
-    npy_intp nitems;
-    npy_intp itemsize;
-    void *data;
-
-    npy_intp shape_and_strides[];
-} arystruct_t;
 
 static
 int NRT_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {

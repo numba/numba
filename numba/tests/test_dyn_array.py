@@ -7,9 +7,12 @@ from numba import unittest_support as unittest
 from numba import njit
 
 
+nrtjit = njit(nrt=True)
+
+
 class TestDynArray(unittest.TestCase):
     def test_empty_1d(self):
-        @njit
+        @nrtjit
         def foo(n):
             arr = np.empty(n)
             for i in range(n):
@@ -37,7 +40,7 @@ class TestDynArray(unittest.TestCase):
 
             return arr
 
-        cfunc = njit(pyfunc)
+        cfunc = nrtjit(pyfunc)
         m = 4
         n = 3
         expected_arr = pyfunc(m, n)
@@ -59,7 +62,7 @@ class TestDynArray(unittest.TestCase):
 
             return arr[p]
 
-        cfunc = njit(pyfunc)
+        cfunc = nrtjit(pyfunc)
         m = 4
         n = 3
         p = 2
@@ -79,7 +82,7 @@ class TestDynArray(unittest.TestCase):
         def return_external_array():
             return y
 
-        cfunc = njit(return_external_array)
+        cfunc = nrtjit(return_external_array)
         out = cfunc()
 
         np.testing.assert_equal(y, out)
@@ -92,7 +95,7 @@ class TestDynArray(unittest.TestCase):
         def return_external_array():
             return y[2:]
 
-        cfunc = njit(return_external_array)
+        cfunc = nrtjit(return_external_array)
         out = cfunc()
 
         yy = y[2:]
@@ -106,7 +109,7 @@ class TestDynArray(unittest.TestCase):
 
         arr = np.ones(4, dtype=np.float32)
 
-        cfunc = njit(pyfunc)
+        cfunc = nrtjit(pyfunc)
         expected = cfunc(arr)
         got = pyfunc(arr)
 
@@ -123,7 +126,7 @@ class TestDynArray(unittest.TestCase):
 
         initrefct = sys.getrefcount(arr)
 
-        cfunc = njit(pyfunc)
+        cfunc = nrtjit(pyfunc)
         got = cfunc(arr)
         self.assertEqual(initrefct + 1, sys.getrefcount(arr))
         expected = pyfunc(arr)
