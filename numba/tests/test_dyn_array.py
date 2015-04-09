@@ -140,6 +140,28 @@ class TestDynArray(unittest.TestCase):
         del got
         self.assertEqual(initrefct, sys.getrefcount(arr))
 
+    def test_ufunc_with_allocated_output(self):
+
+        def pyfunc(a, b):
+            out = np.empty(a.shape)
+            np.add(a, b, out)
+            return out
+
+        cfunc = nrtjit(pyfunc)
+
+        # 1D case
+        arr_a = np.random.random(10)
+        arr_b = np.random.random(10)
+
+        np.testing.assert_equal(pyfunc(arr_a, arr_b),
+                                cfunc(arr_a, arr_b))
+
+        # 2D case
+        arr_a = np.random.random(10).reshape(2, 5)
+        arr_b = np.random.random(10).reshape(2, 5)
+
+        np.testing.assert_equal(pyfunc(arr_a, arr_b),
+                                cfunc(arr_a, arr_b))
 
 
 if __name__ == "__main__":
