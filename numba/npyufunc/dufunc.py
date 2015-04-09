@@ -21,7 +21,7 @@ class DUFunc(_internal._DUFunc):
         argtys = tuple(numpy_support.map_arrayscalar_type(arg)
                        if numpy_support.is_arrayscalar(arg)
                        else typeof(arg)
-                       for arg in args)
+                       for arg in args[:self.ufunc.nin])
         if all(hasattr(argty, 'dtype') for argty in argtys):
             argtys = tuple(argty.dtype for argty in argtys)
         cres, args, return_type = ufuncbuilder._compile_ewise_function(

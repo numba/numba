@@ -201,14 +201,13 @@ class TestVectorizeDecor(unittest.TestCase):
             vectorize([sig], identity=2)(add)
 
     def test_vectorize_no_args(self):
-        print("test_vectorize_no_args")
         a = numpy.linspace(0,1,10)
         b = numpy.linspace(1,2,10)
-        c = numpy.empty(10)
         ufunc = vectorize(add)
-        print(type(ufunc))
         self.assertTrue(numpy.all(ufunc(a,b) == (a + b)))
-        ufunc(a, b, c)
+        ufunc2 = vectorize(add)
+        c = numpy.empty(10)
+        ufunc2(a, b, c)
         self.assertTrue(numpy.all(c == (a + b)))
 
     def test_vectorize_only_kws(self):
