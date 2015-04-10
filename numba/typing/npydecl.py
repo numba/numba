@@ -89,7 +89,13 @@ class Numpy_rules_ufunc(AbstractTemplate):
         if implicit_output_count > 0:
             # XXX this is currently wrong for datetime64 and timedelta64,
             # as ufunc_find_matching_loop() doesn't do any type inference.
-            out.extend(ufunc_loop.outputs[-implicit_output_count:])
+            if ndims == 0:
+                out.extend(ufunc_loop.outputs[-implicit_output_count:])
+            else:
+                # will need to create and return an output array...
+                msg = ("implicit output array creation not supported in this "
+                       "mode for ufunc '{0}'")
+                raise TypingError(msg=msg.format(ufunc.__name__))
 
         # note: although the previous code should support multiple return values, only one
         #       is supported as of now (signature may not support more than one).
