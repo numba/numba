@@ -23,8 +23,8 @@ void nrt_debug_print(char *fmt, ...) {
 /* TypeDefs */
 typedef void (*dtor_function)(void *ptr, void *info);
 typedef size_t (*atomic_inc_dec_func)(size_t *ptr);
-typedef int (*atomic_cas_func)(size_t *ptr, size_t cmp, size_t repl,
-                               size_t *oldptr);
+typedef int (*atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
+                               void **oldptr);
 
 typedef union MemInfo MemInfo;
 typedef struct MemSys MemSys;
