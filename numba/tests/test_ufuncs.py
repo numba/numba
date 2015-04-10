@@ -1007,7 +1007,7 @@ class TestUFuncs(TestCase):
             self.assertTrue(np.all(result == expected))
 
     def test_implicit_output_npm(self):
-        with self.assertRaises(TypingError):
+        with self.assertRaises(TypeError):
             def myadd(a0, a1):
                 return np.add(a0, a1)
             arr_ty = types.Array(types.uint64, 1, 'C')
