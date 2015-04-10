@@ -398,7 +398,6 @@ PyObject* NRT_adapt_native_array(arystruct_t* arystruct, int ndim,
     if (arystruct->meminfo) {
         /* wrap into MemInfoObject */
         miobj = PyObject_New(MemInfoObject, &MemInfoType);
-        PyObject_Init((PyObject*)miobj, &MemInfoType);
         args = Py_BuildValue("(K)", (unsigned PY_LONG_LONG)arystruct->meminfo);
         if(MemInfo_init(miobj, args, NULL)) {
             return NULL;
