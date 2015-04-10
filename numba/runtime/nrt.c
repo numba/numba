@@ -23,6 +23,8 @@ struct MemSys{
     MemInfo *mi_deferlist;
     /* Atomic increment and decrement function */
     atomic_inc_dec_func atomic_inc, atomic_dec;
+    /* Atomic CAS */
+    atomic_cas_func atomic_cas;
 
 };
 
@@ -92,6 +94,10 @@ void NRT_MemSys_set_atomic_inc_dec(atomic_inc_dec_func inc,
 {
     TheMSys.atomic_inc = inc;
     TheMSys.atomic_dec = dec;
+}
+
+void NRT_MemSys_set_atomic_cas(atomic_cas_func cas) {
+    TheMSys.atomic_cas = cas;
 }
 
 static

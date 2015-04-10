@@ -26,6 +26,17 @@ memsys_set_atomic_inc_dec(PyObject *self, PyObject *args) {
 
 static
 PyObject*
+memsys_set_atomic_cas(PyObject *self, PyObject *args) {
+    unsigned PY_LONG_LONG addr_cas;
+    if (!PyArg_ParseTuple(args, "K", &addr_cas)) {
+        return NULL;
+    }
+    NRT_MemSys_set_atomic_cas((void*)addr_cas);
+    Py_RETURN_NONE;
+}
+
+static
+PyObject*
 memsys_process_defer_dtor(PyObject *self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "")) {
         return NULL;
@@ -450,6 +461,7 @@ NRT_decref(MemInfo* mi) {
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(memsys_set_atomic_inc_dec),
+    declmethod(memsys_set_atomic_cas),
     declmethod(memsys_process_defer_dtor),
     declmethod(meminfo_new),
     declmethod(meminfo_alloc),

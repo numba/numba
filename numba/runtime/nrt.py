@@ -8,9 +8,10 @@ class Runtime(object):
     def __init__(self):
         # Compile atomic operations
         compiled = atomicops.compile_atomic_ops()
-        self._mcjit, self._ptr_inc, self._ptr_dec = compiled
+        self._mcjit, self._ptr_inc, self._ptr_dec, self._ptr_cas = compiled
         # Install atomic ops to NRT
         _nrt.memsys_set_atomic_inc_dec(self._ptr_inc, self._ptr_dec)
+        _nrt.memsys_set_atomic_cas(self._ptr_cas)
 
     def meminfo_new(self, data, pyobj):
         mi = _nrt.meminfo_new(data, pyobj)
