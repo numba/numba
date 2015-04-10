@@ -91,7 +91,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
             # as ufunc_find_matching_loop() doesn't do any type inference.
             ret_tys = ufunc_loop.outputs[-implicit_output_count:]
             if ndims > 0:
-                # XXX Not sure 'C' layout is correct...
+                # XXX Not sure 'A' layout is correct...
                 ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout='A')
                            for ret_ty in ret_tys]
             out.extend(ret_tys)
