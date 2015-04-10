@@ -1006,6 +1006,13 @@ class TestUFuncs(TestCase):
             cfunc(x, y, result)
             self.assertTrue(np.all(result == expected))
 
+    def test_implicit_output_npm(self):
+        with self.assertRaises(TypingError):
+            def myadd(a0, a1):
+                return np.add(a0, a1)
+            arr_ty = types.Array(types.uint64, 1, 'C')
+            cr = compile_isolated(myadd, (arr_ty, arr_ty),
+                                  flags=no_pyobj_flags)
 
 class TestScalarUFuncs(TestCase):
     """check the machinery of ufuncs works when the result is an scalar.
