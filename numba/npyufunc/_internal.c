@@ -200,42 +200,26 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
     int nin=-1, nout=1;
     char *name=NULL, *doc=NULL;
 
-    if (!PyArg_ParseTuple(args, "O|iO!",
-                          &dispatcher, &identity,
-                          &PyList_Type, &keepalive)) {
+    static char * kwlist[] = {"dispatcher", "identity", "keepalive", "nin",
+                              "nout", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kws, "O|iO!nn", kwlist,
+                                     &dispatcher, &identity,
+                                     &PyList_Type, &keepalive, &nin, &nout)) {
         return -1;
     }
+
     py_func_obj = PyObject_GetAttrString(dispatcher, "py_func");
     if (!py_func_obj) {
         return -1;
     }
 
-    if (PyMapping_HasKeyString(kws, "identity")) {
-        PyObject * identity_obj = PyMapping_GetItemString(kws, "identity");
-        if (identity_obj) {
-            identity = (int)PyNumber_AsSsize_t(identity_obj, NULL);
-        }
-        Py_XDECREF(identity_obj);
-    }
-    if (PyMapping_HasKeyString(kws, "nin")) {
-        PyObject * nin_obj = PyMapping_GetItemString(kws, "nin");
-        if (nin_obj) {
-            nin = (int)PyNumber_AsSsize_t(nin_obj, NULL);
-        }
-        Py_XDECREF(nin_obj);
-    } else {
+    if (nin < 0) {
         nin = (int)_get_nin(py_func_obj);
         if ((nin < 0) || (PyErr_Occurred())) {
             Py_XDECREF(py_func_obj);
             return -1;
         }
-    }
-    if (PyMapping_HasKeyString(kws, "nout")) {
-        PyObject * nout_obj = PyMapping_GetItemString(kws, "nout");
-        if (nout_obj) {
-            nout = (int)PyNumber_AsSsize_t(nout_obj, NULL);
-        }
-        Py_XDECREF(nout_obj);
     }
 
     /* Construct the UFunc. */
@@ -446,10 +430,10 @@ static PyObject *
 dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
 {
     PyUFuncObject * ufunc=self->ufunc;
-    unsigned long loop_ptr=0, data_ptr=0;
+    void *loop_ptr=NULL, *data_ptr=NULL;
     int idx=-1, usertype=NPY_VOID;
     int *arg_types_arr=NULL;
-    PyObject *arg_types=NULL;
+    PyObject *arg_types=NULL, *loop_obj=NULL, *data_obj=NULL;
     PyUFuncGenericFunction old_func=NULL;
 
     if (self->frozen) {
@@ -458,9 +442,21 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
         return NULL;
     }
 
-    if (!PyArg_ParseTuple(args, "kO!|k", &loop_ptr, &PyList_Type, &arg_types,
-                          &data_ptr)) {
+    if (!PyArg_ParseTuple(args, "O!O!|O!",
+                          &PyLong_Type, &loop_obj, &PyList_Type, &arg_types,
+                          &PyLong_Type, &data_obj)) {
         return NULL;
+    }
+
+    loop_ptr = PyLong_AsVoidPtr(loop_obj);
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    if (data_obj) {
+        data_ptr = PyLong_AsVoidPtr(data_obj);
+        if (PyErr_Occurred()) {
+            return NULL;
+        }
     }
 
     arg_types_arr = _build_arg_types_array(arg_types, (Py_ssize_t)ufunc->nargs);
@@ -474,7 +470,7 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
     if (usertype != NPY_VOID) {
         if (PyUFunc_RegisterLoopForType(ufunc, usertype,
                                         (PyUFuncGenericFunction)loop_ptr,
-                                        arg_types_arr, (void *)data_ptr) < 0) {
+                                        arg_types_arr, data_ptr) < 0) {
             goto _dufunc__add_loop_fail;
         }
     } else if (PyUFunc_ReplaceLoopBySignature(ufunc,
@@ -483,11 +479,23 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
         /* TODO: Consider freeing any memory held by the old loop (somehow) */
         for (idx = 0; idx < ufunc->ntypes; idx++) {
             if (ufunc->functions[idx] == (PyUFuncGenericFunction)loop_ptr) {
-                ufunc->data[idx] = (void *)data_ptr;
+                ufunc->data[idx] = data_ptr;
                 break;
             }
         }
     } else {
+        /* The following is an attempt to loosely follow the pointer
+           alignment code in Numpy.  See ufunc_frompyfunc() in
+           .../numpy/core/src/umath/umathmodule.c.
+
+           The primary goal is to allocate a chunk of memory such that
+           the functions and data pointers align on sizeof(void*)
+           boundaries:
+
+           ptr == |<- XX ->|<- functions ->|<- data ->|<- types ->|<- XX ->|
+
+           where XX is "alignment fudge".
+        */
         int ntypes=ufunc->ntypes + 1;
         PyUFuncGenericFunction *functions=NULL;
         void **data=NULL;
@@ -502,6 +510,10 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
 
         oldptr = ufunc->ptr;
         newptr = PyArray_malloc(newsize);
+        if (!newptr) {
+            PyErr_NoMemory();
+            goto _dufunc__add_loop_fail;
+        }
         functions =
           (PyUFuncGenericFunction*)((char *)newptr +
                                     ((size_t)newptr % sizeof(void *)));
@@ -510,7 +522,7 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
         functions[ntypes - 1] = (PyUFuncGenericFunction)loop_ptr;
         data = (void **)((char *)functions + functions_size);
         memcpy(data, ufunc->data, sizeof(void *) * ufunc->ntypes);
-        data[ntypes - 1] = (void *)data_ptr;
+        data[ntypes - 1] = data_ptr;
         types = (char *)data + data_size;
         memcpy(types, ufunc->types, sizeof(char) * ufunc->ntypes *
                ufunc->nargs);

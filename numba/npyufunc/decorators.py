@@ -43,13 +43,16 @@ class GUVectorize(_BaseVectorize):
 def vectorize(ftylist_or_function=(), **kws):
     """vectorize(ftylist_or_function=(), target='cpu', identity=None, **kws)
 
-    A decorator to create numpy ufunc object from Numba compiled code.  When n
+    A decorator that creates a Numpy ufunc object using Numba compiled
+    code.  When no arguments or only keyword arguments are given,
+    vectorize will return a Numba dynamic ufunc (DUFunc) object, where
+    compilation/specialization may occur at call-time.
 
     Args
     -----
     ftylist_or_function: function or iterable
 
-        When the first argument is a function, signatures are delt
+        When the first argument is a function, signatures are dealt
         with at call-time.
 
         When the first argument is an iterable of type signatures,

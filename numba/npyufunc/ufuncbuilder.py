@@ -69,8 +69,8 @@ target_registry['npyufunc'] = UFuncDispatcher
 
 # Utility functions
 
-def _compile_ewise_function(nb_func, targetoptions, sig=None,
-                            argtypes=None, restype=None):
+def _compile_element_wise_function(nb_func, targetoptions, sig=None,
+                                   argtypes=None, restype=None):
     # Handle argtypes
     if argtypes is not None:
         warnings.warn("Keyword argument argtypes is deprecated",
@@ -89,6 +89,10 @@ def _compile_ewise_function(nb_func, targetoptions, sig=None,
     return cres, args, return_type
 
 def _check_ufunc_signature(cres, args, return_type):
+    '''Given a compilation result, argument types, and a return type,
+    build a valid Numba signature after validating that it doesn't
+    violate the constraints for the compilation mode.
+    '''
     if return_type is None:
         if cres.objectmode:
             # Object mode is used and return type is not specified
@@ -99,8 +103,10 @@ def _check_ufunc_signature(cres, args, return_type):
     assert return_type != types.pyobject
     return return_type(*args)
 
-def _build_ewise_ufunc_wrapper(cres, signature):
-    # Buider wrapper for ufunc entry point
+def _build_element_wise_ufunc_wrapper(cres, signature):
+    '''Build a wrapper for the ufunc loop entry point given by the
+    compilation result object, using the element-wise signature.
+    '''
     ctx = cres.target_context
     library = cres.library
     llvm_func = library.get_function(cres.fndesc.llvm_func_name)
@@ -137,9 +143,10 @@ class _BaseUFuncBuilder(object):
     if np.__version__ >= '1.7':
         _identities["reorderable"] = _internal.PyUFunc_ReorderableNone
 
-    def parse_identity(self, identity):
+    @classmethod
+    def parse_identity(cls, identity):
         try:
-            identity = self._identities[identity]
+            identity = cls._identities[identity]
         except KeyError:
             raise ValueError("Invalid identity value %r" % (identity,))
         return identity
@@ -149,7 +156,7 @@ class _BaseUFuncBuilder(object):
             targetoptions = self.targetoptions
         else:
             targetoptions = self.nb_func.targetoptions
-        cres, args, return_type = _compile_ewise_function(
+        cres, args, return_type = _compile_element_wise_function(
             self.nb_func, targetoptions, sig, argtypes, restype)
         sig = self._finalize_signature(cres, args, return_type)
         self._sigs.append(sig)
@@ -166,6 +173,9 @@ class UFuncBuilder(_BaseUFuncBuilder):
         self._cres = {}
 
     def _finalize_signature(self, cres, args, return_type):
+        '''Slated for deprecation, use ufuncbuilder._check_ufunc_signature()
+        instead.
+        '''
         return _check_ufunc_signature(cres, args, return_type)
 
     def build_ufunc(self):
@@ -205,7 +215,10 @@ class UFuncBuilder(_BaseUFuncBuilder):
         return ufunc
 
     def build(self, cres, signature):
-        return _build_ewise_ufunc_wrapper(cres, signature)
+        '''Slated for deprecation, use
+        ufuncbuilder._build_element_wise_ufunc_wrapper().
+        '''
+        return _build_element_wise_ufunc_wrapper(cres, signature)
 
 
 class GUFuncBuilder(_BaseUFuncBuilder):
