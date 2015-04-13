@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function, division
 import numpy
 
-from .. import jit, typeof, numpy_support
+from .. import jit, typeof, numpy_support, utils
 from . import _internal, ufuncbuilder
 
 class DUFunc(_internal._DUFunc):
@@ -43,6 +43,6 @@ class DUFunc(_internal._DUFunc):
         sig = ufuncbuilder._check_ufunc_signature(cres, args, return_type)
         dtypenums, ptr, env = ufuncbuilder._build_element_wise_ufunc_wrapper(
             cres, sig)
-        self._add_loop(ptr, dtypenums)
+        self._add_loop(utils.longint(ptr), dtypenums)
         self.keepalive.append((ptr, cres.library, env))
         return
