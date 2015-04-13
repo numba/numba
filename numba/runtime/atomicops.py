@@ -8,6 +8,67 @@ from llvmlite import ir, binding as llvm
 _word_type = ir.IntType(MACHINE_BITS)
 
 
+def _define_incref(module, atomic_incr):
+    """
+    Implement NRT_incref in the module
+    """
+    if "NRT_incref" not in module.globals:
+        return
+    fn_incref = module.get_global_variable_named("NRT_incref")
+    fn_incref.linkage = 'linkonce_odr'
+    builder = ir.IRBuilder(fn_incref.append_basic_block())
+    [ptr] = fn_incref.args
+    is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
+    with cgutils.if_unlikely(builder, is_null):
+        builder.ret_void()
+    builder.call(atomic_incr, [builder.bitcast(ptr, atomic_incr.args[0].type)])
+    builder.ret_void()
+
+
+def _define_decref(module, atomic_decr):
+    """
+    Implement NRT_decref in the module
+    """
+    if "NRT_decref" not in module.globals:
+        return
+    fn_decref = module.get_global_variable_named("NRT_decref")
+    fn_decref.linkage = 'linkonce_odr'
+    calldtor = module.add_function(ir.FunctionType(ir.VoidType(),
+        [ir.IntType(8).as_pointer(), ir.IntType(32)]),
+        name="NRT_MemInfo_call_dtor")
+
+    builder = ir.IRBuilder(fn_decref.append_basic_block())
+    [ptr] = fn_decref.args
+    is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
+    with cgutils.if_unlikely(builder, is_null):
+        builder.ret_void()
+    newrefct = builder.call(atomic_decr,
+                            [builder.bitcast(ptr, atomic_decr.args[0].type)])
+
+    refct_eq_0 = builder.icmp_unsigned("==", newrefct,
+                                       ir.Constant(newrefct.type, 0))
+    with cgutils.if_unlikely(builder, refct_eq_0):
+        do_defer = ir.Constant(ir.IntType(32), 0)
+        builder.call(calldtor, [ptr, do_defer])
+    builder.ret_void()
+
+
+def install_atomic_refct(module):
+    """
+    Implement both NRT_incref and NRT_decref in the module
+    """
+    incref = _define_atomic_inc_dec(module, "add", ordering='monotonic')
+    decref = _define_atomic_inc_dec(module, "sub", ordering='monotonic')
+
+    # Set LinkOnce ODR linkage
+    for fn in [incref, decref]:
+        fn.linkage = 'linkonce_odr'
+    del fn
+
+    _define_incref(module, incref)
+    _define_decref(module, decref)
+
+
 def _define_atomic_inc_dec(module, op, ordering):
     """Define a llvm function for atomic increment/decrement to the given module
     Argument ``op`` is the operation "add"/"sub".  Argument ``ordering`` is
@@ -23,6 +84,8 @@ def _define_atomic_inc_dec(module, op, ordering):
     builder.atomic_rmw(op, ptr, ONE, ordering=ordering)
     res = builder.load(ptr)
     builder.ret(res)
+
+    return fn_atomic
 
 
 def _define_atomic_cmpxchg(module, ordering):

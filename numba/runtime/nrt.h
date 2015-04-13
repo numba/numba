@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 /* Debugging facilities */
-#undef NDEBUG
+//#undef NDEBUG
 #ifndef NDEBUG
 #   define NRT_Debug(X) X
 #else
@@ -54,6 +54,7 @@ MemInfo* NRT_MemInfo_alloc_safe(size_t size);
 void NRT_MemInfo_destroy(MemInfo *mi);
 void NRT_MemInfo_acquire(MemInfo* mi);
 void NRT_MemInfo_release(MemInfo* mi, int defer);
+void NRT_MemInfo_call_dtor(MemInfo *mi, int defer);
 void* NRT_MemInfo_data(MemInfo* mi);
 size_t NRT_MemInfo_size(MemInfo* mi);
 void NRT_MemInfo_defer_dtor(MemInfo* mi);

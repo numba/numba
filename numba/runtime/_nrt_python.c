@@ -498,6 +498,7 @@ declmethod(decref);
 declmethod(MemInfo_data);
 declmethod(MemInfo_alloc);
 declmethod(MemInfo_alloc_safe);
+declmethod(MemInfo_call_dtor);
 
 
 #undef declmethod
