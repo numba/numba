@@ -265,6 +265,29 @@ class TestDynArray(unittest.TestCase):
         for out in outputs:
             np.testing.assert_equal(expected, out)
 
+    def test_swap(self):
+
+        def pyfunc(x, y, t):
+            """Swap array x and y for t number of times
+            """
+            for i in range(t):
+                x, y = y, x
+
+            return x, y
+
+
+        cfunc = nrtjit(pyfunc)
+
+        x = np.random.random(100)
+        y = np.random.random(100)
+
+        t = 100
+
+        initrefct = sys.getrefcount(x), sys.getrefcount(y)
+        np.testing.assert_equal(pyfunc(x, y, t), cfunc(x, y, t))
+        self.assertEqual(initrefct, (sys.getrefcount(x), sys.getrefcount(y)))
+
+
 
 if __name__ == "__main__":
     unittest.main()
