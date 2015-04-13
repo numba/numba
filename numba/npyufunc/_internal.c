@@ -472,17 +472,15 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
             }
         }
     } else {
-        /* The following is an attempt to loosely follow the pointer
-           alignment code in Numpy.  See ufunc_frompyfunc() in
+        /* The following is an attempt to loosely follow the allocation
+           code in Numpy.  See ufunc_frompyfunc() in
            .../numpy/core/src/umath/umathmodule.c.
 
-           The primary goal is to allocate a chunk of memory such that
-           the functions and data pointers align on sizeof(void*)
-           boundaries:
+           The primary goal is to allocate a single chunk of memory to
+           hold the functions, data, and types loop arrays:
 
-           ptr == |<- XX ->|<- functions ->|<- data ->|<- types ->|<- XX ->|
+           ptr == |<- functions ->|<- data ->|<- types ->|
 
-           where XX is "alignment fudge".
         */
         int ntypes=ufunc->ntypes + 1;
         PyUFuncGenericFunction *functions=NULL;
@@ -493,8 +491,7 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
         size_t data_size=sizeof(void *) * ntypes;
         size_t type_ofs=sizeof(char) * ufunc->ntypes * ufunc->nargs;
         size_t newsize=(functions_size + data_size +
-                        (sizeof(char) * ntypes * ufunc->nargs) +
-                        (sizeof(void *) - 1)); /* Alignment fudge... */
+                        (sizeof(char) * ntypes * ufunc->nargs));
 
         oldptr = ufunc->ptr;
         newptr = PyArray_malloc(newsize);
@@ -502,9 +499,7 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
             PyErr_NoMemory();
             goto _dufunc__add_loop_fail;
         }
-        functions =
-          (PyUFuncGenericFunction*)((char *)newptr +
-                                    ((size_t)newptr % sizeof(void *)));
+        functions = (PyUFuncGenericFunction*)newptr;
         memcpy(functions, ufunc->functions,
                sizeof(PyUFuncGenericFunction) * ufunc->ntypes);
         functions[ntypes - 1] = (PyUFuncGenericFunction)loop_ptr;
