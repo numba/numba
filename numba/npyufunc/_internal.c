@@ -131,11 +131,7 @@ dufunc_dealloc(PyDUFuncObject *self)
 static PyObject *
 dufunc_repr(PyDUFuncObject *dufunc)
 {
-#if PY_MAJOR_VERSION >= 3
-    return PyUnicode_FromFormat("<numba._DUFunc '%s'>", dufunc->ufunc->name);
-#else
     return PyString_FromFormat("<numba._DUFunc '%s'>", dufunc->ufunc->name);
-#endif
 }
 
 static PyObject *
@@ -225,20 +221,12 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
     /* Construct the UFunc. */
     tmp = PyObject_GetAttrString(py_func_obj, "__name__");
     if (tmp) {
-#if PY_MAJOR_VERSION >= 3
-        name = PyUnicode_AsUTF8(tmp);
-#else
         name = PyString_AsString(tmp);
-#endif
     }
     Py_XDECREF(tmp);
     tmp = PyObject_GetAttrString(py_func_obj, "__doc__");
     if (tmp && (tmp != Py_None)) {
-#if PY_MAJOR_VERSION >= 3
-        doc = PyUnicode_AsUTF8(tmp);
-#else
         doc = PyString_AsString(tmp);
-#endif
     }
     Py_XDECREF(tmp);
     tmp = NULL;
@@ -619,11 +607,7 @@ PyTypeObject PyDUFunc_Type = {
     0,                                          /* tp_print */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-#if defined(NPY_PY3K)
-    0,                                          /* tp_reserved */
-#else
-    0,                                          /* tp_compare */
-#endif
+    0,                                          /* tp_compare/tp_reserved */
     (reprfunc) dufunc_repr,                     /* tp_repr */
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */
