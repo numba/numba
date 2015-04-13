@@ -213,19 +213,23 @@ void NRT_MemInfo_acquire(MemInfo *mi) {
     TheMSys.atomic_inc(&mi->payload.refct);
 }
 
+void NRT_MemInfo_call_dtor(MemInfo *mi, int defer) {
+    /* We have a destructor */
+    if (mi->payload.dtor) {
+        if (defer) {
+            NRT_MemInfo_defer_dtor(mi);
+        } else {
+            nrt_meminfo_call_dtor(mi);
+        }
+    }
+}
+
 void NRT_MemInfo_release(MemInfo *mi, int defer) {
     NRT_Debug(nrt_debug_print("NRT_release %p\n", mi));
     assert (mi->payload.refct > 0 && "RefCt cannot be 0");
     /* RefCt drop to zero */
     if (TheMSys.atomic_dec(&mi->payload.refct) == 0) {
-        /* We have a destructor */
-        if (mi->payload.dtor) {
-            if (defer) {
-                NRT_MemInfo_defer_dtor(mi);
-            } else {
-                nrt_meminfo_call_dtor(mi);
-            }
-        }
+        NRT_MemInfo_call_dtor(mi, defer);
     }
 }
 

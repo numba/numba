@@ -6,6 +6,7 @@ import threading
 
 from numba import unittest_support as unittest
 from numba import njit
+from numba import utils
 
 
 
@@ -286,6 +287,35 @@ class TestDynArray(unittest.TestCase):
         initrefct = sys.getrefcount(x), sys.getrefcount(y)
         np.testing.assert_equal(pyfunc(x, y, t), cfunc(x, y, t))
         self.assertEqual(initrefct, (sys.getrefcount(x), sys.getrefcount(y)))
+
+    def test_swap_speed(self):
+
+        def pyfunc(x, y, t):
+            """Swap array x and y for t number of times
+            """
+            for i in range(t):
+                x, y = y, x
+
+            return x, y
+
+
+        cfunc = nrtjit(pyfunc)
+
+        x = np.random.random(100)
+        y = np.random.random(100)
+        t = 10000
+
+        def bench_pyfunc():
+            pyfunc(x, y, t)
+
+        def bench_cfunc():
+            cfunc(x, y, t)
+
+        python_time = utils.benchmark(bench_pyfunc)
+        numba_time = utils.benchmark(bench_cfunc)
+        print(python_time)
+        print(numba_time)
+
 
 
 
