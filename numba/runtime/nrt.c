@@ -12,6 +12,7 @@ union MemInfo{
         size_t         size;    /* only used for NRT allocated memory */
     } payload;
 
+    /* Freelist or Deferred-dtor-list */
     MemInfo *list_next;
 };
 

@@ -2,9 +2,11 @@ from __future__ import print_function, absolute_import, division
 
 import sys
 import numpy as np
+import threading
 
 from numba import unittest_support as unittest
 from numba import njit
+
 
 
 nrtjit = njit(nrt=True)
@@ -162,6 +164,106 @@ class TestDynArray(unittest.TestCase):
 
         np.testing.assert_equal(pyfunc(arr_a, arr_b),
                                 cfunc(arr_a, arr_b))
+
+    def test_multithread(self):
+
+        def pyfunc(inp):
+            out = np.empty(inp.size)
+            tmp = 0
+            for i in range(out.size):
+                out[i] = tmp
+                tmp = inp[i]
+            return out
+
+        cfunc = nrtjit(pyfunc)
+        size = 10**5
+        arr = np.random.randint(0, 1, size)
+
+        np.testing.assert_equal(pyfunc(arr), cfunc(arr))
+
+        workers = []
+        inputs = []
+        outputs = []
+
+        # Make wrapper to store the output
+        def wrapped(inp, out):
+            out[:] = cfunc(inp)
+
+        # Create worker threads
+        for i in range(10):
+            arr = np.random.randint(0, 1, size)
+            out = np.empty_like(arr)
+            thread = threading.Thread(target=wrapped,
+                                      args=(arr, out),
+                                      name="worker{0}".format(i))
+            workers.append(thread)
+            inputs.append(arr)
+            outputs.append(out)
+
+        # Launch worker threads
+        for thread in workers:
+            thread.start()
+
+        # Join worker threads
+        for thread in workers:
+            thread.join()
+
+        # Check result
+        for inp, out in zip(inputs, outputs):
+            np.testing.assert_equal(pyfunc(inp), out)
+
+    def test_multithread_stress(self):
+
+        def pyfunc(n, t):
+            out = np.empty(n)
+            for i in range(out.size):
+                out[i] = i
+
+            for i in range(t):
+                tmp = np.empty(n)
+                for j in range(tmp.size):
+                    tmp[j] = i + j
+                for j in range(out.size):
+                    tmp[j] += out[j]
+                out = tmp   # Swap the array here
+
+            return out
+
+
+        cfunc = nrtjit(pyfunc)
+        size = 1000
+        repeat = 2000
+
+        expected = pyfunc(size, repeat)
+        np.testing.assert_equal(expected, cfunc(size, repeat))
+
+        workers = []
+        outputs = []
+
+        # Make wrapper to store the output
+        def wrapped(n, t, out):
+            out[:] = cfunc(n, t)
+
+        # Create worker threads
+        for i in range(10):
+            out = np.empty(size)
+            thread = threading.Thread(target=wrapped,
+                                      args=(size, repeat, out),
+                                      name="worker{0}".format(i))
+            workers.append(thread)
+            outputs.append(out)
+
+        # Launch worker threads
+        for thread in workers:
+            thread.start()
+
+        # Join worker threads
+        for thread in workers:
+            thread.join()
+
+        # Check result
+        for out in outputs:
+            np.testing.assert_equal(expected, out)
 
 
 if __name__ == "__main__":
