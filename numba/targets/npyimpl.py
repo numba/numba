@@ -203,16 +203,18 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
     # kernel_class -  a code generating subclass of _Kernel that provides
     # explicit_output - if the output was explicit in the call
     #                   (ie: np.add(x,y,r))
-    if not explicit_output:
-        if isinstance(sig.return_type, types.Array):
-            raise TypeError("array allocation is not supported, yet")
 
-        args.append(lc.Constant.null(context.get_value_type(sig.return_type)))
-        tyargs = sig.args + (sig.return_type,)
-    else:
-        tyargs = sig.args
     arguments = [_prepare_argument(context, builder, arg, tyarg)
-                 for arg, tyarg in zip(args, tyargs)]
+                 for arg, tyarg in zip(args, sig.args)]
+    if not explicit_output:
+        ret_ty = sig.return_type
+        if isinstance(ret_ty, types.Array):
+            raise TypeError("array allocation is not supported, yet")
+        else:
+            output = _prepare_argument(
+                context, builder,
+                lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
+        arguments.append(output)
 
     inputs = arguments[0:-1]
     output = arguments[-1]
@@ -320,7 +322,7 @@ def register_unary_ufunc_kernel(ufunc, kernel):
     def unary_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
 
-    def unary_scalar_ufunc(context, builder, sig, args):
+    def unary_ufunc_no_explicit_output(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
 
@@ -328,15 +330,15 @@ def register_unary_ufunc_kernel(ufunc, kernel):
 
     # (array or scalar, out=array)
     register(implement(ufunc, _any, types.Kind(types.Array))(unary_ufunc))
-    # (scalar, out=array)
-    register(implement(ufunc, _any)(unary_scalar_ufunc))
+    # (array or scalar)
+    register(implement(ufunc, _any)(unary_ufunc_no_explicit_output))
 
 
 def register_binary_ufunc_kernel(ufunc, kernel):
     def binary_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
 
-    def binary_scalar_ufunc(context, builder, sig, args):
+    def binary_ufunc_no_explicit_output(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
 
@@ -345,7 +347,7 @@ def register_binary_ufunc_kernel(ufunc, kernel):
     # (array or scalar, array o scalar, out=array)
     register(implement(ufunc, _any, _any, types.Kind(types.Array))(binary_ufunc))
     # (scalar, scalar)
-    register(implement(ufunc, _any, _any)(binary_scalar_ufunc))
+    register(implement(ufunc, _any, _any)(binary_ufunc_no_explicit_output))
 
 
 ################################################################################
