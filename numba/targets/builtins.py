@@ -1213,6 +1213,24 @@ def getitem_unituple(context, builder, sig, args):
     builder.position_at_end(bbend)
     return phinode
 
+
+@builtin
+@implement('getitem', types.Kind(types.CPointer), types.Kind(types.Integer))
+def getitem_cpointer(context, builder, sig, args):
+    base_ptr, idx = args
+    elem_ptr = builder.gep(base_ptr, [idx])
+    return builder.load(elem_ptr)
+
+
+@builtin
+@implement('setitem', types.Kind(types.CPointer), types.Kind(types.Integer),
+           types.Any)
+def setitem_cpointer(context, builder, sig, args):
+    base_ptr, idx, val = args
+    elem_ptr = builder.gep(base_ptr, [idx])
+    return builder.store(val, elem_ptr)
+
+
 #-------------------------------------------------------------------------------
 
 
