@@ -190,6 +190,53 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         raise TypeError('unknown type for {0}: {1}'.format(where, str(tyinp)))
 
 
+_broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
+                                 types.intp, types.CPointer(types.intp))
+def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
+    if src_ndim > dest_ndim:
+        return 0
+    else:
+        src_index = 0
+        dest_index = dest_ndim - src_ndim
+        while src_index < src_ndim:
+            src_dim_size = src_shape[src_index]
+            dest_dim_size = dest_shape[dest_index]
+            if dest_dim_size != 1:
+                if src_dim_size != dest_dim_size:
+                    return -(dest_index + 1)
+            elif src_dim_size > 1:
+                dest_shape[dest_index] = src_dim_size
+            src_index += 1
+            dest_index += 1
+    return dest_index
+
+def _build_array(context, builder, array_ty, arg_arrays):
+    """Utility function to handle allocation of an implicit output array
+    given the target context, builder, output array type, and a list of
+    _ArrayHelper instances.
+    """
+    intp_ty = context.get_value_type(types.intp)
+    def make_intp_const(val):
+        return lc.Constant.int(intp_ty, val)
+    ZERO = make_intp_const(0)
+    arg_shapes = [(make_intp_const(arg.ndim),
+                   builder.gep(arg.ary.shape, [ZERO]))
+                  for arg in arg_arrays]
+    dest_ndim = make_intp_const(array_ty.ndim)
+    dest_shape = builder.alloca(intp_ty, array_ty.ndim)
+    ONE = make_intp_const(1)
+    import pdb; pdb.set_trace()
+    for index in range(array_ty.ndim):
+        builder.store(ONE,
+                      builder.gep(dest_shape, [make_intp_const(index)]))
+    for arg_ndim, arg_shape in arg_shapes:
+        context.compile_internal(builder, _broadcast_onto, _broadcast_onto_sig,
+                                 [arg_ndim, arg_shape, dest_ndim, dest_shape])
+    raise NotImplementedError("development frontier")
+    return _prepare_argument(context, builder, array_val, array_ty,
+                             where='implicit output argument')
+
+
 def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
                        explicit_output=True):
     # This is the code generator that builds all the looping needed
@@ -209,7 +256,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
     if not explicit_output:
         ret_ty = sig.return_type
         if isinstance(ret_ty, types.Array):
-            raise TypeError("array allocation is not supported, yet")
+            output = _build_array(context, builder, ret_ty, arguments)
         else:
             output = _prepare_argument(
                 context, builder,
