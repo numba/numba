@@ -1,5 +1,8 @@
 from __future__ import print_function, absolute_import, division
 
+import re
+from collections import defaultdict
+
 from numba.config import MACHINE_BITS
 from numba import cgutils
 from llvmlite import ir, binding as llvm
@@ -130,3 +133,79 @@ def compile_atomic_ops():
         "nrt_atomic_cas"))
 
     return mcjit, atomic_inc, atomic_dec, atomic_cas
+
+
+_regex_incref = re.compile(r'call void @NRT_incref\((.*)\)')
+_regex_decref = re.compile(r'call void @NRT_decref\((.*)\)')
+_regex_bb = re.compile(r'[-a-zA-Z$._][-a-zA-Z$._0-9]*:')
+
+
+def remove_redundant_nrt_refct(ir_module):
+    """
+    Remove redundant reference count operations from the llvmlite.ir.ModuleRef.
+    This parses the ir_module as a string and line by line to remove the
+    unnecessary nrt refct pairs within each block.
+
+    Note
+    -----
+    Should replace this.  Not efficient.
+    """
+    # Early escape if NRT_incref is not used
+    try:
+        ir_module.get_function('NRT_incref')
+    except NameError:
+        return ir_module
+
+    incref_map = defaultdict(list)
+    decref_map = defaultdict(list)
+    scopes = []
+
+    # Parse IR module as text
+    llasm = str(ir_module)
+    lines = llasm.splitlines()
+
+    # Phase 1:
+    # Find all refct ops and what they are operating on
+    for lineno, line in enumerate(lines):
+        # Match NRT_incref calls
+        m = _regex_incref.match(line.strip())
+        if m is not None:
+            incref_map[m.group(1)].append(lineno)
+            continue
+
+        # Match NRT_decref calls
+        m = _regex_decref.match(line.strip())
+        if m is not None:
+            decref_map[m.group(1)].append(lineno)
+            continue
+
+        # Split at BB boundaries
+        m = _regex_bb.match(line)
+        if m is not None:
+            # Push
+            scopes.append((incref_map, decref_map))
+            # Reset
+            incref_map = defaultdict(list)
+            decref_map = defaultdict(list)
+
+    # Phase 2:
+    # Determine which refct ops are unnecessary
+    to_remove = set()
+    for incref_map, decref_map in scopes:
+        # For each value being refct-ed
+        for val in incref_map.keys():
+            increfs = incref_map[val]
+            decrefs = decref_map[val]
+            # Mark the incref/decref pairs from the tail for removal
+            for _ in range(min(len(increfs), len(decrefs))):
+                to_remove.add(increfs.pop())
+                to_remove.add(decrefs.pop())
+
+    # Phase 3
+    # Remove all marked instructions
+    newll = '\n'.join(ln for lno, ln in enumerate(lines) if lno not in
+                      to_remove)
+
+    # Regenerate the LLVM module
+    return llvm.parse_assembly(newll)
+
