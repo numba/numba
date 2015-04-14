@@ -9,7 +9,7 @@ import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
 from numba import config, utils
-
+from numba.runtime.atomicops import remove_redundant_nrt_refct
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -131,6 +131,8 @@ class CodeLibrary(object):
 
     def add_llvm_module(self, ll_module):
         self._optimize_functions(ll_module)
+        # TODO: we shouldn't need to recreate the LLVM module object
+        ll_module = remove_redundant_nrt_refct(ll_module)
         self._final_module.link_in(ll_module)
 
     def finalize(self):
