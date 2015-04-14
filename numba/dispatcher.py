@@ -208,11 +208,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        if isinstance(val, utils.INT_TYPES):
-            # Ensure no autoscaling of integer type, to match the
-            # typecode() function in _dispatcher.c.
-            return types.int64
-
         tp = self.typingctx.resolve_argument_type(val)
         if tp is None:
             tp = types.pyobject
