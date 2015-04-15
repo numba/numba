@@ -31,12 +31,14 @@ typedef struct MemSys MemSys;
 
 /* Memory System API */
 void NRT_MemSys_init();
+void NRT_MemSys_shutdown();
 void NRT_MemSys_insert_meminfo(MemInfo *newnode);
 MemInfo* NRT_MemSys_pop_meminfo();
 void NRT_MemSys_set_atomic_inc_dec(atomic_inc_dec_func inc,
                                    atomic_inc_dec_func dec);
 void NRT_MemSys_set_atomic_cas(atomic_cas_func cas);
 void NRT_MemSys_set_atomic_inc_dec_stub();
+void NRT_MemSys_set_atomic_cas_stub();
 void NRT_MemSys_process_defer_dtor();
 
 /* Memory Info API */
