@@ -12,7 +12,7 @@ from collections import namedtuple
 
 from llvmlite.llvmpy import core as lc
 
-from . import builtins, ufunc_db
+from . import builtins, ufunc_db, arrayobj
 from .imputils import implement, Registry
 from .. import typing, types, cgutils, numpy_support
 from ..config import PYVERSION
@@ -193,7 +193,23 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
 _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
                                  types.intp, types.CPointer(types.intp))
 def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
+    '''Low-level utility function used in calculating a shape for
+    an implicit output array.  This function assumes that the
+    destination shape is an LLVM pointer to a C-style array that was
+    already initialized to a size of one along all axes.
+
+    Returns an integer value:
+    >= 1  :  Succeeded.  Return value should equal the number of dimensions in
+             the destination shape.
+    0     :  Failed to broadcast because source shape is larger than the
+             destination shape (this case should be weeded out at type
+             checking).
+    < 0   :  Failed to broadcast onto destination axis, at axis number ==
+             -(return_value + 1).
+    '''
     if src_ndim > dest_ndim:
+        # This check should have been done during type checking, but
+        # let's be defensive anyway...
         return 0
     else:
         src_index = 0
@@ -201,10 +217,16 @@ def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
         while src_index < src_ndim:
             src_dim_size = src_shape[src_index]
             dest_dim_size = dest_shape[dest_index]
+            # Check to see if we've already mutated the destination
+            # shape along this axis.
             if dest_dim_size != 1:
-                if src_dim_size != dest_dim_size:
+                # If we have mutated the destination shape already,
+                # then the source axis size must either be one,
+                # or the destination axis size.
+                if src_dim_size != dest_dim_size and src_dim_size != 1:
                     return -(dest_index + 1)
-            elif src_dim_size > 1:
+            elif src_dim_size != 1:
+                # If the destination size is still its initial
                 dest_shape[dest_index] = src_dim_size
             src_index += 1
             dest_index += 1
@@ -217,22 +239,44 @@ def _build_array(context, builder, array_ty, arg_arrays):
     """
     intp_ty = context.get_value_type(types.intp)
     def make_intp_const(val):
-        return lc.Constant.int(intp_ty, val)
+        return context.get_constant(types.intp, val)
+
     ZERO = make_intp_const(0)
-    arg_shapes = [(make_intp_const(arg.ndim),
-                   builder.gep(arg.ary.shape, [ZERO]))
-                  for arg in arg_arrays]
-    dest_ndim = make_intp_const(array_ty.ndim)
-    dest_shape = builder.alloca(intp_ty, array_ty.ndim)
     ONE = make_intp_const(1)
-    import pdb; pdb.set_trace()
-    for index in range(array_ty.ndim):
-        builder.store(ONE,
-                      builder.gep(dest_shape, [make_intp_const(index)]))
-    for arg_ndim, arg_shape in arg_shapes:
-        context.compile_internal(builder, _broadcast_onto, _broadcast_onto_sig,
-                                 [arg_ndim, arg_shape, dest_ndim, dest_shape])
-    raise NotImplementedError("development frontier")
+
+    src_shape = cgutils.alloca_once(builder, intp_ty, array_ty.ndim,
+                                    "src_shape")
+    dest_ndim = make_intp_const(array_ty.ndim)
+    dest_shape = cgutils.alloca_once(builder, intp_ty, array_ty.ndim,
+                                     "dest_shape")
+    dest_shape_addrs = tuple(builder.gep(dest_shape, [make_intp_const(index)])
+                           for index in range(array_ty.ndim))
+
+    # Initialize the destination shape with all ones.
+    for dest_shape_addr in dest_shape_addrs:
+        builder.store(ONE, dest_shape_addr)
+
+    # For each argument, try to broadcast onto the destination shape,
+    # mutating along any axis where the argument shape is not one and
+    # the destination shape is one.
+    for arg_number, arg in enumerate(arg_arrays):
+        arg_ndim = make_intp_const(arg.ndim)
+        for index in range(arg.ndim):
+            builder.store(builder.extract_value(arg.ary.shape, index),
+                          builder.gep(src_shape, [make_intp_const(index)]))
+        arg_result = context.compile_internal(
+            builder, _broadcast_onto, _broadcast_onto_sig,
+            [arg_ndim, src_shape, dest_ndim, dest_shape])
+        with cgutils.if_unlikely(builder,
+                                 builder.icmp(lc.ICMP_SLT, arg_result, ONE)):
+            msg = "unable to broadcast argument %d to output array" % (
+                arg_number,)
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+    dest_shape_tup = tuple(builder.load(dest_shape_addr)
+                           for dest_shape_addr in dest_shape_addrs)
+    array_val = arrayobj._empty_nd_impl(context, builder, array_ty,
+                                        dest_shape_tup)
     return _prepare_argument(context, builder, array_val, array_ty,
                              where='implicit output argument')
 

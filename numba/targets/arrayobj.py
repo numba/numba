@@ -1139,31 +1139,18 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
-@builtin
-@implement(numpy.empty, types.Kind(types.Integer))
-@implement(numpy.empty, types.Kind(types.Tuple))
-@implement(numpy.empty, types.Kind(types.UniTuple))
-@implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
-@implement(numpy.empty, types.Kind(types.Tuple), types.Kind(types.Function))
-@implement(numpy.empty, types.Kind(types.UniTuple), types.Kind(types.Function))
-def numpy_empty_nd(context, builder, sig, args):
-    arrshapetype = sig.args[0]
-    arrshape = args[0]
-    arrtype = sig.return_type
+def _empty_nd_impl(context, builder, arrtype, shapes):
+    """Utility function used for allocating a new array during LLVM code
+    generation (lowering).  Given a target context, builder, array
+    type, and a tuple or list of lowered dimension sizes, returns a
+    LLVM value pointing at a Numba runtime allocated array.
+    """
     arycls = make_array(arrtype)
     ary = arycls(context, builder)
 
     datatype = context.get_data_type(arrtype.dtype)
     itemsize = context.get_constant(types.intp,
                                     context.get_abi_sizeof(datatype))
-
-    if isinstance(arrshapetype, types.Integer):
-        shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
-    else:
-        arrshape = context.cast(builder, arrshape, arrshapetype,
-                                types.UniTuple(types.intp, len(arrshapetype)))
-        shapes = cgutils.unpack_tuple(builder, arrshape,
-                                      count=len(arrshapetype))
 
     # compute array length
     arrlen = context.get_constant(types.intp, 1)
@@ -1188,3 +1175,24 @@ def numpy_empty_nd(context, builder, sig, args):
     return ary._getvalue()
 
 
+@builtin
+@implement(numpy.empty, types.Kind(types.Integer))
+@implement(numpy.empty, types.Kind(types.Tuple))
+@implement(numpy.empty, types.Kind(types.UniTuple))
+@implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
+@implement(numpy.empty, types.Kind(types.Tuple), types.Kind(types.Function))
+@implement(numpy.empty, types.Kind(types.UniTuple), types.Kind(types.Function))
+def numpy_empty_nd(context, builder, sig, args):
+    arrshapetype = sig.args[0]
+    arrshape = args[0]
+    arrtype = sig.return_type
+
+    if isinstance(arrshapetype, types.Integer):
+        shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
+    else:
+        arrshape = context.cast(builder, arrshape, arrshapetype,
+                                types.UniTuple(types.intp, len(arrshapetype)))
+        shapes = cgutils.unpack_tuple(builder, arrshape,
+                                      count=len(arrshapetype))
+
+    return _empty_nd_impl(context, builder, arrtype, shapes)
