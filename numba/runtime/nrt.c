@@ -26,6 +26,8 @@ struct MemSys{
     atomic_inc_dec_func atomic_inc, atomic_dec;
     /* Atomic CAS */
     atomic_cas_func atomic_cas;
+    /* Shutdown flag */
+    int shutting;
 
 };
 
@@ -105,6 +107,16 @@ void NRT_MemSys_init() {
     memset(&TheMSys, 0, sizeof(MemSys));
 }
 
+void NRT_MemSys_shutdown() {
+    TheMSys.shutting = 1;
+    /* Revert to use our non-atomic stub for all atomic operations
+       because the JIT-ed version will be removed.
+       Since we are at interpreter shutdown,
+       it cannot be running multiple threads anymore. */
+    NRT_MemSys_set_atomic_inc_dec_stub();
+    NRT_MemSys_set_atomic_cas_stub();
+}
+
 void NRT_MemSys_process_defer_dtor() {
     MemInfo *mi;
     while ((mi = nrt_pop_meminfo_list(&TheMSys.mi_deferlist))) {
@@ -164,11 +176,29 @@ size_t nrt_testing_atomic_dec(size_t *ptr){
     return out;
 }
 
+
+static
+int nrt_testing_atomic_cas(size_t *ptr, size_t cmp, size_t val,
+                              size_t *oldptr){
+    /* non atomic */
+    size_t old = *ptr;
+    *oldptr = old;
+    if (old == cmp) {
+        *ptr = val;
+         return 1;
+    }
+    return 0;
+
+}
+
 void NRT_MemSys_set_atomic_inc_dec_stub(){
     NRT_MemSys_set_atomic_inc_dec(nrt_testing_atomic_inc,
                                   nrt_testing_atomic_dec);
 }
 
+void NRT_MemSys_set_atomic_cas_stub() {
+    NRT_MemSys_set_atomic_cas(nrt_testing_atomic_cas);
+}
 
 MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info)

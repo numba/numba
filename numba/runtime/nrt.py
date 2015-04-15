@@ -13,6 +13,9 @@ class Runtime(object):
         _nrt.memsys_set_atomic_inc_dec(self._ptr_inc, self._ptr_dec)
         _nrt.memsys_set_atomic_cas(self._ptr_cas)
 
+    def __del__(self):
+        _nrt.memsys_shutdown()
+
     def meminfo_new(self, data, pyobj):
         mi = _nrt.meminfo_new(data, pyobj)
         return MemInfo(mi)
