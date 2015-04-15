@@ -1202,10 +1202,37 @@ class PythonAPI(object):
                                  (state_size, initial_state, genfn, finalizer, env))
 
     def from_native_charseq(self, val, typ):
-        rawptr = cgutils.alloca_once_value(self.builder, value=val)
-        strptr = self.builder.bitcast(rawptr, self.cstring)
-        strlen = self.context.get_constant(types.intp, typ.count)
-        return self.string_from_string_and_size(strptr, strlen)
+        builder = self.builder
+        rawptr = cgutils.alloca_once_value(builder, value=val)
+        strptr = builder.bitcast(rawptr, self.cstring)
+        fullsize = self.context.get_constant(types.intp, typ.count)
+        zero = self.context.get_constant(types.intp, 0)
+        count = cgutils.alloca_once_value(builder, zero)
+
+        bbend = cgutils.append_basic_block(builder, "end.string.count")
+
+        # Find the length of the string
+        with cgutils.loop_nest(builder, [fullsize], fullsize.type) as [idx]:
+            # Get char at idx
+            ch = builder.load(builder.gep(strptr, [idx]))
+            # Store the current index as count
+            builder.store(idx, count)
+            # Check if the char is a null-byte
+            ch_is_null = cgutils.is_null(builder, ch)
+            # If the char is a null-byte
+            with cgutils.ifthen(builder, ch_is_null):
+                # Jump to the end
+                builder.branch(bbend)
+
+        # This is reached if there is no null-byte in the string
+        # Then, set count to the fullsize
+        builder.store(fullsize, count)
+        # Jump to the end
+        builder.branch(bbend)
+
+        builder.position_at_end(bbend)
+        strlen = builder.load(count)
+        return self.bytes_from_string_and_size(strptr, strlen)
 
     def numba_array_adaptor(self, ary, ptr):
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
