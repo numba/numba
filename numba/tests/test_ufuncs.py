@@ -29,6 +29,9 @@ enable_pyobj_flags.set("enable_pyobject")
 
 no_pyobj_flags = Flags()
 
+enable_nrt_flags = Flags()
+enable_nrt_flags.set("nrt")
+
 def _unimplemented(func):
     """An 'expectedFailure' like decorator that only expects compilation errors
     caused by unimplemented functions that fail in no-python mode"""
@@ -1013,6 +1016,38 @@ class TestUFuncs(TestCase):
             arr_ty = types.Array(types.uint64, 1, 'C')
             cr = compile_isolated(myadd, (arr_ty, arr_ty),
                                   flags=no_pyobj_flags)
+
+    @unittest.skipIf(__name__ != "__main__", "work in progress")
+    def test_broadcast_implicit_output_npm_nrt(self):
+        def pyfunc(a0, a1):
+            return np.add(a0, a1)
+
+        input1_operands = [
+            np.arange(3, dtype='u8'),
+            np.arange(3*3, dtype='u8').reshape(3,3),
+            np.arange(3*3*3, dtype='u8').reshape(3,3,3),
+            np.arange(3, dtype='u8').reshape(3,1),
+            np.arange(3, dtype='u8').reshape(1,3),
+            np.arange(3, dtype='u8').reshape(3,1,1),
+            np.arange(3*3, dtype='u8').reshape(3,3,1),
+            np.arange(3*3, dtype='u8').reshape(3,1,3),
+            np.arange(3*3, dtype='u8').reshape(1,3,3)]
+
+        input2_operands = input1_operands
+
+        for x, y in itertools.product(input1_operands, input2_operands):
+
+            input1_type = types.Array(types.uint64, x.ndim, 'C')
+            input2_type = types.Array(types.uint64, y.ndim, 'C')
+
+            cr = self.cache.compile(pyfunc, (input1_type, input2_type),
+                                    flags=enable_nrt_flags)
+            cfunc = cr.entry_point
+
+            expected = np.add(x, y)
+            result = cfunc(x, y)
+            self.assertTrue(np.all(result == expected))
+
 
 class TestScalarUFuncs(TestCase):
     """check the machinery of ufuncs works when the result is an scalar.
