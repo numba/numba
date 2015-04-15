@@ -1018,6 +1018,9 @@ class PythonAPI(object):
         elif isinstance(typ, types.Generator):
             return self.from_native_generator(val, typ)
 
+        elif isinstance(typ, types.CharSeq):
+            return self.from_native_charseq(val, typ)
+
         raise NotImplementedError(typ)
 
     def to_native_int(self, obj, typ):
@@ -1197,6 +1200,12 @@ class PythonAPI(object):
 
         return self.builder.call(fn,
                                  (state_size, initial_state, genfn, finalizer, env))
+
+    def from_native_charseq(self, val, typ):
+        rawptr = cgutils.alloca_once_value(self.builder, value=val)
+        strptr = self.builder.bitcast(rawptr, self.cstring)
+        strlen = self.context.get_constant(types.intp, typ.count)
+        return self.string_from_string_and_size(strptr, strlen)
 
     def numba_array_adaptor(self, ary, ptr):
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
