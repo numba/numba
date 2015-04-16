@@ -65,8 +65,12 @@ class Numpy_rules_ufunc(AbstractTemplate):
         base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
         return base_types, explicit_outputs, ndims
 
+    @property
+    def ufunc(self):
+        return self.key
+
     def generic(self, args, kws):
-        ufunc = self.key
+        ufunc = self.ufunc
         base_types, explicit_outputs, ndims = self._handle_inputs(ufunc, args,
                                                                   kws)
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
