@@ -1171,8 +1171,8 @@ def numpy_empty_nd(context, builder, sig, args):
         arrlen = builder.mul(arrlen, s)
 
     strides = [itemsize]
-    for i, s in enumerate(shapes[1:]):
-        strides.append(builder.mul(strides[i], s))
+    for s in reversed(shapes[1:]):
+        strides.append(builder.mul(strides[-1], s))
 
     meminfo = context.nrt_meminfo_alloc(builder,
                                         size=builder.mul(itemsize, arrlen))
