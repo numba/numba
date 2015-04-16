@@ -88,7 +88,7 @@ def _compile_element_wise_function(nb_func, targetoptions, sig=None,
 
     return cres, args, return_type
 
-def _check_ufunc_signature(cres, args, return_type):
+def _finalize_ufunc_signature(cres, args, return_type):
     '''Given a compilation result, argument types, and a return type,
     build a valid Numba signature after validating that it doesn't
     violate the constraints for the compilation mode.
@@ -173,10 +173,10 @@ class UFuncBuilder(_BaseUFuncBuilder):
         self._cres = {}
 
     def _finalize_signature(self, cres, args, return_type):
-        '''Slated for deprecation, use ufuncbuilder._check_ufunc_signature()
+        '''Slated for deprecation, use ufuncbuilder._finalize_ufunc_signature()
         instead.
         '''
-        return _check_ufunc_signature(cres, args, return_type)
+        return _finalize_ufunc_signature(cres, args, return_type)
 
     def build_ufunc(self):
         dtypelist = []
