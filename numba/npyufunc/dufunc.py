@@ -40,7 +40,7 @@ class DUFunc(_internal._DUFunc):
         element_wise_signature = tuple(argtys)
         cres, args, return_type = ufuncbuilder._compile_element_wise_function(
             self.dispatcher, self.targetoptions, element_wise_signature)
-        sig = ufuncbuilder._check_ufunc_signature(cres, args, return_type)
+        sig = ufuncbuilder._finalize_ufunc_signature(cres, args, return_type)
         dtypenums, ptr, env = ufuncbuilder._build_element_wise_ufunc_wrapper(
             cres, sig)
         self._add_loop(utils.longint(ptr), dtypenums)
