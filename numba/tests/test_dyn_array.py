@@ -56,6 +56,30 @@ class TestDynArray(unittest.TestCase):
 
         del got_arr
 
+    def test_empty_3d(self):
+        def pyfunc(m, n, p):
+            arr = np.empty((m, n, p), np.int32)
+            for i in range(m):
+                for j in range(n):
+                    for k in range(p):
+                        arr[i, j, k] = i + j + k
+
+            return arr
+
+        cfunc = nrtjit(pyfunc)
+        m = 4
+        n = 3
+        p = 2
+        expected_arr = pyfunc(m, n, p)
+        got_arr = cfunc(m, n, p)
+        np.testing.assert_equal(expected_arr, got_arr)
+
+        self.assertEqual(expected_arr.size, got_arr.size)
+        self.assertEqual(expected_arr.shape, got_arr.shape)
+        self.assertEqual(expected_arr.strides, got_arr.strides)
+
+        del got_arr
+
     def test_empty_2d_sliced(self):
         def pyfunc(m, n, p):
             arr = np.empty((m, n), np.int32)
@@ -162,6 +186,13 @@ class TestDynArray(unittest.TestCase):
         # 2D case
         arr_a = np.random.random(10).reshape(2, 5)
         arr_b = np.random.random(10).reshape(2, 5)
+
+        np.testing.assert_equal(pyfunc(arr_a, arr_b),
+                                cfunc(arr_a, arr_b))
+
+        # 3D case
+        arr_a = np.random.random(70).reshape(2, 5, 7)
+        arr_b = np.random.random(70).reshape(2, 5, 7)
 
         np.testing.assert_equal(pyfunc(arr_a, arr_b),
                                 cfunc(arr_a, arr_b))
