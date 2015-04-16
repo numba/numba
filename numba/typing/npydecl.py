@@ -89,7 +89,12 @@ class Numpy_rules_ufunc(AbstractTemplate):
         if implicit_output_count > 0:
             # XXX this is currently wrong for datetime64 and timedelta64,
             # as ufunc_find_matching_loop() doesn't do any type inference.
-            out.extend(ufunc_loop.outputs[-implicit_output_count:])
+            ret_tys = ufunc_loop.outputs[-implicit_output_count:]
+            if ndims > 0:
+                # XXX Not sure 'A' layout is correct...
+                ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout='A')
+                           for ret_ty in ret_tys]
+            out.extend(ret_tys)
 
         # note: although the previous code should support multiple return values, only one
         #       is supported as of now (signature may not support more than one).
