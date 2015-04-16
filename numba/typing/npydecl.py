@@ -67,7 +67,8 @@ class Numpy_rules_ufunc(AbstractTemplate):
 
     def generic(self, args, kws):
         ufunc = self.key
-        base_types, explicit_outputs, _ = self._handle_inputs(ufunc, args, kws)
+        base_types, explicit_outputs, ndims = self._handle_inputs(ufunc, args,
+                                                                  kws)
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
         if ufunc_loop is None:
             raise TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
