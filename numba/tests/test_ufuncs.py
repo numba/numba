@@ -1017,7 +1017,6 @@ class TestUFuncs(TestCase):
             cr = compile_isolated(myadd, (arr_ty, arr_ty),
                                   flags=no_pyobj_flags)
 
-    @unittest.skipIf(__name__ != "__main__", "work in progress")
     def test_broadcast_implicit_output_npm_nrt(self):
         def pyfunc(a0, a1):
             return np.add(a0, a1)
