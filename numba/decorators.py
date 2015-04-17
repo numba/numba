@@ -3,7 +3,7 @@ Contains function decorators and target_registry
 """
 from __future__ import print_function, division, absolute_import
 import warnings
-from . import sigutils
+from . import config, sigutils
 from .targets import registry
 
 # -----------------------------------------------------------------------------
@@ -140,6 +140,8 @@ def jit(signature_or_function=None, locals={}, target='cpu', **options):
     else:
         # A function is passed
         pyfunc = signature_or_function
+        if config.DISABLE_JIT:
+            return pyfunc
         dispatcher = registry.target_registry[target]
         dispatcher = dispatcher(py_func=pyfunc, locals=locals,
                                 targetoptions=options)
@@ -150,6 +152,8 @@ def _jit(sigs, locals, target, targetoptions):
     dispatcher = registry.target_registry[target]
 
     def wrapper(func):
+        if config.DISABLE_JIT:
+            return func
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions)
         for sig in sigs:
