@@ -15,7 +15,6 @@ def loop1(n):
 def loop2(a, b):
     s = 0
     for i in range(a, b):
-        print(i)
         s += i
     return s
 
@@ -30,6 +29,14 @@ def loop3(a, b, c):
 def range2_writeout(a, b, out):
     i = 0
     for j in range(a, b):
+        out[i] = j
+        i += 1
+    return i
+
+
+def range3_writeout(a, b, c, out):
+    i = 0
+    for j in range(a, b, c):
         out[i] = j
         i += 1
     return i
@@ -70,6 +77,18 @@ class TestRange(unittest.TestCase):
         expected = numpy.zeros(b - a, dtype=numpy.int64)
         got = numpy.zeros(b - a, dtype=numpy.int64)
         self.assertTrue(cfunc(a, b, got), pyfunc(a, b, expected))
+        numpy.testing.assert_equal(expected, got)
+
+    def test_range3_writeout_uint64(self):
+        pyfunc = range3_writeout
+        cres = compile_isolated(pyfunc, [types.uint64, types.uint64,
+                                         types.uint64, types.int64[:]])
+        cfunc = cres.entry_point
+        a, b = 2552764644, 2552764787
+        c = 1
+        expected = numpy.zeros(b - a, dtype=numpy.int64)
+        got = numpy.zeros(b - a, dtype=numpy.int64)
+        self.assertTrue(cfunc(a, b, c, got), pyfunc(a, b, c, expected))
         numpy.testing.assert_equal(expected, got)
 
 
