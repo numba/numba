@@ -125,6 +125,7 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
+        assert not config.DISABLE_JIT, 'Compilation occurring with disabled JIT'
         ll_module = ll.parse_assembly(str(ir_module))
         ll_module.verify()
         self.add_llvm_module(ll_module)
