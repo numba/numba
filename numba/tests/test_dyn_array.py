@@ -105,6 +105,7 @@ class TestDynArray(unittest.TestCase):
 
     def test_return_global_array(self):
         y = np.ones(4, dtype=np.float32)
+        initrefct = sys.getrefcount(y)
 
         def return_external_array():
             return y
@@ -112,9 +113,20 @@ class TestDynArray(unittest.TestCase):
         cfunc = nrtjit(return_external_array)
         out = cfunc()
 
+        # out reference by cfunc
+        self.assertEqual(initrefct + 1, sys.getrefcount(y))
+
         np.testing.assert_equal(y, out)
         np.testing.assert_equal(y, np.ones(4, dtype=np.float32))
         np.testing.assert_equal(out, np.ones(4, dtype=np.float32))
+
+        del out
+        # out is only referenced by cfunc
+        self.assertEqual(initrefct + 1, sys.getrefcount(y))
+
+        del cfunc
+        # y is no longer referenced by cfunc
+        self.assertEqual(initrefct, sys.getrefcount(y))
 
     def test_return_global_array_sliced(self):
         y = np.ones(4, dtype=np.float32)
