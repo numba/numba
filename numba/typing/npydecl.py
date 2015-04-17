@@ -113,6 +113,34 @@ class Numpy_rules_ufunc(AbstractTemplate):
         return signature(*out)
 
 
+class NumpyRulesArrayOperator(Numpy_rules_ufunc):
+    _op_map = {
+         '+': "add",
+         '-': "subtract",
+         '*': "multiply",
+        '/?': "divide",
+         '/': "true_divide",
+        '//': "floor_divide",
+         '%': "remainder",
+        '**': "power",
+        '<<': "left_shift",
+        '>>': "right_shift",
+         '&': "bitwise_and",
+         '|': "bitwise_or",
+         '^': "bitwise_xor",
+    }
+
+    @property
+    def ufunc(self):
+        return getattr(numpy, self._op_map[self.key])
+
+    @classmethod
+    def install_operations(cls):
+        for op, ufunc_name in cls._op_map.items():
+            builtin(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
+                         dict(key=op)))
+
+
 # list of unary ufuncs to register
 
 _math_operations = [ "add", "subtract", "multiply",
@@ -165,7 +193,6 @@ _aliases = set(["bitwise_not", "mod", "abs"])
 if numpy.divide == numpy.true_divide:
     _aliases.add("divide")
 
-
 def _numpy_ufunc(name):
     func = getattr(numpy, name)
     class typing_class(Numpy_rules_ufunc):
@@ -191,6 +218,7 @@ for func in supported_ufuncs:
 all_ufuncs = [getattr(numpy, name) for name in all_ufuncs]
 supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 
+NumpyRulesArrayOperator.install_operations()
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
