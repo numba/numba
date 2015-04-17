@@ -142,3 +142,5 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
 
 make_range_impl(types.range_state32_type, types.range_iter32_type, types.int32)
 make_range_impl(types.range_state64_type, types.range_iter64_type, types.int64)
+make_range_impl(types.unsigned_range_state64_type, types.unsigned_range_iter64_type,
+                types.uint64)
