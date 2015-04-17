@@ -113,6 +113,22 @@ class Numpy_rules_ufunc(AbstractTemplate):
         return signature(*out)
 
 
+@builtin
+class UnaryPositiveArray(AbstractTemplate):
+    '''Typing template class for +(array) expressions.  This operator is
+    special because there is no Numpy ufunc associated with it; we
+    include typing for it here (numba.typing.npydecl) because this is
+    where the remaining array operators are defined.
+    '''
+    key = "+"
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1 and isinstance(args[0], types.Array):
+            arg_ty = args[0]
+            return arg_ty.copy()(arg_ty)
+
+
 class NumpyRulesArrayOperator(Numpy_rules_ufunc):
     _op_map = {
          '+': "add",
@@ -139,6 +155,26 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         for op, ufunc_name in cls._op_map.items():
             builtin(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
                          dict(key=op)))
+
+
+class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
+    _op_map = {
+        # Positive is a special case since there is no Numpy ufunc
+        # corresponding to it (it's essentially an identity operator).
+        # See UnaryPositiveArray, above.
+        '-': "negative",
+        '~': "invert",
+    }
+
+    def generic(self, *args, **kws):
+        '''Overloads and calls base class generic() method, returning None if
+        a TypingError occurred.
+        '''
+        try:
+            return super(NumpyRulesUnaryArrayOperator, self).generic(
+                *args, **kws)
+        except TypingError:
+            return None
 
 
 # list of unary ufuncs to register
@@ -218,6 +254,10 @@ for func in supported_ufuncs:
 all_ufuncs = [getattr(numpy, name) for name in all_ufuncs]
 supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 
+# Order is important here; the binary typing class (more specifically
+# Numpy_rules_ufunc.generic()) will raise a TypingError, shortcutting
+# any following typing information.
+NumpyRulesUnaryArrayOperator.install_operations()
 NumpyRulesArrayOperator.install_operations()
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions

@@ -476,15 +476,28 @@ for ufunc in ufunc_db.get_ufuncs():
         raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
 
 
-for operator, ufunc_name in npydecl.NumpyRulesArrayOperator._op_map.items():
-    ufunc = getattr(numpy, ufunc_name)
-    kernel = _kernels[ufunc]
-    if ufunc.nin == 1:
-        register_unary_operator_kernel(operator, kernel)
-    elif ufunc.nin == 2:
-        register_binary_operator_kernel(operator, kernel)
-    else:
-        raise RuntimeError("Shouldn't be any non-unary or binary operators!")
+@register
+@implement('+', types.Kind(types.Array))
+def array_positive_impl(context, builder, sig, args):
+    '''Lowering function for +(array) expressions.  Defined here
+    (numba.targets.npyimpl) since the remaining array-operator
+    lowering functions are also registered in this module.
+    '''
+    [val] = args
+    return val
+
+
+for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
+                npydecl.NumpyRulesArrayOperator._op_map):
+    for operator, ufunc_name in _op_map.items():
+        ufunc = getattr(numpy, ufunc_name)
+        kernel = _kernels[ufunc]
+        if ufunc.nin == 1:
+            register_unary_operator_kernel(operator, kernel)
+        elif ufunc.nin == 2:
+            register_binary_operator_kernel(operator, kernel)
+        else:
+            raise RuntimeError("There shouldn't be any non-unary or binary operators")
 
 
 del _kernels
