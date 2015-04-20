@@ -13,7 +13,7 @@ class TestAlignment(unittest.TestCase):
             i = cuda.grid(1)
             a[i].a = a[i].b
 
-        a_recarray = np.recarray(3, dtype=rec)
+        a_recarray = np.recarray(3, dtype=rec_dtype)
         for i in range(a_recarray.size):
             a_rec = a_recarray[i]
             a_rec.a = 0

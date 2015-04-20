@@ -49,7 +49,7 @@ def udt_invalid_2(A):
 
 class TestMacro(unittest.TestCase):
     def getarg(self):
-        return np.array(100, dtype=np.float32)
+        return np.array(100, dtype=np.float32, ndmin=1)
 
     def getarg2(self):
         return self.getarg().reshape(1,1)
