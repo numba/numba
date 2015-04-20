@@ -98,7 +98,7 @@ class DUFunc(_internal._DUFunc):
         jit() and njit()).
         """
         if typingctx is None:
-            typingctx = self.dispatcher.targetdescr.typing_context
+            typingctx = self._dispatcher.targetdescr.typing_context
         _ty_cls = type('DUFuncTyping_' + self.ufunc.__name__,
                        (AbstractTemplate,),
                        dict(key=self, generic=self._type_me))
@@ -112,7 +112,7 @@ class DUFunc(_internal._DUFunc):
         compilation result.  Will return two None's if no matching
         signature was found.
         """
-        for sig, cres in self.dispatcher.overloads.items():
+        for sig, cres in self._dispatcher.overloads.items():
             if sig.args == ewise_types:
                 return sig, cres
         return None, None
@@ -156,7 +156,7 @@ class DUFunc(_internal._DUFunc):
         jit() and njit()).
         """
         if targetctx is None:
-            targetctx = self.dispatcher.targetdescr.target_context
+            targetctx = self._dispatcher.targetdescr.target_context
         _any = types.Any
         _arr = types.Kind(types.Array)
         sig0 = _any(*((_any,) * self.ufunc.nin + (_arr,) * self.ufunc.nout))
