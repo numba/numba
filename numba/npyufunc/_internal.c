@@ -196,7 +196,7 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
     int nin=-1, nout=1;
     char *name=NULL, *doc=NULL;
 
-    static char * kwlist[] = {"dispatcher", "identity", "keepalive", "nin",
+    static char * kwlist[] = {"dispatcher", "identity", "_keepalive", "nin",
                               "nout", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kws, "O|iO!nn", kwlist,
@@ -273,11 +273,11 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
 }
 
 static PyMemberDef dufunc_members[] = {
-    {"dispatcher", T_OBJECT_EX, offsetof(PyDUFuncObject, dispatcher), 0,
+    {"_dispatcher", T_OBJECT_EX, offsetof(PyDUFuncObject, dispatcher), 0,
          "Dispatcher object for the core Python function."},
     {"ufunc", T_OBJECT_EX, offsetof(PyDUFuncObject, ufunc), 0,
          "Numpy Ufunc for the dynamic ufunc."},
-    {"keepalive", T_OBJECT_EX, offsetof(PyDUFuncObject, keepalive), 0,
+    {"_keepalive", T_OBJECT_EX, offsetof(PyDUFuncObject, keepalive), 0,
          "List of objects to keep alive during life of dufunc."},
 };
 
@@ -580,7 +580,7 @@ dufunc_setfrozen(PyDUFuncObject * self, PyObject * value, void * closure)
 }
 
 static PyGetSetDef dufunc_getsets[] = {
-    {"frozen",
+    {"_frozen",
      (getter)dufunc_getfrozen, (setter)dufunc_setfrozen,
      "flag indicating call-time compilation has been disabled",
      NULL},
