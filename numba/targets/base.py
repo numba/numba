@@ -315,7 +315,13 @@ class BaseContext(object):
         Return a LLVM constant representing value *val* of Numba type *ty*.
         """
         if self.is_struct_type(ty):
-            return self.get_constant_struct(builder, ty, val)
+            struct = self.get_constant_struct(builder, ty, val)
+            if isinstance(ty, types.Record):
+                ptrty = self.data_model_manager[ty].get_data_type()
+                ptr = cgutils.alloca_once(builder, ptrty)
+                builder.store(struct, ptr)
+                return ptr
+            return struct
 
         elif isinstance(ty, types.ExternalFunctionPointer):
             ptrty = self.get_function_pointer_type(ty)
@@ -479,7 +485,7 @@ class BaseContext(object):
                         itemsize=context.get_constant(types.intp, elemty.size),
                         parent=ary.parent
                     )
-                    
+
                     return ary._getvalue()
             else:
                 @impl_attribute(typ, attr, elemty)
