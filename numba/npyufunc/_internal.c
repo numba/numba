@@ -449,6 +449,16 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
 
     arg_types_arr = _build_arg_types_array(arg_types, (Py_ssize_t)ufunc->nargs);
     if (!arg_types_arr) goto _dufunc__add_loop_fail;
+
+    /* Check to see if any of the input types are user defined dtypes.
+       If they are, we should use PyUFunc_RegisterLoopForType() since
+       dispatch on a user defined dtype uses a Python dictionary
+       keyed by usertype (and not the functions array).
+
+       For more information, see how the usertype argument is used in
+       PyUFunc_RegisterLoopForType(), defined by Numpy at
+       .../numpy/core/src/umath/ufunc_object.c
+    */
     for (idx = 0; idx < ufunc->nargs; idx++) {
         if (arg_types_arr[idx] >= NPY_USERDEF) {
             usertype = arg_types_arr[idx];
