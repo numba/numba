@@ -458,16 +458,21 @@ class BaseContext(object):
                 def imp(context, builder, typ, val):
                     ary = aryty(context, builder)
                     dtype = elemty.dtype
-                    ary.nitems = context.get_constant(types.intp, elemty.nitems)
-                    ary.itemsize = context.get_constant(types.intp, elemty.size)
-                    ary.data = cgutils.get_record_member(builder, val, offset,
-                                                         self.get_data_type(dtype))
-                    ary.shape = cgutils.pack_array(builder,
-                                                   [ self.get_constant(types.intp, s)
-                                                     for s in elemty.shape ])
-                    ary.strides = cgutils.pack_array(builder,
-                                                     [self.get_constant(types.intp, s)
-                                                     for s in elemty.strides ])
+                    newshape = [self.get_constant(types.intp, s) for s in
+                                elemty.shape]
+                    newstrides = [self.get_constant(types.intp, s) for s in
+                                  elemty.strides]
+                    newdata = cgutils.get_record_member(builder, val, offset,
+                                                    self.get_data_type(dtype))
+                    arrayobj.populate_array(
+                        ary,
+                        data=newdata,
+                        shape=cgutils.pack_array(builder, newshape),
+                        strides=cgutils.pack_array(builder, newstrides),
+                        itemsize=context.get_constant(types.intp, elemty.size),
+                        parent=ary.parent
+                    )
+                    
                     return ary._getvalue()
             else:
                 @impl_attribute(typ, attr, elemty)
@@ -482,20 +487,17 @@ class BaseContext(object):
             # We are treating them as constants.
             # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
-            if attrty is not None:
-                try:
-                    pyval = getattr(typ.pymod, attr)
-                    llval = self.get_constant(attrty, pyval)
-                except NotImplementedError:
-                    # Module attribute is not a simple constant
-                    # (e.g. it's a function), it will be handled later on.
-                    pass
-                else:
-                    @impl_attribute(typ, attr, attrty)
-                    def imp(context, builder, typ, val):
-                        return llval
-                    return imp
-            # No implementation
+            if attrty is not None and not isinstance(attrty, (types.Dispatcher,
+                                                              types.Function,
+                                                              types.Module)):
+                pyval = getattr(typ.pymod, attr)
+                llval = self.get_constant(attrty, pyval)
+                @impl_attribute(typ, attr, attrty)
+                def imp(context, builder, typ, val):
+                    return llval
+                return imp
+            # No implementation required for functions/modules, which are
+            # dealt with later
             return None
 
         # Lookup specific attribute implementation for this type
@@ -837,6 +839,12 @@ class BaseContext(object):
 
     def make_array(self, typ):
         return arrayobj.make_array(typ)
+
+    def populate_array(self, arr, **kwargs):
+        """
+        Populate array structure.
+        """
+        return arrayobj.populate_array(arr, **kwargs)
 
     def make_complex(self, typ):
         cls, _ = builtins.get_complex_info(typ)

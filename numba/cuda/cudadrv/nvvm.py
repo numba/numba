@@ -54,9 +54,10 @@ class NVVM(object):
         # nvvmResult nvvmDestroyProgram(nvvmProgram *cu)
         'nvvmDestroyProgram': (nvvm_result, POINTER(nvvm_program)),
 
-        # nvvmResult nvvmAddModuleToProgram(nvvmProgram cu, const char *buffer, size_t size)
+        # nvvmResult nvvmAddModuleToProgram(nvvmProgram cu, const char *buffer,
+        #                                   size_t size, const char *name)
         'nvvmAddModuleToProgram': (
-            nvvm_result, nvvm_program, c_char_p, c_size_t),
+            nvvm_result, nvvm_program, c_char_p, c_size_t, c_char_p),
 
         # nvvmResult nvvmCompileProgram(nvvmProgram cu, int numOptions,
         #                          const char **options)
@@ -138,7 +139,7 @@ class CompilationUnit(object):
            representation (LLVM3.0) or in the text representation.
         """
         err = self.driver.nvvmAddModuleToProgram(self._handle, buffer,
-                                                 len(buffer))
+                                                 len(buffer), None)
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
@@ -383,13 +384,25 @@ done:
 }
 """
 
+
+def _replace_datalayout(llvmir):
+    """
+    Find the line containing the datalayout and replace it
+    """
+    lines = llvmir.splitlines()
+    for i, ln in enumerate(lines):
+        if ln.startswith("target datalayout"):
+            tmp = 'target datalayout = "{0}"'
+            lines[i] = tmp.format(default_data_layout)
+            break
+    return '\n'.join(lines)
+
+
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
     # New LLVM generate a shorthand for datalayout that NVVM does not know
-    llvmir = llvmir.replace('e-i64:64-v16:16-v32:32-n16:32:64',
-                            default_data_layout)
-
+    llvmir = _replace_datalayout(llvmir)
     # Replace with our cmpxchg and atomic implementations because LLVM 3.5 has
     # a new semantic for cmpxchg.
     replacements = [

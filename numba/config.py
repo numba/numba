@@ -23,6 +23,8 @@ class NumbaWarning(Warning):
 def _readenv(name, ctor, default):
     try:
         res = os.environ[name]
+        if res == '':
+            return default
     except KeyError:
         return default
     else:
@@ -80,6 +82,9 @@ DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
 
 # Force dump of type annotation
 ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
+
+# Dump type annotation in html format
+HTML = _readenv("NUMBA_DUMP_HTML", str, None)
 
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]

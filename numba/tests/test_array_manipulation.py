@@ -22,6 +22,9 @@ def flatten_array(a, expected):
 def ravel_array(a, expected):
     return (a.ravel() == expected).all()
 
+def ravel_array_size(a, expected):
+    return (a.ravel().size == expected.size)
+
 def transpose_array(a, expected):
     return (a.transpose() == expected).all()
 
@@ -84,6 +87,18 @@ class TestArrayManipulation(TestCase):
 
     def test_ravel_array(self, flags=enable_pyobj_flags):
         pyfunc = ravel_array
+        arraytype1 = types.Array(types.int32, 2, 'C')
+        arraytype2 = types.Array(types.int32, 1, 'C')
+        cr = compile_isolated(pyfunc, (arraytype1, arraytype2),
+                              flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(9).reshape(3, 3)
+        expected = np.arange(9).reshape(3, 3).ravel()
+        self.assertTrue(cfunc(a, expected))
+
+    def test_ravel_array_size(self, flags=enable_pyobj_flags):
+        pyfunc = ravel_array_size
         arraytype1 = types.Array(types.int32, 2, 'C')
         arraytype2 = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype1, arraytype2),

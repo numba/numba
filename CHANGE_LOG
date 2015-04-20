@@ -1,3 +1,80 @@
+Version 0.18.2
+--------------
+Bug fixes:
+
+* Issue #1073: Fixes missing template file for HTML annotation
+* Issue #1074: Fixes CUDA support on Windows machine due to NVVM API mismatch
+
+
+Version 0.18.1
+--------------
+
+Version 0.18.0 is not officially released.
+
+This version removes the old deprecated and undocumented ``argtypes`` and
+``restype`` arguments to the ``@jit`` decorator.  Function signatures
+should always be passed as the first argument to ``@jit``.
+
+Features:
+
+* Issue #960: Add inspect_llvm() and inspect_asm() methods to JIT-compiled
+  functions: they output the LLVM IR and the native assembler source of the
+  compiled function, respectively.
+* Issue #990: Allow passing tuples as arguments to JIT-compiled functions
+  in ``nopython`` mode.
+* Issue #774: Support two-argument round() in ``nopython`` mode.
+* Issue #987: Support missing functions from the math module in nopython
+  mode: frexp(), ldexp(), gamma(), lgamma(), erf(), erfc().
+* Issue #995: Improve code generation for round() on Python 3.
+* Issue #981: Support functions from the random and numpy.random modules
+  in ``nopython`` mode.
+* Issue #979: Add cuda.atomic.max().
+* Issue #1006: Improve exception raising and reporting.  It is now allowed
+  to raise an exception with an error message in ``nopython`` mode.
+* Issue #821: Allow ctypes- and cffi-defined functions as arguments to
+  ``nopython`` functions.
+* Issue #901: Allow multiple explicit signatures with ``@jit``.  The
+  signatures must be passed in a list, as with ``@vectorize``.
+* Issue #884: Better error message when a JIT-compiled function is called
+  with the wrong types.
+* Issue #1010: Simpler and faster CUDA argument marshalling thanks to a
+  refactoring of the data model.
+* Issue #1018: Support arrays of scalars inside Numpy structured types.
+* Issue #808: Reduce Numba import time by half.
+* Issue #1021: Support the buffer protocol in ``nopython`` mode.
+  Buffer-providing objects, such as ``bytearray``, ``array.array`` or
+  ``memoryview`` support array-like operations such as indexing and iterating.
+  Furthermore, some standard attributes on the ``memoryview`` object are
+  supported.
+* Issue #1030: Support nested arrays in Numpy structured arrays.
+* Issue #1033: Implement the inspect_types(), inspect_llvm() and inspect_asm()
+  methods for CUDA kernels.
+* Issue #1029: Support Numpy structured arrays with CUDA as well.
+* Issue #1034: Support for generators in nopython and object mode.
+* Issue #1044: Support default argument values when calling Numba-compiled
+  functions.
+* Issue #1048: Allow calling Numpy scalar constructors from CUDA functions.
+* Issue #1047: Allow indexing a multi-dimensional array with a single integer,
+  to take a view.
+* Issue #1050: Support len() on tuples.
+* Issue #1011: Revive HTML annotation.
+
+Fixes:
+
+* Issue #977: Assignment optimization was too aggressive.
+* Issue #561: One-argument round() now returns an int on Python 3.
+* Issue #1001: Fix an unlikely bug where two closures with the same name
+  and id() would compile to the same LLVM function name, despite different
+  closure values.
+* Issue #1006: Fix reference leak when a JIT-compiled function is disposed of.
+* Issue #1017: Update instructions for CUDA in the README.
+* Issue #1008: Generate shorter LLVM type names to avoid segfaults with CUDA.
+* Issue #1005: Properly clean up references when raising an exception from
+  object mode.
+* Issue #1041: Fix incompatibility between Numba and the third-party
+  library "future".
+* Issue #1053: Fix the size attribute of CUDA shared arrays.
+
 
 Version 0.17.0
 --------------
@@ -57,10 +134,10 @@ Fixes:
 Version 0.16.0
 --------------
 
-This release contains a major refactor to switch from llvmpy to `llvmlite <https://github.com/numba/llvmlite>`_ 
+This release contains a major refactor to switch from llvmpy to `llvmlite <https://github.com/numba/llvmlite>`_
 as our code generation backend.  The switch is necessary to reconcile
 different compiler requirements for LLVM 3.5 (needs C++11) and Python
-extensions (need specific compiler versions on Windows). As a bonus, we have 
+extensions (need specific compiler versions on Windows). As a bonus, we have
 found the use of llvmlite speeds up compilation by a factor of 2!
 
 Other Major Changes:
@@ -75,14 +152,14 @@ Known Issues:
 * AVX code generation is still disabled by default due to performance
   regressions when operating on misaligned NumPy arrays.  We hope to have a
   workaround in the future.
-* In *extremely* rare circumstances, a `known issue with LLVM 3.5 <http://llvm.org/bugs/show_bug.cgi?id=21423>`_ 
+* In *extremely* rare circumstances, a `known issue with LLVM 3.5 <http://llvm.org/bugs/show_bug.cgi?id=21423>`_
   code generation can cause an ELF relocation error on 64-bit Linux systems.
 
 
 Version 0.15.1
 --------------
 
-(This was a bug-fix release that superceded version 0.15 before it was 
+(This was a bug-fix release that superceded version 0.15 before it was
 announced.)
 
 Fixes:
@@ -125,8 +202,8 @@ Fixes:
   an exeception.
 * Allow function objects to be returned from a function compiled in object
   mode.
-* Fix a linking problem that caused slower platform math functions (such as 
-  ``exp()``) to be used on Windows, leading to performance regressions against 
+* Fix a linking problem that caused slower platform math functions (such as
+  ``exp()``) to be used on Windows, leading to performance regressions against
   NumPy.
 * ``min()`` and ``max()`` no longer accept scalars arguments in nopython mode.
 * Fix handling of ambigous type promotion among several compiled versions of a
@@ -137,7 +214,7 @@ Fixes:
 * Allow the shape of a 1D ``cuda.shared.array`` and ``cuda.local.array`` to be
   a one-element tuple.
 * More correct handling of signed zeros.
-* Add custom implementation of ``atan2()`` on Windows to handle special cases 
+* Add custom implementation of ``atan2()`` on Windows to handle special cases
   properly.
 * Eliminated race condition in the handling of the pagelocked staging area
   used when transferring CUDA arrays.
@@ -150,9 +227,9 @@ Version 0.14
 
 Features:
 
-* Support for nearly all the Numpy math functions (including comparison, 
+* Support for nearly all the Numpy math functions (including comparison,
   logical, bitwise and some previously missing float functions) in nopython mode.
-* The Numpy datetime64 and timedelta64 dtypes are supported in nopython mode 
+* The Numpy datetime64 and timedelta64 dtypes are supported in nopython mode
   with Numpy 1.7 and later.
 * Support for Numpy math functions on complex numbers in nopython mode.
 * ndarray.sum() is supported in nopython mode.
@@ -174,7 +251,7 @@ Features:
 Fixes:
 
 * Generation of AVX instructions has been disabled to avoid performance bugs
-  when calling external math functions that may use SSE instructions, 
+  when calling external math functions that may use SSE instructions,
   especially on OS X.
 * JIT functions can be removed by the garbage collector when they are no
   longer accessible.
@@ -186,9 +263,9 @@ Fixes:
 * Gracefully handle failure to enable faulthandler in the IPython Notebook.
 * Fix a bug that caused loop lifting to fail if the loop was inside an
   ``else`` block.
-* Fixed a problem with selecting CUDA devices in multithreaded programs on 
+* Fixed a problem with selecting CUDA devices in multithreaded programs on
   Linux.
-* The ``pow()`` function (and ``**`` operation) applied to two integers now 
+* The ``pow()`` function (and ``**`` operation) applied to two integers now
   returns an integer rather than a float.
 * Numpy arrays using the object dtype no longer cause an exception in the
   autojit.
@@ -209,7 +286,7 @@ Features:
   compiled code
 * Support for the start argument in enumerate()
 * Inplace arithmetic operations (+=, -=, etc.)
-* Direct iteration over a 1D numpy array (e.g. "for x in array: ...") 
+* Direct iteration over a 1D numpy array (e.g. "for x in array: ...")
   in nopython mode
 
 Fixes:
@@ -217,7 +294,7 @@ Fixes:
 * Support for NVIDIA compute capability 5.0 devices (such as the GTX 750)
 * Vectorize no longer crashes/gives an error when bool\_ is used as return type
 * Return the correct dictionary when globals() is used in JIT functions
-* Fix crash bug when creating dictionary literals in object 
+* Fix crash bug when creating dictionary literals in object
 * Report more informative error message on import if llvmpy is too old
 * Temporarily disable pycc --header, which generates incorrect function
   signatures.

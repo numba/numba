@@ -204,6 +204,9 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
     # explicit_output - if the output was explicit in the call
     #                   (ie: np.add(x,y,r))
     if not explicit_output:
+        if isinstance(sig.return_type, types.Array):
+            raise TypeError("array allocation is not supported, yet")
+
         args.append(lc.Constant.null(context.get_value_type(sig.return_type)))
         tyargs = sig.args + (sig.return_type,)
     else:

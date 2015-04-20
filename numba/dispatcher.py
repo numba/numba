@@ -214,11 +214,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        if isinstance(val, utils.INT_TYPES):
-            # Ensure no autoscaling of integer type, to match the
-            # typecode() function in _dispatcher.c.
-            return types.int64
-
         tp = self.typingctx.resolve_argument_type(val)
         if tp is None:
             tp = types.pyobject
@@ -371,6 +366,7 @@ class LiftedLoop(_OverloadedBase):
         self.locals = locals
         self.flags = flags
         self.bytecode = bytecode
+        self.lifted_from = None
 
     def get_source_location(self):
         """Return the starting line number of the loop.
@@ -396,7 +392,8 @@ class LiftedLoop(_OverloadedBase):
                                              args=args,
                                              return_type=return_type,
                                              flags=flags,
-                                             locals=self.locals)
+                                             locals=self.locals,
+                                             lifted=(), lifted_from=self.lifted_from)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:

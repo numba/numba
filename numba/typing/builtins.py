@@ -77,6 +77,10 @@ class Range(ConcreteTemplate):
         signature(types.range_state64_type, types.int64, types.int64),
         signature(types.range_state64_type, types.int64, types.int64,
                   types.int64),
+        signature(types.unsigned_range_state64_type, types.uint64),
+        signature(types.unsigned_range_state64_type, types.uint64, types.uint64),
+        signature(types.unsigned_range_state64_type, types.uint64, types.uint64,
+                  types.uint64),
     ]
 
 
