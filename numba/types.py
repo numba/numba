@@ -846,7 +846,14 @@ class NestedArray(Array):
     def key(self):
         return self.dtype, self.shape
 
-class UniTuple(IterableType):
+
+class BaseTuple(Type):
+    """
+    The base class for all tuple types (with a known size).
+    """
+
+
+class UniTuple(IterableType, BaseTuple):
 
     def __init__(self, dtype, count):
         self.dtype = dtype
@@ -902,7 +909,8 @@ class UniTupleIter(IteratorType):
         return self.unituple
 
 
-class Tuple(Type):
+class Tuple(BaseTuple):
+
     def __init__(self, types):
         self.types = tuple(types)
         self.count = len(self.types)
