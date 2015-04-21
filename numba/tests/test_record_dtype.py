@@ -150,6 +150,14 @@ def record_read_second_arr(ary):
     return ary.l[2, 2]
 
 
+def get_charseq(ary, i):
+    return ary[i].n
+
+
+def get_charseq_tuple(ary, i):
+    return ary[i].m, ary[i].n
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
                        ('c', np.complex64),
@@ -169,6 +177,9 @@ recordwith2darray = np.dtype([('i', np.int32),
 
 recordwith2arrays = np.dtype([('k', np.int32, (10, 20)),
                               ('l', np.int32, (6, 12))])
+
+recordwithcharseq = np.dtype([('m', np.int32),
+                              ('n', 'S5')])
 
 class TestRecordDtype(unittest.TestCase):
 
@@ -595,6 +606,48 @@ class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArra
 
     def get_cfunc(self, pyfunc, argspec):
         return _get_cfunc_nopython(pyfunc, argspec)
+
+
+class TestRecordDtypeWithCharSeq(unittest.TestCase):
+    def _createSampleaArray(self):
+        self.refsample1d = np.recarray(3, dtype=recordwithcharseq)
+        self.nbsample1d = np.zeros(3, dtype=recordwithcharseq)
+
+    def _fillData(self, arr):
+        for i in range(arr.size):
+            arr[i]['m'] = i
+            arr[i]['n'] = "%d" % i
+
+        arr[0]['n'] = 'abcde'  # no null-byte
+
+    def setUp(self):
+        self._createSampleaArray()
+        self._fillData(self.refsample1d)
+        self._fillData(self.nbsample1d)
+
+    def get_cfunc(self, pyfunc):
+        rectype = numpy_support.from_dtype(recordwithcharseq)
+        cres = compile_isolated(pyfunc, (rectype[:], types.intp))
+        return cres.entry_point
+
+    def test_return_charseq(self):
+        pyfunc = get_charseq
+        cfunc = self.get_cfunc(pyfunc)
+        for i in range(self.refsample1d.size):
+            expected = pyfunc(self.refsample1d, i)
+            got = cfunc(self.nbsample1d, i)
+            self.assertEqual(expected, got)
+
+    def test_return_charseq_tuple(self):
+        pyfunc = get_charseq_tuple
+        cfunc = self.get_cfunc(pyfunc)
+        for i in range(self.refsample1d.size):
+            expected = pyfunc(self.refsample1d, i)
+            got = cfunc(self.nbsample1d, i)
+            self.assertEqual(expected, got)
+
+
+
 
 if __name__ == '__main__':
     unittest.main()
