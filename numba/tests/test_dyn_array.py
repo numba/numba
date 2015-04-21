@@ -2,9 +2,12 @@ from __future__ import print_function, absolute_import, division
 
 import sys
 import numpy as np
+import threading
 
 from numba import unittest_support as unittest
 from numba import njit
+from numba import utils
+
 
 
 nrtjit = njit(nrt=True)
@@ -53,6 +56,30 @@ class TestDynArray(unittest.TestCase):
 
         del got_arr
 
+    def test_empty_3d(self):
+        def pyfunc(m, n, p):
+            arr = np.empty((m, n, p), np.int32)
+            for i in range(m):
+                for j in range(n):
+                    for k in range(p):
+                        arr[i, j, k] = i + j + k
+
+            return arr
+
+        cfunc = nrtjit(pyfunc)
+        m = 4
+        n = 3
+        p = 2
+        expected_arr = pyfunc(m, n, p)
+        got_arr = cfunc(m, n, p)
+        np.testing.assert_equal(expected_arr, got_arr)
+
+        self.assertEqual(expected_arr.size, got_arr.size)
+        self.assertEqual(expected_arr.shape, got_arr.shape)
+        self.assertEqual(expected_arr.strides, got_arr.strides)
+
+        del got_arr
+
     def test_empty_2d_sliced(self):
         def pyfunc(m, n, p):
             arr = np.empty((m, n), np.int32)
@@ -78,6 +105,7 @@ class TestDynArray(unittest.TestCase):
 
     def test_return_global_array(self):
         y = np.ones(4, dtype=np.float32)
+        initrefct = sys.getrefcount(y)
 
         def return_external_array():
             return y
@@ -85,9 +113,20 @@ class TestDynArray(unittest.TestCase):
         cfunc = nrtjit(return_external_array)
         out = cfunc()
 
+        # out reference by cfunc
+        self.assertEqual(initrefct + 1, sys.getrefcount(y))
+
         np.testing.assert_equal(y, out)
         np.testing.assert_equal(y, np.ones(4, dtype=np.float32))
         np.testing.assert_equal(out, np.ones(4, dtype=np.float32))
+
+        del out
+        # out is only referenced by cfunc
+        self.assertEqual(initrefct + 1, sys.getrefcount(y))
+
+        del cfunc
+        # y is no longer referenced by cfunc
+        self.assertEqual(initrefct, sys.getrefcount(y))
 
     def test_return_global_array_sliced(self):
         y = np.ones(4, dtype=np.float32)
@@ -162,6 +201,161 @@ class TestDynArray(unittest.TestCase):
 
         np.testing.assert_equal(pyfunc(arr_a, arr_b),
                                 cfunc(arr_a, arr_b))
+
+        # 3D case
+        arr_a = np.random.random(70).reshape(2, 5, 7)
+        arr_b = np.random.random(70).reshape(2, 5, 7)
+
+        np.testing.assert_equal(pyfunc(arr_a, arr_b),
+                                cfunc(arr_a, arr_b))
+
+    def test_multithread(self):
+
+        def pyfunc(inp):
+            out = np.empty(inp.size)
+            tmp = 0
+            for i in range(out.size):
+                out[i] = tmp
+                tmp = inp[i]
+            return out
+
+        cfunc = nrtjit(pyfunc)
+        size = 10**5
+        arr = np.random.randint(0, 1, size)
+
+        np.testing.assert_equal(pyfunc(arr), cfunc(arr))
+
+        workers = []
+        inputs = []
+        outputs = []
+
+        # Make wrapper to store the output
+        def wrapped(inp, out):
+            out[:] = cfunc(inp)
+
+        # Create worker threads
+        for i in range(10):
+            arr = np.random.randint(0, 1, size)
+            out = np.empty_like(arr)
+            thread = threading.Thread(target=wrapped,
+                                      args=(arr, out),
+                                      name="worker{0}".format(i))
+            workers.append(thread)
+            inputs.append(arr)
+            outputs.append(out)
+
+        # Launch worker threads
+        for thread in workers:
+            thread.start()
+
+        # Join worker threads
+        for thread in workers:
+            thread.join()
+
+        # Check result
+        for inp, out in zip(inputs, outputs):
+            np.testing.assert_equal(pyfunc(inp), out)
+
+    def test_multithread_stress(self):
+
+        def pyfunc(n, t):
+            out = np.empty(n)
+            for i in range(out.size):
+                out[i] = i
+
+            for i in range(t):
+                tmp = np.empty(n)
+                for j in range(tmp.size):
+                    tmp[j] = i + j
+                for j in range(out.size):
+                    tmp[j] += out[j]
+                out = tmp   # Swap the array here
+
+            return out
+
+
+        cfunc = nrtjit(pyfunc)
+        size = 1000
+        repeat = 2000
+
+        expected = pyfunc(size, repeat)
+        np.testing.assert_equal(expected, cfunc(size, repeat))
+
+        workers = []
+        outputs = []
+
+        # Make wrapper to store the output
+        def wrapped(n, t, out):
+            out[:] = cfunc(n, t)
+
+        # Create worker threads
+        for i in range(10):
+            out = np.empty(size)
+            thread = threading.Thread(target=wrapped,
+                                      args=(size, repeat, out),
+                                      name="worker{0}".format(i))
+            workers.append(thread)
+            outputs.append(out)
+
+        # Launch worker threads
+        for thread in workers:
+            thread.start()
+
+        # Join worker threads
+        for thread in workers:
+            thread.join()
+
+        # Check result
+        for out in outputs:
+            np.testing.assert_equal(expected, out)
+
+    def test_swap(self):
+
+        def pyfunc(x, y, t):
+            """Swap array x and y for t number of times
+            """
+            for i in range(t):
+                x, y = y, x
+
+            return x, y
+
+
+        cfunc = nrtjit(pyfunc)
+
+        x = np.random.random(100)
+        y = np.random.random(100)
+
+        t = 100
+
+        initrefct = sys.getrefcount(x), sys.getrefcount(y)
+        np.testing.assert_equal(pyfunc(x, y, t), cfunc(x, y, t))
+        self.assertEqual(initrefct, (sys.getrefcount(x), sys.getrefcount(y)))
+
+
+def benchmark_refct_speed():
+    def pyfunc(x, y, t):
+        """Swap array x and y for t number of times
+        """
+        for i in range(t):
+            x, y = y, x
+        return x, y
+
+    cfunc = nrtjit(pyfunc)
+
+    x = np.random.random(100)
+    y = np.random.random(100)
+    t = 10000
+
+    def bench_pyfunc():
+        pyfunc(x, y, t)
+
+    def bench_cfunc():
+        cfunc(x, y, t)
+
+    python_time = utils.benchmark(bench_pyfunc)
+    numba_time = utils.benchmark(bench_cfunc)
+    print(python_time)
+    print(numba_time)
 
 
 if __name__ == "__main__":

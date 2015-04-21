@@ -12,6 +12,7 @@ union MemInfo{
         size_t         size;    /* only used for NRT allocated memory */
     } payload;
 
+    /* Freelist or Deferred-dtor-list */
     MemInfo *list_next;
 };
 
@@ -25,63 +26,48 @@ struct MemSys{
     atomic_inc_dec_func atomic_inc, atomic_dec;
     /* Atomic CAS */
     atomic_cas_func atomic_cas;
+    /* Shutdown flag */
+    int shutting;
 
 };
 
 /* The Memory System object */
 static MemSys TheMSys;
-void * const LOCKED = (void*)(size_t)-1;
-
-
-static
-void* nrt_lock(void * volatile *p2p) {
-    void *cmp = *p2p;
-    void *old;
-    /* Spin lock */
-    while (1){
-        if (TheMSys.atomic_cas(p2p, cmp, LOCKED, &old)) {
-            /* swap ok */
-            if (old != LOCKED) break;
-        }
-        NRT_Debug(nrt_debug_print("Lock: spinning\n"));
-        cmp = old;
-    }
-    assert(*p2p == LOCKED && "Locking failed");
-    assert(old != LOCKED && "Returning LOCKED");
-    return old;
-}
-
-static
-void nrt_unlock(void * volatile *p2p, void *val) {
-    void *old;
-    assert(*p2p == LOCKED && "Unlocking on non-locked list");
-    assert(val != LOCKED && "Cannot replace with LOCKED");
-    while (!TheMSys.atomic_cas(p2p, LOCKED, val, &old)) {
-        NRT_Debug(nrt_debug_print("Unlock: spinning old=%p\n", old));
-    }
-    assert(old == LOCKED && "old value is not LOCKED");
-}
 
 
 static
 MemInfo *nrt_pop_meminfo_list(MemInfo * volatile *list) {
-    MemInfo *old, *repl;
-    old = nrt_lock((void * volatile *)list);
-    if (old != NULL) {
-        repl = old->list_next;
-    } else {
-        repl = NULL;
-    }
-    nrt_unlock((void * volatile *)list, repl);
+    MemInfo *old, *repl, *head;
+
+    head = *list;     /* get the current head */
+    do {
+        old = head;   /* old is what CAS compare against */
+        if ( head ) {
+            /* if head is not NULL, replace with the next item */
+            repl = head->list_next;
+        } else {
+            /* else, replace with NULL */
+            repl = NULL;
+        }
+        /* Try to replace list head with the next node.
+           The function also perform:
+               head <- atomicload(list) */
+    } while ( !TheMSys.atomic_cas(list, old, repl, &head));
     return old;
 }
 
 static
 void nrt_push_meminfo_list(MemInfo * volatile *list, MemInfo *repl) {
-    MemInfo *old;
-    old = nrt_lock((void * volatile *)list);
-    repl->list_next = old;
-    nrt_unlock((void * volatile *)list, repl);
+    MemInfo *old, *head;
+    head = *list;   /* get the current head */
+    do {
+        old = head; /* old is what CAS compare against */
+        /* Set the next item to be the current head */
+        repl->list_next = head;
+        /* Try to replace the head with the new node.
+           The function also perform:
+               head <- atomicload(list) */
+    } while ( !TheMSys.atomic_cas(list, old, repl, &head) );
 }
 
 static
@@ -102,6 +88,16 @@ MemInfo* meminfo_malloc() {
 
 void NRT_MemSys_init() {
     memset(&TheMSys, 0, sizeof(MemSys));
+}
+
+void NRT_MemSys_shutdown() {
+    TheMSys.shutting = 1;
+    /* Revert to use our non-atomic stub for all atomic operations
+       because the JIT-ed version will be removed.
+       Since we are at interpreter shutdown,
+       it cannot be running multiple threads anymore. */
+    NRT_MemSys_set_atomic_inc_dec_stub();
+    NRT_MemSys_set_atomic_cas_stub();
 }
 
 void NRT_MemSys_process_defer_dtor() {
@@ -163,11 +159,29 @@ size_t nrt_testing_atomic_dec(size_t *ptr){
     return out;
 }
 
+
+static
+int nrt_testing_atomic_cas(size_t *ptr, size_t cmp, size_t val,
+                              size_t *oldptr){
+    /* non atomic */
+    size_t old = *ptr;
+    *oldptr = old;
+    if (old == cmp) {
+        *ptr = val;
+         return 1;
+    }
+    return 0;
+
+}
+
 void NRT_MemSys_set_atomic_inc_dec_stub(){
     NRT_MemSys_set_atomic_inc_dec(nrt_testing_atomic_inc,
                                   nrt_testing_atomic_dec);
 }
 
+void NRT_MemSys_set_atomic_cas_stub() {
+    NRT_MemSys_set_atomic_cas(nrt_testing_atomic_cas);
+}
 
 MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info)
@@ -212,19 +226,23 @@ void NRT_MemInfo_acquire(MemInfo *mi) {
     TheMSys.atomic_inc(&mi->payload.refct);
 }
 
+void NRT_MemInfo_call_dtor(MemInfo *mi, int defer) {
+    /* We have a destructor */
+    if (mi->payload.dtor) {
+        if (defer) {
+            NRT_MemInfo_defer_dtor(mi);
+        } else {
+            nrt_meminfo_call_dtor(mi);
+        }
+    }
+}
+
 void NRT_MemInfo_release(MemInfo *mi, int defer) {
     NRT_Debug(nrt_debug_print("NRT_release %p\n", mi));
     assert (mi->payload.refct > 0 && "RefCt cannot be 0");
     /* RefCt drop to zero */
     if (TheMSys.atomic_dec(&mi->payload.refct) == 0) {
-        /* We have a destructor */
-        if (mi->payload.dtor) {
-            if (defer) {
-                NRT_MemInfo_defer_dtor(mi);
-            } else {
-                nrt_meminfo_call_dtor(mi);
-            }
-        }
+        NRT_MemInfo_call_dtor(mi, defer);
     }
 }
 

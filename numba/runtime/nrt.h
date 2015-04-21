@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 /* Debugging facilities */
-#undef NDEBUG
+//#undef NDEBUG
 #ifndef NDEBUG
 #   define NRT_Debug(X) X
 #else
@@ -31,12 +31,14 @@ typedef struct MemSys MemSys;
 
 /* Memory System API */
 void NRT_MemSys_init();
+void NRT_MemSys_shutdown();
 void NRT_MemSys_insert_meminfo(MemInfo *newnode);
 MemInfo* NRT_MemSys_pop_meminfo();
 void NRT_MemSys_set_atomic_inc_dec(atomic_inc_dec_func inc,
                                    atomic_inc_dec_func dec);
 void NRT_MemSys_set_atomic_cas(atomic_cas_func cas);
 void NRT_MemSys_set_atomic_inc_dec_stub();
+void NRT_MemSys_set_atomic_cas_stub();
 void NRT_MemSys_process_defer_dtor();
 
 /* Memory Info API */
@@ -54,6 +56,7 @@ MemInfo* NRT_MemInfo_alloc_safe(size_t size);
 void NRT_MemInfo_destroy(MemInfo *mi);
 void NRT_MemInfo_acquire(MemInfo* mi);
 void NRT_MemInfo_release(MemInfo* mi, int defer);
+void NRT_MemInfo_call_dtor(MemInfo *mi, int defer);
 void* NRT_MemInfo_data(MemInfo* mi);
 size_t NRT_MemInfo_size(MemInfo* mi);
 void NRT_MemInfo_defer_dtor(MemInfo* mi);

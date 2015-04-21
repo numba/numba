@@ -185,6 +185,15 @@ class Lower(BaseLower):
             self.context.debug_print(self.builder, str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
+            try:
+                # Load original value in variable
+                old = self.loadvar(inst.target.name)
+            except KeyError:
+                # If it has not been defined, don't do anything
+                pass
+            else:
+                # Else, dereference the old value
+                self.decref(ty, old)
             val = self.lower_assign(ty, inst)
             self.storevar(val, inst.target.name)
             self.incref(ty, val)

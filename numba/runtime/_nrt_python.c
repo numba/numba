@@ -15,6 +15,16 @@
 
 static
 PyObject*
+memsys_shutdown(PyObject *self, PyObject *args) {
+    if (!PyArg_ParseTuple(args, "")) {
+        return NULL;
+    }
+    NRT_MemSys_shutdown();
+    Py_RETURN_NONE;
+}
+
+static
+PyObject*
 memsys_set_atomic_inc_dec(PyObject *self, PyObject *args) {
     unsigned PY_LONG_LONG addr_inc, addr_dec;
     if (!PyArg_ParseTuple(args, "KK", &addr_inc, &addr_dec)) {
@@ -459,6 +469,7 @@ NRT_decref(MemInfo* mi) {
 
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
+    declmethod(memsys_shutdown),
     declmethod(memsys_set_atomic_inc_dec),
     declmethod(memsys_set_atomic_cas),
     declmethod(memsys_process_defer_dtor),
@@ -498,6 +509,7 @@ declmethod(decref);
 declmethod(MemInfo_data);
 declmethod(MemInfo_alloc);
 declmethod(MemInfo_alloc_safe);
+declmethod(MemInfo_call_dtor);
 
 
 #undef declmethod
