@@ -13,7 +13,7 @@ import llvmlite.llvmpy.core as lc
 import numba.ctypes_support as ctypes
 import numpy
 from llvmlite.llvmpy.core import Constant
-from numba import types, typing, cgutils
+from numba import types, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
                                     iterator_impl, iternext_impl,
