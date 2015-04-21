@@ -166,10 +166,20 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         (particularly user-defined operators).
         '''
         try:
-            return super(NumpyRulesArrayOperator, self).generic(
+            sig = super(NumpyRulesArrayOperator, self).generic(
                 *args, **kws)
+            # Stay out of the timedelta64 range and domain; already
+            # handled elsewhere.
+            if sig is not None:
+                timedelta_test = (
+                    isinstance(sig.return_type, types.NPTimedelta) or
+                    (all(isinstance(argty, types.NPTimedelta)
+                         for argty in sig.args)))
+                if timedelta_test:
+                    sig = None
         except TypingError:
-            return None
+            sig = None
+        return sig
 
 
 class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
