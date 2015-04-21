@@ -13,11 +13,11 @@ class TestDUFunc(unittest.TestCase):
 
     def test_frozen(self):
         duadd = dufunc.DUFunc(pyuadd, nopython=True)
-        self.assertFalse(duadd.frozen)
-        duadd.frozen = True
-        self.assertTrue(duadd.frozen)
+        self.assertFalse(duadd._frozen)
+        duadd._frozen = True
+        self.assertTrue(duadd._frozen)
         with self.assertRaises(ValueError):
-            duadd.frozen = False
+            duadd._frozen = False
         with self.assertRaises(TypeError):
             duadd(np.linspace(0,1,10), np.linspace(1,2,10))
 

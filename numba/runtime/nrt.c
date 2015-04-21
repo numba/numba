@@ -33,58 +33,41 @@ struct MemSys{
 
 /* The Memory System object */
 static MemSys TheMSys;
-void * const LOCKED = (void*)(size_t)-1;
-
-
-static
-void* nrt_lock(void * volatile *p2p) {
-    void *cmp = *p2p;
-    void *old;
-    /* Spin lock */
-    while (1){
-        if (TheMSys.atomic_cas(p2p, cmp, LOCKED, &old)) {
-            /* swap ok */
-            if (old != LOCKED) break;
-        }
-        NRT_Debug(nrt_debug_print("Lock: spinning\n"));
-        cmp = old;
-    }
-    assert(*p2p == LOCKED && "Locking failed");
-    assert(old != LOCKED && "Returning LOCKED");
-    return old;
-}
-
-static
-void nrt_unlock(void * volatile *p2p, void *val) {
-    void *old;
-    assert(*p2p == LOCKED && "Unlocking on non-locked list");
-    assert(val != LOCKED && "Cannot replace with LOCKED");
-    while (!TheMSys.atomic_cas(p2p, LOCKED, val, &old)) {
-        NRT_Debug(nrt_debug_print("Unlock: spinning old=%p\n", old));
-    }
-    assert(old == LOCKED && "old value is not LOCKED");
-}
 
 
 static
 MemInfo *nrt_pop_meminfo_list(MemInfo * volatile *list) {
-    MemInfo *old, *repl;
-    old = nrt_lock((void * volatile *)list);
-    if (old != NULL) {
-        repl = old->list_next;
-    } else {
-        repl = NULL;
-    }
-    nrt_unlock((void * volatile *)list, repl);
+    MemInfo *old, *repl, *head;
+
+    head = *list;     /* get the current head */
+    do {
+        old = head;   /* old is what CAS compare against */
+        if ( head ) {
+            /* if head is not NULL, replace with the next item */
+            repl = head->list_next;
+        } else {
+            /* else, replace with NULL */
+            repl = NULL;
+        }
+        /* Try to replace list head with the next node.
+           The function also perform:
+               head <- atomicload(list) */
+    } while ( !TheMSys.atomic_cas(list, old, repl, &head));
     return old;
 }
 
 static
 void nrt_push_meminfo_list(MemInfo * volatile *list, MemInfo *repl) {
-    MemInfo *old;
-    old = nrt_lock((void * volatile *)list);
-    repl->list_next = old;
-    nrt_unlock((void * volatile *)list, repl);
+    MemInfo *old, *head;
+    head = *list;   /* get the current head */
+    do {
+        old = head; /* old is what CAS compare against */
+        /* Set the next item to be the current head */
+        repl->list_next = head;
+        /* Try to replace the head with the new node.
+           The function also perform:
+               head <- atomicload(list) */
+    } while ( !TheMSys.atomic_cas(list, old, repl, &head) );
 }
 
 static

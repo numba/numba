@@ -37,7 +37,7 @@ class DUFuncKernel(npyimpl._Kernel):
 class DUFunc(_internal._DUFunc):
     # NOTE: __base_kwargs must be kept in synch with the kwlist in
     # _internal.c:dufunc_init()
-    __base_kwargs = set(('identity', 'keepalive', 'nin', 'nout'))
+    __base_kwargs = set(('identity', '_keepalive', 'nin', 'nout'))
 
     def __init__(self, py_func, **kws):
         dispatcher = jit(target='npyufunc')(py_func)
@@ -55,18 +55,21 @@ class DUFunc(_internal._DUFunc):
         self._install_cg()
 
     def _compile_for_args(self, *args, **kws):
+        nin = self.ufunc.nin
+        args_len = len(args)
+        assert (args_len == nin) or (args_len == nin + self.ufunc.nout)
         assert not kws
         argtys = []
         # To avoid a mismatch in how Numba types values as opposed to
         # Numpy, we need to first check for scalars.  For example, on
         # 64-bit systems, numba.typeof(3) => int32, but
         # numpy.array(3).dtype => int64.
-        for arg in args[:self.ufunc.nin]:
+        for arg in args[:nin]:
             if numpy_support.is_arrayscalar(arg):
                 argtys.append(numpy_support.map_arrayscalar_type(arg))
             else:
                 argty = typeof(arg)
-                if hasattr(argty, 'dtype'):
+                if isinstance(argty, types.Array):
                     argty = argty.dtype
                 argtys.append(argty)
         return self._compile_for_argtys(tuple(argtys))
@@ -79,13 +82,13 @@ class DUFunc(_internal._DUFunc):
         this DUFunc.
         """
         cres, argtys, return_type = ufuncbuilder._compile_element_wise_function(
-            self.dispatcher, self.targetoptions, argtys)
+            self._dispatcher, self.targetoptions, argtys)
         actual_sig = ufuncbuilder._finalize_ufunc_signature(
             cres, argtys, return_type)
         dtypenums, ptr, env = ufuncbuilder._build_element_wise_ufunc_wrapper(
             cres, actual_sig)
         self._add_loop(utils.longint(ptr), dtypenums)
-        self.keepalive.append((ptr, cres.library, env))
+        self._keepalive.append((ptr, cres.library, env))
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the
@@ -95,7 +98,7 @@ class DUFunc(_internal._DUFunc):
         jit() and njit()).
         """
         if typingctx is None:
-            typingctx = self.dispatcher.targetdescr.typing_context
+            typingctx = self._dispatcher.targetdescr.typing_context
         _ty_cls = type('DUFuncTyping_' + self.ufunc.__name__,
                        (AbstractTemplate,),
                        dict(key=self, generic=self._type_me))
@@ -109,7 +112,7 @@ class DUFunc(_internal._DUFunc):
         compilation result.  Will return two None's if no matching
         signature was found.
         """
-        for sig, cres in self.dispatcher.overloads.items():
+        for sig, cres in self._dispatcher.overloads.items():
             if sig.args == ewise_types:
                 return sig, cres
         return None, None
@@ -153,7 +156,7 @@ class DUFunc(_internal._DUFunc):
         jit() and njit()).
         """
         if targetctx is None:
-            targetctx = self.dispatcher.targetdescr.target_context
+            targetctx = self._dispatcher.targetdescr.target_context
         _any = types.Any
         _arr = types.Kind(types.Array)
         sig0 = _any(*((_any,) * self.ufunc.nin + (_arr,) * self.ufunc.nout))

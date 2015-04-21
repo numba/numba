@@ -58,6 +58,16 @@ def global_two_rec_arrs(a, b, c, d):
         d[i] = rec_Y[i].d
 
 
+# Test a global record
+record_only_X = np.recarray(1, dtype=x_dt)[0]
+record_only_X.a = 1
+record_only_X.b = 1.5
+
+@jit(nopython=True)
+def global_record_func(x):
+    return x.a == record_only_X.a
+
+
 @jit(nopython=True)
 def global_module_func(x, y):
     return usecases.andornopython(x, y)
@@ -146,6 +156,16 @@ class TestGlobals(unittest.TestCase):
         # (see github issue #1059)
         res = global_module_func(5, 6)
         self.assertEqual(True, res)
+
+    def test_global_record(self):
+        # (see github issue #1081)
+        x = np.recarray(1, dtype=x_dt)[0]
+        x.a = 1
+        res = global_record_func(x)
+        self.assertEqual(True, res)
+        x.a = 2
+        res = global_record_func(x)
+        self.assertEqual(False, res)
 
 if __name__ == '__main__':
     unittest.main()
