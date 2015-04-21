@@ -278,6 +278,7 @@ static PyMemberDef dufunc_members[] = {
          "Numpy Ufunc for the dynamic ufunc."},
     {"_keepalive", T_OBJECT_EX, offsetof(PyDUFuncObject, keepalive), 0,
          "List of objects to keep alive during life of dufunc."},
+    {NULL}
 };
 
 /* ____________________________________________________________
