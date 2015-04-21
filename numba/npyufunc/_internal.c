@@ -289,8 +289,10 @@ static struct _ufunc_dispatch {
     PyCFunctionWithKeywords ufunc_accumulate;
     PyCFunctionWithKeywords ufunc_reduceat;
     PyCFunctionWithKeywords ufunc_outer;
+#if NPY_API_VERSION >= 0x00000008
     PyCFunction ufunc_at;
-} ufunc_dispatch = {NULL, NULL, NULL, NULL, NULL};
+#endif
+} ufunc_dispatch;
 
 static int
 init_ufunc_dispatch(void)
@@ -302,11 +304,13 @@ init_ufunc_dispatch(void)
         crnt_name = crnt->ml_name;
         switch(crnt_name[0]) {
         case 'a':
-            if (strncmp(crnt_name, "at", 3) == 0) {
-                ufunc_dispatch.ufunc_at = crnt->ml_meth;
-            } else if (strncmp(crnt_name, "accumulate", 11) == 0) {
+            if (strncmp(crnt_name, "accumulate", 11) == 0) {
                 ufunc_dispatch.ufunc_accumulate =
                     (PyCFunctionWithKeywords)crnt->ml_meth;
+#if NPY_API_VERSION >= 0x00000008
+            } else if (strncmp(crnt_name, "at", 3) == 0) {
+                ufunc_dispatch.ufunc_at = crnt->ml_meth;
+#endif
             } else {
                 result = -1;
             }
@@ -337,11 +341,14 @@ init_ufunc_dispatch(void)
     }
     if (result == 0) {
         /* Sanity check. */
-        result = ((ufunc_dispatch.ufunc_reduce != NULL) &&
-                  (ufunc_dispatch.ufunc_accumulate != NULL) &&
-                  (ufunc_dispatch.ufunc_reduceat != NULL) &&
-                  (ufunc_dispatch.ufunc_outer != NULL) &&
-                  (ufunc_dispatch.ufunc_at != NULL));
+        result = ((ufunc_dispatch.ufunc_reduce != NULL)
+                  && (ufunc_dispatch.ufunc_accumulate != NULL)
+                  && (ufunc_dispatch.ufunc_reduceat != NULL)
+                  && (ufunc_dispatch.ufunc_outer != NULL)
+#if NPY_API_VERSION >= 0x00000008
+                  && (ufunc_dispatch.ufunc_at != NULL)
+#endif
+                  );
     }
     return result;
 }
@@ -370,11 +377,13 @@ dufunc_outer(PyDUFuncObject * self, PyObject * args, PyObject *kws)
     return ufunc_dispatch.ufunc_outer((PyObject*)self->ufunc, args, kws);
 }
 
+#if NPY_API_VERSION >= 0x00000008
 static PyObject *
 dufunc_at(PyDUFuncObject * self, PyObject * args)
 {
     return ufunc_dispatch.ufunc_at((PyObject*)self->ufunc, args);
 }
+#endif
 
 static PyObject *
 dufunc__compile_for_args(PyDUFuncObject * self, PyObject * args,
@@ -552,9 +561,11 @@ static struct PyMethodDef dufunc_methods[] = {
     {"outer",
         (PyCFunction)dufunc_outer,
         METH_VARARGS | METH_KEYWORDS, NULL},
+#if NPY_API_VERSION >= 0x00000008
     {"at",
         (PyCFunction)dufunc_at,
         METH_VARARGS, NULL},
+#endif
     {"_compile_for_args",
         (PyCFunction)dufunc__compile_for_args,
         METH_VARARGS | METH_KEYWORDS,
