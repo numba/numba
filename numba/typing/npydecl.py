@@ -332,14 +332,17 @@ class Round(AbstractTemplate):
             else:
                 out = args[2]
 
-        supported_scalars = (types.Integer, types.Float)
+        supported_scalars = (types.Integer, types.Float, types.Complex)
         if isinstance(arg, supported_scalars):
             assert out is None
             return signature(arg, *args)
         if (isinstance(arg, types.Array) and isinstance(arg.dtype, supported_scalars) and
             isinstance(out, types.Array) and isinstance(out.dtype, supported_scalars) and
             out.ndim == arg.ndim):
-            return signature(out, *args)
+            # arg can only be complex if out is complex too
+            if (not isinstance(arg.dtype, types.Complex)
+                or isinstance(out.dtype, types.Complex)):
+                return signature(out, *args)
 
 builtin_global(numpy.round, types.Function(Round))
 

@@ -51,6 +51,18 @@ def np_round_binary(val, decimals):
 def np_round_unary(val):
     return np.round(val)
 
+def _fixed_np_round(arr, decimals=0, out=None):
+    """
+    A slightly bugfixed version of np.round().
+    """
+    if out is not None and arr.dtype.kind == 'c':
+        # workaround for https://github.com/numpy/numpy/issues/5779
+        _fixed_np_round(arr.real, decimals, out.real)
+        _fixed_np_round(arr.imag, decimals, out.imag)
+        return out
+    else:
+        return np.round(arr, decimals, out)
+
 
 def array_sum(arr):
     return arr.sum()
@@ -403,61 +415,70 @@ class TestArrayMethods(TestCase):
 
     def test_round_array(self):
         def check_round(cfunc, values, inty, outty, decimals):
+            # Create input and output arrays of the right type
             arr = values.astype(as_dtype(inty))
             out = np.zeros_like(arr).astype(as_dtype(outty))
             pyout = out.copy()
-            np.round(arr, decimals, pyout)
+            _fixed_np_round(arr, decimals, pyout)
             cfunc(arr, decimals, out)
             np.testing.assert_allclose(out, pyout)
-            # Output shape error
+            # Output shape mismatch
             with self.assertRaises(ValueError) as raises:
-                cres.entry_point(arr, decimals, out[1:])
+                cfunc(arr, decimals, out[1:])
             self.assertEqual(str(raises.exception),
                              "invalid output shape")
 
-        pyfunc = np_round_array
-        argtypes = (types.float64, types.float32, types.int32)
+        def check_types(argtypes, outtypes, values):
+            pyfunc = np_round_array
+            for inty, outty in product(argtypes, outtypes):
+                cres = compile_isolated(pyfunc,
+                                        (types.Array(inty, 1, 'A'),
+                                         types.int32,
+                                         types.Array(outty, 1, 'A')))
+                cfunc = cres.entry_point
+                check_round(cres.entry_point, values, inty, outty, 0)
+                check_round(cres.entry_point, values, inty, outty, 1)
+                if not isinstance(outty, types.Integer):
+                    check_round(cres.entry_point, values * 10, inty, outty, -1)
+                else:
+                    # Avoid Numpy bug when output is an int:
+                    # https://github.com/numpy/numpy/issues/5777
+                    pass
+
         values = np.array([-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75])
-        for inty, outty in product(argtypes, argtypes):
-            cres = compile_isolated(pyfunc,
-                                    (types.Array(inty, 1, 'A'),
-                                     types.int32,
-                                     types.Array(outty, 1, 'A')))
-            cfunc = cres.entry_point
-            check_round(cres.entry_point, values, inty, outty, 0)
-            check_round(cres.entry_point, values, inty, outty, 1)
-            if isinstance(outty, types.Float):
-                check_round(cres.entry_point, values * 10, inty, outty, -1)
-            else:
-                # Avoid Numpy bug when output is an int:
-                # https://github.com/numpy/numpy/issues/5777
-                pass
+
+        argtypes = (types.float64, types.float32, types.int32)
+        check_types(argtypes, argtypes, values)
+
+        argtypes = (types.complex64, types.complex128)
+        check_types(argtypes, argtypes, values * (1 - 1j))
 
     def test_round_scalar(self):
-        argtypes = (types.float64, types.float32, types.int32)
-        values = [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]
+        base_values = [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]
+        complex_values = [x * (1 - 1j) for x in base_values]
+        int_values = [int(x) for x in base_values]
+        argtypes = (types.float64, types.float32, types.int32,
+                    types.complex64, types.complex128)
+        argvalues = [base_values, base_values, int_values,
+                     complex_values, complex_values]
 
         pyfunc = np_round_binary
-        for ty in argtypes:
+        for ty, values in zip(argtypes, argvalues):
             cres = compile_isolated(pyfunc, (ty, types.int32))
             cfunc = cres.entry_point
             for decimals in (1, 0, -1):
                 for v in values:
                     if decimals > 0:
                         v *= 10
-                    if isinstance(ty, types.Integer):
-                        v = int(v)
                     expected = np.round(v, decimals)
                     got = cfunc(v, decimals)
                     self.assertPreciseEqual(got, expected)
 
         pyfunc = np_round_unary
-        for ty in argtypes:
+        for ty, values in zip(argtypes, argvalues):
             cres = compile_isolated(pyfunc, (ty,))
             cfunc = cres.entry_point
             for v in values:
-                if isinstance(ty, types.Integer):
-                    v = int(v)
                 expected = np.round(v)
                 got = cfunc(v)
                 self.assertPreciseEqual(got, expected)

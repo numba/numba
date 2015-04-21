@@ -627,20 +627,32 @@ def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)
 
+def _np_round_float(context, builder, tp, val):
+    llty = context.get_value_type(tp)
+    module = cgutils.get_module(builder)
+    fnty = lc.Type.function(llty, [llty])
+    fn = module.get_or_insert_function(fnty, name=_np_round_intrinsic(tp))
+    return builder.call(fn, (val,))
+
 @builtin
 @implement(numpy.round, types.Kind(types.Float))
 def scalar_round_unary(context, builder, sig, args):
-    fltty = sig.args[0]
-    llty = context.get_value_type(fltty)
-    module = cgutils.get_module(builder)
-    fnty = lc.Type.function(llty, [llty])
-    fn = module.get_or_insert_function(fnty, name=_np_round_intrinsic(fltty))
-    return builder.call(fn, args)
+    return _np_round_float(context, builder, sig.args[0], args[0])
 
 @builtin
 @implement(numpy.round, types.Kind(types.Integer))
 def scalar_round_unary(context, builder, sig, args):
     return args[0]
+
+@builtin
+@implement(numpy.round, types.Kind(types.Complex))
+def scalar_round_unary_complex(context, builder, sig, args):
+    fltty = sig.args[0].underlying_float
+    cplx_cls = context.make_complex(sig.args[0])
+    z = cplx_cls(context, builder, args[0])
+    z.real = _np_round_float(context, builder, fltty, z.real)
+    z.imag = _np_round_float(context, builder, fltty, z.imag)
+    return z._getvalue()
 
 @builtin
 @implement(numpy.round, types.Kind(types.Float), types.Kind(types.Integer))
@@ -670,6 +682,15 @@ def scalar_round_binary_float(context, builder, sig, args):
             pow1 = 10.0 ** (-ndigits)
             y = x / pow1
             return numpy.round(y) * pow1
+
+    return context.compile_internal(builder, round_ndigits, sig, args)
+
+@builtin
+@implement(numpy.round, types.Kind(types.Complex), types.Kind(types.Integer))
+def scalar_round_binary_complex(context, builder, sig, args):
+    def round_ndigits(z, ndigits):
+        return complex(numpy.round(z.real, ndigits),
+                       numpy.round(z.imag, ndigits))
 
     return context.compile_internal(builder, round_ndigits, sig, args)
 
