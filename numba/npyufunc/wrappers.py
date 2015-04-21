@@ -564,7 +564,8 @@ class GUArrayArg(object):
                                shape=shape,
                                strides=strides,
                                itemsize=context.get_constant(types.intp,
-                                                             itemsize))
+                                                             itemsize),
+                               meminfo=None)
 
         return array._getvalue()
 

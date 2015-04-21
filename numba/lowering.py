@@ -187,6 +187,7 @@ class Lower(BaseLower):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
             self.storevar(val, inst.target.name)
+            self.incref(ty, val)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -247,7 +248,13 @@ class Lower(BaseLower):
             return impl(self.builder, (target, index, value))
 
         elif isinstance(inst, ir.Del):
-            pass
+            try:
+                # XXX: incorrect Del injection?
+                val = self.loadvar(inst.value)
+            except KeyError:
+                pass
+            else:
+                self.decref(self.typeof(inst.value), val)
 
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
@@ -589,6 +596,8 @@ class Lower(BaseLower):
         elif expr.op == "build_tuple":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
+            for ty, val in zip(itemtys, itemvals):
+                self.incref(ty, val)
             castvals = [self.context.cast(self.builder, val, fromty, toty)
                         for val, toty, fromty in zip(itemvals, resty, itemtys)]
             tup = self.context.get_constant_undef(resty)
@@ -625,3 +634,17 @@ class Lower(BaseLower):
 
     def alloca_lltype(self, name, lltype):
         return cgutils.alloca_once(self.builder, lltype, name=name)
+
+    def incref(self, typ, val):
+        if not self.context.enable_nrt:
+            return
+        if (isinstance(typ, types.Array) and
+                not isinstance(typ, types.NestedArray)):
+            self.context.array_incref(self.builder, typ, val)
+
+    def decref(self, typ, val):
+        if not self.context.enable_nrt:
+            return
+        if (isinstance(typ, types.Array) and
+                not isinstance(typ, types.NestedArray)):
+            self.context.array_decref(self.builder, typ, val)

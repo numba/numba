@@ -49,6 +49,9 @@ class TargetOptions(object):
         if kws.pop('boundcheck', False):
             flags.set("boundcheck")
 
+        if kws.pop('nrt', False):
+            flags.set("nrt")
+
         if kws.pop('debug', False):
             flags.set("boundcheck")
 

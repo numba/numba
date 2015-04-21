@@ -12,6 +12,8 @@
 #include <numpy/ndarrayobject.h>
 #include <numpy/arrayscalars.h>
 
+#include "_arraystruct.h"
+
 /* For Numpy 1.6 */
 #ifndef NPY_ARRAY_BEHAVED
     #define NPY_ARRAY_BEHAVED NPY_BEHAVED
@@ -1118,20 +1120,6 @@ CLEANUP:
     return record;
 }
 
-/*
- * Fill in the *arystruct* with information from the Numpy array *obj*.
- * *arystruct*'s layout is defined in numba.targets.arrayobj (look
- * for the ArrayTemplate class).
- */
-
-typedef struct {
-    PyObject *parent;
-    npy_intp nitems;
-    npy_intp itemsize;
-    void *data;
-    npy_intp shape_and_strides[];
-} arystruct_t;
-
 static
 int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     PyArrayObject *ndary;
@@ -1156,7 +1144,7 @@ int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     for (i = 0; i < ndim; i++, p++) {
         *p = PyArray_STRIDE(ndary, i);
     }
-
+    arystruct->meminfo = NULL;
     return 0;
 }
 
@@ -1444,9 +1432,9 @@ build_c_helpers_dict(void)
     declmethod(lgamma);
     declmethod(lgammaf);
     declmethod(complex_adaptor);
-    declmethod(extract_record_data);
     declmethod(adapt_ndarray);
     declmethod(ndarray_new);
+    declmethod(extract_record_data);
     declmethod(get_buffer);
     declmethod(adapt_buffer);
     declmethod(release_buffer);

@@ -123,6 +123,8 @@ def as_dtype(nbtype):
     if isinstance(nbtype, (types.CharSeq, types.UnicodeCharSeq)):
         letter = _as_dtype_letters[type(nbtype)]
         return numpy.dtype('%s%d' % (letter, nbtype.count))
+    if isinstance(nbtype, types.Record):
+        return nbtype.dtype
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))
 
