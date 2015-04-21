@@ -6,13 +6,14 @@ the buffer protocol.
 from __future__ import print_function, absolute_import, division
 
 from functools import reduce
+import math
 
 import llvmlite.llvmpy.core as lc
 
 import numba.ctypes_support as ctypes
 import numpy
 from llvmlite.llvmpy.core import Constant
-from numba import types, cgutils
+from numba import types, typing, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
                                     iterator_impl, iternext_impl,
@@ -620,6 +621,72 @@ def array_argmax(context, builder, sig, args):
             idx += 1
         return max_idx
     return context.compile_internal(builder, array_argmax_impl, sig, args)
+
+
+def _np_round_intrinsic(tp):
+    # np.round() always rounds half to even
+    return "llvm.rint.f%d" % (tp.bitwidth,)
+
+@builtin
+@implement(numpy.round, types.Kind(types.Float))
+def scalar_round_unary(context, builder, sig, args):
+    fltty = sig.args[0]
+    llty = context.get_value_type(fltty)
+    module = cgutils.get_module(builder)
+    fnty = lc.Type.function(llty, [llty])
+    fn = module.get_or_insert_function(fnty, name=_np_round_intrinsic(fltty))
+    return builder.call(fn, args)
+
+@builtin
+@implement(numpy.round, types.Kind(types.Integer))
+def scalar_round_unary(context, builder, sig, args):
+    return args[0]
+
+@builtin
+@implement(numpy.round, types.Kind(types.Float), types.Kind(types.Integer))
+@implement(numpy.round, types.Kind(types.Integer), types.Kind(types.Integer))
+def scalar_round_binary_float(context, builder, sig, args):
+    def round_ndigits(x, ndigits):
+        if math.isinf(x) or math.isnan(x):
+            return x
+
+        # NOTE: this is CPython's algorithm, but perhaps this is overkill
+        # when emulating Numpy's behaviour.
+        if ndigits >= 0:
+            if ndigits > 22:
+                # pow1 and pow2 are each safe from overflow, but
+                # pow1*pow2 ~= pow(10.0, ndigits) might overflow.
+                pow1 = 10.0 ** (ndigits - 22)
+                pow2 = 1e22
+            else:
+                pow1 = 10.0 ** ndigits
+                pow2 = 1.0
+            y = (x * pow1) * pow2
+            if math.isinf(y):
+                return x
+            return (numpy.round(y) / pow2) / pow1
+
+        else:
+            pow1 = 10.0 ** (-ndigits)
+            y = x / pow1
+            return numpy.round(y) * pow1
+
+    return context.compile_internal(builder, round_ndigits, sig, args)
+
+
+@builtin
+@implement(numpy.round, types.Kind(types.Array), types.Kind(types.Integer),
+           types.Kind(types.Array))
+def array_round(context, builder, sig, args):
+    def array_round_impl(arr, decimals, out):
+        for x, y in zip(arr.shape, out.shape):
+            if x != y:
+                raise ValueError("invalid output shape")
+        for index, val in numpy.ndenumerate(arr):
+            out[index] = numpy.round(val, decimals)
+        return out
+
+    return context.compile_internal(builder, array_round_impl, sig, args)
 
 
 #-------------------------------------------------------------------------------

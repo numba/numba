@@ -7,6 +7,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
+from numba.numpy_support import as_dtype
 from .support import TestCase
 
 
@@ -40,6 +41,15 @@ def np_ndindex_array(arr):
         for i, j in enumerate(indices):
             s = s + (i + 1) * (j + 1)
     return s
+
+def np_round_array(arr, decimals, out):
+    np.round(arr, decimals, out)
+
+def np_round_binary(val, decimals):
+    return np.round(val, decimals)
+
+def np_round_unary(val):
+    return np.round(val)
 
 
 def array_sum(arr):
@@ -390,6 +400,67 @@ class TestArrayMethods(TestCase):
     def test_std_magnitude(self):
         self.check_aggregation_magnitude(array_std)
         self.check_aggregation_magnitude(array_std_global)
+
+    def test_round_array(self):
+        def check_round(cfunc, values, inty, outty, decimals):
+            arr = values.astype(as_dtype(inty))
+            out = np.zeros_like(arr).astype(as_dtype(outty))
+            pyout = out.copy()
+            np.round(arr, decimals, pyout)
+            cfunc(arr, decimals, out)
+            np.testing.assert_allclose(out, pyout)
+            # Output shape error
+            with self.assertRaises(ValueError) as raises:
+                cres.entry_point(arr, decimals, out[1:])
+            self.assertEqual(str(raises.exception),
+                             "invalid output shape")
+
+        pyfunc = np_round_array
+        argtypes = (types.float64, types.float32, types.int32)
+        values = np.array([-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75])
+        for inty, outty in product(argtypes, argtypes):
+            cres = compile_isolated(pyfunc,
+                                    (types.Array(inty, 1, 'A'),
+                                     types.int32,
+                                     types.Array(outty, 1, 'A')))
+            cfunc = cres.entry_point
+            check_round(cres.entry_point, values, inty, outty, 0)
+            check_round(cres.entry_point, values, inty, outty, 1)
+            if isinstance(outty, types.Float):
+                check_round(cres.entry_point, values * 10, inty, outty, -1)
+            else:
+                # Avoid Numpy bug when output is an int:
+                # https://github.com/numpy/numpy/issues/5777
+                pass
+
+    def test_round_scalar(self):
+        argtypes = (types.float64, types.float32, types.int32)
+        values = [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]
+
+        pyfunc = np_round_binary
+        for ty in argtypes:
+            cres = compile_isolated(pyfunc, (ty, types.int32))
+            cfunc = cres.entry_point
+            for decimals in (1, 0, -1):
+                for v in values:
+                    if decimals > 0:
+                        v *= 10
+                    if isinstance(ty, types.Integer):
+                        v = int(v)
+                    expected = np.round(v, decimals)
+                    got = cfunc(v, decimals)
+                    self.assertPreciseEqual(got, expected)
+
+        pyfunc = np_round_unary
+        for ty in argtypes:
+            cres = compile_isolated(pyfunc, (ty,))
+            cfunc = cres.entry_point
+            for v in values:
+                if isinstance(ty, types.Integer):
+                    v = int(v)
+                expected = np.round(v)
+                got = cfunc(v)
+                self.assertPreciseEqual(got, expected)
 
 
 # These form a testing product where each of the combinations are tested
