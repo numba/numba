@@ -156,6 +156,21 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
             builtin(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
                          dict(key=op)))
 
+    def generic(self, *args, **kws):
+        '''Overloads and calls base class generic() method, returning
+        None if a TypingError occurred.
+
+        Returning None for operators is important since operators are
+        heavily overloaded, and by suppressing type errors, we allow
+        type inference to check other possibilities before giving up
+        (particularly user-defined operators).
+        '''
+        try:
+            return super(NumpyRulesArrayOperator, self).generic(
+                *args, **kws)
+        except TypingError:
+            return None
+
 
 class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
     _op_map = {
@@ -165,16 +180,6 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
         '-': "negative",
         '~': "invert",
     }
-
-    def generic(self, *args, **kws):
-        '''Overloads and calls base class generic() method, returning None if
-        a TypingError occurred.
-        '''
-        try:
-            return super(NumpyRulesUnaryArrayOperator, self).generic(
-                *args, **kws)
-        except TypingError:
-            return None
 
 
 # list of unary ufuncs to register
@@ -254,9 +259,6 @@ for func in supported_ufuncs:
 all_ufuncs = [getattr(numpy, name) for name in all_ufuncs]
 supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 
-# Order is important here; the binary typing class (more specifically
-# Numpy_rules_ufunc.generic()) will raise a TypingError, shortcutting
-# any following typing information.
 NumpyRulesUnaryArrayOperator.install_operations()
 NumpyRulesArrayOperator.install_operations()
 
