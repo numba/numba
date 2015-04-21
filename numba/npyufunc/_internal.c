@@ -137,7 +137,7 @@ dufunc_repr(PyDUFuncObject *dufunc)
 static PyObject *
 dufunc_call(PyDUFuncObject *self, PyObject *args, PyObject *kws)
 {
-    PyObject *result=NULL;
+    PyObject *result=NULL, *method=NULL;
 
     result = PyUFunc_Type.tp_call((PyObject *)self->ufunc, args, kws);
     if ((!self->frozen) &&
@@ -147,8 +147,7 @@ dufunc_call(PyDUFuncObject *self, PyObject *args, PyObject *kws)
 
         /* Break back into Python when we fail at dispatch. */
         PyErr_Clear();
-        PyObject *method = PyObject_GetAttrString(
-            (PyObject*)self, "_compile_for_args");
+        method = PyObject_GetAttrString((PyObject*)self, "_compile_for_args");
 
         if (method) {
             result = PyObject_Call(method, args, kws);
