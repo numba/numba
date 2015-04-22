@@ -34,6 +34,17 @@ class DUFuncKernel(npyimpl._Kernel):
             self.builder, entry_point, isig.return_type, isig.args, cast_args)
         return self.cast(res, isig.return_type, osig.return_type)
 
+
+class DUFuncLowerer(object):
+    def __init__(self, kernel):
+        self.kernel = kernel
+        self.libs = []
+
+    def __call__(self, context, builder, sig, args):
+        return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
+                                          self.kernel)
+
+
 class DUFunc(_internal._DUFunc):
     # NOTE: __base_kwargs must be kept in synch with the kwlist in
     # _internal.c:dufunc_init()
@@ -52,6 +63,10 @@ class DUFunc(_internal._DUFunc):
             kws.pop('identity', None))
         super(DUFunc, self).__init__(dispatcher, **kws)
         self._install_type()
+        self._kernel = type('DUFuncKernel_' + self.ufunc.__name__,
+                            (DUFuncKernel,),
+                            dict(dufunc=self))
+        self._lower_me = DUFuncLowerer(self._kernel)
         self._install_cg()
 
     def _compile_for_args(self, *args, **kws):
@@ -89,6 +104,7 @@ class DUFunc(_internal._DUFunc):
             cres, actual_sig)
         self._add_loop(utils.longint(ptr), dtypenums)
         self._keepalive.append((ptr, cres.library, env))
+        self._lower_me.libs.append(cres.library)
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the
@@ -165,9 +181,3 @@ class DUFunc(_internal._DUFunc):
             (self, sig0),
             (self, sig1),
         ])])
-
-    def _lower_me(self, context, builder, sig, args):
-        kernel = type('DUFuncKernel_' + self.ufunc.__name__,
-                      (DUFuncKernel,),
-                      dict(dufunc=self))
-        return npyimpl.numpy_ufunc_kernel(context, builder, sig, args, kernel)
