@@ -214,7 +214,6 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
     # Run optimizer
     library.add_ir_module(wrapper_module)
     wrapper = library.get_function(wrapper.name)
-    oldfunc.linkage = LINKAGE_INTERNAL
 
     return wrapper
 

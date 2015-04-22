@@ -24,8 +24,8 @@ class NumpyModuleAttribute(AttributeTemplate):
 
 
 class Numpy_rules_ufunc(AbstractTemplate):
-    def generic(self, args, kws):
-        ufunc = self.key
+    @classmethod
+    def _handle_inputs(cls, ufunc, args, kws):
         nin = ufunc.nin
         nout = ufunc.nout
         nargs = ufunc.nargs
@@ -63,6 +63,12 @@ class Numpy_rules_ufunc(AbstractTemplate):
 
         # find the kernel to use, based only in the input types (as does NumPy)
         base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
+        return base_types, explicit_outputs, ndims
+
+    def generic(self, args, kws):
+        ufunc = self.key
+        base_types, explicit_outputs, ndims = self._handle_inputs(ufunc, args,
+                                                                  kws)
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
         if ufunc_loop is None:
             raise TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
@@ -85,7 +91,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # be based on the explicit output types, and when not available with the type given
         # by the selected NumPy loop
         out = list(explicit_outputs)
-        implicit_output_count = nout - len(explicit_outputs)
+        implicit_output_count = ufunc.nout - len(explicit_outputs)
         if implicit_output_count > 0:
             # XXX this is currently wrong for datetime64 and timedelta64,
             # as ufunc_find_matching_loop() doesn't do any type inference.
@@ -345,6 +351,7 @@ class Round(AbstractTemplate):
                 return signature(out, *args)
 
 builtin_global(numpy.round, types.Function(Round))
+builtin_global(numpy.around, types.Function(Round))
 
 
 builtin_global(numpy, types.Module(numpy))

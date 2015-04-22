@@ -7,6 +7,7 @@ import numpy
 from numba import unittest_support as unittest
 from numba.npyufunc.ufuncbuilder import UFuncBuilder, GUFuncBuilder
 from numba import vectorize, guvectorize
+from numba.npyufunc import PyUFunc_One
 from . import support
 
 
@@ -16,6 +17,10 @@ def add(a, b):
 
 def equals(a, b):
     return a == b
+
+def mul(a, b):
+    """A multiplication"""
+    return a * b
 
 def guadd(a, b, c):
     """A generalized addition"""
@@ -194,6 +199,22 @@ class TestVectorizeDecor(unittest.TestCase):
             vectorize([sig], identity='none')(add)
         with self.assertRaises(ValueError):
             vectorize([sig], identity=2)(add)
+
+    def test_vectorize_no_args(self):
+        a = numpy.linspace(0,1,10)
+        b = numpy.linspace(1,2,10)
+        ufunc = vectorize(add)
+        self.assertTrue(numpy.all(ufunc(a,b) == (a + b)))
+        ufunc2 = vectorize(add)
+        c = numpy.empty(10)
+        ufunc2(a, b, c)
+        self.assertTrue(numpy.all(c == (a + b)))
+
+    def test_vectorize_only_kws(self):
+        a = numpy.linspace(0,1,10)
+        b = numpy.linspace(1,2,10)
+        ufunc = vectorize(identity=PyUFunc_One, nopython=True)(mul)
+        self.assertTrue(numpy.all(ufunc(a,b) == (a * b)))
 
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
