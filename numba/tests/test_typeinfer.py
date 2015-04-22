@@ -170,7 +170,13 @@ def issue_797(x0, y0, x1, y1, grid):
             y0 += sy
 
 
-class TestIssue(object):
+def issue_1080(a, b):
+    if not a:
+        return True
+    return b
+
+
+class TestIssue(unittest.TestCase):
     def test_issue_797(self):
         """https://github.com/numba/numba/issues/797#issuecomment-58592401
 
@@ -179,6 +185,14 @@ class TestIssue(object):
         foo = jit(nopython=True)(issue_797)
         g = np.zeros(shape=(10, 10), dtype=np.int32)
         foo(np.int32(0), np.int32(0), np.int32(1), np.int32(1), g)
+
+    def test_issue_1080(self):
+        """https://github.com/numba/numba/issues/1080
+
+        Erroneous promotion of boolean args to int64
+        """
+        foo = jit(nopython=True)(issue_1080)
+        foo(True, False)
 
 
 class TestCoercion(unittest.TestCase):

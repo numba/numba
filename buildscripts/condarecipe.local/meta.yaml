@@ -7,6 +7,9 @@ source:
 
 build:
   number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+  entry_points:
+    - pycc = numba.pycc:main
+    - numba = numba.numba_entry:main
 
 requirements:
   build:
@@ -29,3 +32,4 @@ test:
     - mandel.py
   commands:
     - pycc -h
+    - numba -h

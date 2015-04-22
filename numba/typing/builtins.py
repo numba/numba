@@ -77,6 +77,10 @@ class Range(ConcreteTemplate):
         signature(types.range_state64_type, types.int64, types.int64),
         signature(types.range_state64_type, types.int64, types.int64,
                   types.int64),
+        signature(types.unsigned_range_state64_type, types.uint64),
+        signature(types.unsigned_range_state64_type, types.uint64, types.uint64),
+        signature(types.unsigned_range_state64_type, types.uint64, types.uint64,
+                  types.uint64),
     ]
 
 
@@ -308,30 +312,63 @@ class UnorderedCmpOp(ConcreteTemplate):
 class CmpOpLt(OrderedCmpOp):
     key = '<'
 
-
 @builtin
 class CmpOpLe(OrderedCmpOp):
     key = '<='
-
 
 @builtin
 class CmpOpGt(OrderedCmpOp):
     key = '>'
 
-
 @builtin
 class CmpOpGe(OrderedCmpOp):
     key = '>='
-
 
 @builtin
 class CmpOpEq(UnorderedCmpOp):
     key = '=='
 
-
 @builtin
 class CmpOpNe(UnorderedCmpOp):
     key = '!='
+
+
+class TupleCompare(AbstractTemplate):
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        tuple_types = (types.Tuple, types.UniTuple)
+        if isinstance(lhs, tuple_types) and isinstance(rhs, tuple_types):
+            for u, v in zip(lhs, rhs):
+                # Check element-wise comparability
+                res = self.context.resolve_function_type(self.key, (u, v), {})
+                if res is None:
+                    break
+            else:
+                return signature(types.boolean, lhs, rhs)
+
+@builtin
+class TupleEq(TupleCompare):
+    key = '=='
+
+@builtin
+class TupleNe(TupleCompare):
+    key = '!='
+
+@builtin
+class TupleGe(TupleCompare):
+    key = '>='
+
+@builtin
+class TupleGt(TupleCompare):
+    key = '>'
+
+@builtin
+class TupleLe(TupleCompare):
+    key = '<='
+
+@builtin
+class TupleLt(TupleCompare):
+    key = '<'
 
 
 class CmpOpIdentity(AbstractTemplate):

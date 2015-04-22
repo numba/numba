@@ -1231,6 +1231,21 @@ for tp in types.number_domain:
 
 #-------------------------------------------------------------------------------
 
+def generic_compare(context, builder, key, argtypes, args):
+    """
+    Compare the given LLVM values of the given Numba types using
+    the comparison *key* (e.g. '==').  The values are first cast to
+    a common safe conversion type.
+    """
+    at, bt = argtypes
+    av, bv = args
+    ty = context.typing_context.unify_types(at, bt)
+    cav = context.cast(builder, av, at, ty)
+    cbv = context.cast(builder, bv, bt, ty)
+    cmpsig = typing.signature(types.boolean, ty, ty)
+    cmpfunc = context.get_function(key, cmpsig)
+    return cmpfunc(builder, (cav, cbv))
+
 @builtin
 @implement(max, types.VarArg(types.Any))
 def max_impl(context, builder, sig, args):
@@ -1429,15 +1444,69 @@ def array_ravel_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 @builtin
-@implement(types.len_type, types.Kind(types.Tuple))
-def array_len(context, builder, sig, args):
+@implement(types.len_type, types.Kind(types.BaseTuple))
+def tuple_len(context, builder, sig, args):
     tupty, = sig.args
     retty = sig.return_type
     return context.get_constant(retty, len(tupty.types))
 
+def tuple_cmp_ordered(context, builder, op, sig, args):
+    tu, tv = sig.args
+    u, v = args
+    res = cgutils.alloca_once_value(builder, cgutils.true_bit)
+    bbend = cgutils.append_basic_block(builder, "cmp_end")
+    for i, (ta, tb) in enumerate(zip(tu.types, tv.types)):
+        a = builder.extract_value(u, i)
+        b = builder.extract_value(v, i)
+        not_equal = generic_compare(context, builder, '!=', (ta, tb), (a, b))
+        with cgutils.ifthen(builder, not_equal):
+            pred = generic_compare(context, builder, op, (ta, tb), (a, b))
+            builder.store(pred, res)
+            builder.branch(bbend)
+    # Everything matched equal => compare lengths
+    len_compare = eval("%d %s %d" % (len(tu.types), op, len(tv.types)))
+    pred = context.get_constant(types.boolean, len_compare)
+    builder.store(pred, res)
+    builder.branch(bbend)
+    builder.position_at_end(bbend)
+    return builder.load(res)
+
 @builtin
-@implement(types.len_type, types.Kind(types.UniTuple))
-def array_len(context, builder, sig, args):
-    tupty, = sig.args
-    retty = sig.return_type
-    return context.get_constant(retty, tupty.count)
+@implement('==', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+def tuple_eq(context, builder, sig, args):
+    tu, tv = sig.args
+    u, v = args
+    if len(tu.types) != len(tv.types):
+        return context.get_constant(types.boolean, False)
+    res = context.get_constant(types.boolean, True)
+    for i, (ta, tb) in enumerate(zip(tu.types, tv.types)):
+        a = builder.extract_value(u, i)
+        b = builder.extract_value(v, i)
+        pred = generic_compare(context, builder, "==", (ta, tb), (a, b))
+        res = builder.and_(res, pred)
+    return res
+
+@builtin
+@implement('!=', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+def tuple_ne(context, builder, sig, args):
+    return builder.not_(tuple_eq(context, builder, sig, args))
+
+@builtin
+@implement('<', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+def tuple_lt(context, builder, sig, args):
+    return tuple_cmp_ordered(context, builder, '<', sig, args)
+
+@builtin
+@implement('<=', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+def tuple_le(context, builder, sig, args):
+    return tuple_cmp_ordered(context, builder, '<=', sig, args)
+
+@builtin
+@implement('>', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+def tuple_gt(context, builder, sig, args):
+    return tuple_cmp_ordered(context, builder, '>', sig, args)
+
+@builtin
+@implement('>=', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+def tuple_ge(context, builder, sig, args):
+    return tuple_cmp_ordered(context, builder, '>=', sig, args)

@@ -846,7 +846,14 @@ class NestedArray(Array):
     def key(self):
         return self.dtype, self.shape
 
-class UniTuple(IterableType):
+
+class BaseTuple(Type):
+    """
+    The base class for all tuple types (with a known size).
+    """
+
+
+class UniTuple(IterableType, BaseTuple):
 
     def __init__(self, dtype, count):
         self.dtype = dtype
@@ -902,7 +909,8 @@ class UniTupleIter(IteratorType):
         return self.unituple
 
 
-class Tuple(Type):
+class Tuple(BaseTuple):
+
     def __init__(self, types):
         self.types = tuple(types)
         self.count = len(self.types)
@@ -1122,8 +1130,11 @@ sign_type = Phantom('sign')
 
 range_iter32_type = RangeIteratorType('range_iter32', int32)
 range_iter64_type = RangeIteratorType('range_iter64', int64)
+unsigned_range_iter64_type = RangeIteratorType('unsigned_range_iter64', uint64)
 range_state32_type = RangeType('range_state32', range_iter32_type)
 range_state64_type = RangeType('range_state64', range_iter64_type)
+unsigned_range_state64_type = RangeType('unsigned_range_state64',
+                                        unsigned_range_iter64_type)
 
 # slice2_type = Type('slice2_type')
 slice3_type = Slice3Type('slice3_type')

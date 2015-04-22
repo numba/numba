@@ -1,6 +1,7 @@
 Version 0.18.2
 --------------
 Bug fixes:
+
 * Issue #1073: Fixes missing template file for HTML annotation
 * Issue #1074: Fixes CUDA support on Windows machine due to NVVM API mismatch
 
