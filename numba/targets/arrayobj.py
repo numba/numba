@@ -700,9 +700,8 @@ def scalar_round_binary_complex(context, builder, sig, args):
            types.Kind(types.Array))
 def array_round(context, builder, sig, args):
     def array_round_impl(arr, decimals, out):
-        for x, y in zip(arr.shape, out.shape):
-            if x != y:
-                raise ValueError("invalid output shape")
+        if arr.shape != out.shape:
+            raise ValueError("invalid output shape")
         for index, val in numpy.ndenumerate(arr):
             out[index] = numpy.round(val, decimals)
         return out
