@@ -5,7 +5,7 @@ from itertools import product
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import typeof, types
+from numba import config, typeof, types
 from numba.compiler import compile_isolated
 from numba.numpy_support import as_dtype
 from .support import TestCase
@@ -460,7 +460,10 @@ class TestArrayMethods(TestCase):
         check_types(argtypes, argtypes, values)
 
         argtypes = (types.complex64, types.complex128)
-        check_types(argtypes, argtypes, values * (1 - 1j))
+        if not config.DISABLE_JIT:
+            # XXX: The pure Python version doesn't work correctly because of
+            # https://github.com/numpy/numpy/issues/5779
+            check_types(argtypes, argtypes, values * (1 - 1j))
 
     def test_round_array(self):
         self.check_round_array(np_round_array)
