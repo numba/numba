@@ -71,7 +71,20 @@ def _fixed_np_round(arr, decimals=0, out=None):
         _fixed_np_round(arr.imag, decimals, out.imag)
         return out
     else:
-        return np.round(arr, decimals, out)
+        res = np.round(arr, decimals, out)
+        if out is None:
+            # workaround for https://github.com/numpy/numpy/issues/5780
+            def fixup_signed_zero(arg, res):
+                if res == 0.0 and arg < 0:
+                    return -np.abs(res)
+                else:
+                    return res
+            if isinstance(arr, (complex, np.complexfloating)):
+                res = complex(fixup_signed_zero(arr.real, res.real),
+                              fixup_signed_zero(arr.imag, res.imag))
+            else:
+                res = fixup_signed_zero(arr, res)
+        return res
 
 
 def array_sum(arr):
@@ -485,7 +498,7 @@ class TestArrayMethods(TestCase):
                 for v in values:
                     if decimals > 0:
                         v *= 10
-                    expected = np.round(v, decimals)
+                    expected = _fixed_np_round(v, decimals)
                     got = cfunc(v, decimals)
                     self.assertPreciseEqual(got, expected)
 
@@ -494,7 +507,7 @@ class TestArrayMethods(TestCase):
             cres = compile_isolated(pyfunc, (ty,))
             cfunc = cres.entry_point
             for v in values:
-                expected = np.round(v)
+                expected = _fixed_np_round(v)
                 got = cfunc(v)
                 self.assertPreciseEqual(got, expected)
 
