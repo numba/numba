@@ -345,6 +345,7 @@ class Round(AbstractTemplate):
                 return signature(out, *args)
 
 builtin_global(numpy.round, types.Function(Round))
+builtin_global(numpy.around, types.Function(Round))
 
 
 builtin_global(numpy, types.Module(numpy))

@@ -42,6 +42,16 @@ def np_ndindex_array(arr):
             s = s + (i + 1) * (j + 1)
     return s
 
+
+def np_around_array(arr, decimals, out):
+    np.around(arr, decimals, out)
+
+def np_around_binary(val, decimals):
+    return np.around(val, decimals)
+
+def np_around_unary(val):
+    return np.around(val)
+
 def np_round_array(arr, decimals, out):
     np.round(arr, decimals, out)
 
@@ -413,7 +423,7 @@ class TestArrayMethods(TestCase):
         self.check_aggregation_magnitude(array_std)
         self.check_aggregation_magnitude(array_std_global)
 
-    def test_round_array(self):
+    def check_round_array(self, pyfunc):
         def check_round(cfunc, values, inty, outty, decimals):
             # Create input and output arrays of the right type
             arr = values.astype(as_dtype(inty))
@@ -429,7 +439,6 @@ class TestArrayMethods(TestCase):
                              "invalid output shape")
 
         def check_types(argtypes, outtypes, values):
-            pyfunc = np_round_array
             for inty, outty in product(argtypes, outtypes):
                 cres = compile_isolated(pyfunc,
                                         (types.Array(inty, 1, 'A'),
@@ -453,7 +462,13 @@ class TestArrayMethods(TestCase):
         argtypes = (types.complex64, types.complex128)
         check_types(argtypes, argtypes, values * (1 - 1j))
 
-    def test_round_scalar(self):
+    def test_round_array(self):
+        self.check_round_array(np_round_array)
+
+    def test_around_array(self):
+        self.check_round_array(np_around_array)
+
+    def check_round_scalar(self, unary_pyfunc, binary_pyfunc):
         base_values = [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]
         complex_values = [x * (1 - 1j) for x in base_values]
         int_values = [int(x) for x in base_values]
@@ -462,7 +477,7 @@ class TestArrayMethods(TestCase):
         argvalues = [base_values, base_values, int_values,
                      complex_values, complex_values]
 
-        pyfunc = np_round_binary
+        pyfunc = binary_pyfunc
         for ty, values in zip(argtypes, argvalues):
             cres = compile_isolated(pyfunc, (ty, types.int32))
             cfunc = cres.entry_point
@@ -474,7 +489,7 @@ class TestArrayMethods(TestCase):
                     got = cfunc(v, decimals)
                     self.assertPreciseEqual(got, expected)
 
-        pyfunc = np_round_unary
+        pyfunc = unary_pyfunc
         for ty, values in zip(argtypes, argvalues):
             cres = compile_isolated(pyfunc, (ty,))
             cfunc = cres.entry_point
@@ -482,6 +497,12 @@ class TestArrayMethods(TestCase):
                 expected = np.round(v)
                 got = cfunc(v)
                 self.assertPreciseEqual(got, expected)
+
+    def test_round_scalar(self):
+        self.check_round_scalar(np_round_unary, np_round_binary)
+
+    def test_around_scalar(self):
+        self.check_round_scalar(np_around_unary, np_around_binary)
 
 
 # These form a testing product where each of the combinations are tested
