@@ -116,6 +116,7 @@ The following top-level functions are supported:
 
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
+* :func:`numpy.round_`
 
 The following constructors are supported, only with a numeric input:
 
