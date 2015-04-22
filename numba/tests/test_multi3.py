@@ -1,10 +1,11 @@
 ﻿from __future__ import print_function, absolute_import, division
 
 
-from numba import njit
+from numba import config, njit
 from numba import unittest_support as unittest
 import random
 
+@unittest.skipIf(config.DISABLE_JIT, 'Test hangs with disabled jit')
 class TestMulti3(unittest.TestCase):
     """
     This test is only valid for x86-32.
@@ -25,6 +26,7 @@ class TestMulti3(unittest.TestCase):
             return res
 
         x_cases = [-1, 0, 1, 0xffffffff - 1, 0xffffffff, 0xffffffff + 1]
+
         for _ in range(500):
             x_cases.append(random.randint(0, 0xffffffff))
 
