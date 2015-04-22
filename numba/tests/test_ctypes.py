@@ -5,7 +5,7 @@ import sys
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import jit, types
+from numba import config, jit, types
 
 
 is_windows = sys.platform.startswith('win32')
@@ -82,6 +82,7 @@ def use_func_pointer(fa, fb, x):
         return fb(x)
 
 
+@unittest.skipIf(config.DISABLE_JIT, 'Not testing ctypes with disabled jit')
 class TestCTypes(unittest.TestCase):
 
     def test_c_sin(self):
