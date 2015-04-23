@@ -215,13 +215,6 @@ MemInfo_release(MemInfoObject *self) {
 
 static
 PyObject*
-MemInfo_release_defer(MemInfoObject *self) {
-    NRT_MemInfo_release(self->meminfo, 1);
-    Py_RETURN_NONE;
-}
-
-static
-PyObject*
 MemInfo_set_defer(MemInfoObject *self, PyObject *args) {
     PyObject *should_defer;
     int defer;
@@ -267,10 +260,6 @@ static PyMethodDef MemInfo_methods[] = {
     },
     {"release", (PyCFunction)MemInfo_release, METH_NOARGS,
      "Decrement the reference count"
-    },
-    {"release_defer", (PyCFunction)MemInfo_release_defer, METH_NOARGS,
-     "Decrement the reference count but defer the destructor regardless"
-     "of the value in defer attribute"
     },
     {"set_defer", (PyCFunction)MemInfo_set_defer, METH_VARARGS,
      "Set the defer attribute"
