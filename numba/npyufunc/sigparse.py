@@ -60,6 +60,6 @@ def parse_signature(sig):
 
     diff = osym.difference(isym)
     if diff:
-        raise NameError('undefined output symbols: %s' % ','.join(diff))
+        raise NameError('undefined output symbols: %s' % ','.join(sorted(diff)))
 
     return inputs, outputs

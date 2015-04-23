@@ -261,6 +261,22 @@ class TestVectorizeDecor(unittest.TestCase):
         with self.assertRaises(ValueError):
             guvectorize(*args, identity=2)(add)
 
+    def test_guvectorize_invalid_layout(self):
+        sigs = ['(int32[:,:], int32[:,:], int32[:,:])']
+        # Syntax error
+        with self.assertRaises(ValueError) as raises:
+            guvectorize(sigs, ")-:")(guadd)
+        self.assertIn("bad token in signature", str(raises.exception))
+        # Output shape can't be inferred from inputs
+        with self.assertRaises(NameError) as raises:
+            guvectorize(sigs, "(x,y),(x,y)->(x,z,v)")(guadd)
+        self.assertEqual(str(raises.exception),
+                         "undefined output symbols: v,z")
+        # Arrow but no outputs
+        with self.assertRaises(ValueError) as raises:
+            guvectorize(sigs, "(x,y),(x,y),(x,y)->")(guadd)
+        # (error message depends on Numpy version)
+
 
 if __name__ == '__main__':
     unittest.main()
