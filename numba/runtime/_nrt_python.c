@@ -214,25 +214,20 @@ MemInfo_release(MemInfoObject *self) {
 }
 
 static
-PyObject*
-MemInfo_set_defer(MemInfoObject *self, PyObject *args) {
-    PyObject *should_defer;
-    int defer;
-    if (!PyArg_ParseTuple(args, "O", &should_defer)) {
-        return NULL;
-    }
-    defer = PyObject_IsTrue(should_defer);
+int
+MemInfo_set_defer(MemInfoObject *self, PyObject *value, void *closure) {
+    int defer = PyObject_IsTrue(value);
     if (defer == -1) {
-        return NULL;
+        return -1;
     }
     self->defer = defer;
-    Py_RETURN_NONE;
+    return 0;
 }
 
 
 static
 PyObject*
-MemInfo_get_defer(MemInfoObject *self) {
+MemInfo_get_defer(MemInfoObject *self, void *closure) {
     if (self->defer) {
         Py_RETURN_TRUE;
     } else {
@@ -243,7 +238,7 @@ MemInfo_get_defer(MemInfoObject *self) {
 
 static
 PyObject*
-MemInfo_get_data(MemInfoObject *self) {
+MemInfo_get_data(MemInfoObject *self, void *closure) {
     return PyLong_FromVoidPtr(NRT_MemInfo_data(self->meminfo));
 }
 
@@ -261,18 +256,21 @@ static PyMethodDef MemInfo_methods[] = {
     {"release", (PyCFunction)MemInfo_release, METH_NOARGS,
      "Decrement the reference count"
     },
-    {"set_defer", (PyCFunction)MemInfo_set_defer, METH_VARARGS,
-     "Set the defer attribute"
-    },
-    {"get_defer", (PyCFunction)MemInfo_get_defer, METH_NOARGS,
-     "Get the defer attribute"
-    },
-    {"get_data", (PyCFunction)MemInfo_get_data, METH_NOARGS,
-     "Get the data pointer as an integer"
-    },
     {NULL}  /* Sentinel */
 };
 
+
+static PyGetSetDef MemInfo_getsets[] = {
+    {"defer",
+     (getter)MemInfo_get_defer, (setter)MemInfo_set_defer,
+     "Boolean flag for the defer attribute",
+     NULL},
+    {"data",
+     (getter)MemInfo_get_data, NULL,
+     "Get the data pointer as an integer",
+     NULL},
+    {NULL}  /* Sentinel */
+};
 
 
 static PyTypeObject MemInfoType = {
@@ -310,7 +308,7 @@ static PyTypeObject MemInfoType = {
     0,                                        /* tp_iternext */
     MemInfo_methods,                          /* tp_methods */
     0,                                        /* tp_members */
-    0,                                        /* tp_getset */
+    MemInfo_getsets,                          /* tp_getset */
     0,                                        /* tp_base */
     0,                                        /* tp_dict */
     0,                                        /* tp_descr_get */

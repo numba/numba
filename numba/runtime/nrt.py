@@ -47,22 +47,4 @@ class Runtime(object):
         _nrt.memsys_process_defer_dtor()
 
 
-class MemInfo(_nrt._MemInfo):
-    """
-    A wrapper of MemInfo object in NRT.
-    Defines the buffer protocol.
-    """
-    __slots__ = ()
-
-    @property
-    def defer(self):
-        return self.get_defer()
-
-    @defer.setter
-    def defer(self, enable):
-        self.set_defer(enable)
-
-    @property
-    def data(self):
-        return self.get_data()
-
+MemInfo = _nrt._MemInfo
