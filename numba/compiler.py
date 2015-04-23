@@ -9,7 +9,7 @@ import warnings
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
                    lowering, objmode, irpasses, utils, config,
-                   types, ir, looplifting, macro, types)
+                   types, ir, looplifting, macro, types, rewrites)
 from numba.targets import cpu
 from numba.annotations import type_annotations
 
@@ -411,6 +411,13 @@ class Pipeline(object):
             legalize_return_type(self.return_type, self.interp,
                                  self.targetctx)
 
+    def stage_nopython_rewrites(self):
+        assert self.interp
+        assert self.typemap
+        assert self.calltypes
+        rewrites.rewrite_registry.apply(self.interp.blocks, self.typemap,
+                                        self.calltypes)
+
     def stage_annotate_type(self):
         """
         Create type annotation after type inference
@@ -541,6 +548,7 @@ class Pipeline(object):
             pm.create_pipeline("nopython")
             pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
+            pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_annotate_type, "annotate type")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
 
