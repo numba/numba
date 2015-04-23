@@ -21,6 +21,10 @@ class TestNrtMemInfo(unittest.TestCase):
     Unitest for core MemInfo functionality
     """
 
+    def setUp(self):
+        # Reset the Dummy class
+        Dummy.alive = 0
+
     def test_meminfo_refct_1(self):
         d = Dummy()
         self.assertEqual(Dummy.alive, 1)
