@@ -167,7 +167,13 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
             identity,
             name, doc,
             0 /* check_return */, signature);
-
+        if (!ufunc) {
+            PyArray_free(funcs);
+            PyArray_free(data);
+            Py_DECREF(object);
+            return NULL;
+        }
+        /* XXX funcs, char_types and data won't be free'ed when the ufunc dies */
     }
     else {
         ufunc = (PyUFuncObject *) PyUFunc_FromFuncAndDataAndSignature(
@@ -177,6 +183,13 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
             identity,
             name, doc,
             0 /* check_return */, signature);
+        if (!ufunc) {
+            PyArray_free(funcs);
+            PyArray_free(data);
+            PyArray_free(types);
+            Py_DECREF(object);
+            return NULL;
+        }
 
         PyUFunc_RegisterLoopForType(ufunc,
                                     custom_dtype,
@@ -186,15 +199,16 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
         PyArray_free(funcs);
         PyArray_free(types);
         PyArray_free(data);
+        funcs = NULL;
+        data = NULL;
     }
 
     /* Create the sentinel object to clean up dynamically-allocated fields
        when the ufunc is destroyed. */
     ufunc->obj = cleaner_new(ufunc, object);
     Py_DECREF(object);
-    if (!ufunc->obj) {
+    if (ufunc->obj == NULL) {
         PyArray_free(funcs);
-        PyArray_free(types);
         PyArray_free(data);
         Py_DECREF(ufunc);
         return NULL;

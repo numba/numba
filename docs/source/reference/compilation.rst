@@ -198,6 +198,9 @@ Vectorized functions (ufuncs)
    function argument: your code has to fill it with the appropriate values
    for the function you are implementing.
 
+   If your function doesn't take an output array, you should omit the "arrow"
+   in the layout string (e.g. ``"(n),(n)"``).
+
    .. seealso::
       Specification of the `layout string <http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_
       as supported by Numpy.  Note that Numpy uses the term "signature",

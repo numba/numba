@@ -46,7 +46,7 @@ def parse_signature(sig):
             else:
                 raise ValueError('bad token in signature "%s"' % tok[1])
 
-    ins, outs = stripws(sig).split('->')
+    ins, _, outs = stripws(sig).partition('->')
     inputs = list(parse(ins))
     outputs = list(parse(outs))
 

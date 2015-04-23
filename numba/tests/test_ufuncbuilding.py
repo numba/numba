@@ -224,6 +224,14 @@ class TestVectorizeDecor(unittest.TestCase):
         self.assertTrue(numpy.all(a + a == b))
         self.assertEqual(b.dtype, numpy.dtype('int32'))
 
+    def test_guvectorize_no_output(self):
+        ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                            "(x,y),(x,y),(x,y)")(guadd)
+        a = numpy.arange(10, dtype='int32').reshape(2, 5)
+        out = numpy.zeros_like(a)
+        ufunc(a, a, out)
+        self.assertTrue(numpy.all(a + a == out))
+
     def test_guvectorize_objectmode(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)")(guadd_obj)
