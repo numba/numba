@@ -323,7 +323,7 @@ static PyTypeObject MemInfoType = {
 
 
 static
-int NRT_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
+int NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
     PyArrayObject *ndary;
     int i, ndim;
     npy_intp *p;
@@ -392,8 +392,8 @@ RETURN_ARRAY_COPY:
 }
 
 static
-PyObject* NRT_adapt_native_array(arystruct_t* arystruct, int ndim,
-                                 int type_num) {
+PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
+                                      int type_num) {
     PyObject *array;
     MemInfoObject *miobj = NULL;
     PyObject *args;
@@ -501,9 +501,9 @@ build_c_helpers_dict(void)
 
 #define declmethod(func) _declpointer(#func, &NRT_##func)
 
-declmethod(adapt_ndarray);
-declmethod(adapt_native_array);
-declmethod(adapt_buffer);
+declmethod(adapt_ndarray_from_python);
+declmethod(adapt_ndarray_to_python);
+/*declmethod(adapt_buffer); */ /* not used yet */
 declmethod(incref);
 declmethod(decref);
 declmethod(MemInfo_data);

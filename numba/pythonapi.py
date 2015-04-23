@@ -1222,7 +1222,7 @@ class PythonAPI(object):
             raise Exception("Require NRT")
         intty = ir.IntType(32)
         fnty = Type.function(self.pyobj, [self.voidptr, intty, intty])
-        fn = self._get_function(fnty, name="NRT_adapt_native_array")
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         dtype = numpy_support.as_dtype(aryty.dtype)
 
@@ -1237,7 +1237,7 @@ class PythonAPI(object):
     def nrt_array_adaptor(self, ary, ptr):
         assert self.context.enable_nrt
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
-        fn = self._get_function(fnty, name="NRT_adapt_ndarray")
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_from_python")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
         return self.builder.call(fn, (ary, ptr))
