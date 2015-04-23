@@ -144,11 +144,11 @@ int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
     static char *keywords[] = {"ptr", NULL};
     PyObject *raw_ptr_obj;
     void *raw_ptr;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords, &raw_ptr)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords, &raw_ptr_obj)) {
         return -1;
     }
     raw_ptr = PyLong_AsVoidPtr(raw_ptr_obj);
-    if(PyErr_Occurred()) return NULL;
+    if(PyErr_Occurred()) return -1;
     self->meminfo = (MemInfo*)raw_ptr;
     self->defer = 0;
     NRT_MemInfo_acquire(self->meminfo);
