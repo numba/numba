@@ -26,22 +26,30 @@ memsys_shutdown(PyObject *self, PyObject *args) {
 static
 PyObject*
 memsys_set_atomic_inc_dec(PyObject *self, PyObject *args) {
-    unsigned PY_LONG_LONG addr_inc, addr_dec;
-    if (!PyArg_ParseTuple(args, "KK", &addr_inc, &addr_dec)) {
+    PyObject *addr_inc_obj, *addr_dec_obj;
+    void *addr_inc, *addr_dec;
+    if (!PyArg_ParseTuple(args, "OO", &addr_inc_obj, &addr_dec_obj)) {
         return NULL;
     }
-    NRT_MemSys_set_atomic_inc_dec((void*)addr_inc, (void*)addr_dec);
+    addr_inc = PyLong_AsVoidPtr(addr_inc_obj);
+    if(PyErr_Occurred()) return NULL;
+    addr_dec = PyLong_AsVoidPtr(addr_dec_obj);
+    if(PyErr_Occurred()) return NULL;
+    NRT_MemSys_set_atomic_inc_dec(addr_inc, addr_dec);
     Py_RETURN_NONE;
 }
 
 static
 PyObject*
 memsys_set_atomic_cas(PyObject *self, PyObject *args) {
-    unsigned PY_LONG_LONG addr_cas;
-    if (!PyArg_ParseTuple(args, "K", &addr_cas)) {
+    PyObject *addr_cas_obj;
+    void *addr_cas;
+    if (!PyArg_ParseTuple(args, "O", &addr_cas_obj)) {
         return NULL;
     }
-    NRT_MemSys_set_atomic_cas((void*)addr_cas);
+    addr_cas = PyLong_AsVoidPtr(addr_cas_obj);
+    if(PyErr_Occurred()) return NULL;
+    NRT_MemSys_set_atomic_cas(addr_cas);
     Py_RETURN_NONE;
 }
 
@@ -81,13 +89,16 @@ MemInfo* meminfo_new_from_pyobject(void *data, PyObject *ownerobj) {
 static
 PyObject*
 meminfo_new(PyObject *self, PyObject *args) {
-    unsigned PY_LONG_LONG addr_data;
-    PyObject* ownerobj;
+    PyObject *addr_data_obj;
+    void *addr_data;
+    PyObject *ownerobj;
     MemInfo *mi;
-    if (!PyArg_ParseTuple(args, "KO", &addr_data, &ownerobj)) {
+    if (!PyArg_ParseTuple(args, "OO", &addr_data_obj, &ownerobj)) {
         return NULL;
     }
-    mi = meminfo_new_from_pyobject((void*)addr_data, ownerobj);
+    addr_data = PyLong_AsVoidPtr(addr_data_obj);
+    if(PyErr_Occurred()) return NULL;
+    mi = meminfo_new_from_pyobject(addr_data, ownerobj);
     return PyLong_FromVoidPtr(mi);
 }
 
@@ -99,7 +110,7 @@ PyObject*
 meminfo_alloc(PyObject *self, PyObject *args) {
     MemInfo *mi;
     Py_ssize_t size;
-    if (!PyArg_ParseTuple(args, "K", &size)) {
+    if (!PyArg_ParseTuple(args, "n", &size)) {
         return NULL;
     }
     mi = NRT_MemInfo_alloc(size);
@@ -115,7 +126,7 @@ PyObject*
 meminfo_alloc_safe(PyObject *self, PyObject *args) {
     MemInfo *mi;
     Py_ssize_t size;
-    if (!PyArg_ParseTuple(args, "K", &size)) {
+    if (!PyArg_ParseTuple(args, "n", &size)) {
         return NULL;
     }
     mi = NRT_MemInfo_alloc_safe(size);
@@ -131,10 +142,13 @@ typedef struct {
 static
 int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
     static char *keywords[] = {"ptr", NULL};
-    unsigned PY_LONG_LONG raw_ptr;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "K", keywords, &raw_ptr)) {
+    PyObject *raw_ptr_obj;
+    void *raw_ptr;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords, &raw_ptr)) {
         return -1;
     }
+    raw_ptr = PyLong_AsVoidPtr(raw_ptr_obj);
+    if(PyErr_Occurred()) return NULL;
     self->meminfo = (MemInfo*)raw_ptr;
     self->defer = 0;
     NRT_MemInfo_acquire(self->meminfo);
