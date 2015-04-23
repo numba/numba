@@ -146,11 +146,11 @@ _regex_decref = re.compile(r'call void @NRT_decref\((.*)\)')
 _regex_bb = re.compile(r'[-a-zA-Z$._][-a-zA-Z$._0-9]*:')
 
 
-def remove_redundant_nrt_refct(ir_module):
+def remove_redundant_nrt_refct(ll_module):
     """
-    Remove redundant reference count operations from the llvmlite.ir.ModuleRef.
-    This parses the ir_module as a string and line by line to remove the
-    unnecessary nrt refct pairs within each block.
+    Remove redundant reference count operations from the
+    `llvmlite.binding.ModuleRef`. This parses the ll_module as a string and
+    line by line to remove the unnecessary nrt refct pairs within each block.
 
     Note
     -----
@@ -158,16 +158,16 @@ def remove_redundant_nrt_refct(ir_module):
     """
     # Early escape if NRT_incref is not used
     try:
-        ir_module.get_function('NRT_incref')
+        ll_module.get_function('NRT_incref')
     except NameError:
-        return ir_module
+        return ll_module
 
     incref_map = defaultdict(list)
     decref_map = defaultdict(list)
     scopes = []
 
     # Parse IR module as text
-    llasm = str(ir_module)
+    llasm = str(ll_module)
     lines = llasm.splitlines()
 
     # Phase 1:
