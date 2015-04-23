@@ -106,33 +106,27 @@ def _define_atomic_cmpxchg(module, ordering):
     builder.ret(builder.zext(ok, ftype.return_type))
 
 
-def define_atomic_ops():
-    module = ir.Module()
+def define_atomic_ops(module):
     _define_atomic_inc_dec(module, "add", ordering='monotonic')
     _define_atomic_inc_dec(module, "sub", ordering='monotonic')
     _define_atomic_cmpxchg(module, ordering='monotonic')
     return module
 
 
-def compile_atomic_ops():
+def compile_atomic_ops(ctx):
+    codegen = ctx.jit_codegen()
+    library = codegen.create_library("nrt")
+
     # Implement LLVM module with atomic ops
-    mod = llvm.parse_assembly(str(define_atomic_ops()))
+    ir_mod = define_atomic_ops(library.create_ir_module("atomicops"))
+    library.add_ir_module(ir_mod)
+    library.finalize()
 
-    # Create a target just for this module
-    target = llvm.Target.from_default_triple()
-    mod.triple = target.triple
-    tm = target.create_target_machine(cpu=llvm.get_host_cpu_name(),
-                                      codemodel='jitdefault')
-    mcjit = llvm.create_mcjit_compiler(mod, tm)
-    mcjit.finalize_object()
-    atomic_inc = mcjit.get_pointer_to_function(mod.get_function(
-        "nrt_atomic_add"))
-    atomic_dec = mcjit.get_pointer_to_function(mod.get_function(
-        "nrt_atomic_sub"))
-    atomic_cas = mcjit.get_pointer_to_function(mod.get_function(
-        "nrt_atomic_cas"))
+    atomic_inc = library.get_pointer_to_function("nrt_atomic_add")
+    atomic_dec = library.get_pointer_to_function("nrt_atomic_sub")
+    atomic_cas = library.get_pointer_to_function("nrt_atomic_cas")
 
-    return mcjit, atomic_inc, atomic_dec, atomic_cas
+    return library, atomic_inc, atomic_dec, atomic_cas
 
 
 _regex_incref = re.compile(r'call void @NRT_incref\((.*)\)')

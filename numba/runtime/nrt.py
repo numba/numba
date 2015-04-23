@@ -2,19 +2,45 @@ from __future__ import print_function, absolute_import, division
 
 from . import _nrt_python as _nrt
 from . import atomicops
+from llvmlite import binding as ll
 
 
 class Runtime(object):
+
     def __init__(self):
+        self._init = False
+
+    def initialize(self, ctx):
+        """Initializes the NRT
+
+        Must be called before any actual call to the NRT API.
+        Safe to be called multiple times.
+        """
+        if self._init:
+            # Already initialized
+            return
+
         # Compile atomic operations
-        compiled = atomicops.compile_atomic_ops()
-        self._mcjit, self._ptr_inc, self._ptr_dec, self._ptr_cas = compiled
+        compiled = atomicops.compile_atomic_ops(ctx)
+        self._library, self._ptr_inc, self._ptr_dec, self._ptr_cas = compiled
         # Install atomic ops to NRT
         _nrt.memsys_set_atomic_inc_dec(self._ptr_inc, self._ptr_dec)
         _nrt.memsys_set_atomic_cas(self._ptr_cas)
 
+        # Register globals into the system
+        for py_name in _nrt.c_helpers:
+            c_name = "NRT_" + py_name
+            c_address = _nrt.c_helpers[py_name]
+            ll.add_symbol(c_name, c_address)
+
+        self._init = True
+
     @staticmethod
     def shutdown():
+        """
+        Shutdown the NRT
+        Safe to be called without calling Runtime.initialize first
+        """
         _nrt.memsys_shutdown()
 
     def meminfo_new(self, data, pyobj):

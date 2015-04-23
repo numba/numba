@@ -13,7 +13,6 @@ import llvmlite.binding as ll
 import numba
 from numba import types, utils, cgutils, typing, numpy_support
 from numba import _dynfunc, _helperlib
-from numba.runtime import _nrt_python
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     python_attr_impl,
@@ -118,11 +117,6 @@ def _load_global_helpers():
             c_name = "numba_" + py_name
             c_address = c_helpers[py_name]
             ll.add_symbol(c_name, c_address)
-
-    for py_name in _nrt_python.c_helpers:
-        c_name = "NRT_" + py_name
-        c_address = _nrt_python.c_helpers[py_name]
-        ll.add_symbol(c_name, c_address)
 
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
