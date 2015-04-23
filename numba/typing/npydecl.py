@@ -426,5 +426,40 @@ class NdEmpty(AbstractTemplate):
 
 builtin_global(numpy.empty, types.Function(NdEmpty))
 
+@builtin
+class Round(AbstractTemplate):
+    key = numpy.round
+
+    def generic(self, args, kws):
+        assert not kws
+        assert 1 <= len(args) <= 3
+
+        arg = args[0]
+        if len(args) == 1:
+            decimals = types.int32
+            out = None
+        else:
+            decimals = args[1]
+            if len(args) == 2:
+                out = None
+            else:
+                out = args[2]
+
+        supported_scalars = (types.Integer, types.Float, types.Complex)
+        if isinstance(arg, supported_scalars):
+            assert out is None
+            return signature(arg, *args)
+        if (isinstance(arg, types.Array) and isinstance(arg.dtype, supported_scalars) and
+            isinstance(out, types.Array) and isinstance(out.dtype, supported_scalars) and
+            out.ndim == arg.ndim):
+            # arg can only be complex if out is complex too
+            if (not isinstance(arg.dtype, types.Complex)
+                or isinstance(out.dtype, types.Complex)):
+                return signature(out, *args)
+
+builtin_global(numpy.round, types.Function(Round))
+builtin_global(numpy.around, types.Function(Round))
+
+
 builtin_global(numpy, types.Module(numpy))
 

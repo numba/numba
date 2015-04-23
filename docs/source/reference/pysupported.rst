@@ -83,7 +83,11 @@ The following attributes and methods are supported:
 tuple
 -----
 
-Tuple construction and unpacking is supported.
+Tuple construction and unpacking is supported, as well as the following
+operations:
+
+* comparison between tuples
+* iteration over homogenous tuples
 
 None
 ----
