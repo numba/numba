@@ -1,12 +1,13 @@
 from __future__ import print_function, absolute_import, division
 
-from . import _nrt_python as _nrt
 from . import atomicops
 from llvmlite import binding as ll
 
+from numba.utils import finalize as _finalize
+from . import _nrt_python as _nrt
 
-class Runtime(object):
 
+class _Runtime(object):
     def __init__(self):
         self._init = False
 
@@ -74,4 +75,15 @@ class Runtime(object):
         _nrt.memsys_process_defer_dtor()
 
 
+# Alias to _nrt_python._MemInfo
 MemInfo = _nrt._MemInfo
+
+
+# Initialize
+rtsys = _Runtime()
+
+# Install finalizer
+_finalize(rtsys, _Runtime.shutdown)
+
+# Avoid future use of the class
+del _Runtime
