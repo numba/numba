@@ -152,6 +152,12 @@ size_t NRT_MemInfo_size(MemInfo* mi);
  */
 void NRT_MemInfo_defer_dtor(MemInfo* mi);
 
+
+/*
+ * Print debug info to FILE
+ */
+void NRT_MemInfo_dump(MemInfo *mi, FILE *out);
+
 /* General allocator */
 
 /*

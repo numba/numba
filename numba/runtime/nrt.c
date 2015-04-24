@@ -259,6 +259,10 @@ void NRT_MemInfo_defer_dtor(MemInfo *mi) {
     nrt_push_meminfo_list(&TheMSys.mi_deferlist, mi);
 }
 
+void NRT_MemInfo_dump(MemInfo *mi, FILE *out) {
+    fprintf(out, "MemInfo %p refcount %zu\n", mi, mi->payload.refct);
+}
+
 void* NRT_Allocate(size_t size) {
     void *ptr = malloc(size);
     NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%llu ptr=%p\n", size, ptr));
