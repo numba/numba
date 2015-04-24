@@ -10,7 +10,7 @@ from numba import njit
 from numba import utils
 
 
-nrtjit = njit(nrt=True, nogil=True)
+nrtjit = njit(_nrt=True, nogil=True)
 
 
 class TestDynArray(unittest.TestCase):
