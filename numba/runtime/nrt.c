@@ -187,7 +187,7 @@ MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info)
 {
     MemInfo * mi = NRT_MemSys_pop_meminfo();
-    mi->payload.refct = 1;      /* initialize reference count to 1 */
+    mi->payload.refct = 0;
     mi->payload.dtor = dtor;
     mi->payload.dtor_info = dtor_info;
     mi->payload.data = data;

@@ -149,8 +149,9 @@ int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
     }
     raw_ptr = PyLong_AsVoidPtr(raw_ptr_obj);
     if(PyErr_Occurred()) return -1;
-    self->meminfo = (MemInfo*)raw_ptr;      /* Borrow reference */
+    self->meminfo = (MemInfo*)raw_ptr;
     self->defer = 0;
+    NRT_MemInfo_acquire(self->meminfo);
     return 0;
 }
 
@@ -353,6 +354,7 @@ int NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
     NRT_Debug(nrt_debug_print("NRT_adapt_ndarray_from_python %p\n",
                               arystruct->meminfo));
 
+    NRT_MemInfo_acquire(arystruct->meminfo);
     return 0;
 }
 
@@ -412,8 +414,6 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
         if(MemInfo_init(miobj, args, NULL)) {
             return NULL;
         }
-        /* MemInfo_init borrow reference */
-        NRT_MemInfo_acquire(arystruct->meminfo);
         Py_DECREF(args);
         /* Set writable */
         flags |= NPY_ARRAY_WRITEABLE;
