@@ -914,7 +914,8 @@ class PythonAPI(object):
 
             def cleanup_array():
                 val = self.builder.load(val_on_stack)
-                self.context.array_decref(self.builder, typ, val)
+                if self.context.enable_nrt:
+                    self.context.nrt_decref(self.builder, typ, val)
 
             return NativeValue(val, is_error=failed,
                                cleanup=cleanup_array)
@@ -954,7 +955,10 @@ class PythonAPI(object):
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
     def from_native_return(self, val, typ):
-        return self.from_native_value(val, typ)
+        out = self.from_native_value(val, typ)
+        if self.context.enable_nrt:
+            self.context.nrt_decref(self.builder, typ, val)
+        return out
 
     def from_native_value(self, val, typ):
         if typ == types.pyobject:
@@ -1084,7 +1088,6 @@ class PythonAPI(object):
         nativeary = nativearycls(self.context, builder, value=ary)
         if self.context.enable_nrt:
             newary = self.nrt_adapt_ndarray_to_python(typ, ary)
-            self.context.nrt_decref(builder, nativeary.meminfo)
             return newary
         else:
             parent = nativeary.parent

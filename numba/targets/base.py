@@ -996,35 +996,41 @@ class BaseContext(object):
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
         return builder.call(fn, [meminfo])
 
-    def nrt_incref(self, builder, meminfo):
+    def get_nrt_meminfo(self, builder, typ, value):
+        return self.data_model_manager[typ].get_nrt_meminfo(builder, value)
+
+    def nrt_incref(self, builder, typ, value):
         if not self.enable_nrt:
             raise Exception("Require NRT")
-        mod = cgutils.get_module(builder)
-        fnty = llvmir.FunctionType(llvmir.VoidType(),
-            [llvmir.IntType(8).as_pointer()])
-        fn = mod.get_or_insert_function(fnty, name="NRT_incref")
-        builder.call(fn, [meminfo])
 
-    def nrt_decref(self, builder, meminfo):
+        members = self.data_model_manager[typ].traverse(builder, value)
+        for mt, mv in members:
+            self.nrt_incref(builder, mt, mv)
+
+        meminfo = self.get_nrt_meminfo(builder, typ, value)
+        if meminfo:
+            mod = cgutils.get_module(builder)
+            fnty = llvmir.FunctionType(llvmir.VoidType(),
+                [llvmir.IntType(8).as_pointer()])
+            fn = mod.get_or_insert_function(fnty, name="NRT_incref")
+
+            builder.call(fn, [meminfo])
+
+    def nrt_decref(self, builder, typ, value):
         if not self.enable_nrt:
             raise Exception("Require NRT")
-        mod = cgutils.get_module(builder)
-        fnty = llvmir.FunctionType(llvmir.VoidType(),
-            [llvmir.IntType(8).as_pointer()])
-        fn = mod.get_or_insert_function(fnty, name="NRT_decref")
-        builder.call(fn, [meminfo])
 
-    def array_incref(self, builder, typ, array):
-        if not self.enable_nrt:
-            return
-        ary = self.make_array(typ)(self, builder, value=array)
-        self.nrt_incref(builder, ary.meminfo)
+        members = self.data_model_manager[typ].traverse(builder, value)
+        for mt, mv in members:
+            self.nrt_decref(builder, mt, mv)
 
-    def array_decref(self, builder, typ, array):
-        if not self.enable_nrt:
-            return
-        ary = self.make_array(typ)(self, builder, value=array)
-        self.nrt_decref(builder, ary.meminfo)
+        meminfo = self.get_nrt_meminfo(builder, typ, value)
+        if meminfo:
+            mod = cgutils.get_module(builder)
+            fnty = llvmir.FunctionType(llvmir.VoidType(),
+                [llvmir.IntType(8).as_pointer()])
+            fn = mod.get_or_insert_function(fnty, name="NRT_decref")
+            builder.call(fn, [meminfo])
 
 
 class _wrap_impl(object):
