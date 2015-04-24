@@ -6,7 +6,7 @@ All functions described here are threadsafe.
 #include <stdio.h>
 
 /* Debugging facilities */
-//#undef NDEBUG
+/* #undef NDEBUG */
 #ifndef NDEBUG
 #   define NRT_Debug(X) X
 #else
