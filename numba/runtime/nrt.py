@@ -49,6 +49,8 @@ class _Runtime(object):
         Returns a MemInfo object that tracks memory at `data` owned by `pyobj`.
         MemInfo will acquire a reference on `pyobj`.
         The release of MemInfo will release a reference on `pyobj`.
+
+        Returned MemInfo have refct 1
         """
         mi = _nrt.meminfo_new(data, pyobj)
         return MemInfo(mi)
