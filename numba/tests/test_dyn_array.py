@@ -357,6 +357,50 @@ class TestDynArray(unittest.TestCase):
         np.testing.assert_equal(pyfunc(x, y, t), cfunc(x, y, t))
         self.assertEqual(initrefct, (sys.getrefcount(x), sys.getrefcount(y)))
 
+    def test_return_tuple_of_array(self):
+
+        def pyfunc(x):
+            y = np.empty(x.size)
+            for i in range(y.size):
+                y[i] = x[i] + 1
+            return x, y
+
+        cfunc = nrtjit(pyfunc)
+
+        x = np.random.random(5)
+        initrefct = sys.getrefcount(x)
+        expected_x, expected_y = pyfunc(x)
+        got_x, got_y = cfunc(x)
+        self.assertIs(x, expected_x)
+        self.assertIs(x, got_x)
+        np.testing.assert_equal(expected_x, got_x)
+        np.testing.assert_equal(expected_y, got_y)
+        del expected_x, got_x
+        self.assertEqual(initrefct, sys.getrefcount(x))
+
+        self.assertEqual(sys.getrefcount(expected_y), sys.getrefcount(got_y))
+
+    def test_return_tuple_of_array_created(self):
+
+        def pyfunc(x):
+            y = np.empty(x.size)
+            for i in range(y.size):
+                y[i] = x[i] + 1
+            out = y, y
+            return out
+
+        cfunc = nrtjit(pyfunc)
+
+        x = np.random.random(5)
+        expected_x, expected_y = pyfunc(x)
+        got_x, got_y = cfunc(x)
+        np.testing.assert_equal(expected_x, got_x)
+        np.testing.assert_equal(expected_y, got_y)
+        # getrefcount owns 1, got_y owns 1
+        self.assertEqual(2, sys.getrefcount(got_y))
+        # getrefcount owns 1, got_y owns 1
+        self.assertEqual(2, sys.getrefcount(got_y))
+
 
 def benchmark_refct_speed():
     def pyfunc(x, y, t):
