@@ -338,8 +338,6 @@ int NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
     data = PyArray_DATA(ndary);
 
     arystruct->meminfo = meminfo_new_from_pyobject((void*)data, obj);
-    NRT_MemInfo_dump(arystruct->meminfo, stderr);
-
     arystruct->data = data;
     arystruct->nitems = PyArray_SIZE(ndary);
     arystruct->itemsize = PyArray_ITEMSIZE(ndary);
