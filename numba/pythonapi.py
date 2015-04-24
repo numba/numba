@@ -1072,7 +1072,7 @@ class PythonAPI(object):
         aryptr = nativeary._getpointer()
         ptr = self.builder.bitcast(aryptr, self.voidptr)
         if self.context.enable_nrt:
-            errcode = self.nrt_array_adaptor(ary, ptr)
+            errcode = self.nrt_adapt_ndarray_from_python(ary, ptr)
         else:
             errcode = self.numba_array_adaptor(ary, ptr)
         failed = cgutils.is_not_null(self.builder, errcode)
@@ -1083,7 +1083,7 @@ class PythonAPI(object):
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, builder, value=ary)
         if self.context.enable_nrt:
-            newary = self.nrt_adapt_native_array(typ, ary)
+            newary = self.nrt_adapt_ndarray_to_python(typ, ary)
             self.context.nrt_decref(builder, nativeary.meminfo)
             return newary
         else:
@@ -1217,7 +1217,7 @@ class PythonAPI(object):
         return self.builder.call(fn,
                                  (state_size, initial_state, genfn, finalizer, env))
 
-    def nrt_adapt_native_array(self, aryty, ary):
+    def nrt_adapt_ndarray_to_python(self, aryty, ary):
         if not self.context.enable_nrt:
             raise Exception("Require NRT")
         intty = ir.IntType(32)
@@ -1234,7 +1234,7 @@ class PythonAPI(object):
                                                            self.voidptr),
                                       ndim, typenum])
 
-    def nrt_array_adaptor(self, ary, ptr):
+    def nrt_adapt_ndarray_from_python(self, ary, ptr):
         assert self.context.enable_nrt
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_from_python")

@@ -351,7 +351,8 @@ int NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
         *p = PyArray_STRIDE(ndary, i);
     }
 
-    NRT_Debug(nrt_debug_print("NRT_adapt_ndarray %p\n", arystruct->meminfo));
+    NRT_Debug(nrt_debug_print("NRT_adapt_ndarray_from_python %p\n",
+                              arystruct->meminfo));
 
     NRT_MemInfo_acquire(arystruct->meminfo);
     return 0;
