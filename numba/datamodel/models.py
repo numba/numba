@@ -170,6 +170,12 @@ class PrimitiveModel(DataModel):
 @register_default(types.Type)
 @register_default(types.Object)
 @register_default(types.Module)
+@register_default(types.Phantom)
+@register_default(types.RangeType)
+@register_default(types.Dispatcher)
+@register_default(types.ExceptionType)
+@register_default(types.Dummy)
+@register_default(types.ExceptionInstance)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
