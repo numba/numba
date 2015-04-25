@@ -363,9 +363,12 @@ int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
     int ndim = PyArray_NDIM(ary);
     int layout = 0;
 
-    if (PyArray_ISFARRAY(ary)) {
+    /* The order in which we check for the right contiguous-ness is important.
+       The order must match the order by numba.numpy_support.map_layout.
+    */
+    if (PyArray_ISCARRAY(ary)){
         layout = 1;
-    } else if (PyArray_ISCARRAY(ary)){
+    } else if (PyArray_ISFARRAY(ary)) {
         layout = 2;
     }
 
