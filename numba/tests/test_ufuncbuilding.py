@@ -4,11 +4,11 @@ import sys
 
 import numpy
 
-from numba import unittest_support as unittest
+from numba import config, unittest_support as unittest
 from numba.npyufunc.ufuncbuilder import UFuncBuilder, GUFuncBuilder
 from numba import vectorize, guvectorize
 from numba.npyufunc import PyUFunc_One
-from . import support
+from numba.tests import support
 
 
 def add(a, b):
@@ -97,6 +97,16 @@ class TestUfuncBuilding(unittest.TestCase):
         self.assertTrue(numpy.all(a + a == b))
 
 
+class TestUfuncBuildingJitDisabled(TestUfuncBuilding):
+
+    def setUp(self):
+        self.old_disable_jit = config.DISABLE_JIT
+        config.DISABLE_JIT = False
+
+    def tearDown(self):
+        config.DISABLE_JIT = self.old_disable_jit
+
+
 class TestGUfuncBuilding(unittest.TestCase):
 
     def test_basic_gufunc(self):
@@ -139,6 +149,16 @@ class TestGUfuncBuilding(unittest.TestCase):
 
         self.assertTrue(numpy.all(a + a == b))
         self.assertEqual(b.dtype, numpy.dtype('complex64'))
+
+
+class TestGUfuncBuildingJitDisabled(TestGUfuncBuilding):
+
+    def setUp(self):
+        self.old_disable_jit = config.DISABLE_JIT
+        config.DISABLE_JIT = False
+
+    def tearDown(self):
+        config.DISABLE_JIT = self.old_disable_jit
 
 
 class TestVectorizeDecor(unittest.TestCase):
@@ -252,6 +272,16 @@ class TestVectorizeDecor(unittest.TestCase):
             guvectorize(*args, identity='none')(add)
         with self.assertRaises(ValueError):
             guvectorize(*args, identity=2)(add)
+
+
+class TestVectorizeDecorJitDisabled(TestVectorizeDecor):
+
+    def setUp(self):
+        self.old_disable_jit = config.DISABLE_JIT
+        config.DISABLE_JIT = False
+
+    def tearDown(self):
+        config.DISABLE_JIT = self.old_disable_jit
 
 
 if __name__ == '__main__':
