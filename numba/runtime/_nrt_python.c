@@ -433,12 +433,16 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
 }
 
 static void
-NRT_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
+NRT_adapt_buffer_from_python(Py_buffer *buf, arystruct_t *arystruct)
 {
     int i;
     npy_intp *p;
 
-    arystruct->meminfo = NULL; /* meminfo_new_from_pyobject((void*)buf->buf, buf->obj); */
+    if (buf->obj) {
+        /* Allocate new MemInfo only if the buffer has a parent */
+        arystruct->meminfo = meminfo_new_from_pyobject((void*)buf->buf, buf->obj);
+        NRT_MemInfo_acquire(arystruct->meminfo);
+    }
     arystruct->data = buf->buf;
     arystruct->itemsize = buf->itemsize;
     arystruct->parent = buf->obj;
@@ -452,7 +456,7 @@ NRT_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
         *p = buf->strides[i];
     }
 
-    /* NRT_MemInfo_acquire(arystruct->meminfo); */
+
 }
 
 static void
@@ -505,7 +509,7 @@ build_c_helpers_dict(void)
 
 declmethod(adapt_ndarray_from_python);
 declmethod(adapt_ndarray_to_python);
-/*declmethod(adapt_buffer); */ /* not used yet */
+declmethod(adapt_buffer_from_python);
 declmethod(incref);
 declmethod(decref);
 declmethod(MemInfo_data);

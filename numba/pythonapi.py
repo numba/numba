@@ -1059,7 +1059,10 @@ class PythonAPI(object):
 
         with cgutils.if_likely(self.builder, self.builder.not_(is_error)):
             ptr = self.builder.bitcast(aryptr, self.voidptr)
-            self.numba_buffer_adaptor(buf, ptr)
+            if self.context.enable_nrt:
+                self.nrt_adapt_buffer_from_python(buf, ptr)
+            else:
+                self.numba_buffer_adaptor(buf, ptr)
 
         def cleanup():
             self.release_buffer(buf)
@@ -1241,6 +1244,15 @@ class PythonAPI(object):
         assert self.context.enable_nrt
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_from_python")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        return self.builder.call(fn, (ary, ptr))
+
+    def nrt_adapt_buffer_from_python(self, ary, ptr):
+        assert self.context.enable_nrt
+        fnty = Type.function(Type.void(), [Type.pointer(self.py_buffer_t),
+                                           self.voidptr])
+        fn = self._get_function(fnty, name="NRT_adapt_buffer_from_python")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
         return self.builder.call(fn, (ary, ptr))
