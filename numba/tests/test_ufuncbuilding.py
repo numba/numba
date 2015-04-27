@@ -244,6 +244,14 @@ class TestVectorizeDecor(unittest.TestCase):
         self.assertTrue(numpy.all(a + a == b))
         self.assertEqual(b.dtype, numpy.dtype('int32'))
 
+    def test_guvectorize_no_output(self):
+        ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                            "(x,y),(x,y),(x,y)")(guadd)
+        a = numpy.arange(10, dtype='int32').reshape(2, 5)
+        out = numpy.zeros_like(a)
+        ufunc(a, a, out)
+        self.assertTrue(numpy.all(a + a == out))
+
     def test_guvectorize_objectmode(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)")(guadd_obj)
@@ -272,6 +280,22 @@ class TestVectorizeDecor(unittest.TestCase):
             guvectorize(*args, identity='none')(add)
         with self.assertRaises(ValueError):
             guvectorize(*args, identity=2)(add)
+
+    def test_guvectorize_invalid_layout(self):
+        sigs = ['(int32[:,:], int32[:,:], int32[:,:])']
+        # Syntax error
+        with self.assertRaises(ValueError) as raises:
+            guvectorize(sigs, ")-:")(guadd)
+        self.assertIn("bad token in signature", str(raises.exception))
+        # Output shape can't be inferred from inputs
+        with self.assertRaises(NameError) as raises:
+            guvectorize(sigs, "(x,y),(x,y)->(x,z,v)")(guadd)
+        self.assertEqual(str(raises.exception),
+                         "undefined output symbols: v,z")
+        # Arrow but no outputs
+        with self.assertRaises(ValueError) as raises:
+            guvectorize(sigs, "(x,y),(x,y),(x,y)->")(guadd)
+        # (error message depends on Numpy version)
 
 
 class TestVectorizeDecorJitDisabled(TestVectorizeDecor):
