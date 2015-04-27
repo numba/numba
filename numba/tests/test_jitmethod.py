@@ -79,15 +79,6 @@ class TestDisabledJIT(unittest.TestCase):
             jitted = jit(nopython=True)(method)
         self.assertEqual(jitted.py_func, method)
 
-    def test_compile(self):
-        with override_config('DISABLE_JIT', True):
-            def method(x):
-                return x
-
-            cres = compile_isolated(method, (types.int32,))
-            self.assertEqual(cres.entry_point, method)
-            self.assertEqual(10, method(10))
-
 
 if __name__ == '__main__':
     unittest.main()

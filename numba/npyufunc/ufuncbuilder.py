@@ -46,7 +46,6 @@ class UFuncDispatcher(object):
 
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, topt)
-        flags.set("force_enable_jit")
         flags.set("no_compile")
         flags.set("no_cpython_wrapper")
         # Disable loop lifting

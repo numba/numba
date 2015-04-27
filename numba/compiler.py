@@ -33,8 +33,6 @@ class Flags(utils.ConfigOptions):
         'boundcheck',
         'forceinline',
         'no_cpython_wrapper',
-        # Force use of JIT compilation even when disabled by config
-        'force_enable_jit',
     ])
 
 
@@ -462,31 +460,21 @@ class Pipeline(object):
         if self.library is None:
             codegen = self.targetctx.jit_codegen()
             self.library = codegen.create_library(self.bc.func_qualname)
-        if config.DISABLE_JIT and not self.flags.force_enable_jit:
-            entry_point = self.func
-            call_helper = None
-            fndesc = None
-            environment = None
-        else:
-            lowered = lowerfn()
-            entry_point = lowered.cfunc
-            call_helper = lowered.call_helper
-            fndesc = lowered.fndesc
-            environment = lowered.env
+        lowered = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
         cr = compile_result(typing_context=self.typingctx,
                             target_context=self.targetctx,
-                            entry_point=entry_point,
+                            entry_point=lowered.cfunc,
                             typing_error=self.status.fail_reason,
                             type_annotation=self.type_annotation,
                             library=self.library,
-                            call_helper=call_helper,
+                            call_helper=lowered.call_helper,
                             signature=signature,
                             objectmode=objectmode,
                             interpmode=False,
                             lifted=self.lifted,
-                            fndesc=fndesc,
-                            environment=environment,)
+                            fndesc=lowered.fndesc,
+                            environment=lowered.env,)
         return cr
 
     def stage_objectmode_backend(self):
