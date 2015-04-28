@@ -187,6 +187,10 @@ MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info)
 {
     MemInfo * mi = NRT_MemSys_pop_meminfo();
+    /* Reference count is initialized to zero for easier implementation
+       in the compiler.  The compiler incref when value is binding to variables.
+       We need to improve the compiler pipeline to better track refcount ops.
+     */
     mi->payload.refct = 0;
     mi->payload.dtor = dtor;
     mi->payload.dtor_info = dtor_info;
@@ -257,6 +261,10 @@ size_t NRT_MemInfo_size(MemInfo* mi) {
 void NRT_MemInfo_defer_dtor(MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_MemInfo_defer_dtor\n"));
     nrt_push_meminfo_list(&TheMSys.mi_deferlist, mi);
+}
+
+void NRT_MemInfo_dump(MemInfo *mi, FILE *out) {
+    fprintf(out, "MemInfo %p refcount %zu\n", mi, mi->payload.refct);
 }
 
 void* NRT_Allocate(size_t size) {

@@ -300,6 +300,33 @@ class TestDispatcherMethods(TestCase):
         # Exercise the method
         foo.inspect_types(utils.StringIO())
 
+    def test_issue_with_array_layout_conflict(self):
+        """
+        This test an issue with the dispatcher when an array that is both
+        C and F contiguous is supplied as the first signature.
+        The dispatcher checks for F contiguous first but the compiler checks
+        for C contiguous first. This results in an C contiguous code inserted
+        as F contiguous function.
+        """
+        def pyfunc(A, i, j):
+            return A[i, j]
+
+        cfunc = jit(pyfunc)
+
+        ary_c_and_f = np.array([[1.]])
+        ary_c = np.array([[0., 1.], [2., 3.]], order='C')
+        ary_f = np.array([[0., 1.], [2., 3.]], order='F')
+
+        exp_c = pyfunc(ary_c, 1, 0)
+        exp_f = pyfunc(ary_f, 1, 0)
+
+        self.assertEqual(1., cfunc(ary_c_and_f, 0, 0))
+        got_c = cfunc(ary_c, 1, 0)
+        got_f = cfunc(ary_f, 1, 0)
+
+        self.assertEqual(exp_c, got_c)
+        self.assertEqual(exp_f, got_f)
+
 
 if __name__ == '__main__':
     unittest.main()

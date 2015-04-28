@@ -46,7 +46,7 @@ def parse_signature(sig):
             else:
                 raise ValueError('bad token in signature "%s"' % tok[1])
 
-    ins, outs = stripws(sig).split('->')
+    ins, _, outs = stripws(sig).partition('->')
     inputs = list(parse(ins))
     outputs = list(parse(outs))
 
@@ -60,6 +60,6 @@ def parse_signature(sig):
 
     diff = osym.difference(isym)
     if diff:
-        raise NameError('undefined output symbols: %s' % ','.join(diff))
+        raise NameError('undefined output symbols: %s' % ','.join(sorted(diff)))
 
     return inputs, outputs

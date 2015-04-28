@@ -3,14 +3,14 @@ from __future__ import print_function, absolute_import, division
 import sys
 import numpy as np
 import threading
+import random
 
 from numba import unittest_support as unittest
 from numba import njit
 from numba import utils
 
 
-
-nrtjit = njit(nrt=True)
+nrtjit = njit(_nrt=True, nogil=True)
 
 
 class TestDynArray(unittest.TestCase):
@@ -209,21 +209,39 @@ class TestDynArray(unittest.TestCase):
         np.testing.assert_equal(pyfunc(arr_a, arr_b),
                                 cfunc(arr_a, arr_b))
 
-    def test_multithread(self):
+    def test_allocation_mt(self):
+        """
+        This test exercises the array allocation in multithreaded usecase.
+        This stress the freelist inside NRT.
+        """
 
         def pyfunc(inp):
             out = np.empty(inp.size)
-            tmp = 0
+
+            # Zero fill
             for i in range(out.size):
-                out[i] = tmp
-                tmp = inp[i]
+                out[i] = 0
+
+            for i in range(inp[0]):
+                # Allocate inside a loop
+                tmp = np.empty(inp.size)
+                # Write to tmp
+                for j in range(tmp.size):
+                    tmp[j] = inp[j]
+                # out = tmp + i
+                for j in range(tmp.size):
+                    out[j] += tmp[j] + i
+
             return out
 
         cfunc = nrtjit(pyfunc)
-        size = 10**5
-        arr = np.random.randint(0, 1, size)
+        size = 10  # small array size so that the computation is short
+        arr = np.random.randint(1, 10, size)
+        frozen_arr = arr.copy()
 
         np.testing.assert_equal(pyfunc(arr), cfunc(arr))
+        # Ensure we did not modify the input
+        np.testing.assert_equal(frozen_arr, arr)
 
         workers = []
         inputs = []
@@ -233,9 +251,9 @@ class TestDynArray(unittest.TestCase):
         def wrapped(inp, out):
             out[:] = cfunc(inp)
 
-        # Create worker threads
-        for i in range(10):
-            arr = np.random.randint(0, 1, size)
+        # Create a lot of worker threads to create contention
+        for i in range(100):
+            arr = np.random.randint(1, 10, size)
             out = np.empty_like(arr)
             thread = threading.Thread(target=wrapped,
                                       args=(arr, out),
@@ -256,46 +274,50 @@ class TestDynArray(unittest.TestCase):
         for inp, out in zip(inputs, outputs):
             np.testing.assert_equal(pyfunc(inp), out)
 
-    def test_multithread_stress(self):
+    def test_refct_mt(self):
+        """
+        This test exercises the refct in multithreaded code
+        """
 
-        def pyfunc(n, t):
-            out = np.empty(n)
+        def pyfunc(n, inp):
+            out = np.empty(inp.size)
             for i in range(out.size):
-                out[i] = i
-
-            for i in range(t):
-                tmp = np.empty(n)
-                for j in range(tmp.size):
-                    tmp[j] = i + j
-                for j in range(out.size):
-                    tmp[j] += out[j]
-                out = tmp   # Swap the array here
-
+                out[i] = inp[i] + 1
+            # Use swap to trigger many refct ops
+            for i in range(n):
+                out, inp = inp, out
             return out
 
-
         cfunc = nrtjit(pyfunc)
-        size = 1000
-        repeat = 2000
-
-        expected = pyfunc(size, repeat)
-        np.testing.assert_equal(expected, cfunc(size, repeat))
+        size = 10
+        input = np.arange(size, dtype=np.float)
+        expected_refct = sys.getrefcount(input)
+        swapct = random.randrange(1000)
+        expected = pyfunc(swapct, input)
+        np.testing.assert_equal(expected, cfunc(swapct, input))
+        # The following checks can discover a reference count error
+        del expected
+        self.assertEqual(expected_refct, sys.getrefcount(input))
 
         workers = []
         outputs = []
+        swapcts = []
 
         # Make wrapper to store the output
-        def wrapped(n, t, out):
-            out[:] = cfunc(n, t)
+        def wrapped(n, input, out):
+            out[:] = cfunc(n, input)
 
         # Create worker threads
-        for i in range(10):
+        for i in range(100):
             out = np.empty(size)
+            # All thread shares the same input
+            swapct = random.randrange(1000)
             thread = threading.Thread(target=wrapped,
-                                      args=(size, repeat, out),
+                                      args=(swapct, input, out),
                                       name="worker{0}".format(i))
             workers.append(thread)
             outputs.append(out)
+            swapcts.append(swapct)
 
         # Launch worker threads
         for thread in workers:
@@ -306,8 +328,12 @@ class TestDynArray(unittest.TestCase):
             thread.join()
 
         # Check result
-        for out in outputs:
-            np.testing.assert_equal(expected, out)
+        for swapct, out in zip(swapcts, outputs):
+            np.testing.assert_equal(pyfunc(swapct, input), out)
+
+        del outputs, workers
+        # The following checks can discover a reference count error
+        self.assertEqual(expected_refct, sys.getrefcount(input))
 
     def test_swap(self):
 
@@ -330,6 +356,50 @@ class TestDynArray(unittest.TestCase):
         initrefct = sys.getrefcount(x), sys.getrefcount(y)
         np.testing.assert_equal(pyfunc(x, y, t), cfunc(x, y, t))
         self.assertEqual(initrefct, (sys.getrefcount(x), sys.getrefcount(y)))
+
+    def test_return_tuple_of_array(self):
+
+        def pyfunc(x):
+            y = np.empty(x.size)
+            for i in range(y.size):
+                y[i] = x[i] + 1
+            return x, y
+
+        cfunc = nrtjit(pyfunc)
+
+        x = np.random.random(5)
+        initrefct = sys.getrefcount(x)
+        expected_x, expected_y = pyfunc(x)
+        got_x, got_y = cfunc(x)
+        self.assertIs(x, expected_x)
+        self.assertIs(x, got_x)
+        np.testing.assert_equal(expected_x, got_x)
+        np.testing.assert_equal(expected_y, got_y)
+        del expected_x, got_x
+        self.assertEqual(initrefct, sys.getrefcount(x))
+
+        self.assertEqual(sys.getrefcount(expected_y), sys.getrefcount(got_y))
+
+    def test_return_tuple_of_array_created(self):
+
+        def pyfunc(x):
+            y = np.empty(x.size)
+            for i in range(y.size):
+                y[i] = x[i] + 1
+            out = y, y
+            return out
+
+        cfunc = nrtjit(pyfunc)
+
+        x = np.random.random(5)
+        expected_x, expected_y = pyfunc(x)
+        got_x, got_y = cfunc(x)
+        np.testing.assert_equal(expected_x, got_x)
+        np.testing.assert_equal(expected_y, got_y)
+        # getrefcount owns 1, got_y owns 1
+        self.assertEqual(2, sys.getrefcount(got_y))
+        # getrefcount owns 1, got_y owns 1
+        self.assertEqual(2, sys.getrefcount(got_y))
 
 
 def benchmark_refct_speed():

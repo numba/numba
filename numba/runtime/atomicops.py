@@ -75,7 +75,7 @@ def install_atomic_refct(module):
 def _define_atomic_inc_dec(module, op, ordering):
     """Define a llvm function for atomic increment/decrement to the given module
     Argument ``op`` is the operation "add"/"sub".  Argument ``ordering`` is
-    the memory ordering.
+    the memory ordering.  The generated function returns the new value.
     """
     ftype = ir.FunctionType(_word_type, [_word_type.as_pointer()])
     fn_atomic = ir.Function(module, ftype, name="nrt_atomic_{0}".format(op))
@@ -84,14 +84,26 @@ def _define_atomic_inc_dec(module, op, ordering):
     bb = fn_atomic.append_basic_block()
     builder = ir.IRBuilder(bb)
     ONE = ir.Constant(_word_type, 1)
-    builder.atomic_rmw(op, ptr, ONE, ordering=ordering)
-    res = builder.load(ptr)
+    oldval = builder.atomic_rmw(op, ptr, ONE, ordering=ordering)
+    # Perform the operation on the old value so that we can pretend returning
+    # the "new" value.
+    res = getattr(builder, op)(oldval, ONE)
     builder.ret(res)
 
     return fn_atomic
 
 
 def _define_atomic_cmpxchg(module, ordering):
+    """Define a llvm function for atomic compare-and-swap.
+    The generated function is a direct wrapper of the LLVM cmpxchg with the
+    difference that the a int indicate success (1) or failure (0) is returned
+    and the last argument is a output pointer for storing the old value.
+
+    Note
+    ----
+    On failure, the generated function behaves like an atomic load.  The loaded
+    value is stored to the last argument.
+    """
     ftype = ir.FunctionType(ir.IntType(32), [_word_type.as_pointer(),
                                              _word_type, _word_type,
                                              _word_type.as_pointer()])
@@ -106,33 +118,27 @@ def _define_atomic_cmpxchg(module, ordering):
     builder.ret(builder.zext(ok, ftype.return_type))
 
 
-def define_atomic_ops():
-    module = ir.Module()
+def define_atomic_ops(module):
     _define_atomic_inc_dec(module, "add", ordering='monotonic')
     _define_atomic_inc_dec(module, "sub", ordering='monotonic')
     _define_atomic_cmpxchg(module, ordering='monotonic')
     return module
 
 
-def compile_atomic_ops():
+def compile_atomic_ops(ctx):
+    codegen = ctx.jit_codegen()
+    library = codegen.create_library("nrt")
+
     # Implement LLVM module with atomic ops
-    mod = llvm.parse_assembly(str(define_atomic_ops()))
+    ir_mod = define_atomic_ops(library.create_ir_module("atomicops"))
+    library.add_ir_module(ir_mod)
+    library.finalize()
 
-    # Create a target just for this module
-    target = llvm.Target.from_default_triple()
-    mod.triple = target.triple
-    tm = target.create_target_machine(cpu=llvm.get_host_cpu_name(),
-                                      codemodel='jitdefault')
-    mcjit = llvm.create_mcjit_compiler(mod, tm)
-    mcjit.finalize_object()
-    atomic_inc = mcjit.get_pointer_to_function(mod.get_function(
-        "nrt_atomic_add"))
-    atomic_dec = mcjit.get_pointer_to_function(mod.get_function(
-        "nrt_atomic_sub"))
-    atomic_cas = mcjit.get_pointer_to_function(mod.get_function(
-        "nrt_atomic_cas"))
+    atomic_inc = library.get_pointer_to_function("nrt_atomic_add")
+    atomic_dec = library.get_pointer_to_function("nrt_atomic_sub")
+    atomic_cas = library.get_pointer_to_function("nrt_atomic_cas")
 
-    return mcjit, atomic_inc, atomic_dec, atomic_cas
+    return library, atomic_inc, atomic_dec, atomic_cas
 
 
 _regex_incref = re.compile(r'call void @NRT_incref\((.*)\)')
@@ -140,11 +146,11 @@ _regex_decref = re.compile(r'call void @NRT_decref\((.*)\)')
 _regex_bb = re.compile(r'[-a-zA-Z$._][-a-zA-Z$._0-9]*:')
 
 
-def remove_redundant_nrt_refct(ir_module):
+def remove_redundant_nrt_refct(ll_module):
     """
-    Remove redundant reference count operations from the llvmlite.ir.ModuleRef.
-    This parses the ir_module as a string and line by line to remove the
-    unnecessary nrt refct pairs within each block.
+    Remove redundant reference count operations from the
+    `llvmlite.binding.ModuleRef`. This parses the ll_module as a string and
+    line by line to remove the unnecessary nrt refct pairs within each block.
 
     Note
     -----
@@ -152,16 +158,16 @@ def remove_redundant_nrt_refct(ir_module):
     """
     # Early escape if NRT_incref is not used
     try:
-        ir_module.get_function('NRT_incref')
+        ll_module.get_function('NRT_incref')
     except NameError:
-        return ir_module
+        return ll_module
 
     incref_map = defaultdict(list)
     decref_map = defaultdict(list)
     scopes = []
 
     # Parse IR module as text
-    llasm = str(ir_module)
+    llasm = str(ll_module)
     lines = llasm.splitlines()
 
     # Phase 1:

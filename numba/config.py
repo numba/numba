@@ -117,3 +117,6 @@ FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _force_cc, None)
 # Enable AVX on supported platforms where it won't degrade performance.
 ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int,
                       _cpu_name not in ('corei7-avx', 'core-avx-i'))
+
+# Disable jit for debugging
+DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)

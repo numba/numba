@@ -27,9 +27,9 @@ def fbcorr(imgs, filters, output):
                                 output[ii, ff, rr, cc] += imgval * filterval
 
 def main ():
-    imgs = np.random.randn(10, 64, 64, 3)
+    imgs = np.random.randn(10, 16, 16, 3)
     filt = np.random.randn(6, 5, 5, 3)
-    output = np.zeros((10, 60, 60, 6))
+    output = np.zeros((10, 6, 15, 15))
 
     import time
     t0 = time.time()

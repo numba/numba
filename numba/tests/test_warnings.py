@@ -36,7 +36,7 @@ class TestBuiltins(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', NumbaWarning)
 
-            cfunc = jit(return_external_array)
+            cfunc = jit(_nrt=False)(return_external_array)
             cfunc()
 
             self.assertEqual(len(w), 2)
@@ -47,6 +47,24 @@ class TestBuiltins(unittest.TestCase):
             # Object mode
             self.assertEqual(w[1].category, NumbaWarning)
             self.assertIn('object mode', str(w[1].message))
+
+    def test_return_type_warning_with_nrt(self):
+        """
+        Rerun test_return_type_warning with nrt
+        """
+        y = np.ones(4, dtype=np.float32)
+
+        def return_external_array():
+            return y
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            cfunc = jit(return_external_array)
+            cfunc()
+            # No more warning
+            self.assertEqual(len(w), 0)
+
 
     def test_no_warning_with_forceobj(self):
         def add(x, y):
