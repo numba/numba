@@ -412,11 +412,18 @@ class Pipeline(object):
                                  self.targetctx)
 
     def stage_nopython_rewrites(self):
+        """
+        Perform any intermediate representation rewrites.
+        """
+        # Ensure we have an IR container (interp), and type information.
         assert self.interp
-        assert self.typemap
-        assert self.calltypes
-        rewrites.rewrite_registry.apply(self.interp.blocks, self.typemap,
-                                        self.calltypes)
+        assert isinstance(getattr(self, 'typemap', None), dict)
+        assert isinstance(getattr(self, 'calltypes', None), dict)
+        with self.fallback_context('Internal error in rewriting pass '
+                                   'encountered during compilation of '
+                                   'function "%s"' % (self.func_attr.name,)):
+            rewrites.rewrite_registry.apply(self.interp.blocks, self.typemap,
+                                            self.calltypes)
 
     def stage_annotate_type(self):
         """
