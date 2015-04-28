@@ -1,4 +1,2 @@
-from . import nrt
-
-# initialize
-rtsys = nrt.Runtime()
+from __future__ import absolute_import
+from .nrt import rtsys

@@ -16,6 +16,7 @@ from numba.targets import (
     npyimpl, operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
 from numba.runtime.atomicops import install_atomic_refct
+from numba.runtime import rtsys
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -54,6 +55,9 @@ class CPUContext(BaseContext):
         self.install_registry(randomimpl.registry)
 
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
+
+        # Initialize NRT runtime
+        rtsys.initialize(self)
 
     @property
     def target_data(self):
@@ -167,7 +171,7 @@ class CPUTargetOptions(TargetOptions):
         "looplift": bool,
         "wraparound": bool,
         "boundcheck": bool,
-        "nrt": bool,
+        "_nrt": bool,
     }
 
 

@@ -185,18 +185,8 @@ class Lower(BaseLower):
             self.context.debug_print(self.builder, str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
-            try:
-                # Load original value in variable
-                old = self.loadvar(inst.target.name)
-            except KeyError:
-                # If it has not been defined, don't do anything
-                pass
-            else:
-                # Else, dereference the old value
-                self.decref(ty, old)
             val = self.lower_assign(ty, inst)
             self.storevar(val, inst.target.name)
-            self.incref(ty, val)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -605,8 +595,6 @@ class Lower(BaseLower):
         elif expr.op == "build_tuple":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
-            for ty, val in zip(itemtys, itemvals):
-                self.incref(ty, val)
             castvals = [self.context.cast(self.builder, val, fromty, toty)
                         for val, toty, fromty in zip(itemvals, resty, itemtys)]
             tup = self.context.get_constant_undef(resty)
@@ -630,12 +618,25 @@ class Lower(BaseLower):
         return self.builder.load(ptr)
 
     def storevar(self, value, name):
+        # Clean up existing value stored in the variable
+        try:
+            # Load original value in variable
+            old = self.loadvar(name)
+        except KeyError:
+            # If it has not been defined, don't do anything
+            pass
+        else:
+            # Else, dereference the old value
+            self.decref(self.typeof(name), old)
+        # Store variable
         if name not in self.varmap:
             self.varmap[name] = self.alloca_lltype(name, value.type)
         ptr = self.getvar(name)
         assert value.type == ptr.type.pointee,\
             "store %s to ptr of %s" % (value.type, ptr.type.pointee)
         self.builder.store(value, ptr)
+        # Incref
+        self.incref(self.typeof(name), value)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
@@ -647,13 +648,11 @@ class Lower(BaseLower):
     def incref(self, typ, val):
         if not self.context.enable_nrt:
             return
-        if (isinstance(typ, types.Array) and
-                not isinstance(typ, types.NestedArray)):
-            self.context.array_incref(self.builder, typ, val)
+
+        self.context.nrt_incref(self.builder, typ, val)
 
     def decref(self, typ, val):
         if not self.context.enable_nrt:
             return
-        if (isinstance(typ, types.Array) and
-                not isinstance(typ, types.NestedArray)):
-            self.context.array_decref(self.builder, typ, val)
+
+        self.context.nrt_decref(self.builder, typ, val)

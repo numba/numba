@@ -328,6 +328,9 @@ class NdEmpty(AbstractTemplate):
         dtype = types.double
         if len(args) >= 2:
             npy_dtype = args[1]
+            # numpy APIs allow dtype constructor to be used as `dtype`
+            # arguments.  Since, npy_dtype.template.key dtype or dtype
+            # ctor, we use numpy.dtype to force it into a dtype object.
             dtype = from_dtype(numpy.dtype(npy_dtype.template.key))
 
         if isinstance(shape, types.Integer):

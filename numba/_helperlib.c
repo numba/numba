@@ -1173,6 +1173,7 @@ Numba_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
     for (i = 0; i < buf->ndim; i++, p++) {
         *p = buf->strides[i];
     }
+    arystruct->meminfo = NULL;
 }
 
 static void

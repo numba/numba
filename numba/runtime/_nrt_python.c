@@ -26,22 +26,30 @@ memsys_shutdown(PyObject *self, PyObject *args) {
 static
 PyObject*
 memsys_set_atomic_inc_dec(PyObject *self, PyObject *args) {
-    unsigned PY_LONG_LONG addr_inc, addr_dec;
-    if (!PyArg_ParseTuple(args, "KK", &addr_inc, &addr_dec)) {
+    PyObject *addr_inc_obj, *addr_dec_obj;
+    void *addr_inc, *addr_dec;
+    if (!PyArg_ParseTuple(args, "OO", &addr_inc_obj, &addr_dec_obj)) {
         return NULL;
     }
-    NRT_MemSys_set_atomic_inc_dec((void*)addr_inc, (void*)addr_dec);
+    addr_inc = PyLong_AsVoidPtr(addr_inc_obj);
+    if(PyErr_Occurred()) return NULL;
+    addr_dec = PyLong_AsVoidPtr(addr_dec_obj);
+    if(PyErr_Occurred()) return NULL;
+    NRT_MemSys_set_atomic_inc_dec(addr_inc, addr_dec);
     Py_RETURN_NONE;
 }
 
 static
 PyObject*
 memsys_set_atomic_cas(PyObject *self, PyObject *args) {
-    unsigned PY_LONG_LONG addr_cas;
-    if (!PyArg_ParseTuple(args, "K", &addr_cas)) {
+    PyObject *addr_cas_obj;
+    void *addr_cas;
+    if (!PyArg_ParseTuple(args, "O", &addr_cas_obj)) {
         return NULL;
     }
-    NRT_MemSys_set_atomic_cas((void*)addr_cas);
+    addr_cas = PyLong_AsVoidPtr(addr_cas_obj);
+    if(PyErr_Occurred()) return NULL;
+    NRT_MemSys_set_atomic_cas(addr_cas);
     Py_RETURN_NONE;
 }
 
@@ -81,13 +89,16 @@ MemInfo* meminfo_new_from_pyobject(void *data, PyObject *ownerobj) {
 static
 PyObject*
 meminfo_new(PyObject *self, PyObject *args) {
-    unsigned PY_LONG_LONG addr_data;
-    PyObject* ownerobj;
+    PyObject *addr_data_obj;
+    void *addr_data;
+    PyObject *ownerobj;
     MemInfo *mi;
-    if (!PyArg_ParseTuple(args, "KO", &addr_data, &ownerobj)) {
+    if (!PyArg_ParseTuple(args, "OO", &addr_data_obj, &ownerobj)) {
         return NULL;
     }
-    mi = meminfo_new_from_pyobject((void*)addr_data, ownerobj);
+    addr_data = PyLong_AsVoidPtr(addr_data_obj);
+    if(PyErr_Occurred()) return NULL;
+    mi = meminfo_new_from_pyobject(addr_data, ownerobj);
     return PyLong_FromVoidPtr(mi);
 }
 
@@ -99,7 +110,7 @@ PyObject*
 meminfo_alloc(PyObject *self, PyObject *args) {
     MemInfo *mi;
     Py_ssize_t size;
-    if (!PyArg_ParseTuple(args, "K", &size)) {
+    if (!PyArg_ParseTuple(args, "n", &size)) {
         return NULL;
     }
     mi = NRT_MemInfo_alloc(size);
@@ -115,7 +126,7 @@ PyObject*
 meminfo_alloc_safe(PyObject *self, PyObject *args) {
     MemInfo *mi;
     Py_ssize_t size;
-    if (!PyArg_ParseTuple(args, "K", &size)) {
+    if (!PyArg_ParseTuple(args, "n", &size)) {
         return NULL;
     }
     mi = NRT_MemInfo_alloc_safe(size);
@@ -131,10 +142,13 @@ typedef struct {
 static
 int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
     static char *keywords[] = {"ptr", NULL};
-    unsigned PY_LONG_LONG raw_ptr;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "K", keywords, &raw_ptr)) {
+    PyObject *raw_ptr_obj;
+    void *raw_ptr;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords, &raw_ptr_obj)) {
         return -1;
     }
+    raw_ptr = PyLong_AsVoidPtr(raw_ptr_obj);
+    if(PyErr_Occurred()) return -1;
     self->meminfo = (MemInfo*)raw_ptr;
     self->defer = 0;
     NRT_MemInfo_acquire(self->meminfo);
@@ -200,32 +214,20 @@ MemInfo_release(MemInfoObject *self) {
 }
 
 static
-PyObject*
-MemInfo_release_defer(MemInfoObject *self) {
-    NRT_MemInfo_release(self->meminfo, 1);
-    Py_RETURN_NONE;
-}
-
-static
-PyObject*
-MemInfo_set_defer(MemInfoObject *self, PyObject *args) {
-    PyObject *should_defer;
-    int defer;
-    if (!PyArg_ParseTuple(args, "O", &should_defer)) {
-        return NULL;
-    }
-    defer = PyObject_IsTrue(should_defer);
+int
+MemInfo_set_defer(MemInfoObject *self, PyObject *value, void *closure) {
+    int defer = PyObject_IsTrue(value);
     if (defer == -1) {
-        return NULL;
+        return -1;
     }
     self->defer = defer;
-    Py_RETURN_NONE;
+    return 0;
 }
 
 
 static
 PyObject*
-MemInfo_get_defer(MemInfoObject *self) {
+MemInfo_get_defer(MemInfoObject *self, void *closure) {
     if (self->defer) {
         Py_RETURN_TRUE;
     } else {
@@ -236,7 +238,7 @@ MemInfo_get_defer(MemInfoObject *self) {
 
 static
 PyObject*
-MemInfo_get_data(MemInfoObject *self) {
+MemInfo_get_data(MemInfoObject *self, void *closure) {
     return PyLong_FromVoidPtr(NRT_MemInfo_data(self->meminfo));
 }
 
@@ -254,22 +256,21 @@ static PyMethodDef MemInfo_methods[] = {
     {"release", (PyCFunction)MemInfo_release, METH_NOARGS,
      "Decrement the reference count"
     },
-    {"release_defer", (PyCFunction)MemInfo_release_defer, METH_NOARGS,
-     "Decrement the reference count but defer the destructor regardless"
-     "of the value in defer attribute"
-    },
-    {"set_defer", (PyCFunction)MemInfo_set_defer, METH_VARARGS,
-     "Set the defer attribute"
-    },
-    {"get_defer", (PyCFunction)MemInfo_get_defer, METH_NOARGS,
-     "Get the defer attribute"
-    },
-    {"get_data", (PyCFunction)MemInfo_get_data, METH_NOARGS,
-     "Get the data pointer as an integer"
-    },
     {NULL}  /* Sentinel */
 };
 
+
+static PyGetSetDef MemInfo_getsets[] = {
+    {"defer",
+     (getter)MemInfo_get_defer, (setter)MemInfo_set_defer,
+     "Boolean flag for the defer attribute",
+     NULL},
+    {"data",
+     (getter)MemInfo_get_data, NULL,
+     "Get the data pointer as an integer",
+     NULL},
+    {NULL}  /* Sentinel */
+};
 
 
 static PyTypeObject MemInfoType = {
@@ -307,7 +308,7 @@ static PyTypeObject MemInfoType = {
     0,                                        /* tp_iternext */
     MemInfo_methods,                          /* tp_methods */
     0,                                        /* tp_members */
-    0,                                        /* tp_getset */
+    MemInfo_getsets,                          /* tp_getset */
     0,                                        /* tp_base */
     0,                                        /* tp_dict */
     0,                                        /* tp_descr_get */
@@ -323,7 +324,7 @@ static PyTypeObject MemInfoType = {
 
 
 static
-int NRT_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
+int NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
     PyArrayObject *ndary;
     int i, ndim;
     npy_intp *p;
@@ -350,7 +351,8 @@ int NRT_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
         *p = PyArray_STRIDE(ndary, i);
     }
 
-    NRT_Debug(nrt_debug_print("NRT_adapt_ndarray %p\n", arystruct->meminfo));
+    NRT_Debug(nrt_debug_print("NRT_adapt_ndarray_from_python %p\n",
+                              arystruct->meminfo));
 
     NRT_MemInfo_acquire(arystruct->meminfo);
     return 0;
@@ -392,8 +394,8 @@ RETURN_ARRAY_COPY:
 }
 
 static
-PyObject* NRT_adapt_native_array(arystruct_t* arystruct, int ndim,
-                                 int type_num) {
+PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
+                                      int type_num) {
     PyObject *array;
     MemInfoObject *miobj = NULL;
     PyObject *args;
@@ -431,12 +433,16 @@ PyObject* NRT_adapt_native_array(arystruct_t* arystruct, int ndim,
 }
 
 static void
-NRT_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
+NRT_adapt_buffer_from_python(Py_buffer *buf, arystruct_t *arystruct)
 {
     int i;
     npy_intp *p;
 
-    arystruct->meminfo = NULL; /* meminfo_new_from_pyobject((void*)buf->buf, buf->obj); */
+    if (buf->obj) {
+        /* Allocate new MemInfo only if the buffer has a parent */
+        arystruct->meminfo = meminfo_new_from_pyobject((void*)buf->buf, buf->obj);
+        NRT_MemInfo_acquire(arystruct->meminfo);
+    }
     arystruct->data = buf->buf;
     arystruct->itemsize = buf->itemsize;
     arystruct->parent = buf->obj;
@@ -450,7 +456,7 @@ NRT_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
         *p = buf->strides[i];
     }
 
-    /* NRT_MemInfo_acquire(arystruct->meminfo); */
+
 }
 
 static void
@@ -501,9 +507,9 @@ build_c_helpers_dict(void)
 
 #define declmethod(func) _declpointer(#func, &NRT_##func)
 
-declmethod(adapt_ndarray);
-declmethod(adapt_native_array);
-declmethod(adapt_buffer);
+declmethod(adapt_ndarray_from_python);
+declmethod(adapt_ndarray_to_python);
+declmethod(adapt_buffer_from_python);
 declmethod(incref);
 declmethod(decref);
 declmethod(MemInfo_data);

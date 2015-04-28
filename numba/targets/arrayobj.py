@@ -1264,11 +1264,9 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
 
 @builtin
 @implement(numpy.empty, types.Kind(types.Integer))
-@implement(numpy.empty, types.Kind(types.Tuple))
-@implement(numpy.empty, types.Kind(types.UniTuple))
+@implement(numpy.empty, types.Kind(types.BaseTuple))
 @implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
-@implement(numpy.empty, types.Kind(types.Tuple), types.Kind(types.Function))
-@implement(numpy.empty, types.Kind(types.UniTuple), types.Kind(types.Function))
+@implement(numpy.empty, types.Kind(types.BaseTuple), types.Kind(types.Function))
 def numpy_empty_nd(context, builder, sig, args):
     arrshapetype = sig.args[0]
     arrshape = args[0]

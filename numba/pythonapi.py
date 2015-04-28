@@ -914,7 +914,8 @@ class PythonAPI(object):
 
             def cleanup_array():
                 val = self.builder.load(val_on_stack)
-                self.context.array_decref(self.builder, typ, val)
+                if self.context.enable_nrt:
+                    self.context.nrt_decref(self.builder, typ, val)
 
             return NativeValue(val, is_error=failed,
                                cleanup=cleanup_array)
@@ -954,7 +955,10 @@ class PythonAPI(object):
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
     def from_native_return(self, val, typ):
-        return self.from_native_value(val, typ)
+        out = self.from_native_value(val, typ)
+        if self.context.enable_nrt:
+            self.context.nrt_decref(self.builder, typ, val)
+        return out
 
     def from_native_value(self, val, typ):
         if typ == types.pyobject:
@@ -1055,7 +1059,10 @@ class PythonAPI(object):
 
         with cgutils.if_likely(self.builder, self.builder.not_(is_error)):
             ptr = self.builder.bitcast(aryptr, self.voidptr)
-            self.numba_buffer_adaptor(buf, ptr)
+            if self.context.enable_nrt:
+                self.nrt_adapt_buffer_from_python(buf, ptr)
+            else:
+                self.numba_buffer_adaptor(buf, ptr)
 
         def cleanup():
             self.release_buffer(buf)
@@ -1072,7 +1079,7 @@ class PythonAPI(object):
         aryptr = nativeary._getpointer()
         ptr = self.builder.bitcast(aryptr, self.voidptr)
         if self.context.enable_nrt:
-            errcode = self.nrt_array_adaptor(ary, ptr)
+            errcode = self.nrt_adapt_ndarray_from_python(ary, ptr)
         else:
             errcode = self.numba_array_adaptor(ary, ptr)
         failed = cgutils.is_not_null(self.builder, errcode)
@@ -1083,8 +1090,7 @@ class PythonAPI(object):
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, builder, value=ary)
         if self.context.enable_nrt:
-            newary = self.nrt_adapt_native_array(typ, ary)
-            self.context.nrt_decref(builder, nativeary.meminfo)
+            newary = self.nrt_adapt_ndarray_to_python(typ, ary)
             return newary
         else:
             parent = nativeary.parent
@@ -1217,6 +1223,40 @@ class PythonAPI(object):
         return self.builder.call(fn,
                                  (state_size, initial_state, genfn, finalizer, env))
 
+    def nrt_adapt_ndarray_to_python(self, aryty, ary):
+        if not self.context.enable_nrt:
+            raise Exception("Require NRT")
+        intty = ir.IntType(32)
+        fnty = Type.function(self.pyobj, [self.voidptr, intty, intty])
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        dtype = numpy_support.as_dtype(aryty.dtype)
+
+        ndim = self.context.get_constant(types.int32, aryty.ndim)
+        typenum = self.context.get_constant(types.int32, dtype.num)
+
+        aryptr = cgutils.alloca_once_value(self.builder, ary)
+        return self.builder.call(fn, [self.builder.bitcast(aryptr,
+                                                           self.voidptr),
+                                      ndim, typenum])
+
+    def nrt_adapt_ndarray_from_python(self, ary, ptr):
+        assert self.context.enable_nrt
+        fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_from_python")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        return self.builder.call(fn, (ary, ptr))
+
+    def nrt_adapt_buffer_from_python(self, ary, ptr):
+        assert self.context.enable_nrt
+        fnty = Type.function(Type.void(), [Type.pointer(self.py_buffer_t),
+                                           self.voidptr])
+        fn = self._get_function(fnty, name="NRT_adapt_buffer_from_python")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        return self.builder.call(fn, (ary, ptr))
+
     def from_native_charseq(self, val, typ):
         builder = self.builder
         rawptr = cgutils.alloca_once_value(builder, value=val)
@@ -1249,31 +1289,6 @@ class PythonAPI(object):
         builder.position_at_end(bbend)
         strlen = builder.load(count)
         return self.bytes_from_string_and_size(strptr, strlen)
-
-    def nrt_adapt_native_array(self, aryty, ary):
-        if not self.context.enable_nrt:
-            raise Exception("Require NRT")
-        intty = ir.IntType(32)
-        fnty = Type.function(self.pyobj, [self.voidptr, intty, intty])
-        fn = self._get_function(fnty, name="NRT_adapt_native_array")
-        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
-        dtype = numpy_support.as_dtype(aryty.dtype)
-
-        ndim = self.context.get_constant(types.int32, aryty.ndim)
-        typenum = self.context.get_constant(types.int32, dtype.num)
-
-        aryptr = cgutils.alloca_once_value(self.builder, ary)
-        return self.builder.call(fn, [self.builder.bitcast(aryptr,
-                                                           self.voidptr),
-                                      ndim, typenum])
-
-    def nrt_array_adaptor(self, ary, ptr):
-        assert self.context.enable_nrt
-        fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
-        fn = self._get_function(fnty, name="NRT_adapt_ndarray")
-        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
-        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
-        return self.builder.call(fn, (ary, ptr))
 
     def numba_array_adaptor(self, ary, ptr):
         assert not self.context.enable_nrt
