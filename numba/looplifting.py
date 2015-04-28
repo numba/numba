@@ -170,7 +170,7 @@ def insert_loop_call(bytecode, loop, args, outer, outerlabels, returns,
             insertpt = insertpt.next()
     else:
         # No return value
-        poptop = ByteCodeInst.get(outer[-1].next, "POP_TOP", None)
+        poptop = ByteCodeInst.get(insertpt, "POP_TOP", None)
         poptop.lineno = loop[0].lineno
         insert_instruction(outer, poptop)
         insertpt = insertpt.next()
