@@ -160,6 +160,7 @@ class BaseContext(object):
         self.defns = defaultdict(Overloads)
         self.attrs = defaultdict(Overloads)
         self.generators = {}
+        self.special_ops = {}
 
         self.install_registry(builtin_registry)
 

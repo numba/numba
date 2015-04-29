@@ -4,6 +4,7 @@ from . import ir, types
 
 # Imports specific to a concrete rewrite (maybe move?):
 from .typing import npydecl
+from .targets import npyimpl
 
 
 class Rewrite(object):
@@ -23,15 +24,16 @@ class RewriteRegistry(object):
         self.rewrites.append(rewrite_cls)
         return rewrite_cls
 
-    def apply(self, blocks, typemap, calltypes):
+    def apply(self, pipeline, blocks):
         old_blocks = blocks.copy()
         for rewrite_cls in self.rewrites:
             # Exhaustively apply a rewrite until it stops matching.
-            rewrite = rewrite_cls()
+            rewrite = rewrite_cls(pipeline)
             work_list = list(blocks.items())
             while work_list:
                 key, block = work_list.pop()
-                matches = rewrite.match(block, typemap, calltypes)
+                matches = rewrite.match(block, pipeline.typemap,
+                                        pipeline.calltypes)
                 if matches:
                     new_block = rewrite.apply()
                     blocks[key] = new_block
@@ -50,6 +52,13 @@ register_rewrite = rewrite_registry.register
 class RewriteArrayExprs(Rewrite):
     _operators = set(npydecl.NumpyRulesArrayOperator._op_map.keys()).union(
         npydecl.NumpyRulesUnaryArrayOperator._op_map.keys())
+
+    def __init__(self, pipeline, *args, **kws):
+        super(RewriteArrayExprs, self).__init__(*args, **kws)
+        # Install a lowering hook if we are using this rewrite.
+        special_ops = pipeline.targetctx.special_ops
+        if 'arrayexpr' not in special_ops:
+            special_ops['arrayexpr'] = npyimpl.lower_array_expr
 
     def match(self, block, typemap, calltypes):
         matches = []

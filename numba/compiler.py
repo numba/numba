@@ -422,8 +422,7 @@ class Pipeline(object):
         with self.fallback_context('Internal error in rewriting pass '
                                    'encountered during compilation of '
                                    'function "%s"' % (self.func_attr.name,)):
-            rewrites.rewrite_registry.apply(self.interp.blocks, self.typemap,
-                                            self.calltypes)
+            rewrites.rewrite_registry.apply(self, self.interp.blocks)
 
     def stage_annotate_type(self):
         """
