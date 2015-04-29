@@ -512,10 +512,3 @@ for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
 
 
 del _kernels
-
-
-################################################################################
-# Lowering support for array expressions
-
-def lower_array_expr(context, builder, expr):
-    raise NotImplementedError("Development frontier.")

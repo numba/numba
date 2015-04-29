@@ -638,7 +638,7 @@ class Lower(BaseLower):
             return castval
 
         elif expr.op in self.context.special_ops:
-            return self.context.special_ops[expr.op](self, self.builder, expr)
+            return self.context.special_ops[expr.op](self, expr)
 
         raise NotImplementedError(expr)
 
