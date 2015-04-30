@@ -712,6 +712,9 @@ class BaseContext(object):
             assert toty.layout == 'A'
             return val
 
+        elif fromty in types.integer_domain and toty == types.voidptr:
+            return builder.inttoptr(val, self.get_value_type(toty))
+
         raise NotImplementedError("cast", val, fromty, toty)
 
     def make_optional(self, optionaltype):
