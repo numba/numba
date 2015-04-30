@@ -873,6 +873,12 @@ class BaseContext(object):
             fndesc = cres.fndesc
             self.cached_internal_func[cache_key] = fndesc
 
+        return self.call_internal(builder, fndesc, sig, args)
+
+    def call_internal(self, builder, fndesc, sig, args):
+        """Given the function descriptor of an internally compiled function,
+        emit a call to that function with the given arguments.
+        """
         # Add call to the generated function
         llvm_mod = cgutils.get_module(builder)
         fn = self.declare_function(llvm_mod, fndesc)
