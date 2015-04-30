@@ -25,8 +25,8 @@ platform:
 
 # The engine are the initial conda packages you want to run with
 engine:
- - python=2.6 argparse unittest2
- #- python=2.7
+ - python=2.6 argparse funcsigs unittest2
+ #- python=2.7 funcsigs
  #- python=3.3
  - python=3.4
 
