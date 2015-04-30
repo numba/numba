@@ -34,6 +34,7 @@ class Flags(utils.ConfigOptions):
         'forceinline',
         'no_cpython_wrapper',
         'nrt',
+        'no_rewrites',
     ])
 
 
@@ -555,7 +556,8 @@ class Pipeline(object):
             pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
-            pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
+            if not self.flags.no_rewrites:
+                pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
 
         if self.status.can_fallback or self.flags.force_pyobject:
