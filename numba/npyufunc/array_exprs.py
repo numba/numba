@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import ast
 
-from .. import ir, types, rewrites
+from .. import ir, types, rewrites, six, config
 from ..typing import npydecl
 from ..targets import npyimpl
 
@@ -61,6 +61,11 @@ class RewriteArrayExprs(rewrites.Rewrite):
         '''When we've found array expressions in a basic block, rewrite that
         block, returning a new, transformed block.
         '''
+        if config.DUMP_IR:
+            print("_" * 70)
+            print("REWRITING:")
+            self.crnt_block.dump()
+            print("_" * 60)
         # Part 1: Iterate over the matches, trying to find which
         # instructions should be rewritten.
         replace_map = {}
@@ -126,6 +131,9 @@ class RewriteArrayExprs(rewrites.Rewrite):
         if delete_map:
             for instr in delete_map.values():
                 result.insert_before_terminator(instr)
+        if config.DUMP_IR:
+            result.dump()
+            print("_" * 70)
         return result
 
 
@@ -180,18 +188,25 @@ def _lower_array_expr(lowerer, expr):
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
     expr_args = expr.list_vars()
     expr_arg_names = [arg.name for arg in expr_args]
-    ast_args = ast.arguments([ast.arg(arg.name, None)
-                              for arg in expr_args],
-                             None, [], [], None, [])
     ast_expr = _arr_expr_to_ast(expr.expr)
-    ast_module = ast.fix_missing_locations(
-        ast.Module([
-            ast.FunctionDef(expr_name, ast_args, [
-                ast.Return(ast_expr)
-            ], [], None)
-    ]))
+    ast_stmt = ast.Return(ast_expr)
+    if hasattr(ast, "arg"):
+        # Should be Python 3.x
+        ast_args = ast.arguments([ast.arg(arg_name, None)
+                                  for arg_name in expr_arg_names],
+                                 None, [], [], None, [])
+        ast_fn = ast.FunctionDef(expr_name, ast_args, [ast_stmt], [], None)
+    else:
+        # Should be Python 2.x
+        ast_args = ast.arguments([ast.Name(arg_name, ast.Param())
+                                  for arg_name in expr_arg_names],
+                                 None, None, [])
+        ast_fn = ast.FunctionDef(expr_name, ast_args, [ast_stmt], [])
+    ast_module = ast.Module([ast_fn])
+    ast.fix_missing_locations(ast_module)
     namespace = {}
-    exec(compile(ast_module, expr_args[0].loc.filename, 'exec'), namespace)
+    code_obj = compile(ast_module, expr_args[0].loc.filename, 'exec')
+    six.exec_(code_obj, namespace)
     impl = namespace[expr_name]
 
     context = lowerer.context
