@@ -805,7 +805,7 @@ def array_ctypes(context, builder, typ, value):
 
 @builtin_attr
 @impl_attribute(types.Kind(types.ArrayCTypes), "data", types.uintp)
-def array_ctypes(context, builder, typ, value):
+def array_ctypes_data(context, builder, typ, value):
     ctinfo_type = cgutils.create_struct_proxy(typ)
     ctinfo = ctinfo_type(context, builder, value=value)
     return ctinfo.data

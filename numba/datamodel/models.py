@@ -773,15 +773,13 @@ class GeneratorModel(CompositeModel):
     def from_return(self, builder, value):
         return value
 
+
 @register_default(types.ArrayCTypes)
 class ArrayCTypesModel(StructModel):
     def __init__(self, dmm, fe_type):
-        ndim = fe_type.ndim
-        members = [('data', types.uintp),
-                   ]
+        # ndim = fe_type.ndim
+        members = [('data', types.uintp)]
         super(ArrayCTypesModel, self).__init__(dmm, fe_type, members)
-
-
 
 
 # =============================================================================
