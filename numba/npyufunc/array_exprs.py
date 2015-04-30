@@ -3,14 +3,22 @@ import ast
 
 from .. import ir, types, rewrites
 from ..typing import npydecl
+from ..targets import npyimpl
 
 
 @rewrites.register_rewrite
 class RewriteArrayExprs(rewrites.Rewrite):
+    '''The RewriteArrayExprs class is responsible for finding array
+    expressions in Numba intermediate representation code, and
+    rewriting those expressions to a single operation that will expand
+    into something similar to a ufunc call.
+    '''
     _operators = set(npydecl.NumpyRulesArrayOperator._op_map.keys()).union(
         npydecl.NumpyRulesUnaryArrayOperator._op_map.keys())
 
     def __init__(self, pipeline, *args, **kws):
+        # At time of codeing, there shouldn't be anything in args or
+        # kws, but they are there for possible forward compatibility.
         super(RewriteArrayExprs, self).__init__(*args, **kws)
         # Install a lowering hook if we are using this rewrite.
         special_ops = pipeline.targetctx.special_ops
@@ -18,6 +26,10 @@ class RewriteArrayExprs(rewrites.Rewrite):
             special_ops['arrayexpr'] = _lower_array_expr
 
     def match(self, block, typemap, calltypes):
+        '''Using typing and a basic block, search the basic block for array
+        expressions.  Returns True when one or more matches were
+        found, False otherwise.
+        '''
         matches = []
         # We can trivially reject everything if there are fewer than 2
         # calls in the type results since we'll only rewrite when
@@ -46,6 +58,11 @@ class RewriteArrayExprs(rewrites.Rewrite):
         return len(matches) > 0
 
     def apply(self):
+        '''When we've found array expressions in a basic block, rewrite that
+        block, returning a new, transformed block.
+        '''
+        # Part 1: Iterate over the matches, trying to find which
+        # instructions should be rewritten.
         replace_map = {}
         dead_vars = set()
         used_vars = set()
@@ -78,6 +95,8 @@ class RewriteArrayExprs(rewrites.Rewrite):
                 else:
                     used_vars.add(operand.name)
                     arr_inps.append(operand)
+        # Part 2: Using the information above, rewrite the target
+        # basic block.
         result = ir.Block(self.crnt_block.scope, self.crnt_block.loc)
         delete_map = {}
         for instr in self.crnt_block.body:
@@ -134,6 +153,9 @@ _binops = {
 
 
 def _arr_expr_to_ast(expr):
+    '''Build a Python expression AST from an array expression built by
+    RewriteArrayExprs.
+    '''
     if isinstance(expr, tuple):
         op, args = expr
         if op in RewriteArrayExprs._operators:
@@ -153,6 +175,8 @@ def _arr_expr_to_ast(expr):
 
 
 def _lower_array_expr(lowerer, expr):
+    '''Lower an array expression built by RewriteArrayExprs.
+    '''
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
     expr_args = expr.list_vars()
     expr_arg_names = [arg.name for arg in expr_args]
@@ -169,10 +193,30 @@ def _lower_array_expr(lowerer, expr):
     namespace = {}
     exec(compile(ast_module, expr_args[0].loc.filename, 'exec'), namespace)
     impl = namespace[expr_name]
-    cgctx = lowerer.context
+
+    context = lowerer.context
     builder = lowerer.builder
-    sig = expr.ty.dtype(*(lowerer.typeof(name).dtype
-                          for name in expr_arg_names))
+    outer_sig = expr.ty(*(lowerer.typeof(name) for name in expr_arg_names))
+    inner_sig_args = []
+    for argty in outer_sig.args:
+        if isinstance(argty, types.Array):
+            inner_sig_args.append(argty.dtype)
+        else:
+            inner_sig_args.append(argty)
+    inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
+
+    cres = context.compile_only_no_cache(builder, impl, inner_sig)
+
+    class ExprKernel(npyimpl._Kernel):
+        def generate(self, *args):
+            arg_zip = zip(args, self.outer_sig.args, inner_sig.args)
+            cast_args = [self.cast(val, inty, outty)
+                         for val, inty, outty in arg_zip]
+            result = self.context.call_internal(
+                builder, cres.fndesc, inner_sig, cast_args)
+            return self.cast(result, inner_sig.return_type,
+                             self.outer_sig.return_type)
+
     args = [lowerer.loadvar(name) for name in expr_arg_names]
-    cres = cgctx.compile_only_no_cache(builder, impl, sig)
-    raise NotImplementedError("Development frontier.")
+    return npyimpl.numpy_ufunc_kernel(
+        context, builder, outer_sig, args, ExprKernel, explicit_output=False)
