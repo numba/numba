@@ -2,6 +2,8 @@ from __future__ import print_function, absolute_import, division
 
 from ctypes import *
 import sys
+import threading
+import numpy
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
@@ -140,6 +142,68 @@ class TestCTypes(unittest.TestCase):
             compile_isolated(use_c_untyped, [types.double])
         self.assertIn("ctypes function 'exp' doesn't define its argument types",
                       str(raises.exception))
+
+    def test_python_call_back(self):
+        mydct = {'what': 1232121}
+
+        def call_me_maybe(arr):
+            return mydct[arr[0].decode('ascii')]
+
+        # Create a callback into the python interpreter
+        py_call_back = CFUNCTYPE(c_int, py_object)(call_me_maybe)
+
+        def pyfunc(a):
+            what = py_call_back(a)
+            return what
+
+        cfunc = jit(nopython=True, nogil=True)(pyfunc)
+        arr = numpy.array(["what"], dtype='S10')
+        self.assertEqual(pyfunc(arr), cfunc(arr))
+
+    def test_python_call_back_threaded(self):
+        mydct = {'what': 1232121}
+
+        def call_me_maybe(arr):
+            return mydct[arr[0].decode('ascii')]
+
+        # Create a callback into the python interpreter
+        py_call_back = CFUNCTYPE(c_int, py_object)(call_me_maybe)
+
+        def pyfunc(a, repeat):
+            out = 0
+            for _ in range(repeat):
+                out += py_call_back(a)
+            return out
+
+        cfunc = jit(nopython=True, nogil=True)(pyfunc)
+
+        arr = numpy.array(["what"], dtype='S10')
+        repeat = 1000
+
+        expected = pyfunc(arr, repeat)
+        outputs = []
+
+        # Test the function in multiple threads to exercise the
+        # GIL ensure/release code
+
+        def run(func, arr, repeat):
+            outputs.append(func(arr, repeat))
+
+        threads = [threading.Thread(target=run, args=(cfunc, arr, repeat))
+                   for _ in range(10)]
+
+        # Start threads
+        for th in threads:
+            th.start()
+
+        # End threads
+        for th in threads:
+            th.join()
+
+        # Check results
+        for got in outputs:
+            self.assertEqual(expected, got)
+
 
 
 if __name__ == '__main__':

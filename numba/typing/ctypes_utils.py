@@ -27,6 +27,7 @@ CTYPES_MAP = {
     ctypes.c_double: types.float64,
 
     ctypes.c_void_p: types.voidptr,
+    ctypes.py_object: types.ffi_forced_object,
 }
 
 

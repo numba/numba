@@ -394,13 +394,32 @@ class ExternalFunctionPointer(Function):
     *get_pointer* is a Python function taking an object
     and returning the raw pointer value as an int.
     """
-
     def __init__(self, sig, get_pointer, cconv=None):
-        from . import typing
+        from .typing.templates import (AbstractTemplate, make_concrete_template,
+                                       signature)
+        if sig.return_type == ffi_forced_object:
+            raise TypeError("Cannot return a pyobject from a external function")
         self.sig = sig
+        self.requires_gil = any(a == ffi_forced_object for a in self.sig.args)
         self.get_pointer = get_pointer
         self.cconv = cconv
-        template = typing.make_concrete_template("CFuncPtr", sig, [sig])
+        if self.requires_gil:
+            class GilRequiringDefn(AbstractTemplate):
+                key = self.sig
+
+                def generic(self, args, kws):
+                    if kws:
+                        raise TypeError("does not support keyword arguments")
+                    # Make ffi_forced_object a bottom type to allow any type to be
+                    # casted to it. This is the only place that support
+                    # ffi_forced_object.
+                    coerced = [actual if formal == ffi_forced_object else formal
+                               for actual, formal
+                               in zip(args, self.key.args)]
+                    return signature(self.key.return_type, *coerced)
+            template = GilRequiringDefn
+        else:
+            template = make_concrete_template("CFuncPtr", sig, [sig])
         super(ExternalFunctionPointer, self).__init__(template)
 
     @property
@@ -1084,6 +1103,7 @@ def is_int_tuple(x):
 
 
 pyobject = Opaque('pyobject')
+ffi_forced_object = Opaque('ffi_forced_object')
 none = NoneType('none')
 Any = Phantom('any')
 string = Dummy('str')
@@ -1259,4 +1279,5 @@ f8
 c8
 c16
 optional
+ffi_forced_object
 '''.split()
