@@ -188,21 +188,22 @@ def _lower_array_expr(lowerer, expr):
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
     expr_args = expr.list_vars()
     expr_arg_names = [arg.name for arg in expr_args]
-    ast_expr = _arr_expr_to_ast(expr.expr)
-    ast_stmt = ast.Return(ast_expr)
     if hasattr(ast, "arg"):
         # Should be Python 3.x
-        ast_args = ast.arguments([ast.arg(arg_name, None)
-                                  for arg_name in expr_arg_names],
-                                 None, [], [], None, [])
-        ast_fn = ast.FunctionDef(expr_name, ast_args, [ast_stmt], [], None)
+        ast_args = [ast.arg(arg_name, None)
+                    for arg_name in expr_arg_names]
     else:
         # Should be Python 2.x
-        ast_args = ast.arguments([ast.Name(arg_name, ast.Param())
-                                  for arg_name in expr_arg_names],
-                                 None, None, [])
-        ast_fn = ast.FunctionDef(expr_name, ast_args, [ast_stmt], [])
-    ast_module = ast.Module([ast_fn])
+        ast_args = [ast.Name(arg_name, ast.Param())
+                    for arg_name in expr_arg_names]
+    # Parse a stub function to ensure the AST is populated with
+    # reasonable defaults for the Python version.
+    ast_module = ast.parse('def {0}(): return'.format(expr_name),
+                           expr_args[0].loc.filename, 'exec')
+    assert hasattr(ast_module, 'body') and len(ast_module.body) == 1
+    ast_fn = ast_module.body[0]
+    ast_fn.args.args = ast_args
+    ast_fn.body[0].value = _arr_expr_to_ast(expr.expr)
     ast.fix_missing_locations(ast_module)
     namespace = {}
     code_obj = compile(ast_module, expr_args[0].loc.filename, 'exec')
