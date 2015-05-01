@@ -435,8 +435,37 @@ class Lower(BaseLower):
         elif isinstance(fnty, types.ExternalFunctionPointer):
             # Handle a C function pointer
             pointer = self.loadvar(expr.func.name)
-            res = self.context.call_function_pointer(self.builder, pointer,
-                                                     argvals, fnty.cconv)
+            # If the external function pointer uses libpython
+            if fnty.requires_gil:
+                pyapi = self.context.get_python_api(self.builder)
+                # Acquire the GIL
+                gil_state = pyapi.gil_ensure()
+                # Make PyObjects
+                newargvals = []
+                pyvals = []
+                for exptyp, gottyp, aval in zip(fnty.sig.args, signature.args,
+                                                argvals):
+                    # Adjust argument values to pyobjects
+                    if exptyp == types.ffi_forced_object:
+                        obj = pyapi.from_native_value(aval, gottyp)
+                        newargvals.append(obj)
+                        pyvals.append(obj)
+                    else:
+                        newargvals.append(aval)
+
+                # Call external function
+                res = self.context.call_function_pointer(self.builder, pointer,
+                                                         newargvals, fnty.cconv)
+                # Release PyObjects
+                for obj in pyvals:
+                    pyapi.decref(obj)
+
+                # Release the GIL
+                pyapi.gil_release(gil_state)
+            # If the external function pointer does NOT use libpython
+            else:
+                res = self.context.call_function_pointer(self.builder, pointer,
+                                                         argvals, fnty.cconv)
 
         else:
             # Normal function resolution (for Numba-compiled functions)
