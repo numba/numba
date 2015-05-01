@@ -146,6 +146,12 @@ class BaseContext(object):
     implement_powi_as_math_call = False
     implement_pow_as_math_call = False
 
+    # Bound checking
+    enable_boundcheck = False
+
+    # NRT
+    enable_nrt = False
+
     def __init__(self, typing_context):
         _load_global_helpers()
         self.address_size = utils.MACHINE_BITS
@@ -176,6 +182,14 @@ class BaseContext(object):
     @property
     def target_data(self):
         raise NotImplementedError
+
+    def subtarget(self, **kws):
+        obj = copy.copy(self)  # shallow copy
+        for k, v in kws.items():
+            if not hasattr(obj, k):
+                raise NameError("unknown option {0!r}".format(k))
+            setattr(obj, k, v)
+        return obj
 
     def install_registry(self, registry):
         """
@@ -483,6 +497,7 @@ class BaseContext(object):
                         shape=cgutils.pack_array(builder, newshape),
                         strides=cgutils.pack_array(builder, newstrides),
                         itemsize=context.get_constant(types.intp, elemty.size),
+                        meminfo=ary.meminfo,
                         parent=ary.parent
                     )
 
@@ -922,9 +937,19 @@ class BaseContext(object):
 
         # Create array structure
         cary = self.make_array(typ)(self, builder)
-        cary.data = builder.bitcast(data, cary.data.type)
-        cary.shape = cshape
-        cary.strides = cstrides
+
+        rt_addr = self.get_constant(types.uintp, id(ary)).inttoptr(
+            self.get_value_type(types.pyobject))
+
+        intp_itemsize = self.get_constant(types.intp, ary.dtype.itemsize)
+        self.populate_array(cary,
+                            data=builder.bitcast(data, cary.data.type),
+                            shape=cshape,
+                            strides=cstrides,
+                            itemsize=intp_itemsize,
+                            parent=rt_addr,
+                            meminfo=None)
+
         return cary._getvalue()
 
     def get_abi_sizeof(self, ty):
@@ -952,6 +977,60 @@ class BaseContext(object):
         """Create a LLVM module
         """
         return lc.Module.new(name)
+
+    def nrt_meminfo_alloc(self, builder, size):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = cgutils.get_module(builder)
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+            [self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
+        return builder.call(fn, [size])
+
+    def nrt_meminfo_data(self, builder, meminfo):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = cgutils.get_module(builder)
+        voidptr = llvmir.IntType(8).as_pointer()
+        fnty = llvmir.FunctionType(voidptr, [voidptr])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
+        return builder.call(fn, [meminfo])
+
+    def get_nrt_meminfo(self, builder, typ, value):
+        return self.data_model_manager[typ].get_nrt_meminfo(builder, value)
+
+    def nrt_incref(self, builder, typ, value):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+
+        members = self.data_model_manager[typ].traverse(builder, value)
+        for mt, mv in members:
+            self.nrt_incref(builder, mt, mv)
+
+        meminfo = self.get_nrt_meminfo(builder, typ, value)
+        if meminfo:
+            mod = cgutils.get_module(builder)
+            fnty = llvmir.FunctionType(llvmir.VoidType(),
+                [llvmir.IntType(8).as_pointer()])
+            fn = mod.get_or_insert_function(fnty, name="NRT_incref")
+
+            builder.call(fn, [meminfo])
+
+    def nrt_decref(self, builder, typ, value):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+
+        members = self.data_model_manager[typ].traverse(builder, value)
+        for mt, mv in members:
+            self.nrt_decref(builder, mt, mv)
+
+        meminfo = self.get_nrt_meminfo(builder, typ, value)
+        if meminfo:
+            mod = cgutils.get_module(builder)
+            fnty = llvmir.FunctionType(llvmir.VoidType(),
+                [llvmir.IntType(8).as_pointer()])
+            fn = mod.get_or_insert_function(fnty, name="NRT_decref")
+            builder.call(fn, [meminfo])
 
 
 class _wrap_impl(object):

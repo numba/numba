@@ -29,7 +29,8 @@ def make_array(array_type):
     return cgutils.create_struct_proxy(array_type)
 
 
-def populate_array(array, data, shape, strides, itemsize, parent=None):
+def populate_array(array, data, shape, strides, itemsize, meminfo,
+                   parent=None):
     """
     Helper function for populating array structures.
     This avoids forgetting to set fields.
@@ -39,10 +40,15 @@ def populate_array(array, data, shape, strides, itemsize, parent=None):
     datamodel = array._datamodel
     required_fields = set(datamodel._fields)
 
+    if meminfo is None:
+        meminfo = Constant.null(context.get_value_type(
+            datamodel.get_type('meminfo')))
+
     attrs = dict(shape=shape,
                  strides=strides,
                  data=data,
-                 itemsize=itemsize)
+                 itemsize=itemsize,
+                 meminfo=meminfo,)
 
     # Set `parent` attribute
     if parent is None:
@@ -72,32 +78,6 @@ def populate_array(array, data, shape, strides, itemsize, parent=None):
         setattr(array, k, v)
 
     return array
-
-
-def make_array_ctype(ndim):
-    """Create a ctypes representation of an array_type.
-
-    Parameters
-    -----------
-    ndim: int
-        number of dimensions of array
-
-    Returns
-    -----------
-        a ctypes array structure for an array with the given number of
-        dimensions
-    """
-    c_intp = ctypes.c_ssize_t
-
-    class c_array(ctypes.Structure):
-        _fields_ = [('parent', ctypes.c_void_p),
-                    ('nitems', c_intp),
-                    ('itemsize', c_intp),
-                    ('data', ctypes.c_void_p),
-                    ('shape', c_intp * ndim),
-                    ('strides', c_intp * ndim)]
-
-    return c_array
 
 
 @struct_factory(types.ArrayIterator)
@@ -183,7 +163,9 @@ def getitem_arraynd_intp(context, builder, sig, args):
                        shape=cgutils.pack_array(builder, in_shapes[1:]),
                        strides=cgutils.pack_array(builder, in_strides[1:]),
                        itemsize=adapted_ary.itemsize,
+                       meminfo=adapted_ary.meminfo,
                        parent=adapted_ary.parent,)
+
         result = out_ary._getvalue()
     else:
         raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
@@ -223,6 +205,7 @@ def getitem_array1d_slice(context, builder, sig, args):
                    shape=cgutils.pack_array(builder, [shape]),
                    strides=cgutils.pack_array(builder, [stride]),
                    itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
                    parent=ary.parent)
 
     return retary._getvalue()
@@ -262,6 +245,7 @@ def getitem_array_unituple(context, builder, sig, args):
                        shape=cgutils.pack_array(builder, shapes),
                        strides=cgutils.pack_array(builder, strides),
                        itemsize=ary.itemsize,
+                       meminfo=ary.meminfo,
                        parent=ary.parent)
         return retary._getvalue()
     else:
@@ -318,6 +302,7 @@ def getitem_array_tuple(context, builder, sig, args):
                        shape=cgutils.pack_array(builder, shapes),
                        strides=cgutils.pack_array(builder, strides),
                        itemsize=ary.itemsize,
+                       meminfo=ary.meminfo,
                        parent=ary.parent)
         return retary._getvalue()
     else:
@@ -817,6 +802,7 @@ def array_record_getattr(context, builder, typ, value, attr):
                    shape=array.shape,
                    strides=array.strides,
                    itemsize=context.get_constant(types.intp, datasize),
+                   meminfo=array.meminfo,
                    parent=array.parent)
     return rary._getvalue()
 
@@ -1238,3 +1224,52 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditer = nditercls(context, builder, value=nditer)
 
     nditer.iternext_specific(context, builder, result)
+
+
+@builtin
+@implement(numpy.empty, types.Kind(types.Integer))
+@implement(numpy.empty, types.Kind(types.BaseTuple))
+@implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
+@implement(numpy.empty, types.Kind(types.BaseTuple), types.Kind(types.Function))
+def numpy_empty_nd(context, builder, sig, args):
+    arrshapetype = sig.args[0]
+    arrshape = args[0]
+    arrtype = sig.return_type
+    arycls = make_array(arrtype)
+    ary = arycls(context, builder)
+
+    datatype = context.get_data_type(arrtype.dtype)
+    itemsize = context.get_constant(types.intp,
+                                    context.get_abi_sizeof(datatype))
+
+    if isinstance(arrshapetype, types.Integer):
+        shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
+    else:
+        arrshape = context.cast(builder, arrshape, arrshapetype,
+                                types.UniTuple(types.intp, len(arrshapetype)))
+        shapes = cgutils.unpack_tuple(builder, arrshape,
+                                      count=len(arrshapetype))
+
+    # compute array length
+    arrlen = context.get_constant(types.intp, 1)
+    for s in shapes:
+        arrlen = builder.mul(arrlen, s)
+
+    strides = [itemsize]
+    for s in reversed(shapes[1:]):
+        strides.append(builder.mul(strides[-1], s))
+
+    meminfo = context.nrt_meminfo_alloc(builder,
+                                        size=builder.mul(itemsize, arrlen))
+    data = context.nrt_meminfo_data(builder, meminfo)
+
+    populate_array(ary,
+                   data=builder.bitcast(data, datatype.as_pointer()),
+                   shape=cgutils.pack_array(builder, shapes),
+                   strides=cgutils.pack_array(builder,
+                                              tuple(reversed(strides))),
+                   itemsize=itemsize,
+                   meminfo=meminfo)
+    return ary._getvalue()
+
+

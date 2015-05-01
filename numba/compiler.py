@@ -9,7 +9,7 @@ import warnings
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
                    lowering, objmode, irpasses, utils, config,
-                   types, ir, assume, looplifting, macro, types)
+                   types, ir, looplifting, macro, types)
 from numba.targets import cpu
 from numba.annotations import type_annotations
 
@@ -33,6 +33,7 @@ class Flags(utils.ConfigOptions):
         'boundcheck',
         'forceinline',
         'no_cpython_wrapper',
+        'nrt',
     ])
 
 
@@ -219,7 +220,14 @@ class Pipeline(object):
     def __init__(self, typingctx, targetctx, library, args, return_type, flags,
                  locals):
         self.typingctx = typingctx
-        self.targetctx = targetctx
+
+        subtargetoptions = {}
+        if flags.boundcheck:
+            subtargetoptions['enable_boundcheck'] = True
+        if flags.nrt:
+            subtargetoptions['enable_nrt'] = True
+
+        self.targetctx = targetctx.subtarget(**subtargetoptions)
         self.library = library
         self.args = args
         self.return_type = return_type
@@ -602,9 +610,7 @@ def legalize_return_type(return_type, interp, targetctx):
     Only accept array return type iff it is passed into the function.
     Reject function object return types if in nopython mode.
     """
-    assert assume.return_argument_array_only
-
-    if isinstance(return_type, types.Array):
+    if not targetctx.enable_nrt and isinstance(return_type, types.Array):
         # Walk IR to discover all arguments and all return statements
         retstmts = []
         caststmts = {}
@@ -621,12 +627,6 @@ def legalize_return_type(return_type, interp, targetctx):
                         argvars.add(inst.target.name)
 
         assert retstmts, "No return statements?"
-
-        # FIXME: In the future, we can return an array that is either a dynamically
-        #        allocated array or an array that is passed as argument.  This
-        #        must be statically resolvable.
-
-        # The return value must be the first modification of the value.
 
         for var in retstmts:
             cast = caststmts.get(var)

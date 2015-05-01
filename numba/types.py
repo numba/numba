@@ -1088,6 +1088,8 @@ class Slice3Type(Type):
     pass
 
 
+
+
 # Utils
 
 def is_int_tuple(x):
@@ -1111,6 +1113,9 @@ string = Dummy('str')
 # No operation is defined on voidptr
 # Can only pass it around
 voidptr = Opaque('void*')
+
+# For NRT GC
+meminfo_pointer = Opaque("MemInfo*")
 
 boolean = bool_ = Boolean('bool')
 

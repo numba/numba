@@ -247,7 +247,13 @@ class Lower(BaseLower):
             return impl(self.builder, (target, index, value))
 
         elif isinstance(inst, ir.Del):
-            pass
+            try:
+                # XXX: incorrect Del injection?
+                val = self.loadvar(inst.value)
+            except KeyError:
+                pass
+            else:
+                self.decref(self.typeof(inst.value), val)
 
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
@@ -641,12 +647,25 @@ class Lower(BaseLower):
         return self.builder.load(ptr)
 
     def storevar(self, value, name):
+        # Clean up existing value stored in the variable
+        try:
+            # Load original value in variable
+            old = self.loadvar(name)
+        except KeyError:
+            # If it has not been defined, don't do anything
+            pass
+        else:
+            # Else, dereference the old value
+            self.decref(self.typeof(name), old)
+        # Store variable
         if name not in self.varmap:
             self.varmap[name] = self.alloca_lltype(name, value.type)
         ptr = self.getvar(name)
         assert value.type == ptr.type.pointee,\
             "store %s to ptr of %s" % (value.type, ptr.type.pointee)
         self.builder.store(value, ptr)
+        # Incref
+        self.incref(self.typeof(name), value)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
@@ -654,3 +673,15 @@ class Lower(BaseLower):
 
     def alloca_lltype(self, name, lltype):
         return cgutils.alloca_once(self.builder, lltype, name=name)
+
+    def incref(self, typ, val):
+        if not self.context.enable_nrt:
+            return
+
+        self.context.nrt_incref(self.builder, typ, val)
+
+    def decref(self, typ, val):
+        if not self.context.enable_nrt:
+            return
+
+        self.context.nrt_decref(self.builder, typ, val)
