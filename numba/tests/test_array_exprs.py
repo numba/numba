@@ -43,7 +43,7 @@ class TestArrayExpressions(unittest.TestCase):
         A = np.linspace(0,1,10)
         X = np.linspace(2,1,10)
         Y = np.linspace(1,2,10)
-        arg_tys = [typeof(arg) for arg in A, X, Y]
+        arg_tys = [typeof(arg) for arg in (A, X, Y)]
 
         control_pipeline = RewritesTester.mk_no_rw_pipeline(arg_tys)
         cres_0 = control_pipeline.compile_extra(axy)
