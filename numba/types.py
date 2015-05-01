@@ -835,7 +835,7 @@ class ArrayCTypes(Type):
 
     @property
     def key(self):
-        return (self.ndim)
+        return self.ndim
 
 
 class NestedArray(Array):
