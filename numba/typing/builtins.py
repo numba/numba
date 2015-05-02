@@ -515,11 +515,23 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_flat(self, ary):
         return types.NumpyFlatType(ary)
 
+    def resolve_ctypes(self, ary):
+        return types.ArrayCTypes(ary)
+
     def generic_resolve(self, ary, attr):
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
                 return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,
                                    layout='A')
+
+
+@builtin_attr
+class ArrayCTypesAttribute(AttributeTemplate):
+    key = types.ArrayCTypes
+
+    def resolve_data(self, ctinfo):
+        return types.uintp
+
 
 
 @builtin_attr

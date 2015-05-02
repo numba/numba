@@ -52,6 +52,10 @@ def size_after_slicing_usecase(buf, i):
     return sliced.size
 
 
+def array_ctypes_data(arr):
+    return arr.ctypes.data
+
+
 class TestArrayAttr(unittest.TestCase):
     def setUp(self):
         self.a = np.arange(10).reshape(2, 5)
@@ -144,6 +148,14 @@ class TestSlicedArrayAttr(unittest.TestCase):
         arr = np.arange(2 * 5 * 3).reshape(2, 5, 3)
         for i in range(arr.shape[0]):
             self.assertEqual(pyfunc(arr, i), cfunc(arr, i))
+
+
+class TestArrayCTypes(unittest.TestCase):
+    def test_array_ctypes_data(self):
+        pyfunc = array_ctypes_data
+        cfunc = njit(pyfunc)
+        arr = np.arange(3)
+        self.assertEqual(pyfunc(arr), cfunc(arr))
 
 
 if __name__ == '__main__':
