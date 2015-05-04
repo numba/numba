@@ -822,6 +822,22 @@ class Array(Buffer):
         return self.dtype, self.ndim, self.layout, self.mutable
 
 
+class ArrayCTypes(Type):
+    """
+    This is the type for `numpy.ndarray.ctypes`.
+    """
+    def __init__(self, arytype):
+        # This depends on the ndim for the shape and strides attributes,
+        # even though they are not implemented, yet.
+        self.ndim = arytype.ndim
+        name = "ArrayCType(ndim={0})".format(self.ndim)
+        super(ArrayCTypes, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.ndim
+
+
 class NestedArray(Array):
     """
     A NestedArray is an array nested within a structured type (which are "void"

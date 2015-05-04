@@ -43,6 +43,9 @@ def _init_casting_rules(tm):
 
     tcr.promote_unsafe(types.complex64, types.complex128)
 
+    # Allow integers to cast ot void*
+    tcr.unsafe_unsafe(types.uintp, types.voidptr)
+
     return tcr
 
 

@@ -774,6 +774,29 @@ def array_readonly(context, builder, typ, value):
 
 
 @builtin_attr
+@impl_attribute(types.Kind(types.Array), "ctypes",
+                types.Kind(types.ArrayCTypes))
+def array_ctypes(context, builder, typ, value):
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+    # Cast void* data to uintp
+    addr = builder.ptrtoint(array.data, context.get_value_type(types.uintp))
+    # Create new ArrayCType structure
+    ctinfo_type = cgutils.create_struct_proxy(types.ArrayCTypes(typ))
+    ctinfo = ctinfo_type(context, builder)
+    ctinfo.data = addr
+    return ctinfo._getvalue()
+
+
+@builtin_attr
+@impl_attribute(types.Kind(types.ArrayCTypes), "data", types.uintp)
+def array_ctypes_data(context, builder, typ, value):
+    ctinfo_type = cgutils.create_struct_proxy(typ)
+    ctinfo = ctinfo_type(context, builder, value=value)
+    return ctinfo.data
+
+
+@builtin_attr
 @impl_attribute_generic(types.Kind(types.Array))
 def array_record_getattr(context, builder, typ, value, attr):
     arrayty = make_array(typ)
@@ -805,7 +828,6 @@ def array_record_getattr(context, builder, typ, value, attr):
                    meminfo=array.meminfo,
                    parent=array.parent)
     return rary._getvalue()
-
 
 
 #-------------------------------------------------------------------------------
