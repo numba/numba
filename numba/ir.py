@@ -81,11 +81,8 @@ class VarMap(object):
     def __repr__(self):
         return pprint.pformat(self._con)
 
-    def __hash__(self):
-        return hash(self.name)
-
     def __iter__(self):
-        return self._con.iterkeys()
+        return iter(self._con.keys())
 
 
 class Inst(object):
