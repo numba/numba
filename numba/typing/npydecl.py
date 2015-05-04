@@ -318,6 +318,7 @@ class NdIndex(AbstractTemplate):
 
 builtin_global(numpy.ndindex, types.Function(NdIndex))
 
+
 @builtin
 class NdEmpty(AbstractKeywordTemplate):
     key = numpy.empty
@@ -339,10 +340,9 @@ class NdEmpty(AbstractKeywordTemplate):
 
         elif isinstance(shape, (types.Tuple, types.UniTuple)):
             if all(isinstance(s, types.Integer) for s in shape):
-                aryty = types.Array(dtype=np_dtype,
-                                    ndim=len(shape),
-                                    layout='C')
-                return_type = signature(aryty, shape, dtype)
+                return_type = types.Array(dtype=np_dtype,
+                                          ndim=len(shape),
+                                          layout='C')
 
         if return_type is not None:
             args = [shape]
