@@ -156,7 +156,7 @@ class DUFunc(_internal._DUFunc):
         ufunc = self.ufunc
         _handle_inputs_result = npydecl.Numpy_rules_ufunc._handle_inputs(
             ufunc, argtys, kwtys)
-        base_types, explicit_outputs, ndims = _handle_inputs_result
+        base_types, explicit_outputs, ndims, layout = _handle_inputs_result
         ewise_types = tuple(base_types[:-len(explicit_outputs)])
         sig, cres = self.find_ewise_function(ewise_types)
         if sig is None:
@@ -168,9 +168,7 @@ class DUFunc(_internal._DUFunc):
         if explicit_outputs:
             outtys = list(explicit_outputs)
         elif ufunc.nout == 1:
-            # XXX What does Numpy do about memory layout when not
-            # given an explicit output array?
-            outtys = [types.Array(sig.return_type, ndims, 'A')]
+            outtys = [types.Array(sig.return_type, ndims, layout)]
         else:
             raise NotImplementedError("typing gufuncs (nout > 1)")
         outtys.extend(argtys)

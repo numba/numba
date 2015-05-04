@@ -62,13 +62,27 @@ class Numpy_rules_ufunc(AbstractTemplate):
             raise TypingError(msg=msg.format(ufunc.__name__))
 
         # find the kernel to use, based only in the input types (as does NumPy)
-        base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
-        return base_types, explicit_outputs, ndims
+        base_types = [x.dtype if isinstance(x, types.Array) else x
+                      for x in args]
+
+        # Figure out the output array layout, if needed.
+        layout = None
+        if ndims > 0:
+            layout = 'C'
+            layouts = [x.layout if isinstance(x, types.Array) else ''
+                       for x in args]
+            if 'C' not in layouts:
+                if 'F' in layouts:
+                    layout = 'F'
+                elif 'A' in layouts:
+                    layout = 'A'
+
+        return base_types, explicit_outputs, ndims, layout
 
     def generic(self, args, kws):
         ufunc = self.key
-        base_types, explicit_outputs, ndims = self._handle_inputs(ufunc, args,
-                                                                  kws)
+        base_types, explicit_outputs, ndims, layout = self._handle_inputs(
+            ufunc, args, kws)
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
         if ufunc_loop is None:
             raise TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
@@ -97,8 +111,8 @@ class Numpy_rules_ufunc(AbstractTemplate):
             # as ufunc_find_matching_loop() doesn't do any type inference.
             ret_tys = ufunc_loop.outputs[-implicit_output_count:]
             if ndims > 0:
-                # XXX Not sure 'A' layout is correct...
-                ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout='A')
+                assert layout is not None
+                ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout=layout)
                            for ret_ty in ret_tys]
             out.extend(ret_tys)
 
