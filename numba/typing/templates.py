@@ -258,6 +258,10 @@ class FunctionTemplate(object):
 
     @classmethod
     def bind_for_call(cls, args, kwargs):
+        """
+        Flatten the keyword arguments into position arguments and skipping
+        any undefined values.
+        """
         return _flatten_keywords(cls.keywords, args, kwargs,
                                  compressed=True)
 
