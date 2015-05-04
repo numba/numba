@@ -299,12 +299,27 @@ class StoreMap(Stmt):
 
 
 class Del(Stmt):
+    """
+    Delete a reference from the value
+    """
     def __init__(self, value, loc):
         self.value = value
         self.loc = loc
 
     def __str__(self):
         return "del %s" % self.value
+
+
+class Acq(Stmt):
+    """
+    Acquire a reference from the value.
+    """
+    def __init__(self, value, loc):
+        self.value = value
+        self.loc = loc
+
+    def __str__(self):
+        return "acq %s" % self.value
 
 
 class Raise(Stmt):
