@@ -58,7 +58,7 @@ def make_concrete_template(name, key, signatures):
 
 def signature(return_type, *args, **kws):
     recvr = kws.pop('recvr', None)
-    assert not kws
+    assert not kws, "Extra keyword arguments: {0}".format(kws.keys())
     return Signature(return_type, args, recvr=recvr)
 
 
@@ -124,8 +124,47 @@ def _rate_arguments(context, actualargs, formalargs):
     return ratings
 
 
-def resolve_overload(context, key, cases, args, kws):
-    assert not kws, "Keyword arguments are not supported, yet"
+def _flatten_keywords(keywords, args, kws, compressed=False):
+    """
+    Flatten keyword arguments according to the declared keywords spec.
+    """
+    if keywords:
+        # Check
+        nargs = len(args)
+        nkws = len(kws)
+        if nkws + nargs > len(keywords):
+            raise TypeError("Number of argument mismatch")
+
+        # Flatten keyword arguments
+        args = list(args)
+        kwsdct = dict(kws)
+        for k in keywords[nargs:]:
+            if k not in kwsdct:
+                if not compressed:
+                    args.append(None)
+            else:
+                args.append(kwsdct.pop(k))
+
+        # There are more keyword arguments then defined
+        if kwsdct:
+            msg = "Extra keyword arguments: {0}"
+            raise NameError(msg.format(', '.join(map(repr, kwsdct))))
+
+    return args
+
+
+def resolve_overload(context, key, cases, args, kws, keywords):
+    """
+    Resolve overloaded signatures with positional and keywords arguments
+    """
+    args = _flatten_keywords(keywords, args, kws, compressed=True)
+    return _resolve_overload_flattened(context, key, cases, args)
+
+
+def _resolve_overload_flattened(context, key, cases, args):
+    """
+    Resolve overloaded signatures from a flattened list of arguments.
+    """
     # Rate each cases
     candids = []
     symm_ratings = []
@@ -183,7 +222,8 @@ class FunctionTemplate(object):
         self.context = context
 
     def _select(self, cases, args, kws):
-        selected = resolve_overload(self.context, self.key, cases, args, kws)
+        selected = resolve_overload(self.context, self.key, cases, args, kws,
+                                    keywords=self.keywords)
         return selected
 
 
