@@ -57,6 +57,11 @@ def make_concrete_template(name, key, signatures):
 
 
 def signature(return_type, *args, **kws):
+    """
+    Create a signature object.
+    The only accept keyword argument is ``recvr`` for specifying the
+    receiving object for a method.
+    """
     recvr = kws.pop('recvr', None)
     assert not kws, "Extra keyword arguments: {0}".format(kws.keys())
     return Signature(return_type, args, recvr=recvr)
@@ -229,6 +234,8 @@ def resolve_ambiguous_resolution(context, cases, args):
 
 
 class FunctionTemplate(object):
+    keywords = None
+
     def __init__(self, context):
         self.context = context
 
@@ -264,6 +271,12 @@ class AbstractTemplate(FunctionTemplate):
         if sig:
             cases = [sig]
             return self._select(cases, args, kws)
+
+
+class AbstractKeywordTemplate(AbstractTemplate):
+    def generic(self, args, kws):
+        vals = _flatten_keywords(self.keywords, args, kws)
+        return self.generic_keywords(dict(zip(self.keywords, vals)))
 
 
 class ConcreteTemplate(FunctionTemplate):
