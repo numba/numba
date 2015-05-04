@@ -295,6 +295,15 @@ class AbstractTemplate(FunctionTemplate):
 
 
 class AbstractKeywordTemplate(AbstractTemplate):
+    """
+    Extend this class and implement generic_keywords() for handling
+    calls that have keyword arguments.
+
+    generic_keywords(kwargs) takes a dictionary where the keys are the argument
+    names and the values are the type of the argument.  If the argument
+    is not defined at the call site, the associated value in the dictionary
+    will be ``None``.
+    """
     def generic(self, args, kws):
         vals = _flatten_keywords(self.keywords, args, kws)
         return self.generic_keywords(dict(zip(self.keywords, vals)))
