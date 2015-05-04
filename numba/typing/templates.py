@@ -127,6 +127,17 @@ def _rate_arguments(context, actualargs, formalargs):
 def _flatten_keywords(keywords, args, kws, compressed=False):
     """
     Flatten keyword arguments according to the declared keywords spec.
+
+    Returns a sequence of positional arguments by appending key-values from
+    ``kws`` according to the spec in ``keywords`` into the end of ``args``
+    (Note that ``args`` parameter is not modified).
+
+    If ``compressed`` is True, the missing key-values in ``kws`` is skipped.
+    Otherwise, they are defaulted to None and the values in returned sequence
+    should corresponding to the names in ``keywords`` the following will work:
+
+        keys, values = zip(keywords, returned_value)
+
     """
     if keywords:
         # Check
