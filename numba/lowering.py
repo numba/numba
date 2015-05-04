@@ -388,10 +388,22 @@ class Lower(BaseLower):
             try:
                 pysig = fnty.pysig
             except AttributeError:
-                if expr.kws:
+                # If the call has keyword argument and the call type
+                # is not:
+                #    - a function type, and;
+                #    - with keyword defined.
+                if (expr.kws and
+                    not (isinstance(fnty, types.Function) and
+                         fnty.template.keywords)):
                     raise NotImplementedError("unsupported keyword arguments "
                                               "when calling %s" % (fnty,))
-                args = expr.args
+
+                # If it is a function type,
+                # bind the keywords to the positional arguments
+                if isinstance(fnty, types.Function):
+                    args = fnty.template.bind_for_call(expr.args, expr.kws)
+                else:
+                    args = expr.args
             else:
                 ba = pysig.bind(*expr.args, **dict(expr.kws))
                 for i, param in enumerate(pysig.parameters.values()):

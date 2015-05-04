@@ -244,6 +244,11 @@ class FunctionTemplate(object):
                                     keywords=self.keywords)
         return selected
 
+    @classmethod
+    def bind_for_call(cls, args, kwargs):
+        return _flatten_keywords(cls.keywords, args, kwargs,
+                                 compressed=True)
+
 
 class AbstractTemplate(FunctionTemplate):
     """
