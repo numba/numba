@@ -204,6 +204,24 @@ class TestCTypes(unittest.TestCase):
         for got in outputs:
             self.assertEqual(expected, got)
 
+    def test_passing_array_ctypes_data(self):
+
+        def take_array_ptr(ptr):
+            return ptr
+
+        c_take_array_ptr = CFUNCTYPE(c_void_p, c_void_p)(take_array_ptr)
+
+        def pyfunc(arr):
+            return c_take_array_ptr(arr.ctypes.data)
+
+        cfunc = jit(nopython=True, nogil=True)(pyfunc)
+
+        arr = numpy.arange(5)
+
+        expected = pyfunc(arr)
+        got = cfunc(arr)
+
+        self.assertEqual(expected, got)
 
 
 if __name__ == '__main__':

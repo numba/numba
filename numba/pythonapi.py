@@ -1033,6 +1033,11 @@ class PythonAPI(object):
         elif isinstance(typ, types.CharSeq):
             return self.from_native_charseq(val, typ)
 
+        elif typ == types.voidptr:
+            ll_intp = self.context.get_value_type(types.uintp)
+            addr = self.builder.ptrtoint(val, ll_intp)
+            return self.from_native_value(addr, types.uintp)
+
         raise NotImplementedError(typ)
 
     def to_native_int(self, obj, typ):
