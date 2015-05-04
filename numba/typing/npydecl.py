@@ -334,24 +334,25 @@ class NdEmpty(AbstractKeywordTemplate):
             # ctor, we use numpy.dtype to force it into a dtype object.
             np_dtype = from_dtype(numpy.dtype(dtype.template.key))
 
-        return_type = None
         if isinstance(shape, types.Integer):
-            return_type = types.double[::1]
+            ndim = 1
+        elif isinstance(shape, types.BaseTuple):
+            ndim = len(shape)
+            if not all(isinstance(s, types.Integer) for s in shape):
+                # Not all element in shape are integer
+                return
+        else:
+            return
 
-        elif isinstance(shape, (types.Tuple, types.UniTuple)):
-            if all(isinstance(s, types.Integer) for s in shape):
-                return_type = types.Array(dtype=np_dtype,
-                                          ndim=len(shape),
-                                          layout='C')
+        return_type = types.Array(dtype=np_dtype, ndim=ndim, layout='C')
 
-        if return_type is not None:
-            args = [shape]
-            keywords = set(['shape'])
-            if dtype is not None:
-                args.append(dtype)
-                keywords.add('dtype')
+        args = [shape]
+        keywords = set(['shape'])
+        if dtype is not None:
+            args.append(dtype)
+            keywords.add('dtype')
 
-            return signature(return_type, *args, keywords=keywords)
+        return signature(return_type, *args, keywords=keywords)
 
 
 builtin_global(numpy.empty, types.Function(NdEmpty))
