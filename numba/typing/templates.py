@@ -11,39 +11,47 @@ import operator
 
 
 class Signature(object):
-    __slots__ = 'return_type', 'args', 'recvr'
+    __slots__ = 'return_type', 'args', 'recvr', 'keywords'
 
-    def __init__(self, return_type, args, recvr):
+    def __init__(self, return_type, args, recvr, keywords):
         self.return_type = return_type
         self.args = args
         self.recvr = recvr
+        self.keywords = frozenset(keywords)
 
     def __getstate__(self):
         """
         Needed because of __slots__.
         """
-        return self.return_type, self.args, self.recvr
+        return self.return_type, self.args, self.recvr, self.keywords
 
     def __setstate__(self, state):
         """
         Needed because of __slots__.
         """
-        self.return_type, self.args, self.recvr = state
+        self.return_type, self.args, self.recvr, self.keywords = state
 
     def __hash__(self):
         return hash((self.args, self.return_type))
 
     def __eq__(self, other):
+        # Note: defaults does not participate in equality check
         if isinstance(other, Signature):
             return (self.args == other.args and
                     self.return_type == other.return_type and
-                    self.recvr == other.recvr)
+                    self.recvr == other.recvr and
+                    self.keywords == other.keywords)
 
     def __ne__(self, other):
         return not (self == other)
 
     def __repr__(self):
-        return "%s -> %s" % (self.args, self.return_type)
+        if self.keywords:
+            return "%s -> %s (keywords: %s)" % (self.args, self.return_type,
+                                                self.keywords)
+        else:
+            return "%s -> %s" % (self.args, self.return_type)
+
 
     @property
     def is_method(self):
@@ -59,12 +67,16 @@ def make_concrete_template(name, key, signatures):
 def signature(return_type, *args, **kws):
     """
     Create a signature object.
-    The only accept keyword argument is ``recvr`` for specifying the
-    receiving object for a method.
+    The only accept keyword arguments are:
+    - ``recvr`` for specifying the receiving object for a method.
+    - ``keywords`` for specifying keyword arguments that are defined at
+       the call site.
     """
     recvr = kws.pop('recvr', None)
+    keywords = kws.pop('keywords', frozenset())
     assert not kws, "Extra keyword arguments: {0}".format(kws.keys())
-    return Signature(return_type, args, recvr=recvr)
+    return Signature(return_type, args, recvr=recvr,
+                     keywords=keywords)
 
 
 def _uses_downcast(dists):

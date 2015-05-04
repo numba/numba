@@ -346,9 +346,12 @@ class NdEmpty(AbstractKeywordTemplate):
 
         if return_type is not None:
             args = [shape]
+            keywords = set(['shape'])
             if dtype is not None:
                 args.append(dtype)
-            return signature(return_type, *args)
+                keywords.add('dtype')
+
+            return signature(return_type, *args, keywords=keywords)
 
 
 builtin_global(numpy.empty, types.Function(NdEmpty))
