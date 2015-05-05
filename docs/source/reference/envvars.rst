@@ -111,6 +111,13 @@ Compilation options
    codebase from an old Numba version (before 0.12), and want to avoid
    breaking everything at once.  Otherwise, please don't use this.
 
+.. envvar:: NUMBA_DISABLE_JIT
+
+   Disable JIT compilation entirely.  The :func:`~numba.jit` decorator acts
+   as if it performs no operation, and the invocation of decorated functions
+   calls the original Python function instead of a compiled version.  This
+   can be useful if you want to run the Python debugger over your code.
+
 
 GPU support
 -----------
