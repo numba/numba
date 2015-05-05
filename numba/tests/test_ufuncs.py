@@ -1045,12 +1045,12 @@ class TestUFuncs(TestCase):
 
             expected = np.add(x, y)
             result = cfunc(x, y)
-            self.assertTrue(np.all(result == expected))
+            np.testing.assert_array_equal(expected, result)
 
     def test_implicit_output_layout(self):
         def pyfunc(a0, a1):
             return np.add(a0, a1)
-        X = np.linspace(0, 1, 25).reshape(5, 5)
+        X = np.linspace(0, 1, 20).reshape(4, 5)
         Y = np.array(X, order='F')
         Xty = typeof(X)
         assert X.flags.c_contiguous and Xty.layout == 'C'
@@ -1064,7 +1064,7 @@ class TestUFuncs(TestCase):
                          result0.flags.c_contiguous)
         self.assertEqual(expected0.flags.f_contiguous,
                          result0.flags.f_contiguous)
-        self.assertTrue(np.all(result0 == expected0))
+        np.testing.assert_array_equal(expected0, result0)
 
         cr1 = self.cache.compile(pyfunc, (Yty, Yty), flags=enable_nrt_flags)
         expected1 = np.add(Y, Y)
@@ -1073,7 +1073,7 @@ class TestUFuncs(TestCase):
                          result1.flags.c_contiguous)
         self.assertEqual(expected1.flags.f_contiguous,
                          result1.flags.f_contiguous)
-        self.assertTrue(np.all(result1 == expected1))
+        np.testing.assert_array_equal(expected1, result1)
 
 
 class TestScalarUFuncs(TestCase):
