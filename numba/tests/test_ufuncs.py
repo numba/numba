@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import types, typing, utils
+from numba import types, typing, utils, typeof
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype
 from numba import vectorize
@@ -1113,7 +1113,35 @@ class TestUFuncs(TestCase):
 
             expected = np.add(x, y)
             result = cfunc(x, y)
-            self.assertTrue(np.all(result == expected))
+            np.testing.assert_array_equal(expected, result)
+
+    def test_implicit_output_layout(self):
+        def pyfunc(a0, a1):
+            return np.add(a0, a1)
+        X = np.linspace(0, 1, 20).reshape(4, 5)
+        Y = np.array(X, order='F')
+        Xty = typeof(X)
+        assert X.flags.c_contiguous and Xty.layout == 'C'
+        Yty = typeof(Y)
+        assert Y.flags.f_contiguous and Yty.layout == 'F'
+
+        cr0 = self.cache.compile(pyfunc, (Xty, Yty), flags=enable_nrt_flags)
+        expected0 = np.add(X, Y)
+        result0 = cr0.entry_point(X, Y)
+        self.assertEqual(expected0.flags.c_contiguous,
+                         result0.flags.c_contiguous)
+        self.assertEqual(expected0.flags.f_contiguous,
+                         result0.flags.f_contiguous)
+        np.testing.assert_array_equal(expected0, result0)
+
+        cr1 = self.cache.compile(pyfunc, (Yty, Yty), flags=enable_nrt_flags)
+        expected1 = np.add(Y, Y)
+        result1 = cr1.entry_point(Y, Y)
+        self.assertEqual(expected1.flags.c_contiguous,
+                         result1.flags.c_contiguous)
+        self.assertEqual(expected1.flags.f_contiguous,
+                         result1.flags.f_contiguous)
+        np.testing.assert_array_equal(expected1, result1)
 
     # ____________________________________________________________
     # Array operators

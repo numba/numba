@@ -1266,9 +1266,20 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     for s in shapes:
         arrlen = builder.mul(arrlen, s)
 
-    strides = [itemsize]
-    for s in reversed(shapes[1:]):
-        strides.append(builder.mul(strides[-1], s))
+    if arrtype.layout == 'C':
+        strides = [itemsize]
+        for dimension_size in reversed(shapes[1:]):
+            strides.append(builder.mul(strides[-1], dimension_size))
+        strides = tuple(reversed(strides))
+    elif arrtype.layout == 'F':
+        strides = [itemsize]
+        for dimension_size in shapes[:-1]:
+            strides.append(builder.mul(strides[-1], dimension_size))
+        strides = tuple(strides)
+    else:
+        raise NotImplementedError(
+            "Don't know how to allocate array with layout '{0}'.".format(
+                arrtype.layout))
 
     meminfo = context.nrt_meminfo_alloc(builder,
                                         size=builder.mul(itemsize, arrlen))
@@ -1277,8 +1288,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     populate_array(ary,
                    data=builder.bitcast(data, datatype.as_pointer()),
                    shape=cgutils.pack_array(builder, shapes),
-                   strides=cgutils.pack_array(builder,
-                                              tuple(reversed(strides))),
+                   strides=cgutils.pack_array(builder, strides),
                    itemsize=itemsize,
                    meminfo=meminfo)
     return ary._getvalue()

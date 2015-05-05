@@ -40,10 +40,10 @@ typedef struct MemSys MemSys;
 /* Memory System API */
 
 /* Initialize the memory system */
-void NRT_MemSys_init();
+void NRT_MemSys_init(void);
 
 /* Shutdown the memory system */
-void NRT_MemSys_shutdown();
+void NRT_MemSys_shutdown(void);
 
 /*
  * Internal API
@@ -57,7 +57,7 @@ void NRT_MemSys_insert_meminfo(MemInfo *newnode);
  * Internal API
  * Pop a MemInfo from the freelist.
  */
-MemInfo* NRT_MemSys_pop_meminfo();
+MemInfo* NRT_MemSys_pop_meminfo(void);
 
 /*
  * Register the atomic increment and decrement functions
@@ -74,17 +74,17 @@ void NRT_MemSys_set_atomic_cas(atomic_cas_func cas);
 /*
  * Register a non-atomic STUB for increment and decrement
  */
-void NRT_MemSys_set_atomic_inc_dec_stub();
+void NRT_MemSys_set_atomic_inc_dec_stub(void);
 
 /*
  * Register a non-atomic STUB for compare and swap
  */
-void NRT_MemSys_set_atomic_cas_stub();
+void NRT_MemSys_set_atomic_cas_stub(void);
 
 /*
  * Process all pending deferred dtors
  */
-void NRT_MemSys_process_defer_dtor();
+void NRT_MemSys_process_defer_dtor(void);
 
 /* Memory Info API */
 

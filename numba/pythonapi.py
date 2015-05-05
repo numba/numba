@@ -914,8 +914,6 @@ class PythonAPI(object):
 
             def cleanup_array():
                 val = self.builder.load(val_on_stack)
-                if self.context.enable_nrt:
-                    self.context.nrt_decref(self.builder, typ, val)
 
             return NativeValue(val, is_error=failed,
                                cleanup=cleanup_array)
@@ -955,6 +953,9 @@ class PythonAPI(object):
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
     def from_native_return(self, val, typ):
+        assert not isinstance(typ, types.Optional), "callconv should have " \
+                                                    "prevented the return of " \
+                                                    "optional value"
         out = self.from_native_value(val, typ)
         if self.context.enable_nrt:
             self.context.nrt_decref(self.builder, typ, val)
@@ -1253,14 +1254,14 @@ class PythonAPI(object):
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
         return self.builder.call(fn, (ary, ptr))
 
-    def nrt_adapt_buffer_from_python(self, ary, ptr):
+    def nrt_adapt_buffer_from_python(self, buf, ptr):
         assert self.context.enable_nrt
         fnty = Type.function(Type.void(), [Type.pointer(self.py_buffer_t),
                                            self.voidptr])
         fn = self._get_function(fnty, name="NRT_adapt_buffer_from_python")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
-        return self.builder.call(fn, (ary, ptr))
+        return self.builder.call(fn, (buf, ptr))
 
     def from_native_charseq(self, val, typ):
         builder = self.builder
