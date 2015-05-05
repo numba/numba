@@ -38,6 +38,7 @@ class Flags(utils.ConfigOptions):
 
 
 DEFAULT_FLAGS = Flags()
+DEFAULT_FLAGS.set('nrt')
 
 
 CR_FIELDS = ["typing_context",
