@@ -191,6 +191,9 @@ class PrimitiveModel(DataModel):
 @register_default(types.ExceptionType)
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
+@register_default(types.BoundFunction)
+@register_default(types.NumpyNdEnumerateType)
+@register_default(types.NumpyNdIndexType)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers

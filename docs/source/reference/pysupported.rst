@@ -92,8 +92,8 @@ operations:
 None
 ----
 
-The :const:`None` value is supported for identity testing (when using
-an :class:`~numba.optional` type).
+The None value is supported for identity testing (when using an
+:class:`~numba.optional` type).
 
 bytes, bytearray, memoryview
 ----------------------------
