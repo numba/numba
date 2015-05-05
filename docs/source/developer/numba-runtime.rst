@@ -22,7 +22,7 @@ Cooperating with CPython
 ------------------------
 
 For NRT to cooperate with CPython, the NRT python binding provides adaptors for
-converting python objects that exports a memory region.  When such an
+converting python objects that export a memory region.  When such an
 object is used as an argument to a NPM function, a new ``MemInfo`` is created
 and it acquires a reference to the Python object.  When a NPM value is returned
 to the Python intpreter, the associated ``MemInfo`` (if any) is checked.  If
@@ -74,7 +74,7 @@ Future Plan
 
 The plan for NRT is to make a standalone shared library that can be linked to
 Numba compiled code, including use within the Python interpreter and without
-the Python interpreter.  To make that work, we will be some refactoring:
+the Python interpreter.  To make that work, we will be doing some refactoring:
 
 * numba NPM code references statically compiled code in "helperlib.c".  Those
   functions should be moved to NRT.
