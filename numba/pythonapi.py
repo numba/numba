@@ -914,8 +914,6 @@ class PythonAPI(object):
 
             def cleanup_array():
                 val = self.builder.load(val_on_stack)
-                if self.context.enable_nrt:
-                    self.context.nrt_decref(self.builder, typ, val)
 
             return NativeValue(val, is_error=failed,
                                cleanup=cleanup_array)
