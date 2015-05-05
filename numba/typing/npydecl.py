@@ -67,7 +67,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
 
         # Figure out the output array layout, if needed.
         layout = None
-        if ndims > 0:
+        if ndims > 0 and (len(explicit_outputs) < ufunc.nout):
             layout = 'C'
             layouts = [x.layout if isinstance(x, types.Array) else ''
                        for x in args]
@@ -75,7 +75,10 @@ class Numpy_rules_ufunc(AbstractTemplate):
                 if 'F' in layouts:
                     layout = 'F'
                 elif 'A' in layouts:
-                    layout = 'A'
+                    # See also _empty_nd_impl() in numba.targets.arrayobj.
+                    raise NotImplementedError(
+                        "Don't know how to create implicit output array "
+                        "with 'A' layout.")
 
         return base_types, explicit_outputs, ndims, layout
 
