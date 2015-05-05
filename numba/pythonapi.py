@@ -955,6 +955,9 @@ class PythonAPI(object):
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
     def from_native_return(self, val, typ):
+        assert not isinstance(typ, types.Optional), "callconv should have " \
+                                                    "prevented the return of " \
+                                                    "optional value"
         out = self.from_native_value(val, typ)
         if self.context.enable_nrt:
             self.context.nrt_decref(self.builder, typ, val)

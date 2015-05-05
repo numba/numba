@@ -148,7 +148,7 @@ class PyCallWrapper(object):
             with cgutils.ifthen(builder, status.is_none):
                 api.return_none()
 
-            retval = api.from_native_return(res, self.fndesc.restype)
+            retval = api.from_native_return(res, self._simplified_return_type())
             builder.ret(retval)
 
         with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
@@ -191,3 +191,18 @@ class PyCallWrapper(object):
         kwlist = Constant.array(stringtype, strings)
         kwlist = cgutils.global_constant(self.module, ".kwlist", kwlist)
         return Constant.bitcast(kwlist, Type.pointer(stringtype))
+
+    def _simplified_return_type(self):
+        """
+        The NPM callconv has already converted simplified optional types.
+        We can simply use the value type from it.
+        """
+        restype = self.fndesc.restype
+        # Optional type
+        if isinstance(restype, types.Optional):
+            return restype.type
+        else:
+            return restype
+
+
+
