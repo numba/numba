@@ -11,39 +11,47 @@ import operator
 
 
 class Signature(object):
-    __slots__ = 'return_type', 'args', 'recvr'
+    __slots__ = 'return_type', 'args', 'recvr', 'keywords'
 
-    def __init__(self, return_type, args, recvr):
+    def __init__(self, return_type, args, recvr, keywords):
         self.return_type = return_type
         self.args = args
         self.recvr = recvr
+        self.keywords = frozenset(keywords)
 
     def __getstate__(self):
         """
         Needed because of __slots__.
         """
-        return self.return_type, self.args, self.recvr
+        return self.return_type, self.args, self.recvr, self.keywords
 
     def __setstate__(self, state):
         """
         Needed because of __slots__.
         """
-        self.return_type, self.args, self.recvr = state
+        self.return_type, self.args, self.recvr, self.keywords = state
 
     def __hash__(self):
         return hash((self.args, self.return_type))
 
     def __eq__(self, other):
+        # Note: defaults does not participate in equality check
         if isinstance(other, Signature):
             return (self.args == other.args and
                     self.return_type == other.return_type and
-                    self.recvr == other.recvr)
+                    self.recvr == other.recvr and
+                    self.keywords == other.keywords)
 
     def __ne__(self, other):
         return not (self == other)
 
     def __repr__(self):
-        return "%s -> %s" % (self.args, self.return_type)
+        if self.keywords:
+            return "%s -> %s (keywords: %s)" % (self.args, self.return_type,
+                                                self.keywords)
+        else:
+            return "%s -> %s" % (self.args, self.return_type)
+
 
     @property
     def is_method(self):
@@ -57,9 +65,18 @@ def make_concrete_template(name, key, signatures):
 
 
 def signature(return_type, *args, **kws):
+    """
+    Create a signature object.
+    The only accept keyword arguments are:
+    - ``recvr`` for specifying the receiving object for a method.
+    - ``keywords`` for specifying keyword arguments that are defined at
+       the call site.
+    """
     recvr = kws.pop('recvr', None)
-    assert not kws
-    return Signature(return_type, args, recvr=recvr)
+    keywords = kws.pop('keywords', frozenset())
+    assert not kws, "Extra keyword arguments: {0}".format(kws.keys())
+    return Signature(return_type, args, recvr=recvr,
+                     keywords=keywords)
 
 
 def _uses_downcast(dists):
@@ -124,8 +141,58 @@ def _rate_arguments(context, actualargs, formalargs):
     return ratings
 
 
-def resolve_overload(context, key, cases, args, kws):
-    assert not kws, "Keyword arguments are not supported, yet"
+def _flatten_keywords(keywords, args, kws, compressed=False):
+    """
+    Flatten keyword arguments according to the declared keywords spec.
+
+    Returns a sequence of positional arguments by appending key-values from
+    ``kws`` according to the spec in ``keywords`` into the end of ``args``
+    (Note that ``args`` parameter is not modified).
+
+    If ``compressed`` is True, the missing key-values in ``kws`` is skipped.
+    Otherwise, they are defaulted to None and the values in returned sequence
+    should corresponding to the names in ``keywords`` the following will work:
+
+        keys, values = zip(keywords, returned_value)
+
+    """
+    if keywords:
+        # Check
+        nargs = len(args)
+        nkws = len(kws)
+        if nkws + nargs > len(keywords):
+            raise TypeError("Number of argument mismatch")
+
+        # Flatten keyword arguments
+        args = list(args)
+        kwsdct = dict(kws)
+        for k in keywords[nargs:]:
+            if k not in kwsdct:
+                if not compressed:
+                    args.append(None)
+            else:
+                args.append(kwsdct.pop(k))
+
+        # There are more keyword arguments then defined
+        if kwsdct:
+            msg = "Extra keyword arguments: {0}"
+            raise NameError(msg.format(', '.join(map(repr, kwsdct))))
+
+    return args
+
+
+def resolve_overload(context, key, cases, args, kws, keywords):
+    """
+    Resolve overloaded signatures with positional and keywords arguments
+    """
+    args = _flatten_keywords(keywords, args, kws, compressed=True)
+    return _resolve_overload_flattened(context, key, cases, args)
+
+
+def _resolve_overload_flattened(context, key, cases, args):
+    """
+    Resolve overloaded signatures from a flattened list of arguments.
+    """
     # Rate each cases
     candids = []
     symm_ratings = []
@@ -179,12 +246,24 @@ def resolve_ambiguous_resolution(context, cases, args):
 
 
 class FunctionTemplate(object):
+    keywords = None
+
     def __init__(self, context):
         self.context = context
 
     def _select(self, cases, args, kws):
-        selected = resolve_overload(self.context, self.key, cases, args, kws)
+        selected = resolve_overload(self.context, self.key, cases, args, kws,
+                                    keywords=self.keywords)
         return selected
+
+    @classmethod
+    def bind_for_call(cls, args, kwargs):
+        """
+        Flatten the keyword arguments into position arguments and skipping
+        any undefined values.
+        """
+        return _flatten_keywords(cls.keywords, args, kwargs,
+                                 compressed=True)
 
 
 class AbstractTemplate(FunctionTemplate):
@@ -213,6 +292,21 @@ class AbstractTemplate(FunctionTemplate):
         if sig:
             cases = [sig]
             return self._select(cases, args, kws)
+
+
+class AbstractKeywordTemplate(AbstractTemplate):
+    """
+    Extend this class and implement generic_keywords() for handling
+    calls that have keyword arguments.
+
+    generic_keywords(kwargs) takes a dictionary where the keys are the argument
+    names and the values are the type of the argument.  If the argument
+    is not defined at the call site, the associated value in the dictionary
+    will be ``None``.
+    """
+    def generic(self, args, kws):
+        vals = _flatten_keywords(self.keywords, args, kws)
+        return self.generic_keywords(dict(zip(self.keywords, vals)))
 
 
 class ConcreteTemplate(FunctionTemplate):

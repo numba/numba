@@ -9,13 +9,37 @@ import functools
 
 from .. import typing, cgutils, types
 
+
+def _getattr_or_default(obj, attr, default):
+    """
+    Set attributes to ``obj`` with the ``default`` if it does not exist.
+    Returns the existing attributes or the ``default``.
+    """
+    val = getattr(obj, attr, default)
+    setattr(obj, attr, val)
+    return val
+
+
 def implement(func, *argtys):
+    """
+    Define an implementation that use positional argument only
+    """
     def wrapper(impl):
-        try:
-            sigs = impl.function_signatures
-        except AttributeError:
-            sigs = impl.function_signatures = []
+        sigs = _getattr_or_default(impl, 'function_signatures', [])
         sigs.append((func, typing.signature(types.Any, *argtys)))
+        return impl
+
+    return wrapper
+
+
+def implement_keywords(func, parameters, *argtys):
+    """
+    Define an implementation and specify the required set of parameters.
+    """
+    def wrapper(impl):
+        sigs = _getattr_or_default(impl, 'function_signatures', [])
+        sigs.append((func, typing.signature(types.Any, *argtys,
+                                            keywords=parameters)))
         return impl
 
     return wrapper

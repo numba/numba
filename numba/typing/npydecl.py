@@ -3,7 +3,7 @@ from __future__ import absolute_import, print_function
 import numpy
 from .. import types
 from .templates import (AttributeTemplate, AbstractTemplate,
-                                    Registry, signature)
+                        AbstractKeywordTemplate, Registry, signature)
 
 from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
@@ -318,29 +318,41 @@ class NdIndex(AbstractTemplate):
 
 builtin_global(numpy.ndindex, types.Function(NdIndex))
 
-@builtin
-class NdEmpty(AbstractTemplate):
-    key = numpy.empty
 
-    def generic(self, args, kws):
-        assert not kws
-        shape = args[0]
-        dtype = types.double
-        if len(args) >= 2:
-            npy_dtype = args[1]
+@builtin
+class NdEmpty(AbstractKeywordTemplate):
+    key = numpy.empty
+    keywords = 'shape', 'dtype'
+
+    def generic_keywords(self, kwargs):
+        shape = kwargs['shape']
+        dtype = kwargs.get('dtype')
+        np_dtype = types.double
+        if dtype is not None:
             # numpy APIs allow dtype constructor to be used as `dtype`
             # arguments.  Since, npy_dtype.template.key dtype or dtype
             # ctor, we use numpy.dtype to force it into a dtype object.
-            dtype = from_dtype(numpy.dtype(npy_dtype.template.key))
+            np_dtype = from_dtype(numpy.dtype(dtype.template.key))
 
         if isinstance(shape, types.Integer):
-            return signature(types.double[::1], *args)
-        elif isinstance(shape, (types.Tuple, types.UniTuple)):
-            if all(isinstance(s, types.Integer) for s in shape):
-                aryty = types.Array(dtype=dtype,
-                                    ndim=len(shape),
-                                    layout='C')
-                return signature(aryty, *args)
+            ndim = 1
+        elif isinstance(shape, types.BaseTuple):
+            ndim = len(shape)
+            if not all(isinstance(s, types.Integer) for s in shape):
+                # Not all element in shape are integer
+                return
+        else:
+            return
+
+        return_type = types.Array(dtype=np_dtype, ndim=ndim, layout='C')
+
+        args = [shape]
+        keywords = set(['shape'])
+        if dtype is not None:
+            args.append(dtype)
+            keywords.add('dtype')
+
+        return signature(return_type, *args, keywords=keywords)
 
 
 builtin_global(numpy.empty, types.Function(NdEmpty))

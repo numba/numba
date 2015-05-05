@@ -17,7 +17,7 @@ from numba import types, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
                                     iterator_impl, iternext_impl,
-                                    struct_factory)
+                                    struct_factory, implement_keywords)
 from .builtins import Slice
 
 
@@ -1249,10 +1249,12 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
 
 
 @builtin
-@implement(numpy.empty, types.Kind(types.Integer))
-@implement(numpy.empty, types.Kind(types.BaseTuple))
-@implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
-@implement(numpy.empty, types.Kind(types.BaseTuple), types.Kind(types.Function))
+@implement_keywords(numpy.empty, ['shape'], types.Kind(types.Integer))
+@implement_keywords(numpy.empty, ['shape'], types.Kind(types.BaseTuple))
+@implement_keywords(numpy.empty, ['shape', 'dtype'],
+                    types.Kind(types.Integer), types.Kind(types.Function))
+@implement_keywords(numpy.empty, ['shape', 'dtype'],
+                    types.Kind(types.BaseTuple), types.Kind(types.Function))
 def numpy_empty_nd(context, builder, sig, args):
     arrshapetype = sig.args[0]
     arrshape = args[0]

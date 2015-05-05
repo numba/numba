@@ -186,10 +186,10 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             print('=' * 80, file=file)
 
     def _explain_ambiguous(self, *args, **kws):
-        assert not kws, "kwargs not handled"
         args = tuple([self.typeof_pyval(a) for a in args])
         sigs = [cr.signature for cr in self._compileinfos.values()]
-        res = resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
+        res = resolve_overload(self.typingctx, self.py_func, sigs, args, kws,
+                               keywords=self._pysig.parameters)
         print("res =", res)
 
     def _explain_matching_error(self, *args, **kws):

@@ -402,6 +402,56 @@ class TestDynArray(unittest.TestCase):
         self.assertEqual(2, sys.getrefcount(got_y))
 
 
+class TestNpyEmptyKeyword(unittest.TestCase):
+    def _test_with_dtype_kw(self, dtype):
+        def pyfunc(shape):
+            return np.empty(shape, dtype=dtype)
+
+        shapes = [1, 5, 9]
+
+        cfunc = nrtjit(pyfunc)
+        for s in shapes:
+            expected = pyfunc(s)
+            got = cfunc(s)
+            self.assertEqual(expected.dtype, got.dtype)
+            self.assertEqual(expected.shape, got.shape)
+
+    def test_with_dtype_kws(self):
+        for dtype in [np.int32, np.float32, np.complex64]:
+            self._test_with_dtype_kw(dtype)
+
+    def _test_with_shape_and_dtype_kw(self, dtype):
+        def pyfunc(shape):
+            return np.empty(shape=shape, dtype=dtype)
+
+        shapes = [1, 5, 9]
+
+        cfunc = nrtjit(pyfunc)
+        for s in shapes:
+            expected = pyfunc(s)
+            got = cfunc(s)
+            self.assertEqual(expected.dtype, got.dtype)
+            self.assertEqual(expected.shape, got.shape)
+
+    def test_with_shape_and_dtype_kws(self):
+        for dtype in [np.int32, np.float32, np.complex64]:
+            self._test_with_dtype_kw(dtype)
+
+    def test_empty_no_args(self):
+        from numba.typeinfer import TypingError
+
+        def pyfunc():
+            return np.empty()
+
+
+        cfunc = nrtjit(pyfunc)
+
+        # Trigger the compilation
+        # That will cause a TypingError due to missing shape argument
+        with self.assertRaises(TypingError):
+            cfunc()
+
+
 def benchmark_refct_speed():
     def pyfunc(x, y, t):
         """Swap array x and y for t number of times
