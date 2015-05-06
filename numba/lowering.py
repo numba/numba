@@ -187,6 +187,15 @@ class Lower(BaseLower):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
             self.storevar(val, inst.target.name)
+            # TODO: emit incref/decref in the numba IR properly.
+            # Workaround due to lack of proper incref/decref info.
+            if self.context.enable_nrt:
+                if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
+                    callexpr = inst.value
+                    # NPM function returns new reference
+                    if isinstance(self.typeof(callexpr.func.name),
+                                  types.Dispatcher):
+                        self.decref(ty, val)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
