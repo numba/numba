@@ -82,10 +82,11 @@ class TestArrayExpressions(unittest.TestCase):
                     if instr.value.op == 'arrayexpr':
                         yield instr
 
-
     def test_complex_expr(self):
         A = np.random.random(10)
-        B = np.random.random(10)
+        B = np.random.random(10) + 1. # Increase likelihood of real
+                                      # root (could add 2 to force all
+                                      # roots to be real).
         C = np.random.random(10)
         arg_tys = [typeof(arg) for arg in (A, B, C)]
 
@@ -107,8 +108,8 @@ class TestArrayExpressions(unittest.TestCase):
         ir1 = test_pipeline.interp.blocks
         self.assertEqual(len(ir0), len(ir1))
         self.assertGreater(len(ir0[0].body), len(ir1[0].body))
-        self.assertEqual(len(self._get_array_exprs(ir0[0].body)), 0)
-        self.assertEqual(len(self._get_array_exprs(ir1[0].body)), 1)
+        self.assertEqual(len(list(self._get_array_exprs(ir0[0].body))), 0)
+        self.assertEqual(len(list(self._get_array_exprs(ir1[0].body))), 1)
 
 
 if __name__ == "__main__":
