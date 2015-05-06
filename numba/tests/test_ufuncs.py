@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import types, typing, utils, typeof
+from numba import types, typing, utils, typeof, numpy_support
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype
 from numba import vectorize
@@ -314,17 +314,32 @@ class TestUFuncs(TestCase):
         inputs.extend(additional_inputs)
         pyfunc = operator_func
         for input_tuple in inputs:
-            input_operand, input_type = input_tuple
+            input_operand1, input_type = input_tuple
+            input_type1 = input_type
 
-            if ((input_type in skip_inputs) or
-                (not isinstance(input_type, types.Array))):
+            if input_type in skip_inputs:
                 continue
 
-            cr = self.cache.compile(pyfunc, (input_type, input_type),
+            # If we only use two scalars, the code generator will not
+            # select the ufunctionalized operator, so we mix it up.
+            if isinstance(input_type, types.Array):
+                input_operand0 = input_operand1
+                input_type0 = input_type
+            else:
+                input_operand0 = np.array(
+                    np.random.random(10) * 100,
+                    dtype=numpy_support.as_dtype(input_type))
+                input_type0 = typeof(input_operand0)
+
+            cr = self.cache.compile(pyfunc, (input_type0, input_type1),
                                     flags=flags)
             cfunc = cr.entry_point
-            expected = pyfunc(input_operand, input_operand)
-            result = cfunc(input_operand, input_operand)
+            expected = pyfunc(input_operand0, input_operand1)
+            try:
+                result = cfunc(input_operand0, input_operand1)
+            except Exception as exn:
+                import pudb; pudb.set_trace()
+                print(exn)
             self._binary_match_results(
                 expected, result,
                 lambda: '\n'.join(["array operator '{0}' failed",
