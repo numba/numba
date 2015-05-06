@@ -261,6 +261,8 @@ def _build_array(context, builder, array_ty, arg_arrays):
     # mutating along any axis where the argument shape is not one and
     # the destination shape is one.
     for arg_number, arg in enumerate(arg_arrays):
+        if not hasattr(arg, "ndim"): # Skip scalar arguments
+            continue
         arg_ndim = make_intp_const(arg.ndim)
         for index in range(arg.ndim):
             builder.store(builder.extract_value(arg.ary.shape, index),
@@ -460,8 +462,11 @@ def register_binary_operator_kernel(operator, kernel):
     def lower_binary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
+    _any = types.Any
     _arr_kind = types.Kind(types.Array)
     register(implement(operator, _arr_kind, _arr_kind)(lower_binary_operator))
+    register(implement(operator, _any, _arr_kind)(lower_binary_operator))
+    register(implement(operator, _arr_kind, _any)(lower_binary_operator))
 
 
 ################################################################################
