@@ -40,34 +40,54 @@ class RewriteArrayExprs(rewrites.Rewrite):
             self.matches = matches
             array_assigns = {}
             self.array_assigns = array_assigns
+            const_assigns = {}
+            self.const_assigns = const_assigns
             for instr in block.body:
-                is_array_expr = (
-                    isinstance(instr, ir.Assign)
-                    and isinstance(typemap.get(instr.target.name, None),
-                                   types.Array)
-                    and isinstance(instr.value, ir.Expr)
-                    and instr.value.op in ('unary', 'binop')
-                    and instr.value.fn in self._operators
-                )
-                if is_array_expr:
+                if isinstance(instr, ir.Assign):
                     target_name = instr.target.name
-                    array_assigns[target_name] = instr
-                    operands = set(var.name for var in instr.value.list_vars())
-                    if operands.intersection(array_assigns.keys()):
-                        matches.append(target_name)
+                    is_array_expr = (
+                        isinstance(typemap.get(target_name, None),
+                                   types.Array)
+                        and isinstance(instr.value, ir.Expr)
+                        and instr.value.op in ('unary', 'binop')
+                        and instr.value.fn in self._operators
+                    )
+                    if is_array_expr:
+                        array_assigns[target_name] = instr
+                        operands = set(var.name
+                                       for var in instr.value.list_vars())
+                        if operands.intersection(array_assigns.keys()):
+                            matches.append(target_name)
+                    elif isinstance(instr.value, ir.Const):
+                        const_assigns[target_name] = instr.value
         return len(matches) > 0
 
-    def apply(self):
-        '''When we've found array expressions in a basic block, rewrite that
-        block, returning a new, transformed block.
+    def _get_operands(self, ir_expr):
+        '''Given a Numba IR expression, return the operands to the expression
+        in order they appear in the expression.
         '''
-        if config.DUMP_IR:
-            print("_" * 70)
-            print("REWRITING:")
-            self.crnt_block.dump()
-            print("_" * 60)
-        # Part 1: Iterate over the matches, trying to find which
-        # instructions should be rewritten.
+        ir_op = ir_expr.op
+        if ir_op == 'binop':
+            return ir_expr.lhs, ir_expr.rhs
+        elif ir_op == 'unary':
+            return ir_expr.list_vars()
+        raise NotImplementedError(
+            "Don't know how to find the operands for '{0}' expressions.".format(
+                ir_op))
+
+    def _translate_expr(self, ir_expr):
+        '''Translate the given expression from Numba IR to an array expression
+        tree.
+        '''
+        if ir_expr.op == 'arrayexpr':
+            return ir_expr.expr
+        return ir_expr.fn, [self.const_assigns.get(op_var.name, op_var)
+                            for op_var in self._get_operands(ir_expr)]
+
+    def _handle_matches(self):
+        '''Iterate over the matches, trying to find which instructions should
+        be rewritten, deleted, or moved.
+        '''
         replace_map = {}
         dead_vars = set()
         used_vars = set()
@@ -82,7 +102,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
             new_instr = ir.Assign(new_expr, instr.target, instr.loc)
             replace_map[instr] = new_instr
             self.array_assigns[instr.target.name] = new_instr
-            for operand in instr.value.list_vars():
+            for operand in self._get_operands(instr.value):
                 operand_name = operand.name
                 if operand_name in self.array_assigns:
                     child_assign = self.array_assigns[operand_name]
@@ -90,16 +110,39 @@ class RewriteArrayExprs(rewrites.Rewrite):
                     child_operands = child_expr.list_vars()
                     used_vars.update(operand.name
                                      for operand in child_operands)
-                    if child_expr.op != 'arrayexpr':
-                        arr_inps.append((child_expr.fn, child_operands))
-                    else:
-                        arr_inps.append(child_expr.expr)
+                    arr_inps.append(self._translate_expr(child_expr))
                     if child_assign.target.is_temp:
                         dead_vars.add(child_assign.target.name)
                         replace_map[child_assign] = None
+                elif operand_name in self.const_assigns:
+                    arr_inps.append(self.const_assigns[operand_name])
                 else:
                     used_vars.add(operand.name)
                     arr_inps.append(operand)
+        return replace_map, dead_vars, used_vars
+
+    def _get_final_replacement(self, replacement_map, instr):
+        '''Find the final replacement instruction for a given initial
+        instruction by chasing instructions in a map from instructions
+        to replacement instructions.
+        '''
+        replacement = replacement_map[instr]
+        while replacement in replacement_map:
+            replacement = replacement_map[replacement]
+        return replacement
+
+    def apply(self):
+        '''When we've found array expressions in a basic block, rewrite that
+        block, returning a new, transformed block.
+        '''
+        if config.DUMP_IR:
+            print("_" * 70)
+            print("REWRITING:")
+            self.crnt_block.dump()
+            print("_" * 60)
+        # Part 1: Figure out what instructions should be rewritten
+        # based on the matches found.
+        replace_map, dead_vars, used_vars = self._handle_matches()
         # Part 2: Using the information above, rewrite the target
         # basic block.
         result = ir.Block(self.crnt_block.scope, self.crnt_block.loc)
@@ -108,7 +151,8 @@ class RewriteArrayExprs(rewrites.Rewrite):
             if isinstance(instr, ir.Assign):
                 target_name = instr.target.name
                 if instr in replace_map:
-                    replacement = replace_map[instr]
+                    replacement = self._get_final_replacement(
+                        replace_map, instr)
                     if replacement:
                         result.append(replacement)
                         for var in replacement.value.list_vars():
@@ -178,6 +222,8 @@ def _arr_expr_to_ast(expr):
         return ast.Name(expr.name, ast.Load(),
                         lineno=expr.loc.line,
                         col_offset=expr.loc.col if expr.loc.col else 0)
+    elif isinstance(expr, ir.Const):
+        return ast.Num(expr.value)
     raise NotImplementedError(
         "Don't know how to translate array expression '%r'" % (expr,))
 
@@ -186,7 +232,7 @@ def _lower_array_expr(lowerer, expr):
     '''Lower an array expression built by RewriteArrayExprs.
     '''
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
-    expr_args = expr.list_vars()
+    expr_args = sorted(set(expr.list_vars()), key=lambda x: x.name)
     expr_arg_names = [arg.name for arg in expr_args]
     if hasattr(ast, "arg"):
         # Should be Python 3.x
