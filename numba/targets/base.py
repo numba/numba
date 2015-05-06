@@ -497,8 +497,8 @@ class BaseContext(object):
                         shape=cgutils.pack_array(builder, newshape),
                         strides=cgutils.pack_array(builder, newstrides),
                         itemsize=context.get_constant(types.intp, elemty.size),
-                        meminfo=ary.meminfo,
-                        parent=ary.parent
+                        meminfo=None,
+                        parent=None,
                     )
 
                     return ary._getvalue()
