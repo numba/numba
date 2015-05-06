@@ -152,10 +152,72 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
         # Post-processing and analysis on generated IR
-        self._insert_var_dels()
+
+        self.dump(sys.stdout)
+        self._prune_extra_variables()
+        self.dump(sys.stdout)
+
+        self._remove_redundant_acq_del()
+        self.dump(sys.stdout)
+
         self._compute_live_variables()
+
         if self.generator_info:
             self._compute_generator_info()
+
+    def _prune_extra_variables(self):
+        """
+        Scan and prune variables that are only used by Acq/Del
+        """
+        # Pass 1: find unused variable names
+        acqdel = set()
+        used = set()
+        for ir_block in self.blocks.values():
+            for stmt in ir_block.body:
+                varnames = set(x.name for x in stmt.list_vars())
+                if isinstance(stmt, (ir.Acq, ir.Del)):
+                    acqdel |= varnames
+                else:
+                    used |= varnames
+
+        unused = acqdel - used
+
+        # Pass 2: prune
+        for ir_block in self.blocks.values():
+            prune = []
+            for stmt in ir_block.body:
+                if isinstance(stmt, (ir.Acq, ir.Del)):
+                    if stmt.value.name in unused:
+                        prune.append(stmt)
+
+            for stmt in prune:
+                ir_block.body.remove(stmt)
+
+    def _remove_redundant_acq_del(self):
+        """
+        Scan for acq/del pairs within each block and remove pairs that
+        cancel out each other.
+        """
+        for ir_block in self.blocks.values():
+            acq_map = collections.defaultdict(list)
+            del_map = collections.defaultdict(list)
+            # Pass 1: find Acq and Del
+            for stmt in ir_block.body:
+                if isinstance(stmt, ir.Acq):
+                    acq_map[stmt.value.name].append(stmt)
+                elif isinstance(stmt, ir.Del):
+                    del_map[stmt.value.name].append(stmt)
+            # Pass 2: find redundant
+            prune_lst = []
+            for varname, acq_list in acq_map.items():
+                del_list = del_map[varname]
+
+                for a, q in zip(reversed(acq_list), del_list):
+                    prune_lst.append(a)
+                    prune_lst.append(q)
+            # Pass 3: prune
+            for stmt in prune_lst:
+                ir_block.body.remove(stmt)
 
     def _compute_live_variables(self):
         """
@@ -238,6 +300,11 @@ class Interpreter(object):
             st |= yp.live_vars
             st |= yp.weak_live_vars
         gi.state_vars = sorted(st)
+
+    def _delete_all_local_variables(self):
+        for name in self.current_scope.localvars:
+            var = self.current_scope.get(name)
+            self.current_block.append(ir.Del(var, loc=self.loc))
 
     def _insert_var_dels(self):
         """
@@ -500,8 +567,11 @@ class Interpreter(object):
             target = self.current_scope.get_or_define(name, loc=self.loc)
         if isinstance(value, ir.Var):
             value = self.assigner.assign(value, target)
+
+        self.current_block.append(ir.Del(value=target, loc=self.loc))
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
+        self.current_block.append(ir.Acq(value=target, loc=self.loc))
         self.definitions[name].append(value)
 
     def get(self, name):
@@ -1000,6 +1070,8 @@ class Interpreter(object):
 
     def op_RETURN_VALUE(self, inst, retval, castval):
         self.store(ir.Expr.cast(self.get(retval), loc=self.loc), castval)
+        self.current_block.append(ir.Acq(self.get(castval), loc=self.loc))
+        self._delete_all_local_variables()
         ret = ir.Return(self.get(castval), loc=self.loc)
         self.current_block.append(ret)
 
