@@ -401,6 +401,26 @@ class TestDynArray(unittest.TestCase):
         # getrefcount owns 1, got_y owns 1
         self.assertEqual(2, sys.getrefcount(got_y))
 
+    def test_issue_with_return_leak(self):
+        """
+        Dispatcher returns a new reference.
+        It need to workaround it for now.
+        """
+        @nrtjit
+        def inner(out):
+            return out
+
+        def pyfunc(x):
+            return inner(x)
+
+        cfunc = nrtjit(pyfunc)
+
+        arr = np.arange(10)
+        old_refct = sys.getrefcount(arr)
+
+        self.assertEqual(old_refct, sys.getrefcount(pyfunc(arr)))
+        self.assertEqual(old_refct, sys.getrefcount(cfunc(arr)))
+
 
 def benchmark_refct_speed():
     def pyfunc(x, y, t):
