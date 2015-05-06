@@ -235,7 +235,7 @@ class Interpreter(object):
                     adds.add(name)
                     dels.discard(name)
                 elif isinstance(stmt, ir.Del):
-                    name = stmt.value
+                    name = stmt.value.name
                     adds.discard(name)
                     dels.add(name)
 

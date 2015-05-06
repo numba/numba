@@ -300,6 +300,7 @@ class Del(Stmt):
     Delete a reference from the value
     """
     def __init__(self, value, loc):
+        assert isinstance(value, Var)
         self.value = value
         self.loc = loc
 
@@ -312,6 +313,7 @@ class Acq(Stmt):
     Acquire a reference from the value.
     """
     def __init__(self, value, loc):
+        assert isinstance(value, Var)
         self.value = value
         self.loc = loc
 
