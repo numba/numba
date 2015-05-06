@@ -12,7 +12,7 @@ from collections import namedtuple
 
 from llvmlite.llvmpy import core as lc
 
-from . import builtins, ufunc_db
+from . import builtins, ufunc_db, arrayobj
 from .imputils import implement, Registry
 from .. import typing, types, cgutils, numpy_support
 from ..config import PYVERSION
@@ -190,6 +190,97 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         raise TypeError('unknown type for {0}: {1}'.format(where, str(tyinp)))
 
 
+_broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
+                                 types.intp, types.CPointer(types.intp))
+def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
+    '''Low-level utility function used in calculating a shape for
+    an implicit output array.  This function assumes that the
+    destination shape is an LLVM pointer to a C-style array that was
+    already initialized to a size of one along all axes.
+
+    Returns an integer value:
+    >= 1  :  Succeeded.  Return value should equal the number of dimensions in
+             the destination shape.
+    0     :  Failed to broadcast because source shape is larger than the
+             destination shape (this case should be weeded out at type
+             checking).
+    < 0   :  Failed to broadcast onto destination axis, at axis number ==
+             -(return_value + 1).
+    '''
+    if src_ndim > dest_ndim:
+        # This check should have been done during type checking, but
+        # let's be defensive anyway...
+        return 0
+    else:
+        src_index = 0
+        dest_index = dest_ndim - src_ndim
+        while src_index < src_ndim:
+            src_dim_size = src_shape[src_index]
+            dest_dim_size = dest_shape[dest_index]
+            # Check to see if we've already mutated the destination
+            # shape along this axis.
+            if dest_dim_size != 1:
+                # If we have mutated the destination shape already,
+                # then the source axis size must either be one,
+                # or the destination axis size.
+                if src_dim_size != dest_dim_size and src_dim_size != 1:
+                    return -(dest_index + 1)
+            elif src_dim_size != 1:
+                # If the destination size is still its initial
+                dest_shape[dest_index] = src_dim_size
+            src_index += 1
+            dest_index += 1
+    return dest_index
+
+def _build_array(context, builder, array_ty, arg_arrays):
+    """Utility function to handle allocation of an implicit output array
+    given the target context, builder, output array type, and a list of
+    _ArrayHelper instances.
+    """
+    intp_ty = context.get_value_type(types.intp)
+    def make_intp_const(val):
+        return context.get_constant(types.intp, val)
+
+    ZERO = make_intp_const(0)
+    ONE = make_intp_const(1)
+
+    src_shape = cgutils.alloca_once(builder, intp_ty, array_ty.ndim,
+                                    "src_shape")
+    dest_ndim = make_intp_const(array_ty.ndim)
+    dest_shape = cgutils.alloca_once(builder, intp_ty, array_ty.ndim,
+                                     "dest_shape")
+    dest_shape_addrs = tuple(builder.gep(dest_shape, [make_intp_const(index)])
+                           for index in range(array_ty.ndim))
+
+    # Initialize the destination shape with all ones.
+    for dest_shape_addr in dest_shape_addrs:
+        builder.store(ONE, dest_shape_addr)
+
+    # For each argument, try to broadcast onto the destination shape,
+    # mutating along any axis where the argument shape is not one and
+    # the destination shape is one.
+    for arg_number, arg in enumerate(arg_arrays):
+        arg_ndim = make_intp_const(arg.ndim)
+        for index in range(arg.ndim):
+            builder.store(builder.extract_value(arg.ary.shape, index),
+                          builder.gep(src_shape, [make_intp_const(index)]))
+        arg_result = context.compile_internal(
+            builder, _broadcast_onto, _broadcast_onto_sig,
+            [arg_ndim, src_shape, dest_ndim, dest_shape])
+        with cgutils.if_unlikely(builder,
+                                 builder.icmp(lc.ICMP_SLT, arg_result, ONE)):
+            msg = "unable to broadcast argument %d to output array" % (
+                arg_number,)
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+    dest_shape_tup = tuple(builder.load(dest_shape_addr)
+                           for dest_shape_addr in dest_shape_addrs)
+    array_val = arrayobj._empty_nd_impl(context, builder, array_ty,
+                                        dest_shape_tup)
+    return _prepare_argument(context, builder, array_val, array_ty,
+                             where='implicit output argument')
+
+
 def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
                        explicit_output=True):
     # This is the code generator that builds all the looping needed
@@ -203,16 +294,18 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
     # kernel_class -  a code generating subclass of _Kernel that provides
     # explicit_output - if the output was explicit in the call
     #                   (ie: np.add(x,y,r))
-    if not explicit_output:
-        if isinstance(sig.return_type, types.Array):
-            raise TypeError("array allocation is not supported, yet")
 
-        args.append(lc.Constant.null(context.get_value_type(sig.return_type)))
-        tyargs = sig.args + (sig.return_type,)
-    else:
-        tyargs = sig.args
     arguments = [_prepare_argument(context, builder, arg, tyarg)
-                 for arg, tyarg in zip(args, tyargs)]
+                 for arg, tyarg in zip(args, sig.args)]
+    if not explicit_output:
+        ret_ty = sig.return_type
+        if isinstance(ret_ty, types.Array):
+            output = _build_array(context, builder, ret_ty, arguments)
+        else:
+            output = _prepare_argument(
+                context, builder,
+                lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
+        arguments.append(output)
 
     inputs = arguments[0:-1]
     output = arguments[-1]
@@ -320,7 +413,7 @@ def register_unary_ufunc_kernel(ufunc, kernel):
     def unary_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
 
-    def unary_scalar_ufunc(context, builder, sig, args):
+    def unary_ufunc_no_explicit_output(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
 
@@ -328,15 +421,15 @@ def register_unary_ufunc_kernel(ufunc, kernel):
 
     # (array or scalar, out=array)
     register(implement(ufunc, _any, types.Kind(types.Array))(unary_ufunc))
-    # (scalar, out=array)
-    register(implement(ufunc, _any)(unary_scalar_ufunc))
+    # (array or scalar)
+    register(implement(ufunc, _any)(unary_ufunc_no_explicit_output))
 
 
 def register_binary_ufunc_kernel(ufunc, kernel):
     def binary_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
 
-    def binary_scalar_ufunc(context, builder, sig, args):
+    def binary_ufunc_no_explicit_output(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
 
@@ -345,7 +438,7 @@ def register_binary_ufunc_kernel(ufunc, kernel):
     # (array or scalar, array o scalar, out=array)
     register(implement(ufunc, _any, _any, types.Kind(types.Array))(binary_ufunc))
     # (scalar, scalar)
-    register(implement(ufunc, _any, _any)(binary_scalar_ufunc))
+    register(implement(ufunc, _any, _any)(binary_ufunc_no_explicit_output))
 
 
 ################################################################################

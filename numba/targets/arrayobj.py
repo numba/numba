@@ -1248,6 +1248,52 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
+def _empty_nd_impl(context, builder, arrtype, shapes):
+    """Utility function used for allocating a new array during LLVM code
+    generation (lowering).  Given a target context, builder, array
+    type, and a tuple or list of lowered dimension sizes, returns a
+    LLVM value pointing at a Numba runtime allocated array.
+    """
+    arycls = make_array(arrtype)
+    ary = arycls(context, builder)
+
+    datatype = context.get_data_type(arrtype.dtype)
+    itemsize = context.get_constant(types.intp,
+                                    context.get_abi_sizeof(datatype))
+
+    # compute array length
+    arrlen = context.get_constant(types.intp, 1)
+    for s in shapes:
+        arrlen = builder.mul(arrlen, s)
+
+    if arrtype.layout == 'C':
+        strides = [itemsize]
+        for dimension_size in reversed(shapes[1:]):
+            strides.append(builder.mul(strides[-1], dimension_size))
+        strides = tuple(reversed(strides))
+    elif arrtype.layout == 'F':
+        strides = [itemsize]
+        for dimension_size in shapes[:-1]:
+            strides.append(builder.mul(strides[-1], dimension_size))
+        strides = tuple(strides)
+    else:
+        raise NotImplementedError(
+            "Don't know how to allocate array with layout '{0}'.".format(
+                arrtype.layout))
+
+    meminfo = context.nrt_meminfo_alloc(builder,
+                                        size=builder.mul(itemsize, arrlen))
+    data = context.nrt_meminfo_data(builder, meminfo)
+
+    populate_array(ary,
+                   data=builder.bitcast(data, datatype.as_pointer()),
+                   shape=cgutils.pack_array(builder, shapes),
+                   strides=cgutils.pack_array(builder, strides),
+                   itemsize=itemsize,
+                   meminfo=meminfo)
+    return ary._getvalue()
+
+
 @builtin
 @implement(numpy.empty, types.Kind(types.Integer))
 @implement(numpy.empty, types.Kind(types.BaseTuple))
@@ -1257,12 +1303,6 @@ def numpy_empty_nd(context, builder, sig, args):
     arrshapetype = sig.args[0]
     arrshape = args[0]
     arrtype = sig.return_type
-    arycls = make_array(arrtype)
-    ary = arycls(context, builder)
-
-    datatype = context.get_data_type(arrtype.dtype)
-    itemsize = context.get_constant(types.intp,
-                                    context.get_abi_sizeof(datatype))
 
     if isinstance(arrshapetype, types.Integer):
         shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
@@ -1272,26 +1312,4 @@ def numpy_empty_nd(context, builder, sig, args):
         shapes = cgutils.unpack_tuple(builder, arrshape,
                                       count=len(arrshapetype))
 
-    # compute array length
-    arrlen = context.get_constant(types.intp, 1)
-    for s in shapes:
-        arrlen = builder.mul(arrlen, s)
-
-    strides = [itemsize]
-    for s in reversed(shapes[1:]):
-        strides.append(builder.mul(strides[-1], s))
-
-    meminfo = context.nrt_meminfo_alloc(builder,
-                                        size=builder.mul(itemsize, arrlen))
-    data = context.nrt_meminfo_data(builder, meminfo)
-
-    populate_array(ary,
-                   data=builder.bitcast(data, datatype.as_pointer()),
-                   shape=cgutils.pack_array(builder, shapes),
-                   strides=cgutils.pack_array(builder,
-                                              tuple(reversed(strides))),
-                   itemsize=itemsize,
-                   meminfo=meminfo)
-    return ary._getvalue()
-
-
+    return _empty_nd_impl(context, builder, arrtype, shapes)
