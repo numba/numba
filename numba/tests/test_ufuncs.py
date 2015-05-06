@@ -335,11 +335,7 @@ class TestUFuncs(TestCase):
                                     flags=flags)
             cfunc = cr.entry_point
             expected = pyfunc(input_operand0, input_operand1)
-            try:
-                result = cfunc(input_operand0, input_operand1)
-            except Exception as exn:
-                import pudb; pudb.set_trace()
-                print(exn)
+            result = cfunc(input_operand0, input_operand1)
             self._binary_match_results(
                 expected, result,
                 lambda: '\n'.join(["array operator '{0}' failed",
