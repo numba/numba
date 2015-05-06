@@ -480,12 +480,18 @@ class Interpreter(object):
         for phiname, varname in self.dfainfo.outgoing_phis.items():
             target = self.current_scope.get_or_define(phiname,
                                                       loc=self.loc)
-            stmt = ir.Assign(value=self.get(varname), target=target,
-                             loc=self.loc)
+            stmtlist = [
+                ir.Del(value=target, loc=self.loc),
+                ir.Assign(value=self.get(varname), target=target, loc=self.loc),
+                ir.Acq(value=target, loc=self.loc)
+            ]
+
             if not self.current_block.is_terminated:
-                self.current_block.append(stmt)
+                for stmt in stmtlist:
+                    self.current_block.append(stmt)
             else:
-                self.current_block.insert_before_terminator(stmt)
+                for stmt in stmtlist:
+                    self.current_block.insert_before_terminator(stmt)
 
     def get_global_value(self, name):
         """
@@ -894,6 +900,11 @@ class Interpreter(object):
         # Emit code
         val = self.get(iterator)
 
+        # Remember the iterator
+        loopblock = self.syntax_blocks[-1]
+        assert not loopblock.cleanups
+        loopblock.cleanups.add(self.get(iterator))
+
         pairval = ir.Expr.iternext(value=val, loc=self.loc)
         self.store(pairval, pair)
 
@@ -1066,7 +1077,9 @@ class Interpreter(object):
         self.current_block.append(jmp)
 
     def op_POP_BLOCK(self, inst):
-        self.syntax_blocks.pop()
+        blk = self.syntax_blocks.pop()
+        for var in blk.cleanups:
+            self.current_block.append(ir.Del(var, loc=self.loc))
 
     def op_RETURN_VALUE(self, inst, retval, castval):
         self.store(ir.Expr.cast(self.get(retval), loc=self.loc), castval)

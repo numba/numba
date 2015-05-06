@@ -635,11 +635,12 @@ class Block(object):
 
 
 class Loop(object):
-    __slots__ = "entry", "exit"
+    __slots__ = "entry", "exit", "cleanups"
 
     def __init__(self, entry, exit):
         self.entry = entry
         self.exit = exit
+        self.cleanups = set()
 
     def __repr__(self):
         args = self.entry, self.exit
