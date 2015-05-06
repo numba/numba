@@ -152,13 +152,8 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
         # Post-processing and analysis on generated IR
-
-        self.dump(sys.stdout)
         self._prune_extra_variables()
-        self.dump(sys.stdout)
-
         self._remove_redundant_acq_del()
-        self.dump(sys.stdout)
 
         self._compute_live_variables()
 
