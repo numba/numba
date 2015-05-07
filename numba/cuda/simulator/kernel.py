@@ -1,7 +1,7 @@
 from __future__ import print_function
 from .array import to_device
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
-from six import reraise
+from numba.six import reraise
 import numpy as np
 import sys
 import threading

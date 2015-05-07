@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 import numpy as np
 from warnings import warn
-from six import raise_from
+from numba.six import raise_from
 
 class FakeShape(tuple):
     '''
