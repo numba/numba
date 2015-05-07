@@ -35,7 +35,7 @@ class FakeCUDALocal(object):
     CUDA Local arrays
     '''
     def array(self, shape, dtype):
-        dtype = numpy_support.to_dtype(dtype)
+        dtype = numpy_support.as_dtype(dtype)
         return np.empty(shape, dtype)
 
 
@@ -71,14 +71,14 @@ class FakeCUDAShared(object):
         self._dynshared = np.zeros(dynshared_size, dtype=np.byte)
 
     def array(self, shape, dtype):
-        dtype = numpy_support.to_dtype(dtype)
+        dtype = numpy_support.as_dtype(dtype)
         # Dynamic shared memory is requested with size 0 - this all shares the
         # same underlying memory
         if shape == 0:
             # Count must be the maximum number of whole elements that fit in the
             # buffer (Numpy complains if the buffer is not a multiple of the
             # element size)
-            count = self._dynshared_size // dtype(0).itemsize
+            count = self._dynshared_size // dtype.itemsize
             return np.frombuffer(self._dynshared.data, dtype=dtype, count=count)
 
         # Otherwise, identify allocations by source file and line number
