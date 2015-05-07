@@ -1,8 +1,8 @@
 from __future__ import print_function, absolute_import, division
-from numba import sigutils, types
+from numba import config, sigutils, types
 from .compiler import (compile_kernel, compile_device, declare_device_function,
                        AutoJitCUDAKernel, compile_device_template)
-
+from .simulator.kernel import FakeCUDAKernel
 
 def jitdevice(func, link=[], debug=False, inline=False):
     """Wrapper for device-jit.
@@ -97,6 +97,9 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
         Disables precise square root.
     """
 
+    if link and config.ENABLE_CUDASIM:
+        raise NotImplementedError('Cannot link PTX in the simulator')
+
     if argtypes is None and not sigutils.is_signature(restype):
         if restype is None:
             return autojit(device=device, bind=bind, link=link, debug=debug,
@@ -109,8 +112,14 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
             return decor(restype)
 
     else:
-        restype, argtypes = convert_types(restype, argtypes)
         fastmath = kws.get('fastmath', False)
+        if config.ENABLE_CUDASIM:
+            def jitwrapper(func):
+                return FakeCUDAKernel(func, device=device, fastmath=fastmath,
+                                      debug=debug)
+            return jitwrapper
+
+        restype, argtypes = convert_types(restype, argtypes)
 
         if restype and not device and restype != types.void:
             raise TypeError("CUDA kernel must have void return type.")
@@ -165,12 +174,20 @@ def autojit(func=None, device=False, bind=True, **kws):
 
     """
     if func is None:
-        def autojitwrapper(func):
-            return autojit(func, device=device, bind=bind, **kws)
+        if config.ENABLE_CUDASIM:
+            def autojitwrapper(func):
+                return FakeCUDAKernel(func, device=device, fastmath=fastmath,
+                                      debug=debug)
+        else:
+            def autojitwrapper(func):
+                return autojit(func, device=device, bind=bind, **kws)
 
         return autojitwrapper
     else:
-        if device:
+        if config.ENABLE_CUDASIM:
+            return FakeCUDAKernel(func, device=device, fastmath=fastmath,
+                                  debug=debug)
+        elif device:
             return jitdevice(func, **kws)
         else:
             return AutoJitCUDAKernel(func, bind=bind, targetoptions=kws)

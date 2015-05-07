@@ -2,8 +2,10 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 from numba import cuda
 from numba.cuda.testing import unittest
+from numba.cuda.testing import skip_on_cudasim
 
 
+@skip_on_cudasim('Simulator does not have definitions attribute')
 class TestCudaAutoJit(unittest.TestCase):
     def test_autojit(self):
         @cuda.autojit

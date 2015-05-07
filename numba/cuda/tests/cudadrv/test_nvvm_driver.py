@@ -7,10 +7,12 @@ from numba.cuda.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
 from ctypes import c_size_t, c_uint64, sizeof
 from numba.cuda.testing import unittest
 from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError
+from numba.cuda.testing import skip_on_cudasim
 
 is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 
 
+@skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestNvvmDriver(unittest.TestCase):
     def get_ptx(self):
         nvvm = NVVM()
@@ -79,6 +81,7 @@ class TestNvvmDriver(unittest.TestCase):
                 self.assertIn(pat, raises.msg)
 
 
+@skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
         self.assertEqual(get_arch_option(2, 0), 'compute_20')
@@ -94,6 +97,7 @@ class TestArchOption(unittest.TestCase):
                          'compute_%d%d' % SUPPORTED_CC[-1])
 
 
+@skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestLibDevice(unittest.TestCase):
     def _libdevice_load(self, arch, expect):
         libdevice = LibDevice(arch=arch)

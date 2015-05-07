@@ -3,8 +3,10 @@ import numpy
 from numba.cuda.cudadrv import driver, drvapi, devices
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.utils import IS_PY3
+from numba.cuda.testing import skip_on_cudasim
 
 
+@skip_on_cudasim('CUDA Memory API unsupported in the simulator')
 class TestCudaMemory(CUDATestCase):
     def setUp(self):
         self.context = devices.get_context()
@@ -39,6 +41,7 @@ class TestCudaMemory(CUDATestCase):
         self._template(devmem)
 
 
+@skip_on_cudasim('CUDA Memory API unsupported in the simulator')
 class TestCudaMemoryFunctions(CUDATestCase):
     def setUp(self):
         self.context = devices.get_context()
@@ -82,6 +85,7 @@ class TestCudaMemoryFunctions(CUDATestCase):
         self.assertTrue(numpy.all(hst == hst2))
 
 
+@skip_on_cudasim('CUDA Memory API unsupported in the simulator')
 class TestMVExtent(CUDATestCase):
     def test_c_contiguous_array(self):
         ary = numpy.arange(100)

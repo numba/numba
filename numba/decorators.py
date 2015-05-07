@@ -5,6 +5,7 @@ from __future__ import print_function, division, absolute_import
 import warnings
 from . import config, sigutils
 from .targets import registry
+from . import cuda
 
 # -----------------------------------------------------------------------------
 # Decorators
@@ -146,6 +147,8 @@ def jit(signature_or_function=None, locals={}, target='cpu', **options):
     else:
         # A function is passed
         pyfunc = signature_or_function
+        if config.ENABLE_CUDASIM and target == 'cuda':
+            return cuda.jit(pyfunc)
         if config.DISABLE_JIT and not target == 'npyufunc':
             return DisableJitWrapper(pyfunc)
         dispatcher = registry.target_registry[target]
