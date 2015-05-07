@@ -1262,11 +1262,12 @@ class TestLoopTypes(TestCase):
         # fail in no python mode. Usually the last loop in ufuncs is an all
         # object fallback
         supported_types = getattr(self, '_supported_types', [])
-        skip_types = getattr(self, '_skip_types', [])
-        if any(l not in supported_types or l in skip_types
-               for l in letter_types):
+        if (supported_types and
+            any(l not in supported_types for l in letter_types)):
             return
-
+        skip_types = getattr(self, '_skip_types', [])
+        if any(l in skip_types for l in letter_types):
+            return
         # if the test case requires some types to be present, skip loops
         # not involving any of those types.
         required_types = getattr(self, '_required_types', [])
