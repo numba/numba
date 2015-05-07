@@ -28,7 +28,7 @@ class FakeCUDAArray(object):
         try:
             attr = getattr(self._ary, attrname)
             return attr
-        except AttributeError:
+        except AttributeError as e:
             raise_from(AttributeError("Wrapped array has no attribute '%s'"
                                       % attrname), e)
 
@@ -48,15 +48,15 @@ class FakeCUDAArray(object):
         return ary
 
     def copy_to_device(self, ary, stream=0):
-       '''
-       Copy from the provided array into this array.
+        '''
+        Copy from the provided array into this array.
 
-       This may be less forgiving than the CUDA Python implementation, which
-       will copy data up to the length of the smallest of the two arrays,
-       whereas this uses np.copyto, which expects the size of the arrays to be
-       equal.
-       '''
-       np.copyto(self._ary, ary)
+        This may be less forgiving than the CUDA Python implementation, which
+        will copy data up to the length of the smallest of the two arrays,
+        whereas this uses np.copyto, which expects the size of the arrays to be
+        equal.
+        '''
+        np.copyto(self._ary, ary)
 
     def to_host(self):
         warn('to_host() is deprecated and will be removed')
@@ -72,10 +72,10 @@ class FakeCUDAArray(object):
         return FakeCUDAArray(self._ary.reshape(*args, **kwargs))
 
     def is_c_contiguous(self):
-       return self._ary.flags.c_contiguous
+        return self._ary.flags.c_contiguous
 
     def is_f_contiguous(self):
-       return self._ary.flags.f_contiguous
+        return self._ary.flags.f_contiguous
 
     def __str__(self):
         return str(self._ary)
