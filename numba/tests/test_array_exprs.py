@@ -25,6 +25,12 @@ def pos_root(As, Bs, Cs):
 def neg_root_common_subexpr(As, Bs, Cs):
     _2As = 2. * As
     _4AsCs = 2. * _2As * Cs
+    _Bs2_4AsCs = (Bs ** 2. - _4AsCs)
+    return (-Bs - (_Bs2_4AsCs ** 0.5)) / _2As
+
+def neg_root_complex_subexpr(As, Bs, Cs):
+    _2As = 2. * As
+    _4AsCs = 2. * _2As * Cs
     _Bs2_4AsCs = (Bs ** 2. - _4AsCs) + 0j # Force into the complex domain.
     return (-Bs - (_Bs2_4AsCs ** 0.5)) / _2As
 
@@ -96,6 +102,24 @@ class TestArrayExpressions(unittest.TestCase):
                     if instr.value.op == 'arrayexpr':
                         yield instr
 
+    def _array_expr_to_set(self, expr, out=None):
+        '''
+        Convert an array expression tree into a set of operators.
+        '''
+        if out is None:
+            out = set()
+        if not isinstance(expr, tuple):
+            raise ValueError("{0} not a tuple".format(expr))
+        operation, operands = expr
+        processed_operands = []
+        for operand in operands:
+            if isinstance(operand, tuple):
+                operand, _ = self._array_expr_to_set(operand, out)
+            processed_operands.append(operand)
+        processed_expr = operation, tuple(processed_operands)
+        out.add(processed_expr)
+        return processed_expr, out
+
     def _test_root_function(self, fn=pos_root):
         A = np.random.random(10)
         B = np.random.random(10) + 1. # Increase likelihood of real
@@ -109,7 +133,7 @@ class TestArrayExpressions(unittest.TestCase):
         nb_fn_0 = control_cres.entry_point
 
         test_pipeline = RewritesTester.mk_pipeline(arg_tys)
-        test_cres = test_pipeline.compile_extra(pos_root)
+        test_cres = test_pipeline.compile_extra(fn)
         nb_fn_1 = test_cres.entry_point
 
         np_result = fn(A, B, C)
@@ -134,13 +158,36 @@ class TestArrayExpressions(unittest.TestCase):
         self.assertEqual(len(list(self._get_array_exprs(ir0[0].body))), 0)
         self.assertEqual(len(list(self._get_array_exprs(ir1[0].body))), 1)
 
-    def test_common_subexpressions(self):
+    def test_common_subexpressions(self, fn=neg_root_common_subexpr):
         '''
         Attempt to verify that rewriting will incorporate user common
         subexpressions properly.
         '''
-        import pudb; pudb.set_trace()
-        ns = self._test_root_function(neg_root_common_subexpr)
+        ns = self._test_root_function(fn)
+        ir0 = ns.control_pipeline.interp.blocks
+        ir1 = ns.test_pipeline.interp.blocks
+        self.assertEqual(len(ir0), len(ir1))
+        self.assertGreater(len(ir0[0].body), len(ir1[0].body))
+        self.assertEqual(len(list(self._get_array_exprs(ir0[0].body))), 0)
+        # Verify that we didn't rewrite everything into a monolithic
+        # array expression since we stored temporary values in
+        # variables that might be used later (from the optimization's
+        # point of view).
+        array_expr_instrs = list(self._get_array_exprs(ir1[0].body))
+        self.assertGreater(len(array_expr_instrs), 1)
+        # Now check that we haven't duplicated any subexpressions in
+        # the rewritten code.
+        array_sets = list(self._array_expr_to_set(instr.value.expr)[1]
+                          for instr in array_expr_instrs)
+        for expr_set_0, expr_set_1 in zip(array_sets[:-1], array_sets[1:]):
+            intersections = expr_set_0.intersection(expr_set_1)
+            if intersections:
+                self.fail("Common subexpressions detected in array "
+                          "expressions ({0})".format(intersections))
+
+    @unittest.skipIf(__name__ != "__main__", "waiting on fix for issue #1125")
+    def test_complex_subexpression(self):
+        return self.test_common_subexpressions(neg_root_complex_subexpr)
 
 
 if __name__ == "__main__":
