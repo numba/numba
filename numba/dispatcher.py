@@ -487,7 +487,11 @@ class FunctionCache(object):
         data_name = overloads.get(key)
         if data_name is None:
             return
-        return self._load_data(data_name, target_context)
+        try:
+            return self._load_data(data_name, target_context)
+        except EnvironmentError:
+            # File could have been removed while the index still refers it.
+            return
 
     def save_overload(self, sig, cres):
         if not self._enabled:
