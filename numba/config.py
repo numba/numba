@@ -120,3 +120,6 @@ ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int,
 
 # Disable jit for debugging
 DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
+
+# Enable CUDA simulator
+ENABLE_CUDASIM = _readenv("NUMBA_ENABLE_CUDASIM", int, 0)
