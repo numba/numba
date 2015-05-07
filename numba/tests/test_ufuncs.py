@@ -1302,43 +1302,64 @@ class TestLoopTypes(TestCase):
                 msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
                                  "args: {2}", "expected {3}", "got {4}"])
                 msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
-                self.assertPreciseEqual(py, c, prec=prec, msg=msg) 
+                try:
+                    self.assertPreciseEqual(py, c, prec=prec, msg=msg)
+                except AssertionError:
+                    if not self._is_acceptable_error(py, c):
+                        raise
 
-    def _check_ufunc_loops(self, ufunc):
-        fn = _make_ufunc_usecase(ufunc)
-        _failed_loops = []
+    def _is_acceptable_error(self, py, c):
+        """
+        Result mismatch due to differing error handling.
+        """
+        if np.isnan(c) or np.isnan(py):
+            if 0 in [c, py]:
+                # If one is NaN and the other is zero
+                msg = "mismatch for nan values: expected {0}; got {1}"
+                print(msg.format(py, c))
+                return True
+
+        elif np.abs(c) == 0 and np.abs(py) == np.abs(c):
+            # If both are zeros and they are differ by sign
+            msg = "mismatch sign for 0: expected {0}; got {1}"
+            print(msg.format(py, c))
+            return True
+
+        elif isinstance(c, complex) and isinstance(py, complex):
+            # Recurse into real and imag of a complex
+            return (self._is_acceptable_error(c.real, py.real)
+                    and self._is_acceptable_error(c.imag, py.imag))
+
+        # Match?
+        return py == c
+
+    @classmethod
+    def _check_ufunc_loops(cls, ufunc):
         for loop in ufunc.types:
-            try:
-                self._check_loop(fn, ufunc, loop)
-            except AssertionError as e:
-                import traceback
-                traceback.print_exc()
-                _failed_loops.append('{2} {0}:{1}'.format(loop, str(e),
-                                                          ufunc.__name__))
+            cls._inject_test(ufunc, loop)
 
-        return _failed_loops
+    @classmethod
+    def _inject_test(cls, ufunc, loop):
+        def test_template(self):
+            fn = _make_ufunc_usecase(ufunc)
+            self._check_loop(fn, ufunc, loop)
+        setattr(cls, "test_{0}_{1}".format(ufunc.__name__,
+                                           loop.replace('->', '_')),
+                test_template)
 
-    def test_ufunc_loops(self):
-        failed_ufuncs = []
-        failed_loops_count = 0
-        for ufunc in self._ufuncs:
-            failed_loops = self._check_ufunc_loops(ufunc)
-            if failed_loops:
-                failed_loops_count += len(failed_loops)
-                msg = 'ufunc {0} failed in loops:\n\t{1}\n\t'.format(
-                    ufunc.__name__,
-                    '\n\t'.join(failed_loops))
-                failed_ufuncs.append(msg)
-
-        if failed_ufuncs:
-            msg = 'Failed {0} ufuncs, {1} loops:\n{2}'.format(
-                len(failed_ufuncs), failed_loops_count,
-                '\n'.join(failed_ufuncs))
-
-            self.fail(msg=msg)
+    @classmethod
+    def autogenerate(cls):
+        for ufunc in cls._ufuncs:
+            cls._check_ufunc_loops(ufunc)
 
 
-class TestLoopTypesIntNoPython(TestLoopTypes):
+class TestLoopTypes(_TestLoopTypes):
+    pass
+
+TestLoopTypes.autogenerate()
+
+
+class TestLoopTypesIntNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
     # reciprocal needs a special test due to issue #757
