@@ -887,10 +887,18 @@ class Stream(object):
         return "<CUDA stream %d on %s>" % (self.handle.value, self.context)
 
     def synchronize(self):
+        '''
+        Wait for all commands in this stream to execute. This will commit any
+        pending memory transfers.
+        '''
         driver.cuStreamSynchronize(self.handle)
 
     @contextlib.contextmanager
     def auto_synchronize(self):
+        '''
+        A context manager that waits for all commands in this stream to execute
+        and commits any pending memory transfers upon exiting the context.
+        '''
         yield self
         self.synchronize()
 
