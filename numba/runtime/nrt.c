@@ -3,6 +3,11 @@
 #include "nrt.h"
 #include "assert.h"
 
+
+typedef int (*atomic_meminfo_cas_func)(MemInfo * volatile *ptr, MemInfo *cmp,
+                                       MemInfo *repl, MemInfo **oldptr);
+
+
 union MemInfo{
     struct {
         size_t         refct;
@@ -25,7 +30,7 @@ struct MemSys{
     /* Atomic increment and decrement function */
     atomic_inc_dec_func atomic_inc, atomic_dec;
     /* Atomic CAS */
-    atomic_cas_func atomic_cas;
+    atomic_meminfo_cas_func atomic_cas;
     /* Shutdown flag */
     int shutting;
 
@@ -138,7 +143,7 @@ void NRT_MemSys_set_atomic_inc_dec(atomic_inc_dec_func inc,
 }
 
 void NRT_MemSys_set_atomic_cas(atomic_cas_func cas) {
-    TheMSys.atomic_cas = cas;
+    TheMSys.atomic_cas = (atomic_meminfo_cas_func)cas;
 }
 
 static
@@ -161,10 +166,10 @@ size_t nrt_testing_atomic_dec(size_t *ptr){
 
 
 static
-int nrt_testing_atomic_cas(size_t *ptr, size_t cmp, size_t val,
-                              size_t *oldptr){
+int nrt_testing_atomic_cas(void* volatile *ptr, void *cmp, void *val,
+                           void * *oldptr){
     /* non atomic */
-    size_t old = *ptr;
+    void *old = *ptr;
     *oldptr = old;
     if (old == cmp) {
         *ptr = val;

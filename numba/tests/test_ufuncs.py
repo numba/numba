@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import types, typing, utils
+from numba import types, typing, utils, typeof
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype
 from numba import vectorize
@@ -28,6 +28,9 @@ enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
 no_pyobj_flags = Flags()
+
+enable_nrt_flags = Flags()
+enable_nrt_flags.set("nrt")
 
 def _unimplemented(func):
     """An 'expectedFailure' like decorator that only expects compilation errors
@@ -1013,6 +1016,65 @@ class TestUFuncs(TestCase):
             arr_ty = types.Array(types.uint64, 1, 'C')
             cr = compile_isolated(myadd, (arr_ty, arr_ty),
                                   flags=no_pyobj_flags)
+
+    def test_broadcast_implicit_output_npm_nrt(self):
+        def pyfunc(a0, a1):
+            return np.add(a0, a1)
+
+        input1_operands = [
+            np.arange(3, dtype='u8'),
+            np.arange(3*3, dtype='u8').reshape(3,3),
+            np.arange(3*3*3, dtype='u8').reshape(3,3,3),
+            np.arange(3, dtype='u8').reshape(3,1),
+            np.arange(3, dtype='u8').reshape(1,3),
+            np.arange(3, dtype='u8').reshape(3,1,1),
+            np.arange(3*3, dtype='u8').reshape(3,3,1),
+            np.arange(3*3, dtype='u8').reshape(3,1,3),
+            np.arange(3*3, dtype='u8').reshape(1,3,3)]
+
+        input2_operands = input1_operands
+
+        for x, y in itertools.product(input1_operands, input2_operands):
+
+            input1_type = types.Array(types.uint64, x.ndim, 'C')
+            input2_type = types.Array(types.uint64, y.ndim, 'C')
+
+            cr = self.cache.compile(pyfunc, (input1_type, input2_type),
+                                    flags=enable_nrt_flags)
+            cfunc = cr.entry_point
+
+            expected = np.add(x, y)
+            result = cfunc(x, y)
+            np.testing.assert_array_equal(expected, result)
+
+    def test_implicit_output_layout(self):
+        def pyfunc(a0, a1):
+            return np.add(a0, a1)
+        X = np.linspace(0, 1, 20).reshape(4, 5)
+        Y = np.array(X, order='F')
+        Xty = typeof(X)
+        assert X.flags.c_contiguous and Xty.layout == 'C'
+        Yty = typeof(Y)
+        assert Y.flags.f_contiguous and Yty.layout == 'F'
+
+        cr0 = self.cache.compile(pyfunc, (Xty, Yty), flags=enable_nrt_flags)
+        expected0 = np.add(X, Y)
+        result0 = cr0.entry_point(X, Y)
+        self.assertEqual(expected0.flags.c_contiguous,
+                         result0.flags.c_contiguous)
+        self.assertEqual(expected0.flags.f_contiguous,
+                         result0.flags.f_contiguous)
+        np.testing.assert_array_equal(expected0, result0)
+
+        cr1 = self.cache.compile(pyfunc, (Yty, Yty), flags=enable_nrt_flags)
+        expected1 = np.add(Y, Y)
+        result1 = cr1.entry_point(Y, Y)
+        self.assertEqual(expected1.flags.c_contiguous,
+                         result1.flags.c_contiguous)
+        self.assertEqual(expected1.flags.f_contiguous,
+                         result1.flags.f_contiguous)
+        np.testing.assert_array_equal(expected1, result1)
+
 
 class TestScalarUFuncs(TestCase):
     """check the machinery of ufuncs works when the result is an scalar.

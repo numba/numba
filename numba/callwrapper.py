@@ -10,7 +10,8 @@ class _ArgManager(object):
     """
     A utility class to handle argument unboxing and cleanup
     """
-    def __init__(self, builder, api, endblk, nargs):
+    def __init__(self, context, builder, api, endblk, nargs):
+        self.context = context
         self.builder = builder
         self.api = api
         self.arg_count = 0  # how many function arguments have been processed
@@ -37,6 +38,14 @@ class _ArgManager(object):
         cleanupblk = cgutils.append_basic_block(self.builder,
                                                 "arg%d.err" % self.arg_count)
         with cgutils.goto_block(self.builder, cleanupblk):
+            # NRT cleanup
+
+            if self.context.enable_nrt:
+                def nrt_cleanup():
+                    self.context.nrt_decref(self.builder, ty, native.value)
+                nrt_cleanup()
+                self.cleanups.append(nrt_cleanup)
+
             if native.cleanup is not None:
                 native.cleanup()
                 self.cleanups.append(native.cleanup)
@@ -122,7 +131,7 @@ class PyCallWrapper(object):
         with cgutils.goto_block(builder, endblk):
             builder.ret(api.get_null_object())
 
-        cleanup_manager = _ArgManager(builder, api, endblk, nargs)
+        cleanup_manager = _ArgManager(self.context, builder, api, endblk, nargs)
 
         innerargs = []
         for obj, ty in zip(objs, self.fndesc.argtypes):
@@ -148,7 +157,7 @@ class PyCallWrapper(object):
             with cgutils.ifthen(builder, status.is_none):
                 api.return_none()
 
-            retval = api.from_native_return(res, self.fndesc.restype)
+            retval = api.from_native_return(res, self._simplified_return_type())
             builder.ret(retval)
 
         with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
@@ -191,3 +200,18 @@ class PyCallWrapper(object):
         kwlist = Constant.array(stringtype, strings)
         kwlist = cgutils.global_constant(self.module, ".kwlist", kwlist)
         return Constant.bitcast(kwlist, Type.pointer(stringtype))
+
+    def _simplified_return_type(self):
+        """
+        The NPM callconv has already converted simplified optional types.
+        We can simply use the value type from it.
+        """
+        restype = self.fndesc.restype
+        # Optional type
+        if isinstance(restype, types.Optional):
+            return restype.type
+        else:
+            return restype
+
+
+

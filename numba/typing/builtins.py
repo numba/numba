@@ -468,6 +468,17 @@ class GetItemBuffer(AbstractTemplate):
 
 
 @builtin
+class GetItemCPointer(AbstractTemplate):
+    key = "getitem"
+
+    def generic(self, args, kws):
+        assert not kws
+        ptr, idx = args
+        if isinstance(ptr, types.CPointer) and isinstance(idx, types.Integer):
+            return signature(ptr.dtype, ptr, normalize_index(idx))
+
+
+@builtin
 class SetItemBuffer(AbstractTemplate):
     key = "setitem"
 
@@ -478,6 +489,17 @@ class SetItemBuffer(AbstractTemplate):
             if not ary.mutable:
                 raise TypeError("Immutable array")
             return signature(types.none, ary, normalize_index(idx), ary.dtype)
+
+
+@builtin
+class SetItemCPointer(AbstractTemplate):
+    key = "setitem"
+
+    def generic(self, args, kws):
+        assert not kws
+        ptr, idx, val = args
+        if isinstance(ptr, types.CPointer) and isinstance(idx, types.Integer):
+            return signature(types.none, ptr, normalize_index(idx), ptr.dtype)
 
 
 @builtin
