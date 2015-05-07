@@ -2,11 +2,12 @@ from __future__ import print_function, absolute_import, division
 import os.path
 import numpy as np
 from numba.cuda.testing import unittest
+from numba.cuda.testing import skip_on_cudasim
 from numba.cuda.cudadrv.driver import Linker
 from numba.cuda import require_context
 from numba import cuda
 
-
+@skip_on_cudasim('Linking unsupported in the simulator')
 class TestLinker(unittest.TestCase):
 
     @require_context

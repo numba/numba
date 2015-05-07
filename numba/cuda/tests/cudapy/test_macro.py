@@ -3,6 +3,7 @@ import numpy as np
 from numba import cuda, float32
 from numba.cuda.testing import unittest
 from numba.macro import MacroError
+from numba.cuda.testing import skip_on_cudasim
 
 GLOBAL_CONSTANT = 5
 GLOBAL_CONSTANT_2 = 6
@@ -62,6 +63,7 @@ class TestMacro(unittest.TestCase):
         udt = cuda.jit((float32[:, :],))(udt_global_build_tuple)
         udt(self.getarg2())
 
+    @skip_on_cudasim('Simulator does not perform macro expansion')
     def test_global_build_list(self):
         with self.assertRaises(MacroError) as raises:
             cuda.jit((float32[:, :],))(udt_global_build_list)
@@ -73,6 +75,7 @@ class TestMacro(unittest.TestCase):
         udt = cuda.jit((float32[:, :],))(udt_global_constant_tuple)
         udt(self.getarg2())
 
+    @skip_on_cudasim("Can't check for constants in simulator")
     def test_invalid_1(self):
         with self.assertRaises(ValueError) as raises:
             cuda.jit((float32[:],))(udt_invalid_1)
@@ -80,6 +83,7 @@ class TestMacro(unittest.TestCase):
         self.assertIn("Argument 'shape' must be a constant at",
                       str(raises.exception))
 
+    @skip_on_cudasim("Can't check for constants in simulator")
     def test_invalid_2(self):
         with self.assertRaises(ValueError) as raises:
             cuda.jit((float32[:, :],))(udt_invalid_2)

@@ -1,5 +1,5 @@
 from __future__ import print_function, absolute_import, division
-from numba import unittest_support as unittest
+from numba import config, unittest_support as unittest
 
 
 class CUDATestCase(unittest.TestCase):
@@ -7,3 +7,7 @@ class CUDATestCase(unittest.TestCase):
         from numba.cuda.cudadrv.devices import reset
 
         reset()
+
+
+def skip_on_cudasim(reason):
+    return unittest.skipIf(config.ENABLE_CUDASIM, reason)

@@ -1,6 +1,6 @@
 from __future__ import print_function, absolute_import
 import numpy
-from numba import jit, cuda
+from numba import config, cuda, jit
 from numba.cuda.testing import unittest
 
 
@@ -14,7 +14,10 @@ class TestException(unittest.TestCase):
         unsafe_foo = jit(target='cuda')(foo)
         safe_foo = jit(target='cuda', debug=True)(foo)
 
-        unsafe_foo[1, 2](numpy.array([0,1]))
+        if not config.ENABLE_CUDASIM:
+            # Simulator throws exceptions regardless of debug
+            # setting
+            unsafe_foo[1, 2](numpy.array([0,1]))
 
         with self.assertRaises(IndexError) as cm:
             safe_foo[1, 2](numpy.array([0,1]))

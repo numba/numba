@@ -1,6 +1,7 @@
 from numba import cuda
 import numpy as np
 from numba import unittest_support as unittest
+from numba.cuda.testing import skip_on_cudasim
 import threading
 
 
@@ -47,6 +48,7 @@ class TestMultiGPUContext(unittest.TestCase):
         copy_plus_1[1, N](A, B)
         check(A, B)
 
+    @skip_on_cudasim('Simulator does not support multiple threads')
     def test_multithreaded(self):
         def work(gpu, dA, results, ridx):
             try:
