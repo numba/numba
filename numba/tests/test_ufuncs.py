@@ -1318,7 +1318,7 @@ class _TestLoopTypes(TestCase):
                 # If one is NaN and the other is zero
                 msg = "mismatch for nan values: expected {0}; got {1}"
                 print(msg.format(py, c))
-                return True
+                # This is not occurring any more
 
         elif np.abs(c) == 0 and np.abs(py) == np.abs(c):
             # If both are zeros and they are differ by sign
