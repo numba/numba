@@ -31,6 +31,25 @@ FROM_DTYPE = {
     numpy.dtype('complex128'): types.complex128,
 }
 
+TO_DTYPE = {
+    types.boolean: numpy.bool,
+    types.int8: numpy.int8,
+    types.int16: numpy.int16,
+    types.int32: numpy.int32,
+    types.int64: numpy.int64,
+
+    types.uint8: numpy.uint8,
+    types.uint16: numpy.uint16,
+    types.uint32: numpy.uint32,
+    types.uint64: numpy.uint64,
+
+    types.float32: numpy.float32,
+    types.float64: numpy.float64,
+
+    types.complex64: numpy.complex64,
+    types.complex128: numpy.complex128,
+}
+
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
 re_datetimestr = re.compile(r'[<>=\|]([mM])8?(\[([a-z]+)\])?$', re.I)
 
@@ -97,6 +116,16 @@ def from_dtype(dtype):
     else:
         return from_struct_dtype(dtype)
 
+def to_dtype(numba_type):
+    '''
+    Return a Numpy dtype corresponding to a given Numba type instance
+    '''
+    if isinstance(numba_type, numpy.dtype):
+        return numba_type
+    try:
+        return TO_DTYPE[numba_type]
+    except KeyError:
+        raise NotImplementedError(numba_type)
 
 _as_dtype_letters = {
     types.NPDatetime: 'M8',
