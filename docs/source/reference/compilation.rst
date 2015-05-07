@@ -144,8 +144,8 @@ Vectorized functions (ufuncs)
    form as in the :func:`numba.jit` *signature* argument.
 
    *identity* is the identity (or unit) value of the function being
-   implemented.  Possible values are 0, 1, :const:`None`, and the string
-   ``"reorderable"``.  The default is :const:`None`.  Both :const:`None` and
+   implemented.  Possible values are 0, 1, None, and the string
+   ``"reorderable"``.  The default is None.  Both None and
    ``"reorderable"`` mean the function has no identity value;
    ``"reorderable"`` additionally specifies that reductions along multiple
    axes can be reordered.  (Note that ``"reorderable"`` is only supported in
@@ -197,6 +197,9 @@ Vectorized functions (ufuncs)
    Note that any output will be given to you preallocated as an additional
    function argument: your code has to fill it with the appropriate values
    for the function you are implementing.
+
+   If your function doesn't take an output array, you should omit the "arrow"
+   in the layout string (e.g. ``"(n),(n)"``).
 
    .. seealso::
       Specification of the `layout string <http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_

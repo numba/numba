@@ -13,6 +13,8 @@ from . import templates
 
 CTYPES_MAP = {
     None: types.none,
+    ctypes.c_bool: types.boolean,
+    
     ctypes.c_int8:  types.int8,
     ctypes.c_int16: types.int16,
     ctypes.c_int32: types.int32,
@@ -27,6 +29,7 @@ CTYPES_MAP = {
     ctypes.c_double: types.float64,
 
     ctypes.c_void_p: types.voidptr,
+    ctypes.py_object: types.ffi_forced_object,
 }
 
 

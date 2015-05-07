@@ -84,8 +84,17 @@ ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
 ext_mviewbuf = Extension(name='numba.mviewbuf',
                          sources=['numba/mviewbuf.c'])
 
+ext_nrt_python = Extension(name='numba.runtime._nrt_python',
+                           sources=['numba/runtime/_nrt_python.c',
+                                    'numba/runtime/nrt.c'],
+                           depends=['numba/runtime/nrt.h',
+                                    'numba/_pymodule.h'],
+                           include_dirs=["numba"] + npymath_info['include_dirs'])
+
 ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
-               ext_helperlib, ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf]
+               ext_helperlib, ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf,
+               ext_nrt_python]
+
 
 packages = [
     "numba",
@@ -105,6 +114,7 @@ packages = [
     "numba.cuda.tests.cudapy",
     "numba.cuda.tests.nocuda",
     "numba.annotations",
+    "numba.runtime",
 ]
 
 setup(name='numba',

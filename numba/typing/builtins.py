@@ -312,30 +312,63 @@ class UnorderedCmpOp(ConcreteTemplate):
 class CmpOpLt(OrderedCmpOp):
     key = '<'
 
-
 @builtin
 class CmpOpLe(OrderedCmpOp):
     key = '<='
-
 
 @builtin
 class CmpOpGt(OrderedCmpOp):
     key = '>'
 
-
 @builtin
 class CmpOpGe(OrderedCmpOp):
     key = '>='
-
 
 @builtin
 class CmpOpEq(UnorderedCmpOp):
     key = '=='
 
-
 @builtin
 class CmpOpNe(UnorderedCmpOp):
     key = '!='
+
+
+class TupleCompare(AbstractTemplate):
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        tuple_types = (types.Tuple, types.UniTuple)
+        if isinstance(lhs, tuple_types) and isinstance(rhs, tuple_types):
+            for u, v in zip(lhs, rhs):
+                # Check element-wise comparability
+                res = self.context.resolve_function_type(self.key, (u, v), {})
+                if res is None:
+                    break
+            else:
+                return signature(types.boolean, lhs, rhs)
+
+@builtin
+class TupleEq(TupleCompare):
+    key = '=='
+
+@builtin
+class TupleNe(TupleCompare):
+    key = '!='
+
+@builtin
+class TupleGe(TupleCompare):
+    key = '>='
+
+@builtin
+class TupleGt(TupleCompare):
+    key = '>'
+
+@builtin
+class TupleLe(TupleCompare):
+    key = '<='
+
+@builtin
+class TupleLt(TupleCompare):
+    key = '<'
 
 
 class CmpOpIdentity(AbstractTemplate):
@@ -435,6 +468,17 @@ class GetItemBuffer(AbstractTemplate):
 
 
 @builtin
+class GetItemCPointer(AbstractTemplate):
+    key = "getitem"
+
+    def generic(self, args, kws):
+        assert not kws
+        ptr, idx = args
+        if isinstance(ptr, types.CPointer) and isinstance(idx, types.Integer):
+            return signature(ptr.dtype, ptr, normalize_index(idx))
+
+
+@builtin
 class SetItemBuffer(AbstractTemplate):
     key = "setitem"
 
@@ -445,6 +489,17 @@ class SetItemBuffer(AbstractTemplate):
             if not ary.mutable:
                 raise TypeError("Immutable array")
             return signature(types.none, ary, normalize_index(idx), ary.dtype)
+
+
+@builtin
+class SetItemCPointer(AbstractTemplate):
+    key = "setitem"
+
+    def generic(self, args, kws):
+        assert not kws
+        ptr, idx, val = args
+        if isinstance(ptr, types.CPointer) and isinstance(idx, types.Integer):
+            return signature(types.none, ptr, normalize_index(idx), ptr.dtype)
 
 
 @builtin
@@ -482,11 +537,23 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_flat(self, ary):
         return types.NumpyFlatType(ary)
 
+    def resolve_ctypes(self, ary):
+        return types.ArrayCTypes(ary)
+
     def generic_resolve(self, ary, attr):
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
                 return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,
                                    layout='A')
+
+
+@builtin_attr
+class ArrayCTypesAttribute(AttributeTemplate):
+    key = types.ArrayCTypes
+
+    def resolve_data(self, ctinfo):
+        return types.uintp
+
 
 
 @builtin_attr

@@ -1,13 +1,13 @@
 from __future__ import absolute_import, print_function
 
 import numpy
-import itertools
 from .. import types
 from .templates import (AttributeTemplate, AbstractTemplate,
                                     Registry, signature)
 
 from ..numpy_support import (ufunc_find_matching_loop,
-                             supported_ufunc_loop, as_dtype)
+                             supported_ufunc_loop, as_dtype,
+                             from_dtype)
 
 from ..typeinfer import TypingError
 
@@ -24,8 +24,8 @@ class NumpyModuleAttribute(AttributeTemplate):
 
 
 class Numpy_rules_ufunc(AbstractTemplate):
-    def generic(self, args, kws):
-        ufunc = self.key
+    @classmethod
+    def _handle_inputs(cls, ufunc, args, kws):
         nin = ufunc.nin
         nout = ufunc.nout
         nargs = ufunc.nargs
@@ -62,7 +62,30 @@ class Numpy_rules_ufunc(AbstractTemplate):
             raise TypingError(msg=msg.format(ufunc.__name__))
 
         # find the kernel to use, based only in the input types (as does NumPy)
-        base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
+        base_types = [x.dtype if isinstance(x, types.Array) else x
+                      for x in args]
+
+        # Figure out the output array layout, if needed.
+        layout = None
+        if ndims > 0 and (len(explicit_outputs) < ufunc.nout):
+            layout = 'C'
+            layouts = [x.layout if isinstance(x, types.Array) else ''
+                       for x in args]
+            if 'C' not in layouts:
+                if 'F' in layouts:
+                    layout = 'F'
+                elif 'A' in layouts:
+                    # See also _empty_nd_impl() in numba.targets.arrayobj.
+                    raise NotImplementedError(
+                        "Don't know how to create implicit output array "
+                        "with 'A' layout.")
+
+        return base_types, explicit_outputs, ndims, layout
+
+    def generic(self, args, kws):
+        ufunc = self.key
+        base_types, explicit_outputs, ndims, layout = self._handle_inputs(
+            ufunc, args, kws)
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
         if ufunc_loop is None:
             raise TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
@@ -85,14 +108,14 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # be based on the explicit output types, and when not available with the type given
         # by the selected NumPy loop
         out = list(explicit_outputs)
-        implicit_output_count = nout - len(explicit_outputs)
+        implicit_output_count = ufunc.nout - len(explicit_outputs)
         if implicit_output_count > 0:
             # XXX this is currently wrong for datetime64 and timedelta64,
             # as ufunc_find_matching_loop() doesn't do any type inference.
             ret_tys = ufunc_loop.outputs[-implicit_output_count:]
             if ndims > 0:
-                # XXX Not sure 'A' layout is correct...
-                ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout='A')
+                assert layout is not None
+                ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout=layout)
                            for ret_ty in ret_tys]
             out.extend(ret_tys)
 
@@ -312,5 +335,67 @@ class NdIndex(AbstractTemplate):
 
 builtin_global(numpy.ndindex, types.Function(NdIndex))
 
+@builtin
+class NdEmpty(AbstractTemplate):
+    key = numpy.empty
+
+    def generic(self, args, kws):
+        assert not kws
+        shape = args[0]
+        dtype = types.double
+        if len(args) >= 2:
+            npy_dtype = args[1]
+            # numpy APIs allow dtype constructor to be used as `dtype`
+            # arguments.  Since, npy_dtype.template.key dtype or dtype
+            # ctor, we use numpy.dtype to force it into a dtype object.
+            dtype = from_dtype(numpy.dtype(npy_dtype.template.key))
+
+        if isinstance(shape, types.Integer):
+            return signature(types.double[::1], *args)
+        elif isinstance(shape, (types.Tuple, types.UniTuple)):
+            if all(isinstance(s, types.Integer) for s in shape):
+                aryty = types.Array(dtype=dtype,
+                                    ndim=len(shape),
+                                    layout='C')
+                return signature(aryty, *args)
+
+
+builtin_global(numpy.empty, types.Function(NdEmpty))
+
+@builtin
+class Round(AbstractTemplate):
+    key = numpy.round
+
+    def generic(self, args, kws):
+        assert not kws
+        assert 1 <= len(args) <= 3
+
+        arg = args[0]
+        if len(args) == 1:
+            decimals = types.int32
+            out = None
+        else:
+            decimals = args[1]
+            if len(args) == 2:
+                out = None
+            else:
+                out = args[2]
+
+        supported_scalars = (types.Integer, types.Float, types.Complex)
+        if isinstance(arg, supported_scalars):
+            assert out is None
+            return signature(arg, *args)
+        if (isinstance(arg, types.Array) and isinstance(arg.dtype, supported_scalars) and
+            isinstance(out, types.Array) and isinstance(out.dtype, supported_scalars) and
+            out.ndim == arg.ndim):
+            # arg can only be complex if out is complex too
+            if (not isinstance(arg.dtype, types.Complex)
+                or isinstance(out.dtype, types.Complex)):
+                return signature(out, *args)
+
+builtin_global(numpy.round, types.Function(Round))
+builtin_global(numpy.around, types.Function(Round))
+
 
 builtin_global(numpy, types.Module(numpy))
+

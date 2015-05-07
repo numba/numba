@@ -206,6 +206,15 @@ class Lower(BaseLower):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
             self.storevar(val, inst.target.name)
+            # TODO: emit incref/decref in the numba IR properly.
+            # Workaround due to lack of proper incref/decref info.
+            if self.context.enable_nrt:
+                if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
+                    callexpr = inst.value
+                    # NPM function returns new reference
+                    if isinstance(self.typeof(callexpr.func.name),
+                                  types.Dispatcher):
+                        self.decref(ty, val)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -266,7 +275,13 @@ class Lower(BaseLower):
             return impl(self.builder, (target, index, value))
 
         elif isinstance(inst, ir.Del):
-            pass
+            try:
+                # XXX: incorrect Del injection?
+                val = self.loadvar(inst.value)
+            except KeyError:
+                pass
+            else:
+                self.decref(self.typeof(inst.value), val)
 
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
@@ -442,8 +457,37 @@ class Lower(BaseLower):
         elif isinstance(fnty, types.ExternalFunctionPointer):
             # Handle a C function pointer
             pointer = self.loadvar(expr.func.name)
-            res = self.context.call_function_pointer(self.builder, pointer,
-                                                     argvals, fnty.cconv)
+            # If the external function pointer uses libpython
+            if fnty.requires_gil:
+                pyapi = self.context.get_python_api(self.builder)
+                # Acquire the GIL
+                gil_state = pyapi.gil_ensure()
+                # Make PyObjects
+                newargvals = []
+                pyvals = []
+                for exptyp, gottyp, aval in zip(fnty.sig.args, signature.args,
+                                                argvals):
+                    # Adjust argument values to pyobjects
+                    if exptyp == types.ffi_forced_object:
+                        obj = pyapi.from_native_value(aval, gottyp)
+                        newargvals.append(obj)
+                        pyvals.append(obj)
+                    else:
+                        newargvals.append(aval)
+
+                # Call external function
+                res = self.context.call_function_pointer(self.builder, pointer,
+                                                         newargvals, fnty.cconv)
+                # Release PyObjects
+                for obj in pyvals:
+                    pyapi.decref(obj)
+
+                # Release the GIL
+                pyapi.gil_release(gil_state)
+            # If the external function pointer does NOT use libpython
+            else:
+                res = self.context.call_function_pointer(self.builder, pointer,
+                                                         argvals, fnty.cconv)
 
         else:
             # Normal function resolution (for Numba-compiled functions)
@@ -625,12 +669,25 @@ class Lower(BaseLower):
         return self.builder.load(ptr)
 
     def storevar(self, value, name):
+        # Clean up existing value stored in the variable
+        try:
+            # Load original value in variable
+            old = self.loadvar(name)
+        except KeyError:
+            # If it has not been defined, don't do anything
+            pass
+        else:
+            # Else, dereference the old value
+            self.decref(self.typeof(name), old)
+        # Store variable
         if name not in self.varmap:
             self.varmap[name] = self.alloca_lltype(name, value.type)
         ptr = self.getvar(name)
         assert value.type == ptr.type.pointee,\
             "store %s to ptr of %s" % (value.type, ptr.type.pointee)
         self.builder.store(value, ptr)
+        # Incref
+        self.incref(self.typeof(name), value)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
@@ -638,3 +695,15 @@ class Lower(BaseLower):
 
     def alloca_lltype(self, name, lltype):
         return cgutils.alloca_once(self.builder, lltype, name=name)
+
+    def incref(self, typ, val):
+        if not self.context.enable_nrt:
+            return
+
+        self.context.nrt_incref(self.builder, typ, val)
+
+    def decref(self, typ, val):
+        if not self.context.enable_nrt:
+            return
+
+        self.context.nrt_decref(self.builder, typ, val)

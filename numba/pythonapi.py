@@ -10,7 +10,8 @@ import llvmlite.llvmpy.core as lc
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
-from numba import types, utils, cgutils, _helperlib, assume, lowering
+from numba import numpy_support
+from numba import types, utils, cgutils, lowering, _helperlib
 
 
 class NativeValue(object):
@@ -944,7 +945,13 @@ class PythonAPI(object):
 
         elif isinstance(typ, types.Array):
             val, failed = self.to_native_array(obj, typ)
-            return NativeValue(val, is_error=failed)
+            val_on_stack = cgutils.alloca_once_value(builder, val)
+
+            def cleanup_array():
+                val = self.builder.load(val_on_stack)
+
+            return NativeValue(val, is_error=failed,
+                               cleanup=cleanup_array)
 
         elif isinstance(typ, types.Buffer):
             return self.to_native_buffer(obj, typ)
@@ -981,7 +988,13 @@ class PythonAPI(object):
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
     def from_native_return(self, val, typ, env_manager):
-        return self.from_native_value(val, typ, env_manager)
+        assert not isinstance(typ, types.Optional), "callconv should have " \
+                                                    "prevented the return of " \
+                                                    "optional value"
+        out = self.from_native_value(val, typ, env_manager)
+        if self.context.enable_nrt:
+            self.context.nrt_decref(self.builder, typ, val)
+        return out
 
     def from_native_value(self, val, typ, env_manager=None):
         if typ == types.pyobject:
@@ -1049,6 +1062,14 @@ class PythonAPI(object):
         elif isinstance(typ, types.Generator):
             return self.from_native_generator(val, typ)
 
+        elif isinstance(typ, types.CharSeq):
+            return self.from_native_charseq(val, typ)
+
+        elif typ == types.voidptr:
+            ll_intp = self.context.get_value_type(types.uintp)
+            addr = self.builder.ptrtoint(val, ll_intp)
+            return self.from_native_value(addr, types.uintp)
+
         raise NotImplementedError(typ)
 
     def to_native_int(self, obj, typ):
@@ -1075,7 +1096,10 @@ class PythonAPI(object):
 
         with cgutils.if_likely(self.builder, self.builder.not_(is_error)):
             ptr = self.builder.bitcast(aryptr, self.voidptr)
-            self.numba_buffer_adaptor(buf, ptr)
+            if self.context.enable_nrt:
+                self.nrt_adapt_buffer_from_python(buf, ptr)
+            else:
+                self.numba_buffer_adaptor(buf, ptr)
 
         def cleanup():
             self.release_buffer(buf)
@@ -1091,17 +1115,24 @@ class PythonAPI(object):
         nativeary = nativearycls(self.context, self.builder)
         aryptr = nativeary._getpointer()
         ptr = self.builder.bitcast(aryptr, self.voidptr)
-        errcode = self.numba_array_adaptor(ary, ptr)
+        if self.context.enable_nrt:
+            errcode = self.nrt_adapt_ndarray_from_python(ary, ptr)
+        else:
+            errcode = self.numba_array_adaptor(ary, ptr)
         failed = cgutils.is_not_null(self.builder, errcode)
         return self.builder.load(aryptr), failed
 
     def from_native_array(self, ary, typ):
-        assert assume.return_argument_array_only
+        builder = self.builder
         nativearycls = self.context.make_array(typ)
-        nativeary = nativearycls(self.context, self.builder, value=ary)
-        parent = nativeary.parent
-        self.incref(parent)
-        return parent
+        nativeary = nativearycls(self.context, builder, value=ary)
+        if self.context.enable_nrt:
+            newary = self.nrt_adapt_ndarray_to_python(typ, ary)
+            return newary
+        else:
+            parent = nativeary.parent
+            self.incref(parent)
+            return parent
 
     def to_native_optional(self, obj, typ):
         """
@@ -1229,7 +1260,75 @@ class PythonAPI(object):
         return self.builder.call(fn,
                                  (state_size, initial_state, genfn, finalizer, env))
 
+    def nrt_adapt_ndarray_to_python(self, aryty, ary):
+        if not self.context.enable_nrt:
+            raise Exception("Require NRT")
+        intty = ir.IntType(32)
+        fnty = Type.function(self.pyobj, [self.voidptr, intty, intty])
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        dtype = numpy_support.as_dtype(aryty.dtype)
+
+        ndim = self.context.get_constant(types.int32, aryty.ndim)
+        typenum = self.context.get_constant(types.int32, dtype.num)
+
+        aryptr = cgutils.alloca_once_value(self.builder, ary)
+        return self.builder.call(fn, [self.builder.bitcast(aryptr,
+                                                           self.voidptr),
+                                      ndim, typenum])
+
+    def nrt_adapt_ndarray_from_python(self, ary, ptr):
+        assert self.context.enable_nrt
+        fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_from_python")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        return self.builder.call(fn, (ary, ptr))
+
+    def nrt_adapt_buffer_from_python(self, buf, ptr):
+        assert self.context.enable_nrt
+        fnty = Type.function(Type.void(), [Type.pointer(self.py_buffer_t),
+                                           self.voidptr])
+        fn = self._get_function(fnty, name="NRT_adapt_buffer_from_python")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        return self.builder.call(fn, (buf, ptr))
+
+    def from_native_charseq(self, val, typ):
+        builder = self.builder
+        rawptr = cgutils.alloca_once_value(builder, value=val)
+        strptr = builder.bitcast(rawptr, self.cstring)
+        fullsize = self.context.get_constant(types.intp, typ.count)
+        zero = self.context.get_constant(types.intp, 0)
+        count = cgutils.alloca_once_value(builder, zero)
+
+        bbend = cgutils.append_basic_block(builder, "end.string.count")
+
+        # Find the length of the string
+        with cgutils.loop_nest(builder, [fullsize], fullsize.type) as [idx]:
+            # Get char at idx
+            ch = builder.load(builder.gep(strptr, [idx]))
+            # Store the current index as count
+            builder.store(idx, count)
+            # Check if the char is a null-byte
+            ch_is_null = cgutils.is_null(builder, ch)
+            # If the char is a null-byte
+            with cgutils.ifthen(builder, ch_is_null):
+                # Jump to the end
+                builder.branch(bbend)
+
+        # This is reached if there is no null-byte in the string
+        # Then, set count to the fullsize
+        builder.store(fullsize, count)
+        # Jump to the end
+        builder.branch(bbend)
+
+        builder.position_at_end(bbend)
+        strlen = builder.load(count)
+        return self.bytes_from_string_and_size(strptr, strlen)
+
     def numba_array_adaptor(self, ary, ptr):
+        assert not self.context.enable_nrt
         fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
         fn = self._get_function(fnty, name="numba_adapt_ndarray")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)

@@ -6,6 +6,7 @@ the buffer protocol.
 from __future__ import print_function, absolute_import, division
 
 from functools import reduce
+import math
 
 import llvmlite.llvmpy.core as lc
 
@@ -28,7 +29,8 @@ def make_array(array_type):
     return cgutils.create_struct_proxy(array_type)
 
 
-def populate_array(array, data, shape, strides, itemsize, parent=None):
+def populate_array(array, data, shape, strides, itemsize, meminfo,
+                   parent=None):
     """
     Helper function for populating array structures.
     This avoids forgetting to set fields.
@@ -38,10 +40,15 @@ def populate_array(array, data, shape, strides, itemsize, parent=None):
     datamodel = array._datamodel
     required_fields = set(datamodel._fields)
 
+    if meminfo is None:
+        meminfo = Constant.null(context.get_value_type(
+            datamodel.get_type('meminfo')))
+
     attrs = dict(shape=shape,
                  strides=strides,
                  data=data,
-                 itemsize=itemsize)
+                 itemsize=itemsize,
+                 meminfo=meminfo,)
 
     # Set `parent` attribute
     if parent is None:
@@ -71,32 +78,6 @@ def populate_array(array, data, shape, strides, itemsize, parent=None):
         setattr(array, k, v)
 
     return array
-
-
-def make_array_ctype(ndim):
-    """Create a ctypes representation of an array_type.
-
-    Parameters
-    -----------
-    ndim: int
-        number of dimensions of array
-
-    Returns
-    -----------
-        a ctypes array structure for an array with the given number of
-        dimensions
-    """
-    c_intp = ctypes.c_ssize_t
-
-    class c_array(ctypes.Structure):
-        _fields_ = [('parent', ctypes.c_void_p),
-                    ('nitems', c_intp),
-                    ('itemsize', c_intp),
-                    ('data', ctypes.c_void_p),
-                    ('shape', c_intp * ndim),
-                    ('strides', c_intp * ndim)]
-
-    return c_array
 
 
 @struct_factory(types.ArrayIterator)
@@ -182,7 +163,9 @@ def getitem_arraynd_intp(context, builder, sig, args):
                        shape=cgutils.pack_array(builder, in_shapes[1:]),
                        strides=cgutils.pack_array(builder, in_strides[1:]),
                        itemsize=adapted_ary.itemsize,
+                       meminfo=adapted_ary.meminfo,
                        parent=adapted_ary.parent,)
+
         result = out_ary._getvalue()
     else:
         raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
@@ -222,6 +205,7 @@ def getitem_array1d_slice(context, builder, sig, args):
                    shape=cgutils.pack_array(builder, [shape]),
                    strides=cgutils.pack_array(builder, [stride]),
                    itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
                    parent=ary.parent)
 
     return retary._getvalue()
@@ -261,6 +245,7 @@ def getitem_array_unituple(context, builder, sig, args):
                        shape=cgutils.pack_array(builder, shapes),
                        strides=cgutils.pack_array(builder, strides),
                        itemsize=ary.itemsize,
+                       meminfo=ary.meminfo,
                        parent=ary.parent)
         return retary._getvalue()
     else:
@@ -317,6 +302,7 @@ def getitem_array_tuple(context, builder, sig, args):
                        shape=cgutils.pack_array(builder, shapes),
                        strides=cgutils.pack_array(builder, strides),
                        itemsize=ary.itemsize,
+                       meminfo=ary.meminfo,
                        parent=ary.parent)
         return retary._getvalue()
     else:
@@ -622,6 +608,92 @@ def array_argmax(context, builder, sig, args):
     return context.compile_internal(builder, array_argmax_impl, sig, args)
 
 
+def _np_round_intrinsic(tp):
+    # np.round() always rounds half to even
+    return "llvm.rint.f%d" % (tp.bitwidth,)
+
+def _np_round_float(context, builder, tp, val):
+    llty = context.get_value_type(tp)
+    module = cgutils.get_module(builder)
+    fnty = lc.Type.function(llty, [llty])
+    fn = module.get_or_insert_function(fnty, name=_np_round_intrinsic(tp))
+    return builder.call(fn, (val,))
+
+@builtin
+@implement(numpy.round, types.Kind(types.Float))
+def scalar_round_unary(context, builder, sig, args):
+    return _np_round_float(context, builder, sig.args[0], args[0])
+
+@builtin
+@implement(numpy.round, types.Kind(types.Integer))
+def scalar_round_unary(context, builder, sig, args):
+    return args[0]
+
+@builtin
+@implement(numpy.round, types.Kind(types.Complex))
+def scalar_round_unary_complex(context, builder, sig, args):
+    fltty = sig.args[0].underlying_float
+    cplx_cls = context.make_complex(sig.args[0])
+    z = cplx_cls(context, builder, args[0])
+    z.real = _np_round_float(context, builder, fltty, z.real)
+    z.imag = _np_round_float(context, builder, fltty, z.imag)
+    return z._getvalue()
+
+@builtin
+@implement(numpy.round, types.Kind(types.Float), types.Kind(types.Integer))
+@implement(numpy.round, types.Kind(types.Integer), types.Kind(types.Integer))
+def scalar_round_binary_float(context, builder, sig, args):
+    def round_ndigits(x, ndigits):
+        if math.isinf(x) or math.isnan(x):
+            return x
+
+        # NOTE: this is CPython's algorithm, but perhaps this is overkill
+        # when emulating Numpy's behaviour.
+        if ndigits >= 0:
+            if ndigits > 22:
+                # pow1 and pow2 are each safe from overflow, but
+                # pow1*pow2 ~= pow(10.0, ndigits) might overflow.
+                pow1 = 10.0 ** (ndigits - 22)
+                pow2 = 1e22
+            else:
+                pow1 = 10.0 ** ndigits
+                pow2 = 1.0
+            y = (x * pow1) * pow2
+            if math.isinf(y):
+                return x
+            return (numpy.round(y) / pow2) / pow1
+
+        else:
+            pow1 = 10.0 ** (-ndigits)
+            y = x / pow1
+            return numpy.round(y) * pow1
+
+    return context.compile_internal(builder, round_ndigits, sig, args)
+
+@builtin
+@implement(numpy.round, types.Kind(types.Complex), types.Kind(types.Integer))
+def scalar_round_binary_complex(context, builder, sig, args):
+    def round_ndigits(z, ndigits):
+        return complex(numpy.round(z.real, ndigits),
+                       numpy.round(z.imag, ndigits))
+
+    return context.compile_internal(builder, round_ndigits, sig, args)
+
+
+@builtin
+@implement(numpy.round, types.Kind(types.Array), types.Kind(types.Integer),
+           types.Kind(types.Array))
+def array_round(context, builder, sig, args):
+    def array_round_impl(arr, decimals, out):
+        if arr.shape != out.shape:
+            raise ValueError("invalid output shape")
+        for index, val in numpy.ndenumerate(arr):
+            out[index] = numpy.round(val, decimals)
+        return out
+
+    return context.compile_internal(builder, array_round_impl, sig, args)
+
+
 #-------------------------------------------------------------------------------
 
 
@@ -702,6 +774,29 @@ def array_readonly(context, builder, typ, value):
 
 
 @builtin_attr
+@impl_attribute(types.Kind(types.Array), "ctypes",
+                types.Kind(types.ArrayCTypes))
+def array_ctypes(context, builder, typ, value):
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+    # Cast void* data to uintp
+    addr = builder.ptrtoint(array.data, context.get_value_type(types.uintp))
+    # Create new ArrayCType structure
+    ctinfo_type = cgutils.create_struct_proxy(types.ArrayCTypes(typ))
+    ctinfo = ctinfo_type(context, builder)
+    ctinfo.data = addr
+    return ctinfo._getvalue()
+
+
+@builtin_attr
+@impl_attribute(types.Kind(types.ArrayCTypes), "data", types.uintp)
+def array_ctypes_data(context, builder, typ, value):
+    ctinfo_type = cgutils.create_struct_proxy(typ)
+    ctinfo = ctinfo_type(context, builder, value=value)
+    return ctinfo.data
+
+
+@builtin_attr
 @impl_attribute_generic(types.Kind(types.Array))
 def array_record_getattr(context, builder, typ, value, attr):
     arrayty = make_array(typ)
@@ -730,9 +825,9 @@ def array_record_getattr(context, builder, typ, value, attr):
                    shape=array.shape,
                    strides=array.strides,
                    itemsize=context.get_constant(types.intp, datasize),
+                   meminfo=array.meminfo,
                    parent=array.parent)
     return rary._getvalue()
-
 
 
 #-------------------------------------------------------------------------------
@@ -1151,3 +1246,70 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditer = nditercls(context, builder, value=nditer)
 
     nditer.iternext_specific(context, builder, result)
+
+
+def _empty_nd_impl(context, builder, arrtype, shapes):
+    """Utility function used for allocating a new array during LLVM code
+    generation (lowering).  Given a target context, builder, array
+    type, and a tuple or list of lowered dimension sizes, returns a
+    LLVM value pointing at a Numba runtime allocated array.
+    """
+    arycls = make_array(arrtype)
+    ary = arycls(context, builder)
+
+    datatype = context.get_data_type(arrtype.dtype)
+    itemsize = context.get_constant(types.intp,
+                                    context.get_abi_sizeof(datatype))
+
+    # compute array length
+    arrlen = context.get_constant(types.intp, 1)
+    for s in shapes:
+        arrlen = builder.mul(arrlen, s)
+
+    if arrtype.layout == 'C':
+        strides = [itemsize]
+        for dimension_size in reversed(shapes[1:]):
+            strides.append(builder.mul(strides[-1], dimension_size))
+        strides = tuple(reversed(strides))
+    elif arrtype.layout == 'F':
+        strides = [itemsize]
+        for dimension_size in shapes[:-1]:
+            strides.append(builder.mul(strides[-1], dimension_size))
+        strides = tuple(strides)
+    else:
+        raise NotImplementedError(
+            "Don't know how to allocate array with layout '{0}'.".format(
+                arrtype.layout))
+
+    meminfo = context.nrt_meminfo_alloc(builder,
+                                        size=builder.mul(itemsize, arrlen))
+    data = context.nrt_meminfo_data(builder, meminfo)
+
+    populate_array(ary,
+                   data=builder.bitcast(data, datatype.as_pointer()),
+                   shape=cgutils.pack_array(builder, shapes),
+                   strides=cgutils.pack_array(builder, strides),
+                   itemsize=itemsize,
+                   meminfo=meminfo)
+    return ary._getvalue()
+
+
+@builtin
+@implement(numpy.empty, types.Kind(types.Integer))
+@implement(numpy.empty, types.Kind(types.BaseTuple))
+@implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
+@implement(numpy.empty, types.Kind(types.BaseTuple), types.Kind(types.Function))
+def numpy_empty_nd(context, builder, sig, args):
+    arrshapetype = sig.args[0]
+    arrshape = args[0]
+    arrtype = sig.return_type
+
+    if isinstance(arrshapetype, types.Integer):
+        shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
+    else:
+        arrshape = context.cast(builder, arrshape, arrshapetype,
+                                types.UniTuple(types.intp, len(arrshapetype)))
+        shapes = cgutils.unpack_tuple(builder, arrshape,
+                                      count=len(arrshapetype))
+
+    return _empty_nd_impl(context, builder, arrtype, shapes)

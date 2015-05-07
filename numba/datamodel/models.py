@@ -84,6 +84,21 @@ class DataModel(object):
         """
         return self.from_data(builder, builder.load(ptr))
 
+    def traverse(self, builder, value):
+        """
+        Traverse contained values
+        Returns a iterable of contained (types, values)
+        """
+        return ()
+
+    def get_nrt_meminfo(self, builder, value):
+        """
+        Returns the MemInfo object or None if it is not tracked.
+        It is only defined for types.meminfo_pointer
+        """
+        return None
+
+
     def _compared_fields(self):
         return (type(self), self._fe_type)
 
@@ -170,6 +185,15 @@ class PrimitiveModel(DataModel):
 @register_default(types.Type)
 @register_default(types.Object)
 @register_default(types.Module)
+@register_default(types.Phantom)
+@register_default(types.RangeType)
+@register_default(types.Dispatcher)
+@register_default(types.ExceptionType)
+@register_default(types.Dummy)
+@register_default(types.ExceptionInstance)
+@register_default(types.BoundFunction)
+@register_default(types.NumpyNdEnumerateType)
+@register_default(types.NumpyNdIndexType)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
@@ -179,6 +203,9 @@ class OpaqueModel(PrimitiveModel):
         be_type = ir.IntType(8).as_pointer()
         super(OpaqueModel, self).__init__(dmm, fe_type, be_type)
 
+    def get_nrt_meminfo(self, builder, value):
+        if self._fe_type == types.meminfo_pointer:
+            return value
 
 @register_default(types.Integer)
 class IntegerModel(PrimitiveModel):
@@ -294,6 +321,10 @@ class UniTupleModel(DataModel):
 
     def from_return(self, builder, value):
         return value
+
+    def traverse(self, builder, value):
+        values = cgutils.unpack_tuple(builder, value, count=self._count)
+        return zip([self._fe_type.dtype] * len(values), values)
 
 
 class CompositeModel(DataModel):
@@ -470,6 +501,11 @@ class StructModel(CompositeModel):
             pos = self.get_field_position(pos)
         return self._members[pos]
 
+    def traverse(self, builder, value):
+        out = [(self.get_type(k), self.get(builder, value, k))
+                for k in self._fields]
+        return out
+
 
 @register_default(types.Complex)
 class ComplexModel(StructModel):
@@ -508,12 +544,14 @@ class ArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
         members = [
+            ('meminfo', types.meminfo_pointer),
             ('parent', types.pyobject),
             ('nitems', types.intp),
             ('itemsize', types.intp),
             ('data', types.CPointer(fe_type.dtype)),
             ('shape', types.UniTuple(types.intp, ndim)),
             ('strides', types.UniTuple(types.intp, ndim)),
+
         ]
         super(ArrayModel, self).__init__(dmm, fe_type, members)
 
@@ -547,6 +585,13 @@ class OptionalModel(StructModel):
 
     def from_return(self, builder, value):
         return self._value_model.from_return(builder, value)
+
+    def traverse(self, builder, value):
+        data = self.get(builder, value, "data")
+        valid = self.get(builder, value, "valid")
+        data = builder.select(valid, data, ir.Constant(data.type, None))
+        return [(self.get_type("data"), data),
+                (self.get_type("valid"), valid)]
 
 
 @register_default(types.Record)
@@ -623,6 +668,12 @@ class CharSeq(DataModel):
         return value
 
     def from_data(self, builder, value):
+        return value
+
+    def as_return(self, builder, value):
+        return value
+
+    def from_return(self, builder, value):
         return value
 
 
@@ -766,6 +817,14 @@ class GeneratorModel(CompositeModel):
 
     def from_return(self, builder, value):
         return value
+
+
+@register_default(types.ArrayCTypes)
+class ArrayCTypesModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        # ndim = fe_type.ndim
+        members = [('data', types.uintp)]
+        super(ArrayCTypesModel, self).__init__(dmm, fe_type, members)
 
 
 # =============================================================================

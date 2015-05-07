@@ -15,7 +15,8 @@ from numba.targets import (
     callconv, codegen, externals, intrinsics, cmathimpl, mathimpl,
     npyimpl, operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
-
+from numba.runtime.atomicops import install_atomic_refct
+from numba.runtime import rtsys
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -54,6 +55,9 @@ class CPUContext(BaseContext):
         self.install_registry(randomimpl.registry)
 
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
+
+        # Initialize NRT runtime
+        rtsys.initialize(self)
 
     @property
     def target_data(self):
@@ -108,6 +112,8 @@ class CPUContext(BaseContext):
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
             # calls to compiler-rt
             intrinsics.fix_divmod(mod)
+
+        install_atomic_refct(mod)
 
     def create_cpython_wrapper(self, library, fndesc, env, call_helper,
                                release_gil=False):
@@ -165,6 +171,7 @@ class CPUTargetOptions(TargetOptions):
         "looplift": bool,
         "wraparound": bool,
         "boundcheck": bool,
+        "_nrt": bool,
     }
 
 
