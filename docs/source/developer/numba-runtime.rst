@@ -25,7 +25,7 @@ For NRT to cooperate with CPython, the NRT python binding provides adaptors for
 converting python objects that export a memory region.  When such an
 object is used as an argument to a NPM function, a new ``MemInfo`` is created
 and it acquires a reference to the Python object.  When a NPM value is returned
-to the Python intpreter, the associated ``MemInfo`` (if any) is checked.  If
+to the Python interpreter, the associated ``MemInfo`` (if any) is checked.  If
 the ``MemInfo`` references a Python object, the underlying Python object is
 released and returned instead.  Otherwise, the ``MemInfo`` is wrapped in a
 Python object and returned.  Additional process maybe required depending on

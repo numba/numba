@@ -223,9 +223,6 @@ When this mode is enabled, the ``vectorize`` and ``guvectorize`` decorators will
 still result in compilation of a ufunc, as there is no straightforward pure
 Python implementation of these functions.
 
-Setting the :envvar:`NUMBA_DISABLE_JIT` environment variable presently has no
-effect in CUDA Python.
-
 Debugging CUDA Python code
 ==========================
 

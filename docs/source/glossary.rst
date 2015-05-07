@@ -26,10 +26,9 @@ Glossary
       A Numba compilation mode that generates code that does not access the
       Python C API.  This compilation mode produces the highest performance
       code, but requires that the native types of all values in the function
-      can be :term:`inferred <type inference>`, and that no new objects are
-      allocated.  Unless otherwise instructed, the ``@jit`` decorator will
-      automatically fall back to :term:`object mode` if nopython mode cannot
-      be used.
+      can be :term:`inferred <type inference>`.  Unless otherwise instructed,
+      the ``@jit`` decorator will automatically fall back to :term:`object
+      mode` if nopython mode cannot be used.
 
    object mode
       A Numba compilation mode that generates code that handles all values

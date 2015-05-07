@@ -25,18 +25,18 @@ JIT functions
      ``"void(int32, double)"``.  All type names used in the string are assumed
      to be defined in the ``numba.types`` module.
 
-   *nopython* and *nojit* are boolean flags.  *locals* is a mapping of
+   *nopython* and *nogil* are boolean flags.  *locals* is a mapping of
    local variable names to :ref:`numba-types`.
 
    This decorator has several modes of operation:
 
-   * If one more *signature* is given, a specialization is compiled
-     for each signature.  Calling the decorated function will
-     then try to choose the best matching signature, and raise a
-     :class:`TypeError` if no appropriate conversion is available for the
-     funciton arguments.  If converting succeeds, the compiled machine code
-     is executed with the converted arguments and the return value is
-     converted back according to the signature.
+   * If one or more signatures are given in *signature*, a specialization is
+     compiled for each of them.  Calling the decorated function will then try
+     to choose the best matching signature, and raise a :class:`TypeError` if
+     no appropriate conversion is available for the function arguments.  If
+     converting succeeds, the compiled machine code is executed with the
+     converted arguments and the return value is converted back according to
+     the signature.
 
    * If no *signature* is given, the decorated function implements
      lazy compilation.  Each call to the decorated function will try to
@@ -55,7 +55,7 @@ JIT functions
 
    If true, *nogil* tries to release the :py:term:`global interpreter lock`
    inside the compiled function.  The GIL will only be released if Numba can
-   compile the function in :term:`object mode`, otherwise a compilation
+   compile the function in :term:`nopython mode`, otherwise a compilation
    warning will be printed.
 
    The *locals* dictionary may be used to force the :ref:`numba-types`
