@@ -668,7 +668,11 @@ class Lower(BaseLower):
             self.decref(self.typeof(name), old)
         # Store variable
         if name not in self.varmap:
-            self.varmap[name] = self.alloca_lltype(name, value.type)
+            # If not already defined, allocate it
+            llty = self.context.get_value_type(self.typeof(name))
+            ptr = self.alloca_lltype(name, llty)
+            # Remember the pointer
+            self.varmap[name] = ptr
         ptr = self.getvar(name)
         assert value.type == ptr.type.pointee,\
             "store %s to ptr of %s" % (value.type, ptr.type.pointee)
@@ -681,7 +685,7 @@ class Lower(BaseLower):
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
-        return cgutils.alloca_once(self.builder, lltype, name=name)
+        return cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
 
     def incref(self, typ, val):
         if not self.context.enable_nrt:

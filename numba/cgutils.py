@@ -304,14 +304,18 @@ def goto_entry_block(builder):
         yield
 
 
-def alloca_once(builder, ty, size=None, name=''):
+def alloca_once(builder, ty, size=None, name='', zfill=False):
     """Allocate stack memory at the entry block of the current function
     pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
     set the number of element to allocate.  The default is 1.  The optional
     ``name`` arg set the symbol name inside the llvm IR for debugging.
+    If ``zfill`` is set, also filling zeros to the memory.
     """
     with goto_entry_block(builder):
-        return builder.alloca(ty, size=size, name=name)
+        ptr = builder.alloca(ty, size=size, name=name)
+        if zfill:
+            builder.store(Constant.null(ty), ptr)
+        return ptr
 
 
 def alloca_once_value(builder, value, name=''):
