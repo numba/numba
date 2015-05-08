@@ -82,8 +82,12 @@ class Numpy_rules_ufunc(AbstractTemplate):
 
         return base_types, explicit_outputs, ndims, layout
 
+    @property
+    def ufunc(self):
+        return self.key
+
     def generic(self, args, kws):
-        ufunc = self.key
+        ufunc = self.ufunc
         base_types, explicit_outputs, ndims, layout = self._handle_inputs(
             ufunc, args, kws)
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
@@ -124,6 +128,91 @@ class Numpy_rules_ufunc(AbstractTemplate):
         #       there is an check enforcing only one output
         out.extend(args)
         return signature(*out)
+
+
+@builtin
+class UnaryPositiveArray(AbstractTemplate):
+    '''Typing template class for +(array) expressions.  This operator is
+    special because there is no Numpy ufunc associated with it; we
+    include typing for it here (numba.typing.npydecl) because this is
+    where the remaining array operators are defined.
+    '''
+    key = "+"
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1 and isinstance(args[0], types.Array):
+            arg_ty = args[0]
+            return arg_ty.copy()(arg_ty)
+
+
+class NumpyRulesArrayOperator(Numpy_rules_ufunc):
+    _op_map = {
+         '+': "add",
+         '-': "subtract",
+         '*': "multiply",
+        '/?': "divide",
+         '/': "true_divide",
+        '//': "floor_divide",
+         '%': "remainder",
+        '**': "power",
+        '<<': "left_shift",
+        '>>': "right_shift",
+         '&': "bitwise_and",
+         '|': "bitwise_or",
+         '^': "bitwise_xor",
+        '==': "equal",
+         '>': "greater",
+        '>=': "greater_equal",
+         '<': "less",
+        '<=': "less_equal",
+        '!=': "not_equal",
+    }
+
+    @property
+    def ufunc(self):
+        return getattr(numpy, self._op_map[self.key])
+
+    @classmethod
+    def install_operations(cls):
+        for op, ufunc_name in cls._op_map.items():
+            builtin(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
+                         dict(key=op)))
+
+    def generic(self, *args, **kws):
+        '''Overloads and calls base class generic() method, returning
+        None if a TypingError occurred.
+
+        Returning None for operators is important since operators are
+        heavily overloaded, and by suppressing type errors, we allow
+        type inference to check other possibilities before giving up
+        (particularly user-defined operators).
+        '''
+        try:
+            sig = super(NumpyRulesArrayOperator, self).generic(
+                *args, **kws)
+            # Stay out of the timedelta64 range and domain; already
+            # handled elsewhere.
+            if sig is not None:
+                timedelta_test = (
+                    isinstance(sig.return_type, types.NPTimedelta) or
+                    (all(isinstance(argty, types.NPTimedelta)
+                         for argty in sig.args)))
+                if timedelta_test:
+                    sig = None
+        except TypingError:
+            sig = None
+        return sig
+
+
+class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
+    _op_map = {
+        # Positive is a special case since there is no Numpy ufunc
+        # corresponding to it (it's essentially an identity operator).
+        # See UnaryPositiveArray, above.
+        '-': "negative",
+        '~': "invert",
+    }
 
 
 # list of unary ufuncs to register
@@ -178,7 +267,6 @@ _aliases = set(["bitwise_not", "mod", "abs"])
 if numpy.divide == numpy.true_divide:
     _aliases.add("divide")
 
-
 def _numpy_ufunc(name):
     func = getattr(numpy, name)
     class typing_class(Numpy_rules_ufunc):
@@ -204,6 +292,8 @@ for func in supported_ufuncs:
 all_ufuncs = [getattr(numpy, name) for name in all_ufuncs]
 supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 
+NumpyRulesUnaryArrayOperator.install_operations()
+NumpyRulesArrayOperator.install_operations()
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported

@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import types, typing, utils, typeof
+from numba import types, typing, utils, typeof, numpy_support, njit
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype
 from numba import vectorize
@@ -62,12 +62,28 @@ def _make_unary_ufunc_usecase(ufunc):
     return fn
 
 
+def _make_unary_ufunc_op_usecase(ufunc_op):
+    ldict = {}
+    exec("def fn(x):\n    return {0}(x)".format(ufunc_op), globals(), ldict)
+    fn = ldict["fn"]
+    fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
+    return fn
+
+
 def _make_binary_ufunc_usecase(ufunc):
     ufunc_name = ufunc.__name__
     ldict = {}
     exec("def fn(x,y,out):\n    np.{0}(x,y,out)".format(ufunc_name), globals(), ldict);
     fn = ldict['fn']
     fn.__name__ = "{0}_usecase".format(ufunc_name)
+    return fn
+
+
+def _make_binary_ufunc_op_usecase(ufunc_op):
+    ldict = {}
+    exec("def fn(x,y):\n    return x{0}y".format(ufunc_op), globals(), ldict)
+    fn = ldict["fn"]
+    fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
     return fn
 
 
@@ -109,6 +125,29 @@ class TestUFuncs(TestCase):
             ]
         self.cache = CompilationCache()
 
+    def _determine_output_type(self, input_type, int_output_type=None,
+                               float_output_type=None):
+        ty = input_type
+        if isinstance(ty, types.Array):
+            ty = ty.dtype
+
+        if ty in types.signed_domain:
+            if int_output_type:
+                output_type = types.Array(int_output_type, 1, 'C')
+            else:
+                output_type = types.Array(ty, 1, 'C')
+        elif ty in types.unsigned_domain:
+            if int_output_type:
+                output_type = types.Array(int_output_type, 1, 'C')
+            else:
+                output_type = types.Array(ty, 1, 'C')
+        else:
+            if float_output_type:
+                output_type = types.Array(float_output_type, 1, 'C')
+            else:
+                output_type = types.Array(ty, 1, 'C')
+        return output_type
+
     def unary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None):
@@ -130,25 +169,8 @@ class TestUFuncs(TestCase):
             if input_type in skip_inputs:
                 continue
 
-            ty = input_type
-            if isinstance(ty, types.Array):
-                ty = ty.dtype
-
-            if ty in types.signed_domain:
-                if int_output_type:
-                    output_type = types.Array(int_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
-            elif ty in types.unsigned_domain:
-                if int_output_type:
-                    output_type = types.Array(int_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
-            else:
-                if float_output_type:
-                    output_type = types.Array(float_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
+            output_type = self._determine_output_type(
+                input_type, int_output_type, float_output_type)
 
             cr = self.cache.compile(pyfunc, (input_type, output_type),
                                     flags=flags)
@@ -203,6 +225,26 @@ class TestUFuncs(TestCase):
                                                expected.dtype, expected)
                         self.fail(msg)
 
+    def unary_op_test(self, operator, flags=enable_nrt_flags,
+                      skip_inputs=[], additional_inputs=[],
+                      int_output_type=None, float_output_type=None):
+        operator_func = _make_unary_ufunc_op_usecase(operator)
+        inputs = list(self.inputs)
+        inputs.extend(additional_inputs)
+        pyfunc = operator_func
+        for input_tuple in inputs:
+            input_operand, input_type = input_tuple
+
+            if ((input_type in skip_inputs) or
+                (not isinstance(input_type, types.Array))):
+                continue
+
+            cr = self.cache.compile(pyfunc, (input_type,),
+                                    flags=flags)
+            cfunc = cr.entry_point
+            expected = pyfunc(input_operand)
+            result = cfunc(input_operand)
+            np.testing.assert_array_almost_equal(expected, result)
 
     def binary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
@@ -220,25 +262,8 @@ class TestUFuncs(TestCase):
             if input_type in skip_inputs:
                 continue
 
-            ty = input_type
-            if isinstance(ty, types.Array):
-                ty = ty.dtype
-
-            if ty in types.signed_domain:
-                if int_output_type:
-                    output_type = types.Array(int_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
-            elif ty in types.unsigned_domain:
-                if int_output_type:
-                    output_type = types.Array(int_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
-            else:
-                if float_output_type:
-                    output_type = types.Array(float_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
+            output_type = self._determine_output_type(
+                input_type, int_output_type, float_output_type)
 
             cr = self.cache.compile(pyfunc, (input_type, input_type, output_type),
                                     flags=flags)
@@ -254,27 +279,56 @@ class TestUFuncs(TestCase):
                 expected = np.zeros(1, dtype=output_type.dtype.name)
             cfunc(input_operand, input_operand, result)
             pyfunc(input_operand, input_operand, expected)
+            np.testing.assert_array_almost_equal(expected, result)
 
-            # Need special checks if NaNs are in results
-            if np.isnan(expected).any() or np.isnan(result).any():
-                self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
-                if not np.isnan(expected).all() and not np.isnan(result).all():
-                    self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
-                                     expected[np.invert(np.isnan(expected))]))
+    def binary_op_test(self, operator, flags=enable_nrt_flags,
+                       skip_inputs=[], additional_inputs=[],
+                       int_output_type=None, float_output_type=None,
+                       positive_rhs=False):
+        operator_func = _make_binary_ufunc_op_usecase(operator)
+        inputs = list(self.inputs)
+        inputs.extend(additional_inputs)
+        pyfunc = operator_func
+        for input_tuple in inputs:
+            input_operand1, input_type = input_tuple
+            input_dtype = numpy_support.as_dtype(
+                getattr(input_type, "dtype", input_type))
+            input_type1 = input_type
+
+            if input_type in skip_inputs:
+                continue
+
+            if positive_rhs:
+                zero = np.zeros(1, dtype=input_dtype)[0]
+            # If we only use two scalars, the code generator will not
+            # select the ufunctionalized operator, so we mix it up.
+            if isinstance(input_type, types.Array):
+                input_operand0 = input_operand1
+                input_type0 = input_type
+                if positive_rhs and np.any(input_operand1 < zero):
+                    continue
             else:
-                match = np.all(result == expected) or np.allclose(result,
-                                                                  expected)
-                if not match:
-                    msg = '\n'.join(["ufunc '{0}' failed",
-                                     "inputs ({1}):", "{2}",
-                                     "got({3})", "{4}",
-                                     "expected ({5}):", "{6}"
-                                 ]).format(ufunc.__name__,
-                                           input_type, input_operand,
-                                           output_type, result,
-                                           expected.dtype, expected)
-                    self.fail(msg)
+                input_operand0 = (np.random.random(10) * 100).astype(
+                    input_dtype)
+                input_type0 = typeof(input_operand0)
+                if positive_rhs and input_operand1 < zero:
+                    continue
 
+            cr = self.cache.compile(pyfunc, (input_type0, input_type1),
+                                    flags=flags)
+            cfunc = cr.entry_point
+            expected = pyfunc(input_operand0, input_operand1)
+            result = cfunc(input_operand0, input_operand1)
+            np.testing.assert_array_almost_equal(expected, result)
+
+    def binary_int_op_test(self, *args, **kws):
+        if 'skip_inputs' not in kws:
+            kws['skip_inputs'] = []
+        kws['skip_inputs'].extend([
+            types.float32, types.float64,
+            types.Array(types.float32, 1, 'C'),
+            types.Array(types.float64, 1, 'C')])
+        return self.binary_op_test(*args, **kws)
 
     def unary_int_ufunc_test(self, name=None, flags=enable_pyobj_flags):
         self.unary_ufunc_test(name, flags=flags,
@@ -1074,6 +1128,100 @@ class TestUFuncs(TestCase):
         self.assertEqual(expected1.flags.f_contiguous,
                          result1.flags.f_contiguous)
         np.testing.assert_array_equal(expected1, result1)
+
+    # ____________________________________________________________
+    # Array operators
+
+    def test_unary_positive_array_op(self):
+        self.unary_op_test('+')
+
+    def test_unary_negative_array_op(self):
+        self.unary_op_test('-')
+
+    def test_unary_invert_array_op(self):
+        self.unary_op_test('~', skip_inputs=[
+            types.float32, types.float64,
+            types.Array(types.float32, 1, 'C'),
+            types.Array(types.float64, 1, 'C')])
+
+    def test_add_array_op(self):
+        self.binary_op_test('+')
+
+    def test_subtract_array_op(self):
+        self.binary_op_test('-')
+
+    def test_multiply_array_op(self):
+        self.binary_op_test('*')
+
+    def test_divide_array_op(self):
+        int_out_type = None
+        if PYVERSION >= (3, 0):
+            int_out_type = types.float64
+        self.binary_op_test('/', int_output_type=int_out_type)
+
+    def test_floor_divide_array_op(self):
+        self.binary_op_test('//')
+
+    def test_remainder_array_op(self):
+        self.binary_op_test('%')
+
+    def test_power_array_op(self):
+        self.binary_op_test('**')
+
+    def test_left_shift_array_op(self):
+        self.binary_int_op_test('<<', positive_rhs=True)
+
+    def test_right_shift_array_op(self):
+        self.binary_int_op_test('>>', positive_rhs=True)
+
+    def test_bitwise_and_array_op(self):
+        self.binary_int_op_test('&')
+
+    def test_bitwise_or_array_op(self):
+        self.binary_int_op_test('|')
+
+    def test_bitwise_xor_array_op(self):
+        self.binary_int_op_test('^')
+
+    def test_equal_array_op(self):
+        self.binary_op_test('==')
+
+    def test_greater_array_op(self):
+        self.binary_op_test('>')
+
+    def test_greater_equal_array_op(self):
+        self.binary_op_test('>=')
+
+    def test_less_array_op(self):
+        self.binary_op_test('<')
+
+    def test_less_equal_array_op(self):
+        self.binary_op_test('<=')
+
+    def test_not_equal_array_op(self):
+        self.binary_op_test('!=')
+
+    def test_unary_positive_array_op(self):
+        '''
+        Verify that the unary positive operator copies values, and doesn't
+        just alias to the input array (mirrors normal Numpy/Python
+        interaction behavior).
+        '''
+        # Test originally from @gmarkall
+        def f(a1):
+            a2 = +a1
+            a1[0] = 3
+            a2[1] = 4
+            return a2
+
+        a1 = np.zeros(10)
+        a2 = f(a1)
+        self.assertTrue(a1[0] != a2[0] and a1[1] != a2[1])
+        a3 = np.zeros(10)
+        a4 = njit(f)(a3)
+        self.assertTrue(a3[0] != a4[0] and a3[1] != a4[1])
+        np.testing.assert_array_equal(a1, a3)
+        np.testing.assert_array_equal(a2, a4)
 
 
 class TestScalarUFuncs(TestCase):
