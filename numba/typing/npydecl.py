@@ -161,6 +161,12 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
          '&': "bitwise_and",
          '|': "bitwise_or",
          '^': "bitwise_xor",
+        '==': "equal",
+         '>': "greater",
+        '>=': "greater_equal",
+         '<': "less",
+        '<=': "less_equal",
+        '!=': "not_equal",
     }
 
     @property

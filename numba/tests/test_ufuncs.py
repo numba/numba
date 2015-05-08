@@ -1183,6 +1183,24 @@ class TestUFuncs(TestCase):
     def test_bitwise_xor_array_op(self):
         self.binary_int_op_test('^')
 
+    def test_equal_array_op(self):
+        self.binary_op_test('==')
+
+    def test_greater_array_op(self):
+        self.binary_op_test('>')
+
+    def test_greater_equal_array_op(self):
+        self.binary_op_test('>=')
+
+    def test_less_array_op(self):
+        self.binary_op_test('<')
+
+    def test_less_equal_array_op(self):
+        self.binary_op_test('<=')
+
+    def test_not_equal_array_op(self):
+        self.binary_op_test('!=')
+
 
 class TestScalarUFuncs(TestCase):
     """check the machinery of ufuncs works when the result is an scalar.
