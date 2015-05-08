@@ -890,14 +890,10 @@ def make_ndindex_cls(nditerty):
     """
     ndim = nditerty.ndim
 
-    class NdIndexIter(cgutils.Structure):
+    class NdIndexIter(cgutils.create_struct_proxy(nditerty)):
         """
         .ndindex() implementation.
         """
-        _fields = [('shape', types.UniTuple(types.intp, ndim)),
-                   ('indices', types.CPointer(types.intp)),
-                   ('exhausted', types.CPointer(types.boolean)),
-                   ]
 
         def init_specific(self, context, builder, shapes):
             zero = context.get_constant(types.intp, 0)

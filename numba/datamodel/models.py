@@ -190,7 +190,6 @@ class PrimitiveModel(DataModel):
 @register_default(types.ExceptionType)
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
-@register_default(types.NumpyNdIndexType)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
@@ -835,6 +834,16 @@ class RangeModel(StructModel):
 
 
 # =============================================================================
+
+@register_default(types.NumpyNdIndexType)
+class NdIndexType(StructModel):
+    def __init__(self, dmm, fe_type):
+        ndim = fe_type.ndim
+        members = [('shape', types.UniTuple(types.intp, ndim)),
+                   ('indices', types.CPointer(types.intp)),
+                   ('exhausted', types.CPointer(types.boolean)),
+                   ]
+        super(NdIndexType, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.NumpyFlatType)
