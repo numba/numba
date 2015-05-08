@@ -1,12 +1,15 @@
 from __future__ import print_function, absolute_import, division
 import numpy as np
 import time
-from numba import cuda, float64, void
+from numba import cuda, config, float64, void
 from numba.cuda.testing import unittest
 
 # NOTE: CUDA kernel does not return any value
 
-tpb = 16
+if config.ENABLE_CUDASIM:
+    tpb = 4
+else:
+    tpb = 16
 SM_SIZE = tpb, tpb
 
 
@@ -62,15 +65,18 @@ def jocabi_relax_core(A, Anew, error):
 
 class TestCudaLaplace(unittest.TestCase):
     def test_laplace_small(self):
-        NN = 256
-        NM = 256
+        if config.ENABLE_CUDASIM:
+            NN, NM = 4, 4
+            iter_max = 20
+        else:
+            NN, NM = 256, 256
+            iter_max = 1000
 
         A = np.zeros((NN, NM), dtype=np.float64)
         Anew = np.zeros((NN, NM), dtype=np.float64)
 
         n = NN
         m = NM
-        iter_max = 1000
 
         tol = 1.0e-6
         error = 1.0

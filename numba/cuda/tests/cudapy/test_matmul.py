@@ -1,11 +1,15 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
 from timeit import default_timer as time
-from numba import cuda, float32
+from numba import cuda, config, float32
 from numba.cuda.testing import unittest
 
-bpg = 50
-tpb = 32
+# Ensure the test takes a reasonable amount of time in the simulator
+if config.ENABLE_CUDASIM:
+    bpg, tpb = 2, 8
+else:
+    bpg, tpb = 50, 32
+
 n = bpg * tpb
 SM_SIZE = (tpb, tpb)
 

@@ -149,10 +149,26 @@ class DeviceNDArrayBase(object):
             _driver.host_to_device(self, ary, sz, stream=stream)
 
     def copy_to_host(self, ary=None, stream=0):
-        """Copy ``self`` to ``ary`` or create a new numpy ndarray
+        """Copy ``self`` to ``ary`` or create a new Numpy ndarray
         if ``ary`` is ``None``.
 
+        If a CUDA ``stream`` is given, then the transfer will be made
+        asynchronously as part as the given stream.  Otherwise, the transfer is
+        synchronous: the function returns after the copy is finished.
+
         Always returns the host array.
+
+        Example::
+
+            import numpy as np
+            from numba import cuda
+
+            arr = np.arange(1000)
+            d_arr = cuda.to_device(arr)
+
+            my_kernel[100, 100](d_arr)
+
+            result_array = d_arr.copy_to_host()
         """
         stream = self._default_stream(stream)
         if ary is None:
@@ -240,15 +256,23 @@ class DeviceRecord(DeviceNDArrayBase):
 
 class DeviceNDArray(DeviceNDArrayBase):
     def is_f_contiguous(self):
+        '''
+        Return true if the array is Fortran-contiguous.
+        '''
         return self._dummy.is_f_contig
 
     def is_c_contiguous(self):
+        '''
+        Return true if the array is C-contiguous.
+        '''
         return self._dummy.is_c_contig
 
     def reshape(self, *newshape, **kws):
-        """reshape(self, *newshape, order='C'):
+        """
+        Reshape the array without changing its contents, similarly to
+        :meth:`numpy.ndarray.reshape`. Example::
 
-        Reshape the array and keeping the original data
+            d_arr = d_arr.reshape(20, 50, order='F')
         """
         if len(newshape) == 1 and isinstance(newshape[0], (tuple, list)):
             newshape = newshape[0]
@@ -268,6 +292,10 @@ class DeviceNDArray(DeviceNDArrayBase):
             raise NotImplementedError("operation requires copying")
 
     def ravel(self, order='C', stream=0):
+        '''
+        Flatten the array without changing its contents, similar to
+        :meth:`numpy.ndarray.ravel`.
+        '''
         stream = self._default_stream(stream)
         cls = type(self)
         newarr, extents = self._dummy.ravel(order=order)

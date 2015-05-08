@@ -54,3 +54,19 @@ Users can then create a new context with another device.
       This makes it not very useful to close and create new devices, though it
       is certainly useful for choosing which device to use when the machine
       has multiple GPUs.
+
+The Device List
+===============
+
+The Device List is a list of all the GPUs in the system, and can be indexed to
+obtain a context manager that ensures execution on the selected GPU.
+
+.. attribute:: numba.cuda.gpus
+.. attribute:: numba.cuda.cudadrv.devices.gpus
+
+:py:data:`.gpus` is an instance of the :class:`_DeviceList` class, from which
+the current GPU context can also be retrieved:
+
+.. autoclass:: numba.cuda.cudadrv.devices._DeviceList
+    :members: current
+

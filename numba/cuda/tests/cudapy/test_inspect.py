@@ -1,9 +1,11 @@
 from __future__ import print_function, division, absolute_import
 from numba import cuda, float64, intp
 from numba.cuda.testing import unittest
+from numba.cuda.testing import skip_on_cudasim
 from numba.utils import StringIO
 
 
+@skip_on_cudasim('Simulator does not generate code to be inspected')
 class TestInspect(unittest.TestCase):
     def test_monotyped(self):
         @cuda.jit("(float32, int32)")

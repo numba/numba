@@ -108,6 +108,8 @@ packages = [
     "numba.datamodel",
     "numba.cuda",
     "numba.cuda.cudadrv",
+    "numba.cuda.simulator",
+    "numba.cuda.simulator.cudadrv",
     "numba.cuda.tests",
     "numba.cuda.tests.cudadrv",
     "numba.cuda.tests.cudadrv.data",

@@ -4,6 +4,7 @@ from ctypes import c_int, sizeof
 from numba.cuda.cudadrv.driver import host_to_device, device_to_host
 from numba.cuda.cudadrv import devices
 from numba.cuda.testing import unittest
+from numba.cuda.testing import skip_on_cudasim
 
 ptx1 = '''
     .version 1.4
@@ -58,6 +59,7 @@ ptx2 = '''
 '''
 
 
+@skip_on_cudasim('CUDA Driver API unsupported in the simulator')
 class TestCudaDriver(unittest.TestCase):
     def setUp(self):
         self.assertTrue(len(devices.gpus) > 0)

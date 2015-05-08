@@ -1,0 +1,198 @@
+'''
+Implements the cuda module as called from within an executing kernel
+(@cuda.jit-decorated function).
+'''
+
+import numpy as np
+import threading
+import traceback
+from contextlib import contextmanager
+from numba import types, numpy_support
+
+class Dim3(object):
+    '''
+    Used to implement thread/block indices/dimensions
+    '''
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def __str__(self):
+        return '(%s, %s, %s)' % (self.x, self.y, self.z)
+
+    def __repr__(self):
+        return 'Dim3(%s, %s, %s)' % (self.x, self.y, self.z)
+
+    def __iter__(self):
+        yield self.x
+        yield self.y
+        yield self.z
+
+
+class FakeCUDALocal(object):
+    '''
+    CUDA Local arrays
+    '''
+    def array(self, shape, dtype):
+        dtype = numpy_support.as_dtype(dtype)
+        return np.empty(shape, dtype)
+
+
+class FakeCUDAConst(object):
+    '''
+    CUDA Const arrays
+    '''
+    def array_like(self, ary):
+        return ary
+
+
+class FakeCUDAShared(object):
+    '''
+    CUDA Shared arrays.
+
+    Limitations: assumes that only one call to cuda.shared.array is on a line,
+    and that that line is only executed once per thread. i.e.::
+
+        a = cuda.shared.array(...); b = cuda.shared.array(...)
+
+    will erroneously alias a and b, and::
+
+        for i in range(10):
+            sharedarrs[i] = cuda.shared.array(...)
+
+    will alias all arrays created at that point (though it is not certain that
+    this would be supported by Numba anyway).
+    '''
+
+    def __init__(self, dynshared_size):
+        self._allocations = {}
+        self._dynshared_size = dynshared_size
+        self._dynshared = np.zeros(dynshared_size, dtype=np.byte)
+
+    def array(self, shape, dtype):
+        dtype = numpy_support.as_dtype(dtype)
+        # Dynamic shared memory is requested with size 0 - this all shares the
+        # same underlying memory
+        if shape == 0:
+            # Count must be the maximum number of whole elements that fit in the
+            # buffer (Numpy complains if the buffer is not a multiple of the
+            # element size)
+            count = self._dynshared_size // dtype.itemsize
+            return np.frombuffer(self._dynshared.data, dtype=dtype, count=count)
+
+        # Otherwise, identify allocations by source file and line number
+        caller = traceback.extract_stack()[-2][0:2]
+        res = self._allocations.get(caller)
+        if res is None:
+            res = np.empty(shape, dtype)
+            self._allocations[caller] = res
+        return res
+
+addlock = threading.Lock()
+maxlock = threading.Lock()
+
+class FakeCUDAAtomic(object):
+    def add(self, array, index, val):
+        with addlock:
+            array[index] += val
+
+    def max(self, array, index, val):
+        with maxlock:
+            # CUDA Python's semantics for max differ from Numpy's Python's,
+            # so we have special handling here (CUDA Python treats NaN as
+            # missing data).
+            if np.isnan(array[index]):
+                array[index] = val
+            elif np.isnan(val):
+                return
+            array[index] = max(array[index], val)
+
+class FakeCUDAModule(object):
+    '''
+    An instance of this class will be injected into the __globals__ for an
+    executing function in order to implement calls to cuda.*. This will fail to
+    work correctly if the user code does::
+
+        from numba import cuda as something_else
+
+    In other words, the CUDA module must be called cuda.
+    '''
+
+    def __init__(self, grid_dim, block_dim, dynshared_size):
+        self.gridDim = Dim3(*grid_dim)
+        self.blockDim = Dim3(*block_dim)
+        self._local = FakeCUDALocal()
+        self._shared = FakeCUDAShared(dynshared_size)
+        self._const = FakeCUDAConst()
+        self._atomic = FakeCUDAAtomic()
+
+    @property
+    def local(self):
+        return self._local
+
+    @property
+    def shared(self):
+        return self._shared
+
+    @property
+    def const(self):
+        return self._const
+
+    @property
+    def atomic(self):
+        return self._atomic
+
+    @property
+    def threadIdx(self):
+        return threading.current_thread().threadIdx
+
+    @property
+    def blockIdx(self):
+        return threading.current_thread().blockIdx
+
+    def syncthreads(self):
+        threading.current_thread().syncthreads()
+
+    def grid(self, n):
+        bdim = self.blockDim
+        bid = self.blockIdx
+        tid = self.threadIdx
+        x = bid.x * bdim.x + tid.x
+        if n == 1:
+            return x
+        y = bid.y * bdim.y + tid.y
+        if n == 2:
+            return (x, y)
+        z = bid.z * bdim.z + tid.z
+        if n == 3:
+            return (x, y, z)
+
+        raise RuntimeError("Global ID has 1-3 dimensions. %d requested" % n)
+
+    def gridsize(self, n):
+        bdim = self.blockDim
+        gdim = self.gridDim
+        x = bdim.x * gdim.x
+        if n == 1:
+            return x
+        y = bdim.y * gdim.y
+        if n == 2:
+            return (x, y)
+        z = bdim.z * gdim.z
+        if n == 3:
+            return (x, y, z)
+
+        raise RuntimeError("Global grid has 1-3 dimensions. %d requested" % n)
+
+
+@contextmanager
+def swapped_cuda_module(fn, fake_cuda_module):
+    fn_globs = fn.__globals__
+    original_cuda, fn_globs['cuda'] = fn_globs['cuda'], fake_cuda_module
+    try:
+        yield
+    finally:
+        fn_globs['cuda'] = original_cuda
+
+

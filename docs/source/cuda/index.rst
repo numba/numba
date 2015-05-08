@@ -11,3 +11,4 @@ Numba for CUDA GPUs
    intrinsics.rst
    device-management.rst
    examples.rst
+   simulator.rst

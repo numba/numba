@@ -67,7 +67,7 @@ script:
     # Ensure that the documentation builds without warnings
     - cd $TRAVIS_BUILD_DIR/docs ; make SPHINXOPTS=-W clean html
     # Run the Numba test suite
-    - cd ~ ; python -m numba.testing -v -b -m
+    - cd ~ ; NUMBA_ENABLE_CUDASIM=1 python -m numba.testing -v -b -m
     #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME; py.test --udf $HOME/impyla/impala/tests/test_udf_compile.py; fi
 
 notifications:
