@@ -239,27 +239,12 @@ class TestUFuncs(TestCase):
                 (not isinstance(input_type, types.Array))):
                 continue
 
-            output_type = self._determine_output_type(
-                input_type, int_output_type, float_output_type)
             cr = self.cache.compile(pyfunc, (input_type,),
                                     flags=flags)
             cfunc = cr.entry_point
             expected = pyfunc(input_operand)
             result = cfunc(input_operand)
-            self.assertTrue(np.all(expected == result))
-
-    def _binary_match_results(self, expected, result, msg_thunk):
-        # Need special checks if NaNs are in results
-        if np.isnan(expected).any() or np.isnan(result).any():
-            self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
-            if not np.isnan(expected).all() and not np.isnan(result).all():
-                self.assertTrue(np.allclose(
-                    result[np.invert(np.isnan(result))],
-                    expected[np.invert(np.isnan(expected))]))
-        else:
-            match = np.all(result == expected) or np.allclose(result, expected)
-            if not match:
-                self.fail(msg_thunk())
+            np.testing.assert_array_almost_equal(expected, result)
 
     def binary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
@@ -294,57 +279,47 @@ class TestUFuncs(TestCase):
                 expected = np.zeros(1, dtype=output_type.dtype.name)
             cfunc(input_operand, input_operand, result)
             pyfunc(input_operand, input_operand, expected)
-
-            self._binary_match_results(
-                expected, result,
-                lambda: '\n'.join(["ufunc '{0}' failed",
-                                   "inputs ({1}):", "{2}",
-                                   "got({3})", "{4}",
-                                   "expected ({5}):", "{6}"
-                               ]).format(ufunc.__name__,
-                                         input_type, input_operand,
-                                         output_type, result,
-                                         expected.dtype, expected))
+            np.testing.assert_array_almost_equal(expected, result)
 
     def binary_op_test(self, operator, flags=enable_nrt_flags,
                        skip_inputs=[], additional_inputs=[],
-                       int_output_type=None, float_output_type=None):
+                       int_output_type=None, float_output_type=None,
+                       positive_rhs=False):
         operator_func = _make_binary_ufunc_op_usecase(operator)
         inputs = list(self.inputs)
         inputs.extend(additional_inputs)
         pyfunc = operator_func
         for input_tuple in inputs:
             input_operand1, input_type = input_tuple
+            input_dtype = numpy_support.as_dtype(
+                getattr(input_type, "dtype", input_type))
             input_type1 = input_type
 
             if input_type in skip_inputs:
                 continue
 
+            if positive_rhs:
+                zero = np.zeros(1, dtype=input_dtype)[0]
             # If we only use two scalars, the code generator will not
             # select the ufunctionalized operator, so we mix it up.
             if isinstance(input_type, types.Array):
                 input_operand0 = input_operand1
                 input_type0 = input_type
+                if positive_rhs and np.any(input_operand1 < zero):
+                    continue
             else:
-                input_operand0 = np.array(
-                    np.random.random(10) * 100,
-                    dtype=numpy_support.as_dtype(input_type))
+                input_operand0 = (np.random.random(10) * 100).astype(
+                    input_dtype)
                 input_type0 = typeof(input_operand0)
+                if positive_rhs and input_operand1 < zero:
+                    continue
 
             cr = self.cache.compile(pyfunc, (input_type0, input_type1),
                                     flags=flags)
             cfunc = cr.entry_point
             expected = pyfunc(input_operand0, input_operand1)
             result = cfunc(input_operand0, input_operand1)
-            self._binary_match_results(
-                expected, result,
-                lambda: '\n'.join(["array operator '{0}' failed",
-                                   "inputs ({1}):", "{2}",
-                                   "got({3})", "{4}",
-                                   "expected ({5}):", "{6}"
-                               ]).format(operator, input_type, input_operand,
-                                         result.dtype, result,
-                                         expected.dtype, expected))
+            np.testing.assert_array_almost_equal(expected, result)
 
     def binary_int_op_test(self, *args, **kws):
         if 'skip_inputs' not in kws:
@@ -1194,10 +1169,10 @@ class TestUFuncs(TestCase):
         self.binary_op_test('**')
 
     def test_left_shift_array_op(self):
-        self.binary_int_op_test('<<')
+        self.binary_int_op_test('<<', positive_rhs=True)
 
     def test_right_shift_array_op(self):
-        self.binary_int_op_test('>>')
+        self.binary_int_op_test('>>', positive_rhs=True)
 
     def test_bitwise_and_array_op(self):
         self.binary_int_op_test('&')
