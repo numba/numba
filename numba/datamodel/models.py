@@ -190,7 +190,6 @@ class PrimitiveModel(DataModel):
 @register_default(types.ExceptionType)
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
-@register_default(types.BoundFunction)
 @register_default(types.NumpyNdEnumerateType)
 @register_default(types.NumpyNdIndexType)
 class OpaqueModel(PrimitiveModel):
@@ -845,3 +844,8 @@ def handle_numpy_flat_type(dmm, ty):
         return CContiguousFlatIter(dmm, ty)
     else:
         return FlatIter(dmm, ty)
+
+@register_default(types.BoundFunction)
+def handle_bound_function(dmm, ty):
+    # The same as the underlying type
+    return dmm[ty.this]
