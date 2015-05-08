@@ -190,6 +190,7 @@ class PrimitiveModel(DataModel):
 @register_default(types.ExceptionType)
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
+@register_default(types.ExternalFunction)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
