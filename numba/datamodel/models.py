@@ -190,7 +190,6 @@ class PrimitiveModel(DataModel):
 @register_default(types.ExceptionType)
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
-@register_default(types.NumpyNdEnumerateType)
 @register_default(types.NumpyNdIndexType)
 class OpaqueModel(PrimitiveModel):
     """
@@ -839,6 +838,7 @@ class RangeModel(StructModel):
 
 
 @register_default(types.NumpyFlatType)
+@register_default(types.NumpyNdEnumerateType)
 def handle_numpy_flat_type(dmm, ty):
     if ty.array_type.layout == 'C':
         return CContiguousFlatIter(dmm, ty)
