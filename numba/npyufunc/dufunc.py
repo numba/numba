@@ -52,8 +52,10 @@ class DUFuncLowerer(object):
         self.libs = []
 
     def __call__(self, context, builder, sig, args):
+        explicit_output = len(args) > self.kernel.dufunc.ufunc.nin
         return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
-                                          self.kernel)
+                                          self.kernel,
+                                          explicit_output=explicit_output)
 
 
 class DUFunc(_internal._DUFunc):
@@ -157,7 +159,11 @@ class DUFunc(_internal._DUFunc):
         _handle_inputs_result = npydecl.Numpy_rules_ufunc._handle_inputs(
             ufunc, argtys, kwtys)
         base_types, explicit_outputs, ndims, layout = _handle_inputs_result
-        ewise_types = tuple(base_types[:-len(explicit_outputs)])
+        explicit_output_count = len(explicit_outputs)
+        if explicit_output_count > 0:
+            ewise_types = tuple(base_types[:-len(explicit_outputs)])
+        else:
+            ewise_types = tuple(base_types)
         sig, cres = self.find_ewise_function(ewise_types)
         if sig is None:
             # Matching element-wise signature was not found; must
@@ -165,10 +171,13 @@ class DUFunc(_internal._DUFunc):
             self._compile_for_argtys(ewise_types)
             sig, cres = self.find_ewise_function(ewise_types)
             assert sig is not None
-        if explicit_outputs:
+        if explicit_output_count > 0:
             outtys = list(explicit_outputs)
         elif ufunc.nout == 1:
-            outtys = [types.Array(sig.return_type, ndims, layout)]
+            if ndims > 0:
+                outtys = [types.Array(sig.return_type, ndims, layout)]
+            else:
+                outtys = [sig.return_type]
         else:
             raise NotImplementedError("typing gufuncs (nout > 1)")
         outtys.extend(argtys)
