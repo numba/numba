@@ -91,7 +91,7 @@ class StructProxy(object):
             assert ref.type.pointee == self._be_type
             self._value = ref
         else:
-            self._value = alloca_once(self._builder, self._be_type)
+            self._value = alloca_once(self._builder, self._be_type, zfill=True)
             if value is not None:
                 self._builder.store(value, self._value)
 
