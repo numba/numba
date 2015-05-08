@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import types, typing, utils, typeof, numpy_support
+from numba import types, typing, utils, typeof, numpy_support, njit
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype
 from numba import vectorize
@@ -1200,6 +1200,28 @@ class TestUFuncs(TestCase):
 
     def test_not_equal_array_op(self):
         self.binary_op_test('!=')
+
+    def test_unary_positive_array_op(self):
+        '''
+        Verify that the unary positive operator copies values, and doesn't
+        just alias to the input array (mirrors normal Numpy/Python
+        interaction behavior).
+        '''
+        # Test originally from @gmarkall
+        def f(a1):
+            a2 = +a1
+            a1[0] = 3
+            a2[1] = 4
+            return a2
+
+        a1 = np.zeros(10)
+        a2 = f(a1)
+        self.assertTrue(a1[0] != a2[0] and a1[1] != a2[1])
+        a3 = np.zeros(10)
+        a4 = njit(f)(a3)
+        self.assertTrue(a3[0] != a4[0] and a3[1] != a4[1])
+        np.testing.assert_array_equal(a1, a3)
+        np.testing.assert_array_equal(a2, a4)
 
 
 class TestScalarUFuncs(TestCase):

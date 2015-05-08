@@ -488,8 +488,13 @@ def array_positive_impl(context, builder, sig, args):
     (numba.targets.npyimpl) since the remaining array-operator
     lowering functions are also registered in this module.
     '''
-    [val] = args
-    return val
+    class _UnaryPositiveKernel(_Kernel):
+        def generate(self, *args):
+            [val] = args
+            return val
+
+    return numpy_ufunc_kernel(context, builder, sig, args,
+                              _UnaryPositiveKernel, explicit_output=False)
 
 
 for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
