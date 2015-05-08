@@ -278,12 +278,6 @@ def defer_cleanup():
         yield
 
 
-# TODO
-# Temporary entry-point to debug a failure for nvidia profiling tools to
-# record any kind of events.  Manually invocation of _profile_stop seems to be
-# necessary only on windows.
-# Should we make cuda.close() call _profile_stop()?
-_profiling = require_context(driver.profiling)
-_profile_start = require_context(driver.profile_start)
-_profile_stop = require_context(driver.profile_stop)
-
+profiling = require_context(driver.profiling)
+profile_start = require_context(driver.profile_start)
+profile_stop = require_context(driver.profile_stop)
