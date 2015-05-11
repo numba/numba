@@ -1461,6 +1461,9 @@ class _TestLoopTypes(TestCase):
         """
         Result mismatch due to differing error handling.
         """
+        def get_leftmost_bit(dtype):
+            return dtype.type(1 << (dtype.itemsize * 8 - 1))
+
         if np.isnan(c) or np.isnan(py):
             if 0 in [c, py]:
                 # If one is NaN and the other is zero
@@ -1471,6 +1474,12 @@ class _TestLoopTypes(TestCase):
         elif np.abs(c) == 0 and np.abs(py) == np.abs(c):
             # If both are zeros and they are differ by sign
             msg = "mismatch sign for 0: expected {0}; got {1}"
+            print(msg.format(py, c))
+            return True
+
+        elif ((c == 0 and py == get_leftmost_bit(py.dtype)) or
+                  (py == 0 and c == get_leftmost_bit(py.dtype))):
+            msg = "mismatch left-most bit: expected {0}; got {1}"
             print(msg.format(py, c))
             return True
 
