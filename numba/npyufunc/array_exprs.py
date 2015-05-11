@@ -1,9 +1,12 @@
 from __future__ import print_function, division, absolute_import
 import ast
 
+from numpy import ufunc
+
 from .. import ir, types, rewrites, six, config
 from ..typing import npydecl
 from ..targets import npyimpl
+from .dufunc import DUFunc
 
 
 @rewrites.register_rewrite
@@ -42,25 +45,55 @@ class RewriteArrayExprs(rewrites.Rewrite):
             self.array_assigns = array_assigns
             const_assigns = {}
             self.const_assigns = const_assigns
-            for instr in block.body:
-                if isinstance(instr, ir.Assign):
-                    target_name = instr.target.name
-                    is_array_expr = (
-                        isinstance(typemap.get(target_name, None),
-                                   types.Array)
-                        and isinstance(instr.value, ir.Expr)
-                        and instr.value.op in ('unary', 'binop')
-                        and instr.value.fn in self._operators
-                    )
-                    if is_array_expr:
+            assignments = (instr
+                           for instr in block.body
+                           if isinstance(instr, ir.Assign))
+            for instr in assignments:
+                target_name = instr.target.name
+                expr = instr.value
+                if isinstance(expr, ir.Expr) and isinstance(
+                        typemap.get(target_name, None), types.Array):
+                    # We've matched a subexpression assignment to an
+                    # array variable.  Now see if the expression is an
+                    # array expression.
+                    expr_op = expr.op
+                    if ((expr_op in ('unary', 'binop')) and (
+                            expr.fn in self._operators)):
+                        # Matches an array operation that maps to a ufunc.
                         array_assigns[target_name] = instr
+                    elif expr_op == 'call':
+                        # Could be a match for a ufunc or DUFunc call.
+                        func_type = typemap.get(expr.func.name)
+                        func_key = getattr(func_type.template, 'key', None)
+                        if isinstance(func_key, (ufunc, DUFunc)):
+                            # If so, match it as a potential subexpression.
+                            array_assigns[target_name] = instr
+                    # Now check to see if we matched anything of
+                    # interest; if so, check to see if one of the
+                    # expression's dependencies isn't also a matching
+                    # expression.
+                    if target_name in array_assigns:
                         operands = set(var.name
-                                       for var in instr.value.list_vars())
+                                       for var in expr.list_vars())
                         if operands.intersection(array_assigns.keys()):
+                            # We've identified a nested array
+                            # expression.  Rewrite it.
                             matches.append(target_name)
-                    elif isinstance(instr.value, ir.Const):
-                        const_assigns[target_name] = instr.value
+                elif isinstance(expr, ir.Const):
+                    # Track constants since we might need them for an
+                    # array expression.
+                    const_assigns[target_name] = expr
         return len(matches) > 0
+
+    def _get_array_operator(self, ir_expr):
+        ir_op = ir_expr.op
+        if ir_op in ('unary', 'binop'):
+            return ir_expr.fn
+        elif ir_op == 'call':
+            return self.typemap[ir_expr.func.name].template.key
+        raise NotImplementedError(
+            "Don't know how to find the operator for '{0}' expressions.".format(
+                ir_op))
 
     def _get_operands(self, ir_expr):
         '''Given a Numba IR expression, return the operands to the expression
@@ -71,6 +104,8 @@ class RewriteArrayExprs(rewrites.Rewrite):
             return ir_expr.lhs, ir_expr.rhs
         elif ir_op == 'unary':
             return ir_expr.list_vars()
+        elif ir_op == 'call':
+            return ir_expr.args
         raise NotImplementedError(
             "Don't know how to find the operands for '{0}' expressions.".format(
                 ir_op))
@@ -79,10 +114,12 @@ class RewriteArrayExprs(rewrites.Rewrite):
         '''Translate the given expression from Numba IR to an array expression
         tree.
         '''
-        if ir_expr.op == 'arrayexpr':
+        ir_op = ir_expr.op
+        if ir_op == 'arrayexpr':
             return ir_expr.expr
-        return ir_expr.fn, [self.const_assigns.get(op_var.name, op_var)
+        operands_or_args = [self.const_assigns.get(op_var.name, op_var)
                             for op_var in self._get_operands(ir_expr)]
+        return self._get_array_operator(ir_expr), operands_or_args
 
     def _handle_matches(self):
         '''Iterate over the matches, trying to find which instructions should
@@ -93,16 +130,17 @@ class RewriteArrayExprs(rewrites.Rewrite):
         used_vars = set()
         for match in self.matches:
             instr = self.array_assigns[match]
+            expr = instr.value
             arr_inps = []
-            arr_expr = instr.value.fn, arr_inps
+            arr_expr = self._get_array_operator(expr), arr_inps
             new_expr = ir.Expr(op='arrayexpr',
-                               loc=instr.value.loc,
+                               loc=expr.loc,
                                expr=arr_expr,
                                ty=self.typemap[instr.target.name])
             new_instr = ir.Assign(new_expr, instr.target, instr.loc)
             replace_map[instr] = new_instr
             self.array_assigns[instr.target.name] = new_instr
-            for operand in self._get_operands(instr.value):
+            for operand in self._get_operands(expr):
                 operand_name = operand.name
                 if operand_name in self.array_assigns:
                     child_assign = self.array_assigns[operand_name]
@@ -209,21 +247,33 @@ def _arr_expr_to_ast(expr):
     RewriteArrayExprs.
     '''
     if isinstance(expr, tuple):
-        op, args = expr
+        op, arr_expr_args = expr
+        ast_args = []
+        env = {}
+        for arg in arr_expr_args:
+            ast_arg, child_env = _arr_expr_to_ast(arg)
+            ast_args.append(ast_arg)
+            env.update(child_env)
         if op in RewriteArrayExprs._operators:
-            args = [_arr_expr_to_ast(arg) for arg in args]
-            if len(args) == 2:
+            if len(ast_args) == 2:
                 if op in _binops:
-                    return ast.BinOp(args[0], _binops[op](), args[1])
+                    return ast.BinOp(
+                        ast_args[0], _binops[op](), ast_args[1]), env
             else:
                 assert op in _unaryops
-                return ast.UnaryOp(_unaryops[op](), args[0])
+                return ast.UnaryOp(_unaryops[op](), ast_args[0]), env
+        elif isinstance(op, (ufunc, DUFunc)):
+            fn_name = "__ufunc_or_dufunc_{0}".format(
+                hex(hash(op)).replace("-", "_"))
+            fn_ast_name = ast.Name(fn_name, ast.Load())
+            env[fn_name] = op # Stash the ufunc or DUFunc in the environment
+            return ast.Call(fn_ast_name, ast_args, [], None, None), env
     elif isinstance(expr, ir.Var):
         return ast.Name(expr.name, ast.Load(),
                         lineno=expr.loc.line,
-                        col_offset=expr.loc.col if expr.loc.col else 0)
+                        col_offset=expr.loc.col if expr.loc.col else 0), {}
     elif isinstance(expr, ir.Const):
-        return ast.Num(expr.value)
+        return ast.Num(expr.value), {}
     raise NotImplementedError(
         "Don't know how to translate array expression '%r'" % (expr,))
 
@@ -249,9 +299,8 @@ def _lower_array_expr(lowerer, expr):
     assert hasattr(ast_module, 'body') and len(ast_module.body) == 1
     ast_fn = ast_module.body[0]
     ast_fn.args.args = ast_args
-    ast_fn.body[0].value = _arr_expr_to_ast(expr.expr)
+    ast_fn.body[0].value, namespace = _arr_expr_to_ast(expr.expr)
     ast.fix_missing_locations(ast_module)
-    namespace = {}
     code_obj = compile(ast_module, expr_args[0].loc.filename, 'exec')
     six.exec_(code_obj, namespace)
     impl = namespace[expr_name]
@@ -267,7 +316,11 @@ def _lower_array_expr(lowerer, expr):
             inner_sig_args.append(argty)
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
-    cres = context.compile_only_no_cache(builder, impl, inner_sig)
+    _locals = dict((name, value)
+                   for name, value in namespace.items()
+                   if name.startswith("__ufunc_or_dufunc_"))
+    cres = context.compile_only_no_cache(builder, impl, inner_sig,
+                                         locals=_locals)
 
     class ExprKernel(npyimpl._Kernel):
         def generate(self, *args):
