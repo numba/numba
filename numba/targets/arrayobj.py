@@ -1291,15 +1291,10 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                    strides=cgutils.pack_array(builder, strides),
                    itemsize=itemsize,
                    meminfo=meminfo)
-    return ary._getvalue()
+    return ary
 
 
-@builtin
-@implement(numpy.empty, types.Kind(types.Integer))
-@implement(numpy.empty, types.Kind(types.BaseTuple))
-@implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
-@implement(numpy.empty, types.Kind(types.BaseTuple), types.Kind(types.Function))
-def numpy_empty_nd(context, builder, sig, args):
+def _parse_empty_args(context, builder, sig, args):
     arrshapetype = sig.args[0]
     arrshape = args[0]
     arrtype = sig.return_type
@@ -1311,5 +1306,47 @@ def numpy_empty_nd(context, builder, sig, args):
                                 types.UniTuple(types.intp, len(arrshapetype)))
         shapes = cgutils.unpack_tuple(builder, arrshape,
                                       count=len(arrshapetype))
+    return arrtype, shapes
 
-    return _empty_nd_impl(context, builder, arrtype, shapes)
+
+@builtin
+@implement(numpy.empty, types.Kind(types.Integer))
+@implement(numpy.empty, types.Kind(types.BaseTuple))
+@implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
+@implement(numpy.empty, types.Kind(types.BaseTuple), types.Kind(types.Function))
+def numpy_empty_nd(context, builder, sig, args):
+    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    return ary._getvalue()
+
+
+@builtin
+@implement(numpy.zeros, types.Kind(types.Integer))
+@implement(numpy.zeros, types.Kind(types.BaseTuple))
+@implement(numpy.zeros, types.Kind(types.Integer), types.Kind(types.Function))
+@implement(numpy.zeros, types.Kind(types.BaseTuple), types.Kind(types.Function))
+def numpy_zeros_nd(context, builder, sig, args):
+    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    print("arrtype:", arrtype)
+
+    memset = "llvm.memset.p0i8.i%d" % (types.intp.bitwidth)
+    module = cgutils.get_module(builder)
+    ll_intp = context.get_value_type(types.intp)
+    i32 = lc.Type.int(32)
+    i8 = lc.Type.int(8)
+    i1 = lc.Type.int(1)
+    # void @llvm.memset.p0i8.i32(i8* <dest>, i8 <val>,
+    #                            i32 <len>, i32 <align>, i1 <isvolatile>)
+    ptr = builder.bitcast(ary.data, lc.Type.pointer(i8))
+    fnty = lc.Type.function(lc.Type.void(),
+                            [ptr.type, i8,
+                             context.get_value_type(types.intp),
+                             i32, i1])
+    fn = module.get_or_insert_function(fnty, name=memset)
+    builder.call(fn, [ptr, Constant.int(i8, 0),
+                      builder.mul(ary.itemsize, ary.nitems),
+                      Constant.int(i32, 0), Constant.int(i1, 0)])
+
+    return ary._getvalue()
+

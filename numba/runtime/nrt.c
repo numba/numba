@@ -85,17 +85,17 @@ void nrt_meminfo_call_dtor(MemInfo *mi) {
 }
 
 static
-MemInfo* meminfo_malloc() {
+MemInfo* meminfo_malloc(void) {
     void *p = malloc(sizeof(MemInfo));;
     NRT_Debug(nrt_debug_print("meminfo_malloc %p\n", p));
     return p;
 }
 
-void NRT_MemSys_init() {
+void NRT_MemSys_init(void) {
     memset(&TheMSys, 0, sizeof(MemSys));
 }
 
-void NRT_MemSys_shutdown() {
+void NRT_MemSys_shutdown(void) {
     TheMSys.shutting = 1;
     /* Revert to use our non-atomic stub for all atomic operations
        because the JIT-ed version will be removed.
@@ -105,7 +105,7 @@ void NRT_MemSys_shutdown() {
     NRT_MemSys_set_atomic_cas_stub();
 }
 
-void NRT_MemSys_process_defer_dtor() {
+void NRT_MemSys_process_defer_dtor(void) {
     MemInfo *mi;
     while ((mi = nrt_pop_meminfo_list(&TheMSys.mi_deferlist))) {
         NRT_Debug(nrt_debug_print("Defer dtor %p\n", mi));
@@ -125,7 +125,7 @@ void NRT_MemSys_insert_meminfo(MemInfo *newnode) {
     nrt_push_meminfo_list(&TheMSys.mi_freelist, newnode);
 }
 
-MemInfo* NRT_MemSys_pop_meminfo() {
+MemInfo* NRT_MemSys_pop_meminfo(void) {
     MemInfo *node = nrt_pop_meminfo_list(&TheMSys.mi_freelist);
     if (NULL == node) {
         node = meminfo_malloc();
@@ -179,12 +179,12 @@ int nrt_testing_atomic_cas(void* volatile *ptr, void *cmp, void *val,
 
 }
 
-void NRT_MemSys_set_atomic_inc_dec_stub(){
+void NRT_MemSys_set_atomic_inc_dec_stub(void){
     NRT_MemSys_set_atomic_inc_dec(nrt_testing_atomic_inc,
                                   nrt_testing_atomic_dec);
 }
 
-void NRT_MemSys_set_atomic_cas_stub() {
+void NRT_MemSys_set_atomic_cas_stub(void) {
     NRT_MemSys_set_atomic_cas(nrt_testing_atomic_cas);
 }
 
@@ -208,7 +208,7 @@ static
 void nrt_internal_dtor(void *ptr, void *info) {
     NRT_Debug(nrt_debug_print("nrt_internal_dtor %p, %p\n", ptr, info));
     if (info != NULL) {
-        memset(ptr, 0, (size_t)info);  /* for safety */
+        memset(ptr, 0xDE, (size_t)info);  /* for safety */
     }
     NRT_Free(ptr);
 }
@@ -221,7 +221,7 @@ MemInfo* NRT_MemInfo_alloc(size_t size) {
 
 MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
     void *data = NRT_Allocate(size);
-    memset(data, 0, size);
+    memset(data, 0xCB, size);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p %llu\n", data, size));
     return NRT_MemInfo_new(data, size, nrt_internal_dtor, (void*)size);
 }

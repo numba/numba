@@ -425,9 +425,7 @@ class NdIndex(AbstractTemplate):
 
 builtin_global(numpy.ndindex, types.Function(NdIndex))
 
-@builtin
-class NdEmpty(AbstractTemplate):
-    key = numpy.empty
+class NdConstructor(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
@@ -441,16 +439,28 @@ class NdEmpty(AbstractTemplate):
             dtype = from_dtype(numpy.dtype(npy_dtype.template.key))
 
         if isinstance(shape, types.Integer):
-            return signature(types.double[::1], *args)
+            ndim = 1
         elif isinstance(shape, (types.Tuple, types.UniTuple)):
-            if all(isinstance(s, types.Integer) for s in shape):
-                aryty = types.Array(dtype=dtype,
-                                    ndim=len(shape),
-                                    layout='C')
-                return signature(aryty, *args)
+            if not all(isinstance(s, types.Integer) for s in shape):
+                return
+            ndim = len(shape)
+        else:
+            return
 
+        aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
+        return signature(aryty, *args)
+
+@builtin
+class NdEmpty(NdConstructor):
+    key = numpy.empty
+
+@builtin
+class NdZeros(NdConstructor):
+    key = numpy.zeros
 
 builtin_global(numpy.empty, types.Function(NdEmpty))
+builtin_global(numpy.zeros, types.Function(NdZeros))
+
 
 @builtin
 class Round(AbstractTemplate):

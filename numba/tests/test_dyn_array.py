@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import contextlib
 import sys
 import numpy as np
 import threading
@@ -420,6 +421,66 @@ class TestDynArray(unittest.TestCase):
 
         self.assertEqual(old_refct, sys.getrefcount(pyfunc(arr)))
         self.assertEqual(old_refct, sys.getrefcount(cfunc(arr)))
+        self.assertEqual(old_refct, sys.getrefcount(arr))
+
+
+class ConstructorBaseTest(object):
+
+    @contextlib.contextmanager
+    def check_1d(self, cfunc, dtype):
+        n = 3
+        arr = cfunc(n)
+        self.assertEqual(arr.size, n)
+        self.assertEqual(arr.shape, (n,))
+        self.assertEqual(arr.dtype, np.dtype(dtype))
+        self.assertEqual(arr.strides, (np.dtype(dtype).itemsize,))
+        yield arr
+        arr.fill(123)  # test writability
+        np.testing.assert_equal(123, arr)
+
+    @contextlib.contextmanager
+    def check_2d(self, cfunc, dtype):
+        m, n = 2, 3
+        arr = cfunc(m, n)
+        itemsize = np.dtype(dtype).itemsize
+        self.assertEqual(arr.size, m * n)
+        self.assertEqual(arr.shape, (m, n))
+        self.assertEqual(arr.dtype, np.dtype(dtype))
+        self.assertEqual(arr.strides, (n * itemsize, itemsize))
+        yield arr
+        arr.fill(123)  # test writability
+        np.testing.assert_equal(123, arr)
+
+
+class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
+
+    def test_1d(self):
+        @nrtjit
+        def func(n):
+            return np.zeros(n)
+        with self.check_1d(func, np.float64) as arr:
+            np.testing.assert_equal(0, arr)
+
+    def test_1d_dtype(self):
+        @nrtjit
+        def func(n):
+            return np.zeros(n, np.int32)
+        with self.check_1d(func, np.int32) as arr:
+            np.testing.assert_equal(0, arr)
+
+    def test_2d(self):
+        @nrtjit
+        def func(m, n):
+            return np.zeros((m, n))
+        with self.check_2d(func, np.float64) as arr:
+            np.testing.assert_equal(0, arr)
+
+    def test_2d_dtype(self):
+        @nrtjit
+        def func(m, n):
+            return np.zeros((m, n), np.uint16)
+        with self.check_2d(func, np.uint16) as arr:
+            np.testing.assert_equal(0, arr)
 
 
 def benchmark_refct_speed():

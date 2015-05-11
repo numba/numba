@@ -97,16 +97,16 @@ class TestNrtMemInfo(unittest.TestCase):
 
     @unittest.skipIf(PYVERSION <= (2, 7), "memoryview not supported")
     def test_memoryview(self):
-        from ctypes import c_int32, c_void_p, POINTER, cast
+        from ctypes import c_uint32, c_void_p, POINTER, cast
 
-        dtype = np.dtype(np.int32)
+        dtype = np.dtype(np.uint32)
         bytesize = dtype.itemsize * 10
         mi = rtsys.meminfo_alloc(bytesize, safe=True)
         addr = mi.data
-        c_arr = cast(c_void_p(mi.data), POINTER(c_int32 * 10))
-        # Check zero-filling
+        c_arr = cast(c_void_p(mi.data), POINTER(c_uint32 * 10))
+        # Check 0xCB-filling
         for i in range(10):
-            self.assertEqual(c_arr.contents[i], 0)
+            self.assertEqual(c_arr.contents[i], 0xcbcbcbcb)
 
         # Init array with ctypes
         for i in range(10):
@@ -138,16 +138,16 @@ class TestNrtMemInfo(unittest.TestCase):
         # consumed by another thread.
 
     def test_buffer(self):
-        from ctypes import c_int32, c_void_p, POINTER, cast
+        from ctypes import c_uint32, c_void_p, POINTER, cast
 
-        dtype = np.dtype(np.int32)
+        dtype = np.dtype(np.uint32)
         bytesize = dtype.itemsize * 10
         mi = rtsys.meminfo_alloc(bytesize, safe=True)
         addr = mi.data
-        c_arr = cast(c_void_p(addr), POINTER(c_int32 * 10))
-        # Check zero-filling
+        c_arr = cast(c_void_p(addr), POINTER(c_uint32 * 10))
+        # Check 0xCB-filling
         for i in range(10):
-            self.assertEqual(c_arr.contents[i], 0)
+            self.assertEqual(c_arr.contents[i], 0xcbcbcbcb)
 
         # Init array with ctypes
         for i in range(10):
