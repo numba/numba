@@ -426,7 +426,6 @@ class TestDynArray(unittest.TestCase):
 
 class ConstructorBaseTest(object):
 
-    @contextlib.contextmanager
     def check_1d(self, cfunc, dtype):
         n = 3
         arr = cfunc(n)
@@ -434,11 +433,10 @@ class ConstructorBaseTest(object):
         self.assertEqual(arr.shape, (n,))
         self.assertEqual(arr.dtype, np.dtype(dtype))
         self.assertEqual(arr.strides, (np.dtype(dtype).itemsize,))
-        yield arr
+        self.check_result_value(arr)
         arr.fill(123)  # test writability
         np.testing.assert_equal(123, arr)
 
-    @contextlib.contextmanager
     def check_2d(self, cfunc, dtype):
         m, n = 2, 3
         arr = cfunc(m, n)
@@ -447,40 +445,113 @@ class ConstructorBaseTest(object):
         self.assertEqual(arr.shape, (m, n))
         self.assertEqual(arr.dtype, np.dtype(dtype))
         self.assertEqual(arr.strides, (n * itemsize, itemsize))
-        yield arr
+        self.check_result_value(arr)
         arr.fill(123)  # test writability
         np.testing.assert_equal(123, arr)
 
 
+class ConstructorLikeBaseTest(object):
+
+    def check_like(self, cfunc, dtype, ret_dtype):
+        orig = np.linspace(0, 5, 6).astype(dtype)
+        for shape in (6, (2, 3), (1, 2, 3), (3, 1, 2)):
+            arr = orig.reshape(shape)
+            ret = cfunc(arr)
+            self.assertEqual(ret.size, arr.size)
+            self.assertEqual(ret.shape, arr.shape)
+            self.assertEqual(ret.dtype, ret_dtype)
+            # Logical strides (in # of elements) are the same, physical
+            # strides needn't (if different dtypes).
+            self.assertEqual([x / ret.itemsize for x in ret.strides],
+                             [x / arr.itemsize for x in arr.strides])
+            self.check_result_value(ret)
+            ret.fill(123)  # test writability
+            np.testing.assert_equal(123, ret)
+
+
 class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
 
+    def setUp(self):
+        self.pyfunc = np.zeros
+        self.expected_value = 0
+
+    def check_result_value(self, arr):
+        np.testing.assert_equal(self.expected_value, arr)
+
     def test_1d(self):
+        pyfunc = self.pyfunc
         @nrtjit
         def func(n):
-            return np.zeros(n)
-        with self.check_1d(func, np.float64) as arr:
-            np.testing.assert_equal(0, arr)
+            return pyfunc(n)
+        self.check_1d(func, np.float64)
 
     def test_1d_dtype(self):
+        pyfunc = self.pyfunc
         @nrtjit
         def func(n):
-            return np.zeros(n, np.int32)
-        with self.check_1d(func, np.int32) as arr:
-            np.testing.assert_equal(0, arr)
+            return pyfunc(n, np.int32)
+        self.check_1d(func, np.int32)
 
     def test_2d(self):
+        pyfunc = self.pyfunc
         @nrtjit
         def func(m, n):
-            return np.zeros((m, n))
-        with self.check_2d(func, np.float64) as arr:
-            np.testing.assert_equal(0, arr)
+            return pyfunc((m, n))
+        self.check_2d(func, np.float64)
 
     def test_2d_dtype(self):
+        pyfunc = self.pyfunc
         @nrtjit
         def func(m, n):
-            return np.zeros((m, n), np.uint16)
-        with self.check_2d(func, np.uint16) as arr:
-            np.testing.assert_equal(0, arr)
+            return pyfunc((m, n), np.complex64)
+        self.check_2d(func, np.complex64)
+
+
+class TestNdOnes(TestNdZeros):
+
+    def setUp(self):
+        self.pyfunc = np.ones
+        self.expected_value = 1
+
+
+class TestNdEmptyLike(ConstructorLikeBaseTest, unittest.TestCase):
+
+    def setUp(self):
+        self.pyfunc = np.empty_like
+
+    def check_result_value(self, arr):
+        pass
+
+    def test_like(self):
+        pyfunc = self.pyfunc
+        @nrtjit
+        def func(arr):
+            return pyfunc(arr)
+        self.check_like(func, np.float64, np.float64)
+
+    def test_like_dtype(self):
+        pyfunc = self.pyfunc
+        @nrtjit
+        def func(arr):
+            return pyfunc(arr, np.int32)
+        self.check_like(func, np.float64, np.int32)
+
+
+class TestNdZerosLike(TestNdEmptyLike):
+
+    def setUp(self):
+        self.pyfunc = np.zeros_like
+        self.expected_value = 0
+
+    def check_result_value(self, arr):
+        np.testing.assert_equal(self.expected_value, arr)
+
+
+class TestNdOnesLike(TestNdZerosLike):
+
+    def setUp(self):
+        self.pyfunc = np.ones_like
+        self.expected_value = 1
 
 
 def benchmark_refct_speed():

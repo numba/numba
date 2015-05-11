@@ -426,6 +426,9 @@ class NdIndex(AbstractTemplate):
 builtin_global(numpy.ndindex, types.Function(NdIndex))
 
 class NdConstructor(AbstractTemplate):
+    """
+    Typing template for np.empty(), .zeros(), .ones().
+    """
 
     def generic(self, args, kws):
         assert not kws
@@ -450,6 +453,29 @@ class NdConstructor(AbstractTemplate):
         aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
         return signature(aryty, *args)
 
+
+class NdConstructorLike(AbstractTemplate):
+    """
+    Typing template for np.empty_like(), .zeros_like(), .ones_like().
+    """
+
+    def generic(self, args, kws):
+        assert not kws
+        arr = args[0]
+        if not isinstance(arr, types.Array):
+            return
+        if len(args) >= 2:
+            npy_dtype = args[1]
+            # numpy APIs allow dtype constructor to be used as `dtype`
+            # arguments.  Since, npy_dtype.template.key dtype or dtype
+            # ctor, we use numpy.dtype to force it into a dtype object.
+            dtype = from_dtype(numpy.dtype(npy_dtype.template.key))
+        else:
+            dtype = arr.dtype
+
+        return_type = arr.copy(dtype=dtype)
+        return signature(return_type, *args)
+
 @builtin
 class NdEmpty(NdConstructor):
     key = numpy.empty
@@ -458,8 +484,28 @@ class NdEmpty(NdConstructor):
 class NdZeros(NdConstructor):
     key = numpy.zeros
 
+@builtin
+class NdOnes(NdConstructor):
+    key = numpy.ones
+
+@builtin
+class NdEmptyLike(NdConstructorLike):
+    key = numpy.empty_like
+
+@builtin
+class NdZerosLike(NdConstructorLike):
+    key = numpy.zeros_like
+
+@builtin
+class NdOnesLike(NdConstructorLike):
+    key = numpy.ones_like
+
 builtin_global(numpy.empty, types.Function(NdEmpty))
 builtin_global(numpy.zeros, types.Function(NdZeros))
+builtin_global(numpy.ones, types.Function(NdOnes))
+builtin_global(numpy.empty_like, types.Function(NdEmptyLike))
+builtin_global(numpy.zeros_like, types.Function(NdZerosLike))
+builtin_global(numpy.ones_like, types.Function(NdOnesLike))
 
 
 @builtin
@@ -498,4 +544,3 @@ builtin_global(numpy.around, types.Function(Round))
 
 
 builtin_global(numpy, types.Module(numpy))
-

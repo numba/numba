@@ -1293,43 +1293,10 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                    meminfo=meminfo)
     return ary
 
-
-def _parse_empty_args(context, builder, sig, args):
-    arrshapetype = sig.args[0]
-    arrshape = args[0]
-    arrtype = sig.return_type
-
-    if isinstance(arrshapetype, types.Integer):
-        shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
-    else:
-        arrshape = context.cast(builder, arrshape, arrshapetype,
-                                types.UniTuple(types.intp, len(arrshapetype)))
-        shapes = cgutils.unpack_tuple(builder, arrshape,
-                                      count=len(arrshapetype))
-    return arrtype, shapes
-
-
-@builtin
-@implement(numpy.empty, types.Kind(types.Integer))
-@implement(numpy.empty, types.Kind(types.BaseTuple))
-@implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
-@implement(numpy.empty, types.Kind(types.BaseTuple), types.Kind(types.Function))
-def numpy_empty_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    return ary._getvalue()
-
-
-@builtin
-@implement(numpy.zeros, types.Kind(types.Integer))
-@implement(numpy.zeros, types.Kind(types.BaseTuple))
-@implement(numpy.zeros, types.Kind(types.Integer), types.Kind(types.Function))
-@implement(numpy.zeros, types.Kind(types.BaseTuple), types.Kind(types.Function))
-def numpy_zeros_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    print("arrtype:", arrtype)
-
+def _zero_fill_array(context, builder, ary):
+    """
+    Zero-fill an array.  The array must be contiguous.
+    """
     memset = "llvm.memset.p0i8.i%d" % (types.intp.bitwidth)
     module = cgutils.get_module(builder)
     ll_intp = context.get_value_type(types.intp)
@@ -1348,5 +1315,126 @@ def numpy_zeros_nd(context, builder, sig, args):
                       builder.mul(ary.itemsize, ary.nitems),
                       Constant.int(i32, 0), Constant.int(i1, 0)])
 
+
+def _parse_empty_args(context, builder, sig, args):
+    """
+    Parse the arguments of a np.empty(), np.zeros() or np.ones() call.
+    """
+    arrshapetype = sig.args[0]
+    arrshape = args[0]
+    arrtype = sig.return_type
+
+    if isinstance(arrshapetype, types.Integer):
+        shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
+    else:
+        arrshape = context.cast(builder, arrshape, arrshapetype,
+                                types.UniTuple(types.intp, len(arrshapetype)))
+        shapes = cgutils.unpack_tuple(builder, arrshape,
+                                      count=len(arrshapetype))
+    return arrtype, shapes
+
+
+def _parse_empty_like_args(context, builder, sig, args):
+    """
+    Parse the arguments of a np.empty_like(), np.zeros_like() or
+    np.ones_like() call.
+    """
+    arytype = sig.args[0]
+    ary = make_array(arytype)(context, builder, value=args[0])
+    shapes = cgutils.unpack_tuple(builder, ary.shape, count=arytype.ndim)
+    return sig.return_type, shapes
+
+
+@builtin
+@implement(numpy.empty, types.Kind(types.Integer))
+@implement(numpy.empty, types.Kind(types.BaseTuple))
+@implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
+@implement(numpy.empty, types.Kind(types.BaseTuple), types.Kind(types.Function))
+def numpy_empty_nd(context, builder, sig, args):
+    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes)
     return ary._getvalue()
+
+@builtin
+@implement(numpy.empty_like, types.Kind(types.Array))
+@implement(numpy.empty_like, types.Kind(types.Array), types.Kind(types.Function))
+def numpy_zeros_like_nd(context, builder, sig, args):
+    arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    return ary._getvalue()
+
+
+@builtin
+@implement(numpy.zeros, types.Kind(types.Integer))
+@implement(numpy.zeros, types.Kind(types.BaseTuple))
+@implement(numpy.zeros, types.Kind(types.Integer), types.Kind(types.Function))
+@implement(numpy.zeros, types.Kind(types.BaseTuple), types.Kind(types.Function))
+def numpy_zeros_nd(context, builder, sig, args):
+    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    _zero_fill_array(context, builder, ary)
+    return ary._getvalue()
+
+
+@builtin
+@implement(numpy.zeros_like, types.Kind(types.Array))
+@implement(numpy.zeros_like, types.Kind(types.Array), types.Kind(types.Function))
+def numpy_zeros_like_nd(context, builder, sig, args):
+    arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    _zero_fill_array(context, builder, ary)
+    return ary._getvalue()
+
+
+@builtin
+@implement(numpy.ones, types.Kind(types.Integer))
+@implement(numpy.ones, types.Kind(types.BaseTuple))
+def numpy_ones_nd(context, builder, sig, args):
+
+    def ones(shape):
+        arr = numpy.empty(shape)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = 1
+        return arr
+
+    return context.compile_internal(builder, ones, sig, args)
+
+
+@builtin
+@implement(numpy.ones, types.Kind(types.Integer), types.Kind(types.Function))
+@implement(numpy.ones, types.Kind(types.BaseTuple), types.Kind(types.Function))
+def numpy_ones_dtype_nd(context, builder, sig, args):
+
+    def ones(shape, dtype):
+        arr = numpy.empty(shape, dtype)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = 1
+        return arr
+
+    return context.compile_internal(builder, ones, sig, args)
+
+
+@builtin
+@implement(numpy.ones_like, types.Kind(types.Array))
+def numpy_ones_like_nd(context, builder, sig, args):
+
+    def ones_like(arr):
+        arr = numpy.empty_like(arr)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = 1
+        return arr
+
+    return context.compile_internal(builder, ones_like, sig, args)
+
+@builtin
+@implement(numpy.ones_like, types.Kind(types.Array), types.Kind(types.Function))
+def numpy_ones_like_dtype_nd(context, builder, sig, args):
+
+    def ones_like(arr, dtype):
+        arr = numpy.empty_like(arr, dtype)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = 1
+        return arr
+
+    return context.compile_internal(builder, ones_like, sig, args)
 
