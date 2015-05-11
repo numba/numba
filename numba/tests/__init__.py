@@ -16,6 +16,11 @@ from unittest import result, runner, signals
 from numba.utils import PYVERSION, StringIO
 from numba import config
 
+try:
+    from multiprocessing import TimeoutError
+except ImportError:
+    from Queue import Empty as TimeoutError
+
 # "unittest.main" is really the TestProgram class!
 # (defined in a module named itself "unittest.main"...)
 
@@ -380,14 +385,18 @@ class ParallelTestRunner(runner.TextTestRunner):
                 tickets = []
                 for test in self._test_list[chunkidx:chunkidx + chunksize]:
                     ticket = pool.apply_async(child_runner, [test])
-                    tickets.append(ticket)
+                    tickets.append((ticket, test))
 
                 chunkidx += len(tickets)
 
                 # Gather test results
-                for ticket in tickets:
+                for ticket, test in tickets:
                     # A test can't run longer than 2 minutes
-                    child_result = ticket.get(120)
+                    try:
+                        child_result = ticket.get(120)
+                    except TimeoutError:
+                        print("TimedOut", test)
+                        raise
                     result.add_results(child_result)
                     if child_result.shouldStop:
                         break
