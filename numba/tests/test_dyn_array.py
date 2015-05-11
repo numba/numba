@@ -450,25 +450,6 @@ class ConstructorBaseTest(object):
         np.testing.assert_equal(123, arr)
 
 
-class ConstructorLikeBaseTest(object):
-
-    def check_like(self, cfunc, dtype, ret_dtype):
-        orig = np.linspace(0, 5, 6).astype(dtype)
-        for shape in (6, (2, 3), (1, 2, 3), (3, 1, 2)):
-            arr = orig.reshape(shape)
-            ret = cfunc(arr)
-            self.assertEqual(ret.size, arr.size)
-            self.assertEqual(ret.shape, arr.shape)
-            self.assertEqual(ret.dtype, ret_dtype)
-            # Logical strides (in # of elements) are the same, physical
-            # strides needn't (if different dtypes).
-            self.assertEqual([x / ret.itemsize for x in ret.strides],
-                             [x / arr.itemsize for x in arr.strides])
-            self.check_result_value(ret)
-            ret.fill(123)  # test writability
-            np.testing.assert_equal(123, ret)
-
-
 class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
 
     def setUp(self):
@@ -514,24 +495,52 @@ class TestNdOnes(TestNdZeros):
         self.expected_value = 1
 
 
+class ConstructorLikeBaseTest(object):
+
+    def check_like(self, pyfunc, dtype, ret_dtype):
+        orig = np.linspace(0, 5, 6).astype(dtype)
+        cfunc = nrtjit(pyfunc)
+
+        for shape in (6, (2, 3), (1, 2, 3), (3, 1, 2)):
+            arr = orig.reshape(shape)
+            expected = pyfunc(arr)
+            ret = cfunc(arr)
+            self.assertEqual(ret.size, expected.size)
+            self.assertEqual(ret.shape, expected.shape)
+            self.assertEqual(ret.dtype, expected.dtype)
+            self.assertEqual(ret.strides, expected.strides)
+            self.check_result_value(ret, expected)
+            # test writability
+            ret.fill(123)
+            expected.fill(123)
+            np.testing.assert_equal(ret, expected)
+
+
 class TestNdEmptyLike(ConstructorLikeBaseTest, unittest.TestCase):
 
     def setUp(self):
         self.pyfunc = np.empty_like
 
-    def check_result_value(self, arr):
+    def check_result_value(self, ret, expected):
         pass
 
     def test_like(self):
         pyfunc = self.pyfunc
-        @nrtjit
         def func(arr):
             return pyfunc(arr)
         self.check_like(func, np.float64, np.float64)
 
+    # Not supported yet.
+    @unittest.expectedFailure
+    def test_like_structured(self):
+        dtype = np.dtype([('a', np.int16), ('b', np.float32)])
+        pyfunc = self.pyfunc
+        def func(arr):
+            return pyfunc(arr)
+        self.check_like(func, dtype, dtype)
+
     def test_like_dtype(self):
         pyfunc = self.pyfunc
-        @nrtjit
         def func(arr):
             return pyfunc(arr, np.int32)
         self.check_like(func, np.float64, np.int32)
@@ -541,10 +550,9 @@ class TestNdZerosLike(TestNdEmptyLike):
 
     def setUp(self):
         self.pyfunc = np.zeros_like
-        self.expected_value = 0
 
-    def check_result_value(self, arr):
-        np.testing.assert_equal(self.expected_value, arr)
+    def check_result_value(self, ret, expected):
+        np.testing.assert_equal(ret, expected)
 
 
 class TestNdOnesLike(TestNdZerosLike):
