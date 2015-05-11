@@ -183,6 +183,9 @@ class TestCTypes(unittest.TestCase):
         expected = pyfunc(arr, repeat)
         outputs = []
 
+        # Warm up
+        cfunc(arr, repeat)
+
         # Test the function in multiple threads to exercise the
         # GIL ensure/release code
 
