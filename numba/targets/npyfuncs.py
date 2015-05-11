@@ -83,18 +83,18 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         # First, prepare the return value
         complex_class = context.make_complex(ty)
         out = complex_class(context, builder)
-        call_args = [out._getvalue()] + list(args)
+        ptrargs = [cgutils.alloca_once_value(builder, arg)
+                   for arg in args]
+        call_args = [out._getpointer()] + ptrargs
         # get_value_as_argument for struct types like complex allocate stack space
         # and initialize with the value, the return value is the pointer to that
         # allocated space (ie: pointer to a copy of the value in the stack).
         # get_argument_type returns a pointer to the struct type in consonance.
         call_argtys = [ty] + list(sig.args)
-        call_argltys = [context.get_argument_type(ty) for ty in call_argtys]
+        call_argltys = [context.get_value_type(ty).as_pointer()
+                        for ty in call_argtys]
         fnty = lc.Type.function(lc.Type.void(), call_argltys)
         fn = mod.get_or_insert_function(fnty, name=func_name)
-
-        call_args = [context.get_value_as_argument(builder, argty, arg)
-                     for argty, arg in zip(call_argtys, call_args)]
         builder.call(fn, call_args)
         retval = builder.load(call_args[0])
     else:
