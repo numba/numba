@@ -370,12 +370,28 @@ class ParallelTestRunner(runner.TextTestRunner):
         # method as if it were a test case.
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
         pool = multiprocessing.Pool()
-        imap = pool.imap_unordered
+
+        chunksize = min(4, multiprocessing.cpu_count() * 8)
+        chunkidx = 0
         try:
-            for child_result in imap(child_runner, self._test_list):
-                result.add_results(child_result)
-                if child_result.shouldStop:
-                    break
+            while self._test_list[chunkidx:]:
+
+                # Launch test asynchronously
+                tickets = []
+                for test in self._test_list[chunkidx:chunkidx + chunksize]:
+                    ticket = pool.apply_async(child_runner, [test])
+                    tickets.append(ticket)
+
+                chunkidx += len(tickets)
+
+                # Gather test results
+                for ticket in tickets:
+                    # A test can't run longer than 2 minutes
+                    child_result = ticket.get(120)
+                    result.add_results(child_result)
+                    if child_result.shouldStop:
+                        break
+
             return result
         finally:
             # Kill the still active workers
