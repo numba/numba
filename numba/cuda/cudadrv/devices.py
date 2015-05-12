@@ -34,6 +34,9 @@ class _DeviceList(object):
         return super(_DeviceList, self).__getattr__(attr)
 
     def __getitem__(self, devnum):
+        '''
+        Returns the context manager for device *devnum*.
+        '''
         return self.lst[devnum]
 
     def __str__(self):
@@ -54,7 +57,15 @@ class _DeviceList(object):
 
 
 class _DeviceContextManager(object):
-    """Provides contextmanager functionality to Device objects
+    """
+    Provides a context manager for executing in the context of the chosen
+    device. The normal use of instances of this type is from
+    ``numba.cuda.gpus``. For example, to execute on device 2::
+
+       with numba.cuda.gpus[2]:
+           d_a = numba.cuda.to_device(a)
+
+    to copy the array *a* onto device 2, referred to by *d_a*.
     """
 
     def __init__(self, device):
@@ -230,7 +241,14 @@ def get_context(devnum=0):
 
 def require_context(fn):
     """
-    A decorator to ensure a context for the CUDA subsystem
+    A decorator that ensures a CUDA context is available when *fn* is executed.
+
+    Decorating *fn* is equivalent to writing::
+
+       get_context()
+       fn()
+
+    at each call site.
     """
 
     @functools.wraps(fn)

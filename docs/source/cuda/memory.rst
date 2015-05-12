@@ -14,8 +14,11 @@ read-only arrays, you can use the following APIs to manually control the
 transfer:
 
 .. autofunction:: numba.cuda.device_array
+   :noindex:
 .. autofunction:: numba.cuda.device_array_like
+   :noindex:
 .. autofunction:: numba.cuda.to_device
+   :noindex:
 
 Device arrays
 -------------
@@ -25,22 +28,27 @@ called in host code, not within CUDA-jitted functions.
 
 .. autoclass:: numba.cuda.cudadrv.devicearray.DeviceNDArray
     :members: copy_to_host, is_c_contiguous, is_f_contiguous, ravel, reshape
+    :noindex:
 
 Pinned memory
 =============
 
 .. autofunction:: numba.cuda.pinned
+   :noindex:
 .. autofunction:: numba.cuda.pinned_array
+   :noindex:
 
 Streams
 =======
 
 .. autofunction:: numba.cuda.stream
+   :noindex:
 
 CUDA streams have the following methods:
 
 .. autoclass:: numba.cuda.cudadrv.driver.Stream
     :members: synchronize, auto_synchronize
+    :noindex:
 
 .. _cuda-shared-memory:
 
@@ -58,6 +66,7 @@ The memory is allocated once for the duration of the kernel, unlike
 traditional dynamic memory management.
 
 .. function:: numba.cuda.shared.array(shape, type)
+   :noindex:
 
    Allocate a shared array of the given *shape* and *type* on the device.
    This function must be called on the device (i.e. from a kernel or
@@ -71,7 +80,9 @@ traditional dynamic memory management.
    A common pattern is to have each thread populate one element in the
    shared array and then wait for all threads to finish using :func:`.syncthreads`.
 
+
 .. function:: numba.cuda.syncthreads()
+   :noindex:
 
    Synchronize all threads in the same thread block.  This function
    implements the same pattern as `barriers <http://en.wikipedia.org/wiki/Barrier_%28computer_science%29>`_
@@ -93,6 +104,7 @@ are not enough.  The memory is allocated once for the duration of the kernel,
 unlike traditional dynamic memory management.
 
 .. function:: numba.cuda.local.array(shape, type)
+   :noindex:
 
    Allocate a local array of the given *shape* and *type* on the device.
    The array is private to the current thread.  An array-like object is

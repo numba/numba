@@ -9,7 +9,7 @@ from .errors import KernelRuntimeError
 
 from .decorators import jit, autojit, declare_device
 from .api import *
-from .api import _auto_device, _profiling, _profile_start, _profile_stop
+from .api import _auto_device
 
 
 def is_available():
