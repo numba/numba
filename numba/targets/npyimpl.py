@@ -39,6 +39,7 @@ def register_casters(register_function):
     for tp in types.number_domain:
         register_function(caster(tp, getattr(numpy, str(tp))))
 
+    register_function(caster(types.bool_, numpy.bool_))
     register_function(caster(types.intc, numpy.intc))
     register_function(caster(types.uintc, numpy.uintc))
     register_function(caster(types.intp, numpy.intp))

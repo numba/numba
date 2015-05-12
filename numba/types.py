@@ -155,7 +155,9 @@ class OpaqueType(Type):
 
 
 class Boolean(Type):
-    pass
+
+    def cast_python_value(self, value):
+        return bool(value)
 
 
 @utils.total_ordering

@@ -436,8 +436,10 @@ class ConstructorBaseTest(object):
         self.assertEqual(ret.dtype, expected.dtype)
         self.assertEqual(ret.strides, expected.strides)
         self.check_result_value(ret, expected)
-        ret.fill(123)  # test writability
-        np.testing.assert_equal(123, ret)
+        # test writability
+        expected = np.full_like(ret, 123)
+        ret.fill(123)
+        np.testing.assert_equal(ret, expected)
 
     def check_2d(self, pyfunc, dtype):
         cfunc = nrtjit(pyfunc)
@@ -449,8 +451,10 @@ class ConstructorBaseTest(object):
         self.assertEqual(ret.dtype, expected.dtype)
         self.assertEqual(ret.strides, expected.strides)
         self.check_result_value(ret, expected)
-        ret.fill(123)  # test writability
-        np.testing.assert_equal(123, ret)
+        # test writability
+        expected = np.full_like(ret, 123)
+        ret.fill(123)
+        np.testing.assert_equal(ret, expected)
 
 
 class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
@@ -504,7 +508,7 @@ class TestNdFull(ConstructorBaseTest, unittest.TestCase):
 
     def test_1d_dtype(self):
         def func(n):
-            return np.full(n, 4.5, np.int32)
+            return np.full(n, 4.5, np.bool_)
         self.check_1d(func, np.int32)
 
     def test_2d(self):
@@ -605,8 +609,33 @@ class TestNdFullLike(ConstructorLikeBaseTest, unittest.TestCase):
 
     def test_like_dtype(self):
         def func(arr):
-            return np.full_like(arr, 4.5, np.int32)
-        self.check_like(func, np.float64, np.int32)
+            return np.full_like(arr, 4.5, np.bool_)
+        self.check_like(func, np.float64, np.bool_)
+
+
+class TestNdIdentity(unittest.TestCase):
+
+    def check_identity(self, pyfunc):
+        cfunc = nrtjit(pyfunc)
+        n = 3
+        expected = pyfunc(n)
+        ret = cfunc(n)
+        self.assertEqual(ret.size, expected.size)
+        self.assertEqual(ret.shape, expected.shape)
+        self.assertEqual(ret.dtype, expected.dtype)
+        self.assertEqual(ret.strides, expected.strides)
+        np.testing.assert_equal(expected, ret)
+
+    def test_identity(self):
+        def func(n):
+            return np.identity(n)
+        self.check_identity(func)
+
+    def test_identity_dtype(self):
+        for dtype in (np.complex64, np.int16, np.bool_):
+            def func(n):
+                return np.identity(n, dtype)
+            self.check_identity(func)
 
 
 def benchmark_refct_speed():

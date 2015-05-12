@@ -1248,6 +1248,9 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
+# -----------------------------------------------------------------------------
+# Numpy array constructors
+
 def _empty_nd_impl(context, builder, arrtype, shapes):
     """Utility function used for allocating a new array during LLVM code
     generation (lowering).  Given a target context, builder, array
@@ -1460,10 +1463,7 @@ def numpy_ones_dtype_nd(context, builder, sig, args):
 def numpy_ones_like_nd(context, builder, sig, args):
 
     def ones_like(arr):
-        arr = numpy.empty_like(arr)
-        for idx in numpy.ndindex(arr.shape):
-            arr[idx] = 1
-        return arr
+        return numpy.full_like(arr, 1)
 
     return context.compile_internal(builder, ones_like, sig, args)
 
@@ -1472,10 +1472,32 @@ def numpy_ones_like_nd(context, builder, sig, args):
 def numpy_ones_like_dtype_nd(context, builder, sig, args):
 
     def ones_like(arr, dtype):
-        arr = numpy.empty_like(arr, dtype)
-        for idx in numpy.ndindex(arr.shape):
-            arr[idx] = 1
-        return arr
+        return numpy.full_like(arr, 1, dtype)
 
     return context.compile_internal(builder, ones_like, sig, args)
 
+
+@builtin
+@implement(numpy.identity, types.Kind(types.Integer))
+def numpy_identity(context, builder, sig, args):
+
+    def identity(n):
+        arr = numpy.zeros((n, n))
+        for i in range(n):
+            arr[i, i] = 1
+        return arr
+
+    return context.compile_internal(builder, identity, sig, args)
+
+
+@builtin
+@implement(numpy.identity, types.Kind(types.Integer), types.Kind(types.Function))
+def numpy_identity(context, builder, sig, args):
+
+    def identity(n, dtype):
+        arr = numpy.zeros((n, n), dtype)
+        for i in range(n):
+            arr[i, i] = 1
+        return arr
+
+    return context.compile_internal(builder, identity, sig, args)

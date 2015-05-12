@@ -3,7 +3,7 @@ from __future__ import absolute_import, print_function
 import numpy
 from .. import types
 from .templates import (AttributeTemplate, AbstractTemplate,
-                                    Registry, signature)
+                        ConcreteTemplate, Registry, signature)
 
 from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
@@ -364,6 +364,7 @@ for func in ['argmin', 'argmax']:
 
 # Register numpy.int8, etc. as convertors to the equivalent Numba types
 np_types = set(getattr(numpy, str(nb_type)) for nb_type in types.number_domain)
+np_types.add(numpy.bool_)
 # Those may or may not be aliases (depending on the Numpy build / version)
 np_types.add(numpy.intc)
 np_types.add(numpy.intp)
@@ -389,42 +390,9 @@ def register_casters(register_global):
 
 register_casters(builtin_global)
 
+
 # -----------------------------------------------------------------------------
-# Miscellaneous functions
-
-@builtin
-class NdEnumerate(AbstractTemplate):
-    key = numpy.ndenumerate
-
-    def generic(self, args, kws):
-        assert not kws
-        arr, = args
-
-        if isinstance(arr, types.Array):
-            enumerate_type = types.NumpyNdEnumerateType(arr)
-            return signature(enumerate_type, *args)
-
-builtin_global(numpy.ndenumerate, types.Function(NdEnumerate))
-
-@builtin
-class NdIndex(AbstractTemplate):
-    key = numpy.ndindex
-
-    def generic(self, args, kws):
-        assert not kws
-
-        # Either ndindex(shape) or ndindex(*shape)
-        if len(args) == 1 and isinstance(args[0], types.UniTuple):
-            shape = list(args[0])
-        else:
-            shape = args
-
-        if shape and all(isinstance(x, types.Integer) for x in shape):
-            iterator_type = types.NumpyNdIndexType(len(shape))
-            return signature(iterator_type, *args)
-
-builtin_global(numpy.ndindex, types.Function(NdIndex))
-
+# Numpy array constructors
 
 def _parse_shape(shape):
     ndim = None
@@ -440,7 +408,6 @@ def _parse_dtype(dtype):
     # arguments.  Since, npy_dtype.template.key dtype or dtype
     # ctor, we use numpy.dtype to force it into a dtype object.
     return from_dtype(numpy.dtype(dtype.template.key))
-
 
 
 class NdConstructor(AbstractTemplate):
@@ -542,9 +509,6 @@ class NdZerosLike(NdConstructorLike):
 class NdOnesLike(NdConstructorLike):
     key = numpy.ones_like
 
-
-
-
 builtin_global(numpy.empty, types.Function(NdEmpty))
 builtin_global(numpy.zeros, types.Function(NdZeros))
 builtin_global(numpy.ones, types.Function(NdOnes))
@@ -553,6 +517,63 @@ builtin_global(numpy.empty_like, types.Function(NdEmptyLike))
 builtin_global(numpy.zeros_like, types.Function(NdZerosLike))
 builtin_global(numpy.ones_like, types.Function(NdOnesLike))
 builtin_global(numpy.full_like, types.Function(NdFullLike))
+
+
+@builtin
+class NdIdentity(AbstractTemplate):
+    key = numpy.identity
+
+    def generic(self, args, kws):
+        assert not kws
+        n = args[0]
+        if not isinstance(n, types.Integer):
+            return
+        if len(args) >= 2:
+            dtype = _parse_dtype(args[1])
+        else:
+            dtype = types.float64
+
+        return_type = types.Array(ndim=2, dtype=dtype, layout='C')
+        return signature(return_type, *args)
+
+builtin_global(numpy.identity, types.Function(NdIdentity))
+
+
+# -----------------------------------------------------------------------------
+# Miscellaneous functions
+
+@builtin
+class NdEnumerate(AbstractTemplate):
+    key = numpy.ndenumerate
+
+    def generic(self, args, kws):
+        assert not kws
+        arr, = args
+
+        if isinstance(arr, types.Array):
+            enumerate_type = types.NumpyNdEnumerateType(arr)
+            return signature(enumerate_type, *args)
+
+builtin_global(numpy.ndenumerate, types.Function(NdEnumerate))
+
+@builtin
+class NdIndex(AbstractTemplate):
+    key = numpy.ndindex
+
+    def generic(self, args, kws):
+        assert not kws
+
+        # Either ndindex(shape) or ndindex(*shape)
+        if len(args) == 1 and isinstance(args[0], types.UniTuple):
+            shape = list(args[0])
+        else:
+            shape = args
+
+        if shape and all(isinstance(x, types.Integer) for x in shape):
+            iterator_type = types.NumpyNdIndexType(len(shape))
+            return signature(iterator_type, *args)
+
+builtin_global(numpy.ndindex, types.Function(NdIndex))
 
 
 @builtin
@@ -588,6 +609,5 @@ class Round(AbstractTemplate):
 
 builtin_global(numpy.round, types.Function(Round))
 builtin_global(numpy.around, types.Function(Round))
-
 
 builtin_global(numpy, types.Module(numpy))

@@ -1243,7 +1243,9 @@ def caster(restype):
 
     return _cast
 
-for tp in types.number_domain:
+cast_types = set(types.number_domain)
+cast_types.add(types.bool_)
+for tp in cast_types:
     builtin(caster(tp))
 
 
