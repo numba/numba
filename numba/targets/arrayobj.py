@@ -1408,6 +1408,32 @@ def numpy_full_dtype_nd(context, builder, sig, args):
 
 
 @builtin
+@implement(numpy.full_like, types.Kind(types.Array), types.Any)
+def numpy_full_like_nd(context, builder, sig, args):
+
+    def full_like(arr, value):
+        arr = numpy.empty_like(arr)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = value
+        return arr
+
+    return context.compile_internal(builder, full_like, sig, args)
+
+
+@builtin
+@implement(numpy.full_like, types.Kind(types.Array), types.Any, types.Kind(types.Function))
+def numpy_full_like_nd(context, builder, sig, args):
+
+    def full_like(arr, value, dtype):
+        arr = numpy.empty_like(arr, dtype)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = value
+        return arr
+
+    return context.compile_internal(builder, full_like, sig, args)
+
+
+@builtin
 @implement(numpy.ones, types.Any)
 def numpy_ones_nd(context, builder, sig, args):
 

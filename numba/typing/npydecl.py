@@ -491,13 +491,32 @@ class NdConstructorLike(AbstractTemplate):
         if not isinstance(arr, types.Array):
             return
         if len(args) >= 2:
-            npy_dtype = args[1]
-            dtype = _parse_dtype(npy_dtype)
+            dtype = _parse_dtype(args[1])
         else:
             dtype = arr.dtype
 
         return_type = arr.copy(dtype=dtype)
         return signature(return_type, *args)
+
+
+@builtin
+class NdFullLike(AbstractTemplate):
+    key = numpy.full_like
+
+    def generic(self, args, kws):
+        assert not kws
+        arr = args[0]
+        if not isinstance(arr, types.Array):
+            return
+        value = args[1]
+        if len(args) >= 3:
+            dtype = _parse_dtype(args[2])
+        else:
+            dtype = arr.dtype
+
+        return_type = arr.copy(dtype=dtype)
+        return signature(return_type, *args)
+
 
 @builtin
 class NdEmpty(NdConstructor):
@@ -533,6 +552,7 @@ builtin_global(numpy.full, types.Function(NdFull))
 builtin_global(numpy.empty_like, types.Function(NdEmptyLike))
 builtin_global(numpy.zeros_like, types.Function(NdZerosLike))
 builtin_global(numpy.ones_like, types.Function(NdOnesLike))
+builtin_global(numpy.full_like, types.Function(NdFullLike))
 
 
 @builtin

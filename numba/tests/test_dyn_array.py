@@ -585,6 +585,30 @@ class TestNdOnesLike(TestNdZerosLike):
         self.expected_value = 1
 
 
+class TestNdFullLike(ConstructorLikeBaseTest, unittest.TestCase):
+
+    def check_result_value(self, ret, expected):
+        np.testing.assert_equal(ret, expected)
+
+    def test_like(self):
+        def func(arr):
+            return np.full_like(arr, 3.5)
+        self.check_like(func, np.float64, np.float64)
+
+    # Not supported yet.
+    @unittest.expectedFailure
+    def test_like_structured(self):
+        dtype = np.dtype([('a', np.int16), ('b', np.float32)])
+        def func(arr):
+            return np.full_like(arr, 4.5)
+        self.check_like(func, dtype, dtype)
+
+    def test_like_dtype(self):
+        def func(arr):
+            return np.full_like(arr, 4.5, np.int32)
+        self.check_like(func, np.float64, np.int32)
+
+
 def benchmark_refct_speed():
     def pyfunc(x, y, t):
         """Swap array x and y for t number of times
