@@ -492,7 +492,7 @@ class Context(object):
 
     def pop(self):
         """
-        Pops this context on the current CPU thread. Note that this context must
+        Pops this context off the current CPU thread. Note that this context must
         be at the top of the context stack, otherwise an error will occur.
         """
         popped = drvapi.cu_context()
