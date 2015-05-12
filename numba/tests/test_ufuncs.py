@@ -712,7 +712,7 @@ class TestUFuncs(TestCase):
         self.test_bitwise_not_ufunc(flags=no_pyobj_flags)
 
 
-    # Note: there is no entry for left_shift and right_shift as this harness 
+    # Note: there is no entry for left_shift and right_shift as this harness
     #       is not valid for them. This is so because left_shift and right
     #       shift implementation in NumPy has undefined behavior (in C-parlance)
     #       when the second argument is a negative (or bigger than the number
@@ -1341,7 +1341,7 @@ class TestUfuncIssues(TestCase):
         self.assertEqual(foo(1j, 1j), cr.entry_point(1j, 1j))
 
 
-class TestLoopTypes(TestCase):
+class _TestLoopTypes(TestCase):
     """Test code generation for the different loop types defined by ufunc.
 
     This class tests the ufuncs without forcing no-python mode. Subclasses
@@ -1369,8 +1369,9 @@ class TestLoopTypes(TestCase):
     """
 
     _ufuncs = all_ufuncs[:]
+    _ufuncs.remove(np.left_shift) # has its own test class
     _compile_flags = enable_pyobj_flags
-    _skip_types='O'
+    _skip_types = 'OegG'
 
     def _arg_for_type(self, a_letter_type, index=0):
         """return a suitable array argument for testing the letter type"""
@@ -1410,11 +1411,12 @@ class TestLoopTypes(TestCase):
         # fail in no python mode. Usually the last loop in ufuncs is an all
         # object fallback
         supported_types = getattr(self, '_supported_types', [])
-        skip_types = getattr(self, '_skip_types', [])
-        if any(l not in supported_types or l in skip_types
-               for l in letter_types):
+        if (supported_types and
+            any(l not in supported_types for l in letter_types)):
             return
-
+        skip_types = getattr(self, '_skip_types', [])
+        if any(l in skip_types for l in letter_types):
+            return
         # if the test case requires some types to be present, skip loops
         # not involving any of those types.
         required_types = getattr(self, '_required_types', [])
@@ -1449,43 +1451,64 @@ class TestLoopTypes(TestCase):
                 msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
                                  "args: {2}", "expected {3}", "got {4}"])
                 msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
-                self.assertPreciseEqual(py, c, prec=prec, msg=msg) 
+                try:
+                    self.assertPreciseEqual(py, c, prec=prec, msg=msg)
+                except AssertionError:
+                    if not self._is_acceptable_error(py, c):
+                        raise
 
-    def _check_ufunc_loops(self, ufunc):
-        fn = _make_ufunc_usecase(ufunc)
-        _failed_loops = []
+    def _is_acceptable_error(self, py, c):
+        """
+        Result mismatch due to differing error handling.
+        """
+        if np.isnan(c) or np.isnan(py):
+            if 0 in [c, py]:
+                # If one is NaN and the other is zero
+                msg = "mismatch for nan values: expected {0}; got {1}"
+                print(msg.format(py, c))
+                # This is not occurring any more
+
+        elif np.abs(c) == 0 and np.abs(py) == np.abs(c):
+            # If both are zeros and they are differ by sign
+            msg = "mismatch sign for 0: expected {0}; got {1}"
+            print(msg.format(py, c))
+            return True
+
+        elif isinstance(c, complex) and isinstance(py, complex):
+            # Recurse into real and imag of a complex
+            return (self._is_acceptable_error(c.real, py.real)
+                    and self._is_acceptable_error(c.imag, py.imag))
+
+        # Match?
+        return py == c
+
+    @classmethod
+    def _check_ufunc_loops(cls, ufunc):
         for loop in ufunc.types:
-            try:
-                self._check_loop(fn, ufunc, loop)
-            except AssertionError as e:
-                import traceback
-                traceback.print_exc()
-                _failed_loops.append('{2} {0}:{1}'.format(loop, str(e),
-                                                          ufunc.__name__))
+            cls._inject_test(ufunc, loop)
 
-        return _failed_loops
+    @classmethod
+    def _inject_test(cls, ufunc, loop):
+        def test_template(self):
+            fn = _make_ufunc_usecase(ufunc)
+            self._check_loop(fn, ufunc, loop)
+        setattr(cls, "test_{0}_{1}".format(ufunc.__name__,
+                                           loop.replace('->', '_')),
+                test_template)
 
-    def test_ufunc_loops(self):
-        failed_ufuncs = []
-        failed_loops_count = 0
-        for ufunc in self._ufuncs:
-            failed_loops = self._check_ufunc_loops(ufunc)
-            if failed_loops:
-                failed_loops_count += len(failed_loops)
-                msg = 'ufunc {0} failed in loops:\n\t{1}\n\t'.format(
-                    ufunc.__name__,
-                    '\n\t'.join(failed_loops))
-                failed_ufuncs.append(msg)
-
-        if failed_ufuncs:
-            msg = 'Failed {0} ufuncs, {1} loops:\n{2}'.format(
-                len(failed_ufuncs), failed_loops_count,
-                '\n'.join(failed_ufuncs))
-
-            self.fail(msg=msg)
+    @classmethod
+    def autogenerate(cls):
+        for ufunc in cls._ufuncs:
+            cls._check_ufunc_loops(ufunc)
 
 
-class TestLoopTypesIntNoPython(TestLoopTypes):
+class TestLoopTypes(_TestLoopTypes):
+    pass
+
+TestLoopTypes.autogenerate()
+
+
+class TestLoopTypesIntNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
     # reciprocal needs a special test due to issue #757
@@ -1493,32 +1516,34 @@ class TestLoopTypesIntNoPython(TestLoopTypes):
     _ufuncs.remove(np.left_shift) # has its own test class
     _ufuncs.remove(np.right_shift) # has its own test class
     _required_types = '?bBhHiIlLqQ'
-    _skip_types = 'fdFDmMO'
+    _skip_types = 'fdFDmMO' + _TestLoopTypes._skip_types
 
+TestLoopTypesIntNoPython.autogenerate()
 
-class TestLoopTypesIntReciprocalNoPython(TestLoopTypes):
+class TestLoopTypesIntReciprocalNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.reciprocal] # issue #757
     _required_types = 'bBhHiIlLqQ'
-    _skip_types = 'fdFDmMO'
+    _skip_types = 'fdFDmMO' + _TestLoopTypes._skip_types
 
     def _arg_for_type(self, a_letter_type, index=0):
-        res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
+        res = super(self.__class__, self)._arg_for_type(a_letter_type,
                                                         index=index)
         # avoid 0 as argument, as it triggers undefined behavior that my differ
         # in results from numba to the compiler used to compile NumPy
         res[res == 0] = 42
         return res
 
+TestLoopTypesIntReciprocalNoPython.autogenerate()
 
-class TestLoopTypesIntLeftShiftNoPython(TestLoopTypes):
+class TestLoopTypesIntLeftShiftNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.left_shift]
     _required_types = 'bBhHiIlLqQ'
-    _skip_types = 'fdFDmMO'
+    _skip_types = 'fdFDmMO' + _TestLoopTypes._skip_types
 
     def _arg_for_type(self, a_letter_type, index=0):
-        res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
+        res = super(self.__class__, self)._arg_for_type(a_letter_type,
                                                         index=index)
         # Shifting by a negative amount (argument with index 1) is undefined
         # behavior in C. It is also undefined behavior in numba. In the same
@@ -1528,18 +1553,19 @@ class TestLoopTypesIntLeftShiftNoPython(TestLoopTypes):
         # that 0 <= shift_amount < bitcount(shifted_integer)
         if index == 1:
             bit_count = res.dtype.itemsize * 8
-            res = np.clip(res, 0, bit_count-1) 
+            res = np.clip(res, 0, bit_count-1)
         return res
 
+TestLoopTypesIntLeftShiftNoPython.autogenerate()
 
-class TestLoopTypesIntRightShiftNoPython(TestLoopTypes):
+class TestLoopTypesIntRightShiftNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.right_shift]
     _required_types = 'bBhHiIlLqQ'
-    _skip_types = 'fdFDmMO'
+    _skip_types = 'fdFDmMO' + _TestLoopTypes._skip_types
 
     def _arg_for_type(self, a_letter_type, index=0):
-        res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
+        res = super(self.__class__, self)._arg_for_type(a_letter_type,
                                                         index=index)
         # Shifting by a negative amount (argument with index 1) is undefined
         # behavior in C. It is also undefined behavior in numba. In the same
@@ -1555,7 +1581,7 @@ class TestLoopTypesIntRightShiftNoPython(TestLoopTypes):
         # shifted is negative (in C). In numba, right shift for signed integers
         # is "arithmetic" while for unsigned integers is "logical".
         # This test compares against the NumPy implementation, that relies
-        # on "implementation defined behavior", so the test could be a false 
+        # on "implementation defined behavior", so the test could be a false
         # failure if the compiler used to compile NumPy doesn't follow the same
         # policy.
         # Hint: do not rely on right shifting negative numbers in NumPy.
@@ -1563,28 +1589,31 @@ class TestLoopTypesIntRightShiftNoPython(TestLoopTypes):
             res = np.abs(res)
         return res
 
+TestLoopTypesIntRightShiftNoPython.autogenerate()
 
-class TestLoopTypesFloatNoPython(TestLoopTypes):
+class TestLoopTypesFloatNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
     if iswindows:
         _ufuncs.remove(np.signbit) # TODO: fix issue #758
     _required_types = 'fd'
-    _skip_types = 'FDmMO'
+    _skip_types = 'FDmMO' + _TestLoopTypes._skip_types
 
+TestLoopTypesFloatNoPython.autogenerate()
 
-class TestLoopTypesComplexNoPython(TestLoopTypes):
+class TestLoopTypesComplexNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
 
     # Test complex types
     # Every loop containing a complex argument must be tested
     _required_types = 'FD'
-    _skip_types = 'mMO'
+    _skip_types = 'mMO' + _TestLoopTypes._skip_types
 
+TestLoopTypesComplexNoPython.autogenerate()
 
 @skip_on_numpy_16
-class TestLoopTypesDatetimeNoPython(TestLoopTypes):
+class TestLoopTypesDatetimeNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
 
@@ -1678,6 +1707,7 @@ class TestLoopTypesDatetimeNoPython(TestLoopTypes):
                       np.greater, np.greater_equal]:
             self._check_comparison(ufunc)
 
+TestLoopTypesDatetimeNoPython.autogenerate()
 
 class TestUFuncBadArgsNoPython(TestCase):
     _compile_flags = no_pyobj_flags
