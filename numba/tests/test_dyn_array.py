@@ -426,63 +426,61 @@ class TestDynArray(unittest.TestCase):
 
 class ConstructorBaseTest(object):
 
-    def check_1d(self, cfunc, dtype):
+    def check_1d(self, pyfunc, dtype):
+        cfunc = nrtjit(pyfunc)
         n = 3
-        arr = cfunc(n)
-        self.assertEqual(arr.size, n)
-        self.assertEqual(arr.shape, (n,))
-        self.assertEqual(arr.dtype, np.dtype(dtype))
-        self.assertEqual(arr.strides, (np.dtype(dtype).itemsize,))
-        self.check_result_value(arr)
-        arr.fill(123)  # test writability
-        np.testing.assert_equal(123, arr)
+        expected = pyfunc(n)
+        ret = cfunc(n)
+        self.assertEqual(ret.size, expected.size)
+        self.assertEqual(ret.shape, expected.shape)
+        self.assertEqual(ret.dtype, expected.dtype)
+        self.assertEqual(ret.strides, expected.strides)
+        self.check_result_value(ret, expected)
+        ret.fill(123)  # test writability
+        np.testing.assert_equal(123, ret)
 
-    def check_2d(self, cfunc, dtype):
+    def check_2d(self, pyfunc, dtype):
+        cfunc = nrtjit(pyfunc)
         m, n = 2, 3
-        arr = cfunc(m, n)
-        itemsize = np.dtype(dtype).itemsize
-        self.assertEqual(arr.size, m * n)
-        self.assertEqual(arr.shape, (m, n))
-        self.assertEqual(arr.dtype, np.dtype(dtype))
-        self.assertEqual(arr.strides, (n * itemsize, itemsize))
-        self.check_result_value(arr)
-        arr.fill(123)  # test writability
-        np.testing.assert_equal(123, arr)
+        expected = pyfunc(m, n)
+        ret = cfunc(m, n)
+        self.assertEqual(ret.size, expected.size)
+        self.assertEqual(ret.shape, expected.shape)
+        self.assertEqual(ret.dtype, expected.dtype)
+        self.assertEqual(ret.strides, expected.strides)
+        self.check_result_value(ret, expected)
+        ret.fill(123)  # test writability
+        np.testing.assert_equal(123, ret)
 
 
 class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
 
     def setUp(self):
         self.pyfunc = np.zeros
-        self.expected_value = 0
 
-    def check_result_value(self, arr):
-        np.testing.assert_equal(self.expected_value, arr)
+    def check_result_value(self, ret, expected):
+        np.testing.assert_equal(ret, expected)
 
     def test_1d(self):
         pyfunc = self.pyfunc
-        @nrtjit
         def func(n):
             return pyfunc(n)
         self.check_1d(func, np.float64)
 
     def test_1d_dtype(self):
         pyfunc = self.pyfunc
-        @nrtjit
         def func(n):
             return pyfunc(n, np.int32)
         self.check_1d(func, np.int32)
 
     def test_2d(self):
         pyfunc = self.pyfunc
-        @nrtjit
         def func(m, n):
             return pyfunc((m, n))
         self.check_2d(func, np.float64)
 
     def test_2d_dtype(self):
         pyfunc = self.pyfunc
-        @nrtjit
         def func(m, n):
             return pyfunc((m, n), np.complex64)
         self.check_2d(func, np.complex64)
@@ -492,7 +490,32 @@ class TestNdOnes(TestNdZeros):
 
     def setUp(self):
         self.pyfunc = np.ones
-        self.expected_value = 1
+
+
+class TestNdFull(ConstructorBaseTest, unittest.TestCase):
+
+    def check_result_value(self, ret, expected):
+        np.testing.assert_equal(ret, expected)
+
+    def test_1d(self):
+        def func(n):
+            return np.full(n, 4.5)
+        self.check_1d(func, np.float64)
+
+    def test_1d_dtype(self):
+        def func(n):
+            return np.full(n, 4.5, np.int32)
+        self.check_1d(func, np.int32)
+
+    def test_2d(self):
+        def func(m, n):
+            return np.full((m, n), 4.5)
+        self.check_2d(func, np.float64)
+
+    def test_2d_dtype(self):
+        def func(m, n):
+            return np.full((m, n), 1 + 4.5j, np.complex64)
+        self.check_2d(func, np.complex64)
 
 
 class ConstructorLikeBaseTest(object):

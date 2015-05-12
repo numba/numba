@@ -425,6 +425,24 @@ class NdIndex(AbstractTemplate):
 
 builtin_global(numpy.ndindex, types.Function(NdIndex))
 
+
+def _parse_shape(shape):
+    ndim = None
+    if isinstance(shape, types.Integer):
+        ndim = 1
+    elif isinstance(shape, (types.Tuple, types.UniTuple)):
+        if all(isinstance(s, types.Integer) for s in shape):
+            ndim = len(shape)
+    return ndim
+
+def _parse_dtype(dtype):
+    # numpy APIs allow dtype constructor to be used as `dtype`
+    # arguments.  Since, npy_dtype.template.key dtype or dtype
+    # ctor, we use numpy.dtype to force it into a dtype object.
+    return from_dtype(numpy.dtype(dtype.template.key))
+
+
+
 class NdConstructor(AbstractTemplate):
     """
     Typing template for np.empty(), .zeros(), .ones().
@@ -435,23 +453,31 @@ class NdConstructor(AbstractTemplate):
         shape = args[0]
         dtype = types.double
         if len(args) >= 2:
-            npy_dtype = args[1]
-            # numpy APIs allow dtype constructor to be used as `dtype`
-            # arguments.  Since, npy_dtype.template.key dtype or dtype
-            # ctor, we use numpy.dtype to force it into a dtype object.
-            dtype = from_dtype(numpy.dtype(npy_dtype.template.key))
+            dtype = _parse_dtype(args[1])
 
-        if isinstance(shape, types.Integer):
-            ndim = 1
-        elif isinstance(shape, (types.Tuple, types.UniTuple)):
-            if not all(isinstance(s, types.Integer) for s in shape):
-                return
-            ndim = len(shape)
+        ndim = _parse_shape(shape)
+        if ndim is not None:
+            aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
+            return signature(aryty, *args)
+
+
+@builtin
+class NdFull(AbstractTemplate):
+    key = numpy.full
+
+    def generic(self, args, kws):
+        assert not kws
+        shape = args[0]
+        value = args[1]
+        if len(args) >= 3:
+            dtype = _parse_dtype(args[2])
         else:
-            return
+            dtype = value
 
-        aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
-        return signature(aryty, *args)
+        ndim = _parse_shape(shape)
+        if ndim is not None:
+            aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
+            return signature(aryty, *args)
 
 
 class NdConstructorLike(AbstractTemplate):
@@ -466,10 +492,7 @@ class NdConstructorLike(AbstractTemplate):
             return
         if len(args) >= 2:
             npy_dtype = args[1]
-            # numpy APIs allow dtype constructor to be used as `dtype`
-            # arguments.  Since, npy_dtype.template.key dtype or dtype
-            # ctor, we use numpy.dtype to force it into a dtype object.
-            dtype = from_dtype(numpy.dtype(npy_dtype.template.key))
+            dtype = _parse_dtype(npy_dtype)
         else:
             dtype = arr.dtype
 
@@ -500,9 +523,13 @@ class NdZerosLike(NdConstructorLike):
 class NdOnesLike(NdConstructorLike):
     key = numpy.ones_like
 
+
+
+
 builtin_global(numpy.empty, types.Function(NdEmpty))
 builtin_global(numpy.zeros, types.Function(NdZeros))
 builtin_global(numpy.ones, types.Function(NdOnes))
+builtin_global(numpy.full, types.Function(NdFull))
 builtin_global(numpy.empty_like, types.Function(NdEmptyLike))
 builtin_global(numpy.zeros_like, types.Function(NdZerosLike))
 builtin_global(numpy.ones_like, types.Function(NdOnesLike))
