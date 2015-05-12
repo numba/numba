@@ -323,7 +323,7 @@ class CUDAKernel(CUDAKernelBase):
     @property
     def ptx(self):
         '''
-        Returns the PTX code for this kernel encoded in UTF-8.
+        PTX code for this kernel.
         '''
         return self._func.ptx.get().decode('utf8')
 
