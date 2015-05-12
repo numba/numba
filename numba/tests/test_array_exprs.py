@@ -40,6 +40,9 @@ vaxy = vectorize(axy)
 def call_stuff(a0, a1):
     return np.cos(vaxy(a0, np.sin(a1) - 1., 1.))
 
+def are_roots_imaginary(As, Bs, Cs):
+    return (Bs ** 2 - 4 * As * Cs) < 0
+
 
 class RewritesTester(Pipeline):
     @classmethod
@@ -152,6 +155,17 @@ class TestArrayExpressions(unittest.TestCase):
 
         return Namespace(locals())
 
+    def _assert_total_rewrite(self, ir0, ir1):
+        '''
+        Given two dictionaries of Numba IR blocks, check to make sure the
+        control IR (ir0) has no array expressions, while the test IR
+        contains one and only one.
+        '''
+        self.assertEqual(len(ir0), len(ir1))
+        self.assertGreater(len(ir0[0].body), len(ir1[0].body))
+        self.assertEqual(len(list(self._get_array_exprs(ir0[0].body))), 0)
+        self.assertEqual(len(list(self._get_array_exprs(ir1[0].body))), 1)
+
     def test_complicated_expr(self):
         '''
         Using the polynomial root function, ensure the full expression is
@@ -159,12 +173,8 @@ class TestArrayExpressions(unittest.TestCase):
         array expressions.
         '''
         ns = self._test_root_function()
-        ir0 = ns.control_pipeline.interp.blocks
-        ir1 = ns.test_pipeline.interp.blocks
-        self.assertEqual(len(ir0), len(ir1))
-        self.assertGreater(len(ir0[0].body), len(ir1[0].body))
-        self.assertEqual(len(list(self._get_array_exprs(ir0[0].body))), 0)
-        self.assertEqual(len(list(self._get_array_exprs(ir1[0].body))), 1)
+        self._assert_total_rewrite(ns.control_pipeline.interp.blocks,
+                                   ns.test_pipeline.interp.blocks)
 
     def test_common_subexpressions(self, fn=neg_root_common_subexpr):
         '''
@@ -226,12 +236,16 @@ class TestArrayExpressions(unittest.TestCase):
         np.testing.assert_array_almost_equal(expected, control)
         np.testing.assert_array_almost_equal(expected, actual)
 
-        ir0 = control_pipeline.interp.blocks
-        ir1 = test_pipeline.interp.blocks
-        self.assertEqual(len(ir0), len(ir1))
-        self.assertGreater(len(ir0[0].body), len(ir1[0].body))
-        self.assertEqual(len(list(self._get_array_exprs(ir0[0].body))), 0)
-        self.assertEqual(len(list(self._get_array_exprs(ir1[0].body))), 1)
+        self._assert_total_rewrite(control_pipeline.interp.blocks,
+                                   test_pipeline.interp.blocks)
+
+    def test_cmp_op(self):
+        '''
+        Verify that comparison operators are supported by the rewriter.
+        '''
+        ns = self._test_root_function(are_roots_imaginary)
+        self._assert_total_rewrite(ns.control_pipeline.interp.blocks,
+                                   ns.test_pipeline.interp.blocks)
 
 
 if __name__ == "__main__":

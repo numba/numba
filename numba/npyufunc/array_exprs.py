@@ -241,6 +241,15 @@ _binops = {
     '//' : ast.FloorDiv,
 }
 
+_cmpops = {
+    '==' : ast.Eq,
+    '!=' : ast.NotEq,
+    '<' : ast.Lt,
+    '<=' : ast.LtE,
+    '>' : ast.Gt,
+    '>=' : ast.GtE,
+}
+
 
 def _arr_expr_to_ast(expr):
     '''Build a Python expression AST from an array expression built by
@@ -259,6 +268,9 @@ def _arr_expr_to_ast(expr):
                 if op in _binops:
                     return ast.BinOp(
                         ast_args[0], _binops[op](), ast_args[1]), env
+                if op in _cmpops:
+                    return ast.Compare(
+                        ast_args[0], [_cmpops[op]()], [ast_args[1]]), env
             else:
                 assert op in _unaryops
                 return ast.UnaryOp(_unaryops[op](), ast_args[0]), env
