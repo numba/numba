@@ -279,6 +279,11 @@ class CachedCUFunction(object):
 
 
 class CUDAKernel(CUDAKernelBase):
+    '''
+    CUDA Kernel specialized for a given set of argument types. When called, this
+    object will validate that the argument types match those for which it is
+    specialized, and then launch the kernel on the device.
+    '''
     def __init__(self, llvm_module, name, pretty_name,
                  argtypes, call_helper,
                  link=(), debug=False, fastmath=False,
@@ -317,6 +322,9 @@ class CUDAKernel(CUDAKernelBase):
 
     @property
     def ptx(self):
+        '''
+        Returns the PTX code for this kernel encoded in UTF-8.
+        '''
         return self._func.ptx.get().decode('utf8')
 
     @property
@@ -327,12 +335,23 @@ class CUDAKernel(CUDAKernelBase):
         return get_current_device()
 
     def inspect_llvm(self):
+        '''
+        Returns the LLVM IR for this kernel.
+        '''
         return str(self._func.ptx.llvmir)
 
     def inspect_asm(self):
+        '''
+        Returns the PTX code for this kernel.
+        '''
         return str(self._func.ptx.get())
 
     def inspect_types(self, file=None):
+        '''
+        Produce a dump of the Python source of this function annotated with the
+        corresponding Numba IR and type information. The dump is written to
+        *file*, or *sys.stdout* if *file* is *None*.
+        '''
         if self._type_annotation is None:
             raise ValueError("Type annotation is not available")
 
@@ -459,6 +478,14 @@ class CUDAKernel(CUDAKernelBase):
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):
+    '''
+    CUDA Kernel object. When called, the kernel object will specialize itself
+    for the given arguments (if no suitable specialized version already exists)
+    and launch on the device associated with the current context.
+
+    Kernel objects are not to be constructed by the user, but instead are
+    created using the :func:`numba.cuda.jit` decorator.
+    '''
     def __init__(self, func, bind, targetoptions):
         super(AutoJitCUDAKernel, self).__init__()
         self.py_func = func
@@ -471,11 +498,18 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         self.typingctx = CUDATargetDesc.typingctx
 
     def __call__(self, *args):
+        '''
+        Specialize and invoke this kernel with *args*.
+        '''
         kernel = self.specialize(*args)
         cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
         cfg(*args)
 
     def specialize(self, *args):
+        '''
+        Compile and bind to the current context a version of this kernel
+        specialized for the given *args*.
+        '''
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
         kernel = self.definitions.get(argtypes)
@@ -490,6 +524,10 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         return kernel
 
     def inspect_llvm(self, signature=None):
+        '''
+        Return the LLVM IR for all signatures encountered thus far, or the LLVM
+        IR for a specific signature if given.
+        '''
         if signature is not None:
             return self.definitions[signature].inspect_llvm()
         else:
@@ -497,6 +535,10 @@ class AutoJitCUDAKernel(CUDAKernelBase):
                         for sig, defn in self.definitions.items())
 
     def inspect_asm(self, signature=None):
+        '''
+        Return the generated assembly code for all signatures encountered thus
+        far, or the LLVM IR for a specific signature if given.
+        '''
         if signature is not None:
             return self.definitions[signature].inspect_asm()
         else:
@@ -504,6 +546,11 @@ class AutoJitCUDAKernel(CUDAKernelBase):
                         for sig, defn in self.definitions.items())
 
     def inspect_types(self, file=None):
+        '''
+        Produce a dump of the Python source of this function annotated with the
+        corresponding Numba IR and type information. The dump is written to
+        *file*, or *sys.stdout* if *file* is *None*.
+        '''
         if file is None:
             file = sys.stdout
 
