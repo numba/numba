@@ -926,10 +926,12 @@ def complex_div_impl(context, builder, sig, args):
         aimag = a.imag
         breal = b.real
         bimag = b.imag
+        if not breal and not bimag:
+            raise ZeroDivisionError("complex division by zero")
         if abs(breal) >= abs(bimag):
             # Divide tops and bottom by b.real
             if not breal:
-                raise ZeroDivisionError("complex division by zero")
+                return complex(NAN, NAN)
             ratio = bimag / breal
             denom = breal + bimag * ratio
             return complex(
