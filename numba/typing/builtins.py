@@ -689,50 +689,6 @@ for ty in types.number_domain:
 
 #-------------------------------------------------------------------------------
 
-#@builtin_attr
-class NumbaTypesModuleAttribute(AttributeTemplate):
-    key = types.Module(types)
-
-    def resolve_int8(self, mod):
-        return types.Function(ToInt8)
-
-    def resolve_int16(self, mod):
-        return types.Function(ToInt16)
-
-    def resolve_int32(self, mod):
-        return types.Function(ToInt32)
-
-    def resolve_int64(self, mod):
-        return types.Function(ToInt64)
-
-    def resolve_uint8(self, mod):
-        return types.Function(ToUint8)
-
-    def resolve_uint16(self, mod):
-        return types.Function(ToUint16)
-
-    def resolve_uint32(self, mod):
-        return types.Function(ToUint32)
-
-    def resolve_uint64(self, mod):
-        return types.Function(ToUint64)
-
-    def resolve_float32(self, mod):
-        return types.Function(ToFloat32)
-
-    def resolve_float64(self, mod):
-        return types.Function(ToFloat64)
-
-    def resolve_complex64(self, mod):
-        return types.Function(ToComplex64)
-
-    def resolve_complex128(self, mod):
-        return types.Function(ToComplex128)
-
-
-builtin_global(types, types.Module(types))
-
-
 def register_casters(register_global):
     nb_types = set(types.number_domain)
     nb_types.add(types.bool_)
