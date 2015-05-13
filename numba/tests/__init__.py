@@ -376,39 +376,25 @@ class ParallelTestRunner(runner.TextTestRunner):
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
         pool = multiprocessing.Pool()
 
-        chunksize = min(4, multiprocessing.cpu_count() * 8)
-        chunkidx = 0
-
         try:
-            self._inner(result, pool, child_runner, chunkidx, chunksize)
+            self._inner(result, pool, child_runner)
             return result
         finally:
             # Kill the still active workers
             pool.terminate()
             pool.join()
 
-    def _inner(self, result, pool, child_runner, chunkidx, chunksize):
-        while self._test_list[chunkidx:]:
-            # Launch test asynchronously
-            tickets = []
-            for test in self._test_list[chunkidx:chunkidx + chunksize]:
-                ticket = pool.apply_async(child_runner, [test])
-                tickets.append((ticket, test))
-
-            chunkidx += len(tickets)
-
-            # Gather test results
-            for ticket, test in tickets:
+    def _inner(self, result, pool, child_runner):
+        it = pool.imap_unordered(child_runner, self._test_list)
+        while True:
+            try:
                 # A test can't run longer than 2 minutes
-                try:
-                    child_result = ticket.get(120)
-                except TimeoutError:
-                    print("TimedOut", test)
-                    raise
-                result.add_results(child_result)
-                if child_result.shouldStop:
-                    return
-
+                child_result = it.__next__(120)
+            except StopIteration:
+                return
+            result.add_results(child_result)
+            if child_result.shouldStop:
+                return
 
     def run(self, test):
         self._test_list = _flatten_suite(test)
