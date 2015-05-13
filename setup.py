@@ -155,6 +155,7 @@ setup(name='numba',
       url="http://numba.github.com",
       ext_modules=ext_modules,
       packages=packages,
+      install_requires=install_requires,
       license="BSD",
       cmdclass=cmdclass,
       **setup_args)
