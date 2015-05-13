@@ -950,6 +950,20 @@ class PythonAPI(object):
                         builder.store(builder.bitcast(ptr, ptrty), ret)
                 return NativeValue(builder.load(ret), is_error=c_api_error())
 
+        elif isinstance(typ, types.CharSeq):
+            lty = self.context.get_value_type(typ)
+            ptr = self.string_as_string(obj)
+            ptr_is_null = cgutils.is_not_null(builder, ptr)
+            with cgutils.ifelse(builder, ptr_is_null) as (on_ok, on_error):
+                with on_ok:
+                    charseq_ptr = builder.bitcast(ptr, lty.as_pointer())
+                    ret = builder.load(charseq_ptr)
+
+                with on_error:
+                    ret = ir.Constant(lty, None)
+
+            return NativeValue(ret, is_error=c_api_error())
+
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
     def from_native_return(self, val, typ):
