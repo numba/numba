@@ -539,6 +539,10 @@ class NdIdentity(AbstractTemplate):
 builtin_global(numpy.identity, types.Function(NdIdentity))
 
 
+def _infer_dtype_from_inputs(inputs):
+    return dtype
+
+
 @builtin
 class NdArange(AbstractTemplate):
     key = numpy.arange
@@ -550,7 +554,6 @@ class NdArange(AbstractTemplate):
             bounds = args[:3]
         else:
             bounds = args
-            # Infer dtypes from inputs
             if any(isinstance(arg, types.Complex) for arg in bounds):
                 dtype = types.complex128
             elif any(isinstance(arg, types.Float) for arg in bounds):
@@ -563,6 +566,33 @@ class NdArange(AbstractTemplate):
         return signature(return_type, *args)
 
 builtin_global(numpy.arange, types.Function(NdArange))
+
+
+@builtin
+class NdLinspace(AbstractTemplate):
+    key = numpy.linspace
+
+    def generic(self, args, kws):
+        assert not kws
+        bounds = args[:2]
+        if not all(isinstance(arg, types.Number) for arg in bounds):
+            return
+        if len(args) >= 3:
+            num = args[2]
+            if not isinstance(num, types.Integer):
+                return
+        if len(args) >= 4:
+            # Not supporting the other arguments as it would require
+            # keyword arguments for reasonable use.
+            return
+        if any(isinstance(arg, types.Complex) for arg in bounds):
+            dtype = types.complex128
+        else:
+            dtype = types.float64
+        return_type = types.Array(ndim=1, dtype=dtype, layout='C')
+        return signature(return_type, *args)
+
+builtin_global(numpy.linspace, types.Function(NdLinspace))
 
 
 # -----------------------------------------------------------------------------

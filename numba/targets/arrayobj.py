@@ -1573,3 +1573,30 @@ def numpy_arange_4(context, builder, sig, args):
     return context.compile_internal(builder, arange, sig, args,
                                     locals={'nitems': types.intp})
 
+
+@builtin
+@implement(numpy.linspace, types.Kind(types.Number), types.Kind(types.Number))
+def numpy_linspace_2(context, builder, sig, args):
+
+    def linspace(start, stop):
+        return numpy.linspace(start, stop, 50)
+
+    return context.compile_internal(builder, linspace, sig, args)
+
+@builtin
+@implement(numpy.linspace, types.Kind(types.Number), types.Kind(types.Number),
+           types.Kind(types.Integer))
+def numpy_linspace_3(context, builder, sig, args):
+    dtype = getattr(numpy, str(sig.return_type.dtype))
+
+    def linspace(start, stop, num):
+        arr = numpy.empty(num, dtype)
+        div = num - 1
+        delta = stop - start
+        arr[0] = start
+        for i in range(1, num):
+            arr[i] = start + delta * (i / div)
+        return arr
+
+    return context.compile_internal(builder, linspace, sig, args)
+

@@ -14,6 +14,23 @@ from numba import utils
 nrtjit = njit(_nrt=True, nogil=True)
 
 
+class BaseTest(unittest.TestCase):
+
+    def check_outputs(self, pyfunc, argslist, exact=True):
+        cfunc = nrtjit(pyfunc)
+        for args in argslist:
+            expected = pyfunc(*args)
+            ret = cfunc(*args)
+            self.assertEqual(ret.size, expected.size)
+            self.assertEqual(ret.shape, expected.shape)
+            self.assertEqual(ret.dtype, expected.dtype)
+            self.assertEqual(ret.strides, expected.strides)
+            if exact:
+                np.testing.assert_equal(expected, ret)
+            else:
+                np.testing.assert_allclose(expected, ret)
+
+
 class TestDynArray(unittest.TestCase):
     def test_empty_1d(self):
         @nrtjit
@@ -621,18 +638,10 @@ class TestNdFullLike(ConstructorLikeBaseTest, unittest.TestCase):
         self.check_like(func, np.float64, np.bool_)
 
 
-class TestNdIdentity(unittest.TestCase):
+class TestNdIdentity(BaseTest):
 
     def check_identity(self, pyfunc):
-        cfunc = nrtjit(pyfunc)
-        n = 3
-        expected = pyfunc(n)
-        ret = cfunc(n)
-        self.assertEqual(ret.size, expected.size)
-        self.assertEqual(ret.shape, expected.shape)
-        self.assertEqual(ret.dtype, expected.dtype)
-        self.assertEqual(ret.strides, expected.strides)
-        np.testing.assert_equal(expected, ret)
+        self.check_outputs(pyfunc, [(3,)])
 
     def test_identity(self):
         def func(n):
@@ -646,37 +655,23 @@ class TestNdIdentity(unittest.TestCase):
             self.check_identity(func)
 
 
-class TestNdArange(unittest.TestCase):
+class TestNdArange(BaseTest):
 
-    def check_outputs(self, pyfunc, argslist):
-        cfunc = nrtjit(pyfunc)
-        for args in argslist:
-            expected = pyfunc(*args)
-            ret = cfunc(*args)
-            self.assertEqual(ret.size, expected.size)
-            self.assertEqual(ret.shape, expected.shape)
-            self.assertEqual(ret.dtype, expected.dtype)
-            self.assertEqual(ret.strides, expected.strides)
-            np.testing.assert_equal(expected, ret, verbose=True)
-
-    def test_arange_1(self):
-        def pyfunc(n):
-            return np.arange(n)
-        self.check_outputs(pyfunc, [(0,), (1,), (2.5,), (2+3j,), (-1,), (1.5j,)])
-
-    def test_arange_2(self):
+    def test_linspace_2(self):
         def pyfunc(n, m):
-            return np.arange(n, m)
+            return np.linspace(n, m)
         self.check_outputs(pyfunc,
-                           [(0, 4), (1, 4), (-3.5, 2.5), (-3j, 2+3j),
-                            (2, 1), (1+0.5j, 1.5j)])
+                           [(0, 4), (1, 100), (-3.5, 2.5), (-3j, 2+3j),
+                            (2, 1), (1+0.5j, 1.5j)], exact=False)
 
-    def test_arange_3(self):
+    def test_linspace_3(self):
         def pyfunc(n, m, p):
-            return np.arange(n, m, p)
+            return np.linspace(n, m, p)
         self.check_outputs(pyfunc,
-                           [(0, 5, 2), (9, 1, -1.5), (-13., 2.5, 0.25),
-                            (-3j, 2+3j, 1j), (1, 3, -1), (0.5j, 1+1.5j, 1-1j)])
+                           [(0, 4, 9), (1, 4, 3), (-3.5, 2.5, 8),
+                            (-3j, 2+3j, 7), (2, 1, 0),
+                            (1+0.5j, 1.5j, 5), (1, 1e100, 1)],
+                           exact=False)
 
 
 def benchmark_refct_speed():

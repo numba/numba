@@ -119,6 +119,7 @@ The following top-level functions are supported:
 * :func:`numpy.full`
 * :func:`numpy.full_like`
 * :func:`numpy.identity`
+* :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :func:`numpy.ones`
