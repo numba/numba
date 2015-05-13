@@ -13,6 +13,7 @@ import numpy
 import numpy.distutils.misc_util as np_misc
 import versioneer
 
+versioneer.VCS = 'git'
 versioneer.versionfile_source = 'numba/_version.py'
 versioneer.versionfile_build = 'numba/_version.py'
 versioneer.tag_prefix = ''
@@ -118,6 +119,12 @@ packages = [
     "numba.annotations",
     "numba.runtime",
 ]
+
+install_requires = ['llvmlite', 'numpy']
+if sys.version_info < (3, 4):
+    install_requires.append('enum34')
+if sys.version_info < (3, 3):
+    install_requires.append('funcsigs')
 
 setup(name='numba',
       description="compiling Python code using LLVM",
