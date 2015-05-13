@@ -19,11 +19,7 @@ def make_range_iterator(typ):
 
 
 def make_range_impl(range_state_type, range_iter_type, int_type):
-
-    class RangeState(cgutils.Structure):
-        _fields = [('start', int_type),
-                   ('stop', int_type),
-                   ('step', int_type)]
+    RangeState = cgutils.create_struct_proxy(range_state_type)
 
     @builtin
     @implement(types.range_type, int_type)

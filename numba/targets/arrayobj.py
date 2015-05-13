@@ -890,14 +890,10 @@ def make_ndindex_cls(nditerty):
     """
     ndim = nditerty.ndim
 
-    class NdIndexIter(cgutils.Structure):
+    class NdIndexIter(cgutils.create_struct_proxy(nditerty)):
         """
         .ndindex() implementation.
         """
-        _fields = [('shape', types.UniTuple(types.intp, ndim)),
-                   ('indices', types.CPointer(types.intp)),
-                   ('exhausted', types.CPointer(types.boolean)),
-                   ]
 
         def init_specific(self, context, builder, shapes):
             zero = context.get_constant(types.intp, 0)
@@ -954,16 +950,10 @@ def _make_flattening_iter_cls(flatiterty, kind):
     dtype = array_type.dtype
 
     if array_type.layout == 'C':
-        class CContiguousFlatIter(cgutils.Structure):
+        class CContiguousFlatIter(cgutils.create_struct_proxy(flatiterty)):
             """
             .flat() / .ndenumerate() implementation for C-contiguous arrays.
             """
-            _fields = [('array', types.CPointer(array_type)),
-                       ('stride', types.intp),
-                       ('pointer', types.CPointer(types.CPointer(dtype))),
-                       ('index', types.CPointer(types.intp)),
-                       ('indices', types.CPointer(types.intp)),
-                       ]
 
             def init_specific(self, context, builder, arrty, arr):
                 zero = context.get_constant(types.intp, 0)
@@ -1020,18 +1010,13 @@ def _make_flattening_iter_cls(flatiterty, kind):
         return CContiguousFlatIter
 
     else:
-        class FlatIter(cgutils.Structure):
+        class FlatIter(cgutils.create_struct_proxy(flatiterty)):
             """
             Generic .flat() / .ndenumerate() implementation for
             non-contiguous arrays.
             It keeps track of pointers along each dimension in order to
             minimize computations.
             """
-            _fields = [('array', types.CPointer(array_type)),
-                       ('pointers', types.CPointer(types.CPointer(dtype))),
-                       ('indices', types.CPointer(types.intp)),
-                       ('exhausted', types.CPointer(types.boolean)),
-                       ]
 
             def init_specific(self, context, builder, arrty, arr):
                 zero = context.get_constant(types.intp, 0)
