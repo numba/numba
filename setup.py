@@ -37,6 +37,13 @@ if sys.platform == 'darwin' and sys.version_info[:2] == (2, 6):
 else:
     cpp_link_args = []
 
+
+install_name_tool_fixer = []
+
+if sys.platform == 'darwin':
+    install_name_tool_fixer += ['-headerpad_max_install_names']
+
+
 npymath_info = np_misc.get_info('npymath')
 
 ext_dynfunc = Extension(name='numba._dynfunc', sources=['numba/_dynfunc.c'],
@@ -64,6 +71,7 @@ ext_helperlib = Extension(name="numba._helperlib",
                           include_dirs=[numpy.get_include()],
                           sources=["numba/_helperlib.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS,
+                          extra_link_args=install_name_tool_fixer,
                           depends=["numba/_pymodule.h",
                                    "numba/_math_c99.h",
                                    "numba/mathnames.inc"])
@@ -151,4 +159,3 @@ setup(name='numba',
       license="BSD",
       cmdclass=cmdclass,
       **setup_args)
-
