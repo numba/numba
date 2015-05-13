@@ -17,6 +17,7 @@ with Numba, we suggest you start with the :doc:`User manual <user/index>`.
    user/index.rst
    reference/index.rst
    cuda/index.rst
+   cuda-reference/index.rst
    developer/index.rst
    glossary.rst
    release-notes.rst

@@ -239,6 +239,9 @@ class DeviceNDArrayBase(object):
 
 
 class DeviceRecord(DeviceNDArrayBase):
+    '''
+    An on-GPU record type
+    '''
     def __init__(self, dtype, stream=0, gpu_data=None):
         shape = ()
         strides = ()
@@ -255,6 +258,9 @@ class DeviceRecord(DeviceNDArrayBase):
 
 
 class DeviceNDArray(DeviceNDArrayBase):
+    '''
+    An on-GPU array type
+    '''
     def is_f_contiguous(self):
         '''
         Return true if the array is Fortran-contiguous.

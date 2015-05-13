@@ -9,6 +9,7 @@ Those that are presently implemented are as follows:
 
 .. automodule:: numba.cuda
     :members: atomic
+    :noindex:
 
 Example
 '''''''

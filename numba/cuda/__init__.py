@@ -6,8 +6,7 @@ if config.ENABLE_CUDASIM:
     from .simulator_init import *
 else:
     from .device_init import *
-    from .device_init import (_auto_device, _profiling, _profile_start,
-                              _profile_stop)
+    from .device_init import _auto_device
 
 
 def test():
