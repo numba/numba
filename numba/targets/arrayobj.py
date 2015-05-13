@@ -1328,12 +1328,20 @@ def _parse_empty_args(context, builder, sig, args):
     arrtype = sig.return_type
 
     if isinstance(arrshapetype, types.Integer):
+        ndim = 1
         shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
     else:
+        ndim = arrshapetype.count
         arrshape = context.cast(builder, arrshape, arrshapetype,
-                                types.UniTuple(types.intp, len(arrshapetype)))
-        shapes = cgutils.unpack_tuple(builder, arrshape,
-                                      count=len(arrshapetype))
+                                types.UniTuple(types.intp, ndim))
+        shapes = cgutils.unpack_tuple(builder, arrshape, count=ndim)
+
+    zero = context.get_constant_generic(builder, types.intp, 0)
+    for dim in range(ndim):
+        is_neg = builder.icmp_signed('<', shapes[dim], zero)
+        with cgutils.if_unlikely(builder, is_neg):
+            context.call_conv.return_user_exc(builder, ValueError,
+                                              ("negative dimensions not allowed",))
     return arrtype, shapes
 
 

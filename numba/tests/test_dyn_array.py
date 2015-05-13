@@ -440,6 +440,10 @@ class ConstructorBaseTest(object):
         expected = np.full_like(ret, 123)
         ret.fill(123)
         np.testing.assert_equal(ret, expected)
+        # errors
+        with self.assertRaises(ValueError) as cm:
+            cfunc(-1)
+        self.assertEqual(str(cm.exception), "negative dimensions not allowed")
 
     def check_2d(self, pyfunc, dtype):
         cfunc = nrtjit(pyfunc)
@@ -455,6 +459,10 @@ class ConstructorBaseTest(object):
         expected = np.full_like(ret, 123)
         ret.fill(123)
         np.testing.assert_equal(ret, expected)
+        # errors
+        with self.assertRaises(ValueError) as cm:
+            cfunc(2, -1)
+        self.assertEqual(str(cm.exception), "negative dimensions not allowed")
 
 
 class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
