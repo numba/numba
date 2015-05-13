@@ -20,6 +20,8 @@ typedef struct DispatcherObject{
     PyObject *firstdef, *fallbackdef, *interpdef;
     /* Whether to fold named arguments and default values (false for lifted loops)*/
     int fold_args;
+    /* Whether the last positional argument is a stararg */
+    int has_stararg;
     /* Tuple of argument names */
     PyObject *argnames;
     /* Tuple of default values */
@@ -120,11 +122,13 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     PyObject *tmaddrobj;
     void *tmaddr;
     int argct;
+    int has_stararg = 0;
 
-    if (!PyArg_ParseTuple(args, "OiiO!O!", &tmaddrobj, &argct,
+    if (!PyArg_ParseTuple(args, "OiiO!O!|i", &tmaddrobj, &argct,
                           &self->fold_args,
                           &PyTuple_Type, &self->argnames,
-                          &PyTuple_Type, &self->defargs)) {
+                          &PyTuple_Type, &self->defargs,
+                          &has_stararg)) {
         return -1;
     }
     Py_INCREF(self->argnames);
@@ -135,6 +139,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     self->firstdef = NULL;
     self->fallbackdef = NULL;
     self->interpdef = NULL;
+    self->has_stararg = has_stararg;
     return 0;
 }
 
@@ -541,42 +546,71 @@ find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
     Py_ssize_t named_args, total_args, i;
     Py_ssize_t func_args = PyTuple_GET_SIZE(self->argnames);
     Py_ssize_t defaults = PyTuple_GET_SIZE(self->defargs);
-    Py_ssize_t defstart = func_args - defaults;
+    /* Last parameter with a default value */
+    Py_ssize_t last_def = (self->has_stararg)
+                          ? func_args - 2
+                          : func_args - 1;
+    /* First parameter with a default value */
+    Py_ssize_t first_def = last_def - defaults + 1;
+    /* Minimum number of required arguments */
+    Py_ssize_t minargs = first_def;
 
     if (kws != NULL)
         named_args = PyDict_Size(kws);
     else
         named_args = 0;
-    if (named_args == 0 && pos_args == func_args) {
-        Py_INCREF(oldargs);
-        return 0;
-    }
     total_args = pos_args + named_args;
-    if (total_args > func_args) {
+    if (!self->has_stararg && total_args > func_args) {
         PyErr_Format(PyExc_TypeError,
                      "too many arguments: expected %d, got %d",
                      (int) func_args, (int) total_args);
         return -1;
     }
-    else if (total_args < func_args - defaults) {
-        if (defaults == 0)
+    else if (self->has_stararg && named_args > 0  && total_args > func_args - 1) {
+        PyErr_Format(PyExc_TypeError, "too many arguments");
+        return -1;
+    }
+    else if (total_args < minargs) {
+        if (minargs == func_args)
             PyErr_Format(PyExc_TypeError,
                          "not enough arguments: expected %d, got %d",
-                         (int) func_args, (int) total_args);
+                         (int) minargs, (int) total_args);
         else
             PyErr_Format(PyExc_TypeError,
                          "not enough arguments: expected at least %d, got %d",
-                         (int) (func_args - defaults), (int) total_args);
+                         (int) minargs, (int) total_args);
         return -1;
     }
     newargs = PyTuple_New(func_args);
     if (!newargs)
         return -1;
+    PySys_FormatStderr("newargs = %R\n", newargs);
+    /* First pack the stararg */
+    if (self->has_stararg) {
+        Py_ssize_t stararg_size = Py_MAX(0, pos_args - func_args + 1);
+        PyObject *stararg = PyTuple_New(stararg_size);
+        if (!stararg) {
+            Py_DECREF(newargs);
+            return -1;
+        }
+        for (i = 0; i < stararg_size; i++) {
+            PyObject *value = PyTuple_GET_ITEM(oldargs, func_args - 1 + i);
+            Py_INCREF(value);
+            PyTuple_SET_ITEM(stararg, i, value);
+        }
+        /* Put it in last position */
+        PyTuple_SET_ITEM(newargs, func_args - 1, stararg);
+    }
+    PySys_FormatStderr("newargs = %R\n", newargs);
     for (i = 0; i < pos_args; i++) {
         PyObject *value = PyTuple_GET_ITEM(oldargs, i);
+        if (self->has_stararg && i >= func_args - 1) {
+            break;
+        }
         Py_INCREF(value);
         PyTuple_SET_ITEM(newargs, i, value);
     }
+    PySys_FormatStderr("newargs = %R\n", newargs);
     /* Iterate over missing positional arguments, try to find them in
        named arguments or default values. */
     for (i = pos_args; i < func_args; i++) {
@@ -590,18 +624,20 @@ find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
                 continue;
             }
         }
-        if (i >= defstart) {
+        if (i >= first_def && i <= last_def) {
             /* Argument has a default value? */
-            PyObject *value = PyTuple_GET_ITEM(self->defargs, i - defstart);
+            PyObject *value = PyTuple_GET_ITEM(self->defargs, i - first_def);
             Py_INCREF(value);
             PyTuple_SET_ITEM(newargs, i, value);
             continue;
         }
-        PyErr_Format(PyExc_TypeError,
-                     "missing argument '%s'",
-                     PyString_AsString(name));
-        Py_DECREF(newargs);
-        return -1;
+        else if (i < func_args - 1 || !self->has_stararg) {
+            PyErr_Format(PyExc_TypeError,
+                         "missing argument '%s'",
+                         PyString_AsString(name));
+            Py_DECREF(newargs);
+            return -1;
+        }
     }
     *pargs = newargs;
     *pkws = NULL;

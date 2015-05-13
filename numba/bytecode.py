@@ -260,19 +260,28 @@ class ByteCodeSupportError(Exception):
 
 class ByteCodeBase(object):
     __slots__ = (
-        'func', 'func_name', 'func_qualname', 'argspec', 'filename', 'co_names',
-        'co_varnames', 'co_consts', 'co_freevars', 'table', 'labels',
+        'func', 'func_name', 'func_qualname', 'filename',
+        'pysig', 'co_names', 'co_varnames', 'co_consts', 'co_freevars',
+        'table', 'labels', 'arg_count', 'arg_names',
         )
 
-    def __init__(self, func, func_qualname, argspec, filename, co_names,
+    def __init__(self, func, func_qualname, pysig, filename, co_names,
                  co_varnames, co_consts, co_freevars, table, labels,
-                 is_generator):
+                 is_generator, arg_count=None, arg_names=None):
+        # When given, these values may not match the pysig's
+        # (when lifting loops)
+        if arg_count is None:
+            arg_count = len(pysig.parameters)
+        if arg_names is None:
+            arg_names = list(pysig.parameters)
         self.func = func
         self.module = inspect.getmodule(func)
         self.is_generator = is_generator
         self.func_qualname = func_qualname
         self.func_name = func_qualname.split('.')[-1]
-        self.argspec = argspec
+        self.pysig = pysig
+        self.arg_count = arg_count
+        self.arg_names = arg_names
         self.filename = filename
         self.co_names = co_names
         self.co_varnames = co_varnames
@@ -313,6 +322,7 @@ class ByteCode(ByteCodeBase):
     def __init__(self, func):
         func = get_function_object(func)
         code = get_code_object(func)
+        pysig = utils.pysignature(func)
         if not code:
             raise ByteCodeSupportError("%s does not provide its bytecode" %
                                        func)
@@ -332,7 +342,7 @@ class ByteCode(ByteCodeBase):
         super(ByteCode, self).__init__(func=func,
                                        func_qualname=func_qualname,
                                        is_generator=inspect.isgeneratorfunction(func),
-                                       argspec=inspect.getargspec(func),
+                                       pysig=pysig,
                                        filename=code.co_filename,
                                        co_names=code.co_names,
                                        co_varnames=code.co_varnames,

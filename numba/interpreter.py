@@ -93,7 +93,8 @@ class Interpreter(object):
         self.bytecode = bytecode
         self.scopes = []
         self.loc = ir.Loc(filename=bytecode.filename, line=1)
-        self.argspec = bytecode.argspec
+        self.arg_count = bytecode.arg_count
+        self.arg_names = bytecode.arg_names
         # Control flow analysis
         self.cfa = controlflow.ControlFlowAnalysis(bytecode)
         self.cfa.run()
@@ -357,7 +358,7 @@ class Interpreter(object):
 
     def init_first_block(self):
         # Define variables receiving the function arguments
-        for index, name in enumerate(self.argspec.args):
+        for index, name in enumerate(self.arg_names):
             val = ir.Arg(index=index, name=name, loc=self.loc)
             self.store(val, name)
 

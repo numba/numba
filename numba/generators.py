@@ -200,7 +200,7 @@ class PyGeneratorLower(BaseGeneratorLower):
         return types.Generator(
             gen_func=self.interp.bytecode.func,
             yield_type=types.pyobject,
-            arg_types=(types.pyobject,) * len(self.interp.argspec.args),
+            arg_types=(types.pyobject,) * self.interp.arg_count,
             state_types=(types.pyobject,) * len(self.geninfo.state_vars),
             has_finalizer=True,
             )

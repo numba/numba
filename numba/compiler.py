@@ -332,7 +332,7 @@ class Pipeline(object):
         Analyze bytecode and translating to Numba IR
         """
         self.interp = translate_stage(self.bc)
-        self.nargs = len(self.interp.argspec.args)
+        self.nargs = self.interp.arg_count
         if not self.args and self.flags.force_pyobject:
             # Allow an empty argument types specification when object mode
             # is explicitly requested.
@@ -666,13 +666,13 @@ def translate_stage(bytecode):
 
 
 def type_inference_stage(typingctx, interp, args, return_type, locals={}):
-    if len(args) != len(interp.argspec.args):
+    if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
 
     infer = typeinfer.TypeInferer(typingctx, interp)
 
     # Seed argument types
-    for index, (name, ty) in enumerate(zip(interp.argspec.args, args)):
+    for index, (name, ty) in enumerate(zip(interp.bytecode.arg_names, args)):
         infer.seed_argument(name, index, ty)
 
     # Seed return type
