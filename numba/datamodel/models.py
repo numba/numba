@@ -186,7 +186,6 @@ class PrimitiveModel(DataModel):
 @register_default(types.Object)
 @register_default(types.Module)
 @register_default(types.Phantom)
-@register_default(types.RangeType)
 @register_default(types.Dispatcher)
 @register_default(types.ExceptionType)
 @register_default(types.Dummy)
@@ -825,6 +824,16 @@ class ArrayCTypesModel(StructModel):
         # ndim = fe_type.ndim
         members = [('data', types.uintp)]
         super(ArrayCTypesModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.RangeType)
+class RangeModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        int_type = fe_type.iterator_type.yield_type
+        members = [('start', int_type),
+                   ('stop', int_type),
+                   ('step', int_type)]
+        super(RangeModel, self).__init__(dmm, fe_type, members)
 
 
 # =============================================================================

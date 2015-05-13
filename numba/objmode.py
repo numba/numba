@@ -125,7 +125,7 @@ class PyLower(BaseLower):
             self.builder.branch(target)
 
         elif isinstance(inst, ir.Del):
-            self.delvar(inst.value)
+            self.delvar(inst.value.name)
 
         elif isinstance(inst, ir.Raise):
             if inst.exception is not None:

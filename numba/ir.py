@@ -81,11 +81,8 @@ class VarMap(object):
     def __repr__(self):
         return pprint.pformat(self._con)
 
-    def __hash__(self):
-        return hash(self.name)
-
     def __iter__(self):
-        return self._con.iterkeys()
+        return iter(self._con.keys())
 
 
 class Inst(object):
@@ -299,12 +296,29 @@ class StoreMap(Stmt):
 
 
 class Del(Stmt):
+    """
+    Delete a reference from the value
+    """
     def __init__(self, value, loc):
+        assert isinstance(value, Var)
         self.value = value
         self.loc = loc
 
     def __str__(self):
         return "del %s" % self.value
+
+
+class Acq(Stmt):
+    """
+    Acquire a reference from the value.
+    """
+    def __init__(self, value, loc):
+        assert isinstance(value, Var)
+        self.value = value
+        self.loc = loc
+
+    def __str__(self):
+        return "acq %s" % self.value
 
 
 class Raise(Stmt):
@@ -623,11 +637,12 @@ class Block(object):
 
 
 class Loop(object):
-    __slots__ = "entry", "exit"
+    __slots__ = "entry", "exit", "cleanups"
 
     def __init__(self, entry, exit):
         self.entry = entry
         self.exit = exit
+        self.cleanups = set()
 
     def __repr__(self):
         args = self.entry, self.exit

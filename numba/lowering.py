@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
+from llvmlite import ir as llvmir
 
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
@@ -187,15 +188,6 @@ class Lower(BaseLower):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
             self.storevar(val, inst.target.name)
-            # TODO: emit incref/decref in the numba IR properly.
-            # Workaround due to lack of proper incref/decref info.
-            if self.context.enable_nrt:
-                if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
-                    callexpr = inst.value
-                    # NPM function returns new reference
-                    if isinstance(self.typeof(callexpr.func.name),
-                                  types.Dispatcher):
-                        self.decref(ty, val)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -256,13 +248,14 @@ class Lower(BaseLower):
             return impl(self.builder, (target, index, value))
 
         elif isinstance(inst, ir.Del):
-            try:
-                # XXX: incorrect Del injection?
-                val = self.loadvar(inst.value)
-            except KeyError:
-                pass
-            else:
-                self.decref(self.typeof(inst.value), val)
+            val = self.loadvar(inst.value.name)
+            self.decref(self.typeof(inst.value.name), val)
+            # self.builder.store(llvmir.Constant(val.type, None),
+            #                    self.getvar(inst.value.name))
+
+        elif isinstance(inst, ir.Acq):
+            val = self.loadvar(inst.value.name)
+            self.incref(self.typeof(inst.value.name), val)
 
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
@@ -649,32 +642,37 @@ class Lower(BaseLower):
         raise NotImplementedError(expr)
 
     def getvar(self, name):
-        return self.varmap[name]
+        try:
+            return self.varmap[name]
+        except KeyError:
+            return self.allocvar(name)
 
     def loadvar(self, name):
         ptr = self.getvar(name)
         return self.builder.load(ptr)
 
+    def allocvar(self, name):
+        assert name not in self.varmap
+        # Stack allocate
+        self.varmap[name] = ptr = self.alloca(name, self.typeof(name))
+        # Zero initialize
+        with cgutils.goto_entry_block(self.builder):
+            self.builder.store(llvmir.Constant(ptr.type.pointee, None), ptr)
+        return ptr
+
     def storevar(self, value, name):
-        # Clean up existing value stored in the variable
-        try:
-            # Load original value in variable
-            old = self.loadvar(name)
-        except KeyError:
-            # If it has not been defined, don't do anything
-            pass
-        else:
-            # Else, dereference the old value
-            self.decref(self.typeof(name), old)
         # Store variable
-        if name not in self.varmap:
-            self.varmap[name] = self.alloca_lltype(name, value.type)
         ptr = self.getvar(name)
+        fetype = self.typeof(name)
+        betype = self.context.get_value_type(fetype)
+        if betype != value.type:
+            msg = ("internal error: storing {value.type} to {betype} for "
+                   "{name} of {fetype}")
+            raise ValueError(msg.format(value=value, betype=betype, name=name,
+                                        fetype=fetype))
         assert value.type == ptr.type.pointee,\
             "store %s to ptr of %s" % (value.type, ptr.type.pointee)
         self.builder.store(value, ptr)
-        # Incref
-        self.incref(self.typeof(name), value)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
