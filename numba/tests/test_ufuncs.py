@@ -17,7 +17,8 @@ from numba.config import PYVERSION
 from numba.typeinfer import TypingError
 from numba.targets import cpu
 from numba.lowering import LoweringError
-from .support import TestCase, CompilationCache, skip_on_numpy_16
+from .support import (TestCase, CompilationCache, skip_on_numpy_16,
+                      is_on_numpy_16)
 
 from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
@@ -1372,6 +1373,10 @@ class _TestLoopTypes(TestCase):
     _ufuncs.remove(np.left_shift) # has its own test class
     _compile_flags = enable_pyobj_flags
     _skip_types = 'OegG'
+
+    # Skip datetime64 'M' and timedelta64 'm' on numpy 1.6
+    if is_on_numpy_16:
+        _skip_types += 'Mm'
 
     def _arg_for_type(self, a_letter_type, index=0):
         """return a suitable array argument for testing the letter type"""
