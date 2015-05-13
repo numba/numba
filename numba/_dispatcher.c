@@ -566,10 +566,6 @@ find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
                      (int) func_args, (int) total_args);
         return -1;
     }
-    else if (self->has_stararg && named_args > 0  && total_args > func_args - 1) {
-        PyErr_Format(PyExc_TypeError, "too many arguments");
-        return -1;
-    }
     else if (total_args < minargs) {
         if (minargs == func_args)
             PyErr_Format(PyExc_TypeError,
@@ -584,7 +580,6 @@ find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
     newargs = PyTuple_New(func_args);
     if (!newargs)
         return -1;
-    PySys_FormatStderr("newargs = %R\n", newargs);
     /* First pack the stararg */
     if (self->has_stararg) {
         Py_ssize_t stararg_size = Py_MAX(0, pos_args - func_args + 1);
@@ -600,27 +595,33 @@ find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
         }
         /* Put it in last position */
         PyTuple_SET_ITEM(newargs, func_args - 1, stararg);
+
     }
-    PySys_FormatStderr("newargs = %R\n", newargs);
     for (i = 0; i < pos_args; i++) {
         PyObject *value = PyTuple_GET_ITEM(oldargs, i);
         if (self->has_stararg && i >= func_args - 1) {
+            /* Skip stararg */
             break;
         }
         Py_INCREF(value);
         PyTuple_SET_ITEM(newargs, i, value);
     }
-    PySys_FormatStderr("newargs = %R\n", newargs);
+
     /* Iterate over missing positional arguments, try to find them in
        named arguments or default values. */
     for (i = pos_args; i < func_args; i++) {
         PyObject *name = PyTuple_GET_ITEM(self->argnames, i);
+        if (self->has_stararg && i >= func_args - 1) {
+            /* Skip stararg */
+            break;
+        }
         if (kws != NULL) {
             /* Named argument? */
             PyObject *value = PyDict_GetItem(kws, name);
             if (value != NULL) {
                 Py_INCREF(value);
                 PyTuple_SET_ITEM(newargs, i, value);
+                named_args--;
                 continue;
             }
         }
@@ -638,6 +639,12 @@ find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
             Py_DECREF(newargs);
             return -1;
         }
+    }
+    if (named_args) {
+        PyErr_Format(PyExc_TypeError,
+                     "some keyword arguments unexpected");
+        Py_DECREF(newargs);
+        return -1;
     }
     *pargs = newargs;
     *pkws = NULL;

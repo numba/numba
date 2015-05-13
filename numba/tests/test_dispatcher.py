@@ -184,10 +184,13 @@ class TestDispatcher(TestCase):
         check(4, y=5)
         with self.assertRaises(TypeError) as cm:
             f(4, 5, y=6)
-        self.assertIn("too many arguments", str(cm.exception))
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
         with self.assertRaises(TypeError) as cm:
             f(4, 5, z=6)
-        self.assertIn("too many arguments", str(cm.exception))
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(4, x=6)
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
 
     def test_explicit_signatures(self):
         f = jit("(int64,int64)")(add)
