@@ -64,6 +64,7 @@ ext_helperlib = Extension(name="numba._helperlib",
                           include_dirs=[numpy.get_include()],
                           sources=["numba/_helperlib.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS,
+                          extra_link_args=['-headerpad_max_install_names'],
                           depends=["numba/_pymodule.h",
                                    "numba/_math_c99.h",
                                    "numba/mathnames.inc"])
@@ -151,4 +152,3 @@ setup(name='numba',
       license="BSD",
       cmdclass=cmdclass,
       **setup_args)
-
