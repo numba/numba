@@ -113,6 +113,7 @@ Functions
 
 The following top-level functions are supported:
 
+* :func:`numpy.arange`
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.full`

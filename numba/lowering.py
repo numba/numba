@@ -402,19 +402,12 @@ class Lower(BaseLower):
                                               "when calling %s" % (fnty,))
                 args = expr.args
             else:
-                ba = pysig.bind(*expr.args, **dict(expr.kws))
-                for i, param in enumerate(pysig.parameters.values()):
-                    name = param.name
-                    default = param.default
-                    if (default is not param.empty and
-                        name not in ba.arguments):
-                        value = self.context.get_constant_generic(
-                            self.builder, signature.args[i], default)
-                        ba.arguments[name] = value
-                        defargs.add(i)
-                # This is ensured in Dispatcher.get_call_template()
-                assert not ba.kwargs
-                args = ba.args
+                def default_handler(index, default):
+                    return self.context.get_constant_generic(
+                                self.builder, signature.args[index], default)
+                args, defargs = typing.fold_arguments(pysig,
+                                                      expr.args, dict(expr.kws),
+                                                      default_handler)
 
             # Fetch and cast non-default arguments
             argvals = list(args)

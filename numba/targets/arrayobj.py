@@ -14,6 +14,7 @@ import numba.ctypes_support as ctypes
 import numpy
 from llvmlite.llvmpy.core import Constant
 from numba import types, cgutils
+from numba.numpy_support import as_dtype
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
                                     iterator_impl, iternext_impl,
@@ -1465,7 +1466,6 @@ def numpy_ones_dtype_nd(context, builder, sig, args):
 
     return context.compile_internal(builder, ones, sig, args)
 
-
 @builtin
 @implement(numpy.ones_like, types.Kind(types.Array))
 def numpy_ones_like_nd(context, builder, sig, args):
@@ -1497,7 +1497,6 @@ def numpy_identity(context, builder, sig, args):
 
     return context.compile_internal(builder, identity, sig, args)
 
-
 @builtin
 @implement(numpy.identity, types.Kind(types.Integer), types.Kind(types.Function))
 def numpy_identity(context, builder, sig, args):
@@ -1509,3 +1508,68 @@ def numpy_identity(context, builder, sig, args):
         return arr
 
     return context.compile_internal(builder, identity, sig, args)
+
+
+@builtin
+@implement(numpy.arange, types.Kind(types.Number))
+def numpy_arange_1(context, builder, sig, args):
+    dtype = getattr(numpy, str(sig.return_type.dtype))
+
+    def arange(stop):
+        return numpy.arange(0, stop, 1, dtype)
+
+    return context.compile_internal(builder, arange, sig, args)
+
+@builtin
+@implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number))
+def numpy_arange_2(context, builder, sig, args):
+    dtype = getattr(numpy, str(sig.return_type.dtype))
+
+    def arange(start, stop):
+        return numpy.arange(start, stop, 1, dtype)
+
+    return context.compile_internal(builder, arange, sig, args)
+
+
+@builtin
+@implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number),
+           types.Kind(types.Number))
+def numpy_arange_3(context, builder, sig, args):
+    dtype = getattr(numpy, str(sig.return_type.dtype))
+
+    def arange(start, stop, step):
+        return numpy.arange(start, stop, step, dtype)
+
+    return context.compile_internal(builder, arange, sig, args)
+
+@builtin
+@implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number),
+           types.Kind(types.Number), types.Kind(types.Function))
+def numpy_arange_4(context, builder, sig, args):
+
+    if any(isinstance(a, types.Complex) for a in sig.args):
+        def arange(start, stop, step, dtype):
+            nitems_c = (stop - start) / step
+            nitems_r = math.ceil(nitems_c.real)
+            nitems_i = math.ceil(nitems_c.imag)
+            nitems = max(min(nitems_i, nitems_r), 0)
+            arr = numpy.empty(nitems, dtype)
+            val = start
+            for i in range(nitems):
+                arr[i] = val
+                val += step
+            return arr
+    else:
+        def arange(start, stop, step, dtype):
+            nitems_r = math.ceil((stop - start) / step)
+            nitems = max(nitems_r, 0)
+            arr = numpy.empty(nitems, dtype)
+            val = start
+            for i in range(nitems):
+                arr[i] = val
+                val += step
+            return arr
+
+    return context.compile_internal(builder, arange, sig, args,
+                                    locals={'nitems': types.intp})
+

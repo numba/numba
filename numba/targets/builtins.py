@@ -929,7 +929,7 @@ def complex_div_impl(context, builder, sig, args):
         if abs(breal) >= abs(bimag):
             # Divide tops and bottom by b.real
             if not breal:
-                return complex(NAN, NAN)
+                raise ZeroDivisionError("complex division by zero")
             ratio = bimag / breal
             denom = breal + bimag * ratio
             return complex(
