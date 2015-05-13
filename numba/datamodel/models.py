@@ -676,6 +676,12 @@ class CharSeq(DataModel):
     def from_return(self, builder, value):
         return value
 
+    def as_argument(self, builder, value):
+        return value
+
+    def from_argument(self, builder, value):
+        return value
+
 
 class CContiguousFlatIter(StructModel):
     def __init__(self, dmm, fe_type):
