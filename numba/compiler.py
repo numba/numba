@@ -9,7 +9,7 @@ import warnings
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
                    lowering, objmode, irpasses, utils, config,
-                   types, ir, looplifting, macro, types)
+                   types, ir, looplifting, macro, types, rewrites)
 from numba.targets import cpu
 from numba.annotations import type_annotations
 
@@ -34,6 +34,7 @@ class Flags(utils.ConfigOptions):
         'forceinline',
         'no_cpython_wrapper',
         'nrt',
+        'no_rewrites',
     ])
 
 
@@ -411,6 +412,19 @@ class Pipeline(object):
             legalize_return_type(self.return_type, self.interp,
                                  self.targetctx)
 
+    def stage_nopython_rewrites(self):
+        """
+        Perform any intermediate representation rewrites.
+        """
+        # Ensure we have an IR container (interp), and type information.
+        assert self.interp
+        assert isinstance(getattr(self, 'typemap', None), dict)
+        assert isinstance(getattr(self, 'calltypes', None), dict)
+        with self.fallback_context('Internal error in rewriting pass '
+                                   'encountered during compilation of '
+                                   'function "%s"' % (self.func_attr.name,)):
+            rewrites.rewrite_registry.apply(self, self.interp.blocks)
+
     def stage_annotate_type(self):
         """
         Create type annotation after type inference
@@ -542,6 +556,8 @@ class Pipeline(object):
             pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
+            if not self.flags.no_rewrites:
+                pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
 
         if self.status.can_fallback or self.flags.force_pyobject:

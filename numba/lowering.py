@@ -637,6 +637,9 @@ class Lower(BaseLower):
             castval = self.context.cast(self.builder, val, ty, resty)
             return castval
 
+        elif expr.op in self.context.special_ops:
+            return self.context.special_ops[expr.op](self, expr)
+
         raise NotImplementedError(expr)
 
     def getvar(self, name):

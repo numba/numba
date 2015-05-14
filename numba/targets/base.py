@@ -160,6 +160,7 @@ class BaseContext(object):
         self.defns = defaultdict(Overloads)
         self.attrs = defaultdict(Overloads)
         self.generators = {}
+        self.special_ops = {}
 
         self.install_registry(builtin_registry)
 
@@ -833,6 +834,29 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
+    def compile_only_no_cache(self, builder, impl, sig, locals={}):
+        """Invoke the compiler to compile a function to be used inside a
+        nopython function, but without generating code to call that
+        function.
+        """
+        # Compile
+        from numba import compiler
+
+        codegen = self.jit_codegen()
+        library = codegen.create_library(impl.__name__)
+        flags = compiler.Flags()
+        flags.set('no_compile')
+        flags.set('no_cpython_wrapper')
+        cres = compiler.compile_internal(self.typing_context, self,
+                                         library,
+                                         impl, sig.args,
+                                         sig.return_type, flags,
+                                         locals=locals)
+
+        # Allow inlining the function inside callers.
+        codegen.add_linking_library(cres.library)
+        return cres
+
     def compile_internal(self, builder, impl, sig, args, locals={}):
         """Invoke compiler to implement a function for a nopython function
         """
@@ -844,25 +868,17 @@ class BaseContext(object):
         fndesc = self.cached_internal_func.get(cache_key)
 
         if fndesc is None:
-            # Compile
-            from numba import compiler
-
-            codegen = self.jit_codegen()
-            library = codegen.create_library(impl.__name__)
-            flags = compiler.Flags()
-            flags.set('no_compile')
-            flags.set('no_cpython_wrapper')
-            cres = compiler.compile_internal(self.typing_context, self,
-                                             library,
-                                             impl, sig.args,
-                                             sig.return_type, flags,
-                                             locals=locals)
-
-            # Allow inlining the function inside callers.
-            codegen.add_linking_library(cres.library)
+            cres = self.compile_only_no_cache(builder, impl, sig,
+                                              locals=locals)
             fndesc = cres.fndesc
             self.cached_internal_func[cache_key] = fndesc
 
+        return self.call_internal(builder, fndesc, sig, args)
+
+    def call_internal(self, builder, fndesc, sig, args):
+        """Given the function descriptor of an internally compiled function,
+        emit a call to that function with the given arguments.
+        """
         # Add call to the generated function
         llvm_mod = cgutils.get_module(builder)
         fn = self.declare_function(llvm_mod, fndesc)
