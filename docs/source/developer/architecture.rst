@@ -296,7 +296,14 @@ fall back to object mode.  Type inference can fail when unsupported Python
 types, language features, or functions are used in the function body.
 
 
-Stage 5a: Generate No-Python LLVM IR
+Stage 5: Rewrite Typed IR
+-------------------------
+
+Numba implements at least one optimization pass that rewrites the
+Numba IR.
+
+
+Stage 6a: Generate No-Python LLVM IR
 ------------------------------------
 
 If type inference succeeds in finding a Numba type for every intermediate
@@ -358,7 +365,7 @@ generated above quite significantly:
         ret i32 0
    }
 
-Stage 5b: Generate Object Mode LLVM IR
+Stage 6b: Generate Object Mode LLVM IR
 --------------------------------------
 
 If type inference fails to find Numba types for all values inside a function,
@@ -446,7 +453,7 @@ function.  Loop-lifting helps improve the performance of functions that
 need to access uncompilable code (such as I/O or plotting code) but still
 contain a time-intensive section of compilable code.
 
-Stage 6: Compile LLVM IR to Machine Code
+Stage 7: Compile LLVM IR to Machine Code
 ----------------------------------------
 
 In both "object mode" and "nopython mode", the generated LLVM IR is compiled
