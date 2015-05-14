@@ -90,6 +90,7 @@ def _make_bytecode_table():
                     ('BUILD_SLICE', 2),
                     ('BUILD_TUPLE', 2),
                     ('CALL_FUNCTION', 2),
+                    ('CALL_FUNCTION_VAR', 2),
                     ('COMPARE_OP', 2),
                     ('DELETE_ATTR', 2),
                     ('DUP_TOP', 0),

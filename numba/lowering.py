@@ -1,7 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import namedtuple
 import sys
 
+from llvmlite.ir import Value
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 
@@ -18,6 +20,9 @@ class LoweringError(Exception):
 
 class ForbiddenConstruct(LoweringError):
     pass
+
+
+_VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
 
 class BaseLower(object):
@@ -386,8 +391,14 @@ class Lower(BaseLower):
         Cast a Numba IR variable to the given Numba type, returning a
         low-level value.
         """
-        return self.context.cast(self.builder, self.loadvar(var.name),
-                                 self.typeof(var.name), ty)
+        if isinstance(var, _VarArgItem):
+            varty = self.typeof(var.vararg.name)[var.index]
+            val = self.builder.extract_value(self.loadvar(var.vararg.name),
+                                             var.index)
+        else:
+            varty = self.typeof(var.name)
+            val = self.loadvar(var.name)
+        return self.context.cast(self.builder, val, varty, ty)
 
     def lower_call(self, resty, expr):
         signature = self.fndesc.calltypes[expr]
@@ -399,6 +410,14 @@ class Lower(BaseLower):
             argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
+            pos_args = expr.args
+            if expr.vararg:
+                # Inject *args from function call
+                # The lowering will be done in _cast_var() above.
+                tp_vararg = self.typeof(expr.vararg.name)
+                assert isinstance(tp_vararg, types.BaseTuple)
+                pos_args = pos_args + [_VarArgItem(expr.vararg, i)
+                                       for i in range(len(tp_vararg))]
 
             # Fold keyword arguments and resolve default argument values
             defargs = set()
@@ -409,7 +428,7 @@ class Lower(BaseLower):
                     raise NotImplementedError("unsupported keyword arguments "
                                               "when calling %s" % (fnty,))
                 argvals = [self._cast_var(var, sigty)
-                           for var, sigty in zip(expr.args, signature.args)]
+                           for var, sigty in zip(pos_args, signature.args)]
             else:
                 def normal_handler(index, param, var):
                     return self._cast_var(var, signature.args[index])
@@ -421,7 +440,7 @@ class Lower(BaseLower):
                               for var, sigty in zip(vars, signature.args[index])]
                     return cgutils.make_anonymous_struct(self.builder, values)
                 argvals = typing.fold_arguments(pysig,
-                                                expr.args, dict(expr.kws),
+                                                pos_args, dict(expr.kws),
                                                 normal_handler,
                                                 default_handler,
                                                 stararg_handler)

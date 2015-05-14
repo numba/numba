@@ -254,7 +254,7 @@ class DataFlowAnalysis(object):
         info.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
         info.push(indval)
 
-    def op_CALL_FUNCTION(self, info, inst):
+    def _op_call_function(self, info, inst, has_vararg):
         narg = inst.arg & 0xff
         nkws = (inst.arg >> 8) & 0xff
 
@@ -263,13 +263,21 @@ class DataFlowAnalysis(object):
             key = info.pop()
             return key, val
 
+        vararg = info.pop() if has_vararg else None
         kws = list(reversed([pop_kws() for _ in range(nkws)]))
         args = list(reversed([info.pop() for _ in range(narg)]))
         func = info.pop()
 
         res = info.make_temp()
-        info.append(inst, func=func, args=args, kws=kws, res=res)
+        info.append(inst, func=func, args=args, kws=kws, res=res,
+                    vararg=vararg)
         info.push(res)
+
+    def op_CALL_FUNCTION(self, info, inst):
+        self._op_call_function(info, inst, has_vararg=False)
+
+    def op_CALL_FUNCTION_VAR(self, info, inst):
+        self._op_call_function(info, inst, has_vararg=True)
 
     def op_PRINT_ITEM(self, info, inst):
         warnings.warn("Python2 style print partially supported.  Please use "
