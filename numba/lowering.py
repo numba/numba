@@ -391,19 +391,22 @@ class Lower(BaseLower):
             argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
-
-            # Fold keyword arguments and resolve default argument values
             defargs = set()
-            try:
-                pysig = fnty.pysig
-            except AttributeError:
+
+            pysig = signature.pysig
+            if pysig is None:
                 if expr.kws:
                     raise NotImplementedError("unsupported keyword arguments "
                                               "when calling %s" % (fnty,))
                 args = expr.args
             else:
+                # Fold keyword arguments and resolve default argument values
                 ba = pysig.bind(*expr.args, **dict(expr.kws))
                 for i, param in enumerate(pysig.parameters.values()):
+                    # The formal Python signature can have more arguments
+                    # than the actual call signature, ignore
+                    if i >= len(signature.args):
+                        break
                     name = param.name
                     default = param.default
                     if (default is not param.empty and
