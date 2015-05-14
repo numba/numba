@@ -926,6 +926,8 @@ def complex_div_impl(context, builder, sig, args):
         aimag = a.imag
         breal = b.real
         bimag = b.imag
+        if not breal and not bimag:
+            raise ZeroDivisionError("complex division by zero")
         if abs(breal) >= abs(bimag):
             # Divide tops and bottom by b.real
             if not breal:
@@ -1243,7 +1245,9 @@ def caster(restype):
 
     return _cast
 
-for tp in types.number_domain:
+cast_types = set(types.number_domain)
+cast_types.add(types.bool_)
+for tp in cast_types:
     builtin(caster(tp))
 
 

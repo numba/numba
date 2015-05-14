@@ -113,13 +113,25 @@ Functions
 
 The following top-level functions are supported:
 
+* :func:`numpy.arange`
+* :func:`numpy.empty`
+* :func:`numpy.empty_like`
+* :func:`numpy.eye`
+* :func:`numpy.full`
+* :func:`numpy.full_like`
+* :func:`numpy.identity`
+* :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
+* :func:`numpy.ones`
+* :func:`numpy.ones_like`
 * :func:`numpy.round_`
-* :func:`numpy.empty`
+* :func:`numpy.zeros`
+* :func:`numpy.zeros_like`
 
 The following constructors are supported, only with a numeric input:
 
+* :class:`numpy.bool_`
 * :class:`numpy.complex64`
 * :class:`numpy.complex128`
 * :class:`numpy.float32`

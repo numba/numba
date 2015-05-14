@@ -766,6 +766,28 @@ def pointer_add(builder, ptr, offset, return_type=None):
     return builder.inttoptr(intptr, return_type or ptr.type)
 
 
+def memset(builder, ptr, size, value):
+    """
+    Fill *size* bytes starting from *ptr* with *value*.
+    """
+    sizety = size.type
+    memset = "llvm.memset.p0i8.i%d" % (sizety.width)
+    module = get_module(builder)
+    i32 = lc.Type.int(32)
+    i8 = lc.Type.int(8)
+    i1 = lc.Type.int(1)
+    # void @llvm.memset.p0i8.iXY(i8* <dest>, i8 <val>,
+    #                            iXY <len>, i32 <align>, i1 <isvolatile>)
+    ptr = builder.bitcast(ptr, lc.Type.pointer(i8))
+    fnty = lc.Type.function(lc.Type.void(),
+                            [ptr.type, i8, sizety, i32, i1])
+    fn = module.get_or_insert_function(fnty, name=memset)
+    if isinstance(value, int):
+        value = Constant.int(i8, value)
+    builder.call(fn, [ptr, value, size,
+                      Constant.int(i32, 0), Constant.int(i1, 0)])
+
+
 def global_constant(builder_or_module, name, value, linkage=lc.LINKAGE_INTERNAL):
     """
     Get or create a (LLVM module-)global constant with *name* or *value*.

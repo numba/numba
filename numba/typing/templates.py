@@ -66,6 +66,31 @@ def signature(return_type, *args, **kws):
     return Signature(return_type, args, recvr=recvr)
 
 
+def fold_arguments(pysig, args, kws, default_handler):
+    """
+    Given the signature *pysig*, explicit *args* and *kws*, resolve
+    omitted arguments (by calling default_handler(index, default))
+    and keyword arguments.  A tuple (arguments, defaults) is returned
+    where *arguments* is a tuple of positional arguments and *defaults*
+    is the list of indices of omitted arguments.
+    """
+    ba = pysig.bind(*args, **kws)
+    defargs = []
+    for i, param in enumerate(pysig.parameters.values()):
+        name = param.name
+        default = param.default
+        if (default is not param.empty and
+            name not in ba.arguments):
+            ba.arguments[name] = default_handler(i, default)
+            defargs.append(i)
+    if ba.kwargs:
+        # There's a remaining keyword argument, e.g. if omitting
+        # some argument with a default value before it.
+        raise NotImplementedError("unhandled keyword argument: %s"
+                                  % list(ba.kwargs))
+    return ba.args, defargs
+
+
 def _uses_downcast(dists):
     for d in dists:
         if d < 0:
@@ -256,6 +281,12 @@ class CallableTemplate(FunctionTemplate):
             # If not a signature, `sig` is assumed to be the return type
             assert isinstance(sig, types.Type)
             sig = signature(sig, *bound.args)
+        # Hack any omitted parameters out of the typer's pysig,
+        # as lowering expects an exact match between formal signature
+        # and actual args.
+        if len(bound.args) < len(pysig.parameters):
+            parameters = list(pysig.parameters.values())[:len(bound.args)]
+            pysig = pysig.replace(parameters=parameters)
         sig.pysig = pysig
         cases = [sig]
         return self._select(cases, bound.args, bound.kwargs)

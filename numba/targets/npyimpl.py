@@ -39,6 +39,7 @@ def register_casters(register_function):
     for tp in types.number_domain:
         register_function(caster(tp, getattr(numpy, str(tp))))
 
+    register_function(caster(types.bool_, numpy.bool_))
     register_function(caster(types.intc, numpy.intc))
     register_function(caster(types.uintc, numpy.uintc))
     register_function(caster(types.intp, numpy.intp))
@@ -280,7 +281,7 @@ def _build_array(context, builder, array_ty, arg_arrays):
                            for dest_shape_addr in dest_shape_addrs)
     array_val = arrayobj._empty_nd_impl(context, builder, array_ty,
                                         dest_shape_tup)
-    return _prepare_argument(context, builder, array_val, array_ty,
+    return _prepare_argument(context, builder, array_val._getvalue(), array_ty,
                              where='implicit output argument')
 
 

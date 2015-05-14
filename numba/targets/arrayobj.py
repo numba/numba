@@ -14,6 +14,7 @@ import numba.ctypes_support as ctypes
 import numpy
 from llvmlite.llvmpy.core import Constant
 from numba import types, cgutils
+from numba.numpy_support import as_dtype
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
                                     iterator_impl, iternext_impl,
@@ -1233,6 +1234,9 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
+# -----------------------------------------------------------------------------
+# Numpy array constructors
+
 def _empty_nd_impl(context, builder, arrtype, shapes):
     """Utility function used for allocating a new array during LLVM code
     generation (lowering).  Given a target context, builder, array
@@ -1276,25 +1280,340 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                    strides=cgutils.pack_array(builder, strides),
                    itemsize=itemsize,
                    meminfo=meminfo)
-    return ary._getvalue()
+    return ary
+
+def _zero_fill_array(context, builder, ary):
+    """
+    Zero-fill an array.  The array must be contiguous.
+    """
+    cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems), 0)
 
 
-@builtin
-@implement(numpy.empty, types.Kind(types.Integer))
-@implement(numpy.empty, types.Kind(types.BaseTuple))
-@implement(numpy.empty, types.Kind(types.Integer), types.Kind(types.Function))
-@implement(numpy.empty, types.Kind(types.BaseTuple), types.Kind(types.Function))
-def numpy_empty_nd(context, builder, sig, args):
+def _parse_empty_args(context, builder, sig, args):
+    """
+    Parse the arguments of a np.empty(), np.zeros() or np.ones() call.
+    """
     arrshapetype = sig.args[0]
     arrshape = args[0]
     arrtype = sig.return_type
 
     if isinstance(arrshapetype, types.Integer):
+        ndim = 1
         shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
     else:
+        ndim = arrshapetype.count
         arrshape = context.cast(builder, arrshape, arrshapetype,
-                                types.UniTuple(types.intp, len(arrshapetype)))
-        shapes = cgutils.unpack_tuple(builder, arrshape,
-                                      count=len(arrshapetype))
+                                types.UniTuple(types.intp, ndim))
+        shapes = cgutils.unpack_tuple(builder, arrshape, count=ndim)
 
-    return _empty_nd_impl(context, builder, arrtype, shapes)
+    zero = context.get_constant_generic(builder, types.intp, 0)
+    for dim in range(ndim):
+        is_neg = builder.icmp_signed('<', shapes[dim], zero)
+        with cgutils.if_unlikely(builder, is_neg):
+            context.call_conv.return_user_exc(builder, ValueError,
+                                              ("negative dimensions not allowed",))
+    return arrtype, shapes
+
+
+def _parse_empty_like_args(context, builder, sig, args):
+    """
+    Parse the arguments of a np.empty_like(), np.zeros_like() or
+    np.ones_like() call.
+    """
+    arytype = sig.args[0]
+    ary = make_array(arytype)(context, builder, value=args[0])
+    shapes = cgutils.unpack_tuple(builder, ary.shape, count=arytype.ndim)
+    return sig.return_type, shapes
+
+
+@builtin
+@implement(numpy.empty, types.Any)
+@implement(numpy.empty, types.Any, types.Any)
+def numpy_empty_nd(context, builder, sig, args):
+    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    return ary._getvalue()
+
+@builtin
+@implement(numpy.empty_like, types.Kind(types.Array))
+@implement(numpy.empty_like, types.Kind(types.Array), types.Kind(types.Function))
+def numpy_zeros_like_nd(context, builder, sig, args):
+    arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    return ary._getvalue()
+
+
+@builtin
+@implement(numpy.zeros, types.Any)
+@implement(numpy.zeros, types.Any, types.Any)
+def numpy_zeros_nd(context, builder, sig, args):
+    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    _zero_fill_array(context, builder, ary)
+    return ary._getvalue()
+
+
+@builtin
+@implement(numpy.zeros_like, types.Kind(types.Array))
+@implement(numpy.zeros_like, types.Kind(types.Array), types.Kind(types.Function))
+def numpy_zeros_like_nd(context, builder, sig, args):
+    arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
+    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    _zero_fill_array(context, builder, ary)
+    return ary._getvalue()
+
+
+@builtin
+@implement(numpy.full, types.Any, types.Any)
+def numpy_full_nd(context, builder, sig, args):
+
+    def full(shape, value):
+        arr = numpy.empty(shape)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = value
+        return arr
+
+    return context.compile_internal(builder, full, sig, args)
+
+@builtin
+@implement(numpy.full, types.Any, types.Any, types.Kind(types.Function))
+def numpy_full_dtype_nd(context, builder, sig, args):
+
+    def full(shape, value, dtype):
+        arr = numpy.empty(shape, dtype)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = value
+        return arr
+
+    return context.compile_internal(builder, full, sig, args)
+
+
+@builtin
+@implement(numpy.full_like, types.Kind(types.Array), types.Any)
+def numpy_full_like_nd(context, builder, sig, args):
+
+    def full_like(arr, value):
+        arr = numpy.empty_like(arr)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = value
+        return arr
+
+    return context.compile_internal(builder, full_like, sig, args)
+
+
+@builtin
+@implement(numpy.full_like, types.Kind(types.Array), types.Any, types.Kind(types.Function))
+def numpy_full_like_nd(context, builder, sig, args):
+
+    def full_like(arr, value, dtype):
+        arr = numpy.empty_like(arr, dtype)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = value
+        return arr
+
+    return context.compile_internal(builder, full_like, sig, args)
+
+
+@builtin
+@implement(numpy.ones, types.Any)
+def numpy_ones_nd(context, builder, sig, args):
+
+    def ones(shape):
+        c = 1
+        return numpy.full(shape, c)
+
+    valty = sig.return_type.dtype
+    return context.compile_internal(builder, ones, sig, args,
+                                    locals={'c': valty})
+
+@builtin
+@implement(numpy.ones, types.Any, types.Kind(types.Function))
+def numpy_ones_dtype_nd(context, builder, sig, args):
+
+    def ones(shape, dtype):
+        return numpy.full(shape, 1, dtype)
+
+    return context.compile_internal(builder, ones, sig, args)
+
+@builtin
+@implement(numpy.ones_like, types.Kind(types.Array))
+def numpy_ones_like_nd(context, builder, sig, args):
+
+    def ones_like(arr):
+        return numpy.full_like(arr, 1)
+
+    return context.compile_internal(builder, ones_like, sig, args)
+
+@builtin
+@implement(numpy.ones_like, types.Kind(types.Array), types.Kind(types.Function))
+def numpy_ones_like_dtype_nd(context, builder, sig, args):
+
+    def ones_like(arr, dtype):
+        return numpy.full_like(arr, 1, dtype)
+
+    return context.compile_internal(builder, ones_like, sig, args)
+
+
+@builtin
+@implement(numpy.identity, types.Kind(types.Integer))
+def numpy_identity(context, builder, sig, args):
+
+    def identity(n):
+        arr = numpy.zeros((n, n))
+        for i in range(n):
+            arr[i, i] = 1
+        return arr
+
+    return context.compile_internal(builder, identity, sig, args)
+
+@builtin
+@implement(numpy.identity, types.Kind(types.Integer), types.Kind(types.Function))
+def numpy_identity(context, builder, sig, args):
+
+    def identity(n, dtype):
+        arr = numpy.zeros((n, n), dtype)
+        for i in range(n):
+            arr[i, i] = 1
+        return arr
+
+    return context.compile_internal(builder, identity, sig, args)
+
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n):
+        return numpy.identity(n)
+
+    return context.compile_internal(builder, eye, sig, args)
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n, m):
+        return numpy.eye(n, m, 0, numpy.float64)
+
+    return context.compile_internal(builder, eye, sig, args)
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
+           types.Kind(types.Integer))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n, m, k):
+        return numpy.eye(n, m, k, numpy.float64)
+
+    return context.compile_internal(builder, eye, sig, args)
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
+           types.Kind(types.Integer), types.Kind(types.Function))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n, m, k, dtype):
+        arr = numpy.zeros((n, m), dtype)
+        if k >= 0:
+            d = min(n, m - k)
+            for i in range(d):
+                arr[i, i + k] = 1
+        else:
+            d = min(n + k, m)
+            for i in range(d):
+                arr[i - k, i] = 1
+        return arr
+
+    return context.compile_internal(builder, eye, sig, args)
+
+
+@builtin
+@implement(numpy.arange, types.Kind(types.Number))
+def numpy_arange_1(context, builder, sig, args):
+    dtype = getattr(numpy, str(sig.return_type.dtype))
+
+    def arange(stop):
+        return numpy.arange(0, stop, 1, dtype)
+
+    return context.compile_internal(builder, arange, sig, args)
+
+@builtin
+@implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number))
+def numpy_arange_2(context, builder, sig, args):
+    dtype = getattr(numpy, str(sig.return_type.dtype))
+
+    def arange(start, stop):
+        return numpy.arange(start, stop, 1, dtype)
+
+    return context.compile_internal(builder, arange, sig, args)
+
+
+@builtin
+@implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number),
+           types.Kind(types.Number))
+def numpy_arange_3(context, builder, sig, args):
+    dtype = getattr(numpy, str(sig.return_type.dtype))
+
+    def arange(start, stop, step):
+        return numpy.arange(start, stop, step, dtype)
+
+    return context.compile_internal(builder, arange, sig, args)
+
+@builtin
+@implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number),
+           types.Kind(types.Number), types.Kind(types.Function))
+def numpy_arange_4(context, builder, sig, args):
+
+    if any(isinstance(a, types.Complex) for a in sig.args):
+        def arange(start, stop, step, dtype):
+            nitems_c = (stop - start) / step
+            nitems_r = math.ceil(nitems_c.real)
+            nitems_i = math.ceil(nitems_c.imag)
+            nitems = max(min(nitems_i, nitems_r), 0)
+            arr = numpy.empty(nitems, dtype)
+            val = start
+            for i in range(nitems):
+                arr[i] = val
+                val += step
+            return arr
+    else:
+        def arange(start, stop, step, dtype):
+            nitems_r = math.ceil((stop - start) / step)
+            nitems = max(nitems_r, 0)
+            arr = numpy.empty(nitems, dtype)
+            val = start
+            for i in range(nitems):
+                arr[i] = val
+                val += step
+            return arr
+
+    return context.compile_internal(builder, arange, sig, args,
+                                    locals={'nitems': types.intp})
+
+
+@builtin
+@implement(numpy.linspace, types.Kind(types.Number), types.Kind(types.Number))
+def numpy_linspace_2(context, builder, sig, args):
+
+    def linspace(start, stop):
+        return numpy.linspace(start, stop, 50)
+
+    return context.compile_internal(builder, linspace, sig, args)
+
+@builtin
+@implement(numpy.linspace, types.Kind(types.Number), types.Kind(types.Number),
+           types.Kind(types.Integer))
+def numpy_linspace_3(context, builder, sig, args):
+    dtype = getattr(numpy, str(sig.return_type.dtype))
+
+    def linspace(start, stop, num):
+        arr = numpy.empty(num, dtype)
+        div = num - 1
+        delta = stop - start
+        arr[0] = start
+        for i in range(1, num):
+            arr[i] = start + delta * (i / div)
+        return arr
+
+    return context.compile_internal(builder, linspace, sig, args)
+

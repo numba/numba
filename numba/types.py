@@ -155,11 +155,19 @@ class OpaqueType(Type):
 
 
 class Boolean(Type):
-    pass
+
+    def cast_python_value(self, value):
+        return bool(value)
+
+
+class Number(Type):
+    """
+    Base class for number types.
+    """
 
 
 @utils.total_ordering
-class Integer(Type):
+class Integer(Number):
     def __init__(self, *args, **kws):
         super(Integer, self).__init__(*args, **kws)
         # Determine bitwidth
@@ -181,7 +189,7 @@ class Integer(Type):
 
 
 @utils.total_ordering
-class Float(Type):
+class Float(Number):
     def __init__(self, *args, **kws):
         super(Float, self).__init__(*args, **kws)
         # Determine bitwidth
@@ -199,7 +207,7 @@ class Float(Type):
 
 
 @utils.total_ordering
-class Complex(Type):
+class Complex(Number):
     def __init__(self, name, underlying_float, **kwargs):
         super(Complex, self).__init__(name, **kwargs)
         self.underlying_float = underlying_float
