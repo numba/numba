@@ -38,7 +38,7 @@
 #endif
 
 #ifndef Py_MAX
-#define Py_MAX(x, y) (((x) > (y)) ? (y) : (x))
+#define Py_MAX(x, y) (((x) < (y)) ? (y) : (x))
 #endif
 
 #endif /* NUMBA_PY_MODULE_H_ */
