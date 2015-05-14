@@ -154,6 +154,10 @@ def get_charseq(ary, i):
     return ary[i].n
 
 
+def set_charseq(ary, i, cs):
+    ary[i].n = cs
+
+
 def get_charseq_tuple(ary, i):
     return ary[i].m, ary[i].n
 
@@ -638,6 +642,43 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             got = cfunc(self.nbsample1d, i)
             self.assertEqual(expected, got)
 
+    def test_npm_argument_charseq(self):
+        """
+        Test CharSeq as NPM argument
+        """
+
+        def pyfunc(arr, i):
+            return arr[i].n
+
+        identity = jit(lambda x: x)   # an identity function
+
+        @jit(nopython=True)
+        def cfunc(arr, i):
+            return identity(arr[i].n)
+
+        for i in range(self.refsample1d.size):
+            expected = pyfunc(self.refsample1d, i)
+            got = cfunc(self.nbsample1d, i)
+            self.assertEqual(expected, got)
+
+    def test_py_argument_charseq(self):
+        """
+        Test CharSeq as python wrapper argument
+        """
+        pyfunc = set_charseq
+
+        # compile
+        rectype = numpy_support.from_dtype(recordwithcharseq)
+        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
+                                         rectype.typeof('n')))
+        cfunc = cres.entry_point
+
+        for i in range(self.refsample1d.size):
+            chars = "{0}".format(hex(i+10))
+            expected = pyfunc(self.refsample1d, i, chars)
+            got = cfunc(self.nbsample1d, i, chars)
+            np.testing.assert_equal(self.refsample1d, self.nbsample1d)
+
     def test_return_charseq_tuple(self):
         pyfunc = get_charseq_tuple
         cfunc = self.get_cfunc(pyfunc)
@@ -645,8 +686,6 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             expected = pyfunc(self.refsample1d, i)
             got = cfunc(self.nbsample1d, i)
             self.assertEqual(expected, got)
-
-
 
 
 if __name__ == '__main__':
