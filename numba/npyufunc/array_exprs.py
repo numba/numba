@@ -3,7 +3,7 @@ import ast
 
 from numpy import ufunc
 
-from .. import ir, types, rewrites, six, config
+from .. import ir, types, rewrites, six
 from ..typing import npydecl
 from ..targets import npyimpl
 from .dufunc import DUFunc
@@ -170,11 +170,6 @@ class RewriteArrayExprs(rewrites.Rewrite):
         '''When we've found array expressions in a basic block, rewrite that
         block, returning a new, transformed block.
         '''
-        if config.DUMP_IR:
-            print("_" * 70)
-            print("REWRITING:")
-            self.crnt_block.dump()
-            print("_" * 60)
         # Part 1: Figure out what instructions should be rewritten
         # based on the matches found.
         replace_map, dead_vars, used_vars = self._handle_matches()
@@ -210,9 +205,6 @@ class RewriteArrayExprs(rewrites.Rewrite):
         if delete_map:
             for instr in delete_map.values():
                 result.insert_before_terminator(instr)
-        if config.DUMP_IR:
-            result.dump()
-            print("_" * 70)
         return result
 
 

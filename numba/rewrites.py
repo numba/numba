@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from . import config
 
 class Rewrite(object):
     def match(self, block, typemap, calltypes):
@@ -29,9 +30,17 @@ class RewriteRegistry(object):
                 matches = rewrite.match(block, pipeline.typemap,
                                         pipeline.calltypes)
                 if matches:
+                    if config.DUMP_IR:
+                        print("_" * 70)
+                        print("REWRITING:")
+                        block.dump()
+                        print("_" * 60)
                     new_block = rewrite.apply()
                     blocks[key] = new_block
                     work_list.append((key, new_block))
+                    if config.DUMP_IR:
+                        new_block.dump()
+                        print("_" * 70)
         # If any blocks were changed, perform a sanity check.
         for key, block in blocks.items():
             if block != old_blocks[key]:
