@@ -26,7 +26,8 @@ force_pyobj_flags.set("force_pyobject")
 no_pyobj_flags = Flags()
 
 
-skip_on_numpy_16 = unittest.skipIf(np.__version__.startswith("1.6."),
+is_on_numpy_16 = np.__version__.startswith("1.6.")
+skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
                                    "test requires Numpy 1.7 or later")
 
 

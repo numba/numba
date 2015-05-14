@@ -56,6 +56,16 @@ def unpack_tuple_too_large():
     return a + b + c
 
 
+def unpack_heterogenous_tuple_too_small():
+    a, b, c = (1, 2.5j)
+    return a + b + c
+
+
+def unpack_heterogenous_tuple_too_large():
+    a, b, c = (1, 2.5, 3j, 4)
+    return a + b + c
+
+
 def unpack_heterogenous_tuple():
     a, b, c = (1, 2.5, 3j)
     return a + b + c
@@ -137,23 +147,31 @@ class TestUnpack(TestCase):
     def test_chained_unpack_assign_npm(self):
         self.test_chained_unpack_assign(flags=no_pyobj_flags)
 
-    def check_unpack_error(self, pyfunc, flags=force_pyobj_flags):
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        with self.assertRaises(ValueError):
+    def check_unpack_error(self, pyfunc, flags=force_pyobj_flags, exc=ValueError):
+        with self.assertRaises(exc):
+            cr = compile_isolated(pyfunc, (), flags=flags)
+            cfunc = cr.entry_point
             cfunc()
 
     def test_unpack_tuple_too_small(self):
         self.check_unpack_error(unpack_tuple_too_small)
+        self.check_unpack_error(unpack_heterogenous_tuple_too_small)
 
     def test_unpack_tuple_too_small_npm(self):
-        self.check_unpack_error(unpack_tuple_too_small, no_pyobj_flags)
+        self.check_unpack_error(unpack_tuple_too_small, no_pyobj_flags,
+                                TypeError)
+        self.check_unpack_error(unpack_heterogenous_tuple_too_small,
+                                no_pyobj_flags, TypeError)
 
     def test_unpack_tuple_too_large(self):
         self.check_unpack_error(unpack_tuple_too_large)
+        self.check_unpack_error(unpack_heterogenous_tuple_too_large)
 
     def test_unpack_tuple_too_large_npm(self):
-        self.check_unpack_error(unpack_tuple_too_large, no_pyobj_flags)
+        self.check_unpack_error(unpack_tuple_too_large, no_pyobj_flags,
+                                TypeError)
+        self.check_unpack_error(unpack_heterogenous_tuple_too_large,
+                                no_pyobj_flags, TypeError)
 
     def test_unpack_range_too_small(self):
         self.check_unpack_error(unpack_range_too_small)

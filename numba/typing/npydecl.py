@@ -2,8 +2,8 @@ from __future__ import absolute_import, print_function
 
 import numpy
 from .. import types
-from .templates import (AttributeTemplate, AbstractTemplate,
-                        ConcreteTemplate, Registry, signature)
+from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
+                        Registry, signature)
 
 from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
@@ -410,79 +410,72 @@ def _parse_dtype(dtype):
     return from_dtype(numpy.dtype(dtype.template.key))
 
 
-class NdConstructor(AbstractTemplate):
+class NdConstructor(CallableTemplate):
     """
     Typing template for np.empty(), .zeros(), .ones().
     """
 
-    def generic(self, args, kws):
-        assert not kws
-        shape = args[0]
-        dtype = types.double
-        if len(args) >= 2:
-            dtype = _parse_dtype(args[1])
+    def generic(self):
+        def typer(shape, dtype=None):
+            if dtype is None:
+                nb_dtype = types.double
+            else:
+                nb_dtype = _parse_dtype(dtype)
 
-        ndim = _parse_shape(shape)
-        if ndim is not None:
-            aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
-            return signature(aryty, *args)
+            ndim = _parse_shape(shape)
+            if ndim is not None:
+                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+        return typer
 
 
 @builtin
-class NdFull(AbstractTemplate):
+class NdFull(CallableTemplate):
     key = numpy.full
 
-    def generic(self, args, kws):
-        assert not kws
-        shape = args[0]
-        value = args[1]
-        if len(args) >= 3:
-            dtype = _parse_dtype(args[2])
-        else:
-            dtype = value
+    def generic(self):
+        def typer(shape, fill_value, dtype=None):
+            if dtype is None:
+                nb_dtype = fill_value
+            else:
+                nb_dtype = _parse_dtype(dtype)
 
-        ndim = _parse_shape(shape)
-        if ndim is not None:
-            aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
-            return signature(aryty, *args)
+            ndim = _parse_shape(shape)
+            if ndim is not None:
+                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+        return typer
 
 
-class NdConstructorLike(AbstractTemplate):
+class NdConstructorLike(CallableTemplate):
     """
     Typing template for np.empty_like(), .zeros_like(), .ones_like().
     """
 
-    def generic(self, args, kws):
-        assert not kws
-        arr = args[0]
-        if not isinstance(arr, types.Array):
-            return
-        if len(args) >= 2:
-            dtype = _parse_dtype(args[1])
-        else:
-            dtype = arr.dtype
+    def generic(self):
+        def typer(arr, dtype=None):
+            if dtype is None:
+                nb_dtype = arr.dtype
+            else:
+                nb_dtype = _parse_dtype(dtype)
+            return arr.copy(dtype=nb_dtype)
 
-        return_type = arr.copy(dtype=dtype)
-        return signature(return_type, *args)
+        return typer
 
 
 @builtin
-class NdFullLike(AbstractTemplate):
+class NdFullLike(CallableTemplate):
     key = numpy.full_like
 
-    def generic(self, args, kws):
-        assert not kws
-        arr = args[0]
-        if not isinstance(arr, types.Array):
-            return
-        value = args[1]
-        if len(args) >= 3:
-            dtype = _parse_dtype(args[2])
-        else:
-            dtype = arr.dtype
+    def generic(self):
+        def typer(arr, fill_value, dtype=None):
+            if dtype is None:
+                nb_dtype = arr.dtype
+            else:
+                nb_dtype = _parse_dtype(dtype)
+            return arr.copy(dtype=nb_dtype)
 
-        return_type = arr.copy(dtype=dtype)
-        return signature(return_type, *args)
+        return typer
 
 
 @builtin
@@ -541,6 +534,23 @@ builtin_global(numpy.identity, types.Function(NdIdentity))
 
 def _infer_dtype_from_inputs(inputs):
     return dtype
+
+
+@builtin
+class NdEye(CallableTemplate):
+    key = numpy.eye
+
+    def generic(self):
+        def typer(N, M=None, k=None, dtype=None):
+            if dtype is None:
+                nb_dtype = types.float64
+            else:
+                nb_dtype = _parse_dtype(dtype)
+            return types.Array(ndim=2, dtype=nb_dtype, layout='C')
+
+        return typer
+
+builtin_global(numpy.eye, types.Function(NdEye))
 
 
 @builtin

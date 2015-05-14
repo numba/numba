@@ -91,7 +91,7 @@ class StructProxy(object):
             assert ref.type.pointee == self._be_type
             self._value = ref
         else:
-            self._value = alloca_once(self._builder, self._be_type)
+            self._value = alloca_once(self._builder, self._be_type, zfill=True)
             if value is not None:
                 self._builder.store(value, self._value)
 
@@ -304,14 +304,18 @@ def goto_entry_block(builder):
         yield
 
 
-def alloca_once(builder, ty, size=None, name=''):
+def alloca_once(builder, ty, size=None, name='', zfill=False):
     """Allocate stack memory at the entry block of the current function
     pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
     set the number of element to allocate.  The default is 1.  The optional
     ``name`` arg set the symbol name inside the llvm IR for debugging.
+    If ``zfill`` is set, also filling zeros to the memory.
     """
     with goto_entry_block(builder):
-        return builder.alloca(ty, size=size, name=name)
+        ptr = builder.alloca(ty, size=size, name=name)
+        if zfill:
+            builder.store(Constant.null(ty), ptr)
+        return ptr
 
 
 def alloca_once_value(builder, value, name=''):
@@ -760,6 +764,28 @@ def pointer_add(builder, ptr, offset, return_type=None):
         offset = Constant.int(intptr_t, offset)
     intptr = builder.add(intptr, offset)
     return builder.inttoptr(intptr, return_type or ptr.type)
+
+
+def memset(builder, ptr, size, value):
+    """
+    Fill *size* bytes starting from *ptr* with *value*.
+    """
+    sizety = size.type
+    memset = "llvm.memset.p0i8.i%d" % (sizety.width)
+    module = get_module(builder)
+    i32 = lc.Type.int(32)
+    i8 = lc.Type.int(8)
+    i1 = lc.Type.int(1)
+    # void @llvm.memset.p0i8.iXY(i8* <dest>, i8 <val>,
+    #                            iXY <len>, i32 <align>, i1 <isvolatile>)
+    ptr = builder.bitcast(ptr, lc.Type.pointer(i8))
+    fnty = lc.Type.function(lc.Type.void(),
+                            [ptr.type, i8, sizety, i32, i1])
+    fn = module.get_or_insert_function(fnty, name=memset)
+    if isinstance(value, int):
+        value = Constant.int(i8, value)
+    builder.call(fn, [ptr, value, size,
+                      Constant.int(i32, 0), Constant.int(i1, 0)])
 
 
 def global_constant(builder_or_module, name, value, linkage=lc.LINKAGE_INTERNAL):

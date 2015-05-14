@@ -891,14 +891,10 @@ def make_ndindex_cls(nditerty):
     """
     ndim = nditerty.ndim
 
-    class NdIndexIter(cgutils.Structure):
+    class NdIndexIter(cgutils.create_struct_proxy(nditerty)):
         """
         .ndindex() implementation.
         """
-        _fields = [('shape', types.UniTuple(types.intp, ndim)),
-                   ('indices', types.CPointer(types.intp)),
-                   ('exhausted', types.CPointer(types.boolean)),
-                   ]
 
         def init_specific(self, context, builder, shapes):
             zero = context.get_constant(types.intp, 0)
@@ -955,16 +951,10 @@ def _make_flattening_iter_cls(flatiterty, kind):
     dtype = array_type.dtype
 
     if array_type.layout == 'C':
-        class CContiguousFlatIter(cgutils.Structure):
+        class CContiguousFlatIter(cgutils.create_struct_proxy(flatiterty)):
             """
             .flat() / .ndenumerate() implementation for C-contiguous arrays.
             """
-            _fields = [('array', types.CPointer(array_type)),
-                       ('stride', types.intp),
-                       ('pointer', types.CPointer(types.CPointer(dtype))),
-                       ('index', types.CPointer(types.intp)),
-                       ('indices', types.CPointer(types.intp)),
-                       ]
 
             def init_specific(self, context, builder, arrty, arr):
                 zero = context.get_constant(types.intp, 0)
@@ -1021,18 +1011,13 @@ def _make_flattening_iter_cls(flatiterty, kind):
         return CContiguousFlatIter
 
     else:
-        class FlatIter(cgutils.Structure):
+        class FlatIter(cgutils.create_struct_proxy(flatiterty)):
             """
             Generic .flat() / .ndenumerate() implementation for
             non-contiguous arrays.
             It keeps track of pointers along each dimension in order to
             minimize computations.
             """
-            _fields = [('array', types.CPointer(array_type)),
-                       ('pointers', types.CPointer(types.CPointer(dtype))),
-                       ('indices', types.CPointer(types.intp)),
-                       ('exhausted', types.CPointer(types.boolean)),
-                       ]
 
             def init_specific(self, context, builder, arrty, arr):
                 zero = context.get_constant(types.intp, 0)
@@ -1301,23 +1286,7 @@ def _zero_fill_array(context, builder, ary):
     """
     Zero-fill an array.  The array must be contiguous.
     """
-    memset = "llvm.memset.p0i8.i%d" % (types.intp.bitwidth)
-    module = cgutils.get_module(builder)
-    ll_intp = context.get_value_type(types.intp)
-    i32 = lc.Type.int(32)
-    i8 = lc.Type.int(8)
-    i1 = lc.Type.int(1)
-    # void @llvm.memset.p0i8.i32(i8* <dest>, i8 <val>,
-    #                            i32 <len>, i32 <align>, i1 <isvolatile>)
-    ptr = builder.bitcast(ary.data, lc.Type.pointer(i8))
-    fnty = lc.Type.function(lc.Type.void(),
-                            [ptr.type, i8,
-                             context.get_value_type(types.intp),
-                             i32, i1])
-    fn = module.get_or_insert_function(fnty, name=memset)
-    builder.call(fn, [ptr, Constant.int(i8, 0),
-                      builder.mul(ary.itemsize, ary.nitems),
-                      Constant.int(i32, 0), Constant.int(i1, 0)])
+    cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems), 0)
 
 
 def _parse_empty_args(context, builder, sig, args):
@@ -1508,6 +1477,54 @@ def numpy_identity(context, builder, sig, args):
         return arr
 
     return context.compile_internal(builder, identity, sig, args)
+
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n):
+        return numpy.identity(n)
+
+    return context.compile_internal(builder, eye, sig, args)
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n, m):
+        return numpy.eye(n, m, 0, numpy.float64)
+
+    return context.compile_internal(builder, eye, sig, args)
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
+           types.Kind(types.Integer))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n, m, k):
+        return numpy.eye(n, m, k, numpy.float64)
+
+    return context.compile_internal(builder, eye, sig, args)
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
+           types.Kind(types.Integer), types.Kind(types.Function))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n, m, k, dtype):
+        arr = numpy.zeros((n, m), dtype)
+        if k >= 0:
+            d = min(n, m - k)
+            for i in range(d):
+                arr[i, i + k] = 1
+        else:
+            d = min(n + k, m)
+            for i in range(d):
+                arr[i - k, i] = 1
+        return arr
+
+    return context.compile_internal(builder, eye, sig, args)
 
 
 @builtin
