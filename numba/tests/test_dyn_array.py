@@ -508,10 +508,10 @@ class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
             return pyfunc((m, n))
         self.check_2d(func, np.float64)
 
-    def test_2d_dtype(self):
+    def test_2d_dtype_kwarg(self):
         pyfunc = self.pyfunc
         def func(m, n):
-            return pyfunc((m, n), np.complex64)
+            return pyfunc((m, n), dtype=np.complex64)
         self.check_2d(func, np.complex64)
 
 
@@ -541,9 +541,9 @@ class TestNdFull(ConstructorBaseTest, unittest.TestCase):
             return np.full((m, n), 4.5)
         self.check_2d(func, np.float64)
 
-    def test_2d_dtype(self):
+    def test_2d_dtype_kwarg(self):
         def func(m, n):
-            return np.full((m, n), 1 + 4.5j, np.complex64)
+            return np.full((m, n), 1 + 4.5j, dtype=np.complex64)
         self.check_2d(func, np.complex64)
 
 
@@ -597,6 +597,12 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, unittest.TestCase):
             return pyfunc(arr, np.int32)
         self.check_like(func, np.float64, np.int32)
 
+    def test_like_dtype_kwarg(self):
+        pyfunc = self.pyfunc
+        def func(arr):
+            return pyfunc(arr, dtype=np.int32)
+        self.check_like(func, np.float64, np.int32)
+
 
 class TestNdZerosLike(TestNdEmptyLike):
 
@@ -637,6 +643,11 @@ class TestNdFullLike(ConstructorLikeBaseTest, unittest.TestCase):
             return np.full_like(arr, 4.5, np.bool_)
         self.check_like(func, np.float64, np.bool_)
 
+    def test_like_dtype_kwarg(self):
+        def func(arr):
+            return np.full_like(arr, 4.5, dtype=np.bool_)
+        self.check_like(func, np.float64, np.bool_)
+
 
 class TestNdIdentity(BaseTest):
 
@@ -672,6 +683,56 @@ class TestNdArange(BaseTest):
                             (-3j, 2+3j, 7), (2, 1, 0),
                             (1+0.5j, 1.5j, 5), (1, 1e100, 1)],
                            exact=False)
+
+
+class TestNpyEmptyKeyword(unittest.TestCase):
+    def _test_with_dtype_kw(self, dtype):
+        def pyfunc(shape):
+            return np.empty(shape, dtype=dtype)
+
+        shapes = [1, 5, 9]
+
+        cfunc = nrtjit(pyfunc)
+        for s in shapes:
+            expected = pyfunc(s)
+            got = cfunc(s)
+            self.assertEqual(expected.dtype, got.dtype)
+            self.assertEqual(expected.shape, got.shape)
+
+    def test_with_dtype_kws(self):
+        for dtype in [np.int32, np.float32, np.complex64]:
+            self._test_with_dtype_kw(dtype)
+
+    def _test_with_shape_and_dtype_kw(self, dtype):
+        def pyfunc(shape):
+            return np.empty(shape=shape, dtype=dtype)
+
+        shapes = [1, 5, 9]
+
+        cfunc = nrtjit(pyfunc)
+        for s in shapes:
+            expected = pyfunc(s)
+            got = cfunc(s)
+            self.assertEqual(expected.dtype, got.dtype)
+            self.assertEqual(expected.shape, got.shape)
+
+    def test_with_shape_and_dtype_kws(self):
+        for dtype in [np.int32, np.float32, np.complex64]:
+            self._test_with_dtype_kw(dtype)
+
+    def test_empty_no_args(self):
+        from numba.typeinfer import TypingError
+
+        def pyfunc():
+            return np.empty()
+
+
+        cfunc = nrtjit(pyfunc)
+
+        # Trigger the compilation
+        # That will cause a TypingError due to missing shape argument
+        with self.assertRaises(TypingError):
+            cfunc()
 
 
 def benchmark_refct_speed():
