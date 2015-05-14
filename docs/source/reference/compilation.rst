@@ -131,17 +131,24 @@ JIT functions
       for testing and interactive use.
 
 
-Vectorized functions (ufuncs)
------------------------------
+Vectorized functions (ufuncs and DUFuncs)
+-----------------------------------------
 
-.. decorator:: numba.vectorize(signatures, *, identity=None, nopython=True, forceobj=False, locals={})
+.. decorator:: numba.vectorize(*, signatures=[], identity=None, nopython=True, forceobj=False, locals={})
 
-   Compile the decorated function on-the-fly and wrap it as a
-   `Numpy ufunc`_.  The optional *nopython*, *forceobj* and
-   *locals* arguments have the same meaning as in :func:`numba.jit`.
+   Compile the decorated function and wrap it either as a `Numpy
+   ufunc`_ or a Numba :class:`DUFunc`.  The optional *nopython*,
+   *forceobj* and *locals* arguments have the same meaning as in
+   :func:`numba.jit`.
 
-   *signatures* is a mandatory list of signatures expressed in the same
-   form as in the :func:`numba.jit` *signature* argument.
+   *signatures* is an optional list of signatures expressed in the
+   same form as in the :func:`numba.jit` *signature* argument.  If
+   *signatures* is non-empty, then the decorator will compile the user
+   Python function into a Numpy ufunc.  If no *signatures* are given,
+   then the decorator will wrap the user Python function in a
+   :class:`~numba.DUFunc` instance, which will compile the user
+   function at call time whenever Numpy can not find a matching loop
+   for the input arguments.
 
    *identity* is the identity (or unit) value of the function being
    implemented.  Possible values are 0, 1, None, and the string
@@ -217,3 +224,80 @@ Vectorized functions (ufuncs)
    .. attribute:: ufunc
 
       The actual Numpy ufunc object.
+
+   .. attribute:: nin
+
+      The number of DUFunc (ufunc) inputs.  See `ufunc.nin`_.
+
+   .. attribute:: nout
+
+      The number of DUFunc outputs.  See `ufunc.nout`_.
+
+   .. attribute:: nargs
+
+      The total number of possible DUFunc arguments (should be
+      :attr:`~numba.DUFunc.nin` + :attr:`~numba.DUFunc.nout`).
+      See `ufunc.nargs`_.
+
+   .. attribute:: ntypes
+
+      The number of input types supported by the DUFunc.  See
+      `ufunc.ntypes`_.
+
+   .. attribute:: types
+
+      A list of the supported types given as strings.  See
+      `ufunc.types`_.
+
+   .. attribute:: identity
+
+      The identity value when using the ufunc as a reduction.  See
+      `ufunc.identity`_.
+
+   .. method:: reduce(A, *, axis, dtype, out, keepdims)
+
+      Reduces *A*\'s dimension by one by applying the DUFunc along one
+      axis.  See `ufunc.reduce`_.
+
+   .. method:: accumulate(A, *, axis, dtype, out)
+
+      Accumulate the result of applying the operator to all elements.
+      See `ufunc.accumulate`_.
+
+   .. method:: reduceat(A, indices, *, axis, dtype, out)
+
+      Performs a (local) reduce with specified slices over a single
+      axis.  See `ufunc.reduceat`_.
+
+   .. method:: outer(A, B)
+
+      Apply the ufunc to all pairs (*a*, *b*) with *a* in *A*, and *b*
+      in *B*.  See `ufunc.outer`_.
+
+   .. method:: at(A, indices, *, B)
+
+      Performs unbuffered in place operation on operand *A* for
+      elements specified by *indices*.  If you are using Numpy 1.7 or
+      earlier, this method will not be present.  See `ufunc.at`_.
+
+.. _`ufunc.nin`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.nin.html#numpy.ufunc.nin
+
+.. _`ufunc.nout`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.nout.html#numpy.ufunc.nout
+
+.. _`ufunc.nargs`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.nargs.html#numpy.ufunc.nargs
+
+.. _`ufunc.ntypes`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.ntypes.html#numpy.ufunc.ntypes
+
+.. _`ufunc.types`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.types.html#numpy.ufunc.types
+
+.. _`ufunc.identity`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.identity.html#numpy.ufunc.identity
+
+.. _`ufunc.reduce`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.reduce.html#numpy.ufunc.reduce
+
+.. _`ufunc.accumulate`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.accumulate.html#numpy.ufunc.accumulate
+
+.. _`ufunc.reduceat`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.reduceat.html#numpy.ufunc.reduceat
+
+.. _`ufunc.outer`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.outer.html#numpy.ufunc.outer
+
+.. _`ufunc.at`: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ufunc.at.html#numpy.ufunc.at
