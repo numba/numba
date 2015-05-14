@@ -21,7 +21,6 @@ class ArgPacker(object):
         self._nargs = len(fe_args)
         self._dm_args = [self._dmm.lookup(ty) for ty in fe_args]
         argtys = [bt.get_argument_type() for bt in self._dm_args]
-        #flattened = list()
         if argtys:
             self._be_args, self._posmap = zip(*_flatten(argtys, mark_empty=True))
         else:
