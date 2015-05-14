@@ -1286,23 +1286,7 @@ def _zero_fill_array(context, builder, ary):
     """
     Zero-fill an array.  The array must be contiguous.
     """
-    memset = "llvm.memset.p0i8.i%d" % (types.intp.bitwidth)
-    module = cgutils.get_module(builder)
-    ll_intp = context.get_value_type(types.intp)
-    i32 = lc.Type.int(32)
-    i8 = lc.Type.int(8)
-    i1 = lc.Type.int(1)
-    # void @llvm.memset.p0i8.i32(i8* <dest>, i8 <val>,
-    #                            i32 <len>, i32 <align>, i1 <isvolatile>)
-    ptr = builder.bitcast(ary.data, lc.Type.pointer(i8))
-    fnty = lc.Type.function(lc.Type.void(),
-                            [ptr.type, i8,
-                             context.get_value_type(types.intp),
-                             i32, i1])
-    fn = module.get_or_insert_function(fnty, name=memset)
-    builder.call(fn, [ptr, Constant.int(i8, 0),
-                      builder.mul(ary.itemsize, ary.nitems),
-                      Constant.int(i32, 0), Constant.int(i1, 0)])
+    cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems), 0)
 
 
 def _parse_empty_args(context, builder, sig, args):
