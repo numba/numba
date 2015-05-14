@@ -208,3 +208,12 @@ Vectorized functions (ufuncs)
 
 
 .. _Numpy ufunc: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
+
+.. class:: numba.DUFunc
+
+   The class of objects created by calling :func:`numba.vectorize`
+   with no signatures.
+
+   .. attribute:: ufunc
+
+      The actual Numpy ufunc object.
