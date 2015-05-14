@@ -23,6 +23,14 @@ def g_inner(a, b=2, c=3):
 def g(x, y, z):
     return g_inner(x, b=y), g_inner(a=z, c=x)
 
+@njit
+def star_inner(a=5, *b):
+    return a, b
+
+def star(x, y, z):
+    #return star_inner(x, y, z)
+    return star_inner(a=x), star_inner(x, y, z)
+
 
 
 class TestNestedCall(unittest.TestCase):
@@ -57,6 +65,13 @@ class TestNestedCall(unittest.TestCase):
         cfunc = njit(g)
         self.assertEqual(cfunc(1, 2, 3), g(1, 2, 3))
         self.assertEqual(cfunc(1, y=2, z=3), g(1, 2, 3))
+
+    def test_star_args(self):
+        """
+        Test a nested function call to a function with *args in its signature.
+        """
+        cfunc = njit(star)
+        self.assertEqual(cfunc(1, 2, 3), star(1, 2, 3))
 
 
 if __name__ == '__main__':

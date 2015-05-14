@@ -4,7 +4,7 @@ import functools
 import inspect
 import sys
 
-from numba import _dispatcher, compiler, utils
+from numba import _dispatcher, compiler, utils, types
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, types, typing
 from numba.typing.templates import resolve_overload, fold_arguments
@@ -120,9 +120,16 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         *args* and *kws* types.  This allows to resolve the return type.
         """
         # Fold keyword arguments and resolve default values
-        def default_handler(index, default):
+        def normal_handler(index, param, value):
+            return value
+        def default_handler(index, param, default):
             return self.typeof_pyval(default)
-        args, _ = fold_arguments(self._pysig, args, kws, default_handler)
+        def stararg_handler(index, param, values):
+            return types.Tuple(values)
+        args = fold_arguments(self._pysig, args, kws,
+                              normal_handler,
+                              default_handler,
+                              stararg_handler)
         kws = {}
         # Ensure an overload is available, but avoid compiler re-entrance
         if self._can_compile and not self.is_compiling:

@@ -381,6 +381,14 @@ class Lower(BaseLower):
         return self.context.cast(self.builder, res, signature.return_type,
                                  resty)
 
+    def _cast_var(self, var, ty):
+        """
+        Cast a Numba IR variable to the given Numba type, returning a
+        low-level value.
+        """
+        return self.context.cast(self.builder, self.loadvar(var.name),
+                                 self.typeof(var.name), ty)
+
     def lower_call(self, resty, expr):
         signature = self.fndesc.calltypes[expr]
         if isinstance(signature.return_type, types.Phantom):
@@ -400,24 +408,23 @@ class Lower(BaseLower):
                 if expr.kws:
                     raise NotImplementedError("unsupported keyword arguments "
                                               "when calling %s" % (fnty,))
-                args = expr.args
+                argvals = [self._cast_var(var, sigty)
+                           for var, sigty in zip(expr.args, signature.args)]
             else:
-                def default_handler(index, default):
+                def normal_handler(index, param, var):
+                    return self._cast_var(var, signature.args[index])
+                def default_handler(index, param, default):
                     return self.context.get_constant_generic(
                                 self.builder, signature.args[index], default)
-                args, defargs = typing.fold_arguments(pysig,
-                                                      expr.args, dict(expr.kws),
-                                                      default_handler)
-
-            # Fetch and cast non-default arguments
-            argvals = list(args)
-            for i, a in enumerate(argvals):
-                if i not in defargs:
-                    ty = self.typeof(a.name)
-                    val = self.loadvar(a.name)
-                    a = self.context.cast(self.builder, val, ty,
-                                          signature.args[i])
-                    argvals[i] = a
+                def stararg_handler(index, param, vars):
+                    values = [self._cast_var(var, sigty)
+                              for var, sigty in zip(vars, signature.args[index])]
+                    return cgutils.make_anonymous_struct(self.builder, values)
+                argvals = typing.fold_arguments(pysig,
+                                                expr.args, dict(expr.kws),
+                                                normal_handler,
+                                                default_handler,
+                                                stararg_handler)
 
         if isinstance(fnty, types.ExternalFunction):
             # Handle a named external function
