@@ -988,17 +988,25 @@ class PythonAPI(object):
 
         elif isinstance(typ, types.CharSeq):
             lty = self.context.get_value_type(typ)
-            ptr = self.string_as_string(obj)
-            ptr_is_null = cgutils.is_not_null(builder, ptr)
-            with cgutils.ifelse(builder, ptr_is_null) as (on_ok, on_error):
-                with on_ok:
-                    charseq_ptr = builder.bitcast(ptr, lty.as_pointer())
-                    ret = builder.load(charseq_ptr)
+            ok, buffer, size = self.string_as_string_and_size(obj)
 
-                with on_error:
-                    ret = ir.Constant(lty, None)
+            # Check if the returned string size fits in the charseq
+            storage_size = ir.Constant(size.type, typ.count)
+            size_fits = builder.icmp_unsigned("<=", size, storage_size)
 
-            return NativeValue(ret, is_error=c_api_error())
+            ok = builder.and_(ok, size_fits)
+
+            # Initialize output to zero bytes
+            null_string = ir.Constant(lty, None)
+            outspace  = cgutils.alloca_once_value(builder, null_string)
+
+            # If conversion is ok, copy the buffer to the output storage.
+            with cgutils.if_likely(builder, ok):
+                cgutils.memcpy(builder, builder.bitcast(outspace, buffer.type),
+                               buffer, size)
+
+            ret = builder.load(outspace)
+            return NativeValue(ret, is_error=builder.not_(ok))
 
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
