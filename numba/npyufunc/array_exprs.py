@@ -16,9 +16,6 @@ class RewriteArrayExprs(rewrites.Rewrite):
     rewriting those expressions to a single operation that will expand
     into something similar to a ufunc call.
     '''
-    _operators = set(npydecl.NumpyRulesArrayOperator._op_map.keys()).union(
-        npydecl.NumpyRulesUnaryArrayOperator._op_map.keys())
-
     def __init__(self, pipeline, *args, **kws):
         # At time of codeing, there shouldn't be anything in args or
         # kws, but they are there for possible forward compatibility.
@@ -58,7 +55,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
                     # array expression.
                     expr_op = expr.op
                     if ((expr_op in ('unary', 'binop')) and (
-                            expr.fn in self._operators)):
+                            expr.fn in npydecl.supported_array_operators)):
                         # Matches an array operation that maps to a ufunc.
                         array_assigns[target_name] = instr
                     elif expr_op == 'call':
@@ -263,7 +260,7 @@ def _arr_expr_to_ast(expr):
             ast_arg, child_env = _arr_expr_to_ast(arg)
             ast_args.append(ast_arg)
             env.update(child_env)
-        if op in RewriteArrayExprs._operators:
+        if op in npydecl.supported_array_operators:
             if len(ast_args) == 2:
                 if op in _binops:
                     return ast.BinOp(

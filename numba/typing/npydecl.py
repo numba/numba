@@ -295,6 +295,10 @@ supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 NumpyRulesUnaryArrayOperator.install_operations()
 NumpyRulesArrayOperator.install_operations()
 
+supported_array_operators = set(
+    NumpyRulesUnaryArrayOperator._op_map.keys()).union(
+        NumpyRulesArrayOperator._op_map.keys())
+
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
 del _aliases, _numpy_ufunc
