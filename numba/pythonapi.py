@@ -994,7 +994,8 @@ class PythonAPI(object):
             storage_size = ir.Constant(size.type, typ.count)
             size_fits = builder.icmp_unsigned("<=", size, storage_size)
 
-            ok = builder.and_(ok, size_fits)
+            # Allow truncation of string
+            size = builder.select(size_fits, size, storage_size)
 
             # Initialize output to zero bytes
             null_string = ir.Constant(lty, None)
@@ -1002,6 +1003,8 @@ class PythonAPI(object):
 
             # If conversion is ok, copy the buffer to the output storage.
             with cgutils.if_likely(builder, ok):
+                # We don't need to set the NULL-terminator because the storage
+                # is already zero-filled.
                 cgutils.memcpy(builder, builder.bitcast(outspace, buffer.type),
                                buffer, size)
 

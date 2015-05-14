@@ -679,6 +679,46 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             got = cfunc(self.nbsample1d, i, chars)
             np.testing.assert_equal(self.refsample1d, self.nbsample1d)
 
+    def test_py_argument_char_seq_near_overflow(self):
+        """
+        Test strings that are as long as the charseq capacity
+        """
+        pyfunc = set_charseq
+        # compile
+        rectype = numpy_support.from_dtype(recordwithcharseq)
+        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
+                                         rectype.typeof('n')))
+        cfunc = cres.entry_point
+
+        cs_near_overflow = "abcde"
+
+        self.assertEqual(len(cs_near_overflow),
+                         recordwithcharseq['n'].itemsize)
+
+        cfunc(self.nbsample1d, 0, cs_near_overflow)
+        self.assertEqual(self.nbsample1d[0]['n'].decode('ascii'), cs_near_overflow)
+        # Check that we didn't overwrite
+        np.testing.assert_equal(self.refsample1d[1:], self.nbsample1d[1:])
+
+    def test_py_argument_char_seq_truncate(self):
+        """
+        NumPy silently truncates strings to fix inside charseq
+        """
+        pyfunc = set_charseq
+        # compile
+        rectype = numpy_support.from_dtype(recordwithcharseq)
+        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
+                                         rectype.typeof('n')))
+        cfunc = cres.entry_point
+
+        cs_overflowed = "abcdef"
+
+        pyfunc(self.refsample1d, 1, cs_overflowed)
+        cfunc(self.nbsample1d, 1, cs_overflowed)
+        np.testing.assert_equal(self.refsample1d, self.nbsample1d)
+        self.assertEqual(self.refsample1d[1].n,
+                         cs_overflowed[:-1].encode("ascii"))
+
     def test_return_charseq_tuple(self):
         pyfunc = get_charseq_tuple
         cfunc = self.get_cfunc(pyfunc)
