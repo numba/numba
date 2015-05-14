@@ -58,9 +58,9 @@ class RewriteArrayExprs(rewrites.Rewrite):
                             expr.fn in npydecl.supported_array_operators)):
                         # Matches an array operation that maps to a ufunc.
                         array_assigns[target_name] = instr
-                    elif expr_op == 'call':
+                    elif ((expr_op == 'call') and (expr.func.name in typemap)):
                         # Could be a match for a ufunc or DUFunc call.
-                        func_type = typemap.get(expr.func.name)
+                        func_type = typemap[expr.func.name]
                         func_key = getattr(func_type.template, 'key', None)
                         if isinstance(func_key, (ufunc, DUFunc)):
                             # If so, match it as a potential subexpression.
