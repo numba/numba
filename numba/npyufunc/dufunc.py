@@ -83,6 +83,30 @@ class DUFunc(_internal._DUFunc):
         self._lower_me = DUFuncLowerer(self)
         self._install_cg()
 
+    @property
+    def nin(self):
+        return self.ufunc.nin
+
+    @property
+    def nout(self):
+        return self.ufunc.nout
+
+    @property
+    def nargs(self):
+        return self.ufunc.nargs
+
+    @property
+    def ntypes(self):
+        return self.ufunc.ntypes
+
+    @property
+    def types(self):
+        return self.ufunc.types
+
+    @property
+    def identity(self):
+        return self.ufunc.identity
+
     def _compile_for_args(self, *args, **kws):
         nin = self.ufunc.nin
         args_len = len(args)

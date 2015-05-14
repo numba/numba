@@ -534,9 +534,9 @@ class Lower(BaseLower):
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            # If we have a heterogenous tuple, we needn't do anything,
-            # and we can't iterate over it anyway.
-            if isinstance(ty, types.Tuple):
+            # If we have a tuple, we needn't do anything
+            # (and we can't iterate over the heterogenous ones).
+            if isinstance(ty, types.BaseTuple):
                 return val
 
             itemty = ty.iterator_type.yield_type
@@ -649,6 +649,7 @@ class Lower(BaseLower):
         return self.builder.load(ptr)
 
     def storevar(self, value, name):
+        fetype = self.typeof(name)
         # Clean up existing value stored in the variable
         try:
             # Load original value in variable
@@ -658,23 +659,32 @@ class Lower(BaseLower):
             pass
         else:
             # Else, dereference the old value
-            self.decref(self.typeof(name), old)
+            self.decref(fetype, old)
         # Store variable
         if name not in self.varmap:
-            self.varmap[name] = self.alloca_lltype(name, value.type)
+            # If not already defined, allocate it
+            llty = self.context.get_value_type(fetype)
+            ptr = self.alloca_lltype(name, llty)
+            # Remember the pointer
+            self.varmap[name] = ptr
+
         ptr = self.getvar(name)
-        assert value.type == ptr.type.pointee,\
-            "store %s to ptr of %s" % (value.type, ptr.type.pointee)
+        if value.type != ptr.type.pointee:
+            msg = ("Storing {value.type} to ptr of {ptr.type.pointee}. "
+                   "FE type {fetype}").format(value=value, ptr=ptr,
+                                              fetype=fetype)
+            raise AssertionError(msg)
+
         self.builder.store(value, ptr)
         # Incref
-        self.incref(self.typeof(name), value)
+        self.incref(fetype, value)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
-        return cgutils.alloca_once(self.builder, lltype, name=name)
+        return cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
 
     def incref(self, typ, val):
         if not self.context.enable_nrt:
