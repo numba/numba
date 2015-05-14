@@ -21,16 +21,16 @@ loop (or *kernel*) allowing efficient iteration over the actual inputs.
 
 The :func:`~numba.vectorize` decorator has two modes of operation:
 
-* Decoration-time compilation: If you pass one or more type signatures
-  to the decorator, you will be building a Numpy universal function
-  (ufunc).  The rest of this subsection describes building ufuncs
-  using decoration-time compilation.
+* Eager, or decoration-time, compilation: If you pass one or more type
+  signatures to the decorator, you will be building a Numpy universal
+  function (ufunc).  The rest of this subsection describes building
+  ufuncs using decoration-time compilation.
 
-* Call-time compilation: When not given any signatures, the decorator
-  will give you a Numba dynamic universal function
+* Lazy, or call-time, compilation: When not given any signatures, the
+  decorator will give you a Numba dynamic universal function
   (:class:`~numba.DUFunc`) that dynamically compiles a new kernel when
   called with a previously unsupported input type.  A later
-  subsection, `Dynamic universal functions`_, describes this mode in
+  subsection, ":ref:`dynamic-universal-functions`", describes this mode in
   more depth.
 
 As described above, if you pass a list of signatures to the
@@ -171,6 +171,7 @@ complicated inputs, depending on their shapes::
    Use it to ensure the generated code does not fallback to
    :term:`object mode`.
 
+.. _dynamic-universal-functions:
 
 Dynamic universal functions
 ===========================
@@ -201,15 +202,16 @@ interactions illustrate how dynamic compilation works::
 
 The example above shows that :class:`~numba.DUFunc` instances are not
 ufuncs.  Rather than subclass ufunc's, :class:`~numba.DUFunc`
-instances work by keeping a :attr:`~numba.DUFunc.ufunc` member (also
-known as aggregation).  Second, when we look at the initial types
+instances work by keeping a :attr:`~numba.DUFunc.ufunc` member, and
+then delegating ufunc property reads and method calls to this member
+(also known as type aggregation).  When we look at the initial types
 supported by the ufunc, we can verify there are none.
 
 Let's try to make a call to :func:`f`::
 
    >>> f(3,4)
    12
-   >>> f.ufunc.types
+   >>> f.types   # shorthand for f.ufunc.types
    ['ll->l']
 
 If this was a normal Numpy ufunc, we would have seen an exception
@@ -222,7 +224,7 @@ We can add additional loops by calling :func:`f` with different inputs::
 
    >>> f(1.,2.)
    2.0
-   >>> f.ufunc.types
+   >>> f.types
    ['ll->l', 'dd->d']
 
 We can now verify that Numba added a second loop for dealing with
@@ -233,7 +235,7 @@ casting rules`_ are still in effect::
 
    >>> f(1,2.)
    2.0
-   >>> f.ufunc.types
+   >>> f.types
    ['ll->l', 'dd->d']
 
 .. _`Numpy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
@@ -257,7 +259,7 @@ floating-point values.  For example::
    0.66666666666666663
    >>> g(2,3)
    0.66666666666666663
-   >>> g.ufunc.types
+   >>> g.types
    ['dd->d']
 
 If you require precise support for various type signatures, you should

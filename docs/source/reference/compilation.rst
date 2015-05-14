@@ -137,9 +137,9 @@ Vectorized functions (ufuncs and DUFuncs)
 .. decorator:: numba.vectorize(*, signatures=[], identity=None, nopython=True, forceobj=False, locals={})
 
    Compile the decorated function and wrap it either as a `Numpy
-   ufunc`_ or a Numba :class:`DUFunc`.  The optional *nopython*,
-   *forceobj* and *locals* arguments have the same meaning as in
-   :func:`numba.jit`.
+   ufunc`_ or a Numba :class:`~numba.DUFunc`.  The optional
+   *nopython*, *forceobj* and *locals* arguments have the same meaning
+   as in :func:`numba.jit`.
 
    *signatures* is an optional list of signatures expressed in the
    same form as in the :func:`numba.jit` *signature* argument.  If
@@ -221,9 +221,34 @@ Vectorized functions (ufuncs and DUFuncs)
    The class of objects created by calling :func:`numba.vectorize`
    with no signatures.
 
+   DUFunc instances should behave similarly to Numpy
+   :class:`~numpy.ufunc` objects with one important difference:
+   call-time loop generation.  When calling a ufunc, Numpy looks at
+   the existing loops registered for that ufunc, and will raise a
+   :class:`~python.TypeError` if it cannot find a loop that it cannot
+   safely cast the inputs to suit.  When calling a DUFunc, Numba
+   delegates the call to Numpy.  If the Numpy ufunc call fails, then
+   Numba attempts to build a new loop for the given input types, and
+   calls the ufunc again.  If this second call attempt fails or a
+   compilation error occurs, then DUFunc passes along the exception to
+   the caller.
+
+   .. seealso::
+
+      The ":ref:`dynamic-universal-functions`" section in the user's
+      guide demonstrates the call-time behavior of
+      :class:`~numba.DUFunc`, and discusses the impact of call order
+      on how Numba generates the underlying :class:`~numpy.ufunc`.
+
    .. attribute:: ufunc
 
-      The actual Numpy ufunc object.
+      The actual Numpy :class:`~numpy.ufunc` object being built by the
+      :class:`~numba.DUFunc` instance.  Note that the
+      :class:`~numba.DUFunc` object maintains several important data
+      structures required for proper ufunc functionality (specifically
+      the dynamically compiled loops).  Users should not pass the
+      :class:`~numpy.ufunc` value around without ensuring the
+      underlying :class:`~numba.DUFunc` will not be garbage collected.
 
    .. attribute:: nin
 
