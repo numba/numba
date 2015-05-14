@@ -541,9 +541,9 @@ class Lower(BaseLower):
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            # If we have a heterogenous tuple, we needn't do anything,
-            # and we can't iterate over it anyway.
-            if isinstance(ty, types.Tuple):
+            # If we have a tuple, we needn't do anything
+            # (and we can't iterate over the heterogenous ones).
+            if isinstance(ty, types.BaseTuple):
                 return val
 
             itemty = ty.iterator_type.yield_type
