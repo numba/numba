@@ -537,6 +537,23 @@ def _infer_dtype_from_inputs(inputs):
 
 
 @builtin
+class NdEye(CallableTemplate):
+    key = numpy.eye
+
+    def generic(self):
+        def typer(N, M=None, k=None, dtype=None):
+            if dtype is None:
+                nb_dtype = types.float64
+            else:
+                nb_dtype = _parse_dtype(dtype)
+            return types.Array(ndim=2, dtype=nb_dtype, layout='C')
+
+        return typer
+
+builtin_global(numpy.eye, types.Function(NdEye))
+
+
+@builtin
 class NdArange(AbstractTemplate):
     key = numpy.arange
 

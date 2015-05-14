@@ -666,6 +666,37 @@ class TestNdIdentity(BaseTest):
             self.check_identity(func)
 
 
+class TestNdEye(BaseTest):
+
+    def test_eye_n(self):
+        def func(n):
+            return np.eye(n)
+        self.check_outputs(func, [(1,), (3,)])
+
+    def test_eye_n_m(self):
+        def func(n, m):
+            return np.eye(n, m)
+        self.check_outputs(func, [(1, 2), (3, 2), (0, 3)])
+
+    def check_eye_n_m_k(self, func):
+        self.check_outputs(func, [(1, 2, 0),
+                                  (3, 4, 1),
+                                  (3, 4, -1),
+                                  (4, 3, -2),
+                                  (4, 3, -5),
+                                  (4, 3, 5)])
+
+    def test_eye_n_m_k(self):
+        def func(n, m, k):
+            return np.eye(n, m, k)
+        self.check_eye_n_m_k(func)
+
+    def test_eye_n_m_k_dtype(self):
+        def func(n, m, k):
+            return np.eye(N=n, M=m, k=k, dtype=np.int16)
+        self.check_eye_n_m_k(func)
+
+
 class TestNdArange(BaseTest):
 
     def test_linspace_2(self):

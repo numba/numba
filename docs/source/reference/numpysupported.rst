@@ -116,6 +116,7 @@ The following top-level functions are supported:
 * :func:`numpy.arange`
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
+* :func:`numpy.eye`
 * :func:`numpy.full`
 * :func:`numpy.full_like`
 * :func:`numpy.identity`

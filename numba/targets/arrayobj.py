@@ -1480,6 +1480,54 @@ def numpy_identity(context, builder, sig, args):
 
 
 @builtin
+@implement(numpy.eye, types.Kind(types.Integer))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n):
+        return numpy.identity(n)
+
+    return context.compile_internal(builder, eye, sig, args)
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n, m):
+        return numpy.eye(n, m, 0, numpy.float64)
+
+    return context.compile_internal(builder, eye, sig, args)
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
+           types.Kind(types.Integer))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n, m, k):
+        return numpy.eye(n, m, k, numpy.float64)
+
+    return context.compile_internal(builder, eye, sig, args)
+
+@builtin
+@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
+           types.Kind(types.Integer), types.Kind(types.Function))
+def numpy_eye(context, builder, sig, args):
+
+    def eye(n, m, k, dtype):
+        arr = numpy.zeros((n, m), dtype)
+        if k >= 0:
+            d = min(n, m - k)
+            for i in range(d):
+                arr[i, i + k] = 1
+        else:
+            d = min(n + k, m)
+            for i in range(d):
+                arr[i - k, i] = 1
+        return arr
+
+    return context.compile_internal(builder, eye, sig, args)
+
+
+@builtin
 @implement(numpy.arange, types.Kind(types.Number))
 def numpy_arange_1(context, builder, sig, args):
     dtype = getattr(numpy, str(sig.return_type.dtype))
