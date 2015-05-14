@@ -722,7 +722,7 @@ class PythonAPI(object):
             status = self.builder.call(fn, [strobj, p_buffer, p_length])
 
             negone = ir.Constant(status.type, -1)
-            ok = builder.icmp_signed("!=", status, negone)
+            ok = self.builder.icmp_signed("!=", status, negone)
             buffer = self.builder.load(p_buffer)
 
         return (ok, buffer, self.builder.load(p_length))
