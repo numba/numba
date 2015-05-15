@@ -8,6 +8,7 @@ from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
 from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
                              from_dtype)
+from ..numpy_support import version as numpy_version
 
 from ..typeinfer import TypingError
 
@@ -433,24 +434,6 @@ class NdConstructor(CallableTemplate):
         return typer
 
 
-@builtin
-class NdFull(CallableTemplate):
-    key = numpy.full
-
-    def generic(self):
-        def typer(shape, fill_value, dtype=None):
-            if dtype is None:
-                nb_dtype = fill_value
-            else:
-                nb_dtype = _parse_dtype(dtype)
-
-            ndim = _parse_shape(shape)
-            if ndim is not None:
-                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
-
-        return typer
-
-
 class NdConstructorLike(CallableTemplate):
     """
     Typing template for np.empty_like(), .zeros_like(), .ones_like().
@@ -458,21 +441,6 @@ class NdConstructorLike(CallableTemplate):
 
     def generic(self):
         def typer(arr, dtype=None):
-            if dtype is None:
-                nb_dtype = arr.dtype
-            else:
-                nb_dtype = _parse_dtype(dtype)
-            return arr.copy(dtype=nb_dtype)
-
-        return typer
-
-
-@builtin
-class NdFullLike(CallableTemplate):
-    key = numpy.full_like
-
-    def generic(self):
-        def typer(arr, fill_value, dtype=None):
             if dtype is None:
                 nb_dtype = arr.dtype
             else:
@@ -509,11 +477,44 @@ class NdOnesLike(NdConstructorLike):
 builtin_global(numpy.empty, types.Function(NdEmpty))
 builtin_global(numpy.zeros, types.Function(NdZeros))
 builtin_global(numpy.ones, types.Function(NdOnes))
-builtin_global(numpy.full, types.Function(NdFull))
 builtin_global(numpy.empty_like, types.Function(NdEmptyLike))
 builtin_global(numpy.zeros_like, types.Function(NdZerosLike))
 builtin_global(numpy.ones_like, types.Function(NdOnesLike))
-builtin_global(numpy.full_like, types.Function(NdFullLike))
+
+if numpy_version >= (1, 8):
+    @builtin
+    class NdFull(CallableTemplate):
+        key = numpy.full
+
+        def generic(self):
+            def typer(shape, fill_value, dtype=None):
+                if dtype is None:
+                    nb_dtype = fill_value
+                else:
+                    nb_dtype = _parse_dtype(dtype)
+
+                ndim = _parse_shape(shape)
+                if ndim is not None:
+                    return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+            return typer
+
+    @builtin
+    class NdFullLike(CallableTemplate):
+        key = numpy.full_like
+
+        def generic(self):
+            def typer(arr, fill_value, dtype=None):
+                if dtype is None:
+                    nb_dtype = arr.dtype
+                else:
+                    nb_dtype = _parse_dtype(dtype)
+                return arr.copy(dtype=nb_dtype)
+
+            return typer
+
+    builtin_global(numpy.full, types.Function(NdFull))
+    builtin_global(numpy.full_like, types.Function(NdFullLike))
 
 
 @builtin

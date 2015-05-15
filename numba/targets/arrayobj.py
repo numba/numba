@@ -15,6 +15,7 @@ import numpy
 from llvmlite.llvmpy.core import Constant
 from numba import types, cgutils
 from numba.numpy_support import as_dtype
+from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
                                     iterator_impl, iternext_impl,
@@ -1363,55 +1364,56 @@ def numpy_zeros_like_nd(context, builder, sig, args):
     return ary._getvalue()
 
 
-@builtin
-@implement(numpy.full, types.Any, types.Any)
-def numpy_full_nd(context, builder, sig, args):
+if numpy_version >= (1, 8):
+    @builtin
+    @implement(numpy.full, types.Any, types.Any)
+    def numpy_full_nd(context, builder, sig, args):
 
-    def full(shape, value):
-        arr = numpy.empty(shape)
-        for idx in numpy.ndindex(arr.shape):
-            arr[idx] = value
-        return arr
+        def full(shape, value):
+            arr = numpy.empty(shape)
+            for idx in numpy.ndindex(arr.shape):
+                arr[idx] = value
+            return arr
 
-    return context.compile_internal(builder, full, sig, args)
+        return context.compile_internal(builder, full, sig, args)
 
-@builtin
-@implement(numpy.full, types.Any, types.Any, types.Kind(types.Function))
-def numpy_full_dtype_nd(context, builder, sig, args):
+    @builtin
+    @implement(numpy.full, types.Any, types.Any, types.Kind(types.Function))
+    def numpy_full_dtype_nd(context, builder, sig, args):
 
-    def full(shape, value, dtype):
-        arr = numpy.empty(shape, dtype)
-        for idx in numpy.ndindex(arr.shape):
-            arr[idx] = value
-        return arr
+        def full(shape, value, dtype):
+            arr = numpy.empty(shape, dtype)
+            for idx in numpy.ndindex(arr.shape):
+                arr[idx] = value
+            return arr
 
-    return context.compile_internal(builder, full, sig, args)
-
-
-@builtin
-@implement(numpy.full_like, types.Kind(types.Array), types.Any)
-def numpy_full_like_nd(context, builder, sig, args):
-
-    def full_like(arr, value):
-        arr = numpy.empty_like(arr)
-        for idx in numpy.ndindex(arr.shape):
-            arr[idx] = value
-        return arr
-
-    return context.compile_internal(builder, full_like, sig, args)
+        return context.compile_internal(builder, full, sig, args)
 
 
-@builtin
-@implement(numpy.full_like, types.Kind(types.Array), types.Any, types.Kind(types.Function))
-def numpy_full_like_nd(context, builder, sig, args):
+    @builtin
+    @implement(numpy.full_like, types.Kind(types.Array), types.Any)
+    def numpy_full_like_nd(context, builder, sig, args):
 
-    def full_like(arr, value, dtype):
-        arr = numpy.empty_like(arr, dtype)
-        for idx in numpy.ndindex(arr.shape):
-            arr[idx] = value
-        return arr
+        def full_like(arr, value):
+            arr = numpy.empty_like(arr)
+            for idx in numpy.ndindex(arr.shape):
+                arr[idx] = value
+            return arr
 
-    return context.compile_internal(builder, full_like, sig, args)
+        return context.compile_internal(builder, full_like, sig, args)
+
+
+    @builtin
+    @implement(numpy.full_like, types.Kind(types.Array), types.Any, types.Kind(types.Function))
+    def numpy_full_like_nd(context, builder, sig, args):
+
+        def full_like(arr, value, dtype):
+            arr = numpy.empty_like(arr, dtype)
+            for idx in numpy.ndindex(arr.shape):
+                arr[idx] = value
+            return arr
+
+        return context.compile_internal(builder, full_like, sig, args)
 
 
 @builtin
@@ -1419,8 +1421,10 @@ def numpy_full_like_nd(context, builder, sig, args):
 def numpy_ones_nd(context, builder, sig, args):
 
     def ones(shape):
-        c = 1
-        return numpy.full(shape, c)
+        arr = numpy.empty(shape)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = 1
+        return arr
 
     valty = sig.return_type.dtype
     return context.compile_internal(builder, ones, sig, args,
@@ -1431,7 +1435,10 @@ def numpy_ones_nd(context, builder, sig, args):
 def numpy_ones_dtype_nd(context, builder, sig, args):
 
     def ones(shape, dtype):
-        return numpy.full(shape, 1, dtype)
+        arr = numpy.empty(shape, dtype)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = 1
+        return arr
 
     return context.compile_internal(builder, ones, sig, args)
 
@@ -1440,7 +1447,10 @@ def numpy_ones_dtype_nd(context, builder, sig, args):
 def numpy_ones_like_nd(context, builder, sig, args):
 
     def ones_like(arr):
-        return numpy.full_like(arr, 1)
+        arr = numpy.empty_like(arr)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = 1
+        return arr
 
     return context.compile_internal(builder, ones_like, sig, args)
 
@@ -1449,7 +1459,10 @@ def numpy_ones_like_nd(context, builder, sig, args):
 def numpy_ones_like_dtype_nd(context, builder, sig, args):
 
     def ones_like(arr, dtype):
-        return numpy.full_like(arr, 1, dtype)
+        arr = numpy.empty_like(arr, dtype)
+        for idx in numpy.ndindex(arr.shape):
+            arr[idx] = 1
+        return arr
 
     return context.compile_internal(builder, ones_like, sig, args)
 
