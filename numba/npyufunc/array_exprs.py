@@ -17,11 +17,9 @@ class RewriteArrayExprs(rewrites.Rewrite):
     into something similar to a ufunc call.
     '''
     def __init__(self, pipeline, *args, **kws):
-        # At time of codeing, there shouldn't be anything in args or
-        # kws, but they are there for possible forward compatibility.
-        super(RewriteArrayExprs, self).__init__(*args, **kws)
+        super(RewriteArrayExprs, self).__init__(pipeline, *args, **kws)
         # Install a lowering hook if we are using this rewrite.
-        special_ops = pipeline.targetctx.special_ops
+        special_ops = self.pipeline.targetctx.special_ops
         if 'arrayexpr' not in special_ops:
             special_ops['arrayexpr'] = _lower_array_expr
 
