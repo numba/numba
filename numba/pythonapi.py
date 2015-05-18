@@ -691,6 +691,42 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [strobj])
 
+    def string_as_string_and_size(self, strobj):
+        """
+        Returns a tuple of ``(ok, buffer, length)``.
+        The ``ok`` is i1 value that is set if ok.
+        The ``buffer`` is a i8* of the output buffer.
+        The ``length`` is a i32/i64 (py_ssize_t) of the length of the buffer.
+        """
+
+        p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
+        if PYVERSION >= (3, 0):
+            fnty = Type.function(self.cstring, [self.pyobj,
+                                                self.py_ssize_t.as_pointer()])
+            fname = "PyUnicode_AsUTF8AndSize"
+            fn = self._get_function(fnty, name=fname)
+
+            buffer = self.builder.call(fn, [strobj, p_length])
+            ok = self.builder.icmp_unsigned('!=',
+                                            ir.Constant(buffer.type, None),
+                                            buffer)
+        else:
+            fnty = Type.function(lc.Type.int(), [self.pyobj,
+                                                 self.cstring.as_pointer(),
+                                                 self.py_ssize_t.as_pointer()])
+            fname = "PyString_AsStringAndSize"
+            fn = self._get_function(fnty, name=fname)
+            # Allocate space for the output parameters
+            p_buffer = cgutils.alloca_once(self.builder, self.cstring)
+
+            status = self.builder.call(fn, [strobj, p_buffer, p_length])
+
+            negone = ir.Constant(status.type, -1)
+            ok = self.builder.icmp_signed("!=", status, negone)
+            buffer = self.builder.load(p_buffer)
+
+        return (ok, buffer, self.builder.load(p_length))
+
     def string_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
         if PYVERSION >= (3, 0):
@@ -949,6 +985,31 @@ class PythonAPI(object):
                         self.decref(intobj)
                         builder.store(builder.bitcast(ptr, ptrty), ret)
                 return NativeValue(builder.load(ret), is_error=c_api_error())
+
+        elif isinstance(typ, types.CharSeq):
+            lty = self.context.get_value_type(typ)
+            ok, buffer, size = self.string_as_string_and_size(obj)
+
+            # Check if the returned string size fits in the charseq
+            storage_size = ir.Constant(size.type, typ.count)
+            size_fits = builder.icmp_unsigned("<=", size, storage_size)
+
+            # Allow truncation of string
+            size = builder.select(size_fits, size, storage_size)
+
+            # Initialize output to zero bytes
+            null_string = ir.Constant(lty, None)
+            outspace  = cgutils.alloca_once_value(builder, null_string)
+
+            # If conversion is ok, copy the buffer to the output storage.
+            with cgutils.if_likely(builder, ok):
+                # We don't need to set the NULL-terminator because the storage
+                # is already zero-filled.
+                cgutils.memcpy(builder, builder.bitcast(outspace, buffer.type),
+                               buffer, size)
+
+            ret = builder.load(outspace)
+            return NativeValue(ret, is_error=builder.not_(ok))
 
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 

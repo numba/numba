@@ -6,6 +6,7 @@ from collections import namedtuple, defaultdict
 from pprint import pprint
 import sys
 import warnings
+import traceback
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
                    lowering, objmode, irpasses, utils, config,
@@ -181,6 +182,12 @@ class _PipelineManager(object):
         Patches the error to show the stage that it arose in.
         """
         newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
+
+        # For python2, attach the traceback of the previous exception.
+        if not utils.IS_PY3:
+            fmt = "Caused By:\n{tb}\n{newmsg}"
+            newmsg = fmt.format(tb=traceback.format_exc(), newmsg=newmsg)
+
         exc.args = (newmsg,)
         return exc
 

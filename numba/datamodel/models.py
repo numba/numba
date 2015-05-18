@@ -59,20 +59,20 @@ class DataModel(object):
         Takes one LLVM value
         Return a LLVM value or nested tuple of LLVM value
         """
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def as_return(self, builder, value):
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def from_data(self, builder, value):
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def from_argument(self, builder, value):
         """
         Takes a LLVM value or nested tuple of LLVM value
         Returns one LLVM value
         """
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def from_return(self, builder, value):
         raise NotImplementedError
@@ -673,6 +673,12 @@ class CharSeq(DataModel):
         return value
 
     def from_return(self, builder, value):
+        return value
+
+    def as_argument(self, builder, value):
+        return value
+
+    def from_argument(self, builder, value):
         return value
 
 
