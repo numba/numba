@@ -5,8 +5,15 @@ from numba.compiler import compile_isolated
 from numba import types
 from numba.io_support import StringIO
 
+try:
+    import jinja2
+except ImportError:
+    jinja2 = None
 
+
+@unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
 class TestAnnotation(unittest.TestCase):
+
     def test_exercise_code_path(self):
         """
         Ensures template.html is available
@@ -31,4 +38,3 @@ class TestAnnotation(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

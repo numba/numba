@@ -5,9 +5,9 @@ All functions described here are threadsafe.
 #include <stdlib.h>
 #include <stdio.h>
 
-/* Debugging facilities */
+/* Debugging facilities - enabled at compile-time */
 /* #undef NDEBUG */
-#ifndef NDEBUG
+#if 0
 #   define NRT_Debug(X) X
 #else
 #   define NRT_Debug(X)
