@@ -470,16 +470,21 @@ class NdEmptyLike(NdConstructorLike):
 class NdZerosLike(NdConstructorLike):
     key = numpy.zeros_like
 
-@builtin
-class NdOnesLike(NdConstructorLike):
-    key = numpy.ones_like
 
 builtin_global(numpy.empty, types.Function(NdEmpty))
 builtin_global(numpy.zeros, types.Function(NdZeros))
 builtin_global(numpy.ones, types.Function(NdOnes))
 builtin_global(numpy.empty_like, types.Function(NdEmptyLike))
 builtin_global(numpy.zeros_like, types.Function(NdZerosLike))
-builtin_global(numpy.ones_like, types.Function(NdOnesLike))
+
+if numpy_version >= (1, 7):
+    # In Numpy 1.6, ones_like() was a ufunc and had a different signature.
+    @builtin
+    class NdOnesLike(NdConstructorLike):
+        key = numpy.ones_like
+
+    builtin_global(numpy.ones_like, types.Function(NdOnesLike))
+
 
 if numpy_version >= (1, 8):
     @builtin

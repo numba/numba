@@ -617,6 +617,7 @@ class TestNdZerosLike(TestNdEmptyLike):
         np.testing.assert_equal(ret, expected)
 
 
+@unittest.skipIf(numpy_version < (1, 7), "test requires Numpy 1.7 or later")
 class TestNdOnesLike(TestNdZerosLike):
 
     def setUp(self):
