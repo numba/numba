@@ -66,29 +66,43 @@ def signature(return_type, *args, **kws):
     return Signature(return_type, args, recvr=recvr)
 
 
-def fold_arguments(pysig, args, kws, default_handler):
+def fold_arguments(pysig, args, kws, normal_handler, default_handler,
+                   stararg_handler):
     """
     Given the signature *pysig*, explicit *args* and *kws*, resolve
-    omitted arguments (by calling default_handler(index, default))
-    and keyword arguments.  A tuple (arguments, defaults) is returned
-    where *arguments* is a tuple of positional arguments and *defaults*
-    is the list of indices of omitted arguments.
+    omitted arguments and keyword arguments. A tuple of positional
+    arguments is returned.
+    Various handlers allow to process arguments:
+    - normal_handler(index, param, value) is called for normal arguments
+    - default_handler(index, param, default) is called for omitted arguments
+    - stararg_handler(index, param, values) is called for a "*args" argument
     """
     ba = pysig.bind(*args, **kws)
     defargs = []
     for i, param in enumerate(pysig.parameters.values()):
         name = param.name
         default = param.default
-        if (default is not param.empty and
-            name not in ba.arguments):
-            ba.arguments[name] = default_handler(i, default)
-            defargs.append(i)
+        if param.kind == param.VAR_POSITIONAL:
+            # stararg may be omitted, in which case its "default" value
+            # is simply the empty tuple
+            ba.arguments[name] = stararg_handler(i, param,
+                                                 ba.arguments.get(name, ()))
+        elif name in ba.arguments:
+            # Non-stararg, present
+            ba.arguments[name] = normal_handler(i, param, ba.arguments[name])
+        else:
+            # Non-stararg, omitted
+            assert default is not param.empty
+            ba.arguments[name] = default_handler(i, param, default)
     if ba.kwargs:
         # There's a remaining keyword argument, e.g. if omitting
         # some argument with a default value before it.
         raise NotImplementedError("unhandled keyword argument: %s"
                                   % list(ba.kwargs))
-    return ba.args, defargs
+    # Collect args in the right order
+    args = tuple(ba.arguments[param.name]
+                 for param in pysig.parameters.values())
+    return args
 
 
 def _uses_downcast(dists):

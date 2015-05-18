@@ -165,9 +165,10 @@ class Expr(Inst):
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
-    def call(cls, func, args, kws, loc):
+    def call(cls, func, args, kws, loc, vararg=None):
         op = 'call'
-        return cls(op=op, loc=loc, func=func, args=args, kws=kws)
+        return cls(op=op, loc=loc, func=func, args=args, kws=kws,
+                   vararg=vararg)
 
     @classmethod
     def build_tuple(cls, items, loc):
@@ -241,7 +242,9 @@ class Expr(Inst):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)
             kws = ', '.join('%s=%s' % (k, v) for k, v in self.kws)
-            return 'call %s(%s, %s)' % (self.func, args, kws)
+            vararg = '*%s' % (self.vararg,) if self.vararg is not None else ''
+            arglist = ', '.join(filter(None, [args, vararg, kws]))
+            return 'call %s(%s)' % (self.func, arglist)
         elif self.op == 'binop':
             return '%s %s %s' % (self.lhs, self.fn, self.rhs)
         else:

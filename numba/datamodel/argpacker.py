@@ -21,8 +21,8 @@ class ArgPacker(object):
         self._nargs = len(fe_args)
         self._dm_args = [self._dmm.lookup(ty) for ty in fe_args]
         argtys = [bt.get_argument_type() for bt in self._dm_args]
-        if len(argtys):
-            self._be_args, self._posmap = zip(*_flatten(argtys))
+        if argtys:
+            self._be_args, self._posmap = zip(*_flatten(argtys, mark_empty=True))
         else:
             self._be_args = self._posmap = ()
 
@@ -38,18 +38,16 @@ class ArgPacker(object):
         args = [dm.as_argument(builder, val)
                 for dm, val in zip(self._dm_args, values)]
 
-        args, _ = zip(*_flatten(args))
+        flattened = list(_flatten(args))
+        if flattened:
+            args, _ = zip(*flattened)
+        else:
+            args = ()
         return args
 
     def from_arguments(self, builder, args):
         """Unflatten all argument values
         """
-
-        if len(args) != len(self._posmap):
-            raise TypeError("invalid number of args")
-
-        if not args:
-            return ()
 
         valtree = _unflatten(self._posmap, args)
         values = [dm.from_argument(builder, val)
@@ -60,11 +58,6 @@ class ArgPacker(object):
     def assign_names(self, args, names):
         """Assign names for each flattened argument values.
         """
-        if len(args) != len(self._posmap):
-            raise TypeError("invalid number of args")
-
-        if not args:
-            return ()
 
         valtree = _unflatten(self._posmap, args)
         for aval, aname in zip(valtree, names):
@@ -84,7 +77,7 @@ class ArgPacker(object):
         """Return a list of LLVM types that are results of flattening
         composite types.
         """
-        return tuple(self._be_args)
+        return tuple(ty for ty in self._be_args if ty != ())
 
 
 def _unflatten(posmap, flatiter):
@@ -95,7 +88,6 @@ def _unflatten(posmap, flatiter):
 
     res = []
     while poss:
-        assert len(poss) == len(vals)
         cur = poss.popleft()
         ptr = res
         for loc in cur[:-1]:
@@ -103,22 +95,32 @@ def _unflatten(posmap, flatiter):
                 ptr.append([])
             ptr = ptr[loc]
 
-        assert len(ptr) == cur[-1]
-        ptr.append(vals.popleft())
+        if cur == ():
+            ptr.append(())
+        else:
+            assert len(ptr) == cur[-1]
+            ptr.append(vals.popleft())
+
+    assert not vals
 
     return res
 
 
-def _flatten(iterable, indices=(0,)):
+def _flatten(iterable, mark_empty=False):
     """
     Flatten nested iterable of (tuple, list) with position information
     """
-    for i in iterable:
-        if isinstance(i, (tuple, list)):
-            inner = indices + (0,)
-            for j, k in _flatten(i, indices=inner):
-                yield j, k
-        else:
-            yield i, indices
-        indices = indices[:-1] + (indices[-1] + 1,)
+    def rec(iterable, indices):
+        for i in iterable:
+            if isinstance(i, (tuple, list)):
+                if len(i) > 0:
+                    inner = indices + (0,)
+                    for j, k in rec(i, indices=inner):
+                        yield j, k
+                elif mark_empty:
+                    yield i, ()
+            else:
+                yield i, indices
+            indices = indices[:-1] + (indices[-1] + 1,)
+    return rec(iterable, indices=(0,))
 

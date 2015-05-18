@@ -113,7 +113,7 @@ class FunctionDescriptor(object):
         qualname = interp.bytecode.func_qualname
         modname = func.__module__
         doc = func.__doc__ or ''
-        args = interp.argspec.args
+        args = tuple(interp.arg_names)
         kws = ()        # TODO
 
         if modname is None:

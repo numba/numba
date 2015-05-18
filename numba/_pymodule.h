@@ -32,5 +32,14 @@
     #define PyInt_Type PyLong_Type
 #endif
 
+
+#ifndef Py_MIN
+#define Py_MIN(x, y) (((x) > (y)) ? (y) : (x))
+#endif
+
+#ifndef Py_MAX
+#define Py_MAX(x, y) (((x) < (y)) ? (y) : (x))
+#endif
+
 #endif /* NUMBA_PY_MODULE_H_ */
 

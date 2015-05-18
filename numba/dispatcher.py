@@ -4,7 +4,7 @@ import functools
 import inspect
 import sys
 
-from numba import _dispatcher, compiler, utils
+from numba import _dispatcher, compiler, utils, types
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, types, typing
 from numba.typing.templates import resolve_overload, fold_arguments
@@ -19,9 +19,8 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
     __numba__ = "py_func"
 
-    def __init__(self, arg_count, py_func):
+    def __init__(self, arg_count, py_func, pysig):
         self._tm = default_type_manager
-        #_dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(), arg_count)
 
         # A mapping of signatures to entry points
         self.overloads = {}
@@ -36,12 +35,19 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
 
-        self._pysig = utils.pysignature(self.py_func)
+        self._pysig = pysig
         argnames = tuple(self._pysig.parameters)
         defargs = self.py_func.__defaults__ or ()
+        try:
+            lastarg = list(self._pysig.parameters.values())[-1]
+        except IndexError:
+            has_stararg = False
+        else:
+            has_stararg = lastarg.kind == lastarg.VAR_POSITIONAL
         _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(),
                                         arg_count, self._fold_args,
-                                        argnames, defargs)
+                                        argnames, defargs,
+                                        has_stararg)
 
         self.doc = py_func.__doc__
         self._compile_lock = utils.NonReentrantLock()
@@ -114,9 +120,16 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         *args* and *kws* types.  This allows to resolve the return type.
         """
         # Fold keyword arguments and resolve default values
-        def default_handler(index, default):
+        def normal_handler(index, param, value):
+            return value
+        def default_handler(index, param, default):
             return self.typeof_pyval(default)
-        args, _ = fold_arguments(self._pysig, args, kws, default_handler)
+        def stararg_handler(index, param, values):
+            return types.Tuple(values)
+        args = fold_arguments(self._pysig, args, kws,
+                              normal_handler,
+                              default_handler,
+                              stararg_handler)
         kws = {}
         # Ensure an overload is available, but avoid compiler re-entrance
         if self._can_compile and not self.is_compiling:
@@ -227,10 +240,10 @@ class Overloaded(_OverloadedBase):
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 
-        argspec = inspect.getargspec(py_func)
-        argct = len(argspec.args)
+        pysig = utils.pysignature(py_func)
+        arg_count = len(pysig.parameters)
 
-        _OverloadedBase.__init__(self, argct, py_func)
+        _OverloadedBase.__init__(self, arg_count, py_func, pysig)
 
         functools.update_wrapper(self, py_func)
 
@@ -324,10 +337,8 @@ class LiftedLoop(_OverloadedBase):
         self.typingctx = typingctx
         self.targetctx = targetctx
 
-        argspec = bytecode.argspec
-        argct = len(argspec.args)
-
-        _OverloadedBase.__init__(self, argct, bytecode.func)
+        _OverloadedBase.__init__(self, bytecode.arg_count, bytecode.func,
+                                 bytecode.pysig)
 
         self.locals = locals
         self.flags = flags
