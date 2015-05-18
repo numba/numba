@@ -9,6 +9,7 @@ import random
 from numba import unittest_support as unittest
 from numba import njit
 from numba import utils
+from numba.numpy_support import version as numpy_version
 
 
 nrtjit = njit(_nrt=True, nogil=True)
@@ -454,7 +455,8 @@ class ConstructorBaseTest(object):
         self.assertEqual(ret.strides, expected.strides)
         self.check_result_value(ret, expected)
         # test writability
-        expected = np.full_like(ret, 123)
+        expected = np.empty_like(ret) # np.full_like was not added until Numpy 1.8
+        expected.fill(123)
         ret.fill(123)
         np.testing.assert_equal(ret, expected)
         # errors
@@ -473,7 +475,8 @@ class ConstructorBaseTest(object):
         self.assertEqual(ret.strides, expected.strides)
         self.check_result_value(ret, expected)
         # test writability
-        expected = np.full_like(ret, 123)
+        expected = np.empty_like(ret)  # np.full_like was not added until Numpy 1.8
+        expected.fill(123)
         ret.fill(123)
         np.testing.assert_equal(ret, expected)
         # errors
@@ -521,6 +524,7 @@ class TestNdOnes(TestNdZeros):
         self.pyfunc = np.ones
 
 
+@unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
 class TestNdFull(ConstructorBaseTest, unittest.TestCase):
 
     def check_result_value(self, ret, expected):
@@ -613,6 +617,7 @@ class TestNdZerosLike(TestNdEmptyLike):
         np.testing.assert_equal(ret, expected)
 
 
+@unittest.skipIf(numpy_version < (1, 7), "test requires Numpy 1.7 or later")
 class TestNdOnesLike(TestNdZerosLike):
 
     def setUp(self):
@@ -620,6 +625,7 @@ class TestNdOnesLike(TestNdZerosLike):
         self.expected_value = 1
 
 
+@unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
 class TestNdFullLike(ConstructorLikeBaseTest, unittest.TestCase):
 
     def check_result_value(self, ret, expected):
