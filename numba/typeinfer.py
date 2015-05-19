@@ -438,9 +438,8 @@ class TypeInferer(object):
         if not yield_types:
             raise TypingError("Cannot type generator: it does not yield any value")
         yield_type = self.context.unify_types(*yield_types)
-        # No finalizer in nopython mode
         return types.Generator(self.py_func, yield_type, arg_types, state_types,
-                               has_finalizer=False)
+                               has_finalizer=True)
 
     def get_function_types(self, typemap):
         calltypes = utils.UniqueDict()

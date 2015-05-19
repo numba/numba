@@ -86,7 +86,7 @@ class BaseGeneratorLower(object):
         # Structure index #1: the function arguments
         argsty = retty.elements[1]
 
-        # Incref all NRT objects
+        # Incref all NRT objects before storing into generator states
         if self.context.enable_nrt:
             for argty, argval in zip(self.fndesc.argtypes, lower.fnargs):
                 self.context.nrt_incref(builder, argty, argval)
@@ -130,7 +130,6 @@ class BaseGeneratorLower(object):
         # Add block for StopIteration on entry
         stop_block = function.append_basic_block("stop_iteration")
         builder.position_at_end(stop_block)
-        self.cleanup_nrt(lower)
         self.call_conv.return_stop_iteration(builder)
 
         # Add prologue switch to resume blocks
@@ -170,7 +169,6 @@ class BaseGeneratorLower(object):
         """
         Emit a StopIteration at generator end and mark the generator exhausted.
         """
-        self.cleanup_nrt(lower)
         indexval = Constant.int(self.resume_index_ptr.type.pointee, -1)
         lower.builder.store(indexval, self.resume_index_ptr)
         self.call_conv.return_stop_iteration(lower.builder)
@@ -180,12 +178,6 @@ class BaseGeneratorLower(object):
         block = lower.function.append_basic_block(block_name)
         lower.builder.position_at_end(block)
         self.resume_blocks[index] = block
-
-    def cleanup_nrt(self, lower):
-        # Decref all NRT objects
-        if self.context.enable_nrt:
-            for argty, argval in zip(self.fndesc.argtypes, lower.fnargs):
-                self.context.nrt_decref(lower.builder, argty, argval)
 
 
 class GeneratorLower(BaseGeneratorLower):
@@ -199,6 +191,42 @@ class GeneratorLower(BaseGeneratorLower):
     def box_generator_struct(self, lower, gen_struct):
         return gen_struct
 
+    def lower_finalize_func_body(self, builder, genptr):
+        """
+        Lower the body of the generator's finalizer: decref all live
+        state variables.
+        """
+        if not self.context.enable_nrt:
+            return
+
+        resume_index_ptr = cgutils.gep(builder, genptr, 0, 0,
+                                       name='gen.resume_index')
+        resume_index = builder.load(resume_index_ptr)
+
+        # If resume_index is 0, next() was never called
+        need_args_cleanup = builder.icmp_signed(
+            '==', resume_index, Constant.int(resume_index.type, 0))
+
+        with cgutils.ifthen(builder, need_args_cleanup):
+            gen_args_ptr = cgutils.gep(builder, genptr, 0, 1, name="gen_args")
+            assert len(self.fndesc.argtypes) == len(gen_args_ptr.type.pointee)
+            for elem_idx, argty in enumerate(self.fndesc.argtypes):
+                argptr = cgutils.gep(builder, gen_args_ptr, 0, elem_idx)
+                argval = builder.load(argptr)
+                self.context.nrt_decref(builder, argty, argval)
+
+        # Always run the finalizer to clear the block
+        gen_state_ptr = cgutils.gep(builder, genptr, 0, 2, name='gen.state')
+
+        for state_index in range(len(self.gentype.state_types)):
+            state_slot = cgutils.gep(builder, gen_state_ptr,
+                                     0, state_index)
+            ty = self.gentype.state_types[state_index]
+            val = self.context.unpack_value(builder, ty, state_slot)
+            if self.context.enable_nrt:
+                self.context.nrt_decref(builder, ty, val)
+
+        builder.ret_void()
 
 class PyGeneratorLower(BaseGeneratorLower):
     """
@@ -295,7 +323,6 @@ class LowerYield(object):
         indexval = Constant.int(self.resume_index_ptr.type.pointee,
                                 self.inst.index)
         self.builder.store(indexval, self.resume_index_ptr)
-        self.genlower.cleanup_nrt(self.lower)
 
     def lower_yield_resume(self):
         # Emit resumption point
@@ -307,3 +334,5 @@ class LowerYield(object):
             ty = self.gentype.state_types[state_index]
             val = self.context.unpack_value(self.builder, ty, state_slot)
             self.lower.storevar(val, name)
+            # Previous storevar is making an extra incref
+            self.lower.decref(ty, val)

@@ -276,7 +276,58 @@ class TestNrtArrayGen(TestCase):
         self.test_nrt_gen0()
         self.test_nrt_gen1()
 
+    def test_nrt_gen0_stop_iteration(self):
+        """
+        Test cleanup on StopIteration
+        """
+        pygen = nrt_gen0
+        cgen = jit(nopython=True)(pygen)
 
+        py_ary = np.arange(1)
+        c_ary = py_ary.copy()
+
+        py_iter = pygen(py_ary)
+        c_iter = cgen(c_ary)
+
+        py_res = next(py_iter)
+        c_res = next(c_iter)
+
+        with self.assertRaises(StopIteration):
+            py_res = next(py_iter)
+
+        with self.assertRaises(StopIteration):
+            c_res = next(c_iter)
+
+        del py_iter
+        del c_iter
+
+        np.testing.assert_equal(py_ary, c_ary)
+        self.assertEqual(py_res, c_res)
+        # Check reference count
+        self.assertEqual(sys.getrefcount(py_ary),
+                         sys.getrefcount(c_ary))
+
+    def test_nrt_gen0_no_iter(self):
+        """
+        Test cleanup on StopIteration
+        """
+        pygen = nrt_gen0
+        cgen = jit(nopython=True)(pygen)
+
+        py_ary = np.arange(1)
+        c_ary = py_ary.copy()
+
+        py_iter = pygen(py_ary)
+        c_iter = cgen(c_ary)
+
+        del py_iter
+        del c_iter
+
+        np.testing.assert_equal(py_ary, c_ary)
+
+        # Check reference count
+        self.assertEqual(sys.getrefcount(py_ary),
+                         sys.getrefcount(c_ary))
 
 
 if __name__ == '__main__':
