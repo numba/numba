@@ -1291,21 +1291,22 @@ class PythonAPI(object):
                                  (state_size, initial_state, genfn, finalizer, env))
 
     def nrt_adapt_ndarray_to_python(self, aryty, ary):
-        if not self.context.enable_nrt:
-            raise Exception("Require NRT")
+        assert self.context.enable_nrt, "NRT required"
+        np_dtype = numpy_support.as_dtype(aryty.dtype)
+
         intty = ir.IntType(32)
-        fnty = Type.function(self.pyobj, [self.voidptr, intty, intty])
+        fnty = Type.function(self.pyobj, [self.voidptr, intty, self.pyobj])
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         dtype = numpy_support.as_dtype(aryty.dtype)
 
         ndim = self.context.get_constant(types.int32, aryty.ndim)
-        typenum = self.context.get_constant(types.int32, dtype.num)
+        dtypeptr = self.unserialize(self.serialize_object(np_dtype))
 
         aryptr = cgutils.alloca_once_value(self.builder, ary)
         return self.builder.call(fn, [self.builder.bitcast(aryptr,
                                                            self.voidptr),
-                                      ndim, typenum])
+                                      ndim, dtypeptr])
 
     def nrt_adapt_ndarray_from_python(self, ary, ptr):
         assert self.context.enable_nrt

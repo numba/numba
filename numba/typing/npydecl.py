@@ -532,12 +532,12 @@ class NdIdentity(AbstractTemplate):
         if not isinstance(n, types.Integer):
             return
         if len(args) >= 2:
-            dtype = _parse_dtype(args[1])
+            nb_dtype = _parse_dtype(args[1])
         else:
-            dtype = types.float64
+            nb_dtype = types.float64
 
         if nb_dtype is not None:
-            return_type = types.Array(ndim=2, dtype=dtype, layout='C')
+            return_type = types.Array(ndim=2, dtype=nb_dtype, layout='C')
             return signature(return_type, *args)
 
 builtin_global(numpy.identity, types.Function(NdIdentity))
