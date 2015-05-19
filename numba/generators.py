@@ -85,6 +85,12 @@ class BaseGeneratorLower(object):
         resume_index = self.context.get_constant(types.int32, 0)
         # Structure index #1: the function arguments
         argsty = retty.elements[1]
+
+        # Incref all NRT objects
+        if self.context.enable_nrt:
+            for argty, argval in zip(self.fndesc.argtypes, lower.fnargs):
+                self.context.nrt_incref(builder, argty, argval)
+
         argsval = cgutils.make_anonymous_struct(builder, lower.fnargs,
                                                 argsty)
         gen_struct = cgutils.make_anonymous_struct(builder,
@@ -124,6 +130,7 @@ class BaseGeneratorLower(object):
         # Add block for StopIteration on entry
         stop_block = function.append_basic_block("stop_iteration")
         builder.position_at_end(stop_block)
+        self.cleanup_nrt(lower)
         self.call_conv.return_stop_iteration(builder)
 
         # Add prologue switch to resume blocks
@@ -163,6 +170,7 @@ class BaseGeneratorLower(object):
         """
         Emit a StopIteration at generator end and mark the generator exhausted.
         """
+        self.cleanup_nrt(lower)
         indexval = Constant.int(self.resume_index_ptr.type.pointee, -1)
         lower.builder.store(indexval, self.resume_index_ptr)
         self.call_conv.return_stop_iteration(lower.builder)
@@ -173,6 +181,11 @@ class BaseGeneratorLower(object):
         lower.builder.position_at_end(block)
         self.resume_blocks[index] = block
 
+    def cleanup_nrt(self, lower):
+        # Decref all NRT objects
+        if self.context.enable_nrt:
+            for argty, argval in zip(self.fndesc.argtypes, lower.fnargs):
+                self.context.nrt_decref(lower.builder, argty, argval)
 
 
 class GeneratorLower(BaseGeneratorLower):
@@ -282,6 +295,7 @@ class LowerYield(object):
         indexval = Constant.int(self.resume_index_ptr.type.pointee,
                                 self.inst.index)
         self.builder.store(indexval, self.resume_index_ptr)
+        self.genlower.cleanup_nrt(self.lower)
 
     def lower_yield_resume(self):
         # Emit resumption point
