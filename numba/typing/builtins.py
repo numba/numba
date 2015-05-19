@@ -561,19 +561,31 @@ class NestedArrayAttribute(ArrayAttribute):
     key = types.NestedArray
 
 
+def _expand_integer(ty):
+    """
+    If *ty* is an integer, expand it to a machine int (like Numpy).
+    """
+    if isinstance(ty, types.Integer):
+        if ty.signed:
+            return max(types.intp, ty)
+        else:
+            return max(types.uintp, ty)
+    else:
+        return ty
+
 def generic_homog(self, args, kws):
     assert not args
     assert not kws
     return signature(self.this.dtype, recvr=self.this)
 
 def generic_expand(self, args, kws):
-    if isinstance(self.this.dtype, types.Integer):
-        # Expand to a machine int, not larger (like Numpy)
-        if self.this.dtype.signed:
-            return signature(max(types.intp, self.this.dtype), recvr=self.this)
-        else:
-            return signature(max(types.uintp, self.this.dtype), recvr=self.this)
-    return signature(self.this.dtype, recvr=self.this)
+    return signature(_expand_integer(self.this.dtype), recvr=self.this)
+
+def generic_expand_cumulative(self, args, kws):
+    assert isinstance(self.this, types.Array)
+    return_type = types.Array(dtype=_expand_integer(self.this.dtype),
+                              ndim=1, layout='C')
+    return signature(return_type, recvr=self.this)
 
 def generic_hetero_real(self, args, kws):
     assert not args
@@ -603,6 +615,10 @@ for fname in ["min", "max"]:
 # Functions that return a machine-width type, to avoid overflows
 for fname in ["sum", "prod"]:
     install_array_method(fname, generic_expand)
+
+# Functions that return a machine-width type, to avoid overflows
+for fname in ["cumsum", "cumprod"]:
+    install_array_method(fname, generic_expand_cumulative)
 
 # Functions that require integer arrays get promoted to float64 return
 for fName in ["mean", "var", "std"]:

@@ -229,6 +229,28 @@ class TestAssertPreciseEqual(TestCase):
             self.eq(tp(ac), tp(cc), prec='single', ulps=2)
             self.eq(tp(aa), tp(cc), prec='single', ulps=2)
 
+    def test_arrays(self):
+        a = np.arange(1, 7, dtype=np.int16).reshape((2, 3))
+        b = a.copy()
+        self.eq(a, b)
+        # Different values
+        self.ne(a, b + 1)
+        self.ne(a, b[:-1])
+        self.ne(a, b.T)
+        # Different dtypes
+        self.ne(a, b.astype(np.int32))
+        # Different layout
+        self.ne(a, b.T.copy().T)
+        # Different ndim
+        self.ne(a, b.flatten())
+        # Precision
+        a = np.arange(1, 3, dtype=np.float64)
+        b = a * (1.0 + DBL_EPSILON)
+        c = a * (1.0 + DBL_EPSILON * 2)
+        self.ne(a, b)
+        self.eq(a, b, prec='double')
+        self.ne(a, c, prec='double')
+
 
 if __name__ == '__main__':
     unittest.main()
