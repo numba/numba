@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import sys
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
@@ -238,6 +239,9 @@ class TestNrtArrayGen(TestCase):
 
         np.testing.assert_equal(py_ary, c_ary)
         self.assertEqual(py_res, c_res)
+        # Check reference count
+        self.assertEqual(sys.getrefcount(py_ary),
+                         sys.getrefcount(c_ary))
 
 
     def test_nrt_gen1(self):
@@ -256,6 +260,11 @@ class TestNrtArrayGen(TestCase):
         np.testing.assert_equal(py_ary1, c_ary1)
         np.testing.assert_equal(py_ary2, c_ary2)
         self.assertEqual(py_res, c_res)
+        # Check reference count
+        self.assertEqual(sys.getrefcount(py_ary1),
+                         sys.getrefcount(c_ary1))
+        self.assertEqual(sys.getrefcount(py_ary2),
+                          sys.getrefcount(c_ary2))
 
     def test_combine_gen0_gen1(self):
         """
