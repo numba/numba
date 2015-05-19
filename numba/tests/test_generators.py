@@ -214,5 +214,61 @@ class TestGenExprs(TestCase):
         self.assertEqual(sum(cfunc([1, 2, 3])), sum(pyfunc([1, 2, 3])))
 
 
+
+def nrt_gen0(ary):
+    for elem in ary:
+        yield elem
+
+def nrt_gen1(ary1, ary2):
+    for e1, e2 in zip(ary1, ary2):
+        yield e1
+        yield e2
+
+
+class TestNrtArrayGen(TestCase):
+    def test_nrt_gen0(self):
+        pygen = nrt_gen0
+        cgen = jit(nopython=True)(pygen)
+
+        py_ary = np.arange(10)
+        c_ary = py_ary.copy()
+
+        py_res = list(pygen(py_ary))
+        c_res = list(cgen(c_ary))
+
+        np.testing.assert_equal(py_ary, c_ary)
+        self.assertEqual(py_res, c_res)
+
+
+    def test_nrt_gen1(self):
+        pygen = nrt_gen1
+        cgen = jit(nopython=True)(pygen)
+
+        py_ary1 = np.arange(10)
+        py_ary2 = py_ary1 + 100
+
+        c_ary1 = py_ary1.copy()
+        c_ary2 = py_ary2.copy()
+
+        py_res = list(pygen(py_ary1, py_ary2))
+        c_res = list(cgen(c_ary1, c_ary2))
+
+        np.testing.assert_equal(py_ary1, c_ary1)
+        np.testing.assert_equal(py_ary2, c_ary2)
+        self.assertEqual(py_res, c_res)
+
+    def test_combine_gen0_gen1(self):
+        """
+        Issue #1163 is observed when two generator with NRT object arguments
+        is ran in sequence.  The first one does a invalid free and corrupts
+        the NRT memory subsystem.  The second generator is likely to segfault
+        due to corrupted NRT data structure (an invalid MemInfo).
+        """
+        self.test_nrt_gen0()
+        self.test_nrt_gen1()
+
+
+
+
 if __name__ == '__main__':
     unittest.main()
