@@ -23,30 +23,6 @@ registry = Registry()
 register = registry.register
 
 
-def caster(restype, constructor):
-    """
-    Implement explicit calls to Numpy type *constructor* (e.g. np.int16).
-    """
-    @implement(constructor, types.Any)
-    def _cast(context, builder, sig, args):
-        [val] = args
-        [valty] = sig.args
-        return context.cast(builder, val, valty, restype)
-
-    return _cast
-
-def register_casters(register_function):
-    for tp in types.number_domain:
-        register_function(caster(tp, getattr(numpy, str(tp))))
-
-    register_function(caster(types.bool_, numpy.bool_))
-    register_function(caster(types.intc, numpy.intc))
-    register_function(caster(types.uintc, numpy.uintc))
-    register_function(caster(types.intp, numpy.intp))
-    register_function(caster(types.uintp, numpy.uintp))
-
-register_casters(register)
-
 ########################################################################
 
 # In the way we generate code, ufuncs work with scalar as well as
