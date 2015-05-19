@@ -196,35 +196,33 @@ class GeneratorLower(BaseGeneratorLower):
         Lower the body of the generator's finalizer: decref all live
         state variables.
         """
-        if not self.context.enable_nrt:
-            return
+        if self.context.enable_nrt:
+            resume_index_ptr = cgutils.gep(builder, genptr, 0, 0,
+                                           name='gen.resume_index')
+            resume_index = builder.load(resume_index_ptr)
 
-        resume_index_ptr = cgutils.gep(builder, genptr, 0, 0,
-                                       name='gen.resume_index')
-        resume_index = builder.load(resume_index_ptr)
+            # If resume_index is 0, next() was never called
+            need_args_cleanup = builder.icmp_signed(
+                '==', resume_index, Constant.int(resume_index.type, 0))
 
-        # If resume_index is 0, next() was never called
-        need_args_cleanup = builder.icmp_signed(
-            '==', resume_index, Constant.int(resume_index.type, 0))
+            with cgutils.ifthen(builder, need_args_cleanup):
+                gen_args_ptr = cgutils.gep(builder, genptr, 0, 1, name="gen_args")
+                assert len(self.fndesc.argtypes) == len(gen_args_ptr.type.pointee)
+                for elem_idx, argty in enumerate(self.fndesc.argtypes):
+                    argptr = cgutils.gep(builder, gen_args_ptr, 0, elem_idx)
+                    argval = builder.load(argptr)
+                    self.context.nrt_decref(builder, argty, argval)
 
-        with cgutils.ifthen(builder, need_args_cleanup):
-            gen_args_ptr = cgutils.gep(builder, genptr, 0, 1, name="gen_args")
-            assert len(self.fndesc.argtypes) == len(gen_args_ptr.type.pointee)
-            for elem_idx, argty in enumerate(self.fndesc.argtypes):
-                argptr = cgutils.gep(builder, gen_args_ptr, 0, elem_idx)
-                argval = builder.load(argptr)
-                self.context.nrt_decref(builder, argty, argval)
+            # Always run the finalizer to clear the block
+            gen_state_ptr = cgutils.gep(builder, genptr, 0, 2, name='gen.state')
 
-        # Always run the finalizer to clear the block
-        gen_state_ptr = cgutils.gep(builder, genptr, 0, 2, name='gen.state')
-
-        for state_index in range(len(self.gentype.state_types)):
-            state_slot = cgutils.gep(builder, gen_state_ptr,
-                                     0, state_index)
-            ty = self.gentype.state_types[state_index]
-            val = self.context.unpack_value(builder, ty, state_slot)
-            if self.context.enable_nrt:
-                self.context.nrt_decref(builder, ty, val)
+            for state_index in range(len(self.gentype.state_types)):
+                state_slot = cgutils.gep(builder, gen_state_ptr,
+                                         0, state_index)
+                ty = self.gentype.state_types[state_index]
+                val = self.context.unpack_value(builder, ty, state_slot)
+                if self.context.enable_nrt:
+                    self.context.nrt_decref(builder, ty, val)
 
         builder.ret_void()
 
@@ -335,4 +333,5 @@ class LowerYield(object):
             val = self.context.unpack_value(self.builder, ty, state_slot)
             self.lower.storevar(val, name)
             # Previous storevar is making an extra incref
-            self.lower.decref(ty, val)
+            if self.context.enable_nrt:
+                self.lower.decref(ty, val)
