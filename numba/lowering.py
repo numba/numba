@@ -322,10 +322,7 @@ class Lower(BaseLower):
                 return self.context.get_constant_generic(self.builder, ty,
                                                          value.value)
 
-            elif (isinstance(ty, types.Dummy) or
-                    isinstance(ty, types.Module) or
-                    isinstance(ty, types.Function) or
-                    isinstance(ty, types.Dispatcher)):
+            elif isinstance(ty, types.Dummy):
                 return self.context.get_dummy_value()
 
             elif isinstance(ty, types.Array):

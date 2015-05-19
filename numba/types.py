@@ -311,7 +311,7 @@ class VarArg(Type):
         return self.dtype
 
 
-class Module(Type):
+class Module(Dummy):
     def __init__(self, pymod):
         self.pymod = pymod
         super(Module, self).__init__("Module(%s)" % pymod)
@@ -345,7 +345,7 @@ class Callable(Type):
         raise NotImplementedError
 
 
-class Function(Callable):
+class Function(Callable, Opaque):
     def __init__(self, template):
         self.template = template
         name = "%s(%s)" % (self.__class__.__name__, template.key)
@@ -360,6 +360,10 @@ class Function(Callable):
 
 
 class DTypeSpec(Opaque):
+    """
+    Base class for types usable as "dtype" arguments to various Numpy APIs
+    (e.g. np.empty()).
+    """
 
     @property
     def dtype(self):
@@ -429,7 +433,7 @@ class WeakType(Type):
         return Type.__hash__(self)
 
 
-class Dispatcher(WeakType, Callable):
+class Dispatcher(WeakType, Callable, Dummy):
 
     def __init__(self, overloaded):
         self._store_object(overloaded)
