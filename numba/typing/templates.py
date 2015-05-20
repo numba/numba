@@ -4,31 +4,34 @@ Define typing templates
 from __future__ import print_function, division, absolute_import
 
 import functools
-from .. import types
+from .. import types, utils
 from ..typeinfer import TypingError
 from functools import reduce
 import operator
 
 
 class Signature(object):
-    __slots__ = 'return_type', 'args', 'recvr'
+    # XXX Perhaps the signature should be a BoundArguments, instead
+    # of separate args and pysig...
+    __slots__ = 'return_type', 'args', 'recvr', 'pysig'
 
-    def __init__(self, return_type, args, recvr):
+    def __init__(self, return_type, args, recvr, pysig=None):
         self.return_type = return_type
         self.args = args
         self.recvr = recvr
+        self.pysig = pysig
 
     def __getstate__(self):
         """
         Needed because of __slots__.
         """
-        return self.return_type, self.args, self.recvr
+        return self.return_type, self.args, self.recvr, self.pysig
 
     def __setstate__(self, state):
         """
         Needed because of __slots__.
         """
-        self.return_type, self.args, self.recvr = state
+        self.return_type, self.args, self.recvr, self.pysig = state
 
     def __hash__(self):
         return hash((self.args, self.return_type))
@@ -37,7 +40,8 @@ class Signature(object):
         if isinstance(other, Signature):
             return (self.args == other.args and
                     self.return_type == other.return_type and
-                    self.recvr == other.recvr)
+                    self.recvr == other.recvr and
+                    self.pysig == other.pysig)
 
     def __ne__(self, other):
         return not (self == other)
@@ -60,6 +64,45 @@ def signature(return_type, *args, **kws):
     recvr = kws.pop('recvr', None)
     assert not kws
     return Signature(return_type, args, recvr=recvr)
+
+
+def fold_arguments(pysig, args, kws, normal_handler, default_handler,
+                   stararg_handler):
+    """
+    Given the signature *pysig*, explicit *args* and *kws*, resolve
+    omitted arguments and keyword arguments. A tuple of positional
+    arguments is returned.
+    Various handlers allow to process arguments:
+    - normal_handler(index, param, value) is called for normal arguments
+    - default_handler(index, param, default) is called for omitted arguments
+    - stararg_handler(index, param, values) is called for a "*args" argument
+    """
+    ba = pysig.bind(*args, **kws)
+    defargs = []
+    for i, param in enumerate(pysig.parameters.values()):
+        name = param.name
+        default = param.default
+        if param.kind == param.VAR_POSITIONAL:
+            # stararg may be omitted, in which case its "default" value
+            # is simply the empty tuple
+            ba.arguments[name] = stararg_handler(i, param,
+                                                 ba.arguments.get(name, ()))
+        elif name in ba.arguments:
+            # Non-stararg, present
+            ba.arguments[name] = normal_handler(i, param, ba.arguments[name])
+        else:
+            # Non-stararg, omitted
+            assert default is not param.empty
+            ba.arguments[name] = default_handler(i, param, default)
+    if ba.kwargs:
+        # There's a remaining keyword argument, e.g. if omitting
+        # some argument with a default value before it.
+        raise NotImplementedError("unhandled keyword argument: %s"
+                                  % list(ba.kwargs))
+    # Collect args in the right order
+    args = tuple(ba.arguments[param.name]
+                 for param in pysig.parameters.values())
+    return args
 
 
 def _uses_downcast(dists):
@@ -213,6 +256,54 @@ class AbstractTemplate(FunctionTemplate):
         if sig:
             cases = [sig]
             return self._select(cases, args, kws)
+
+
+class CallableTemplate(FunctionTemplate):
+    """
+    Base class for a template defining a ``generic(self)`` method
+    returning a callable to be called with the actual ``*args`` and
+    ``**kwargs`` representing the call signature.  The callable has
+    to return a return type, a full signature, or None.  The signature
+    does not have to match the input types. It is compared against the
+    input types afterwards.
+    """
+
+    def apply(self, args, kws):
+        generic = getattr(self, "generic")
+        typer = generic()
+        pysig = utils.pysignature(typer)
+        sig = typer(*args, **kws)
+
+        # Unpack optional type if no matching signature
+        if sig is None and any(isinstance(x, types.Optional) for x in args):
+            def unpack_opt(x):
+                if isinstance(x, types.Optional):
+                    return x.type
+                else:
+                    return x
+
+            args = list(map(unpack_opt, args))
+            sig = typer(*args, **kws)
+            if sig is None:
+                return
+
+        # Fold any keyword arguments
+        bound = pysig.bind(*args, **kws)
+        if bound.kwargs:
+            raise TypingError("unsupported call signature")
+        if not isinstance(sig, Signature):
+            # If not a signature, `sig` is assumed to be the return type
+            assert isinstance(sig, types.Type)
+            sig = signature(sig, *bound.args)
+        # Hack any omitted parameters out of the typer's pysig,
+        # as lowering expects an exact match between formal signature
+        # and actual args.
+        if len(bound.args) < len(pysig.parameters):
+            parameters = list(pysig.parameters.values())[:len(bound.args)]
+            pysig = pysig.replace(parameters=parameters)
+        sig.pysig = pysig
+        cases = [sig]
+        return self._select(cases, bound.args, bound.kwargs)
 
 
 class ConcreteTemplate(FunctionTemplate):

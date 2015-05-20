@@ -1,6 +1,6 @@
 
 ========================
-Supported Numpy features
+Supported NumPy features
 ========================
 
 One objective of Numba is having a seamless integration with `NumPy`_.
@@ -71,11 +71,10 @@ or layout.
 Operations
 ----------
 
-Arrays support iteration and full indexing (i.e. indexing that yields
-scalar values).  Partial indexing by a single integer is supported,
-but the resulting views can not be returned to Python.  Other kinds of
-partial indexing (for example indexing a 3-d array with a 2-tuple)
-isn't supported.
+Arrays support iteration and full indexing (i.e. indexing that yields scalar
+values).  Partial indexing by a single integer is supported, but other kinds of
+partial indexing (for example indexing a 3-d array with a 2-tuple) are not
+supported.
 
 Attributes
 ----------
@@ -114,12 +113,25 @@ Functions
 
 The following top-level functions are supported:
 
+* :func:`numpy.arange`
+* :func:`numpy.empty`
+* :func:`numpy.empty_like`
+* :func:`numpy.eye`
+* :func:`numpy.full`
+* :func:`numpy.full_like`
+* :func:`numpy.identity`
+* :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
+* :func:`numpy.ones`
+* :func:`numpy.ones_like`
 * :func:`numpy.round_`
+* :func:`numpy.zeros`
+* :func:`numpy.zeros_like`
 
 The following constructors are supported, only with a numeric input:
 
+* :class:`numpy.bool_`
 * :class:`numpy.complex64`
 * :class:`numpy.complex128`
 * :class:`numpy.float32`
@@ -242,11 +254,6 @@ Limitations
 -----------
 
 Right now, only a selection of the standard ufuncs work in :term:`nopython mode`.
-
-Also, in its current implementation ufuncs working on arrays will only
-compile in :term:`nopython mode` if their output array is passed explicitly.
-This limitation does not apply when working with scalars.
-
 Following is a list of the different standard ufuncs that Numba is aware of,
 sorted in the same way as in the NumPy documentation.
 

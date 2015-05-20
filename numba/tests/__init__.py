@@ -16,6 +16,11 @@ from unittest import result, runner, signals
 from numba.utils import PYVERSION, StringIO
 from numba import config
 
+try:
+    from multiprocessing import TimeoutError
+except ImportError:
+    from Queue import Empty as TimeoutError
+
 # "unittest.main" is really the TestProgram class!
 # (defined in a module named itself "unittest.main"...)
 
@@ -370,17 +375,26 @@ class ParallelTestRunner(runner.TextTestRunner):
         # method as if it were a test case.
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
         pool = multiprocessing.Pool()
-        imap = pool.imap_unordered
+
         try:
-            for child_result in imap(child_runner, self._test_list):
-                result.add_results(child_result)
-                if child_result.shouldStop:
-                    break
+            self._inner(result, pool, child_runner)
             return result
         finally:
             # Kill the still active workers
             pool.terminate()
             pool.join()
+
+    def _inner(self, result, pool, child_runner):
+        it = pool.imap_unordered(child_runner, self._test_list)
+        while True:
+            try:
+                # A test can't run longer than 2 minutes
+                child_result = it.__next__(120)
+            except StopIteration:
+                return
+            result.add_results(child_result)
+            if child_result.shouldStop:
+                return
 
     def run(self, test):
         self._test_list = _flatten_suite(test)

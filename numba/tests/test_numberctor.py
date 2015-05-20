@@ -142,12 +142,12 @@ class TestNumberCtor(TestCase):
             self.assertPreciseEqual(got, expected)
 
     def check_number_types(self, tp_factory):
-        values = [1, -1, 100003, 10000000000007, -100003, -10000000000007,
+        values = [0, 1, -1, 100003, 10000000000007, -100003, -10000000000007,
                   1.5, -3.5]
         for tp_name in ('int8', 'int16', 'int32', 'int64',
                         'uint8', 'uint16', 'uint32', 'uint64',
                         'intc', 'uintc', 'intp', 'uintp',
-                        'float32', 'float64'):
+                        'float32', 'float64', 'bool_'):
             np_type = getattr(np, tp_name)
             tp = tp_factory(tp_name)
             self.check_type_converter(tp, np_type, values)

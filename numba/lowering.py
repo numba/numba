@@ -1,7 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import namedtuple
 import sys
 
+from llvmlite.ir import Value
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 
@@ -38,6 +40,9 @@ def _rebuild_env(modname, consts):
     env = Environment(mod.__dict__)
     env.consts[:] = consts
     return env
+
+
+_VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
 
 class BaseLower(object):
@@ -400,6 +405,20 @@ class Lower(BaseLower):
         return self.context.cast(self.builder, res, signature.return_type,
                                  resty)
 
+    def _cast_var(self, var, ty):
+        """
+        Cast a Numba IR variable to the given Numba type, returning a
+        low-level value.
+        """
+        if isinstance(var, _VarArgItem):
+            varty = self.typeof(var.vararg.name)[var.index]
+            val = self.builder.extract_value(self.loadvar(var.vararg.name),
+                                             var.index)
+        else:
+            varty = self.typeof(var.name)
+            val = self.loadvar(var.name)
+        return self.context.cast(self.builder, val, varty, ty)
+
     def lower_call(self, resty, expr):
         signature = self.fndesc.calltypes[expr]
         if isinstance(signature.return_type, types.Phantom):
@@ -410,40 +429,38 @@ class Lower(BaseLower):
             argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
+            pos_args = expr.args
+            if expr.vararg:
+                # Inject *args from function call
+                # The lowering will be done in _cast_var() above.
+                tp_vararg = self.typeof(expr.vararg.name)
+                assert isinstance(tp_vararg, types.BaseTuple)
+                pos_args = pos_args + [_VarArgItem(expr.vararg, i)
+                                       for i in range(len(tp_vararg))]
 
             # Fold keyword arguments and resolve default argument values
-            defargs = set()
-            try:
-                pysig = fnty.pysig
-            except AttributeError:
+            pysig = signature.pysig
+            if pysig is None:
                 if expr.kws:
                     raise NotImplementedError("unsupported keyword arguments "
                                               "when calling %s" % (fnty,))
-                args = expr.args
+                argvals = [self._cast_var(var, sigty)
+                           for var, sigty in zip(pos_args, signature.args)]
             else:
-                ba = pysig.bind(*expr.args, **dict(expr.kws))
-                for i, param in enumerate(pysig.parameters.values()):
-                    name = param.name
-                    default = param.default
-                    if (default is not param.empty and
-                        name not in ba.arguments):
-                        value = self.context.get_constant_generic(
-                            self.builder, signature.args[i], default)
-                        ba.arguments[name] = value
-                        defargs.add(i)
-                # This is ensured in Dispatcher.get_call_template()
-                assert not ba.kwargs
-                args = ba.args
-
-            # Fetch and cast non-default arguments
-            argvals = list(args)
-            for i, a in enumerate(argvals):
-                if i not in defargs:
-                    ty = self.typeof(a.name)
-                    val = self.loadvar(a.name)
-                    a = self.context.cast(self.builder, val, ty,
-                                          signature.args[i])
-                    argvals[i] = a
+                def normal_handler(index, param, var):
+                    return self._cast_var(var, signature.args[index])
+                def default_handler(index, param, default):
+                    return self.context.get_constant_generic(
+                                self.builder, signature.args[index], default)
+                def stararg_handler(index, param, vars):
+                    values = [self._cast_var(var, sigty)
+                              for var, sigty in zip(vars, signature.args[index])]
+                    return cgutils.make_anonymous_struct(self.builder, values)
+                argvals = typing.fold_arguments(pysig,
+                                                pos_args, dict(expr.kws),
+                                                normal_handler,
+                                                default_handler,
+                                                stararg_handler)
 
         if isinstance(fnty, types.ExternalFunction):
             # Handle a named external function
@@ -554,9 +571,9 @@ class Lower(BaseLower):
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            # If we have a heterogenous tuple, we needn't do anything,
-            # and we can't iterate over it anyway.
-            if isinstance(ty, types.Tuple):
+            # If we have a tuple, we needn't do anything
+            # (and we can't iterate over the heterogenous ones).
+            if isinstance(ty, types.BaseTuple):
                 return val
 
             itemty = ty.iterator_type.yield_type
@@ -659,6 +676,9 @@ class Lower(BaseLower):
             castval = self.context.cast(self.builder, val, ty, resty)
             return castval
 
+        elif expr.op in self.context.special_ops:
+            return self.context.special_ops[expr.op](self, expr)
+
         raise NotImplementedError(expr)
 
     def getvar(self, name):
@@ -669,6 +689,7 @@ class Lower(BaseLower):
         return self.builder.load(ptr)
 
     def storevar(self, value, name):
+        fetype = self.typeof(name)
         # Clean up existing value stored in the variable
         try:
             # Load original value in variable
@@ -678,23 +699,32 @@ class Lower(BaseLower):
             pass
         else:
             # Else, dereference the old value
-            self.decref(self.typeof(name), old)
+            self.decref(fetype, old)
         # Store variable
         if name not in self.varmap:
-            self.varmap[name] = self.alloca_lltype(name, value.type)
+            # If not already defined, allocate it
+            llty = self.context.get_value_type(fetype)
+            ptr = self.alloca_lltype(name, llty)
+            # Remember the pointer
+            self.varmap[name] = ptr
+
         ptr = self.getvar(name)
-        assert value.type == ptr.type.pointee,\
-            "store %s to ptr of %s" % (value.type, ptr.type.pointee)
+        if value.type != ptr.type.pointee:
+            msg = ("Storing {value.type} to ptr of {ptr.type.pointee}. "
+                   "FE type {fetype}").format(value=value, ptr=ptr,
+                                              fetype=fetype)
+            raise AssertionError(msg)
+
         self.builder.store(value, ptr)
         # Incref
-        self.incref(self.typeof(name), value)
+        self.incref(fetype, value)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
-        return cgutils.alloca_once(self.builder, lltype, name=name)
+        return cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
 
     def incref(self, typ, val):
         if not self.context.enable_nrt:

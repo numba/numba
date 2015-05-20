@@ -13,6 +13,7 @@ import numpy
 import numpy.distutils.misc_util as np_misc
 import versioneer
 
+versioneer.VCS = 'git'
 versioneer.versionfile_source = 'numba/_version.py'
 versioneer.versionfile_build = 'numba/_version.py'
 versioneer.tag_prefix = ''
@@ -36,6 +37,13 @@ if sys.platform == 'darwin' and sys.version_info[:2] == (2, 6):
     cpp_link_args = ['-lstdc++']
 else:
     cpp_link_args = []
+
+
+install_name_tool_fixer = []
+
+if sys.platform == 'darwin':
+    install_name_tool_fixer += ['-headerpad_max_install_names']
+
 
 npymath_info = np_misc.get_info('npymath')
 
@@ -64,6 +72,7 @@ ext_helperlib = Extension(name="numba._helperlib",
                           include_dirs=[numpy.get_include()],
                           sources=["numba/_helperlib.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS,
+                          extra_link_args=install_name_tool_fixer,
                           depends=["numba/_pymodule.h",
                                    "numba/_math_c99.h",
                                    "numba/mathnames.inc"])
@@ -108,6 +117,8 @@ packages = [
     "numba.datamodel",
     "numba.cuda",
     "numba.cuda.cudadrv",
+    "numba.cuda.simulator",
+    "numba.cuda.simulator.cudadrv",
     "numba.cuda.tests",
     "numba.cuda.tests.cudadrv",
     "numba.cuda.tests.cudadrv.data",
@@ -116,6 +127,12 @@ packages = [
     "numba.annotations",
     "numba.runtime",
 ]
+
+install_requires = ['llvmlite', 'numpy']
+if sys.version_info < (3, 4):
+    install_requires.append('enum34')
+if sys.version_info < (3, 3):
+    install_requires.append('funcsigs')
 
 setup(name='numba',
       description="compiling Python code using LLVM",
@@ -146,7 +163,7 @@ setup(name='numba',
       url="http://numba.github.com",
       ext_modules=ext_modules,
       packages=packages,
+      install_requires=install_requires,
       license="BSD",
       cmdclass=cmdclass,
       **setup_args)
-

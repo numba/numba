@@ -32,13 +32,18 @@ def addsub_defaults(x, y=2, z=3):
     return x - y + z
 
 
+def star_defaults(x, y=2, *z):
+    return x, y, z
+
+
 class TestDispatcher(TestCase):
 
     def compile_func(self, pyfunc):
         def check(*args, **kwargs):
+            expected = pyfunc(*args, **kwargs)
             result = f(*args, **kwargs)
-            self.assertPreciseEqual(result, pyfunc(*args, **kwargs))
-        f = jit(pyfunc)
+            self.assertPreciseEqual(result, expected)
+        f = jit(nopython=True)(pyfunc)
         return f, check
 
     def test_numba_interface(self):
@@ -170,6 +175,29 @@ class TestDispatcher(TestCase):
         with self.assertRaises(TypeError) as cm:
             f(y=6, z=7)
         self.assertIn("missing argument 'x'", str(cm.exception))
+
+    def test_star_args(self):
+        """
+        Test a compiled function with starargs in the signature.
+        """
+        f, check = self.compile_func(star_defaults)
+        check(4)
+        check(4, 5)
+        check(4, 5, 6)
+        check(4, 5, 6, 7)
+        check(4, 5, 6, 7, 8)
+        check(x=4)
+        check(x=4, y=5)
+        check(4, y=5)
+        with self.assertRaises(TypeError) as cm:
+            f(4, 5, y=6)
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(4, 5, z=6)
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(4, x=6)
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
 
     def test_explicit_signatures(self):
         f = jit("(int64,int64)")(add)

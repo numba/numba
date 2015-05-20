@@ -58,6 +58,9 @@ class TargetOptions(object):
         if kws.pop('nogil', False):
             flags.set("release_gil")
 
+        if kws.pop('no_rewrites', False):
+            flags.set('no_rewrites')
+
         flags.set("enable_pyobject_looplift")
 
         if kws:

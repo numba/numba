@@ -17,6 +17,7 @@ from .imputils import implement, Registry
 from .. import typing, types, cgutils, numpy_support
 from ..config import PYVERSION
 from ..numpy_support import ufunc_find_matching_loop
+from ..typing import npydecl
 
 registry = Registry()
 register = registry.register
@@ -38,6 +39,7 @@ def register_casters(register_function):
     for tp in types.number_domain:
         register_function(caster(tp, getattr(numpy, str(tp))))
 
+    register_function(caster(types.bool_, numpy.bool_))
     register_function(caster(types.intc, numpy.intc))
     register_function(caster(types.uintc, numpy.uintc))
     register_function(caster(types.intp, numpy.intp))
@@ -260,6 +262,8 @@ def _build_array(context, builder, array_ty, arg_arrays):
     # mutating along any axis where the argument shape is not one and
     # the destination shape is one.
     for arg_number, arg in enumerate(arg_arrays):
+        if not hasattr(arg, "ndim"): # Skip scalar arguments
+            continue
         arg_ndim = make_intp_const(arg.ndim)
         for index in range(arg.ndim):
             builder.store(builder.extract_value(arg.ary.shape, index),
@@ -277,7 +281,7 @@ def _build_array(context, builder, array_ty, arg_arrays):
                            for dest_shape_addr in dest_shape_addrs)
     array_val = arrayobj._empty_nd_impl(context, builder, array_ty,
                                         dest_shape_tup)
-    return _prepare_argument(context, builder, array_val, array_ty,
+    return _prepare_argument(context, builder, array_val._getvalue(), array_ty,
                              where='implicit output argument')
 
 
@@ -409,6 +413,8 @@ def _ufunc_db_function(ufunc):
 ################################################################################
 # Helper functions that register the ufuncs
 
+_kernels = {} # Temporary map from ufunc's to their kernel implementation class
+
 def register_unary_ufunc_kernel(ufunc, kernel):
     def unary_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
@@ -423,6 +429,8 @@ def register_unary_ufunc_kernel(ufunc, kernel):
     register(implement(ufunc, _any, types.Kind(types.Array))(unary_ufunc))
     # (array or scalar)
     register(implement(ufunc, _any)(unary_ufunc_no_explicit_output))
+
+    _kernels[ufunc] = kernel
 
 
 def register_binary_ufunc_kernel(ufunc, kernel):
@@ -440,6 +448,27 @@ def register_binary_ufunc_kernel(ufunc, kernel):
     # (scalar, scalar)
     register(implement(ufunc, _any, _any)(binary_ufunc_no_explicit_output))
 
+    _kernels[ufunc] = kernel
+
+
+def register_unary_operator_kernel(operator, kernel):
+    def lower_unary_operator(context, builder, sig, args):
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
+                                  explicit_output=False)
+    _arr_kind = types.Kind(types.Array)
+    register(implement(operator, _arr_kind)(lower_unary_operator))
+
+
+def register_binary_operator_kernel(operator, kernel):
+    def lower_binary_operator(context, builder, sig, args):
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
+                                  explicit_output=False)
+    _any = types.Any
+    _arr_kind = types.Kind(types.Array)
+    register(implement(operator, _arr_kind, _arr_kind)(lower_binary_operator))
+    register(implement(operator, _any, _arr_kind)(lower_binary_operator))
+    register(implement(operator, _arr_kind, _any)(lower_binary_operator))
+
 
 ################################################################################
 # Use the contents of ufunc_db to initialize the supported ufuncs
@@ -452,3 +481,34 @@ for ufunc in ufunc_db.get_ufuncs():
     else:
         raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
 
+
+@register
+@implement('+', types.Kind(types.Array))
+def array_positive_impl(context, builder, sig, args):
+    '''Lowering function for +(array) expressions.  Defined here
+    (numba.targets.npyimpl) since the remaining array-operator
+    lowering functions are also registered in this module.
+    '''
+    class _UnaryPositiveKernel(_Kernel):
+        def generate(self, *args):
+            [val] = args
+            return val
+
+    return numpy_ufunc_kernel(context, builder, sig, args,
+                              _UnaryPositiveKernel, explicit_output=False)
+
+
+for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
+                npydecl.NumpyRulesArrayOperator._op_map):
+    for operator, ufunc_name in _op_map.items():
+        ufunc = getattr(numpy, ufunc_name)
+        kernel = _kernels[ufunc]
+        if ufunc.nin == 1:
+            register_unary_operator_kernel(operator, kernel)
+        elif ufunc.nin == 2:
+            register_binary_operator_kernel(operator, kernel)
+        else:
+            raise RuntimeError("There shouldn't be any non-unary or binary operators")
+
+
+del _kernels

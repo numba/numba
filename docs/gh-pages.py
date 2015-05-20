@@ -37,16 +37,24 @@ pages_repo = 'git@github.com:numba/numba-doc.git'
 #-----------------------------------------------------------------------------
 # Functions
 #-----------------------------------------------------------------------------
+def sub_environment():
+    """Return an environment dict for executing subcommands in."""
+    env = os.environ.copy()
+    # Force untranslated messages for regex matching
+    env['LANG'] = 'C'
+    return env
+
+
 def sh(cmd):
     """Execute command in a subshell, return status code."""
-    return check_call(cmd, shell=True)
+    return check_call(cmd, shell=True, env=sub_environment())
 
 
 def sh2(cmd):
     """Execute command in a subshell, return stdout.
 
     Stderr is unbuffered from the subshell.x"""
-    p = Popen(cmd, stdout=PIPE, shell=True)
+    p = Popen(cmd, stdout=PIPE, shell=True, env=sub_environment())
     out = p.communicate()[0]
     retcode = p.returncode
     if retcode:
@@ -59,7 +67,8 @@ def sh3(cmd):
     """Execute command in a subshell, return stdout, stderr
 
     If anything appears in stderr, print it out to sys.stderr"""
-    p = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
+    p = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True,
+              env=sub_environment())
     out, err = p.communicate()
     retcode = p.returncode
     if retcode:
@@ -71,7 +80,7 @@ def sh3(cmd):
 def init_repo(path):
     """clone the gh-pages repo if we haven't already."""
     sh("git clone %s %s"%(pages_repo, path))
-    here = os.getcwdu()
+    here = os.getcwd()
     cd(path)
     sh('git checkout gh-pages')
     cd(here)
@@ -85,12 +94,12 @@ if __name__ == '__main__':
         tag = sys.argv[1]
     except IndexError:
         try:
-            tag = sh2('git describe --exact-match')
+            tag = sh2('git describe --exact-match').decode()
         except CalledProcessError:
             tag = "dev"   # Fallback
             print("Using dev")
 
-    startdir = os.getcwdu()
+    startdir = os.getcwd()
     if not os.path.exists(pages_dir):
         # init the repo
         init_repo(pages_dir)
@@ -120,7 +129,7 @@ if __name__ == '__main__':
 
     try:
         cd(pages_dir)
-        status = sh2('git status | head -1')
+        status = sh2('git status | head -1').decode()
         branch = re.match('\#?\s*On branch (.*)$', status).group(1)
         if branch != 'gh-pages':
             e = 'On %r, git branch is %r, MUST be "gh-pages"' % (pages_dir,

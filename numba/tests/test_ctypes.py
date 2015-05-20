@@ -11,6 +11,21 @@ from numba import jit, types
 from .ctypes_usecases import *
 
 
+mydct = {'what': 1232121}
+
+def call_me_maybe(arr):
+    return mydct[arr[0].decode('ascii')]
+
+# Create a callback into the python interpreter
+py_call_back = CFUNCTYPE(c_int, py_object)(call_me_maybe)
+
+
+def take_array_ptr(ptr):
+    return ptr
+
+c_take_array_ptr = CFUNCTYPE(c_void_p, c_void_p)(take_array_ptr)
+
+
 class TestCTypes(unittest.TestCase):
 
     def test_c_sin(self):
@@ -88,14 +103,6 @@ class TestCTypes(unittest.TestCase):
         self.assertEqual(pyfunc(arr), cfunc(arr))
 
     def test_python_call_back_threaded(self):
-        mydct = {'what': 1232121}
-
-        def call_me_maybe(arr):
-            return mydct[arr[0].decode('ascii')]
-
-        # Create a callback into the python interpreter
-        py_call_back = CFUNCTYPE(c_int, py_object)(call_me_maybe)
-
         def pyfunc(a, repeat):
             out = 0
             for _ in range(repeat):
@@ -109,6 +116,9 @@ class TestCTypes(unittest.TestCase):
 
         expected = pyfunc(arr, repeat)
         outputs = []
+
+        # Warm up
+        cfunc(arr, repeat)
 
         # Test the function in multiple threads to exercise the
         # GIL ensure/release code
@@ -132,12 +142,6 @@ class TestCTypes(unittest.TestCase):
             self.assertEqual(expected, got)
 
     def test_passing_array_ctypes_data(self):
-
-        def take_array_ptr(ptr):
-            return ptr
-
-        c_take_array_ptr = CFUNCTYPE(c_void_p, c_void_p)(take_array_ptr)
-
         def pyfunc(arr):
             return c_take_array_ptr(arr.ctypes.data)
 

@@ -130,3 +130,8 @@ GPU support
 
    If set, force the CUDA compute capability to the given version (a
    string of the type ``major.minor``), regardless of attached devices.
+
+.. envvar:: NUMBA_ENABLE_CUDASIM
+
+   If set, don't compile and execute code for the GPU, but use the CUDA
+   Simulator instead. For debugging purposes.

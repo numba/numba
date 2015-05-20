@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import types, typing, utils, typeof
+from numba import types, typing, utils, typeof, numpy_support, njit
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype
 from numba import vectorize
@@ -17,7 +17,8 @@ from numba.config import PYVERSION
 from numba.typeinfer import TypingError
 from numba.targets import cpu
 from numba.lowering import LoweringError
-from .support import TestCase, CompilationCache, skip_on_numpy_16
+from .support import (TestCase, CompilationCache, skip_on_numpy_16,
+                      is_on_numpy_16)
 
 from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
@@ -62,12 +63,28 @@ def _make_unary_ufunc_usecase(ufunc):
     return fn
 
 
+def _make_unary_ufunc_op_usecase(ufunc_op):
+    ldict = {}
+    exec("def fn(x):\n    return {0}(x)".format(ufunc_op), globals(), ldict)
+    fn = ldict["fn"]
+    fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
+    return fn
+
+
 def _make_binary_ufunc_usecase(ufunc):
     ufunc_name = ufunc.__name__
     ldict = {}
     exec("def fn(x,y,out):\n    np.{0}(x,y,out)".format(ufunc_name), globals(), ldict);
     fn = ldict['fn']
     fn.__name__ = "{0}_usecase".format(ufunc_name)
+    return fn
+
+
+def _make_binary_ufunc_op_usecase(ufunc_op):
+    ldict = {}
+    exec("def fn(x,y):\n    return x{0}y".format(ufunc_op), globals(), ldict)
+    fn = ldict["fn"]
+    fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
     return fn
 
 
@@ -109,6 +126,29 @@ class TestUFuncs(TestCase):
             ]
         self.cache = CompilationCache()
 
+    def _determine_output_type(self, input_type, int_output_type=None,
+                               float_output_type=None):
+        ty = input_type
+        if isinstance(ty, types.Array):
+            ty = ty.dtype
+
+        if ty in types.signed_domain:
+            if int_output_type:
+                output_type = types.Array(int_output_type, 1, 'C')
+            else:
+                output_type = types.Array(ty, 1, 'C')
+        elif ty in types.unsigned_domain:
+            if int_output_type:
+                output_type = types.Array(int_output_type, 1, 'C')
+            else:
+                output_type = types.Array(ty, 1, 'C')
+        else:
+            if float_output_type:
+                output_type = types.Array(float_output_type, 1, 'C')
+            else:
+                output_type = types.Array(ty, 1, 'C')
+        return output_type
+
     def unary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None):
@@ -130,25 +170,8 @@ class TestUFuncs(TestCase):
             if input_type in skip_inputs:
                 continue
 
-            ty = input_type
-            if isinstance(ty, types.Array):
-                ty = ty.dtype
-
-            if ty in types.signed_domain:
-                if int_output_type:
-                    output_type = types.Array(int_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
-            elif ty in types.unsigned_domain:
-                if int_output_type:
-                    output_type = types.Array(int_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
-            else:
-                if float_output_type:
-                    output_type = types.Array(float_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
+            output_type = self._determine_output_type(
+                input_type, int_output_type, float_output_type)
 
             cr = self.cache.compile(pyfunc, (input_type, output_type),
                                     flags=flags)
@@ -203,6 +226,26 @@ class TestUFuncs(TestCase):
                                                expected.dtype, expected)
                         self.fail(msg)
 
+    def unary_op_test(self, operator, flags=enable_nrt_flags,
+                      skip_inputs=[], additional_inputs=[],
+                      int_output_type=None, float_output_type=None):
+        operator_func = _make_unary_ufunc_op_usecase(operator)
+        inputs = list(self.inputs)
+        inputs.extend(additional_inputs)
+        pyfunc = operator_func
+        for input_tuple in inputs:
+            input_operand, input_type = input_tuple
+
+            if ((input_type in skip_inputs) or
+                (not isinstance(input_type, types.Array))):
+                continue
+
+            cr = self.cache.compile(pyfunc, (input_type,),
+                                    flags=flags)
+            cfunc = cr.entry_point
+            expected = pyfunc(input_operand)
+            result = cfunc(input_operand)
+            np.testing.assert_array_almost_equal(expected, result)
 
     def binary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
@@ -220,25 +263,8 @@ class TestUFuncs(TestCase):
             if input_type in skip_inputs:
                 continue
 
-            ty = input_type
-            if isinstance(ty, types.Array):
-                ty = ty.dtype
-
-            if ty in types.signed_domain:
-                if int_output_type:
-                    output_type = types.Array(int_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
-            elif ty in types.unsigned_domain:
-                if int_output_type:
-                    output_type = types.Array(int_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
-            else:
-                if float_output_type:
-                    output_type = types.Array(float_output_type, 1, 'C')
-                else:
-                    output_type = types.Array(ty, 1, 'C')
+            output_type = self._determine_output_type(
+                input_type, int_output_type, float_output_type)
 
             cr = self.cache.compile(pyfunc, (input_type, input_type, output_type),
                                     flags=flags)
@@ -254,27 +280,56 @@ class TestUFuncs(TestCase):
                 expected = np.zeros(1, dtype=output_type.dtype.name)
             cfunc(input_operand, input_operand, result)
             pyfunc(input_operand, input_operand, expected)
+            np.testing.assert_array_almost_equal(expected, result)
 
-            # Need special checks if NaNs are in results
-            if np.isnan(expected).any() or np.isnan(result).any():
-                self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
-                if not np.isnan(expected).all() and not np.isnan(result).all():
-                    self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
-                                     expected[np.invert(np.isnan(expected))]))
+    def binary_op_test(self, operator, flags=enable_nrt_flags,
+                       skip_inputs=[], additional_inputs=[],
+                       int_output_type=None, float_output_type=None,
+                       positive_rhs=False):
+        operator_func = _make_binary_ufunc_op_usecase(operator)
+        inputs = list(self.inputs)
+        inputs.extend(additional_inputs)
+        pyfunc = operator_func
+        for input_tuple in inputs:
+            input_operand1, input_type = input_tuple
+            input_dtype = numpy_support.as_dtype(
+                getattr(input_type, "dtype", input_type))
+            input_type1 = input_type
+
+            if input_type in skip_inputs:
+                continue
+
+            if positive_rhs:
+                zero = np.zeros(1, dtype=input_dtype)[0]
+            # If we only use two scalars, the code generator will not
+            # select the ufunctionalized operator, so we mix it up.
+            if isinstance(input_type, types.Array):
+                input_operand0 = input_operand1
+                input_type0 = input_type
+                if positive_rhs and np.any(input_operand1 < zero):
+                    continue
             else:
-                match = np.all(result == expected) or np.allclose(result,
-                                                                  expected)
-                if not match:
-                    msg = '\n'.join(["ufunc '{0}' failed",
-                                     "inputs ({1}):", "{2}",
-                                     "got({3})", "{4}",
-                                     "expected ({5}):", "{6}"
-                                 ]).format(ufunc.__name__,
-                                           input_type, input_operand,
-                                           output_type, result,
-                                           expected.dtype, expected)
-                    self.fail(msg)
+                input_operand0 = (np.random.random(10) * 100).astype(
+                    input_dtype)
+                input_type0 = typeof(input_operand0)
+                if positive_rhs and input_operand1 < zero:
+                    continue
 
+            cr = self.cache.compile(pyfunc, (input_type0, input_type1),
+                                    flags=flags)
+            cfunc = cr.entry_point
+            expected = pyfunc(input_operand0, input_operand1)
+            result = cfunc(input_operand0, input_operand1)
+            np.testing.assert_array_almost_equal(expected, result)
+
+    def binary_int_op_test(self, *args, **kws):
+        if 'skip_inputs' not in kws:
+            kws['skip_inputs'] = []
+        kws['skip_inputs'].extend([
+            types.float32, types.float64,
+            types.Array(types.float32, 1, 'C'),
+            types.Array(types.float64, 1, 'C')])
+        return self.binary_op_test(*args, **kws)
 
     def unary_int_ufunc_test(self, name=None, flags=enable_pyobj_flags):
         self.unary_ufunc_test(name, flags=flags,
@@ -658,7 +713,7 @@ class TestUFuncs(TestCase):
         self.test_bitwise_not_ufunc(flags=no_pyobj_flags)
 
 
-    # Note: there is no entry for left_shift and right_shift as this harness 
+    # Note: there is no entry for left_shift and right_shift as this harness
     #       is not valid for them. This is so because left_shift and right
     #       shift implementation in NumPy has undefined behavior (in C-parlance)
     #       when the second argument is a negative (or bigger than the number
@@ -1075,6 +1130,100 @@ class TestUFuncs(TestCase):
                          result1.flags.f_contiguous)
         np.testing.assert_array_equal(expected1, result1)
 
+    # ____________________________________________________________
+    # Array operators
+
+    def test_unary_positive_array_op(self):
+        self.unary_op_test('+')
+
+    def test_unary_negative_array_op(self):
+        self.unary_op_test('-')
+
+    def test_unary_invert_array_op(self):
+        self.unary_op_test('~', skip_inputs=[
+            types.float32, types.float64,
+            types.Array(types.float32, 1, 'C'),
+            types.Array(types.float64, 1, 'C')])
+
+    def test_add_array_op(self):
+        self.binary_op_test('+')
+
+    def test_subtract_array_op(self):
+        self.binary_op_test('-')
+
+    def test_multiply_array_op(self):
+        self.binary_op_test('*')
+
+    def test_divide_array_op(self):
+        int_out_type = None
+        if PYVERSION >= (3, 0):
+            int_out_type = types.float64
+        self.binary_op_test('/', int_output_type=int_out_type)
+
+    def test_floor_divide_array_op(self):
+        self.binary_op_test('//')
+
+    def test_remainder_array_op(self):
+        self.binary_op_test('%')
+
+    def test_power_array_op(self):
+        self.binary_op_test('**')
+
+    def test_left_shift_array_op(self):
+        self.binary_int_op_test('<<', positive_rhs=True)
+
+    def test_right_shift_array_op(self):
+        self.binary_int_op_test('>>', positive_rhs=True)
+
+    def test_bitwise_and_array_op(self):
+        self.binary_int_op_test('&')
+
+    def test_bitwise_or_array_op(self):
+        self.binary_int_op_test('|')
+
+    def test_bitwise_xor_array_op(self):
+        self.binary_int_op_test('^')
+
+    def test_equal_array_op(self):
+        self.binary_op_test('==')
+
+    def test_greater_array_op(self):
+        self.binary_op_test('>')
+
+    def test_greater_equal_array_op(self):
+        self.binary_op_test('>=')
+
+    def test_less_array_op(self):
+        self.binary_op_test('<')
+
+    def test_less_equal_array_op(self):
+        self.binary_op_test('<=')
+
+    def test_not_equal_array_op(self):
+        self.binary_op_test('!=')
+
+    def test_unary_positive_array_op(self):
+        '''
+        Verify that the unary positive operator copies values, and doesn't
+        just alias to the input array (mirrors normal Numpy/Python
+        interaction behavior).
+        '''
+        # Test originally from @gmarkall
+        def f(a1):
+            a2 = +a1
+            a1[0] = 3
+            a2[1] = 4
+            return a2
+
+        a1 = np.zeros(10)
+        a2 = f(a1)
+        self.assertTrue(a1[0] != a2[0] and a1[1] != a2[1])
+        a3 = np.zeros(10)
+        a4 = njit(f)(a3)
+        self.assertTrue(a3[0] != a4[0] and a3[1] != a4[1])
+        np.testing.assert_array_equal(a1, a3)
+        np.testing.assert_array_equal(a2, a4)
+
 
 class TestScalarUFuncs(TestCase):
     """check the machinery of ufuncs works when the result is an scalar.
@@ -1193,7 +1342,7 @@ class TestUfuncIssues(TestCase):
         self.assertEqual(foo(1j, 1j), cr.entry_point(1j, 1j))
 
 
-class TestLoopTypes(TestCase):
+class _TestLoopTypes(TestCase):
     """Test code generation for the different loop types defined by ufunc.
 
     This class tests the ufuncs without forcing no-python mode. Subclasses
@@ -1221,8 +1370,13 @@ class TestLoopTypes(TestCase):
     """
 
     _ufuncs = all_ufuncs[:]
+    _ufuncs.remove(np.left_shift) # has its own test class
     _compile_flags = enable_pyobj_flags
-    _skip_types='O'
+    _skip_types = 'OegG'
+
+    # Skip datetime64 'M' and timedelta64 'm' on numpy 1.6
+    if is_on_numpy_16:
+        _skip_types += 'Mm'
 
     def _arg_for_type(self, a_letter_type, index=0):
         """return a suitable array argument for testing the letter type"""
@@ -1262,11 +1416,12 @@ class TestLoopTypes(TestCase):
         # fail in no python mode. Usually the last loop in ufuncs is an all
         # object fallback
         supported_types = getattr(self, '_supported_types', [])
-        skip_types = getattr(self, '_skip_types', [])
-        if any(l not in supported_types or l in skip_types
-               for l in letter_types):
+        if (supported_types and
+            any(l not in supported_types for l in letter_types)):
             return
-
+        skip_types = getattr(self, '_skip_types', [])
+        if any(l in skip_types for l in letter_types):
+            return
         # if the test case requires some types to be present, skip loops
         # not involving any of those types.
         required_types = getattr(self, '_required_types', [])
@@ -1301,43 +1456,73 @@ class TestLoopTypes(TestCase):
                 msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
                                  "args: {2}", "expected {3}", "got {4}"])
                 msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
-                self.assertPreciseEqual(py, c, prec=prec, msg=msg) 
+                try:
+                    self.assertPreciseEqual(py, c, prec=prec, msg=msg)
+                except AssertionError:
+                    if not self._is_acceptable_error(py, c):
+                        raise
 
-    def _check_ufunc_loops(self, ufunc):
-        fn = _make_ufunc_usecase(ufunc)
-        _failed_loops = []
+    def _is_acceptable_error(self, py, c):
+        """
+        Result mismatch due to differing error handling.
+        """
+        def get_leftmost_bit(dtype):
+            return dtype.type(1 << (dtype.itemsize * 8 - 1))
+
+        if np.isnan(c) or np.isnan(py):
+            if 0 in [c, py]:
+                # If one is NaN and the other is zero
+                msg = "mismatch for nan values: expected {0}; got {1}"
+                print(msg.format(py, c))
+                # This is not occurring any more
+
+        elif np.abs(c) == 0 and np.abs(py) == np.abs(c):
+            # If both are zeros and they are differ by sign
+            msg = "mismatch sign for 0: expected {0}; got {1}"
+            print(msg.format(py, c))
+            return True
+
+        elif ((c == 0 and py == get_leftmost_bit(py.dtype)) or
+                  (py == 0 and c == get_leftmost_bit(py.dtype))):
+            msg = "mismatch left-most bit: expected {0}; got {1}"
+            print(msg.format(py, c))
+            return True
+
+        elif isinstance(c, complex) and isinstance(py, complex):
+            # Recurse into real and imag of a complex
+            return (self._is_acceptable_error(c.real, py.real)
+                    and self._is_acceptable_error(c.imag, py.imag))
+
+        # Match?
+        return py == c
+
+    @classmethod
+    def _check_ufunc_loops(cls, ufunc):
         for loop in ufunc.types:
-            try:
-                self._check_loop(fn, ufunc, loop)
-            except AssertionError as e:
-                import traceback
-                traceback.print_exc()
-                _failed_loops.append('{2} {0}:{1}'.format(loop, str(e),
-                                                          ufunc.__name__))
+            cls._inject_test(ufunc, loop)
 
-        return _failed_loops
+    @classmethod
+    def _inject_test(cls, ufunc, loop):
+        def test_template(self):
+            fn = _make_ufunc_usecase(ufunc)
+            self._check_loop(fn, ufunc, loop)
+        setattr(cls, "test_{0}_{1}".format(ufunc.__name__,
+                                           loop.replace('->', '_')),
+                test_template)
 
-    def test_ufunc_loops(self):
-        failed_ufuncs = []
-        failed_loops_count = 0
-        for ufunc in self._ufuncs:
-            failed_loops = self._check_ufunc_loops(ufunc)
-            if failed_loops:
-                failed_loops_count += len(failed_loops)
-                msg = 'ufunc {0} failed in loops:\n\t{1}\n\t'.format(
-                    ufunc.__name__,
-                    '\n\t'.join(failed_loops))
-                failed_ufuncs.append(msg)
-
-        if failed_ufuncs:
-            msg = 'Failed {0} ufuncs, {1} loops:\n{2}'.format(
-                len(failed_ufuncs), failed_loops_count,
-                '\n'.join(failed_ufuncs))
-
-            self.fail(msg=msg)
+    @classmethod
+    def autogenerate(cls):
+        for ufunc in cls._ufuncs:
+            cls._check_ufunc_loops(ufunc)
 
 
-class TestLoopTypesIntNoPython(TestLoopTypes):
+class TestLoopTypes(_TestLoopTypes):
+    pass
+
+TestLoopTypes.autogenerate()
+
+
+class TestLoopTypesIntNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
     # reciprocal needs a special test due to issue #757
@@ -1345,32 +1530,34 @@ class TestLoopTypesIntNoPython(TestLoopTypes):
     _ufuncs.remove(np.left_shift) # has its own test class
     _ufuncs.remove(np.right_shift) # has its own test class
     _required_types = '?bBhHiIlLqQ'
-    _skip_types = 'fdFDmMO'
+    _skip_types = 'fdFDmMO' + _TestLoopTypes._skip_types
 
+TestLoopTypesIntNoPython.autogenerate()
 
-class TestLoopTypesIntReciprocalNoPython(TestLoopTypes):
+class TestLoopTypesIntReciprocalNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.reciprocal] # issue #757
     _required_types = 'bBhHiIlLqQ'
-    _skip_types = 'fdFDmMO'
+    _skip_types = 'fdFDmMO' + _TestLoopTypes._skip_types
 
     def _arg_for_type(self, a_letter_type, index=0):
-        res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
+        res = super(self.__class__, self)._arg_for_type(a_letter_type,
                                                         index=index)
         # avoid 0 as argument, as it triggers undefined behavior that my differ
         # in results from numba to the compiler used to compile NumPy
         res[res == 0] = 42
         return res
 
+TestLoopTypesIntReciprocalNoPython.autogenerate()
 
-class TestLoopTypesIntLeftShiftNoPython(TestLoopTypes):
+class TestLoopTypesIntLeftShiftNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.left_shift]
     _required_types = 'bBhHiIlLqQ'
-    _skip_types = 'fdFDmMO'
+    _skip_types = 'fdFDmMO' + _TestLoopTypes._skip_types
 
     def _arg_for_type(self, a_letter_type, index=0):
-        res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
+        res = super(self.__class__, self)._arg_for_type(a_letter_type,
                                                         index=index)
         # Shifting by a negative amount (argument with index 1) is undefined
         # behavior in C. It is also undefined behavior in numba. In the same
@@ -1380,18 +1567,19 @@ class TestLoopTypesIntLeftShiftNoPython(TestLoopTypes):
         # that 0 <= shift_amount < bitcount(shifted_integer)
         if index == 1:
             bit_count = res.dtype.itemsize * 8
-            res = np.clip(res, 0, bit_count-1) 
+            res = np.clip(res, 0, bit_count-1)
         return res
 
+TestLoopTypesIntLeftShiftNoPython.autogenerate()
 
-class TestLoopTypesIntRightShiftNoPython(TestLoopTypes):
+class TestLoopTypesIntRightShiftNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.right_shift]
     _required_types = 'bBhHiIlLqQ'
-    _skip_types = 'fdFDmMO'
+    _skip_types = 'fdFDmMO' + _TestLoopTypes._skip_types
 
     def _arg_for_type(self, a_letter_type, index=0):
-        res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
+        res = super(self.__class__, self)._arg_for_type(a_letter_type,
                                                         index=index)
         # Shifting by a negative amount (argument with index 1) is undefined
         # behavior in C. It is also undefined behavior in numba. In the same
@@ -1407,7 +1595,7 @@ class TestLoopTypesIntRightShiftNoPython(TestLoopTypes):
         # shifted is negative (in C). In numba, right shift for signed integers
         # is "arithmetic" while for unsigned integers is "logical".
         # This test compares against the NumPy implementation, that relies
-        # on "implementation defined behavior", so the test could be a false 
+        # on "implementation defined behavior", so the test could be a false
         # failure if the compiler used to compile NumPy doesn't follow the same
         # policy.
         # Hint: do not rely on right shifting negative numbers in NumPy.
@@ -1415,28 +1603,31 @@ class TestLoopTypesIntRightShiftNoPython(TestLoopTypes):
             res = np.abs(res)
         return res
 
+TestLoopTypesIntRightShiftNoPython.autogenerate()
 
-class TestLoopTypesFloatNoPython(TestLoopTypes):
+class TestLoopTypesFloatNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
     if iswindows:
         _ufuncs.remove(np.signbit) # TODO: fix issue #758
     _required_types = 'fd'
-    _skip_types = 'FDmMO'
+    _skip_types = 'FDmMO' + _TestLoopTypes._skip_types
 
+TestLoopTypesFloatNoPython.autogenerate()
 
-class TestLoopTypesComplexNoPython(TestLoopTypes):
+class TestLoopTypesComplexNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
 
     # Test complex types
     # Every loop containing a complex argument must be tested
     _required_types = 'FD'
-    _skip_types = 'mMO'
+    _skip_types = 'mMO' + _TestLoopTypes._skip_types
 
+TestLoopTypesComplexNoPython.autogenerate()
 
 @skip_on_numpy_16
-class TestLoopTypesDatetimeNoPython(TestLoopTypes):
+class TestLoopTypesDatetimeNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
 
@@ -1530,6 +1721,7 @@ class TestLoopTypesDatetimeNoPython(TestLoopTypes):
                       np.greater, np.greater_equal]:
             self._check_comparison(ufunc)
 
+TestLoopTypesDatetimeNoPython.autogenerate()
 
 class TestUFuncBadArgsNoPython(TestCase):
     _compile_flags = no_pyobj_flags

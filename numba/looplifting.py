@@ -21,7 +21,7 @@ def lift_loop(bytecode, dispatcher_factory):
     separate_loops(bytecode, outer, loops)
 
     # Prepend arguments as negative bytecode offset
-    for a in bytecode.argspec.args:
+    for a in bytecode.pysig.parameters:
         outer_wrs[a] = [-1] + outer_wrs[a]
 
     dispatchers = []
@@ -42,7 +42,7 @@ def lift_loop(bytecode, dispatcher_factory):
     outerbc = CustomByteCode(func=bytecode.func,
                              func_qualname=bytecode.func_qualname,
                              is_generator=bytecode.is_generator,
-                             argspec=bytecode.argspec,
+                             pysig=bytecode.pysig,
                              filename=bytecode.filename,
                              co_names=outernames,
                              co_varnames=bytecode.co_varnames,
@@ -231,10 +231,6 @@ def make_loop_bytecode(bytecode, loop, args, returns):
     # Function name
     loop_qualname = bytecode.func_qualname + ".__numba__loop%d__" % loop[0].offset
 
-    # Argspec
-    argspectype = type(bytecode.argspec)
-    argspec = argspectype(args=args, varargs=(), keywords=(), defaults=())
-
     # Code table
     codetable = utils.SortedMap((i.offset, i) for i in loop)
 
@@ -243,7 +239,9 @@ def make_loop_bytecode(bytecode, loop, args, returns):
                          func_qualname=loop_qualname,
                          # Enforced in separate_loops()
                          is_generator=False,
-                         argspec=argspec,
+                         pysig=bytecode.pysig,
+                         arg_count=len(args),
+                         arg_names=args,
                          filename=bytecode.filename,
                          co_names=bytecode.co_names,
                          co_varnames=bytecode.co_varnames,

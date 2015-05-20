@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import contextlib
 import sys
 import numpy as np
 import threading
@@ -8,9 +9,27 @@ import random
 from numba import unittest_support as unittest
 from numba import njit
 from numba import utils
+from numba.numpy_support import version as numpy_version
 
 
 nrtjit = njit(_nrt=True, nogil=True)
+
+
+class BaseTest(unittest.TestCase):
+
+    def check_outputs(self, pyfunc, argslist, exact=True):
+        cfunc = nrtjit(pyfunc)
+        for args in argslist:
+            expected = pyfunc(*args)
+            ret = cfunc(*args)
+            self.assertEqual(ret.size, expected.size)
+            self.assertEqual(ret.shape, expected.shape)
+            self.assertEqual(ret.dtype, expected.dtype)
+            self.assertEqual(ret.strides, expected.strides)
+            if exact:
+                np.testing.assert_equal(expected, ret)
+            else:
+                np.testing.assert_allclose(expected, ret)
 
 
 class TestDynArray(unittest.TestCase):
@@ -420,6 +439,337 @@ class TestDynArray(unittest.TestCase):
 
         self.assertEqual(old_refct, sys.getrefcount(pyfunc(arr)))
         self.assertEqual(old_refct, sys.getrefcount(cfunc(arr)))
+        self.assertEqual(old_refct, sys.getrefcount(arr))
+
+
+class ConstructorBaseTest(object):
+
+    def check_1d(self, pyfunc, dtype):
+        cfunc = nrtjit(pyfunc)
+        n = 3
+        expected = pyfunc(n)
+        ret = cfunc(n)
+        self.assertEqual(ret.size, expected.size)
+        self.assertEqual(ret.shape, expected.shape)
+        self.assertEqual(ret.dtype, expected.dtype)
+        self.assertEqual(ret.strides, expected.strides)
+        self.check_result_value(ret, expected)
+        # test writability
+        expected = np.empty_like(ret) # np.full_like was not added until Numpy 1.8
+        expected.fill(123)
+        ret.fill(123)
+        np.testing.assert_equal(ret, expected)
+        # errors
+        with self.assertRaises(ValueError) as cm:
+            cfunc(-1)
+        self.assertEqual(str(cm.exception), "negative dimensions not allowed")
+
+    def check_2d(self, pyfunc, dtype):
+        cfunc = nrtjit(pyfunc)
+        m, n = 2, 3
+        expected = pyfunc(m, n)
+        ret = cfunc(m, n)
+        self.assertEqual(ret.size, expected.size)
+        self.assertEqual(ret.shape, expected.shape)
+        self.assertEqual(ret.dtype, expected.dtype)
+        self.assertEqual(ret.strides, expected.strides)
+        self.check_result_value(ret, expected)
+        # test writability
+        expected = np.empty_like(ret)  # np.full_like was not added until Numpy 1.8
+        expected.fill(123)
+        ret.fill(123)
+        np.testing.assert_equal(ret, expected)
+        # errors
+        with self.assertRaises(ValueError) as cm:
+            cfunc(2, -1)
+        self.assertEqual(str(cm.exception), "negative dimensions not allowed")
+
+
+class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
+
+    def setUp(self):
+        self.pyfunc = np.zeros
+
+    def check_result_value(self, ret, expected):
+        np.testing.assert_equal(ret, expected)
+
+    def test_1d(self):
+        pyfunc = self.pyfunc
+        def func(n):
+            return pyfunc(n)
+        self.check_1d(func, np.float64)
+
+    def test_1d_dtype(self):
+        pyfunc = self.pyfunc
+        def func(n):
+            return pyfunc(n, np.int32)
+        self.check_1d(func, np.int32)
+
+    def test_2d(self):
+        pyfunc = self.pyfunc
+        def func(m, n):
+            return pyfunc((m, n))
+        self.check_2d(func, np.float64)
+
+    def test_2d_dtype_kwarg(self):
+        pyfunc = self.pyfunc
+        def func(m, n):
+            return pyfunc((m, n), dtype=np.complex64)
+        self.check_2d(func, np.complex64)
+
+
+class TestNdOnes(TestNdZeros):
+
+    def setUp(self):
+        self.pyfunc = np.ones
+
+
+@unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
+class TestNdFull(ConstructorBaseTest, unittest.TestCase):
+
+    def check_result_value(self, ret, expected):
+        np.testing.assert_equal(ret, expected)
+
+    def test_1d(self):
+        def func(n):
+            return np.full(n, 4.5)
+        self.check_1d(func, np.float64)
+
+    def test_1d_dtype(self):
+        def func(n):
+            return np.full(n, 4.5, np.bool_)
+        self.check_1d(func, np.int32)
+
+    def test_2d(self):
+        def func(m, n):
+            return np.full((m, n), 4.5)
+        self.check_2d(func, np.float64)
+
+    def test_2d_dtype_kwarg(self):
+        def func(m, n):
+            return np.full((m, n), 1 + 4.5j, dtype=np.complex64)
+        self.check_2d(func, np.complex64)
+
+
+class ConstructorLikeBaseTest(object):
+
+    def check_like(self, pyfunc, dtype, ret_dtype):
+        orig = np.linspace(0, 5, 6).astype(dtype)
+        cfunc = nrtjit(pyfunc)
+
+        for shape in (6, (2, 3), (1, 2, 3), (3, 1, 2)):
+            arr = orig.reshape(shape)
+            expected = pyfunc(arr)
+            ret = cfunc(arr)
+            self.assertEqual(ret.size, expected.size)
+            self.assertEqual(ret.shape, expected.shape)
+            self.assertEqual(ret.dtype, expected.dtype)
+            self.assertEqual(ret.strides, expected.strides)
+            self.check_result_value(ret, expected)
+            # test writability
+            ret.fill(123)
+            expected.fill(123)
+            np.testing.assert_equal(ret, expected)
+
+
+class TestNdEmptyLike(ConstructorLikeBaseTest, unittest.TestCase):
+
+    def setUp(self):
+        self.pyfunc = np.empty_like
+
+    def check_result_value(self, ret, expected):
+        pass
+
+    def test_like(self):
+        pyfunc = self.pyfunc
+        def func(arr):
+            return pyfunc(arr)
+        self.check_like(func, np.float64, np.float64)
+
+    # Not supported yet.
+    @unittest.expectedFailure
+    def test_like_structured(self):
+        dtype = np.dtype([('a', np.int16), ('b', np.float32)])
+        pyfunc = self.pyfunc
+        def func(arr):
+            return pyfunc(arr)
+        self.check_like(func, dtype, dtype)
+
+    def test_like_dtype(self):
+        pyfunc = self.pyfunc
+        def func(arr):
+            return pyfunc(arr, np.int32)
+        self.check_like(func, np.float64, np.int32)
+
+    def test_like_dtype_kwarg(self):
+        pyfunc = self.pyfunc
+        def func(arr):
+            return pyfunc(arr, dtype=np.int32)
+        self.check_like(func, np.float64, np.int32)
+
+
+class TestNdZerosLike(TestNdEmptyLike):
+
+    def setUp(self):
+        self.pyfunc = np.zeros_like
+
+    def check_result_value(self, ret, expected):
+        np.testing.assert_equal(ret, expected)
+
+
+@unittest.skipIf(numpy_version < (1, 7), "test requires Numpy 1.7 or later")
+class TestNdOnesLike(TestNdZerosLike):
+
+    def setUp(self):
+        self.pyfunc = np.ones_like
+        self.expected_value = 1
+
+
+@unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
+class TestNdFullLike(ConstructorLikeBaseTest, unittest.TestCase):
+
+    def check_result_value(self, ret, expected):
+        np.testing.assert_equal(ret, expected)
+
+    def test_like(self):
+        def func(arr):
+            return np.full_like(arr, 3.5)
+        self.check_like(func, np.float64, np.float64)
+
+    # Not supported yet.
+    @unittest.expectedFailure
+    def test_like_structured(self):
+        dtype = np.dtype([('a', np.int16), ('b', np.float32)])
+        def func(arr):
+            return np.full_like(arr, 4.5)
+        self.check_like(func, dtype, dtype)
+
+    def test_like_dtype(self):
+        def func(arr):
+            return np.full_like(arr, 4.5, np.bool_)
+        self.check_like(func, np.float64, np.bool_)
+
+    def test_like_dtype_kwarg(self):
+        def func(arr):
+            return np.full_like(arr, 4.5, dtype=np.bool_)
+        self.check_like(func, np.float64, np.bool_)
+
+
+class TestNdIdentity(BaseTest):
+
+    def check_identity(self, pyfunc):
+        self.check_outputs(pyfunc, [(3,)])
+
+    def test_identity(self):
+        def func(n):
+            return np.identity(n)
+        self.check_identity(func)
+
+    def test_identity_dtype(self):
+        for dtype in (np.complex64, np.int16, np.bool_):
+            def func(n):
+                return np.identity(n, dtype)
+            self.check_identity(func)
+
+
+class TestNdEye(BaseTest):
+
+    def test_eye_n(self):
+        def func(n):
+            return np.eye(n)
+        self.check_outputs(func, [(1,), (3,)])
+
+    def test_eye_n_m(self):
+        def func(n, m):
+            return np.eye(n, m)
+        self.check_outputs(func, [(1, 2), (3, 2), (0, 3)])
+
+    def check_eye_n_m_k(self, func):
+        self.check_outputs(func, [(1, 2, 0),
+                                  (3, 4, 1),
+                                  (3, 4, -1),
+                                  (4, 3, -2),
+                                  (4, 3, -5),
+                                  (4, 3, 5)])
+
+    def test_eye_n_m_k(self):
+        def func(n, m, k):
+            return np.eye(n, m, k)
+        self.check_eye_n_m_k(func)
+
+    def test_eye_n_m_k_dtype(self):
+        def func(n, m, k):
+            return np.eye(N=n, M=m, k=k, dtype=np.int16)
+        self.check_eye_n_m_k(func)
+
+
+class TestNdArange(BaseTest):
+
+    def test_linspace_2(self):
+        def pyfunc(n, m):
+            return np.linspace(n, m)
+        self.check_outputs(pyfunc,
+                           [(0, 4), (1, 100), (-3.5, 2.5), (-3j, 2+3j),
+                            (2, 1), (1+0.5j, 1.5j)], exact=False)
+
+    def test_linspace_3(self):
+        def pyfunc(n, m, p):
+            return np.linspace(n, m, p)
+        self.check_outputs(pyfunc,
+                           [(0, 4, 9), (1, 4, 3), (-3.5, 2.5, 8),
+                            (-3j, 2+3j, 7), (2, 1, 0),
+                            (1+0.5j, 1.5j, 5), (1, 1e100, 1)],
+                           exact=False)
+
+
+class TestNpyEmptyKeyword(unittest.TestCase):
+    def _test_with_dtype_kw(self, dtype):
+        def pyfunc(shape):
+            return np.empty(shape, dtype=dtype)
+
+        shapes = [1, 5, 9]
+
+        cfunc = nrtjit(pyfunc)
+        for s in shapes:
+            expected = pyfunc(s)
+            got = cfunc(s)
+            self.assertEqual(expected.dtype, got.dtype)
+            self.assertEqual(expected.shape, got.shape)
+
+    def test_with_dtype_kws(self):
+        for dtype in [np.int32, np.float32, np.complex64]:
+            self._test_with_dtype_kw(dtype)
+
+    def _test_with_shape_and_dtype_kw(self, dtype):
+        def pyfunc(shape):
+            return np.empty(shape=shape, dtype=dtype)
+
+        shapes = [1, 5, 9]
+
+        cfunc = nrtjit(pyfunc)
+        for s in shapes:
+            expected = pyfunc(s)
+            got = cfunc(s)
+            self.assertEqual(expected.dtype, got.dtype)
+            self.assertEqual(expected.shape, got.shape)
+
+    def test_with_shape_and_dtype_kws(self):
+        for dtype in [np.int32, np.float32, np.complex64]:
+            self._test_with_dtype_kw(dtype)
+
+    def test_empty_no_args(self):
+        from numba.typeinfer import TypingError
+
+        def pyfunc():
+            return np.empty()
+
+
+        cfunc = nrtjit(pyfunc)
+
+        # Trigger the compilation
+        # That will cause a TypingError due to missing shape argument
+        with self.assertRaises(TypingError):
+            cfunc()
 
 
 def benchmark_refct_speed():

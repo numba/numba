@@ -93,7 +93,8 @@ class Interpreter(object):
         self.bytecode = bytecode
         self.scopes = []
         self.loc = ir.Loc(filename=bytecode.filename, line=1)
-        self.argspec = bytecode.argspec
+        self.arg_count = bytecode.arg_count
+        self.arg_names = bytecode.arg_names
         # Control flow analysis
         self.cfa = controlflow.ControlFlowAnalysis(bytecode)
         self.cfa.run()
@@ -357,7 +358,7 @@ class Interpreter(object):
 
     def init_first_block(self):
         # Define variables receiving the function arguments
-        for index, name in enumerate(self.argspec.args):
+        for index, name in enumerate(self.arg_names):
             val = ir.Arg(index=index, name=name, loc=self.loc)
             self.store(val, name)
 
@@ -790,9 +791,11 @@ class Interpreter(object):
         loop = ir.Loop(inst.offset, exit=(inst.next + inst.arg))
         self.syntax_blocks.append(loop)
 
-    def op_CALL_FUNCTION(self, inst, func, args, kws, res):
+    def op_CALL_FUNCTION(self, inst, func, args, kws, res, vararg):
         func = self.get(func)
         args = [self.get(x) for x in args]
+        if vararg is not None:
+            vararg = self.get(vararg)
 
         # Process keywords
         keyvalues = []
@@ -808,8 +811,11 @@ class Interpreter(object):
         for inst in removethese:
             self.current_block.remove(inst)
 
-        expr = ir.Expr.call(func, args, keyvalues, loc=self.loc)
+        expr = ir.Expr.call(func, args, keyvalues, loc=self.loc,
+                            vararg=vararg)
         self.store(expr, res)
+
+    op_CALL_FUNCTION_VAR = op_CALL_FUNCTION
 
     def op_GET_ITER(self, inst, value, res):
         expr = ir.Expr.getiter(value=self.get(value), loc=self.loc)

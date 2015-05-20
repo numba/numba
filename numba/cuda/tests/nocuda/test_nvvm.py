@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, division
 
 from numba.cuda.compiler import compile_kernel
 from numba.cuda.cudadrv import nvvm
+from numba.cuda.testing import skip_on_cudasim
 from numba import unittest_support as unittest
 from numba import types
 
@@ -14,6 +15,7 @@ def has_nvvm_lib():
         return True
 
 
+@skip_on_cudasim('libNVVM not supported in simulator')
 @unittest.skipIf(not has_nvvm_lib(), "No libNVVM")
 class TestNvvmWithoutCuda(unittest.TestCase):
     def test_nvvm_llvm_to_ptx(self):

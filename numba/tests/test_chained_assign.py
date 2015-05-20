@@ -1,4 +1,5 @@
 from __future__ import print_function
+
 from numba import jit
 import numba.unittest_support as unittest
 import numpy as np
@@ -86,8 +87,8 @@ class TestChainedAssign(unittest.TestCase):
 
     def test_chain2(self):
         args = [
-            [3.0],
             [3],
+            [3.0],
         ]
         self._test_template(chain2, args)
 

@@ -439,11 +439,10 @@ def met_requirement_for_device(device):
 
 
 class Context(object):
-    """This object is tied to the lifetime of the actual context resource.
+    """
+    This object wraps a CUDA Context resource.
 
-    This object is usually wrapped in a weakref proxy for user.  User seldom
-    owns this object.
-
+    Contexts should not be constructed directly by user code.
     """
 
     def __init__(self, device, handle, finalizer=None):
@@ -468,7 +467,8 @@ class Context(object):
             traceback.print_exc()
 
     def reset(self):
-        """Clean up all owned resources in this context
+        """
+        Clean up all owned resources in this context.
         """
         # Free owned resources
         self.allocations.clear()
@@ -485,12 +485,15 @@ class Context(object):
         return free.value, total.value
 
     def push(self):
-        """Push context
+        """
+        Pushes this context on the current CPU Thread.
         """
         driver.cuCtxPushCurrent(self.handle)
 
     def pop(self):
-        """Pop context
+        """
+        Pops this context off the current CPU thread. Note that this context must
+        be at the top of the context stack, otherwise an error will occur.
         """
         popped = drvapi.cu_context()
         driver.cuCtxPopCurrent(byref(popped))
@@ -887,10 +890,18 @@ class Stream(object):
         return "<CUDA stream %d on %s>" % (self.handle.value, self.context)
 
     def synchronize(self):
+        '''
+        Wait for all commands in this stream to execute. This will commit any
+        pending memory transfers.
+        '''
         driver.cuStreamSynchronize(self.handle)
 
     @contextlib.contextmanager
     def auto_synchronize(self):
+        '''
+        A context manager that waits for all commands in this stream to execute
+        and commits any pending memory transfers upon exiting the context.
+        '''
         yield self
         self.synchronize()
 
@@ -910,7 +921,8 @@ class Event(object):
             traceback.print_exc()
 
     def query(self):
-        """Returns True if all work before the most recent record has completed;
+        """
+        Returns True if all work before the most recent record has completed;
         otherwise, returns False.
         """
         try:
@@ -924,19 +936,26 @@ class Event(object):
             return True
 
     def record(self, stream=0):
-        """Set the record state of the event at the stream.
+        """
+        Set the record point of the event to the current point in the given
+        stream.
+
+        The event will be considered to have occurred when all work that was
+        queued in the stream at the time of the call to ``record()`` has been
+        completed.
         """
         hstream = stream.handle if stream else 0
         driver.cuEventRecord(self.handle, hstream)
 
     def synchronize(self):
-        """Synchronize the host thread for the completion of the event.
+        """
+        Synchronize the host thread for the completion of the event.
         """
         driver.cuEventSynchronize(self.handle)
 
     def wait(self, stream=0):
-        """All future works submitted to stream will wait util the event
-        completes.
+        """
+        All future works submitted to stream will wait util the event completes.
         """
         hstream = stream.handle if stream else 0
         flags = 0
@@ -947,6 +966,9 @@ class Event(object):
 
 
 def event_elapsed_time(evtstart, evtend):
+    '''
+    Compute the elapsed time between two events in milliseconds.
+    '''
     msec = c_float()
     driver.cuEventElapsedTime(byref(msec), evtstart.handle, evtend.handle)
     return msec.value
@@ -1397,17 +1419,24 @@ def device_memset(dst, val, size, stream=0):
 
 
 def profile_start():
+    '''
+    Enable profile collection in the current context.
+    '''
     driver.cuProfilerStart()
 
 
 def profile_stop():
+    '''
+    Disable profile collection in the current context.
+    '''
     driver.cuProfilerStop()
 
 
 @contextlib.contextmanager
 def profiling():
     """
-    Experimental profiling context.
+    Context manager that enables profiling on entry and disables profiling on
+    exit.
     """
     profile_start()
     yield

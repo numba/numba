@@ -62,7 +62,9 @@ class BaseContext(object):
 
         if isinstance(func, types.Dispatcher):
             template, args, kws = func.overloaded.get_call_template(args, kws)
-            return template(self).apply(args, kws)
+            sig = template(self).apply(args, kws)
+            sig.pysig = func.pysig
+            return sig
 
         if isinstance(func, types.ExceptionType):
             return_type = types.ExceptionInstance(func.exc_class)

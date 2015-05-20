@@ -6,10 +6,11 @@ from collections import namedtuple, defaultdict
 from pprint import pprint
 import sys
 import warnings
+import traceback
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
                    lowering, objmode, irpasses, utils, config,
-                   types, ir, looplifting, macro, types)
+                   types, ir, looplifting, macro, types, rewrites)
 from numba.targets import cpu
 from numba.annotations import type_annotations
 
@@ -34,6 +35,7 @@ class Flags(utils.ConfigOptions):
         'forceinline',
         'no_cpython_wrapper',
         'nrt',
+        'no_rewrites',
     ])
 
 
@@ -218,6 +220,12 @@ class _PipelineManager(object):
         Patches the error to show the stage that it arose in.
         """
         newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
+
+        # For python2, attach the traceback of the previous exception.
+        if not utils.IS_PY3:
+            fmt = "Caused By:\n{tb}\n{newmsg}"
+            newmsg = fmt.format(tb=traceback.format_exc(), newmsg=newmsg)
+
         exc.args = (newmsg,)
         return exc
 
@@ -370,7 +378,7 @@ class Pipeline(object):
         Analyze bytecode and translating to Numba IR
         """
         self.interp = translate_stage(self.bc)
-        self.nargs = len(self.interp.argspec.args)
+        self.nargs = self.interp.arg_count
         if not self.args and self.flags.force_pyobject:
             # Allow an empty argument types specification when object mode
             # is explicitly requested.
@@ -448,6 +456,19 @@ class Pipeline(object):
                                    % (self.func_attr.name,)):
             legalize_return_type(self.return_type, self.interp,
                                  self.targetctx)
+
+    def stage_nopython_rewrites(self):
+        """
+        Perform any intermediate representation rewrites.
+        """
+        # Ensure we have an IR container (interp), and type information.
+        assert self.interp
+        assert isinstance(getattr(self, 'typemap', None), dict)
+        assert isinstance(getattr(self, 'calltypes', None), dict)
+        with self.fallback_context('Internal error in rewriting pass '
+                                   'encountered during compilation of '
+                                   'function "%s"' % (self.func_attr.name,)):
+            rewrites.rewrite_registry.apply(self, self.interp.blocks)
 
     def stage_annotate_type(self):
         """
@@ -580,6 +601,8 @@ class Pipeline(object):
             pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
+            if not self.flags.no_rewrites:
+                pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
 
         if self.status.can_fallback or self.flags.force_pyobject:
@@ -704,13 +727,13 @@ def translate_stage(bytecode):
 
 
 def type_inference_stage(typingctx, interp, args, return_type, locals={}):
-    if len(args) != len(interp.argspec.args):
+    if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
 
     infer = typeinfer.TypeInferer(typingctx, interp)
 
     # Seed argument types
-    for index, (name, ty) in enumerate(zip(interp.argspec.args, args)):
+    for index, (name, ty) in enumerate(zip(interp.bytecode.arg_names, args)):
         infer.seed_argument(name, index, ty)
 
     # Seed return type

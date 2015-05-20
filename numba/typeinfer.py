@@ -155,11 +155,12 @@ class ExhaustIterConstrain(object):
     def __call__(self, context, typevars):
         oset = typevars[self.target]
         for tp in typevars[self.iterator.name].get():
-            if isinstance(tp, types.IterableType):
+            if isinstance(tp, types.BaseTuple):
+                if len(tp) == self.count:
+                    oset.add_types(tp)
+            elif isinstance(tp, types.IterableType):
                 oset.add_types(types.UniTuple(dtype=tp.iterator_type.yield_type,
                                               count=self.count))
-            elif isinstance(tp, types.Tuple):
-                oset.add_types(tp)
 
 
 class PairFirstConstrain(object):
@@ -213,11 +214,12 @@ class CallConstrain(object):
     Perform case analysis foreach combinations of argument types.
     """
 
-    def __init__(self, target, func, args, kws, loc):
+    def __init__(self, target, func, args, kws, vararg, loc):
         self.target = target
         self.func = func
         self.args = args
-        self.kws = kws
+        self.kws = kws or {}
+        self.vararg = vararg
         self.loc = loc
 
     def __call__(self, context, typevars):
@@ -230,10 +232,19 @@ class CallConstrain(object):
         kwds = [kw for (kw, var) in self.kws]
         argtypes = [typevars[a.name].get() for a in self.args]
         argtypes += [typevars[var.name].get() for (kw, var) in self.kws]
+        if self.vararg is not None:
+            argtypes.append(typevars[self.vararg.name].get())
         restypes = []
         # Case analysis for each combination of argument types.
         for args in itertools.product(*argtypes):
             pos_args = args[:n_pos_args]
+            if self.vararg is not None:
+                if not isinstance(args[-1], types.BaseTuple):
+                    # Unsuitable for *args
+                    # (Python is more lenient and accepts all iterables)
+                    continue
+                pos_args += args[-1].types
+                args = args[:-1]
             kw_args = dict(zip(kwds, args[n_pos_args:]))
             sig = context.resolve_function_type(fnty, pos_args, kw_args)
             if sig is None:
@@ -444,16 +455,20 @@ class TypeInferer(object):
             assert signature is not None, (fnty, args)
             calltypes[call] = signature
 
-        for call, args, kws in self.usercalls:
-            args = tuple(typemap[a.name] for a in args)
-            kws = dict((kw, typemap[var.name]) for (kw, var) in kws)
-
+        for call, args, kws, vararg in self.usercalls:
             if isinstance(call.func, ir.Intrinsic):
                 signature = call.func.type
             else:
                 fnty = typemap[call.func.name]
+
+                args = tuple(typemap[a.name] for a in args)
+                kws = dict((kw, typemap[var.name]) for (kw, var) in kws)
+                if vararg is not None:
+                    tp = typemap[vararg.name]
+                    assert isinstance(tp, types.BaseTuple)
+                    args = args + tp.types
                 signature = self.context.resolve_function_type(fnty, args, kws)
-                assert signature is not None, (fnty, args, kws)
+                assert signature is not None, (fnty, args, kws, vararg)
             calltypes[call] = signature
 
         for inst in self.setitemcalls:
@@ -606,7 +621,7 @@ class TypeInferer(object):
             if isinstance(expr.func, ir.Intrinsic):
                 restype = expr.func.type.return_type
                 self.typevars[target.name].add_types(restype)
-                self.usercalls.append((inst.value, expr.args, expr.kws))
+                self.usercalls.append((inst.value, expr.args, expr.kws, None))
             else:
                 self.typeof_call(inst, target, expr)
         elif expr.op in ('getiter', 'iternext'):
@@ -659,12 +674,12 @@ class TypeInferer(object):
 
     def typeof_call(self, inst, target, call):
         constrain = CallConstrain(target.name, call.func.name, call.args,
-                                  call.kws, loc=inst.loc)
+                                  call.kws, call.vararg, loc=inst.loc)
         self.constrains.append(constrain)
-        self.usercalls.append((inst.value, call.args, call.kws))
+        self.usercalls.append((inst.value, call.args, call.kws, call.vararg))
 
     def typeof_intrinsic_call(self, inst, target, func, *args):
-        constrain = IntrinsicCallConstrain(target.name, func, args, (),
-                                           loc=inst.loc)
+        constrain = IntrinsicCallConstrain(target.name, func, args,
+                                           kws=(), vararg=None, loc=inst.loc)
         self.constrains.append(constrain)
         self.intrcalls.append((inst.value, args, ()))

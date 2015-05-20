@@ -410,13 +410,17 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
     if (arystruct->meminfo) {
         /* wrap into MemInfoObject */
         miobj = PyObject_New(MemInfoObject, &MemInfoType);
-        args = Py_BuildValue("(K)", (unsigned PY_LONG_LONG)arystruct->meminfo);
+        args = PyTuple_New(1);
+        /* SETITEM steals reference */
+        PyTuple_SET_ITEM(args, 0, PyLong_FromVoidPtr(arystruct->meminfo));
         if(MemInfo_init(miobj, args, NULL)) {
             return NULL;
         }
         Py_DECREF(args);
         /* Set writable */
+#if NPY_API_VERSION >= 0x00000007
         flags |= NPY_ARRAY_WRITEABLE;
+#endif
     }
 
     shape = arystruct->shape_and_strides;
@@ -427,7 +431,17 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
 
     if (miobj) {
         /* Set the MemInfoObject as the base object */
-        PyArray_SetBaseObject((PyArrayObject*)array, (PyObject *)miobj);
+#if NPY_API_VERSION >= 0x00000007
+        if (-1 == PyArray_SetBaseObject((PyArrayObject*)array,
+                                        (PyObject *)miobj))
+        {
+            Py_DECREF(array);
+            return NULL;
+        }
+#else
+        PyArray_BASE((PyArrayObject*)array) = (PyObject*) miobj;
+#endif
+
     }
     return array;
 }

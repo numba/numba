@@ -128,6 +128,9 @@ class TestArgInfo(unittest.TestCase):
 
         self.assertEqual(expect_types, got_types)
 
+        # Assign names (check this doesn't raise)
+        fi.assign_names(values, ["arg%i" for i in range(len(fe_args))])
+
         builder.ret_void()
 
         ll.parse_assembly(str(module))
@@ -153,6 +156,11 @@ class TestArgInfo(unittest.TestCase):
         self._test_as_arguments(fe_args)
         # Nested tuple
         fe_args = [types.UniTuple(types.UniTuple(types.int32, 2), 3)]
+        self._test_as_arguments(fe_args)
+        # Empty tuple
+        fe_args = [types.UniTuple(types.int16, 0),
+                   types.int32,
+                   types.UniTuple(types.int64, 0)]
         self._test_as_arguments(fe_args)
 
 

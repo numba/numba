@@ -59,20 +59,20 @@ class DataModel(object):
         Takes one LLVM value
         Return a LLVM value or nested tuple of LLVM value
         """
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def as_return(self, builder, value):
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def from_data(self, builder, value):
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def from_argument(self, builder, value):
         """
         Takes a LLVM value or nested tuple of LLVM value
         Returns one LLVM value
         """
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def from_return(self, builder, value):
         raise NotImplementedError
@@ -186,14 +186,12 @@ class PrimitiveModel(DataModel):
 @register_default(types.Object)
 @register_default(types.Module)
 @register_default(types.Phantom)
-@register_default(types.RangeType)
 @register_default(types.Dispatcher)
 @register_default(types.ExceptionType)
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
-@register_default(types.BoundFunction)
-@register_default(types.NumpyNdEnumerateType)
-@register_default(types.NumpyNdIndexType)
+@register_default(types.ExternalFunction)
+@register_default(types.Macro)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
@@ -676,6 +674,12 @@ class CharSeq(DataModel):
     def from_return(self, builder, value):
         return value
 
+    def as_argument(self, builder, value):
+        return value
+
+    def from_argument(self, builder, value):
+        return value
+
 
 class CContiguousFlatIter(StructModel):
     def __init__(self, dmm, fe_type):
@@ -827,12 +831,38 @@ class ArrayCTypesModel(StructModel):
         super(ArrayCTypesModel, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.RangeType)
+class RangeModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        int_type = fe_type.iterator_type.yield_type
+        members = [('start', int_type),
+                   ('stop', int_type),
+                   ('step', int_type)]
+        super(RangeModel, self).__init__(dmm, fe_type, members)
+
+
 # =============================================================================
+
+@register_default(types.NumpyNdIndexType)
+class NdIndexType(StructModel):
+    def __init__(self, dmm, fe_type):
+        ndim = fe_type.ndim
+        members = [('shape', types.UniTuple(types.intp, ndim)),
+                   ('indices', types.CPointer(types.intp)),
+                   ('exhausted', types.CPointer(types.boolean)),
+                   ]
+        super(NdIndexType, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.NumpyFlatType)
+@register_default(types.NumpyNdEnumerateType)
 def handle_numpy_flat_type(dmm, ty):
     if ty.array_type.layout == 'C':
         return CContiguousFlatIter(dmm, ty)
     else:
         return FlatIter(dmm, ty)
+
+@register_default(types.BoundFunction)
+def handle_bound_function(dmm, ty):
+    # The same as the underlying type
+    return dmm[ty.this]
