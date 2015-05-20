@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import sys
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
@@ -212,6 +213,122 @@ class TestGenExprs(TestCase):
         cr = compile_isolated(pyfunc, ())
         cfunc = cr.entry_point
         self.assertEqual(sum(cfunc([1, 2, 3])), sum(pyfunc([1, 2, 3])))
+
+
+
+def nrt_gen0(ary):
+    for elem in ary:
+        yield elem
+
+def nrt_gen1(ary1, ary2):
+    for e1, e2 in zip(ary1, ary2):
+        yield e1
+        yield e2
+
+
+class TestNrtArrayGen(TestCase):
+    def test_nrt_gen0(self):
+        pygen = nrt_gen0
+        cgen = jit(nopython=True)(pygen)
+
+        py_ary = np.arange(10)
+        c_ary = py_ary.copy()
+
+        py_res = list(pygen(py_ary))
+        c_res = list(cgen(c_ary))
+
+        np.testing.assert_equal(py_ary, c_ary)
+        self.assertEqual(py_res, c_res)
+        # Check reference count
+        self.assertEqual(sys.getrefcount(py_ary),
+                         sys.getrefcount(c_ary))
+
+
+    def test_nrt_gen1(self):
+        pygen = nrt_gen1
+        cgen = jit(nopython=True)(pygen)
+
+        py_ary1 = np.arange(10)
+        py_ary2 = py_ary1 + 100
+
+        c_ary1 = py_ary1.copy()
+        c_ary2 = py_ary2.copy()
+
+        py_res = list(pygen(py_ary1, py_ary2))
+        c_res = list(cgen(c_ary1, c_ary2))
+
+        np.testing.assert_equal(py_ary1, c_ary1)
+        np.testing.assert_equal(py_ary2, c_ary2)
+        self.assertEqual(py_res, c_res)
+        # Check reference count
+        self.assertEqual(sys.getrefcount(py_ary1),
+                         sys.getrefcount(c_ary1))
+        self.assertEqual(sys.getrefcount(py_ary2),
+                          sys.getrefcount(c_ary2))
+
+    def test_combine_gen0_gen1(self):
+        """
+        Issue #1163 is observed when two generator with NRT object arguments
+        is ran in sequence.  The first one does a invalid free and corrupts
+        the NRT memory subsystem.  The second generator is likely to segfault
+        due to corrupted NRT data structure (an invalid MemInfo).
+        """
+        self.test_nrt_gen0()
+        self.test_nrt_gen1()
+
+    def test_nrt_gen0_stop_iteration(self):
+        """
+        Test cleanup on StopIteration
+        """
+        pygen = nrt_gen0
+        cgen = jit(nopython=True)(pygen)
+
+        py_ary = np.arange(1)
+        c_ary = py_ary.copy()
+
+        py_iter = pygen(py_ary)
+        c_iter = cgen(c_ary)
+
+        py_res = next(py_iter)
+        c_res = next(c_iter)
+
+        with self.assertRaises(StopIteration):
+            py_res = next(py_iter)
+
+        with self.assertRaises(StopIteration):
+            c_res = next(c_iter)
+
+        del py_iter
+        del c_iter
+
+        np.testing.assert_equal(py_ary, c_ary)
+        self.assertEqual(py_res, c_res)
+        # Check reference count
+        self.assertEqual(sys.getrefcount(py_ary),
+                         sys.getrefcount(c_ary))
+
+    def test_nrt_gen0_no_iter(self):
+        """
+        Test cleanup for a initialized but never iterated (never call next())
+        generator.
+        """
+        pygen = nrt_gen0
+        cgen = jit(nopython=True)(pygen)
+
+        py_ary = np.arange(1)
+        c_ary = py_ary.copy()
+
+        py_iter = pygen(py_ary)
+        c_iter = cgen(c_ary)
+
+        del py_iter
+        del c_iter
+
+        np.testing.assert_equal(py_ary, c_ary)
+
+        # Check reference count
+        self.assertEqual(sys.getrefcount(py_ary),
+                         sys.getrefcount(c_ary))
 
 
 if __name__ == '__main__':
