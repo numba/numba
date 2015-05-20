@@ -309,7 +309,8 @@ class TestNrtArrayGen(TestCase):
 
     def test_nrt_gen0_no_iter(self):
         """
-        Test cleanup on StopIteration
+        Test cleanup for a initialized but never iterated (never call next())
+        generator.
         """
         pygen = nrt_gen0
         cgen = jit(nopython=True)(pygen)
