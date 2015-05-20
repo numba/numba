@@ -202,6 +202,12 @@ class GeneratorLower(BaseGeneratorLower):
             resume_index = builder.load(resume_index_ptr)
 
             # If resume_index is 0, next() was never called
+            # Note: The init func has to acquire the reference
+            #       of all arguments; otherwise, they will be destroyed at the
+            #       end of the init func.  The proper release of these
+            #       references relies on the actual NPM function, which is
+            #       never called if the generator exit before any entry into
+            #       the NPM function.
             need_args_cleanup = builder.icmp_signed(
                 '==', resume_index, Constant.int(resume_index.type, 0))
 
