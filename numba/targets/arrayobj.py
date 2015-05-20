@@ -1381,7 +1381,7 @@ def numpy_empty_nd(context, builder, sig, args):
 
 @builtin
 @implement(numpy.empty_like, types.Kind(types.Array))
-@implement(numpy.empty_like, types.Kind(types.Array), types.Kind(types.Function))
+@implement(numpy.empty_like, types.Kind(types.Array), types.Kind(types.DTypeSpec))
 def numpy_zeros_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
@@ -1400,7 +1400,7 @@ def numpy_zeros_nd(context, builder, sig, args):
 
 @builtin
 @implement(numpy.zeros_like, types.Kind(types.Array))
-@implement(numpy.zeros_like, types.Kind(types.Array), types.Kind(types.Function))
+@implement(numpy.zeros_like, types.Kind(types.Array), types.Kind(types.DTypeSpec))
 def numpy_zeros_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
@@ -1422,7 +1422,7 @@ if numpy_version >= (1, 8):
         return context.compile_internal(builder, full, sig, args)
 
     @builtin
-    @implement(numpy.full, types.Any, types.Any, types.Kind(types.Function))
+    @implement(numpy.full, types.Any, types.Any, types.Kind(types.DTypeSpec))
     def numpy_full_dtype_nd(context, builder, sig, args):
 
         def full(shape, value, dtype):
@@ -1448,7 +1448,7 @@ if numpy_version >= (1, 8):
 
 
     @builtin
-    @implement(numpy.full_like, types.Kind(types.Array), types.Any, types.Kind(types.Function))
+    @implement(numpy.full_like, types.Kind(types.Array), types.Any, types.Kind(types.DTypeSpec))
     def numpy_full_like_nd(context, builder, sig, args):
 
         def full_like(arr, value, dtype):
@@ -1475,7 +1475,7 @@ def numpy_ones_nd(context, builder, sig, args):
                                     locals={'c': valty})
 
 @builtin
-@implement(numpy.ones, types.Any, types.Kind(types.Function))
+@implement(numpy.ones, types.Any, types.Kind(types.DTypeSpec))
 def numpy_ones_dtype_nd(context, builder, sig, args):
 
     def ones(shape, dtype):
@@ -1499,7 +1499,7 @@ def numpy_ones_like_nd(context, builder, sig, args):
     return context.compile_internal(builder, ones_like, sig, args)
 
 @builtin
-@implement(numpy.ones_like, types.Kind(types.Array), types.Kind(types.Function))
+@implement(numpy.ones_like, types.Kind(types.Array), types.Kind(types.DTypeSpec))
 def numpy_ones_like_dtype_nd(context, builder, sig, args):
 
     def ones_like(arr, dtype):
@@ -1524,7 +1524,7 @@ def numpy_identity(context, builder, sig, args):
     return context.compile_internal(builder, identity, sig, args)
 
 @builtin
-@implement(numpy.identity, types.Kind(types.Integer), types.Kind(types.Function))
+@implement(numpy.identity, types.Kind(types.Integer), types.Kind(types.DTypeSpec))
 def numpy_identity(context, builder, sig, args):
 
     def identity(n, dtype):
@@ -1566,7 +1566,7 @@ def numpy_eye(context, builder, sig, args):
 
 @builtin
 @implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
-           types.Kind(types.Integer), types.Kind(types.Function))
+           types.Kind(types.Integer), types.Kind(types.DTypeSpec))
 def numpy_eye(context, builder, sig, args):
 
     def eye(n, m, k, dtype):
@@ -1618,7 +1618,7 @@ def numpy_arange_3(context, builder, sig, args):
 
 @builtin
 @implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number),
-           types.Kind(types.Number), types.Kind(types.Function))
+           types.Kind(types.Number), types.Kind(types.DTypeSpec))
 def numpy_arange_4(context, builder, sig, args):
 
     if any(isinstance(a, types.Complex) for a in sig.args):

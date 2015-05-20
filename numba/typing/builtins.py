@@ -719,7 +719,7 @@ def register_casters(register_global):
                 if a in nb_types:
                     return signature(self.key, a)
 
-        register_global(restype, types.Function(Caster))
+        register_global(restype, types.NumberClass(restype, Caster))
 
 register_casters(builtin_global)
 

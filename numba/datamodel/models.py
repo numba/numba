@@ -193,6 +193,8 @@ class PrimitiveModel(DataModel):
 @register_default(types.ExternalFunction)
 @register_default(types.Method)
 @register_default(types.Macro)
+@register_default(types.NumberClass)
+@register_default(types.DType)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
@@ -205,6 +207,7 @@ class OpaqueModel(PrimitiveModel):
     def get_nrt_meminfo(self, builder, value):
         if self._fe_type == types.meminfo_pointer:
             return value
+
 
 @register_default(types.Integer)
 class IntegerModel(PrimitiveModel):

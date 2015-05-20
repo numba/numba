@@ -57,18 +57,8 @@ class BaseContext(object):
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
         """
-        if isinstance(func, types.Function):
-            return func.template(self).apply(args, kws)
-
-        if isinstance(func, types.Dispatcher):
-            template, args, kws = func.overloaded.get_call_template(args, kws)
-            sig = template(self).apply(args, kws)
-            sig.pysig = func.pysig
-            return sig
-
-        if isinstance(func, types.ExceptionType):
-            return_type = types.ExceptionInstance(func.exc_class)
-            return templates.signature(return_type)
+        if isinstance(func, types.Callable):
+            return func.get_call_type(self, args, kws)
 
         defns = self.functions[func]
         for defn in defns:
@@ -224,18 +214,21 @@ class BaseContext(object):
         if tp is not None:
             return tp
 
-        elif isinstance(val, types.ExternalFunction):
+        if isinstance(val, types.ExternalFunction):
             return val
 
-        elif isinstance(val, type) and issubclass(val, BaseException):
+        if isinstance(val, type) and issubclass(val, BaseException):
             return types.ExceptionType(val)
 
-        else:
-            try:
-                # Try to look up target specific typing information
-                return self.get_global_type(val)
-            except KeyError:
-                pass
+        if isinstance(val, numpy.dtype):
+            tp = numpy_support.from_dtype(val)
+            return types.DType(tp)
+
+        try:
+            # Try to look up target specific typing information
+            return self.get_global_type(val)
+        except KeyError:
+            pass
 
         return None
 
@@ -308,23 +301,6 @@ class BaseContext(object):
             function template
         """
         self._insert_global(fn, types.Function(ft))
-
-    def extend_user_function(self, fn, ft):
-        """ Insert of extend a user function.
-
-        Args
-        ----
-        - fn:
-            object used as callee
-        - ft:
-            function template
-        """
-        try:
-            gty = self._lookup_global(fn)
-        except KeyError:
-            self.insert_user_function(fn, ft)
-        else:
-            gty.extend(ft)
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)

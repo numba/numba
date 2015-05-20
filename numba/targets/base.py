@@ -434,7 +434,7 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
-        if isinstance(fn, types.Function):
+        if isinstance(fn, (types.NumberClass, types.Function)):
             key = fn.template.key
 
             if isinstance(key, MethodType):
@@ -516,17 +516,15 @@ class BaseContext(object):
             # We are treating them as constants.
             # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
-            if attrty is not None and not isinstance(attrty, (types.Dispatcher,
-                                                              types.Function,
-                                                              types.Module)):
+            if attrty is not None and not isinstance(attrty, types.Dummy):
                 pyval = getattr(typ.pymod, attr)
                 llval = self.get_constant(attrty, pyval)
                 @impl_attribute(typ, attr, attrty)
                 def imp(context, builder, typ, val):
                     return llval
                 return imp
-            # No implementation required for functions/modules, which are
-            # dealt with later
+            # No implementation required for dummies (functions, modules...),
+            # which are dealt with later
             return None
 
         # Lookup specific attribute implementation for this type

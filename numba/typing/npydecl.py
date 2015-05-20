@@ -364,7 +364,7 @@ def register_casters(register_global):
                 if a in types.number_domain:
                     return signature(self.restype, a)
 
-        register_global(np_type, types.Function(Caster))
+        register_global(np_type, types.NumberClass(nb_type, Caster))
 
 register_casters(builtin_global)
 
@@ -382,10 +382,8 @@ def _parse_shape(shape):
     return ndim
 
 def _parse_dtype(dtype):
-    # numpy APIs allow dtype constructor to be used as `dtype`
-    # arguments.  Since, npy_dtype.template.key dtype or dtype
-    # ctor, we use numpy.dtype to force it into a dtype object.
-    return from_dtype(numpy.dtype(dtype.template.key))
+    if isinstance(dtype, types.DTypeSpec):
+        return dtype.dtype
 
 
 class NdConstructor(CallableTemplate):
@@ -401,7 +399,7 @@ class NdConstructor(CallableTemplate):
                 nb_dtype = _parse_dtype(dtype)
 
             ndim = _parse_shape(shape)
-            if ndim is not None:
+            if nb_dtype is not None and ndim is not None:
                 return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
         return typer
@@ -418,7 +416,8 @@ class NdConstructorLike(CallableTemplate):
                 nb_dtype = arr.dtype
             else:
                 nb_dtype = _parse_dtype(dtype)
-            return arr.copy(dtype=nb_dtype)
+            if nb_dtype is not None:
+                return arr.copy(dtype=nb_dtype)
 
         return typer
 
@@ -472,7 +471,7 @@ if numpy_version >= (1, 8):
                     nb_dtype = _parse_dtype(dtype)
 
                 ndim = _parse_shape(shape)
-                if ndim is not None:
+                if nb_dtype is not None and ndim is not None:
                     return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
             return typer
@@ -487,7 +486,8 @@ if numpy_version >= (1, 8):
                     nb_dtype = arr.dtype
                 else:
                     nb_dtype = _parse_dtype(dtype)
-                return arr.copy(dtype=nb_dtype)
+                if nb_dtype is not None:
+                    return arr.copy(dtype=nb_dtype)
 
             return typer
 
@@ -505,12 +505,13 @@ class NdIdentity(AbstractTemplate):
         if not isinstance(n, types.Integer):
             return
         if len(args) >= 2:
-            dtype = _parse_dtype(args[1])
+            nb_dtype = _parse_dtype(args[1])
         else:
-            dtype = types.float64
+            nb_dtype = types.float64
 
-        return_type = types.Array(ndim=2, dtype=dtype, layout='C')
-        return signature(return_type, *args)
+        if nb_dtype is not None:
+            return_type = types.Array(ndim=2, dtype=nb_dtype, layout='C')
+            return signature(return_type, *args)
 
 builtin_global(numpy.identity, types.Function(NdIdentity))
 
@@ -529,7 +530,8 @@ class NdEye(CallableTemplate):
                 nb_dtype = types.float64
             else:
                 nb_dtype = _parse_dtype(dtype)
-            return types.Array(ndim=2, dtype=nb_dtype, layout='C')
+            if nb_dtype is not None:
+                return types.Array(ndim=2, dtype=nb_dtype, layout='C')
 
         return typer
 

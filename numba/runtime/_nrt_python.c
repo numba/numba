@@ -359,7 +359,8 @@ int NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
 }
 
 static
-PyObject* try_to_return_parent(arystruct_t *arystruct, int ndim, int typenum)
+PyObject* try_to_return_parent(arystruct_t *arystruct, int ndim,
+                               PyArray_Descr *descr)
 {
     int i;
     PyArrayObject *array = (PyArrayObject *)arystruct->parent;
@@ -367,13 +368,11 @@ PyObject* try_to_return_parent(arystruct_t *arystruct, int ndim, int typenum)
     if (PyArray_DATA(array) != arystruct->data)
         goto RETURN_ARRAY_COPY;
 
-    if (PyArray_TYPE(array) != typenum)
-        goto RETURN_ARRAY_COPY;
-
     if (PyArray_NDIM(array) != ndim)
         goto RETURN_ARRAY_COPY;
 
-    if (PyArray_ITEMSIZE(array) != arystruct->itemsize)
+    if (PyObject_RichCompareBool((PyObject *) PyArray_DESCR(array),
+                                 (PyObject *) descr, Py_EQ) <= 0)
         goto RETURN_ARRAY_COPY;
 
     for(i = 0; i < ndim; ++i) {
@@ -390,20 +389,26 @@ PyObject* try_to_return_parent(arystruct_t *arystruct, int ndim, int typenum)
 
 RETURN_ARRAY_COPY:
     return NULL;
-
 }
 
 static
 PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
-                                      int type_num) {
+                                      PyArray_Descr *descr) {
     PyObject *array;
     MemInfoObject *miobj = NULL;
     PyObject *args;
     npy_intp *shape, *strides;
     int flags=0;
 
+    if (!PyArray_DescrCheck(descr)) {
+        PyErr_Format(PyExc_TypeError,
+                     "expected dtype object, got '%.200s'",
+                     Py_TYPE(descr)->tp_name);
+        return NULL;
+    }
+
     if (arystruct->parent) {
-        array = try_to_return_parent(arystruct, ndim, type_num);
+        array = try_to_return_parent(arystruct, ndim, descr);
         if (array) return array;
     }
 
@@ -425,9 +430,9 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
 
     shape = arystruct->shape_and_strides;
     strides = shape + ndim;
-    array = PyArray_New(&PyArray_Type, ndim, shape, type_num,
-                        strides, arystruct->data,
-                        arystruct->itemsize, flags, (PyObject*)miobj);
+    array = PyArray_NewFromDescr(&PyArray_Type, descr, ndim,
+                                 shape, strides, arystruct->data,
+                                 flags, (PyObject*)miobj);
 
     if (miobj) {
         /* Set the MemInfoObject as the base object */
@@ -436,6 +441,7 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
                                         (PyObject *)miobj))
         {
             Py_DECREF(array);
+            Py_DECREF(miobj);
             return NULL;
         }
 #else

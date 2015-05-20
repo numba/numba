@@ -444,7 +444,7 @@ class TestDynArray(unittest.TestCase):
 
 class ConstructorBaseTest(object):
 
-    def check_1d(self, pyfunc, dtype):
+    def check_1d(self, pyfunc):
         cfunc = nrtjit(pyfunc)
         n = 3
         expected = pyfunc(n)
@@ -464,7 +464,7 @@ class ConstructorBaseTest(object):
             cfunc(-1)
         self.assertEqual(str(cm.exception), "negative dimensions not allowed")
 
-    def check_2d(self, pyfunc, dtype):
+    def check_2d(self, pyfunc):
         cfunc = nrtjit(pyfunc)
         m, n = 2, 3
         expected = pyfunc(m, n)
@@ -497,25 +497,33 @@ class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
         pyfunc = self.pyfunc
         def func(n):
             return pyfunc(n)
-        self.check_1d(func, np.float64)
+        self.check_1d(func)
 
     def test_1d_dtype(self):
         pyfunc = self.pyfunc
         def func(n):
             return pyfunc(n, np.int32)
-        self.check_1d(func, np.int32)
+        self.check_1d(func)
+
+    def test_1d_dtype_instance(self):
+        # dtype as numpy dtype, not as scalar class
+        pyfunc = self.pyfunc
+        _dtype = np.dtype('int32')
+        def func(n):
+            return pyfunc(n, _dtype)
+        self.check_1d(func)
 
     def test_2d(self):
         pyfunc = self.pyfunc
         def func(m, n):
             return pyfunc((m, n))
-        self.check_2d(func, np.float64)
+        self.check_2d(func)
 
     def test_2d_dtype_kwarg(self):
         pyfunc = self.pyfunc
         def func(m, n):
             return pyfunc((m, n), dtype=np.complex64)
-        self.check_2d(func, np.complex64)
+        self.check_2d(func)
 
 
 class TestNdOnes(TestNdZeros):
@@ -533,27 +541,33 @@ class TestNdFull(ConstructorBaseTest, unittest.TestCase):
     def test_1d(self):
         def func(n):
             return np.full(n, 4.5)
-        self.check_1d(func, np.float64)
+        self.check_1d(func)
 
     def test_1d_dtype(self):
         def func(n):
             return np.full(n, 4.5, np.bool_)
-        self.check_1d(func, np.int32)
+        self.check_1d(func)
+
+    def test_1d_dtype_instance(self):
+        dtype = np.dtype('bool')
+        def func(n):
+            return np.full(n, 4.5, dtype)
+        self.check_1d(func)
 
     def test_2d(self):
         def func(m, n):
             return np.full((m, n), 4.5)
-        self.check_2d(func, np.float64)
+        self.check_2d(func)
 
     def test_2d_dtype_kwarg(self):
         def func(m, n):
             return np.full((m, n), 1 + 4.5j, dtype=np.complex64)
-        self.check_2d(func, np.complex64)
+        self.check_2d(func)
 
 
 class ConstructorLikeBaseTest(object):
 
-    def check_like(self, pyfunc, dtype, ret_dtype):
+    def check_like(self, pyfunc, dtype):
         orig = np.linspace(0, 5, 6).astype(dtype)
         cfunc = nrtjit(pyfunc)
 
@@ -584,28 +598,40 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, unittest.TestCase):
         pyfunc = self.pyfunc
         def func(arr):
             return pyfunc(arr)
-        self.check_like(func, np.float64, np.float64)
+        self.check_like(func, np.float64)
 
-    # Not supported yet.
-    @unittest.expectedFailure
     def test_like_structured(self):
         dtype = np.dtype([('a', np.int16), ('b', np.float32)])
         pyfunc = self.pyfunc
         def func(arr):
             return pyfunc(arr)
-        self.check_like(func, dtype, dtype)
+        self.check_like(func, dtype)
 
     def test_like_dtype(self):
         pyfunc = self.pyfunc
         def func(arr):
             return pyfunc(arr, np.int32)
-        self.check_like(func, np.float64, np.int32)
+        self.check_like(func, np.float64)
+
+    def test_like_dtype_instance(self):
+        dtype = np.dtype('int32')
+        pyfunc = self.pyfunc
+        def func(arr):
+            return pyfunc(arr, dtype)
+        self.check_like(func, np.float64)
+
+    def test_like_dtype_structured(self):
+        dtype = np.dtype([('a', np.int16), ('b', np.float32)])
+        pyfunc = self.pyfunc
+        def func(arr):
+            return pyfunc(arr, dtype)
+        self.check_like(func, np.float64)
 
     def test_like_dtype_kwarg(self):
         pyfunc = self.pyfunc
         def func(arr):
             return pyfunc(arr, dtype=np.int32)
-        self.check_like(func, np.float64, np.int32)
+        self.check_like(func, np.float64)
 
 
 class TestNdZerosLike(TestNdEmptyLike):
@@ -624,6 +650,16 @@ class TestNdOnesLike(TestNdZerosLike):
         self.pyfunc = np.ones_like
         self.expected_value = 1
 
+    # Not supported yet.
+
+    @unittest.expectedFailure
+    def test_like_structured(self):
+        super(TestNdOnesLike, self).test_like_structured()
+
+    @unittest.expectedFailure
+    def test_like_dtype_structured(self):
+        super(TestNdOnesLike, self).test_like_dtype_structured()
+
 
 @unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
 class TestNdFullLike(ConstructorLikeBaseTest, unittest.TestCase):
@@ -634,7 +670,7 @@ class TestNdFullLike(ConstructorLikeBaseTest, unittest.TestCase):
     def test_like(self):
         def func(arr):
             return np.full_like(arr, 3.5)
-        self.check_like(func, np.float64, np.float64)
+        self.check_like(func, np.float64)
 
     # Not supported yet.
     @unittest.expectedFailure
@@ -642,17 +678,23 @@ class TestNdFullLike(ConstructorLikeBaseTest, unittest.TestCase):
         dtype = np.dtype([('a', np.int16), ('b', np.float32)])
         def func(arr):
             return np.full_like(arr, 4.5)
-        self.check_like(func, dtype, dtype)
+        self.check_like(func, dtype)
 
     def test_like_dtype(self):
         def func(arr):
             return np.full_like(arr, 4.5, np.bool_)
-        self.check_like(func, np.float64, np.bool_)
+        self.check_like(func, np.float64)
+
+    def test_like_dtype_instance(self):
+        dtype = np.dtype('bool')
+        def func(arr):
+            return np.full_like(arr, 4.5, dtype)
+        self.check_like(func, np.float64)
 
     def test_like_dtype_kwarg(self):
         def func(arr):
             return np.full_like(arr, 4.5, dtype=np.bool_)
-        self.check_like(func, np.float64, np.bool_)
+        self.check_like(func, np.float64)
 
 
 class TestNdIdentity(BaseTest):
@@ -666,7 +708,7 @@ class TestNdIdentity(BaseTest):
         self.check_identity(func)
 
     def test_identity_dtype(self):
-        for dtype in (np.complex64, np.int16, np.bool_):
+        for dtype in (np.complex64, np.int16, np.bool_, np.dtype('bool')):
             def func(n):
                 return np.identity(n, dtype)
             self.check_identity(func)
@@ -700,6 +742,12 @@ class TestNdEye(BaseTest):
     def test_eye_n_m_k_dtype(self):
         def func(n, m, k):
             return np.eye(N=n, M=m, k=k, dtype=np.int16)
+        self.check_eye_n_m_k(func)
+
+    def test_eye_n_m_k_dtype_instance(self):
+        dtype = np.dtype('int16')
+        def func(n, m, k):
+            return np.eye(N=n, M=m, k=k, dtype=dtype)
         self.check_eye_n_m_k(func)
 
 
@@ -737,7 +785,7 @@ class TestNpyEmptyKeyword(unittest.TestCase):
             self.assertEqual(expected.shape, got.shape)
 
     def test_with_dtype_kws(self):
-        for dtype in [np.int32, np.float32, np.complex64]:
+        for dtype in [np.int32, np.float32, np.complex64, np.dtype('complex64')]:
             self._test_with_dtype_kw(dtype)
 
     def _test_with_shape_and_dtype_kw(self, dtype):
@@ -754,8 +802,8 @@ class TestNpyEmptyKeyword(unittest.TestCase):
             self.assertEqual(expected.shape, got.shape)
 
     def test_with_shape_and_dtype_kws(self):
-        for dtype in [np.int32, np.float32, np.complex64]:
-            self._test_with_dtype_kw(dtype)
+        for dtype in [np.int32, np.float32, np.complex64, np.dtype('complex64')]:
+            self._test_with_shape_and_dtype_kw(dtype)
 
     def test_empty_no_args(self):
         from numba.typeinfer import TypingError

@@ -311,7 +311,7 @@ class VarArg(Type):
         return self.dtype
 
 
-class Module(Type):
+class Module(Dummy):
     def __init__(self, pymod):
         self.pymod = pymod
         super(Module, self).__init__("Module(%s)" % pymod)
@@ -332,19 +332,77 @@ class Macro(Type):
         return self.template
 
 
-class Function(Type):
+class Callable(Type):
+    """
+    Base class for callables.
+    """
+
+    def get_call_type(self, context, args, kws):
+        """
+        Using the typing *context*, resolve the callable's signature for
+        the given arguments.  A signature object is returned, or None.
+        """
+        raise NotImplementedError
+
+
+class Function(Callable, Opaque):
     def __init__(self, template):
         self.template = template
         name = "%s(%s)" % (self.__class__.__name__, template.key)
-        # TODO template is mutable.  Should use different naming scheme
         super(Function, self).__init__(name)
 
     @property
     def key(self):
         return self.template
 
-    def extend(self, template):
-        self.template.cases.extend(template.cases)
+    def get_call_type(self, context, args, kws):
+        return self.template(context).apply(args, kws)
+
+
+class DTypeSpec(Opaque):
+    """
+    Base class for types usable as "dtype" arguments to various Numpy APIs
+    (e.g. np.empty()).
+    """
+
+    @property
+    def dtype(self):
+        raise NotImplementedError
+
+
+class NumberClass(Callable, DTypeSpec):
+    """
+    Type class for number classes (e.g. "np.float64").
+    """
+
+    def __init__(self, instance_type, template):
+        self.instance_type = instance_type
+        self.template = template
+        name = "type(%s)" % (instance_type,)
+        super(NumberClass, self).__init__(name)
+
+    def get_call_type(self, context, args, kws):
+        return self.template(context).apply(args, kws)
+
+    @property
+    def dtype(self):
+        return self.instance_type
+
+
+class DType(DTypeSpec):
+    """
+    Type class for Numpy dtypes.
+    """
+
+    def __init__(self, dtype):
+        assert isinstance(dtype, Type)
+        self._dtype = dtype
+        name = "dtype(%s)" % (dtype,)
+        super(DTypeSpec, self).__init__(name)
+
+    @property
+    def dtype(self):
+        return self._dtype
 
 
 class WeakType(Type):
@@ -375,11 +433,17 @@ class WeakType(Type):
         return Type.__hash__(self)
 
 
-class Dispatcher(WeakType):
+class Dispatcher(WeakType, Callable, Dummy):
 
     def __init__(self, overloaded):
         self._store_object(overloaded)
         super(Dispatcher, self).__init__("Dispatcher(%s)" % overloaded)
+
+    def get_call_type(self, context, args, kws):
+        template, args, kws = self.overloaded.get_call_template(args, kws)
+        sig = template(context).apply(args, kws)
+        sig.pysig = self.pysig
+        return sig
 
     @property
     def overloaded(self):
@@ -1075,7 +1139,7 @@ class NoneType(Opaque):
         return Optional(other)
 
 
-class ExceptionType(Phantom):
+class ExceptionType(Callable, Phantom):
     """
     The type of exception classes (not instances).
     """
@@ -1085,6 +1149,11 @@ class ExceptionType(Phantom):
         name = "%s" % (exc_class.__name__)
         self.exc_class = exc_class
         super(ExceptionType, self).__init__(name, param=True)
+
+    def get_call_type(self, context, args, kws):
+        from . import typing
+        return_type = ExceptionInstance(self.exc_class)
+        return typing.signature(return_type)
 
     @property
     def key(self):
