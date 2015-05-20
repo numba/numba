@@ -102,6 +102,8 @@ class TestCase(unittest.TestCase):
         that the object in question belongs to.  Possible return values
         are: "exact", "complex", "approximate", "sequence", and "unknown"
         """
+        if isinstance(numeric_object, np.ndarray):
+            return "ndarray"
 
         for tp in self._sequence_typesets:
             if isinstance(numeric_object, tp):
@@ -179,6 +181,15 @@ class TestCase(unittest.TestCase):
         compare_family = first_family
 
         # For recognized sequences, recurse
+        if compare_family == "ndarray":
+            self.assertEqual(first.dtype, second.dtype)
+            self.assertEqual(first.ndim, second.ndim)
+            self.assertEqual(first.shape, second.shape)
+            self.assertEqual(first.strides, second.strides)
+            for a, b in zip(first.flat, second.flat):
+                self._assertPreciseEqual(a, b, prec, ulps, msg)
+            return
+
         if compare_family == "sequence":
             self.assertEqual(len(first), len(second), msg=msg)
             for a, b in zip(first, second):

@@ -495,6 +495,50 @@ def array_prod(context, builder, sig, args):
 
 
 @builtin
+@implement(numpy.cumsum, types.Kind(types.Array))
+@implement("array.cumsum", types.Kind(types.Array))
+def array_cumsum(context, builder, sig, args):
+    scalar_dtype = sig.return_type.dtype
+    dtype = getattr(numpy, str(scalar_dtype))
+
+    def array_cumsum_impl(arr):
+        size = 1
+        for i in arr.shape:
+            size = size * i
+        out = numpy.empty(size, dtype)
+        c = 0
+        for idx, v in enumerate(arr.flat):
+            c += v
+            out[idx] = c
+        return out
+
+    return context.compile_internal(builder, array_cumsum_impl, sig, args,
+                                    locals=dict(c=scalar_dtype))
+
+
+@builtin
+@implement(numpy.cumprod, types.Kind(types.Array))
+@implement("array.cumprod", types.Kind(types.Array))
+def array_cumsum(context, builder, sig, args):
+    scalar_dtype = sig.return_type.dtype
+    dtype = getattr(numpy, str(scalar_dtype))
+
+    def array_cumprod_impl(arr):
+        size = 1
+        for i in arr.shape:
+            size = size * i
+        out = numpy.empty(size, dtype)
+        c = 1
+        for idx, v in enumerate(arr.flat):
+            c *= v
+            out[idx] = c
+        return out
+
+    return context.compile_internal(builder, array_cumprod_impl, sig, args,
+                                    locals=dict(c=scalar_dtype))
+
+
+@builtin
 @implement(numpy.mean, types.Kind(types.Array))
 @implement("array.mean", types.Kind(types.Array))
 def array_mean(context, builder, sig, args):

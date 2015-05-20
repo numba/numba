@@ -306,62 +306,35 @@ del _aliases, _numpy_ufunc
 
 
 # -----------------------------------------------------------------------------
-# Install global reduction functions
+# Install global helpers for array methods.
 
-# Functions where input domain and output domain are the same
-class Numpy_homogenous_reduction(AbstractTemplate):
+class Numpy_method_redirection(AbstractTemplate):
+    """
+    A template redirecting a Numpy global function (e.g. np.sum) to an
+    array method of the same name (e.g. ndarray.sum).
+    """
+
     def generic(self, args, kws):
         assert not kws
         [arr] = args
-        return signature(arr.dtype, arr)
+        # This will return a BoundFunction
+        meth_ty = self.context.resolve_getattr(arr, self.method_name)
+        # Resolve arguments on the bound function
+        meth_sig = self.context.resolve_function_type(meth_ty, args[1:], kws)
+        if meth_sig is not None:
+            return signature(meth_sig.return_type, meth_sig.recvr, *meth_sig.args)
 
-# Functions where domain and range are possibly different formats
-class Numpy_expanded_reduction(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        [arr] = args
-        if isinstance(arr.dtype, types.Integer):
-            # Expand to a machine int, not larger (like Numpy)
-            if arr.dtype.signed:
-                return signature(max(arr.dtype, types.intp), arr)
-            else:
-                return signature(max(arr.dtype, types.uintp), arr)
-        else:
-            return signature(arr.dtype, arr)
-
-class Numpy_heterogenous_reduction_real(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        [arr] = args
-        if arr.dtype in types.integer_domain:
-            return signature(types.float64, arr)
-        else:
-            return signature(arr.dtype, arr)
-
-class Numpy_index_reduction(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        [arr] = args
-        return signature(types.int64, arr)
 
 # Function to glue attributes onto the numpy-esque object
-def _numpy_reduction(fname, rClass):
-    npyfn = getattr(numpy, fname)
-    cls = type("Numpy_reduce_{0}".format(npyfn), (rClass,), dict(key=npyfn))
-    semiBound = lambda self, mod: types.Function(cls)
-    setattr(NumpyModuleAttribute, "resolve_{0}".format(fname), semiBound)
+def _numpy_redirect(fname):
+    numpy_function = getattr(numpy, fname)
+    cls = type("Numpy_reduce_{0}".format(fname), (Numpy_method_redirection,),
+               dict(key=numpy_function, method_name=fname))
+    builtin_global(numpy_function, types.Function(cls))
 
-for func in ['min', 'max']:
-    _numpy_reduction(func, Numpy_homogenous_reduction)
-
-for func in ['sum', 'prod']:
-    _numpy_reduction(func, Numpy_expanded_reduction)
-
-for func in ['mean', 'var', 'std']:
-    _numpy_reduction(func, Numpy_heterogenous_reduction_real)
-
-for func in ['argmin', 'argmax']:
-    _numpy_reduction(func, Numpy_index_reduction)
+for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
+             'cumsum', 'cumprod', 'argmin', 'argmax']:
+    _numpy_redirect(func)
 
 
 # -----------------------------------------------------------------------------

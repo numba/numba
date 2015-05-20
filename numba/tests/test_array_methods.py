@@ -87,6 +87,18 @@ def _fixed_np_round(arr, decimals=0, out=None):
         return res
 
 
+def array_cumprod(arr):
+    return arr.cumprod()
+
+def array_cumprod_global(arr):
+    return np.cumprod(arr)
+
+def array_cumsum(arr):
+    return arr.cumsum()
+
+def array_cumsum_global(arr):
+    return np.cumsum(arr)
+
 def array_sum(arr):
     return arr.sum()
 
@@ -397,6 +409,23 @@ class TestArrayMethods(TestCase):
 
         np.testing.assert_allclose(np.prod(arr), cfunc(arr))
 
+    def check_cumulative(self, pyfunc):
+        arr = np.arange(2, 10, dtype=np.int16)
+        expected, got = run_comparative(pyfunc, arr)
+        self.assertPreciseEqual(got, expected)
+        arr = np.linspace(2, 8, 6)
+        expected, got = run_comparative(pyfunc, arr)
+        self.assertPreciseEqual(got, expected)
+        arr = arr.reshape((3, 2))
+        expected, got = run_comparative(pyfunc, arr)
+        self.assertPreciseEqual(got, expected)
+
+    def test_array_cumsum(self):
+        self.check_cumulative(array_cumsum)
+
+    def test_array_cumsum_global(self):
+        self.check_cumulative(array_cumsum_global)
+
     def check_aggregation_magnitude(self, pyfunc, is_prod=False):
         """
         Check that integer overflows are avoided (issue #931).
@@ -420,9 +449,17 @@ class TestArrayMethods(TestCase):
         self.check_aggregation_magnitude(array_sum)
         self.check_aggregation_magnitude(array_sum_global)
 
+    def test_cumsum_magnitude(self):
+        self.check_aggregation_magnitude(array_cumsum)
+        self.check_aggregation_magnitude(array_cumsum_global)
+
     def test_prod_magnitude(self):
         self.check_aggregation_magnitude(array_prod, is_prod=True)
         self.check_aggregation_magnitude(array_prod_global, is_prod=True)
+
+    def test_cumprod_magnitude(self):
+        self.check_aggregation_magnitude(array_cumprod, is_prod=True)
+        self.check_aggregation_magnitude(array_cumprod_global, is_prod=True)
 
     def test_mean_magnitude(self):
         self.check_aggregation_magnitude(array_mean)
