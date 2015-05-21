@@ -1,9 +1,6 @@
 
 __all__ = []
 
-__all__ += [name for (name, value) in globals().items()
-            if not name.startswith('_') and issubclass(value, Exception)]
-
 
 class NumbaError(Exception):
     pass
@@ -88,3 +85,7 @@ class CompilerError(NumbaError):
     """
     Some high-level error in the compiler.
     """
+
+
+__all__ += [name for (name, value) in globals().items()
+            if not name.startswith('_') and issubclass(value, Exception)]
