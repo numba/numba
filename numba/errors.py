@@ -71,6 +71,13 @@ class TypingError(NumbaError):
             super(TypingError, self).__init__("%s" % (msg,))
 
 
+class UntypedAttributeError(TypingError):
+    def __init__(self, value, attr):
+        msg = 'Unknown attribute "{attr}" of type {type}'.format(type=value,
+                                                              attr=attr)
+        super(UntypedAttributeError, self).__init__(msg)
+
+
 class ByteCodeSupportError(NumbaError):
     """
     Failure to extract the bytecode of the user's function.
