@@ -14,9 +14,8 @@ from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype
 from numba import vectorize
 from numba.config import PYVERSION
-from numba.typeinfer import TypingError
+from numba.errors import LoweringError, TypingError
 from numba.targets import cpu
-from numba.lowering import LoweringError
 from .support import (TestCase, CompilationCache, skip_on_numpy_16,
                       is_on_numpy_16)
 

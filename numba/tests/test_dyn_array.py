@@ -806,11 +806,10 @@ class TestNpyEmptyKeyword(unittest.TestCase):
             self._test_with_shape_and_dtype_kw(dtype)
 
     def test_empty_no_args(self):
-        from numba.typeinfer import TypingError
+        from numba.errors import TypingError
 
         def pyfunc():
             return np.empty()
-
 
         cfunc = nrtjit(pyfunc)
 

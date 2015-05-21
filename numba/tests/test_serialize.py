@@ -5,8 +5,8 @@ import subprocess
 import sys
 
 from numba import unittest_support as unittest
+from numba.errors import TypingError
 from numba.targets import registry
-from numba.typeinfer import TypingError
 from .support import TestCase
 from .serialize_usecases import *
 

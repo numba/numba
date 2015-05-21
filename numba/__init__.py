@@ -3,12 +3,14 @@ Expose top-level symbols that are safe for import *
 """
 from __future__ import print_function, division, absolute_import
 import re
+
 from . import testing, decorators
 from ._version import get_versions
-from . import special, types, config
+from . import errors, special, types, config
 
 # Re-export typeof
 from .special import *
+from .errors import *
 from .pycc.decorators import export, exportmany
 
 # Version
@@ -45,7 +47,7 @@ export
 exportmany
 cuda
 from_dtype
-""".split() + types.__all__ + special.__all__
+""".split() + types.__all__ + special.__all__ + errors.__all__
 
 
 def _sentry_llvm_version():

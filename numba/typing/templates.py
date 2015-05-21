@@ -4,10 +4,11 @@ Define typing templates
 from __future__ import print_function, division, absolute_import
 
 import functools
-from .. import types, utils
-from ..typeinfer import TypingError
 from functools import reduce
 import operator
+
+from .. import types, utils
+from ..errors import TypingError
 
 
 class Signature(object):

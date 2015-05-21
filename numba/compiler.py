@@ -218,10 +218,6 @@ class _PipelineManager(object):
         raise CompilerError("All pipelines have failed")
 
 
-class CompilerError(Exception):
-    pass
-
-
 class Pipeline(object):
     """
     Stores and manages states for the compiler pipeline
