@@ -568,11 +568,12 @@ class TestNdFull(ConstructorBaseTest, unittest.TestCase):
 class ConstructorLikeBaseTest(object):
 
     def mutate_array(self, arr):
-        if arr.dtype.kind == 'V':
+        try:
+            arr.fill(42)
+        except (TypeError, ValueError):
+            # Try something else (e.g. Numpy 1.6 with structured dtypes)
             fill_value = b'x' * arr.dtype.itemsize
-        else:
-            fill_value = 42
-        arr.fill(fill_value)
+            arr.fill(fill_value)
 
     def check_like(self, pyfunc, dtype):
         orig = np.linspace(0, 5, 6).astype(dtype)
