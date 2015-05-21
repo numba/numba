@@ -567,6 +567,14 @@ class TestNdFull(ConstructorBaseTest, unittest.TestCase):
 
 class ConstructorLikeBaseTest(object):
 
+    def mutate_array(self, arr):
+        try:
+            arr.fill(42)
+        except (TypeError, ValueError):
+            # Try something else (e.g. Numpy 1.6 with structured dtypes)
+            fill_value = b'x' * arr.dtype.itemsize
+            arr.fill(fill_value)
+
     def check_like(self, pyfunc, dtype):
         orig = np.linspace(0, 5, 6).astype(dtype)
         cfunc = nrtjit(pyfunc)
@@ -581,8 +589,8 @@ class ConstructorLikeBaseTest(object):
             self.assertEqual(ret.strides, expected.strides)
             self.check_result_value(ret, expected)
             # test writability
-            ret.fill(123)
-            expected.fill(123)
+            self.mutate_array(ret)
+            self.mutate_array(expected)
             np.testing.assert_equal(ret, expected)
 
 
@@ -641,6 +649,16 @@ class TestNdZerosLike(TestNdEmptyLike):
 
     def check_result_value(self, ret, expected):
         np.testing.assert_equal(ret, expected)
+
+    @unittest.skipIf(numpy_version <= (1, 6),
+                     "zeros_like() broken on Numpy 1.6 with structured dtype")
+    def test_like_structured(self):
+        super(TestNdZerosLike, self).test_like_structured()
+
+    @unittest.skipIf(numpy_version <= (1, 6),
+                     "zeros_like() broken on Numpy 1.6 with structured dtype")
+    def test_like_dtype_structured(self):
+        super(TestNdZerosLike, self).test_like_dtype_structured()
 
 
 @unittest.skipIf(numpy_version < (1, 7), "test requires Numpy 1.7 or later")
