@@ -4,7 +4,7 @@ language: python
 matrix:
   include:
     - python: 2.6
-      env: NUMPY="numpy==1.6"
+      env: NUMPY="numpy=1.6"
     - python: 2.7
       env: NUMPY=numpy
     - python: 3.3
