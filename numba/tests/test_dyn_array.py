@@ -600,6 +600,7 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, unittest.TestCase):
             return pyfunc(arr)
         self.check_like(func, np.float64)
 
+    @unittest.skipIf(numpy_version <= (1, 6), "test fails on Numpy 1.6")
     def test_like_structured(self):
         dtype = np.dtype([('a', np.int16), ('b', np.float32)])
         pyfunc = self.pyfunc
@@ -620,6 +621,7 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, unittest.TestCase):
             return pyfunc(arr, dtype)
         self.check_like(func, np.float64)
 
+    @unittest.skipIf(numpy_version <= (1, 6), "test fails on Numpy 1.6")
     def test_like_dtype_structured(self):
         dtype = np.dtype([('a', np.int16), ('b', np.float32)])
         pyfunc = self.pyfunc

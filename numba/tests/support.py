@@ -123,6 +123,18 @@ class TestCase(unittest.TestCase):
 
         return "unknown"
 
+    def _fix_dtype(self, dtype):
+        """
+        Fix the given *dtype* for comparison.
+        """
+        # Under 64-bit Windows, Numpy may return either int32 or int64
+        # arrays depending on the function.
+        if (sys.platform == 'win32' and sys.maxsize > 2**32 and
+            dtype == np.dtype('int32')):
+            return np.dtype('int64')
+        else:
+            return dtype
+
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                            msg=None):
         """
@@ -182,10 +194,16 @@ class TestCase(unittest.TestCase):
 
         # For recognized sequences, recurse
         if compare_family == "ndarray":
-            self.assertEqual(first.dtype, second.dtype)
+            dtype = self._fix_dtype(first.dtype)
+            self.assertEqual(dtype, self._fix_dtype(second.dtype))
             self.assertEqual(first.ndim, second.ndim)
             self.assertEqual(first.shape, second.shape)
-            self.assertEqual(first.strides, second.strides)
+            self.assertEqual([x / first.itemsize for x in first.strides],
+                             [x / second.itemsize for x in second.strides])
+            if first.dtype != dtype:
+                first = first.astype(dtype)
+            if second.dtype != dtype:
+                second = second.astype(dtype)
             for a, b in zip(first.flat, second.flat):
                 self._assertPreciseEqual(a, b, prec, ulps, msg)
             return
