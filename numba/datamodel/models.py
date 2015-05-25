@@ -254,6 +254,24 @@ class EphemeralPointerModel(PointerModel):
         return builder.bitcast(ptr, self.get_value_type())
 
 
+@register_default(types.EphemeralArray)
+class EphemeralArrayModel(PointerModel):
+
+    def get_data_type(self):
+        return ir.ArrayType(self._pointee_be_type, self._fe_type.count)
+
+    def as_data(self, builder, value):
+        values = [builder.load(cgutils.gep(builder, value, i))
+                  for i in range(self._fe_type.count)]
+        return cgutils.pack_array(builder, values)
+
+    def from_data(self, builder, value):
+        raise NotImplementedError("use load_from_data_pointer() instead")
+
+    def load_from_data_pointer(self, builder, ptr):
+        return builder.bitcast(ptr, self.get_value_type())
+
+
 @register_default(types.ExternalFunctionPointer)
 class ExternalFuncPointerModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
@@ -686,39 +704,33 @@ class CharSeq(DataModel):
 
 
 class CContiguousFlatIter(StructModel):
-    def __init__(self, dmm, fe_type):
+    def __init__(self, dmm, fe_type, need_indices):
         assert fe_type.array_type.layout == 'C'
         array_type = fe_type.array_type
         dtype = array_type.dtype
-        members = [('array', types.CPointer(array_type)),
+        ndim = array_type.ndim
+        members = [('array', types.EphemeralPointer(array_type)),
                    ('stride', types.intp),
                    ('pointer', types.EphemeralPointer(types.CPointer(dtype))),
                    ('index', types.EphemeralPointer(types.intp)),
-                   # NOTE: indices is an array
-                   ('indices', types.EphemeralPointer(types.intp)),
-        ]
+                   ]
+        if need_indices:
+            # For ndenumerate()
+            members.append(('indices', types.EphemeralArray(types.intp, ndim)))
         super(CContiguousFlatIter, self).__init__(dmm, fe_type, members)
-
-    def get_data_type(self):
-        # FIXME: must flatten indices array
-        raise NotImplementedError("cannot serialize flat() iterator")
 
 
 class FlatIter(StructModel):
     def __init__(self, dmm, fe_type):
         array_type = fe_type.array_type
         dtype = array_type.dtype
-        members = [('array', types.CPointer(array_type)),
-                   # NOTE: pointers and indices are arrays
-                   ('pointers', types.EphemeralPointer(types.CPointer(dtype))),
-                   ('indices', types.EphemeralPointer(types.intp)),
+        ndim = array_type.ndim
+        members = [('array', types.EphemeralPointer(array_type)),
+                   ('pointers', types.EphemeralArray(types.CPointer(dtype), ndim)),
+                   ('indices', types.EphemeralArray(types.intp, ndim)),
                    ('exhausted', types.EphemeralPointer(types.boolean)),
         ]
         super(FlatIter, self).__init__(dmm, fe_type, members)
-
-    def get_data_type(self):
-        # FIXME: must flatten indices and pointers
-        raise NotImplementedError("cannot serialize flat() iterator")
 
 
 @register_default(types.UniTupleIter)
@@ -852,17 +864,23 @@ class NdIndexType(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
         members = [('shape', types.UniTuple(types.intp, ndim)),
-                   ('indices', types.CPointer(types.intp)),
-                   ('exhausted', types.CPointer(types.boolean)),
+                   ('indices', types.EphemeralArray(types.intp, ndim)),
+                   ('exhausted', types.EphemeralPointer(types.boolean)),
                    ]
         super(NdIndexType, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.NumpyFlatType)
-@register_default(types.NumpyNdEnumerateType)
 def handle_numpy_flat_type(dmm, ty):
     if ty.array_type.layout == 'C':
-        return CContiguousFlatIter(dmm, ty)
+        return CContiguousFlatIter(dmm, ty, need_indices=False)
+    else:
+        return FlatIter(dmm, ty)
+
+@register_default(types.NumpyNdEnumerateType)
+def handle_numpy_ndenumerate_type(dmm, ty):
+    if ty.array_type.layout == 'C':
+        return CContiguousFlatIter(dmm, ty, need_indices=True)
     else:
         return FlatIter(dmm, ty)
 
