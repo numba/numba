@@ -1099,7 +1099,6 @@ class EphemeralArray(Type):
         return self.dtype, self.count
 
 
-
 class Object(Type):
     mutable = True
 
