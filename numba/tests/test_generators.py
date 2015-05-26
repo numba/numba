@@ -235,11 +235,11 @@ class TestGenerators(TestCase):
         self.check_ndindex(flags=forceobj_flags)
 
     def check_np_flat(self, pyfunc, flags=no_pyobj_flags):
-        cr = compile_isolated(pyfunc, (types.Array(types.intp, 2, "C"),),
+        cr = compile_isolated(pyfunc, (types.Array(types.int32, 2, "C"),),
                               flags=flags)
-        arr = np.arange(6).reshape((2, 3))
+        arr = np.arange(6, dtype=np.int32).reshape((2, 3))
         self.check_generator(pyfunc(arr), cr.entry_point(arr))
-        cr = compile_isolated(pyfunc, (types.Array(types.intp, 2, "A"),),
+        cr = compile_isolated(pyfunc, (types.Array(types.int32, 2, "A"),),
                               flags=flags)
         arr = arr.T
         self.check_generator(pyfunc(arr), cr.entry_point(arr))
