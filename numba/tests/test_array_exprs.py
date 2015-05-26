@@ -248,5 +248,27 @@ class TestArrayExpressions(unittest.TestCase):
                                    ns.test_pipeline.interp.blocks)
 
 
+class TestRewriteIssues(unittest.TestCase):
+    def test_issue_1184(self):
+        from numba import jit
+        import numpy as np
+
+        @jit(nopython=True)
+        def foo(arr):
+            return arr
+
+        @jit(nopython=True)
+        def bar(arr):
+            c = foo(arr)
+            d = foo(arr)   # two calls to trigger rewrite
+            return c, d
+
+        arr = np.arange(10)
+        out_c, out_d = bar(arr)
+        self.assertIs(out_c, out_d)
+        self.assertIs(out_c, arr)
+
+
+
 if __name__ == "__main__":
     unittest.main()
