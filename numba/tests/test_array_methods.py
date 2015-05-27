@@ -153,6 +153,12 @@ def array_argmax(arr):
 def array_argmax_global(arr):
     return np.argmax(arr)
 
+def array_T(arr):
+    return arr.T
+
+def array_transpose(arr):
+    return arr.transpose()
+
 
 def base_test_arrays(dtype):
     a1 = np.arange(10, dtype=dtype) + 1
@@ -553,6 +559,25 @@ class TestArrayMethods(TestCase):
 
     def test_around_scalar(self):
         self.check_round_scalar(np_around_unary, np_around_binary)
+
+    def check_transpose(self, pyfunc):
+        def check_arr(arr):
+            cres = compile_isolated(pyfunc, (typeof(arr),))
+            self.assertPreciseEqual(cres.entry_point(arr), pyfunc(arr))
+        arr = np.arange(24)
+        check_arr(arr)
+        check_arr(arr.reshape((3, 8)))
+        check_arr(arr.reshape((3, 8))[::2])
+        check_arr(arr.reshape((2, 3, 4)))
+        check_arr(arr.reshape((2, 3, 4))[::2])
+        arr = np.array([0]).reshape(())
+        check_arr(arr)
+
+    def test_array_transpose(self):
+        self.check_transpose(array_transpose)
+
+    def test_array_T(self):
+        self.check_transpose(array_T)
 
 
 # These form a testing product where each of the combinations are tested

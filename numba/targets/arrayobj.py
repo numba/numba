@@ -462,6 +462,37 @@ def array_len(context, builder, sig, args):
     return builder.extract_value(shapeary, 0)
 
 
+#-------------------------------------------------------------------------------
+# Shape / layout altering
+
+@builtin
+@implement('array.transpose', types.Kind(types.Array))
+def array_transpose(context, builder, sig, args):
+    return array_T(context, builder, sig.args[0], args[0])
+
+def array_T(context, builder, typ, value):
+    if typ.ndim <= 1:
+        return value
+    else:
+        ary = make_array(typ)(context, builder, value)
+        ret = make_array(typ)(context, builder)
+        shapes = cgutils.unpack_tuple(builder, ary.shape, typ.ndim)
+        strides = cgutils.unpack_tuple(builder, ary.strides, typ.ndim)
+        populate_array(ret,
+                       data=ary.data,
+                       shape=cgutils.pack_array(builder, shapes[::-1]),
+                       strides=cgutils.pack_array(builder, strides[::-1]),
+                       itemsize=ary.itemsize,
+                       meminfo=ary.meminfo,
+                       parent=ary.parent)
+        return ret._getvalue()
+
+builtin_attr(impl_attribute(types.Kind(types.Array), 'T')(array_T))
+
+
+#-------------------------------------------------------------------------------
+# Computations
+
 @builtin
 @implement(numpy.sum, types.Kind(types.Array))
 @implement("array.sum", types.Kind(types.Array))
@@ -741,7 +772,7 @@ def array_round(context, builder, sig, args):
 
 
 #-------------------------------------------------------------------------------
-
+# Array attributes
 
 @builtin_attr
 @impl_attribute(types.Kind(types.Array), "shape", types.Kind(types.UniTuple))

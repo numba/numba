@@ -540,6 +540,20 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_ctypes(self, ary):
         return types.ArrayCTypes(ary)
 
+    def resolve_T(self, ary):
+        if ary.ndim <= 1:
+            retty = ary
+        else:
+            layout = {"C": "F", "F": "C"}.get(ary.layout, "A")
+            retty = ary.copy(layout=layout)
+        return retty
+
+    @bound_function("array.transpose")
+    def resolve_transpose(self, ary, args, kws):
+        assert not args
+        assert not kws
+        return signature(self.resolve_T(ary))
+
     def generic_resolve(self, ary, attr):
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
