@@ -7,6 +7,19 @@ allocate new arrays inside Numba-compiled functions.  There is also a rework
 of the ufunc infrastructure, and an optimization pass to collapse cascading
 array operations into a single efficient loop.
 
+.. warning::
+   Support for Windows XP and Vista with all compiler targets and support
+   for 32-bit platforms (Win/Mac/Linux) with the CUDA compiler target are
+   deprecated.  In the next release of Numba, the oldest version of Windows
+   supported will be Windows 7.  CPU compilation will remain supported
+   on 32-bit Linux and Windows platforms.
+
+Known issues:
+
+* There are some performance regressions in very short running ``nopython``
+  functions due to the additional overhead incurred by memory management.
+  We will work to reduce this overhead in future releases.
+
 Features:
 
 * Issue #1181: Add a Frequently Asked Questions section to the documentation.
