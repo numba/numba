@@ -1449,52 +1449,12 @@ class _TestLoopTypes(TestCase):
         # Check each array (including inputs, to ensure they weren't
         # mutated).
         for c_arg, py_arg in zip(c_args, py_args):
-            # XXX should assertPreciseEqual() accept numpy arrays?
             prec = 'single' if c_arg.dtype.char in 'fF' else 'exact'
             prec = 'double' if c_arg.dtype.char in 'dD' else prec
-            for c, py in zip(c_arg, py_arg):
-                msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
-                                 "args: {2}", "expected {3}", "got {4}"])
-                msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
-                try:
-                    self.assertPreciseEqual(py, c, prec=prec, msg=msg)
-                except AssertionError:
-                    if not self._is_acceptable_error(py, c):
-                        raise
-
-    def _is_acceptable_error(self, py, c):
-        """
-        Result mismatch due to differing error handling.
-        """
-        def get_leftmost_bit(dtype):
-            return dtype.type(1 << (dtype.itemsize * 8 - 1))
-
-        if np.isnan(c) or np.isnan(py):
-            if 0 in [c, py]:
-                # If one is NaN and the other is zero
-                msg = "mismatch for nan values: expected {0}; got {1}"
-                print(msg.format(py, c))
-                # This is not occurring any more
-
-        elif np.abs(c) == 0 and np.abs(py) == np.abs(c):
-            # If both are zeros and they are differ by sign
-            msg = "mismatch sign for 0: expected {0}; got {1}"
-            print(msg.format(py, c))
-            return True
-
-        elif ((c == 0 and py == get_leftmost_bit(py.dtype)) or
-                  (py == 0 and c == get_leftmost_bit(py.dtype))):
-            msg = "mismatch left-most bit: expected {0}; got {1}"
-            print(msg.format(py, c))
-            return True
-
-        elif isinstance(c, complex) and isinstance(py, complex):
-            # Recurse into real and imag of a complex
-            return (self._is_acceptable_error(c.real, py.real)
-                    and self._is_acceptable_error(c.imag, py.imag))
-
-        # Match?
-        return py == c
+            msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
+                             "args: {2}", "expected {3}", "got {4}"])
+            msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
+            self.assertPreciseEqual(py_arg, c_arg, prec=prec, msg=msg)
 
     @classmethod
     def _check_ufunc_loops(cls, ufunc):
