@@ -1,5 +1,66 @@
+
+Version 0.19.0
+--------------
+
+This version introduces memory management in the Numba runtime, allowing to
+allocate new arrays inside Numba-compiled functions.  There is also a rework
+of the ufunc infrastructure, and an optimization pass to collapse cascading
+array operations into a single efficient loop.
+
+Features:
+
+* Issue #1181: Add a Frequently Asked Questions section to the documentation.
+* Issue #1162: Support the ``cumsum()`` and ``cumprod()`` methods on Numpy
+  arrays.
+* Issue #1152: Support the ``*args`` argument-passing style.
+* Issue #1147: Allow passing character sequences as arguments to
+  JIT-compiled functions.
+* Issue #1110: Shortcut deforestation and loop fusion for array expressions.
+* Issue #1136: Support various Numpy array constructors, for example
+  numpy.zeros() and numpy.zeros_like().
+* Issue #1127: Add a CUDA simulator running on the CPU, enabled with the
+  NUMBA_ENABLE_CUDASIM environment variable.
+* Issue #1086: Allow calling standard Numpy ufuncs without an explicit
+  output array from ``nopython`` functions.
+* Issue #1113: Support keyword arguments when calling numpy.empty()
+  and related functions.
+* Issue #1108: Support the ``ctypes.data`` attribute of Numpy arrays.
+* Issue #1077: Memory management for array allocations in ``nopython`` mode.
+* Issue #1105: Support calling a ctypes function that takes ctypes.py_object
+  parameters.
+* Issue #1084: Environment variable NUMBA_DISABLE_JIT disables compilation
+  of ``@jit`` functions, instead calling into the Python interpreter
+  when called.  This allows easier debugging of multiple jitted functions.
+* Issue #927: Allow gufuncs with no output array.
+* Issue #1097: Support comparisons between tuples.
+* Issue #1075: Numba-generated ufuncs can now be called from ``nopython``
+  functions.
+* Issue #1062: ``@vectorize`` now allows omitting the signatures, and will
+  compile the required specializations on the fly (like ``@jit`` does).
+* Issue #1027: Support numpy.round().
+* Issue #1085: Allow returning a character sequence (as fetched from a
+  structured array) from a JIT-compiled function.
+
+Fixes:
+
+* Issue #1170: Ensure ``ndindex()``, ``ndenumerate()`` and ``ndarray.flat``
+  work properly inside generators.
+* Issue #1151: Disallow unpacking of tuples with the wrong size.
+* Issue #1141: Specify install dependencies in setup.py.
+* Issue #1106: Loop-lifting would fail when the lifted loop does not
+  produce any output values for the function tail.
+* Issue #1103: Fix mishandling of some inputs when a JIT-compiled function
+  is called with multiple array layouts.
+* Issue #1089: Fix range() with large unsigned integers.
+* Issue #1088: Install entry-point scripts (numba, pycc) from the conda
+  build recipe.
+* Issue #1081: Constant structured scalars now work properly.
+* Issue #1080: Fix automatic promotion of booleans to integers.
+
+
 Version 0.18.2
 --------------
+
 Bug fixes:
 
 * Issue #1073: Fixes missing template file for HTML annotation
