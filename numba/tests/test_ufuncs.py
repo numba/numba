@@ -1370,7 +1370,10 @@ class _TestLoopTypes(TestCase):
     """
 
     _ufuncs = all_ufuncs[:]
-    _ufuncs.remove(np.left_shift) # has its own test class
+    # Have their own test classes
+    _ufuncs.remove(np.left_shift)
+    _ufuncs.remove(np.reciprocal)
+    _ufuncs.remove(np.power)
     _compile_flags = enable_pyobj_flags
     _skip_types = 'OegG'
 
@@ -1485,7 +1488,8 @@ TestLoopTypes.autogenerate()
 class TestLoopTypesIntNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
-    # reciprocal needs a special test due to issue #757
+    # reciprocal and power need a special test due to issue #757
+    _ufuncs.remove(np.power)
     _ufuncs.remove(np.reciprocal)
     _ufuncs.remove(np.left_shift) # has its own test class
     _ufuncs.remove(np.right_shift) # has its own test class
@@ -1494,21 +1498,41 @@ class TestLoopTypesIntNoPython(_TestLoopTypes):
 
 TestLoopTypesIntNoPython.autogenerate()
 
-class TestLoopTypesIntReciprocalNoPython(_TestLoopTypes):
+class TestLoopTypesReciprocalNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.reciprocal] # issue #757
-    _required_types = 'bBhHiIlLqQ'
-    _skip_types = 'fdFDmMO' + _TestLoopTypes._skip_types
+    _required_types = 'bBhHiIlLqQfdFD'
+    _skip_types = 'mMO' + _TestLoopTypes._skip_types
 
     def _arg_for_type(self, a_letter_type, index=0):
         res = super(self.__class__, self)._arg_for_type(a_letter_type,
                                                         index=index)
-        # avoid 0 as argument, as it triggers undefined behavior that my differ
-        # in results from numba to the compiler used to compile NumPy
-        res[res == 0] = 42
+        if a_letter_type in 'bBhHiIlLqQ':
+            # For integer reciprocal, avoid 0 as argument, as it triggers
+            # undefined behavior that may differ in results from Numba
+            # to the compiler used to compile NumPy.
+            res[res == 0] = 42
         return res
 
-TestLoopTypesIntReciprocalNoPython.autogenerate()
+TestLoopTypesReciprocalNoPython.autogenerate()
+
+class TestLoopTypesPowerNoPython(_TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.power] # issue #757
+    _required_types = 'bBhHiIlLqQfdFD'
+    _skip_types = 'mMO' + _TestLoopTypes._skip_types
+
+    def _arg_for_type(self, a_letter_type, index=0):
+        res = super(self.__class__, self)._arg_for_type(a_letter_type,
+                                                        index=index)
+        if a_letter_type in 'bBhHiIlLqQ' and index == 1:
+            # For integer power, avoid a negative exponent, as it triggers
+            # undefined behavior that may differ in results from Numba
+            # to the compiler used to compile NumPy
+            res[res < 0] = 3
+        return res
+
+TestLoopTypesPowerNoPython.autogenerate()
 
 class TestLoopTypesIntLeftShiftNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
