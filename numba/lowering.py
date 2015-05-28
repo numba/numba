@@ -198,8 +198,12 @@ class Lower(BaseLower):
                 if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
                     callexpr = inst.value
                     # NPM function returns new reference
-                    if isinstance(self.typeof(callexpr.func.name),
-                                  types.Dispatcher):
+                    fnty = self.typeof(callexpr.func.name)
+                    if (isinstance(fnty, types.Dispatcher)
+                        or (isinstance(fnty, types.Function)
+                            and getattr(fnty.template,
+                                        'return_new_reference',
+                                        False))):
                         self.decref(ty, val)
 
         elif isinstance(inst, ir.Branch):

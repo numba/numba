@@ -1325,6 +1325,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                    strides=cgutils.pack_array(builder, strides),
                    itemsize=itemsize,
                    meminfo=meminfo)
+
     return ary
 
 def _zero_fill_array(context, builder, ary):
@@ -1382,7 +1383,7 @@ def numpy_empty_nd(context, builder, sig, args):
 @builtin
 @implement(numpy.empty_like, types.Kind(types.Array))
 @implement(numpy.empty_like, types.Kind(types.Array), types.Kind(types.DTypeSpec))
-def numpy_zeros_like_nd(context, builder, sig, args):
+def numpy_empty_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
     return ary._getvalue()

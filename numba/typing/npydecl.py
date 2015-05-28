@@ -433,6 +433,7 @@ class NdZeros(NdConstructor):
 @builtin
 class NdOnes(NdConstructor):
     key = numpy.ones
+    return_new_reference = True
 
 @builtin
 class NdEmptyLike(NdConstructorLike):
@@ -462,6 +463,8 @@ if numpy_version >= (1, 8):
     @builtin
     class NdFull(CallableTemplate):
         key = numpy.full
+        return_new_reference = True
+
 
         def generic(self):
             def typer(shape, fill_value, dtype=None):
@@ -479,6 +482,7 @@ if numpy_version >= (1, 8):
     @builtin
     class NdFullLike(CallableTemplate):
         key = numpy.full_like
+        return_new_reference = True
 
         def generic(self):
             def typer(arr, fill_value, dtype=None):
@@ -498,6 +502,7 @@ if numpy_version >= (1, 8):
 @builtin
 class NdIdentity(AbstractTemplate):
     key = numpy.identity
+    return_new_reference = True
 
     def generic(self, args, kws):
         assert not kws
@@ -523,6 +528,7 @@ def _infer_dtype_from_inputs(inputs):
 @builtin
 class NdEye(CallableTemplate):
     key = numpy.eye
+    return_new_reference = True
 
     def generic(self):
         def typer(N, M=None, k=None, dtype=None):
@@ -541,6 +547,7 @@ builtin_global(numpy.eye, types.Function(NdEye))
 @builtin
 class NdArange(AbstractTemplate):
     key = numpy.arange
+    return_new_reference = True
 
     def generic(self, args, kws):
         assert not kws
@@ -566,6 +573,7 @@ builtin_global(numpy.arange, types.Function(NdArange))
 @builtin
 class NdLinspace(AbstractTemplate):
     key = numpy.linspace
+    return_new_reference = True
 
     def generic(self, args, kws):
         assert not kws
