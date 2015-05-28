@@ -67,7 +67,7 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
             nitems = builder.mul(nitems, axlen)
     else:
         # Shape is empty
-        nitems = context.get_constant(types.intp, 0)
+        nitems = context.get_constant(types.intp, 1)
     attrs['nitems'] = nitems
 
     # Make sure that we have all the fields
@@ -530,7 +530,7 @@ def array_prod(context, builder, sig, args):
 @implement("array.cumsum", types.Kind(types.Array))
 def array_cumsum(context, builder, sig, args):
     scalar_dtype = sig.return_type.dtype
-    dtype = getattr(numpy, str(scalar_dtype))
+    dtype = as_dtype(scalar_dtype)
 
     def array_cumsum_impl(arr):
         size = 1
@@ -550,9 +550,9 @@ def array_cumsum(context, builder, sig, args):
 @builtin
 @implement(numpy.cumprod, types.Kind(types.Array))
 @implement("array.cumprod", types.Kind(types.Array))
-def array_cumsum(context, builder, sig, args):
+def array_cumprod(context, builder, sig, args):
     scalar_dtype = sig.return_type.dtype
-    dtype = getattr(numpy, str(scalar_dtype))
+    dtype = as_dtype(scalar_dtype)
 
     def array_cumprod_impl(arr):
         size = 1
@@ -992,7 +992,7 @@ def make_ndindex_cls(nditerty):
 
             self.indices = indices
             self.exhausted = exhausted
-            self.shape = cgutils.pack_array(builder, shapes)
+            self.shape = cgutils.pack_array(builder, shapes, zero.type)
 
         def iternext_specific(self, context, builder, result):
             zero = context.get_constant(types.intp, 0)
@@ -1007,7 +1007,7 @@ def make_ndindex_cls(nditerty):
 
             indices = [builder.load(cgutils.gep(builder, self.indices, dim))
                        for dim in range(ndim)]
-            result.yield_(cgutils.pack_array(builder, indices))
+            result.yield_(cgutils.pack_array(builder, indices, zero.type))
             result.set_valid(True)
 
             shape = cgutils.unpack_tuple(builder, self.shape, ndim)
@@ -1280,16 +1280,19 @@ def make_array_ndindex(context, builder, sig, args):
     return nditer._getvalue()
 
 @builtin
-@implement(numpy.ndindex, types.Kind(types.UniTuple))
+@implement(numpy.ndindex, types.Kind(types.BaseTuple))
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(shape)"""
     ndim = sig.return_type.ndim
-    idxty = sig.args[0].dtype
-    tup = args[0]
+    if ndim > 0:
+        idxty = sig.args[0].dtype
+        tup = args[0]
 
-    shape = cgutils.unpack_tuple(builder, tup, ndim)
-    shape = [context.cast(builder, idx, idxty, types.intp)
-             for idx in shape]
+        shape = cgutils.unpack_tuple(builder, tup, ndim)
+        shape = [context.cast(builder, idx, idxty, types.intp)
+                 for idx in shape]
+    else:
+        shape = []
 
     nditercls = make_ndindex_cls(types.NumpyNdIndexType(len(shape)))
     nditer = nditercls(context, builder)
@@ -1331,7 +1334,9 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     for s in shapes:
         arrlen = builder.mul(arrlen, s)
 
-    if arrtype.layout == 'C':
+    if arrtype.ndim == 0:
+        strides = ()
+    elif arrtype.layout == 'C':
         strides = [itemsize]
         for dimension_size in reversed(shapes[1:]):
             strides.append(builder.mul(strides[-1], dimension_size))
@@ -1350,10 +1355,14 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                                         size=builder.mul(itemsize, arrlen))
     data = context.nrt_meminfo_data(builder, meminfo)
 
+    intp_t = context.get_value_type(types.intp)
+    shape_array = cgutils.pack_array(builder, shapes, ty=intp_t)
+    strides_array = cgutils.pack_array(builder, strides, ty=intp_t)
+
     populate_array(ary,
                    data=builder.bitcast(data, datatype.as_pointer()),
-                   shape=cgutils.pack_array(builder, shapes),
-                   strides=cgutils.pack_array(builder, strides),
+                   shape=shape_array,
+                   strides=strides_array,
                    itemsize=itemsize,
                    meminfo=meminfo)
     return ary
@@ -1618,7 +1627,7 @@ def numpy_eye(context, builder, sig, args):
 @builtin
 @implement(numpy.arange, types.Kind(types.Number))
 def numpy_arange_1(context, builder, sig, args):
-    dtype = getattr(numpy, str(sig.return_type.dtype))
+    dtype = as_dtype(sig.return_type.dtype)
 
     def arange(stop):
         return numpy.arange(0, stop, 1, dtype)
@@ -1628,7 +1637,7 @@ def numpy_arange_1(context, builder, sig, args):
 @builtin
 @implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number))
 def numpy_arange_2(context, builder, sig, args):
-    dtype = getattr(numpy, str(sig.return_type.dtype))
+    dtype = as_dtype(sig.return_type.dtype)
 
     def arange(start, stop):
         return numpy.arange(start, stop, 1, dtype)
@@ -1640,7 +1649,7 @@ def numpy_arange_2(context, builder, sig, args):
 @implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number),
            types.Kind(types.Number))
 def numpy_arange_3(context, builder, sig, args):
-    dtype = getattr(numpy, str(sig.return_type.dtype))
+    dtype = as_dtype(sig.return_type.dtype)
 
     def arange(start, stop, step):
         return numpy.arange(start, stop, step, dtype)
@@ -1692,7 +1701,7 @@ def numpy_linspace_2(context, builder, sig, args):
 @implement(numpy.linspace, types.Kind(types.Number), types.Kind(types.Number),
            types.Kind(types.Integer))
 def numpy_linspace_3(context, builder, sig, args):
-    dtype = getattr(numpy, str(sig.return_type.dtype))
+    dtype = as_dtype(sig.return_type.dtype)
 
     def linspace(start, stop, num):
         arr = numpy.empty(num, dtype)
@@ -1705,3 +1714,52 @@ def numpy_linspace_3(context, builder, sig, args):
 
     return context.compile_internal(builder, linspace, sig, args)
 
+
+@builtin
+@implement("array.copy", types.Kind(types.Array))
+def array_copy(context, builder, sig, args):
+    arytype = sig.args[0]
+    ary = make_array(arytype)(context, builder, value=args[0])
+    shapes = cgutils.unpack_tuple(builder, ary.shape)
+
+    rettype = sig.return_type
+    ret = _empty_nd_impl(context, builder, rettype, shapes)
+
+    src_data = ary.data
+    dest_data = ret.data
+
+    assert rettype.layout == "C"
+    if arytype.layout == "C":
+        # Fast path: memcpy
+        # Compute array length
+        arrlen = context.get_constant(types.intp, 1)
+        for s in shapes:
+            arrlen = builder.mul(arrlen, s)
+        arrlen = builder.mul(arrlen, ary.itemsize)
+
+        pchar = lc.Type.int(8).as_pointer()
+        memcpy = builder.module.declare_intrinsic(
+            'llvm.memcpy', [pchar, pchar, arrlen.type])
+        builder.call(memcpy,
+                     (builder.bitcast(dest_data, pchar),
+                      builder.bitcast(src_data, pchar),
+                      arrlen,
+                      lc.Constant.int(lc.Type.int(32), 0),
+                      lc.Constant.int(lc.Type.int(1), 0),
+                      ))
+
+    else:
+        src_strides = cgutils.unpack_tuple(builder, ary.strides)
+        dest_strides = cgutils.unpack_tuple(builder, ret.strides)
+        intp_t = context.get_value_type(types.intp)
+
+        with cgutils.loop_nest(builder, shapes, intp_t) as indices:
+            src_ptr = cgutils.get_item_pointer2(builder, src_data,
+                                                shapes, src_strides,
+                                                arytype.layout, indices)
+            dest_ptr = cgutils.get_item_pointer2(builder, dest_data,
+                                                 shapes, dest_strides,
+                                                 rettype.layout, indices)
+            builder.store(builder.load(src_ptr), dest_ptr)
+
+    return ret._getvalue()

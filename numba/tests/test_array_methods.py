@@ -27,6 +27,12 @@ def array_ndenumerate_sum(arr):
         s = s + (i + 1) * (j + 1) * v
     return s
 
+def np_ndindex_empty():
+    s = 0
+    for ind in np.ndindex(()):
+        s += s + len(ind) + 1
+    return s
+
 def np_ndindex(x, y):
     s = 0
     n = 0
@@ -158,6 +164,9 @@ def array_T(arr):
 
 def array_transpose(arr):
     return arr.transpose()
+
+def array_copy(arr):
+    return arr.copy()
 
 
 def base_test_arrays(dtype):
@@ -371,6 +380,12 @@ class TestArrayMethods(TestCase):
         arr = arr.reshape((2, 2, 3))
         self.check_array_unary(arr, typeof(arr), func)
 
+    def test_np_ndindex_empty(self):
+        func = np_ndindex_empty
+        cres = compile_isolated(func, [])
+        cfunc = cres.entry_point
+        self.assertPreciseEqual(cfunc(), func())
+
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
         arrty = typeof(arr)
@@ -560,24 +575,29 @@ class TestArrayMethods(TestCase):
     def test_around_scalar(self):
         self.check_round_scalar(np_around_unary, np_around_binary)
 
-    def check_transpose(self, pyfunc):
+    def check_layout_dependent_func(self, pyfunc):
         def check_arr(arr):
             cres = compile_isolated(pyfunc, (typeof(arr),))
             self.assertPreciseEqual(cres.entry_point(arr), pyfunc(arr))
         arr = np.arange(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
+        check_arr(arr.reshape((3, 8)).T)
         check_arr(arr.reshape((3, 8))[::2])
         check_arr(arr.reshape((2, 3, 4)))
+        check_arr(arr.reshape((2, 3, 4)).T)
         check_arr(arr.reshape((2, 3, 4))[::2])
         arr = np.array([0]).reshape(())
         check_arr(arr)
 
     def test_array_transpose(self):
-        self.check_transpose(array_transpose)
+        self.check_layout_dependent_func(array_transpose)
 
     def test_array_T(self):
-        self.check_transpose(array_T)
+        self.check_layout_dependent_func(array_T)
+
+    def test_array_copy(self):
+        self.check_layout_dependent_func(array_copy)
 
 
 # These form a testing product where each of the combinations are tested

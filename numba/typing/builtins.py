@@ -554,6 +554,13 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         return signature(self.resolve_T(ary))
 
+    @bound_function("array.copy")
+    def resolve_copy(self, ary, args, kws):
+        assert not args
+        assert not kws
+        retty = ary.copy(layout="C")
+        return signature(retty)
+
     def generic_resolve(self, ary, attr):
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
