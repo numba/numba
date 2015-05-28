@@ -76,7 +76,7 @@ class ArgPacker(object):
 
 def _flatten(iterable):
     """
-    Flatten nested iterable of (tuple, list)n
+    Flatten nested iterable of (tuple, list).
     """
     def rec(iterable):
         for i in iterable:
