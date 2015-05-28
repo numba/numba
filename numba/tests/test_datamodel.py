@@ -145,7 +145,6 @@ class TestArgInfo(unittest.TestCase):
         fe_args = [types.Array(types.int32, 1, 'C')] * 2
         self._test_as_arguments(fe_args)
 
-    @unittest.expectedFailure
     def test_two_0d_arrays(self):
         fe_args = [types.Array(types.int32, 0, 'C')] * 2
         self._test_as_arguments(fe_args)
@@ -170,7 +169,6 @@ class TestArgInfo(unittest.TestCase):
                    types.int32]
         self._test_as_arguments(fe_args)
 
-    @unittest.expectedFailure
     def test_nested_empty_tuples(self):
         fe_args = [types.int32,
                    types.UniTuple(types.Tuple(()), 2),

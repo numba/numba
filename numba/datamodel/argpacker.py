@@ -21,10 +21,8 @@ class ArgPacker(object):
         self._nargs = len(fe_args)
         self._dm_args = [self._dmm.lookup(ty) for ty in fe_args]
         argtys = [bt.get_argument_type() for bt in self._dm_args]
-        if argtys:
-            self._be_args, self._posmap = zip(*_flatten(argtys, mark_empty=True))
-        else:
-            self._be_args = self._posmap = ()
+        self._unflatten_code = _build_unflatten_code(argtys)
+        self._be_args = list(_flatten(argtys))
 
     def as_arguments(self, builder, values):
         """Flatten all argument values
@@ -38,18 +36,14 @@ class ArgPacker(object):
         args = [dm.as_argument(builder, val)
                 for dm, val in zip(self._dm_args, values)]
 
-        flattened = list(_flatten(args))
-        if flattened:
-            args, _ = zip(*flattened)
-        else:
-            args = ()
+        args = tuple(_flatten(args))
         return args
 
     def from_arguments(self, builder, args):
         """Unflatten all argument values
         """
 
-        valtree = _unflatten(self._posmap, args)
+        valtree = _unflatten(self._unflatten_code, args)
         values = [dm.from_argument(builder, val)
                   for dm, val in zip(self._dm_args, valtree)]
 
@@ -59,7 +53,7 @@ class ArgPacker(object):
         """Assign names for each flattened argument values.
         """
 
-        valtree = _unflatten(self._posmap, args)
+        valtree = _unflatten(self._unflatten_code, args)
         for aval, aname in zip(valtree, names):
             self._assign_names(aval, aname)
 
@@ -80,47 +74,67 @@ class ArgPacker(object):
         return tuple(ty for ty in self._be_args if ty != ())
 
 
-def _unflatten(posmap, flatiter):
-    """Rebuild a nested tuple structure
+def _flatten(iterable):
     """
-    poss = deque(posmap)
-    vals = deque(flatiter)
-
-    res = []
-    while poss:
-        cur = poss.popleft()
-        ptr = res
-        for loc in cur[:-1]:
-            if loc >= len(ptr):
-                ptr.append([])
-            ptr = ptr[loc]
-
-        if cur == ():
-            ptr.append(())
-        else:
-            assert len(ptr) == cur[-1]
-            ptr.append(vals.popleft())
-
-    assert not vals
-
-    return res
-
-
-def _flatten(iterable, mark_empty=False):
+    Flatten nested iterable of (tuple, list)n
     """
-    Flatten nested iterable of (tuple, list) with position information
+    def rec(iterable):
+        for i in iterable:
+            if isinstance(i, (tuple, list)):
+                for j in rec(i):
+                    yield j
+            else:
+                yield i
+    return rec(iterable)
+
+
+_PUSH_LIST = 1
+_APPEND_NEXT_VALUE = 2
+_APPEND_EMPTY_TUPLE = 3
+_POP = 4
+
+
+def _build_unflatten_code(iterable):
+    """Build an unflatten opcode sequence for the given *iterable* structure
+    (an iterable of nested sequences).
     """
-    def rec(iterable, indices):
+    code = []
+    def rec(iterable):
         for i in iterable:
             if isinstance(i, (tuple, list)):
                 if len(i) > 0:
-                    inner = indices + (0,)
-                    for j, k in rec(i, indices=inner):
-                        yield j, k
-                elif mark_empty:
-                    yield i, ()
+                    code.append(_PUSH_LIST)
+                    rec(i)
+                    code.append(_POP)
+                else:
+                    code.append(_APPEND_EMPTY_TUPLE)
             else:
-                yield i, indices
-            indices = indices[:-1] + (indices[-1] + 1,)
-    return rec(iterable, indices=(0,))
+                code.append(_APPEND_NEXT_VALUE)
 
+    rec(iterable)
+    return code
+
+
+def _unflatten(code, flatiter):
+    """Rebuild a nested tuple structure using the given opcode sequence.
+    """
+    vals = deque(flatiter)
+
+    res = []
+    cur = res
+    stack = []
+    for op in code:
+        if op is _PUSH_LIST:
+            stack.append(cur)
+            cur.append([])
+            cur = cur[-1]
+        elif op is _APPEND_NEXT_VALUE:
+            cur.append(vals.popleft())
+        elif op is _APPEND_EMPTY_TUPLE:
+            cur.append(())
+        elif op is _POP:
+            cur = stack.pop()
+
+    assert not stack, stack
+
+    return res

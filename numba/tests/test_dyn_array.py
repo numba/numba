@@ -625,9 +625,6 @@ class ConstructorLikeBaseTest(object):
         for shape in (6, (2, 3), (1, 2, 3), (3, 1, 2), ()):
             if shape == ():
                 arr = orig[-1:].reshape(())
-                # FIXME: fails because of argpacker issues with nested
-                # empty tuples.
-                continue
             else:
                 arr = orig.reshape(shape)
             expected = pyfunc(arr)
