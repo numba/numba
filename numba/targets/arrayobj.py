@@ -1326,7 +1326,6 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                    itemsize=itemsize,
                    meminfo=meminfo)
 
-    context.nrt_incref(builder, arrtype, ary._getvalue())
     return ary
 
 def _zero_fill_array(context, builder, ary):
