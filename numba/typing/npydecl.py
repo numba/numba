@@ -390,6 +390,7 @@ class NdConstructor(CallableTemplate):
     """
     Typing template for np.empty(), .zeros(), .ones().
     """
+    return_new_reference = True
 
     def generic(self):
         def typer(shape, dtype=None):
@@ -409,6 +410,7 @@ class NdConstructorLike(CallableTemplate):
     """
     Typing template for np.empty_like(), .zeros_like(), .ones_like().
     """
+    return_new_reference = True
 
     def generic(self):
         def typer(arr, dtype=None):
