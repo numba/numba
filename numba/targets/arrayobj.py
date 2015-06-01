@@ -101,13 +101,8 @@ def update_array_info(aryty, array):
     # Calc num of items from shape
     nitems = context.get_constant(types.intp, 1)
     unpacked_shape = cgutils.unpack_tuple(builder, array.shape, aryty.ndim)
-    if unpacked_shape:
-        # Shape is not empty
-        for axlen in unpacked_shape:
-            nitems = builder.mul(nitems, axlen)
-    else:
-        # Shape is empty
-        nitems = context.get_constant(types.intp, 1)
+    for axlen in unpacked_shape:
+        nitems = builder.mul(nitems, axlen)
     array.nitems = nitems
 
     array.itemsize = context.get_constant(types.intp,
