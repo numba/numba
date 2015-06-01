@@ -31,6 +31,14 @@ def make_array(array_type):
     return cgutils.create_struct_proxy(array_type)
 
 
+def get_itemsize(context, array_type):
+    """
+    Return the item size for the given array type.
+    """
+    llty = context.get_data_type(array_type.dtype)
+    return context.get_abi_sizeof(llty)
+
+
 def populate_array(array, data, shape, strides, itemsize, meminfo,
                    parent=None):
     """
@@ -80,6 +88,30 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
         setattr(array, k, v)
 
     return array
+
+
+def update_array_info(aryty, array):
+    """
+    Update some auxiliary information in *array* after some of its fields
+    were changed.  `itemsize` and `nitems` are updated.
+    """
+    context = array._context
+    builder = array._builder
+
+    # Calc num of items from shape
+    nitems = context.get_constant(types.intp, 1)
+    unpacked_shape = cgutils.unpack_tuple(builder, array.shape, aryty.ndim)
+    if unpacked_shape:
+        # Shape is not empty
+        for axlen in unpacked_shape:
+            nitems = builder.mul(nitems, axlen)
+    else:
+        # Shape is empty
+        nitems = context.get_constant(types.intp, 1)
+    array.nitems = nitems
+
+    array.itemsize = context.get_constant(types.intp,
+                                          get_itemsize(context, aryty))
 
 
 @struct_factory(types.ArrayIterator)
@@ -492,6 +524,11 @@ builtin_attr(impl_attribute(types.Kind(types.Array), 'T')(array_T))
 
 def _attempt_nocopy_reshape(context, builder, aryty, ary, newnd, newshape,
                             newstrides):
+    """
+    Call into Numba_attempt_nocopy_reshape() for the given array type
+    and instance, and the specified new shape.  The array pointed to
+    by *newstrides* will be filled up if successful.
+    """
     ll_intp = context.get_value_type(types.intp)
     ll_intp_star = ll_intp.as_pointer()
     ll_intc = context.get_value_type(types.intc)
@@ -561,6 +598,63 @@ def array_reshape(context, builder, sig, args):
                    itemsize=ary.itemsize,
                    meminfo=ary.meminfo,
                    parent=ary.parent)
+    return ret._getvalue()
+
+
+def _change_dtype(context, builder, oldty, newty, ary):
+    """
+    Attempt to fix up *ary* for switching from *oldty* to *newty*.
+    Non-zero is returned on success.
+    """
+    assert oldty.ndim == newty.ndim
+    assert oldty.layout == newty.layout
+    ll_intp = context.get_value_type(types.intp)
+    ll_intp_star = ll_intp.as_pointer()
+    ll_intc = context.get_value_type(types.intc)
+    ll_char = context.get_value_type(types.int8)
+    fnty = lc.Type.function(ll_intc, [ll_intp, ll_intp_star, ll_intp_star,
+                                      ll_intp, ll_intp, ll_char])
+    fn = builder.module.get_or_insert_function(fnty,
+                                               name="numba_change_dtype")
+
+    old_itemsize = context.get_constant(types.intp, get_itemsize(context, oldty))
+    new_itemsize = context.get_constant(types.intp, get_itemsize(context, newty))
+
+    nd = lc.Constant.int(ll_intp, newty.ndim)
+    shape = cgutils.gep(builder, ary._get_ptr_by_name('shape'), 0, 0)
+    strides = cgutils.gep(builder, ary._get_ptr_by_name('strides'), 0, 0)
+    layout = lc.Constant.int(ll_char, ord(newty.layout))
+    res = builder.call(fn, [nd, shape, strides,
+                            old_itemsize, new_itemsize, layout])
+    update_array_info(newty, ary)
+    return res
+
+
+@builtin
+@implement('array.view', types.Kind(types.Array), types.Kind(types.DTypeSpec))
+def array_view(context, builder, sig, args):
+    aryty = sig.args[0]
+    retty = sig.return_type
+
+    ary = make_array(aryty)(context, builder, args[0])
+    ret = make_array(retty)(context, builder)
+    # Copy all fields, casting the "data" pointer appropriately
+    fields = set(ret._datamodel._fields)
+    for k in sorted(fields):
+        val = getattr(ary, k)
+        if k == 'data':
+            ptrty = ret.data.type
+            ret.data = builder.bitcast(val, ptrty)
+        else:
+            setattr(ret, k, val)
+
+    ok = _change_dtype(context, builder, aryty, retty, ret)
+    fail = builder.icmp_unsigned('==', ok, lc.Constant.int(ok.type, 0))
+
+    with builder.if_then(fail):
+        msg = "new type not compatible with array"
+        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
     return ret._getvalue()
 
 

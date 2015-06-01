@@ -588,7 +588,17 @@ class ArrayAttribute(AttributeTemplate):
         retty = ary.copy(ndim=ndim)
         return signature(retty, shape)
 
+    @bound_function("array.view")
+    def resolve_view(self, ary, args, kws):
+        from .npydecl import _parse_dtype
+        assert not kws
+        dtype, = args
+        dtype = _parse_dtype(dtype)
+        retty = ary.copy(dtype=dtype)
+        return signature(retty, *args)
+
     def generic_resolve(self, ary, attr):
+        # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
                 return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,

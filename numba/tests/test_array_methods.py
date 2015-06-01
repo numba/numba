@@ -171,6 +171,12 @@ def array_copy(arr):
 def array_reshape(arr, newshape):
     return arr.reshape(newshape)
 
+# XXX Can't pass a dtype as a Dispatcher argument for now
+def make_array_view(newtype):
+    def array_view(arr):
+        return arr.view(newtype)
+    return array_view
+
 
 def base_test_arrays(dtype):
     a1 = np.arange(10, dtype=dtype) + 1
@@ -654,6 +660,77 @@ class TestArrayMethods(TestCase):
         check_err_shape(arr, (2, 3, 4))
         check_err_shape(arr, (6, 4))
         check_err_shape(arr, (2, 12))
+
+    def test_array_view(self):
+
+        def run(arr, dtype):
+            pyfunc = make_array_view(dtype)
+            cres = self.ccache.compile(pyfunc, (typeof(arr),))
+            return cres.entry_point(arr)
+        def check(arr, dtype):
+            expected = arr.view(dtype)
+            got = run(arr, dtype)
+            self.assertPreciseEqual(got, expected)
+        def check_err(arr, dtype):
+            with self.assertRaises(ValueError) as raises:
+                run(arr, dtype)
+            self.assertEqual(str(raises.exception),
+                             "new type not compatible with array")
+
+        dt1 = np.dtype([('a', np.int8), ('b', np.int8)])
+        dt2 = np.dtype([('u', np.int16), ('v', np.int8)])
+        dt3 = np.dtype([('x', np.int16), ('y', np.int16)])
+
+        # C-contiguous
+        arr = np.arange(24, dtype=np.int8)
+        check(arr, np.dtype('int16'))
+        check(arr, np.int16)
+        check(arr, np.int8)
+        check(arr, np.float32)
+        check(arr, np.complex64)
+        check(arr, dt1)
+        check(arr, dt2)
+        check_err(arr, np.complex128)
+
+        # Last dimension must have a compatible size
+        arr = arr.reshape((3, 8))
+        check(arr, np.int8)
+        check(arr, np.float32)
+        check(arr, np.complex64)
+        check(arr, dt1)
+        check_err(arr, dt2)
+        check_err(arr, np.complex128)
+
+        # F-contiguous
+        arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
+        check(arr, np.int8)
+        check(arr, np.float32)
+        check(arr, np.complex64)
+        check(arr, dt1)
+        check_err(arr, dt2)
+        check_err(arr, np.complex128)
+
+        # Non-contiguous: only a type with the same itemsize can be used
+        arr = np.arange(16, dtype=np.int32)[::2]
+        check(arr, np.uint32)
+        check(arr, np.float32)
+        check(arr, dt3)
+        check_err(arr, np.int8)
+        check_err(arr, np.int16)
+        check_err(arr, np.int64)
+        check_err(arr, dt1)
+        check_err(arr, dt2)
+
+        # Zero-dim array: only a type with the same itemsize can be used
+        arr = np.array([42], dtype=np.int32).reshape(())
+        check(arr, np.uint32)
+        check(arr, np.float32)
+        check(arr, dt3)
+        check_err(arr, np.int8)
+        check_err(arr, np.int16)
+        check_err(arr, np.int64)
+        check_err(arr, dt1)
+        check_err(arr, dt2)
 
 
 # These form a testing product where each of the combinations are tested

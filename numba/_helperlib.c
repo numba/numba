@@ -1324,6 +1324,61 @@ Numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
     return 1;
 }
 
+/*
+ * See Numpy's array_descr_set()
+ * (np/core/src/multiarray/getset.c).
+ * Attempt to fix the array's shape and strides for a new dtype.
+ * 0 is returned on failure, 1 on success.
+ */
+static int
+Numba_change_dtype(npy_intp nd, npy_intp *dims, npy_intp *strides,
+                   npy_intp old_itemsize, npy_intp new_itemsize,
+                   char layout)
+{
+    npy_intp i, newdim, bytelength;
+
+    assert (layout == 'C' || layout == 'F' || layout == 'A');
+    if (old_itemsize != new_itemsize && (layout == 'A' || nd == 0)) {
+        return 0;
+    }
+    /* Determine the index of the dimension we have to fix up */
+    if (layout == 'C') {
+        i = nd - 1;
+    }
+    else {
+        i = 0;
+    }
+    if (new_itemsize < old_itemsize) {
+        /*
+         * if it is compatible increase the size of the
+         * dimension at end (or at the front if F-contiguous)
+         */
+        if (old_itemsize % new_itemsize != 0) {
+            return 0;
+        }
+        newdim = old_itemsize / new_itemsize;
+        dims[i] *= newdim;
+        strides[i] = new_itemsize;
+    }
+    else if (new_itemsize > old_itemsize) {
+        /*
+         * Determine if last (or first if F-contiguous) dimension
+         * is compatible
+         */
+        bytelength = dims[i] * old_itemsize;
+        if ((bytelength % new_itemsize) != 0) {
+            return 0;
+        }
+        dims[i] = bytelength / new_itemsize;
+        strides[i] = new_itemsize;
+    }
+    else {
+        /* Same item size: nothing to do (this also works for
+         * non-contiguous arrays).
+         */
+    }
+    return 1;
+}
 
 /* We use separate functions for datetime64 and timedelta64, to ensure
  * proper type checking.
@@ -1583,6 +1638,7 @@ build_c_helpers_dict(void)
     declmethod(rnd_init);
     declmethod(poisson_ptrs);
     declmethod(attempt_nocopy_reshape);
+    declmethod(change_dtype);
 
     declpointer(py_random_state);
     declpointer(np_random_state);
