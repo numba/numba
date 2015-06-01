@@ -1206,12 +1206,12 @@ PyObject* Numba_ndarray_new(int nd,
  * axes of length 1. Zero strides should work but are untested.
  *
  * If a copy is needed, returns 0
- * If no copy is needed, returns 1 and fills newstrides
+ * If no copy is needed, returns 1 and fills `npy_intp *newstrides`
  *     with appropriate strides
  */
 static int
-Numba_attempt_nocopy_reshape(npy_intp nd, npy_intp *dims, npy_intp *strides,
-                             npy_intp newnd, npy_intp *newdims,
+Numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *strides,
+                             npy_intp newnd, const npy_intp *newdims,
                              npy_intp *newstrides, npy_intp itemsize,
                              int is_f_order)
 {
