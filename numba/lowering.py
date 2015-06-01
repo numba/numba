@@ -272,6 +272,7 @@ class Lower(BaseLower):
                 pass
             else:
                 self.decref(self.typeof(inst.value), val)
+                self._delete_variable(inst.value)
 
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
@@ -725,3 +726,10 @@ class Lower(BaseLower):
             return
 
         self.context.nrt_decref(self.builder, typ, val)
+
+    def _delete_variable(self, varname):
+        """
+        Zero-fill variable to avoid crashing due to extra ir.Del
+        """
+        storage = self.getvar(varname)
+        self.builder.store(Constant.null(storage.type.pointee), storage)
