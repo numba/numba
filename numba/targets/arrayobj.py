@@ -490,6 +490,80 @@ def array_T(context, builder, typ, value):
 builtin_attr(impl_attribute(types.Kind(types.Array), 'T')(array_T))
 
 
+def _attempt_nocopy_reshape(context, builder, aryty, ary, newnd, newshape,
+                            newstrides):
+    ll_intp = context.get_value_type(types.intp)
+    ll_intp_star = ll_intp.as_pointer()
+    ll_intc = context.get_value_type(types.intc)
+    fnty = lc.Type.function(ll_intc, [ll_intp, ll_intp_star, ll_intp_star,
+                                      ll_intp, ll_intp_star, ll_intp_star,
+                                      ll_intp, ll_intc])
+    fn = builder.module.get_or_insert_function(
+        fnty, name="numba_attempt_nocopy_reshape")
+
+    nd = lc.Constant.int(ll_intp, aryty.ndim)
+    shape = cgutils.gep(builder, ary._get_ptr_by_name('shape'), 0, 0)
+    strides = cgutils.gep(builder, ary._get_ptr_by_name('strides'), 0, 0)
+    newnd = lc.Constant.int(ll_intp, newnd)
+    newshape = cgutils.gep(builder, newshape, 0, 0)
+    newstrides = cgutils.gep(builder, newstrides, 0, 0)
+    is_f_order = lc.Constant.int(ll_intc, 0)
+    res = builder.call(fn, [nd, shape, strides,
+                            newnd, newshape, newstrides,
+                            ary.itemsize, is_f_order])
+    return res
+
+@builtin
+@implement('array.reshape', types.Kind(types.Array), types.Kind(types.BaseTuple))
+def array_reshape(context, builder, sig, args):
+    aryty = sig.args[0]
+    retty = sig.return_type
+    shapety = sig.args[1]
+    shape = args[1]
+
+    ll_intp = context.get_value_type(types.intp)
+    ll_shape = lc.Type.array(ll_intp, shapety.count)
+
+    ary = make_array(aryty)(context, builder, args[0])
+
+    # XXX unknown dimension (-1) is unhandled
+
+    # Check requested size
+    newsize = lc.Constant.int(ll_intp, 1)
+    for s in cgutils.unpack_tuple(builder, shape):
+        newsize = builder.mul(newsize, s)
+    size = lc.Constant.int(ll_intp, 1)
+    for s in cgutils.unpack_tuple(builder, ary.shape):
+        size = builder.mul(size, s)
+    fail = builder.icmp_unsigned('!=', size, newsize)
+    with builder.if_then(fail):
+        msg = "total size of new array must be unchanged"
+        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+    newnd = shapety.count
+    newshape = cgutils.alloca_once(builder, ll_shape)
+    builder.store(shape, newshape)
+    newstrides = cgutils.alloca_once(builder, ll_shape)
+
+    ok = _attempt_nocopy_reshape(context, builder, aryty, ary, newnd,
+                                 newshape, newstrides)
+    fail = builder.icmp_unsigned('==', ok, lc.Constant.int(ok.type, 0))
+
+    with builder.if_then(fail):
+        msg = "incompatible shape for array"
+        context.call_conv.return_user_exc(builder, NotImplementedError, (msg,))
+
+    ret = make_array(retty)(context, builder)
+    populate_array(ret,
+                   data=ary.data,
+                   shape=builder.load(newshape),
+                   strides=builder.load(newstrides),
+                   itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
+                   parent=ary.parent)
+    return ret._getvalue()
+
+
 #-------------------------------------------------------------------------------
 # Computations
 

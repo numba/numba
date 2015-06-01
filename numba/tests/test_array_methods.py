@@ -8,7 +8,7 @@ from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
 from numba.numpy_support import as_dtype
-from .support import TestCase
+from .support import TestCase, CompilationCache
 
 
 def array_flat(arr, out):
@@ -168,6 +168,9 @@ def array_transpose(arr):
 def array_copy(arr):
     return arr.copy()
 
+def array_reshape(arr, newshape):
+    return arr.reshape(newshape)
+
 
 def base_test_arrays(dtype):
     a1 = np.arange(10, dtype=dtype) + 1
@@ -206,6 +209,10 @@ def array_prop(aray):
 
 
 class TestArrayMethods(TestCase):
+
+    def setUp(self):
+        self.ccache = CompilationCache()
+
     def test_array_ndim_and_layout(self):
         for testArray, testArrayProps in zip(base_test_arrays(np.int32), yield_test_props()):
             self.assertEqual(array_prop(testArray), testArrayProps)
@@ -598,6 +605,55 @@ class TestArrayMethods(TestCase):
 
     def test_array_copy(self):
         self.check_layout_dependent_func(array_copy)
+
+    def test_array_reshape(self):
+        pyfunc = array_reshape
+        def run(arr, shape):
+            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(shape)))
+            return cres.entry_point(arr, shape)
+        def check(arr, shape):
+            expected = pyfunc(arr, shape)
+            got = run(arr, shape)
+            self.assertPreciseEqual(got, expected)
+        def check_err_shape(arr, shape):
+            with self.assertRaises(NotImplementedError) as raises:
+                run(arr, shape)
+            self.assertEqual(str(raises.exception),
+                             "incompatible shape for array")
+        def check_err_size(arr, shape):
+            with self.assertRaises(ValueError) as raises:
+                run(arr, shape)
+            self.assertEqual(str(raises.exception),
+                             "total size of new array must be unchanged")
+
+        # C-contiguous
+        arr = np.arange(24)
+        check(arr, (24,))
+        check(arr, (4, 6))
+        check(arr, (8, 3))
+        check(arr, (8, 1, 3))
+        check(arr, (1, 8, 1, 1, 3, 1))
+        arr = np.arange(24).reshape((2, 3, 4))
+        check(arr, (24,))
+        check(arr, (4, 6))
+        check(arr, (8, 3))
+        check(arr, (8, 1, 3))
+        check(arr, (1, 8, 1, 1, 3, 1))
+        check_err_size(arr, (25,))
+        check_err_size(arr, (8, 4))
+        arr = np.arange(24).reshape((1, 8, 1, 1, 3, 1))
+        check(arr, (24,))
+        check(arr, (4, 6))
+        check(arr, (8, 3))
+        check(arr, (8, 1, 3))
+
+        # F-contiguous
+        arr = np.arange(24).reshape((2, 3, 4)).T
+        check(arr, (4, 3, 2))
+        check(arr, (1, 4, 1, 3, 1, 2, 1))
+        check_err_shape(arr, (2, 3, 4))
+        check_err_shape(arr, (6, 4))
+        check_err_shape(arr, (2, 12))
 
 
 # These form a testing product where each of the combinations are tested

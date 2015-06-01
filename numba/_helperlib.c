@@ -1197,6 +1197,134 @@ PyObject* Numba_ndarray_new(int nd,
     return ndary;
 }
 
+/*
+ * Straight from Numpy's _attempt_nocopy_reshape()
+ * (np/core/src/multiarray/shape.c).
+ * Attempt to reshape an array without copying data
+ *
+ * This function should correctly handle all reshapes, including
+ * axes of length 1. Zero strides should work but are untested.
+ *
+ * If a copy is needed, returns 0
+ * If no copy is needed, returns 1 and fills newstrides
+ *     with appropriate strides
+ */
+static int
+Numba_attempt_nocopy_reshape(npy_intp nd, npy_intp *dims, npy_intp *strides,
+                             npy_intp newnd, npy_intp *newdims,
+                             npy_intp *newstrides, npy_intp itemsize,
+                             int is_f_order)
+{
+    int oldnd;
+    npy_intp olddims[NPY_MAXDIMS];
+    npy_intp oldstrides[NPY_MAXDIMS];
+    npy_intp np, op, last_stride;
+    int oi, oj, ok, ni, nj, nk;
+
+    oldnd = 0;
+    /*
+     * Remove axes with dimension 1 from the old array. They have no effect
+     * but would need special cases since their strides do not matter.
+     */
+    for (oi = 0; oi < nd; oi++) {
+        if (dims[oi]!= 1) {
+            olddims[oldnd] = dims[oi];
+            oldstrides[oldnd] = strides[oi];
+            oldnd++;
+        }
+    }
+
+    np = 1;
+    for (ni = 0; ni < newnd; ni++) {
+        np *= newdims[ni];
+    }
+    op = 1;
+    for (oi = 0; oi < oldnd; oi++) {
+        op *= olddims[oi];
+    }
+    if (np != op) {
+        /* different total sizes; no hope */
+        return 0;
+    }
+
+    if (np == 0) {
+        /* the current code does not handle 0-sized arrays, so give up */
+        return 0;
+    }
+
+    /* oi to oj and ni to nj give the axis ranges currently worked with */
+    oi = 0;
+    oj = 1;
+    ni = 0;
+    nj = 1;
+    while (ni < newnd && oi < oldnd) {
+        np = newdims[ni];
+        op = olddims[oi];
+
+        while (np != op) {
+            if (np < op) {
+                /* Misses trailing 1s, these are handled later */
+                np *= newdims[nj++];
+            } else {
+                op *= olddims[oj++];
+            }
+        }
+
+        /* Check whether the original axes can be combined */
+        for (ok = oi; ok < oj - 1; ok++) {
+            if (is_f_order) {
+                if (oldstrides[ok+1] != olddims[ok]*oldstrides[ok]) {
+                     /* not contiguous enough */
+                    return 0;
+                }
+            }
+            else {
+                /* C order */
+                if (oldstrides[ok] != olddims[ok+1]*oldstrides[ok+1]) {
+                    /* not contiguous enough */
+                    return 0;
+                }
+            }
+        }
+
+        /* Calculate new strides for all axes currently worked with */
+        if (is_f_order) {
+            newstrides[ni] = oldstrides[oi];
+            for (nk = ni + 1; nk < nj; nk++) {
+                newstrides[nk] = newstrides[nk - 1]*newdims[nk - 1];
+            }
+        }
+        else {
+            /* C order */
+            newstrides[nj - 1] = oldstrides[oj - 1];
+            for (nk = nj - 1; nk > ni; nk--) {
+                newstrides[nk - 1] = newstrides[nk]*newdims[nk];
+            }
+        }
+        ni = nj++;
+        oi = oj++;
+    }
+
+    /*
+     * Set strides corresponding to trailing 1s of the new shape.
+     */
+    if (ni >= 1) {
+        last_stride = newstrides[ni - 1];
+    }
+    else {
+        last_stride = itemsize;
+    }
+    if (is_f_order) {
+        last_stride *= newdims[ni - 1];
+    }
+    for (nk = ni; nk < newnd; nk++) {
+        newstrides[nk] = last_stride;
+    }
+
+    return 1;
+}
+
+
 /* We use separate functions for datetime64 and timedelta64, to ensure
  * proper type checking.
  */
@@ -1414,7 +1542,8 @@ build_c_helpers_dict(void)
 #define declmethod(func) _declpointer(#func, &Numba_##func)
 
 #define declpointer(ptr) _declpointer(#ptr, &ptr)
-	declmethod(multi3);
+
+    declmethod(multi3);
     declmethod(sdiv);
     declmethod(srem);
     declmethod(udiv);
@@ -1453,6 +1582,7 @@ build_c_helpers_dict(void)
     declmethod(rnd_shuffle);
     declmethod(rnd_init);
     declmethod(poisson_ptrs);
+    declmethod(attempt_nocopy_reshape);
 
     declpointer(py_random_state);
     declpointer(np_random_state);

@@ -515,6 +515,16 @@ class Len(AbstractTemplate):
 
 #-------------------------------------------------------------------------------
 
+def normalize_shape(shape):
+    if isinstance(shape, types.UniTuple):
+        if isinstance(shape.dtype, types.Integer):
+            dimtype = types.intp if shape.dtype.signed else types.uintp
+            return types.UniTuple(dimtype, len(shape))
+
+    elif isinstance(shape, types.Tuple) and shape.count == 0:
+        return shape
+
+
 @builtin_attr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
@@ -560,6 +570,23 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         retty = ary.copy(layout="C")
         return signature(retty)
+
+    @bound_function("array.reshape")
+    def resolve_reshape(self, ary, args, kws):
+        assert not kws
+        shape, = args
+        shape = normalize_shape(shape)
+        if shape is None:
+            return
+        if ary.layout == "C":
+            # Given order='C' (the only supported value), a C-contiguous
+            # array is always returned for a C-contiguous input.
+            layout = "C"
+        else:
+            layout = "A"
+        ndim = shape.count if isinstance(shape, types.BaseTuple) else 1
+        retty = ary.copy(ndim=ndim)
+        return signature(retty, shape)
 
     def generic_resolve(self, ary, attr):
         if isinstance(ary.dtype, types.Record):
