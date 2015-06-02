@@ -1176,7 +1176,7 @@ class PythonAPI(object):
         elif typ == types.voidptr:
             ll_intp = self.context.get_value_type(types.uintp)
             addr = self.builder.ptrtoint(val, ll_intp)
-            return self.from_native_value(addr, types.uintp)
+            return self.from_native_value(addr, types.uintp, env_manager)
 
         raise NotImplementedError(typ)
 
