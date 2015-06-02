@@ -91,15 +91,6 @@ The following attributes of Numpy arrays are supported:
 * :attr:`~numpy.ndarray.strides`
 * :attr:`~numpy.ndarray.T`
 
-Type and shape manipulation
----------------------------
-
-The following methods of Numpy arrays are supported:
-
-* :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
-* :meth:`~numpy.ndarray.transpose` (without arguments)
-* :meth:`~numpy.ndarray.view` (only the 1-argument form)
-
 Calculation
 -----------
 
@@ -120,6 +111,16 @@ The following methods of Numpy arrays are supported in their basic form
 
 The corresponding top-level Numpy functions (such as :func:`numpy.sum`)
 are similarly supported.
+
+Other methods
+-------------
+
+The following methods of Numpy arrays are supported:
+
+* :meth:`~numpy.ndarray.copy` (without arguments)
+* :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
+* :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
+* :meth:`~numpy.ndarray.view` (only the 1-argument form)
 
 
 Functions
