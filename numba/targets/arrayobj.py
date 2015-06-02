@@ -938,6 +938,11 @@ def array_round(context, builder, sig, args):
 # Array attributes
 
 @builtin_attr
+@impl_attribute(types.Kind(types.Array), "dtype", types.Kind(types.DType))
+def array_dtype(context, builder, typ, value):
+    return context.get_dummy_value()
+
+@builtin_attr
 @impl_attribute(types.Kind(types.Array), "shape", types.Kind(types.UniTuple))
 @impl_attribute(types.Kind(types.MemoryView), "shape", types.Kind(types.UniTuple))
 def array_shape(context, builder, typ, value):

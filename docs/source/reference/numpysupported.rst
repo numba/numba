@@ -82,6 +82,7 @@ Attributes
 
 The following attributes of Numpy arrays are supported:
 
+* :attr:`~numpy.ndarray.dtype`
 * :attr:`~numpy.ndarray.flat`
 * :attr:`~numpy.ndarray.itemsize`
 * :attr:`~numpy.ndarray.ndim`

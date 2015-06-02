@@ -529,6 +529,9 @@ def normalize_shape(shape):
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
 
+    def resolve_dtype(self, ary):
+        return types.DType(ary.dtype)
+
     def resolve_itemsize(self, ary):
         return types.intp
 

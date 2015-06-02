@@ -171,6 +171,9 @@ def array_copy(arr):
 def array_reshape(arr, newshape):
     return arr.reshape(newshape)
 
+def array_view(arr, newtype):
+    return arr.view(newtype)
+
 # XXX Can't pass a dtype as a Dispatcher argument for now
 def make_array_view(newtype):
     def array_view(arr):
