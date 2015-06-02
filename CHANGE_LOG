@@ -3,6 +3,7 @@ Version 0.19.1
 --------------
 
 * Issue #1196:
+
   * fix double-free segfault due to redundant variable deletion in the
     Numba IR (#1195)
   * fix use-after-delete in array expression rewrite pass
