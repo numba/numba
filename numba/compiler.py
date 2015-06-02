@@ -734,14 +734,14 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
     del lower
 
     if flags.no_compile:
-        return _LowerResult(fndesc, call_helper, cfunc=None, env=None)
+        return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         # Insert native function for use by other jitted-functions.
         # We also register its library to allow for inlining.
         targetctx.insert_user_function(cfunc, fndesc, [library])
-        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=None)
+        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
