@@ -65,7 +65,8 @@ Structured scalars support attribute getting and setting.
 Array types
 ===========
 
-Arrays of any of the scalar types above are supported, regardless of the shape
+`Numpy arrays <http://docs.scipy.org/doc/numpy/reference/arrays.ndarray.html>`_
+of any of the scalar types above are supported, regardless of the shape
 or layout.
 
 Operations
@@ -87,9 +88,19 @@ The following attributes of Numpy arrays are supported:
 * :attr:`~numpy.ndarray.shape`
 * :attr:`~numpy.ndarray.size`
 * :attr:`~numpy.ndarray.strides`
+* :attr:`~numpy.ndarray.T`
 
-Methods
--------
+Type and shape manipulation
+---------------------------
+
+The following methods of Numpy arrays are supported:
+
+* :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
+* :meth:`~numpy.ndarray.transpose` (without arguments)
+* :meth:`~numpy.ndarray.view` (only the 1-argument form)
+
+Calculation
+-----------
 
 The following methods of Numpy arrays are supported in their basic form
 (without any optional arguments):
