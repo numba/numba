@@ -116,11 +116,9 @@ class PyCallWrapper(object):
 
     def build_wrapper(self, api, builder, closure, args, kws):
         nargs = len(self.fndesc.args)
-        keywords = self.make_keywords(self.fndesc.args)
-        fmt = self.make_const_string("O" * nargs)
 
         objs = [api.alloca_obj() for _ in range(nargs)]
-        parseok = api.parse_tuple_and_keywords(args, kws, fmt, keywords, *objs)
+        parseok = api.unpack_tuple(args, self.fndesc.qualname, nargs, nargs, *objs)
 
         pred = builder.icmp(lc.ICMP_EQ, parseok, Constant.null(parseok.type))
         with cgutils.if_unlikely(builder, pred):
@@ -190,17 +188,6 @@ class PyCallWrapper(object):
     def make_const_string(self, string):
         return self.context.insert_const_string(self.module, string)
 
-    def make_keywords(self, kws):
-        strings = []
-        stringtype = Type.pointer(Type.int(8))
-        for k in kws:
-            strings.append(self.make_const_string(k))
-
-        strings.append(Constant.null(stringtype))
-        kwlist = Constant.array(stringtype, strings)
-        kwlist = cgutils.global_constant(self.module, ".kwlist", kwlist)
-        return Constant.bitcast(kwlist, Type.pointer(stringtype))
-
     def _simplified_return_type(self):
         """
         The NPM callconv has already converted simplified optional types.
@@ -212,6 +199,4 @@ class PyCallWrapper(object):
             return restype.type
         else:
             return restype
-
-
 

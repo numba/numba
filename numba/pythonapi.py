@@ -93,6 +93,17 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyArg_ParseTuple")
         return self.builder.call(fn, [args, fmt] + list(objs))
 
+    def unpack_tuple(self, args, name, n_min, n_max, *objs):
+        charptr = Type.pointer(Type.int(8))
+        argtypes = [self.pyobj, charptr, self.py_ssize_t, self.py_ssize_t]
+        fnty = Type.function(Type.int(), argtypes, var_arg=True)
+        fn = self._get_function(fnty, name="PyArg_UnpackTuple")
+        n_min = Constant.int(self.py_ssize_t, n_min)
+        n_max = Constant.int(self.py_ssize_t, n_max)
+        if isinstance(name, str):
+            name = self.context.insert_const_string(self.builder.module, name)
+        return self.builder.call(fn, [args, name, n_min, n_max] + list(objs))
+
     #
     # Exception and errors
     #

@@ -1360,22 +1360,30 @@ raise_error:
 static PyObject *
 Numba_unpickle(const char *data, Py_ssize_t n)
 {
-    PyObject *buf, *picklemod, *obj;
+    PyObject *buf, *obj;
+    static PyObject *loads;
+
+    /* Caching the pickle.loads function shaves a couple µs here. */
+    if (loads == NULL) {
+        PyObject *picklemod;
+#if PY_MAJOR_VERSION >= 3
+        picklemod = PyImport_ImportModule("pickle");
+#else
+        picklemod = PyImport_ImportModule("cPickle");
+#endif
+        if (picklemod == NULL)
+            return NULL;
+        loads = PyObject_GetAttrString(picklemod, "loads");
+        Py_DECREF(picklemod);
+        if (loads == NULL)
+            return NULL;
+    }
+
     buf = PyBytes_FromStringAndSize(data, n);
     if (buf == NULL)
         return NULL;
-#if PY_MAJOR_VERSION >= 3
-    picklemod = PyImport_ImportModule("pickle");
-#else
-    picklemod = PyImport_ImportModule("cPickle");
-#endif
-    if (picklemod == NULL) {
-        Py_DECREF(buf);
-        return NULL;
-    }
-    obj = PyObject_CallMethod(picklemod, "loads", "O", buf);
+    obj = PyObject_CallFunctionObjArgs(loads, buf, NULL);
     Py_DECREF(buf);
-    Py_DECREF(picklemod);
     return obj;
 }
 
