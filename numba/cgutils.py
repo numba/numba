@@ -595,7 +595,7 @@ def guard_null(context, builder, value, exc_tuple):
     Guard against *value* being null or zero.
     *exc_tuple* should be a (exception type, arguments...) tuple.
     """
-    with if_unlikely(builder, is_scalar_zero(builder, value)):
+    with builder.if_then(is_scalar_zero(builder, value), likely=False):
         exc = exc_tuple[0]
         exc_args = exc_tuple[1:] or None
         context.call_conv.return_user_exc(builder, exc, exc_args)
@@ -681,16 +681,12 @@ def memset(builder, ptr, size, value):
     """
     sizety = size.type
     memset = "llvm.memset.p0i8.i%d" % (sizety.width)
-    module = builder.module
     i32 = lc.Type.int(32)
     i8 = lc.Type.int(8)
+    i8_star = i8.as_pointer()
     i1 = lc.Type.int(1)
-    # void @llvm.memset.p0i8.iXY(i8* <dest>, i8 <val>,
-    #                            iXY <len>, i32 <align>, i1 <isvolatile>)
-    ptr = builder.bitcast(ptr, lc.Type.pointer(i8))
-    fnty = lc.Type.function(lc.Type.void(),
-                            [ptr.type, i8, sizety, i32, i1])
-    fn = module.get_or_insert_function(fnty, name=memset)
+    fn = builder.module.declare_intrinsic('llvm.memset', (i8_star, size.type))
+    ptr = builder.bitcast(ptr, i8_star)
     if isinstance(value, int):
         value = Constant.int(i8, value)
     builder.call(fn, [ptr, value, size,
@@ -741,55 +737,6 @@ def divmod_by_constant(builder, val, divisor):
     quot_val = builder.load(quot)
     rem_val = builder.sub(val, builder.mul(quot_val, divisor))
     return quot_val, rem_val
-
-
-# ------------------------------------------------------------------------------
-# Debug
-
-class VerboseProxy(object):
-    """
-    Use to wrap llvm.core.Builder to track where segfault happens
-    """
-
-    def __init__(self, obj):
-        self.__obj = obj
-
-    def __getattr__(self, key):
-        fn = getattr(self.__obj, key)
-        if callable(fn):
-            def wrapped(*args, **kws):
-                import traceback
-
-                traceback.print_stack()
-                print(key, args, kws)
-                try:
-                    return fn(*args, **kws)
-                finally:
-                    print("ok")
-
-            return wrapped
-        return fn
-
-
-def printf(builder, format_string, *values):
-    str_const = Constant.stringz(format_string)
-    global_str_const = builder.module.add_global_variable(str_const.type, '')
-    global_str_const.initializer = str_const
-
-    idx = [Constant.int(Type.int(32), 0), Constant.int(Type.int(32), 0)]
-    str_addr = global_str_const.gep(idx)
-
-    args = []
-    for v in values:
-        if isinstance(v, int):
-            args.append(Constant.int(Type.int(), v))
-        elif isinstance(v, float):
-            args.append(Constant.real(Type.double(), v))
-        else:
-            args.append(v)
-    functype = Type.function(Type.int(32), [Type.pointer(Type.int(8))], True)
-    fn = builder.module.get_or_insert_function(functype, 'printf')
-    builder.call(fn, [str_addr] + args)
 
 
 def cbranch_or_continue(builder, cond, bbtrue):
