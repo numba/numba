@@ -46,7 +46,7 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
     # it is quite common in NumPy to have loops implemented as a call
     # to the double version of the function, wrapped in casts. This
     # helper function facilitates that.
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     lty = context.get_argument_type(ty)
     fnty = lc.Type.function(lty, [lty]*len(sig.args))
     fn = mod.get_or_insert_function(fnty, name=func_name)
@@ -73,7 +73,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         msg = "No {0} function for real type {1}".format(user_name, str(e))
         raise lowering.LoweringError(msg)
 
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     if ty in types.complex_domain:
         # In numba struct types are always passed by pointer. So the call has to
         # be transformed from "result = func(ops...)" to "func(&result, ops...).
@@ -506,7 +506,7 @@ def np_real_floor_impl(context, builder, sig, args):
     assert len(sig.args) == 1
     ty = sig.args[0]
     assert ty == sig.return_type, "must have homogeneous types"
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     if ty == types.float64:
         fnty = lc.Type.function(lc.Type.double(), [lc.Type.double()])
         fn = mod.get_or_insert_function(fnty, name="numba.npymath.floor")

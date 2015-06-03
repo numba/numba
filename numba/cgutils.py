@@ -269,41 +269,6 @@ class Structure(object):
     # __iter__ is derived by Python from __len__ and __getitem__
 
 
-def get_function(builder):
-    return builder.basic_block.function
-
-
-def get_module(builder):
-    return builder.basic_block.function.module
-
-
-def append_basic_block(builder, name=''):
-    return get_function(builder).append_basic_block(name)
-
-
-@contextmanager
-def goto_block(builder, bb):
-    """
-    A context manager which temporarily positions *builder* at the end
-    of basic block *bb* (but before any terminator).
-    """
-    bbold = builder.basic_block
-    term = bb.terminator
-    if term is not None:
-        builder.position_before(term)
-    else:
-        builder.position_at_end(bb)
-    yield
-    builder.position_at_end(bbold)
-
-
-@contextmanager
-def goto_entry_block(builder):
-    fn = get_function(builder)
-    with goto_block(builder, fn.entry_basic_block):
-        yield
-
-
 def alloca_once(builder, ty, size=None, name='', zfill=False):
     """Allocate stack memory at the entry block of the current function
     pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
@@ -311,7 +276,7 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     ``name`` arg set the symbol name inside the llvm IR for debugging.
     If ``zfill`` is set, also filling zeros to the memory.
     """
-    with goto_entry_block(builder):
+    with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
         if zfill:
             builder.store(Constant.null(ty), ptr)
@@ -350,7 +315,7 @@ def is_not_null(builder, val):
 
 
 def set_branch_weight(builder, brinst, trueweight, falseweight):
-    module = get_module(builder)
+    module = builder.module
     mdid = lc.MetaDataString.get(module, "branch_weights")
     trueweight = lc.Constant.int(Type.int(), trueweight)
     falseweight = lc.Constant.int(Type.int(), falseweight)
@@ -360,47 +325,33 @@ def set_branch_weight(builder, brinst, trueweight, falseweight):
 
 @contextmanager
 def if_unlikely(builder, pred):
-    bb = builder.basic_block
-    with ifthen(builder, pred):
+    with builder.if_then(pred, likely=False):
         yield
-    brinst = bb.instructions[-1]
-    set_branch_weight(builder, brinst, trueweight=1, falseweight=99)
 
 
 @contextmanager
 def if_likely(builder, pred):
-    bb = builder.basic_block
-    with ifthen(builder, pred):
+    with builder.if_then(pred, likely=True):
         yield
-    brinst = bb.instructions[-1]
-    set_branch_weight(builder, brinst, trueweight=99, falseweight=1)
 
 
 @contextmanager
 def ifthen(builder, pred):
-    bb = builder.basic_block
-    bbif = append_basic_block(builder, add_postfix(bb.name, '.if'))
-    bbend = append_basic_block(builder, add_postfix(bb.name, '.endif'))
-    builder.cbranch(pred, bbif, bbend)
-
-    with goto_block(builder, bbif):
-        yield bbend
-        terminate(builder, bbend)
-
-    builder.position_at_end(bbend)
+    with builder.if_then(pred):
+        yield
 
 
 @contextmanager
 def ifnot(builder, pred):
-    with ifthen(builder, builder.not_(pred)):
+    with builder.if_then(builder.not_(pred)):
         yield
 
 
 @contextmanager
 def ifelse(builder, pred, expect=None):
-    bbtrue = append_basic_block(builder, 'if.true')
-    bbfalse = append_basic_block(builder, 'if.false')
-    bbendif = append_basic_block(builder, 'endif')
+    bbtrue = builder.append_basic_block('if.true')
+    bbfalse = builder.append_basic_block('if.false')
+    bbendif = builder.append_basic_block('endif')
 
     br = builder.cbranch(pred, bbtrue, bbfalse)
     if expect is not None:
@@ -435,21 +386,21 @@ def for_range(builder, count, intp):
     start = Constant.int(intp, 0)
     stop = count
 
-    bbcond = append_basic_block(builder, "for.cond")
-    bbbody = append_basic_block(builder, "for.body")
-    bbend = append_basic_block(builder, "for.end")
+    bbcond = builder.append_basic_block("for.cond")
+    bbbody = builder.append_basic_block("for.body")
+    bbend = builder.append_basic_block("for.end")
 
     bbstart = builder.basic_block
     builder.branch(bbcond)
 
     ONE = Constant.int(intp, 1)
 
-    with goto_block(builder, bbcond):
+    with builder.goto_block(bbcond):
         index = builder.phi(intp, name="loop.index")
         pred = builder.icmp(lc.ICMP_SLT, index, stop)
         builder.cbranch(pred, bbbody, bbend)
 
-    with goto_block(builder, bbbody):
+    with builder.goto_block(bbbody):
         yield index
         bbbody = builder.basic_block
         incr = builder.add(index, ONE)
@@ -486,13 +437,13 @@ def for_range_slice(builder, start, stop, step, intp, inc=True):
         None
     """
 
-    bbcond = append_basic_block(builder, "for.cond")
-    bbbody = append_basic_block(builder, "for.body")
-    bbend = append_basic_block(builder, "for.end")
+    bbcond = builder.append_basic_block("for.cond")
+    bbbody = builder.append_basic_block("for.body")
+    bbend = builder.append_basic_block("for.end")
     bbstart = builder.basic_block
     builder.branch(bbcond)
 
-    with goto_block(builder, bbcond):
+    with builder.goto_block(bbcond):
         index = builder.phi(intp, name="loop.index")
         if (inc):
             pred = builder.icmp(lc.ICMP_SLT, index, stop)
@@ -500,7 +451,7 @@ def for_range_slice(builder, start, stop, step, intp, inc=True):
             pred = builder.icmp(lc.ICMP_SGT, index, stop)
         builder.cbranch(pred, bbbody, bbend)
 
-    with goto_block(builder, bbbody):
+    with builder.goto_block(bbbody):
         yield index
         bbbody = builder.basic_block
         incr = builder.add(index, step)
@@ -772,7 +723,7 @@ def memset(builder, ptr, size, value):
     """
     sizety = size.type
     memset = "llvm.memset.p0i8.i%d" % (sizety.width)
-    module = get_module(builder)
+    module = builder.module
     i32 = lc.Type.int(32)
     i8 = lc.Type.int(8)
     i1 = lc.Type.int(1)
@@ -795,7 +746,7 @@ def global_constant(builder_or_module, name, value, linkage=lc.LINKAGE_INTERNAL)
     if isinstance(builder_or_module, lc.Module):
         module = builder_or_module
     else:
-        module = get_module(builder_or_module)
+        module = builder_or_module.module
     data = module.add_global_variable(value.type, name=name)
     data.linkage = linkage
     data.global_constant = True
@@ -864,8 +815,7 @@ class VerboseProxy(object):
 
 def printf(builder, format_string, *values):
     str_const = Constant.stringz(format_string)
-    global_str_const = get_module(builder).add_global_variable(str_const.type,
-                                                               '')
+    global_str_const = builder.module.add_global_variable(str_const.type, '')
     global_str_const.initializer = str_const
 
     idx = [Constant.int(Type.int(32), 0), Constant.int(Type.int(32), 0)]
@@ -880,7 +830,7 @@ def printf(builder, format_string, *values):
         else:
             args.append(v)
     functype = Type.function(Type.int(32), [Type.pointer(Type.int(8))], True)
-    fn = get_module(builder).get_or_insert_function(functype, 'printf')
+    fn = builder.module.get_or_insert_function(functype, 'printf')
     builder.call(fn, [str_addr] + args)
 
 
@@ -891,8 +841,7 @@ def cbranch_or_continue(builder, cond, bbtrue):
     Note: a new block is created and builder is moved to the end of the new
           block.
     """
-    fn = get_function(builder)
-    bbcont = fn.append_basic_block('.continue')
+    bbcont = builder.append_basic_block('.continue')
     builder.cbranch(cond, bbtrue, bbcont)
     builder.position_at_end(bbcont)
     return bbcont

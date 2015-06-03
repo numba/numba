@@ -660,7 +660,7 @@ def _np_round_intrinsic(tp):
 
 def _np_round_float(context, builder, tp, val):
     llty = context.get_value_type(tp)
-    module = cgutils.get_module(builder)
+    module = builder.module
     fnty = lc.Type.function(llty, [llty])
     fn = module.get_or_insert_function(fnty, name=_np_round_intrinsic(tp))
     return builder.call(fn, (val,))
@@ -901,7 +901,7 @@ def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
     zero = context.get_constant(types.intp, 0)
     one = context.get_constant(types.intp, 1)
 
-    bbend = cgutils.append_basic_block(builder, 'end_increment')
+    bbend = builder.append_basic_block('end_increment')
 
     if end_flag is not None:
         builder.store(cgutils.false_byte, end_flag)
@@ -967,7 +967,7 @@ def make_ndindex_cls(nditerty):
             zero = context.get_constant(types.intp, 0)
             one = context.get_constant(types.intp, 1)
 
-            bbend = cgutils.append_basic_block(builder, 'end')
+            bbend = builder.append_basic_block('end')
 
             exhausted = cgutils.as_bool_bit(builder, builder.load(self.exhausted))
             with cgutils.if_unlikely(builder, exhausted):
@@ -1108,7 +1108,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 zero = context.get_constant(types.intp, 0)
                 one = context.get_constant(types.intp, 1)
 
-                bbend = cgutils.append_basic_block(builder, 'end')
+                bbend = builder.append_basic_block('end')
 
                 # Catch already computed iterator exhaustion
                 is_exhausted = cgutils.as_bool_bit(

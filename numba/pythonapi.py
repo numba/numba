@@ -1333,7 +1333,7 @@ class PythonAPI(object):
         zero = self.context.get_constant(types.intp, 0)
         count = cgutils.alloca_once_value(builder, zero)
 
-        bbend = cgutils.append_basic_block(builder, "end.string.count")
+        bbend = builder.append_basic_block("end.string.count")
 
         # Find the length of the string
         with cgutils.loop_nest(builder, [fullsize], fullsize.type) as [idx]:

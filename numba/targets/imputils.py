@@ -68,7 +68,7 @@ def user_function(fndesc, libs):
     """
 
     def imp(context, builder, sig, args):
-        func = context.declare_function(cgutils.get_module(builder), fndesc)
+        func = context.declare_function(builder.module, fndesc)
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
             builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
@@ -87,7 +87,7 @@ def user_generator(gendesc, libs):
     """
 
     def imp(context, builder, sig, args):
-        func = context.declare_function(cgutils.get_module(builder), gendesc)
+        func = context.declare_function(builder.module, gendesc)
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
             builder, func, gendesc.restype, gendesc.argtypes, args, env=None)

@@ -302,8 +302,8 @@ def _randrange_impl(context, builder, start, stop, step, state):
     nbits = builder.trunc(builder.call(fn, [n, cgutils.true_bit]), int32_t)
     nbits = builder.sub(ir.Constant(int32_t, ty.width), nbits)
 
-    bbwhile = cgutils.append_basic_block(builder, "while")
-    bbend = cgutils.append_basic_block(builder, "while.end")
+    bbwhile = builder.append_basic_block("while")
+    bbend = builder.append_basic_block("while.end")
     builder.branch(bbwhile)
 
     builder.position_at_end(bbwhile)
@@ -952,8 +952,8 @@ def poisson_impl(context, builder, sig, args):
     state_ptr = get_np_state_ptr(context, builder)
 
     retptr = cgutils.alloca_once(builder, int64_t, name="ret")
-    bbcont = cgutils.append_basic_block(builder, "bbcont")
-    bbend = cgutils.append_basic_block(builder, "bbend")
+    bbcont = builder.append_basic_block("bbcont")
+    bbend = builder.append_basic_block("bbend")
 
     if len(args) == 1:
         lam, = args

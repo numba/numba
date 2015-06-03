@@ -815,7 +815,7 @@ class BaseContext(object):
         return builder.call(puts, [text])
 
     def debug_print(self, builder, text):
-        mod = cgutils.get_module(builder)
+        mod = builder.module
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
 
@@ -878,7 +878,7 @@ class BaseContext(object):
         emit a call to that function with the given arguments.
         """
         # Add call to the generated function
-        llvm_mod = cgutils.get_module(builder)
+        llvm_mod = builder.module
         fn = self.declare_function(llvm_mod, fndesc)
         status, res = self.call_conv.call_function(builder, fn, sig.return_type,
                                                    sig.args, args)
@@ -998,7 +998,7 @@ class BaseContext(object):
     def nrt_meminfo_alloc(self, builder, size):
         if not self.enable_nrt:
             raise Exception("Require NRT")
-        mod = cgutils.get_module(builder)
+        mod = builder.module
         fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
             [self.get_value_type(types.intp)])
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
@@ -1007,7 +1007,7 @@ class BaseContext(object):
     def nrt_meminfo_data(self, builder, meminfo):
         if not self.enable_nrt:
             raise Exception("Require NRT")
-        mod = cgutils.get_module(builder)
+        mod = builder.module
         voidptr = llvmir.IntType(8).as_pointer()
         fnty = llvmir.FunctionType(voidptr, [voidptr])
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
@@ -1026,7 +1026,7 @@ class BaseContext(object):
 
         meminfo = self.get_nrt_meminfo(builder, typ, value)
         if meminfo:
-            mod = cgutils.get_module(builder)
+            mod = builder.module
             fnty = llvmir.FunctionType(llvmir.VoidType(),
                 [llvmir.IntType(8).as_pointer()])
             fn = mod.get_or_insert_function(fnty, name="NRT_incref")
@@ -1043,7 +1043,7 @@ class BaseContext(object):
 
         meminfo = self.get_nrt_meminfo(builder, typ, value)
         if meminfo:
-            mod = cgutils.get_module(builder)
+            mod = builder.module
             fnty = llvmir.FunctionType(llvmir.VoidType(),
                 [llvmir.IntType(8).as_pointer()])
             fn = mod.get_or_insert_function(fnty, name="NRT_decref")

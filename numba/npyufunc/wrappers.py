@@ -329,7 +329,7 @@ class _GufuncWrapper(object):
                 step_offset += ary.ndim
             arrays.append(ary)
 
-        bbreturn = cgutils.get_function(builder).append_basic_block('.return')
+        bbreturn = builder.append_basic_block('.return')
 
         # Prologue
         self.gen_prologue(builder)
@@ -405,10 +405,9 @@ def build_gufunc_wrapper(library, context, func, signature, sin, sout, fndesc,
 
 def _prepare_call_to_object_mode(context, builder, func, signature, args,
                                  env):
-    mod = cgutils.get_module(builder)
+    mod = builder.module
 
-    thisfunc = cgutils.get_function(builder)
-    bb_core_return = thisfunc.append_basic_block('ufunc.core.return')
+    bb_core_return = builder.append_basic_block('ufunc.core.return')
 
     pyapi = context.get_python_api(builder)
 

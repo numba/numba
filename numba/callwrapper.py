@@ -35,9 +35,8 @@ class _ArgManager(object):
             self.builder.branch(self.nextblk)
 
         # Write the cleanup block for this argument
-        cleanupblk = cgutils.append_basic_block(self.builder,
-                                                "arg%d.err" % self.arg_count)
-        with cgutils.goto_block(self.builder, cleanupblk):
+        cleanupblk = self.builder.append_basic_block("arg%d.err" % self.arg_count)
+        with self.builder.goto_block(cleanupblk):
             # NRT cleanup
 
             if self.context.enable_nrt:
@@ -127,8 +126,8 @@ class PyCallWrapper(object):
             builder.ret(api.get_null_object())
 
         # Block that returns after erroneous argument unboxing/cleanup
-        endblk = cgutils.append_basic_block(builder, "arg.end")
-        with cgutils.goto_block(builder, endblk):
+        endblk = builder.append_basic_block("arg.end")
+        with builder.goto_block(endblk):
             builder.ret(api.get_null_object())
 
         cleanup_manager = _ArgManager(self.context, builder, api, endblk, nargs)

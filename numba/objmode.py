@@ -553,7 +553,7 @@ class PyLower(BaseLower):
         """
         if ltype is None:
             ltype = self.context.get_value_type(types.pyobject)
-        with cgutils.goto_block(self.builder, self.entry_block):
+        with self.builder.goto_block(self.entry_block):
             ptr = self.builder.alloca(ltype, name=name)
             self.builder.store(cgutils.get_null_value(ltype), ptr)
         return ptr

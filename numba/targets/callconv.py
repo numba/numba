@@ -123,8 +123,7 @@ class MinimalCallConv(BaseCallConv):
         return _MinimalCallHelper()
 
     def return_value(self, builder, retval):
-        fn = cgutils.get_function(builder)
-        retptr = fn.args[0]
+        retptr = builder.function.args[0]
         assert retval.type == retptr.type.pointee, \
             (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
@@ -265,8 +264,7 @@ class CPUCallConv(BaseCallConv):
         return None
 
     def return_value(self, builder, retval):
-        fn = cgutils.get_function(builder)
-        retptr = self._get_return_argument(fn)
+        retptr = self._get_return_argument(builder.function)
         assert retval.type == retptr.type.pointee, \
             (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
@@ -275,18 +273,18 @@ class CPUCallConv(BaseCallConv):
     def return_user_exc(self, builder, exc, exc_args=None):
         assert (exc is None or issubclass(exc, BaseException)), exc
         assert (exc_args is None or isinstance(exc_args, tuple)), exc_args
-        fn = cgutils.get_function(builder)
         pyapi = self.context.get_python_api(builder)
         # Build excinfo struct
         if exc_args is not None:
             exc = (exc, exc_args)
         struct_gv = pyapi.serialize_object(exc)
-        builder.store(struct_gv, self._get_excinfo_argument(fn))
+        excptr = self._get_excinfo_argument(builder.function)
+        builder.store(struct_gv, excptr)
         self._return_errcode_raw(builder, RETCODE_USEREXC)
 
     def return_status_propagate(self, builder, status):
-        fn = cgutils.get_function(builder)
-        builder.store(status.excinfoptr, self._get_excinfo_argument(fn))
+        excptr = self._get_excinfo_argument(builder.function)
+        builder.store(status.excinfoptr, excptr)
         self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):
