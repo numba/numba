@@ -314,58 +314,24 @@ def is_not_null(builder, val):
     return builder.icmp(lc.ICMP_NE, null, val)
 
 
-def set_branch_weight(builder, brinst, trueweight, falseweight):
-    module = builder.module
-    mdid = lc.MetaDataString.get(module, "branch_weights")
-    trueweight = lc.Constant.int(Type.int(), trueweight)
-    falseweight = lc.Constant.int(Type.int(), falseweight)
-    md = lc.MetaData.get(module, [mdid, trueweight, falseweight])
-    brinst.set_metadata("prof", md)
-
-
-@contextmanager
 def if_unlikely(builder, pred):
-    with builder.if_then(pred, likely=False):
-        yield
+    return builder.if_then(pred, likely=False)
 
 
-@contextmanager
 def if_likely(builder, pred):
-    with builder.if_then(pred, likely=True):
-        yield
+    return builder.if_then(pred, likely=True)
 
 
-@contextmanager
 def ifthen(builder, pred):
-    with builder.if_then(pred):
-        yield
+    return builder.if_then(pred)
 
 
-@contextmanager
 def ifnot(builder, pred):
-    with builder.if_then(builder.not_(pred)):
-        yield
+    return builder.if_then(builder.not_(pred))
 
 
-@contextmanager
 def ifelse(builder, pred, expect=None):
-    bbtrue = builder.append_basic_block('if.true')
-    bbfalse = builder.append_basic_block('if.false')
-    bbendif = builder.append_basic_block('endif')
-
-    br = builder.cbranch(pred, bbtrue, bbfalse)
-    if expect is not None:
-        if expect:
-            set_branch_weight(builder, br, trueweight=99, falseweight=1)
-        else:
-            set_branch_weight(builder, br, trueweight=1, falseweight=99)
-
-    then = IfBranchObj(builder, bbtrue, bbendif)
-    otherwise = IfBranchObj(builder, bbfalse, bbendif)
-
-    yield then, otherwise
-
-    builder.position_at_end(bbendif)
+    return builder.if_else(pred, likely=expect)
 
 
 class IfBranchObj(object):
@@ -767,7 +733,7 @@ def divmod_by_constant(builder, val, divisor):
 
     quot = alloca_once(builder, val.type)
 
-    with ifelse(builder, is_neg_int(builder, val)) as (if_neg, if_pos):
+    with builder.if_else(is_neg_int(builder, val)) as (if_neg, if_pos):
         with if_pos:
             # quot = val / divisor
             quot_val = builder.sdiv(val, divisor)
