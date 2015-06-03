@@ -445,7 +445,7 @@ class CompilerPy3(_Compiler):
         # Test if module has been created correctly.
         # (XXX for some reason comparing with the NULL constant fails llvm
         #  with an assertion in pydebug mode)
-        with cgutils.ifthen(builder, cgutils.is_null(builder, mod)):
+        with builder.if_then(cgutils.is_null(builder, mod)):
             builder.ret(NULL.bitcast(mod_init_fn.type.pointee.return_type))
 
         builder.ret(mod)

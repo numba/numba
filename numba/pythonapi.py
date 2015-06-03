@@ -292,7 +292,7 @@ class PythonAPI(object):
             else:
                 use_pyint = self.builder.icmp(lc.ICMP_ULE, ival, long_max)
 
-            with cgutils.ifelse(self.builder, use_pyint) as (then, otherwise):
+            with self.builder.if_else(use_pyint) as (then, otherwise):
                 with then:
                     downcast_ival = self.builder.trunc(ival, self.long)
                     res = self.builder.call(pyint_fn, [downcast_ival])
@@ -1174,7 +1174,7 @@ class PythonAPI(object):
         retptr = cgutils.alloca_once(self.builder, noneval.type)
         errptr = cgutils.alloca_once_value(self.builder, cgutils.false_bit)
 
-        with cgutils.ifelse(self.builder, is_not_none) as (then, orelse):
+        with self.builder.if_else(is_not_none) as (then, orelse):
             with then:
                 native = self.to_native_value(obj, typ.type)
                 just = self.context.make_optional_value(self.builder,
@@ -1189,7 +1189,7 @@ class PythonAPI(object):
 
         if native.cleanup is not None:
             def cleanup():
-                with cgutils.ifthen(self.builder, is_not_none):
+                with self.builder.if_then(is_not_none):
                     native.cleanup()
         else:
             cleanup = None
@@ -1344,7 +1344,7 @@ class PythonAPI(object):
             # Check if the char is a null-byte
             ch_is_null = cgutils.is_null(builder, ch)
             # If the char is a null-byte
-            with cgutils.ifthen(builder, ch_is_null):
+            with builder.if_then(ch_is_null):
                 # Jump to the end
                 builder.branch(bbend)
 

@@ -322,16 +322,8 @@ def if_likely(builder, pred):
     return builder.if_then(pred, likely=True)
 
 
-def ifthen(builder, pred):
-    return builder.if_then(pred)
-
-
 def ifnot(builder, pred):
     return builder.if_then(builder.not_(pred))
-
-
-def ifelse(builder, pred, expect=None):
-    return builder.if_else(pred, likely=expect)
 
 
 class IfBranchObj(object):

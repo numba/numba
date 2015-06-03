@@ -62,7 +62,7 @@ class BaseCallConv(object):
             optval = optcls(self.context, builder, value=value)
 
             validbit = cgutils.as_bool_bit(builder, optval.valid)
-            with cgutils.ifthen(builder, validbit):
+            with builder.if_then(validbit):
                 self.return_value(builder, optval.data)
 
             self.return_native_none(builder)

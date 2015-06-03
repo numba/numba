@@ -274,7 +274,7 @@ class PyLower(BaseLower):
             item = self.pyapi.iter_next(iterobj)
             is_valid = cgutils.is_not_null(self.builder, item)
             pair = self.pyapi.tuple_new(2)
-            with cgutils.ifelse(self.builder, is_valid) as (then, otherwise):
+            with self.builder.if_else(is_valid) as (then, otherwise):
                 with then:
                     self.pyapi.tuple_setitem(pair, 0, item)
                 with otherwise:
@@ -376,7 +376,7 @@ class PyLower(BaseLower):
             obj_is_null = self.is_null(obj)
             bbelse = self.builder.basic_block
 
-            with cgutils.ifthen(self.builder, obj_is_null):
+            with self.builder.if_then(obj_is_null):
                 mod = self.pyapi.dict_getitem(moddict,
                                           self._freeze_string("__builtins__"))
                 builtin = self.builtin_lookup(mod, name)

@@ -80,7 +80,7 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
 
     def store(retval):
         is_error = cgutils.is_null(builder, retval)
-        with cgutils.ifelse(builder, is_error) as (if_error, if_ok):
+        with builder.if_else(is_error) as (if_error, if_ok):
             with if_error:
                 msg = context.insert_const_string(pyapi.module,
                                                   "object mode ufunc")
@@ -187,7 +187,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
 
     else:
 
-        with cgutils.ifelse(builder, unit_strided) as (is_unit_strided,
+        with builder.if_else(unit_strided) as (is_unit_strided,
                                                        is_strided):
 
             with is_unit_strided:

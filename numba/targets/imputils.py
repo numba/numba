@@ -103,7 +103,7 @@ def python_attr_impl(cls, attr, atyp):
     def imp(context, builder, typ, value):
         api = context.get_python_api(builder)
         aval = api.object_getattr_string(value, attr)
-        with cgutils.ifthen(builder, cgutils.is_null(builder, aval)):
+        with builder.if_then(cgutils.is_null(builder, aval)):
             context.call_conv.return_exc(builder)
 
         if isinstance(atyp, types.Method):

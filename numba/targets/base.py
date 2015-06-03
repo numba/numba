@@ -795,7 +795,7 @@ class BaseContext(object):
         for obj in pyargs:
             api.decref(obj)
 
-        with cgutils.ifthen(builder, cgutils.is_null(builder, res)):
+        with builder.if_then(cgutils.is_null(builder, res)):
             self.call_conv.return_exc(builder)
 
         if retty == types.none:

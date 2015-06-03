@@ -78,7 +78,7 @@ def int_divmod(context, builder, x, y):
     cond = builder.and_(xmody_istrue, y_xor_xmody_ltz)
 
     bb1 = builder.basic_block
-    with cgutils.ifthen(builder, cond):
+    with builder.if_then(cond):
         xmody_plus_y = builder.add(xmody, y)
         xdivy_minus_1 = builder.sub(xdivy, ONE)
         bb2 = builder.basic_block
@@ -599,10 +599,10 @@ def real_divmod_func_body(context, builder, vx, wx):
     wx_ltz = builder.fcmp(lc.FCMP_OLT, wx, ZERO)
     mod_ltz = builder.fcmp(lc.FCMP_OLT, mod, ZERO)
 
-    with cgutils.ifthen(builder, mod_istrue):
+    with builder.if_then(mod_istrue):
         wx_ltz_ne_mod_ltz = builder.icmp(lc.ICMP_NE, wx_ltz, mod_ltz)
 
-        with cgutils.ifthen(builder, wx_ltz_ne_mod_ltz):
+        with builder.if_then(wx_ltz_ne_mod_ltz):
             mod = builder.fadd(mod, wx)
             div = builder.fsub(div, ONE)
             builder.store(mod, pmod)
@@ -617,7 +617,7 @@ def real_divmod_func_body(context, builder, vx, wx):
         builder.store(mod, pmod)
         del mod
 
-        with cgutils.ifthen(builder, wx_ltz):
+        with builder.if_then(wx_ltz):
             mod = builder.load(pmod)
             mod = builder.fsub(ZERO, mod)
             builder.store(mod, pmod)
@@ -626,7 +626,7 @@ def real_divmod_func_body(context, builder, vx, wx):
     div = builder.load(pdiv)
     div_istrue = builder.fcmp(lc.FCMP_ONE, div, ZERO)
 
-    with cgutils.ifthen(builder, div_istrue):
+    with builder.if_then(div_istrue):
         module = builder.module
         floorfn = lc.Function.intrinsic(module, lc.INTR_FLOOR, [wx.type])
         floordiv = builder.call(floorfn, [div])
@@ -724,11 +724,11 @@ def real_sign_impl(context, builder, sig, args):
     is_pos = builder.fcmp(lc.FCMP_OGT, x, ZERO)
     is_neg = builder.fcmp(lc.FCMP_OLT, x, ZERO)
 
-    with cgutils.ifelse(builder, is_pos) as (gt_zero, not_gt_zero):
+    with builder.if_else(is_pos) as (gt_zero, not_gt_zero):
         with gt_zero:
             builder.store(POS, presult)
         with not_gt_zero:
-            with cgutils.ifelse(builder, is_neg) as (lt_zero, not_lt_zero):
+            with builder.if_else(is_neg) as (lt_zero, not_lt_zero):
                 with lt_zero:
                     builder.store(NEG, presult)
                 with not_lt_zero:
@@ -848,7 +848,7 @@ def complex128_power_impl(context, builder, sig, args):
     b_imag_is_zero = builder.fcmp(lc.FCMP_OEQ, b.imag, ZERO)
     b_is_two = builder.and_(b_real_is_two, b_imag_is_zero)
 
-    with cgutils.ifelse(builder, b_is_two) as (then, otherwise):
+    with builder.if_else(b_is_two) as (then, otherwise):
         with then:
             # Lower as multiplication
             res = complex_mul_impl(context, builder, sig, (ca, ca))
@@ -1177,7 +1177,7 @@ def iternext_unituple(context, builder, sig, args, result):
     is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
     result.set_valid(is_valid)
 
-    with cgutils.ifthen(builder, is_valid):
+    with builder.if_then(is_valid):
         getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
                                        types.intp)
         result.yield_(getitem_unituple(context, builder, getitem_sig, [tup, idx]))
@@ -1481,7 +1481,7 @@ def tuple_cmp_ordered(context, builder, op, sig, args):
         a = builder.extract_value(u, i)
         b = builder.extract_value(v, i)
         not_equal = generic_compare(context, builder, '!=', (ta, tb), (a, b))
-        with cgutils.ifthen(builder, not_equal):
+        with builder.if_then(not_equal):
             pred = generic_compare(context, builder, op, (ta, tb), (a, b))
             builder.store(pred, res)
             builder.branch(bbend)

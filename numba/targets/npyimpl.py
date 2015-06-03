@@ -97,7 +97,7 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
         indices = loop_indices[len(loop_indices) - len(self.indices):]
         for src, dst, dim in zip(indices, self.indices, self.array.shape):
             cond = bld.icmp(lc.ICMP_UGT, dim, ONE)
-            with cgutils.ifthen(bld, cond):
+            with bld.if_then(cond):
                 bld.store(src, dst)
 
     def as_values(self):

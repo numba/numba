@@ -153,13 +153,13 @@ class PyCallWrapper(object):
         # Determine return status
         with cgutils.if_likely(builder, status.is_ok):
             # Ok => return boxed Python value
-            with cgutils.ifthen(builder, status.is_none):
+            with builder.if_then(status.is_none):
                 api.return_none()
 
             retval = api.from_native_return(res, self._simplified_return_type())
             builder.ret(retval)
 
-        with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
+        with builder.if_then(builder.not_(status.is_python_exc)):
             # User exception raised
             self.make_exception_switch(api, builder, status)
 
@@ -172,14 +172,14 @@ class PyCallWrapper(object):
         """
         code = status.code
         # Handle user exceptions
-        with cgutils.ifthen(builder, status.is_user_exc):
+        with builder.if_then(status.is_user_exc):
             exc = api.unserialize(status.excinfoptr)
             with cgutils.if_likely(builder,
                                    cgutils.is_not_null(builder, exc)):
                 api.raise_object(exc)  # steals ref
             builder.ret(api.get_null_object())
 
-        with cgutils.ifthen(builder, status.is_stop_iteration):
+        with builder.if_then(status.is_stop_iteration):
             api.err_set_none("PyExc_StopIteration")
             builder.ret(api.get_null_object())
 
