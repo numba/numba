@@ -115,13 +115,13 @@ class CPUContext(BaseContext):
 
         install_atomic_refct(mod)
 
-    def create_cpython_wrapper(self, library, fndesc, call_helper,
+    def create_cpython_wrapper(self, library, fndesc, env, call_helper,
                                release_gil=False):
         wrapper_module = self.create_module("wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         wrapper_callee = wrapper_module.add_function(fnty, fndesc.llvm_func_name)
         builder = PyCallWrapper(self, wrapper_module, wrapper_callee,
-                                fndesc, call_helper=call_helper,
+                                fndesc, env, call_helper=call_helper,
                                 release_gil=release_gil)
         builder.build()
         library.add_ir_module(wrapper_module)

@@ -9,7 +9,7 @@ import llvmlite.llvmpy.core as lc
 
 from . import cgutils, generators, ir, types, utils
 from .lowering import BaseLower, ForbiddenConstruct
-from .utils import builtins
+from .utils import builtins, intern
 
 
 # Issue #475: locals() is unsupported as calling it naively would give
@@ -45,20 +45,11 @@ class PyLower(BaseLower):
         self._live_vars = set()
 
     def pre_lower(self):
-        self.pyapi = self.context.get_python_api(self.builder)
-
-        # Store environment argument for later use
-        self.envarg = self.call_conv.get_env_argument(self.function)
-        with cgutils.if_unlikely(self.builder, self.is_null(self.envarg)):
-            self.pyapi.err_set_string(
-                "PyExc_SystemError",
-                "Numba internal error: object mode function called "
-                "without an environment")
-            self.return_exception_raised()
-        self.env_body = self.context.get_env_body(self.builder, self.envarg)
+        super(PyLower, self).pre_lower()
+        self.init_pyapi()
 
     def post_lower(self):
-        self._finalize_frozen_string()
+        pass
 
     def pre_block(self, block):
         self.init_vars(block)
@@ -346,9 +337,8 @@ class PyLower(BaseLower):
 
     def lower_const(self, const):
         # All constants are frozen inside the environment
-        index = len(self.env.consts)
-        self.env.consts.append(const)
-        ret = self.get_env_const(index)
+        index = self.env_manager.add_const(const)
+        ret = self.env_manager.read_const(index)
         self.check_error(ret)
         self.incref(ret)
         return ret
@@ -405,13 +395,6 @@ class PyLower(BaseLower):
         mod = self.pyapi.dict_getitem(moddict,
                                       self._freeze_string("__builtins__"))
         return self.builtin_lookup(mod, name)
-
-    def get_env_const(self, index):
-        """
-        Look up constant number *index* inside the environment body.
-        A borrowed reference is returned.
-        """
-        return self.pyapi.list_getitem(self.env_body.consts, index)
 
     def builtin_lookup(self, mod, name):
         """
@@ -575,15 +558,7 @@ class PyLower(BaseLower):
                 self.pyapi.decref(value)
 
     def _freeze_string(self, string):
-        """Freeze a python string object into the code.
-        Insert a reference to the Environment object later.
         """
-        self._frozen_strings.add(string)
-        return self.context.get_constant(types.intp, id(string)).inttoptr(
-            self.pyapi.pyobj)
-
-    def _finalize_frozen_string(self):
-        """Insert all referenced string into the Environment object.
+        Freeze a Python string object into the code.
         """
-        for fs in self._frozen_strings:
-            self.env.consts.append(fs)
+        return self.lower_const(string)

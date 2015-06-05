@@ -11,7 +11,7 @@ import llvmlite.llvmpy.core as lc
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
 from numba import numpy_support
-from numba import types, utils, cgutils, _helperlib
+from numba import types, utils, cgutils, lowering, _helperlib
 
 
 class NativeValue(object):
@@ -24,6 +24,37 @@ class NativeValue(object):
         self.value = value
         self.is_error = is_error if is_error is not None else cgutils.false_bit
         self.cleanup = cleanup
+
+
+class EnvironmentManager(object):
+
+    def __init__(self, pyapi, env, env_body):
+        self.pyapi = pyapi
+        self.env = env
+        self.env_body = env_body
+
+    def add_const(self, const):
+        """
+        Add a constant to the environment, return its index.
+        """
+        # All constants are frozen inside the environment
+        if isinstance(const, str):
+            const = utils.intern(const)
+        for index, val in enumerate(self.env.consts):
+            if val is const:
+                break
+        else:
+            index = len(self.env.consts)
+            self.env.consts.append(const)
+        return index
+
+    def read_const(self, index):
+        """
+        Look up constant number *index* inside the environment body.
+        A borrowed reference is returned.
+        """
+        assert index < len(self.env.consts)
+        return self.pyapi.list_getitem(self.env_body.consts, index)
 
 
 class PythonAPI(object):
@@ -57,6 +88,9 @@ class PythonAPI(object):
         self.cstring = Type.pointer(Type.int(8))
         self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
+
+    def get_env_manager(self, env, env_body):
+        return EnvironmentManager(self, env, env_body)
 
     # ------ Python API -----
 
@@ -92,6 +126,17 @@ class PythonAPI(object):
         fnty = Type.function(Type.int(), argtypes, var_arg=True)
         fn = self._get_function(fnty, name="PyArg_ParseTuple")
         return self.builder.call(fn, [args, fmt] + list(objs))
+
+    def unpack_tuple(self, args, name, n_min, n_max, *objs):
+        charptr = Type.pointer(Type.int(8))
+        argtypes = [self.pyobj, charptr, self.py_ssize_t, self.py_ssize_t]
+        fnty = Type.function(Type.int(), argtypes, var_arg=True)
+        fn = self._get_function(fnty, name="PyArg_UnpackTuple")
+        n_min = Constant.int(self.py_ssize_t, n_min)
+        n_max = Constant.int(self.py_ssize_t, n_max)
+        if isinstance(name, str):
+            name = self.context.insert_const_string(self.builder.module, name)
+        return self.builder.call(fn, [args, name, n_min, n_max] + list(objs))
 
     #
     # Exception and errors
@@ -781,6 +826,43 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="_PyObject_Dump")
         return self.builder.call(fn, (obj,))
 
+    #
+    # NRT (Numba runtime) APIs
+    #
+
+    def nrt_adapt_ndarray_to_python(self, aryty, ary, dtypeptr):
+        assert self.context.enable_nrt, "NRT required"
+
+        intty = ir.IntType(32)
+        fnty = Type.function(self.pyobj, [self.voidptr, intty, self.pyobj])
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        dtype = numpy_support.as_dtype(aryty.dtype)
+
+        ndim = self.context.get_constant(types.int32, aryty.ndim)
+
+        aryptr = cgutils.alloca_once_value(self.builder, ary)
+        return self.builder.call(fn, [self.builder.bitcast(aryptr,
+                                                           self.voidptr),
+                                      ndim, dtypeptr])
+
+    def nrt_adapt_ndarray_from_python(self, ary, ptr):
+        assert self.context.enable_nrt
+        fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_from_python")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        return self.builder.call(fn, (ary, ptr))
+
+    def nrt_adapt_buffer_from_python(self, buf, ptr):
+        assert self.context.enable_nrt
+        fnty = Type.function(Type.void(), [Type.pointer(self.py_buffer_t),
+                                           self.voidptr])
+        fn = self._get_function(fnty, name="NRT_adapt_buffer_from_python")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        return self.builder.call(fn, (buf, ptr))
+
     # ------ utils -----
 
     def _get_function(self, fnty, name):
@@ -1013,16 +1095,16 @@ class PythonAPI(object):
 
         raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
-    def from_native_return(self, val, typ):
+    def from_native_return(self, val, typ, env_manager):
         assert not isinstance(typ, types.Optional), "callconv should have " \
                                                     "prevented the return of " \
                                                     "optional value"
-        out = self.from_native_value(val, typ)
+        out = self.from_native_value(val, typ, env_manager)
         if self.context.enable_nrt:
             self.context.nrt_decref(self.builder, typ, val)
         return out
 
-    def from_native_value(self, val, typ):
+    def from_native_value(self, val, typ, env_manager=None):
         if typ == types.pyobject:
             return val
 
@@ -1070,24 +1152,20 @@ class PythonAPI(object):
             return ret
 
         elif isinstance(typ, types.Optional):
-            return self.from_native_return(val, typ.type)
+            return self.from_native_return(val, typ.type, env_manager)
 
         elif isinstance(typ, types.Array):
-            return self.from_native_array(val, typ)
+            return self.from_native_array(val, typ, env_manager)
 
         elif isinstance(typ, types.Record):
             # Note we will create a copy of the record
             # This is the only safe way.
             size = Constant.int(Type.int(), val.type.pointee.count)
             ptr = self.builder.bitcast(val, Type.pointer(Type.int(8)))
-            # Note: this will only work for CPU mode
-            #       The following requires access to python object
-            dtype_addr = Constant.int(self.py_ssize_t, id(typ.dtype))
-            dtypeobj = dtype_addr.inttoptr(self.pyobj)
-            return self.recreate_record(ptr, size, dtypeobj)
+            return self.recreate_record(ptr, size, typ.dtype, env_manager)
 
         elif isinstance(typ, (types.Tuple, types.UniTuple)):
-            return self.from_native_tuple(val, typ)
+            return self.from_native_tuple(val, typ, env_manager)
 
         elif isinstance(typ, types.Generator):
             return self.from_native_generator(val, typ)
@@ -1098,7 +1176,7 @@ class PythonAPI(object):
         elif typ == types.voidptr:
             ll_intp = self.context.get_value_type(types.uintp)
             addr = self.builder.ptrtoint(val, ll_intp)
-            return self.from_native_value(addr, types.uintp)
+            return self.from_native_value(addr, types.uintp, env_manager)
 
         raise NotImplementedError(typ)
 
@@ -1152,12 +1230,14 @@ class PythonAPI(object):
         failed = cgutils.is_not_null(self.builder, errcode)
         return self.builder.load(aryptr), failed
 
-    def from_native_array(self, ary, typ):
+    def from_native_array(self, ary, typ, env_manager):
         builder = self.builder
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, builder, value=ary)
         if self.context.enable_nrt:
-            newary = self.nrt_adapt_ndarray_to_python(typ, ary)
+            np_dtype = numpy_support.as_dtype(typ.dtype)
+            dtypeptr = env_manager.read_const(env_manager.add_const(np_dtype))
+            newary = self.nrt_adapt_ndarray_to_python(typ, ary, dtypeptr)
             return newary
         else:
             parent = nativeary.parent
@@ -1227,7 +1307,7 @@ class PythonAPI(object):
             value = cgutils.make_anonymous_struct(self.builder, values)
         return NativeValue(value, is_error=is_error, cleanup=cleanup)
 
-    def from_native_tuple(self, val, typ):
+    def from_native_tuple(self, val, typ, env_manager):
         """
         Convert native array or structure *val* to a tuple object.
         """
@@ -1235,7 +1315,7 @@ class PythonAPI(object):
 
         for i, dtype in enumerate(typ):
             item = self.builder.extract_value(val, i)
-            obj = self.from_native_value(item,  dtype)
+            obj = self.from_native_value(item, dtype, env_manager)
             self.tuple_setitem(tuple_val, i, obj)
 
         return tuple_val
@@ -1289,41 +1369,6 @@ class PythonAPI(object):
 
         return self.builder.call(fn,
                                  (state_size, initial_state, genfn, finalizer, env))
-
-    def nrt_adapt_ndarray_to_python(self, aryty, ary):
-        assert self.context.enable_nrt, "NRT required"
-        np_dtype = numpy_support.as_dtype(aryty.dtype)
-
-        intty = ir.IntType(32)
-        fnty = Type.function(self.pyobj, [self.voidptr, intty, self.pyobj])
-        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
-        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
-        dtype = numpy_support.as_dtype(aryty.dtype)
-
-        ndim = self.context.get_constant(types.int32, aryty.ndim)
-        dtypeptr = self.unserialize(self.serialize_object(np_dtype))
-
-        aryptr = cgutils.alloca_once_value(self.builder, ary)
-        return self.builder.call(fn, [self.builder.bitcast(aryptr,
-                                                           self.voidptr),
-                                      ndim, dtypeptr])
-
-    def nrt_adapt_ndarray_from_python(self, ary, ptr):
-        assert self.context.enable_nrt
-        fnty = Type.function(Type.int(), [self.pyobj, self.voidptr])
-        fn = self._get_function(fnty, name="NRT_adapt_ndarray_from_python")
-        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
-        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
-        return self.builder.call(fn, (ary, ptr))
-
-    def nrt_adapt_buffer_from_python(self, buf, ptr):
-        assert self.context.enable_nrt
-        fnty = Type.function(Type.void(), [Type.pointer(self.py_buffer_t),
-                                           self.voidptr])
-        fn = self._get_function(fnty, name="NRT_adapt_buffer_from_python")
-        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
-        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
-        return self.builder.call(fn, (buf, ptr))
 
     def from_native_charseq(self, val, typ):
         builder = self.builder
@@ -1418,10 +1463,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="numba_create_np_timedelta")
         return self.builder.call(fn, [val, unit_code])
 
-    def recreate_record(self, pdata, size, dtypeaddr):
+    def recreate_record(self, pdata, size, dtype, env_manager):
         fnty = Type.function(self.pyobj, [Type.pointer(Type.int(8)),
                                           Type.int(), self.pyobj])
         fn = self._get_function(fnty, name="numba_recreate_record")
+        dtypeaddr = env_manager.read_const(env_manager.add_const(dtype))
         return self.builder.call(fn, [pdata, size, dtypeaddr])
 
     def string_from_constant_string(self, string):
