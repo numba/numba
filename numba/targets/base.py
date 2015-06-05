@@ -1001,6 +1001,7 @@ class BaseContext(object):
         mod = cgutils.get_module(builder)
         fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
             [self.get_value_type(types.intp)])
+        # NOTE: safe alloc really slows allocations down
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         return builder.call(fn, [size])
 

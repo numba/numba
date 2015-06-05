@@ -623,12 +623,16 @@ class NdIndex(AbstractTemplate):
         assert not kws
 
         # Either ndindex(shape) or ndindex(*shape)
-        if len(args) == 1 and isinstance(args[0], types.UniTuple):
-            shape = list(args[0])
+        if len(args) == 1 and isinstance(args[0], types.BaseTuple):
+            tup = args[0]
+            if tup.count > 0 and not isinstance(tup, types.UniTuple):
+                # Heterogenous tuple
+                return
+            shape = list(tup)
         else:
             shape = args
 
-        if shape and all(isinstance(x, types.Integer) for x in shape):
+        if all(isinstance(x, types.Integer) for x in shape):
             iterator_type = types.NumpyNdIndexType(len(shape))
             return signature(iterator_type, *args)
 

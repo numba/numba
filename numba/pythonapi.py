@@ -1173,6 +1173,9 @@ class PythonAPI(object):
         elif isinstance(typ, types.CharSeq):
             return self.from_native_charseq(val, typ)
 
+        elif isinstance(typ, types.DType):
+            return self.from_native_dtype(val, typ)
+
         elif typ == types.voidptr:
             ll_intp = self.context.get_value_type(types.uintp)
             addr = self.builder.ptrtoint(val, ll_intp)
@@ -1243,6 +1246,10 @@ class PythonAPI(object):
             parent = nativeary.parent
             self.incref(parent)
             return parent
+
+    def from_native_dtype(self, val, typ):
+        np_dtype = numpy_support.as_dtype(typ.dtype)
+        return self.unserialize(self.serialize_object(np_dtype))
 
     def to_native_optional(self, obj, typ):
         """

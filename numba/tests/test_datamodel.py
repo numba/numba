@@ -145,6 +145,10 @@ class TestArgInfo(unittest.TestCase):
         fe_args = [types.Array(types.int32, 1, 'C')] * 2
         self._test_as_arguments(fe_args)
 
+    def test_two_0d_arrays(self):
+        fe_args = [types.Array(types.int32, 0, 'C')] * 2
+        self._test_as_arguments(fe_args)
+
     def test_tuples(self):
         fe_args = [types.UniTuple(types.int32, 2),
                    types.UniTuple(types.int32, 3)]
@@ -157,10 +161,18 @@ class TestArgInfo(unittest.TestCase):
         # Nested tuple
         fe_args = [types.UniTuple(types.UniTuple(types.int32, 2), 3)]
         self._test_as_arguments(fe_args)
+
+    def test_empty_tuples(self):
         # Empty tuple
         fe_args = [types.UniTuple(types.int16, 0),
-                   types.int32,
-                   types.UniTuple(types.int64, 0)]
+                   types.Tuple(()),
+                   types.int32]
+        self._test_as_arguments(fe_args)
+
+    def test_nested_empty_tuples(self):
+        fe_args = [types.int32,
+                   types.UniTuple(types.Tuple(()), 2),
+                   types.int64]
         self._test_as_arguments(fe_args)
 
 

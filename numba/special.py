@@ -9,5 +9,5 @@ def typeof(val):
     Used outside of Numba code, infers the type for the object.
     """
     from .targets.registry import CPUTarget
-    return CPUTarget.typing_context.resolve_data_type(val)
+    return CPUTarget.typing_context.resolve_argument_type(val)
 
