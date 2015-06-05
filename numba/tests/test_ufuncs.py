@@ -1370,7 +1370,10 @@ class _TestLoopTypes(TestCase):
     """
 
     _ufuncs = all_ufuncs[:]
-    _ufuncs.remove(np.left_shift) # has its own test class
+    # Have their own test classes
+    _ufuncs.remove(np.left_shift)
+    _ufuncs.remove(np.reciprocal)
+    _ufuncs.remove(np.power)
     _compile_flags = enable_pyobj_flags
     _skip_types = 'OegG'
 
@@ -1449,52 +1452,12 @@ class _TestLoopTypes(TestCase):
         # Check each array (including inputs, to ensure they weren't
         # mutated).
         for c_arg, py_arg in zip(c_args, py_args):
-            # XXX should assertPreciseEqual() accept numpy arrays?
             prec = 'single' if c_arg.dtype.char in 'fF' else 'exact'
             prec = 'double' if c_arg.dtype.char in 'dD' else prec
-            for c, py in zip(c_arg, py_arg):
-                msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
-                                 "args: {2}", "expected {3}", "got {4}"])
-                msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
-                try:
-                    self.assertPreciseEqual(py, c, prec=prec, msg=msg)
-                except AssertionError:
-                    if not self._is_acceptable_error(py, c):
-                        raise
-
-    def _is_acceptable_error(self, py, c):
-        """
-        Result mismatch due to differing error handling.
-        """
-        def get_leftmost_bit(dtype):
-            return dtype.type(1 << (dtype.itemsize * 8 - 1))
-
-        if np.isnan(c) or np.isnan(py):
-            if 0 in [c, py]:
-                # If one is NaN and the other is zero
-                msg = "mismatch for nan values: expected {0}; got {1}"
-                print(msg.format(py, c))
-                # This is not occurring any more
-
-        elif np.abs(c) == 0 and np.abs(py) == np.abs(c):
-            # If both are zeros and they are differ by sign
-            msg = "mismatch sign for 0: expected {0}; got {1}"
-            print(msg.format(py, c))
-            return True
-
-        elif ((c == 0 and py == get_leftmost_bit(py.dtype)) or
-                  (py == 0 and c == get_leftmost_bit(py.dtype))):
-            msg = "mismatch left-most bit: expected {0}; got {1}"
-            print(msg.format(py, c))
-            return True
-
-        elif isinstance(c, complex) and isinstance(py, complex):
-            # Recurse into real and imag of a complex
-            return (self._is_acceptable_error(c.real, py.real)
-                    and self._is_acceptable_error(c.imag, py.imag))
-
-        # Match?
-        return py == c
+            msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
+                             "args: {2}", "expected {3}", "got {4}"])
+            msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
+            self.assertPreciseEqual(py_arg, c_arg, prec=prec, msg=msg)
 
     @classmethod
     def _check_ufunc_loops(cls, ufunc):
@@ -1525,7 +1488,8 @@ TestLoopTypes.autogenerate()
 class TestLoopTypesIntNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
-    # reciprocal needs a special test due to issue #757
+    # reciprocal and power need a special test due to issue #757
+    _ufuncs.remove(np.power)
     _ufuncs.remove(np.reciprocal)
     _ufuncs.remove(np.left_shift) # has its own test class
     _ufuncs.remove(np.right_shift) # has its own test class
@@ -1534,21 +1498,41 @@ class TestLoopTypesIntNoPython(_TestLoopTypes):
 
 TestLoopTypesIntNoPython.autogenerate()
 
-class TestLoopTypesIntReciprocalNoPython(_TestLoopTypes):
+class TestLoopTypesReciprocalNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.reciprocal] # issue #757
-    _required_types = 'bBhHiIlLqQ'
-    _skip_types = 'fdFDmMO' + _TestLoopTypes._skip_types
+    _required_types = 'bBhHiIlLqQfdFD'
+    _skip_types = 'mMO' + _TestLoopTypes._skip_types
 
     def _arg_for_type(self, a_letter_type, index=0):
         res = super(self.__class__, self)._arg_for_type(a_letter_type,
                                                         index=index)
-        # avoid 0 as argument, as it triggers undefined behavior that my differ
-        # in results from numba to the compiler used to compile NumPy
-        res[res == 0] = 42
+        if a_letter_type in 'bBhHiIlLqQ':
+            # For integer reciprocal, avoid 0 as argument, as it triggers
+            # undefined behavior that may differ in results from Numba
+            # to the compiler used to compile NumPy.
+            res[res == 0] = 42
         return res
 
-TestLoopTypesIntReciprocalNoPython.autogenerate()
+TestLoopTypesReciprocalNoPython.autogenerate()
+
+class TestLoopTypesPowerNoPython(_TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.power] # issue #757
+    _required_types = 'bBhHiIlLqQfdFD'
+    _skip_types = 'mMO' + _TestLoopTypes._skip_types
+
+    def _arg_for_type(self, a_letter_type, index=0):
+        res = super(self.__class__, self)._arg_for_type(a_letter_type,
+                                                        index=index)
+        if a_letter_type in 'bBhHiIlLqQ' and index == 1:
+            # For integer power, avoid a negative exponent, as it triggers
+            # undefined behavior that may differ in results from Numba
+            # to the compiler used to compile NumPy
+            res[res < 0] = 3
+        return res
+
+TestLoopTypesPowerNoPython.autogenerate()
 
 class TestLoopTypesIntLeftShiftNoPython(_TestLoopTypes):
     _compile_flags = no_pyobj_flags

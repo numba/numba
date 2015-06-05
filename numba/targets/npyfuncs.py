@@ -107,15 +107,6 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
 
 
 
-def np_dummy_return_arg(context, builder, sig, args):
-    # sometimes a loop does nothing other than returning the first arg...
-    # for example, conjugate for non-complex numbers
-    # this function implements this.
-    _check_arity_and_homogeneity(sig, args, 1)
-    return args[0] # nothing to do...
-
-
-
 ########################################################################
 # Division kernels inspired by NumPy loops.c.src code
 #
@@ -581,21 +572,6 @@ def np_complex_rint_impl(context, builder, sig, args):
     inner_sig = typing.signature(*[float_ty]*2)
     out.real = np_real_rint_impl(context, builder, inner_sig, [in1.real])
     out.imag = np_real_rint_impl(context, builder, inner_sig, [in1.imag])
-    return out._getvalue()
-
-
-########################################################################
-# NumPy conj/conjugate
-def np_complex_conjugate_impl(context, builder, sig, args):
-    _check_arity_and_homogeneity(sig, args, 1)
-    ty = sig.args[0]
-    float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
-    in1 = complex_class(context, builder, value=args[0])
-    out = complex_class(context, builder)
-    ZERO = context.get_constant(float_ty, 0.0)
-    out.real = in1.real
-    out.imag = builder.fsub(ZERO, in1.imag)
     return out._getvalue()
 
 
@@ -1137,35 +1113,6 @@ def np_real_acos_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'arccos')
-
-
-def np_complex_acos_impl(context, builder, sig, args):
-    # npymath does not provide a complex acos. The code in funcs.inc.src
-    # is translated here...
-    # - j * log(x + j * sqrt(1 - sqr(x)))
-    _check_arity_and_homogeneity(sig, args, 1)
-
-    ty = sig.args[0]
-    binary_sig = typing.signature(*[ty]*3)
-
-    ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
-    ZERO = context.get_constant_generic(builder, ty, 0.0 + 0.0j)
-    I = context.get_constant_generic(builder, ty, 0.0 + 1.0j)
-
-    xx = np_complex_square_impl(context, builder, sig, args)
-    one_minus_xx = builtins.complex_sub_impl(context, builder, binary_sig,
-                                             [ONE, xx])
-    sqrt_res = np_complex_sqrt_impl(context, builder, sig, [one_minus_xx])
-    sqrt_res_j = builtins.complex_mul_impl(context, builder, binary_sig,
-                                           [I, sqrt_res])
-
-    log_in = builtins.complex_add_impl(context, builder, binary_sig,
-                                       [args[0], sqrt_res_j])
-    log_out = np_complex_log_impl(context, builder, sig, [log_in])
-    log_j = builtins.complex_mul_impl(context, builder, binary_sig,
-                                      [I, log_out])
-    return builtins.complex_sub_impl(context, builder, binary_sig,
-                                     [ZERO, log_j])
 
 
 ########################################################################
