@@ -8,7 +8,7 @@ from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
 from numba.numpy_support import as_dtype
-from .support import TestCase
+from .support import TestCase, CompilationCache
 
 
 def array_flat(arr, out):
@@ -25,6 +25,12 @@ def array_ndenumerate_sum(arr):
     s = 0
     for (i, j), v in np.ndenumerate(arr):
         s = s + (i + 1) * (j + 1) * v
+    return s
+
+def np_ndindex_empty():
+    s = 0
+    for ind in np.ndindex(()):
+        s += s + len(ind) + 1
     return s
 
 def np_ndindex(x, y):
@@ -153,6 +159,27 @@ def array_argmax(arr):
 def array_argmax_global(arr):
     return np.argmax(arr)
 
+def array_T(arr):
+    return arr.T
+
+def array_transpose(arr):
+    return arr.transpose()
+
+def array_copy(arr):
+    return arr.copy()
+
+def array_reshape(arr, newshape):
+    return arr.reshape(newshape)
+
+def array_view(arr, newtype):
+    return arr.view(newtype)
+
+# XXX Can't pass a dtype as a Dispatcher argument for now
+def make_array_view(newtype):
+    def array_view(arr):
+        return arr.view(newtype)
+    return array_view
+
 
 def base_test_arrays(dtype):
     a1 = np.arange(10, dtype=dtype) + 1
@@ -191,6 +218,10 @@ def array_prop(aray):
 
 
 class TestArrayMethods(TestCase):
+
+    def setUp(self):
+        self.ccache = CompilationCache()
+
     def test_array_ndim_and_layout(self):
         for testArray, testArrayProps in zip(base_test_arrays(np.int32), yield_test_props()):
             self.assertEqual(array_prop(testArray), testArrayProps)
@@ -364,6 +395,12 @@ class TestArrayMethods(TestCase):
         self.check_array_unary(arr, typeof(arr), func)
         arr = arr.reshape((2, 2, 3))
         self.check_array_unary(arr, typeof(arr), func)
+
+    def test_np_ndindex_empty(self):
+        func = np_ndindex_empty
+        cres = compile_isolated(func, [])
+        cfunc = cres.entry_point
+        self.assertPreciseEqual(cfunc(), func())
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
@@ -553,6 +590,150 @@ class TestArrayMethods(TestCase):
 
     def test_around_scalar(self):
         self.check_round_scalar(np_around_unary, np_around_binary)
+
+    def check_layout_dependent_func(self, pyfunc):
+        def check_arr(arr):
+            cres = compile_isolated(pyfunc, (typeof(arr),))
+            self.assertPreciseEqual(cres.entry_point(arr), pyfunc(arr))
+        arr = np.arange(24)
+        check_arr(arr)
+        check_arr(arr.reshape((3, 8)))
+        check_arr(arr.reshape((3, 8)).T)
+        check_arr(arr.reshape((3, 8))[::2])
+        check_arr(arr.reshape((2, 3, 4)))
+        check_arr(arr.reshape((2, 3, 4)).T)
+        check_arr(arr.reshape((2, 3, 4))[::2])
+        arr = np.array([0]).reshape(())
+        check_arr(arr)
+
+    def test_array_transpose(self):
+        self.check_layout_dependent_func(array_transpose)
+
+    def test_array_T(self):
+        self.check_layout_dependent_func(array_T)
+
+    def test_array_copy(self):
+        self.check_layout_dependent_func(array_copy)
+
+    def test_array_reshape(self):
+        pyfunc = array_reshape
+        def run(arr, shape):
+            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(shape)))
+            return cres.entry_point(arr, shape)
+        def check(arr, shape):
+            expected = pyfunc(arr, shape)
+            got = run(arr, shape)
+            self.assertPreciseEqual(got, expected)
+        def check_err_shape(arr, shape):
+            with self.assertRaises(NotImplementedError) as raises:
+                run(arr, shape)
+            self.assertEqual(str(raises.exception),
+                             "incompatible shape for array")
+        def check_err_size(arr, shape):
+            with self.assertRaises(ValueError) as raises:
+                run(arr, shape)
+            self.assertEqual(str(raises.exception),
+                             "total size of new array must be unchanged")
+
+        # C-contiguous
+        arr = np.arange(24)
+        check(arr, (24,))
+        check(arr, (4, 6))
+        check(arr, (8, 3))
+        check(arr, (8, 1, 3))
+        check(arr, (1, 8, 1, 1, 3, 1))
+        arr = np.arange(24).reshape((2, 3, 4))
+        check(arr, (24,))
+        check(arr, (4, 6))
+        check(arr, (8, 3))
+        check(arr, (8, 1, 3))
+        check(arr, (1, 8, 1, 1, 3, 1))
+        check_err_size(arr, (25,))
+        check_err_size(arr, (8, 4))
+        arr = np.arange(24).reshape((1, 8, 1, 1, 3, 1))
+        check(arr, (24,))
+        check(arr, (4, 6))
+        check(arr, (8, 3))
+        check(arr, (8, 1, 3))
+
+        # F-contiguous
+        arr = np.arange(24).reshape((2, 3, 4)).T
+        check(arr, (4, 3, 2))
+        check(arr, (1, 4, 1, 3, 1, 2, 1))
+        check_err_shape(arr, (2, 3, 4))
+        check_err_shape(arr, (6, 4))
+        check_err_shape(arr, (2, 12))
+
+    def test_array_view(self):
+
+        def run(arr, dtype):
+            pyfunc = make_array_view(dtype)
+            cres = self.ccache.compile(pyfunc, (typeof(arr),))
+            return cres.entry_point(arr)
+        def check(arr, dtype):
+            expected = arr.view(dtype)
+            got = run(arr, dtype)
+            self.assertPreciseEqual(got, expected)
+        def check_err(arr, dtype):
+            with self.assertRaises(ValueError) as raises:
+                run(arr, dtype)
+            self.assertEqual(str(raises.exception),
+                             "new type not compatible with array")
+
+        dt1 = np.dtype([('a', np.int8), ('b', np.int8)])
+        dt2 = np.dtype([('u', np.int16), ('v', np.int8)])
+        dt3 = np.dtype([('x', np.int16), ('y', np.int16)])
+
+        # C-contiguous
+        arr = np.arange(24, dtype=np.int8)
+        check(arr, np.dtype('int16'))
+        check(arr, np.int16)
+        check(arr, np.int8)
+        check(arr, np.float32)
+        check(arr, np.complex64)
+        check(arr, dt1)
+        check(arr, dt2)
+        check_err(arr, np.complex128)
+
+        # Last dimension must have a compatible size
+        arr = arr.reshape((3, 8))
+        check(arr, np.int8)
+        check(arr, np.float32)
+        check(arr, np.complex64)
+        check(arr, dt1)
+        check_err(arr, dt2)
+        check_err(arr, np.complex128)
+
+        # F-contiguous
+        arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
+        check(arr, np.int8)
+        check(arr, np.float32)
+        check(arr, np.complex64)
+        check(arr, dt1)
+        check_err(arr, dt2)
+        check_err(arr, np.complex128)
+
+        # Non-contiguous: only a type with the same itemsize can be used
+        arr = np.arange(16, dtype=np.int32)[::2]
+        check(arr, np.uint32)
+        check(arr, np.float32)
+        check(arr, dt3)
+        check_err(arr, np.int8)
+        check_err(arr, np.int16)
+        check_err(arr, np.int64)
+        check_err(arr, dt1)
+        check_err(arr, dt2)
+
+        # Zero-dim array: only a type with the same itemsize can be used
+        arr = np.array([42], dtype=np.int32).reshape(())
+        check(arr, np.uint32)
+        check(arr, np.float32)
+        check(arr, dt3)
+        check_err(arr, np.int8)
+        check_err(arr, np.int16)
+        check_err(arr, np.int64)
+        check_err(arr, dt1)
+        check_err(arr, dt2)
 
 
 # These form a testing product where each of the combinations are tested

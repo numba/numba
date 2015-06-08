@@ -37,18 +37,18 @@ class TestConversion(unittest.TestCase):
 
         xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
         for x in xs:
-            self.assertEqual(cres.entry_point(x=x), x)
+            self.assertEqual(cres.entry_point(x), x)
         for x in np.complex64(xs):
-            self.assertEqual(cres.entry_point(x=x), x)
+            self.assertEqual(cres.entry_point(x), x)
 
         cres = compile_isolated(pyfunc, [types.complex128],
                                 return_type=types.complex128)
 
         xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
         for x in xs:
-            self.assertEqual(cres.entry_point(x=x), x)
+            self.assertEqual(cres.entry_point(x), x)
         for x in np.complex128(xs):
-            self.assertEqual(cres.entry_point(x=x), x)
+            self.assertEqual(cres.entry_point(x), x)
 
     def test_complex_addition(self):
         pyfunc = addition

@@ -515,9 +515,22 @@ class Len(AbstractTemplate):
 
 #-------------------------------------------------------------------------------
 
+def normalize_shape(shape):
+    if isinstance(shape, types.UniTuple):
+        if isinstance(shape.dtype, types.Integer):
+            dimtype = types.intp if shape.dtype.signed else types.uintp
+            return types.UniTuple(dimtype, len(shape))
+
+    elif isinstance(shape, types.Tuple) and shape.count == 0:
+        return shape
+
+
 @builtin_attr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
+
+    def resolve_dtype(self, ary):
+        return types.DType(ary.dtype)
 
     def resolve_itemsize(self, ary):
         return types.intp
@@ -540,7 +553,55 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_ctypes(self, ary):
         return types.ArrayCTypes(ary)
 
+    def resolve_T(self, ary):
+        if ary.ndim <= 1:
+            retty = ary
+        else:
+            layout = {"C": "F", "F": "C"}.get(ary.layout, "A")
+            retty = ary.copy(layout=layout)
+        return retty
+
+    @bound_function("array.transpose")
+    def resolve_transpose(self, ary, args, kws):
+        assert not args
+        assert not kws
+        return signature(self.resolve_T(ary))
+
+    @bound_function("array.copy")
+    def resolve_copy(self, ary, args, kws):
+        assert not args
+        assert not kws
+        retty = ary.copy(layout="C")
+        return signature(retty)
+
+    @bound_function("array.reshape")
+    def resolve_reshape(self, ary, args, kws):
+        assert not kws
+        shape, = args
+        shape = normalize_shape(shape)
+        if shape is None:
+            return
+        if ary.layout == "C":
+            # Given order='C' (the only supported value), a C-contiguous
+            # array is always returned for a C-contiguous input.
+            layout = "C"
+        else:
+            layout = "A"
+        ndim = shape.count if isinstance(shape, types.BaseTuple) else 1
+        retty = ary.copy(ndim=ndim)
+        return signature(retty, shape)
+
+    @bound_function("array.view")
+    def resolve_view(self, ary, args, kws):
+        from .npydecl import _parse_dtype
+        assert not kws
+        dtype, = args
+        dtype = _parse_dtype(dtype)
+        retty = ary.copy(dtype=dtype)
+        return signature(retty, *args)
+
     def generic_resolve(self, ary, attr):
+        # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
                 return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,

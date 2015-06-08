@@ -195,6 +195,10 @@ class BaseContext(object):
                     return type_class(dtype, m.ndim, layout=layout,
                                       readonly=m.readonly)
 
+        if isinstance(val, numpy.dtype):
+            tp = numpy_support.from_dtype(val)
+            return types.DType(tp)
+
         else:
             # Matching here is quite broad, so we have to do it after
             # the more specific matches above.
@@ -219,10 +223,6 @@ class BaseContext(object):
 
         if isinstance(val, type) and issubclass(val, BaseException):
             return types.ExceptionType(val)
-
-        if isinstance(val, numpy.dtype):
-            tp = numpy_support.from_dtype(val)
-            return types.DType(tp)
 
         try:
             # Try to look up target specific typing information

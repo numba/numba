@@ -437,16 +437,24 @@ def _loop_nest(builder, shape, intp):
             yield (ind,)
 
 
-def pack_array(builder, values):
+def pack_array(builder, values, ty=None):
+    """
+    Pack an array of values.  *ty* should be given if the array may be empty,
+    in which case the type can't be inferred from the values.
+    """
     n = len(values)
-    ty = values[0].type
+    if ty is None:
+        ty = values[0].type
     ary = Constant.undef(Type.array(ty, n))
     for i, v in enumerate(values):
         ary = builder.insert_value(ary, v, i)
     return ary
 
 
-def unpack_tuple(builder, tup, count):
+def unpack_tuple(builder, tup, count=None):
+    if count is None:
+        # Assuming *tup* is an aggregate
+        count = len(tup.type.elements)
     vals = [builder.extract_value(tup, i)
             for i in range(count)]
     return vals

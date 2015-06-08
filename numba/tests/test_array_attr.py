@@ -1,9 +1,22 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
+
+import sys
+
 import numpy as np
+
+import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba.numpy_support import from_dtype
-from numba import types, njit
+from numba import types, njit, typeof
+from .support import TestCase
+
+
+def array_dtype(a):
+    return a.dtype
+
+
+def use_dtype(a, b):
+    return a.view(b.dtype)
 
 
 def array_itemsize(a):
@@ -56,9 +69,10 @@ def array_ctypes_data(arr):
     return arr.ctypes.data
 
 
-class TestArrayAttr(unittest.TestCase):
+class TestArrayAttr(TestCase):
+
     def setUp(self):
-        self.a = np.arange(10).reshape(2, 5)
+        self.a = np.arange(10, dtype=np.int32).reshape(2, 5)
 
     def get_cfunc(self, pyfunc, argspec):
         cres = compile_isolated(pyfunc, argspec)
@@ -95,6 +109,24 @@ class TestArrayAttr(unittest.TestCase):
         cfunc = self.get_cfunc(pyfunc, (types.int32[:,:],))
 
         self.assertEqual(pyfunc(self.a), cfunc(self.a))
+
+    def test_dtype(self):
+        pyfunc = array_dtype
+        cfunc = self.get_cfunc(pyfunc, (types.int32[:,:],))
+        self.assertEqual(pyfunc(self.a), cfunc(self.a))
+        dtype = np.dtype([('x', np.int8), ('y', np.int8)])
+        arr = np.zeros(4, dtype=dtype)
+        cfunc = self.get_cfunc(pyfunc, (typeof(arr),))
+        got = cfunc(arr)
+        self.assertEqual(cfunc(arr), dtype)
+
+    def test_use_dtype(self):
+        # Test using the dtype attribute inside the Numba function itself
+        b = np.empty(1, dtype=np.int16)
+        pyfunc = use_dtype
+        cfunc = self.get_cfunc(pyfunc, (typeof(self.a), typeof(b)))
+        expected = pyfunc(self.a, b)
+        self.assertPreciseEqual(cfunc(self.a, b), expected)
 
 
 class TestNestedArrayAttr(unittest.TestCase):

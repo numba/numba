@@ -135,6 +135,15 @@ class TestCase(unittest.TestCase):
         else:
             return dtype
 
+    def _fix_strides(self, arr):
+        """
+        Return the strides of the given array, fixed for comparison.
+        Strides for 0- or 1-sized dimensions are ignored.
+        """
+        return [stride / arr.itemsize
+                for (stride, shape) in zip(arr.strides, arr.shape)
+                if shape > 1]
+
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                            msg=None):
         """
@@ -198,8 +207,8 @@ class TestCase(unittest.TestCase):
             self.assertEqual(dtype, self._fix_dtype(second.dtype))
             self.assertEqual(first.ndim, second.ndim)
             self.assertEqual(first.shape, second.shape)
-            self.assertEqual([x / first.itemsize for x in first.strides],
-                             [x / second.itemsize for x in second.strides])
+            self.assertEqual(first.itemsize, second.itemsize)
+            self.assertEqual(self._fix_strides(first), self._fix_strides(second))
             if first.dtype != dtype:
                 first = first.astype(dtype)
             if second.dtype != dtype:

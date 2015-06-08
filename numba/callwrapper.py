@@ -80,12 +80,13 @@ class _GilManager(object):
 
 
 class PyCallWrapper(object):
-    def __init__(self, context, module, func, fndesc, call_helper,
+    def __init__(self, context, module, func, fndesc, env, call_helper,
                  release_gil):
         self.context = context
         self.module = module
         self.func = func
         self.fndesc = fndesc
+        self.env = env
         self.release_gil = release_gil
 
     def build(self):
@@ -115,11 +116,9 @@ class PyCallWrapper(object):
 
     def build_wrapper(self, api, builder, closure, args, kws):
         nargs = len(self.fndesc.args)
-        keywords = self.make_keywords(self.fndesc.args)
-        fmt = self.make_const_string("O" * nargs)
 
         objs = [api.alloca_obj() for _ in range(nargs)]
-        parseok = api.parse_tuple_and_keywords(args, kws, fmt, keywords, *objs)
+        parseok = api.unpack_tuple(args, self.fndesc.qualname, nargs, nargs, *objs)
 
         pred = builder.icmp(lc.ICMP_EQ, parseok, Constant.null(parseok.type))
         with cgutils.if_unlikely(builder, pred):
@@ -140,13 +139,14 @@ class PyCallWrapper(object):
         if self.release_gil:
             cleanup_manager = _GilManager(builder, api, cleanup_manager)
 
-        # The wrapped function doesn't take a full closure, only
-        # the Environment object.
-        env = self.context.get_env_from_closure(builder, closure)
+        # Extract the Environment object from the Closure
+        envptr = self.context.get_env_from_closure(builder, closure)
+        env_body = self.context.get_env_body(builder, envptr)
+        env_manager = api.get_env_manager(self.env, env_body)
 
         status, res = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
-            innerargs, env)
+            innerargs, envptr)
         # Do clean up
         cleanup_manager.emit_cleanup()
 
@@ -156,7 +156,8 @@ class PyCallWrapper(object):
             with builder.if_then(status.is_none):
                 api.return_none()
 
-            retval = api.from_native_return(res, self._simplified_return_type())
+            retval = api.from_native_return(res, self._simplified_return_type(),
+                                            env_manager)
             builder.ret(retval)
 
         with builder.if_then(builder.not_(status.is_python_exc)):
@@ -189,17 +190,6 @@ class PyCallWrapper(object):
     def make_const_string(self, string):
         return self.context.insert_const_string(self.module, string)
 
-    def make_keywords(self, kws):
-        strings = []
-        stringtype = Type.pointer(Type.int(8))
-        for k in kws:
-            strings.append(self.make_const_string(k))
-
-        strings.append(Constant.null(stringtype))
-        kwlist = Constant.array(stringtype, strings)
-        kwlist = cgutils.global_constant(self.module, ".kwlist", kwlist)
-        return Constant.bitcast(kwlist, Type.pointer(stringtype))
-
     def _simplified_return_type(self):
         """
         The NPM callconv has already converted simplified optional types.
@@ -211,6 +201,3 @@ class PyCallWrapper(object):
             return restype.type
         else:
             return restype
-
-
-
