@@ -423,20 +423,24 @@ def llvm_to_ptx(llvmir, **opts):
     return ptx
 
 
-re_metadata_def = re.compile(r"\!.+=(.*)")
+re_metadata_def = re.compile(r"\!\d+\s*=")
+re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"]")
 
 
 def llvm36_to_34_ir(ir):
     """
-    rewrite metadata
+    Convert LLVM 3.6 IR for LLVM 3.4.
+
+    Rewrite metadata since llvm3.6 dropped the "metadata" type prefix.
     """
     buf = []
     for line in ir.splitlines():
-        if (line.startswith('!') and
-                line[1].isdigit() and
-                    'metadata' not in line):
-            line = line.replace('!{', 'metadata !{')
-            line = line.replace('!"', 'metadata !"')
+        # If the line is a metadata
+        if re_metadata_def.match(line):
+            # Does not contain any correct usage (Maybe already fixed)
+            if None is re_metadata_correct_usage.search(line):
+                line = line.replace('!{', 'metadata !{')
+                line = line.replace('!"', 'metadata !"')
         buf.append(line)
 
     return '\n'.join(buf)
