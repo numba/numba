@@ -33,6 +33,23 @@ class BaseTest(unittest.TestCase):
 
 
 class TestDynArray(unittest.TestCase):
+    def test_empty_0d(self):
+        @nrtjit
+        def foo():
+            arr = np.empty(())
+            arr[()] = 42
+            return arr
+
+        arr = foo()
+        np.testing.assert_equal(42, arr)
+        self.assertEqual(arr.size, 1)
+        self.assertEqual(arr.shape, ())
+        self.assertEqual(arr.dtype, np.dtype(np.float64))
+        self.assertEqual(arr.strides, ())
+        arr.fill(123)  # test writability
+        np.testing.assert_equal(123, arr)
+        del arr
+
     def test_empty_1d(self):
         @nrtjit
         def foo(n):
@@ -444,6 +461,21 @@ class TestDynArray(unittest.TestCase):
 
 class ConstructorBaseTest(object):
 
+    def check_0d(self, pyfunc):
+        cfunc = nrtjit(pyfunc)
+        expected = pyfunc()
+        ret = cfunc()
+        self.assertEqual(ret.size, expected.size)
+        self.assertEqual(ret.shape, expected.shape)
+        self.assertEqual(ret.dtype, expected.dtype)
+        self.assertEqual(ret.strides, expected.strides)
+        self.check_result_value(ret, expected)
+        # test writability
+        expected = np.empty_like(ret) # np.full_like was not added until Numpy 1.8
+        expected.fill(123)
+        ret.fill(123)
+        np.testing.assert_equal(ret, expected)
+
     def check_1d(self, pyfunc):
         cfunc = nrtjit(pyfunc)
         n = 3
@@ -493,6 +525,12 @@ class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
     def check_result_value(self, ret, expected):
         np.testing.assert_equal(ret, expected)
 
+    def test_0d(self):
+        pyfunc = self.pyfunc
+        def func():
+            return pyfunc(())
+        self.check_0d(func)
+
     def test_1d(self):
         pyfunc = self.pyfunc
         def func(n):
@@ -538,6 +576,11 @@ class TestNdFull(ConstructorBaseTest, unittest.TestCase):
     def check_result_value(self, ret, expected):
         np.testing.assert_equal(ret, expected)
 
+    def test_0d(self):
+        def func():
+            return np.full((), 4.5)
+        self.check_0d(func)
+
     def test_1d(self):
         def func(n):
             return np.full(n, 4.5)
@@ -567,12 +610,23 @@ class TestNdFull(ConstructorBaseTest, unittest.TestCase):
 
 class ConstructorLikeBaseTest(object):
 
+    def mutate_array(self, arr):
+        try:
+            arr.fill(42)
+        except (TypeError, ValueError):
+            # Try something else (e.g. Numpy 1.6 with structured dtypes)
+            fill_value = b'x' * arr.dtype.itemsize
+            arr.fill(fill_value)
+
     def check_like(self, pyfunc, dtype):
         orig = np.linspace(0, 5, 6).astype(dtype)
         cfunc = nrtjit(pyfunc)
 
-        for shape in (6, (2, 3), (1, 2, 3), (3, 1, 2)):
-            arr = orig.reshape(shape)
+        for shape in (6, (2, 3), (1, 2, 3), (3, 1, 2), ()):
+            if shape == ():
+                arr = orig[-1:].reshape(())
+            else:
+                arr = orig.reshape(shape)
             expected = pyfunc(arr)
             ret = cfunc(arr)
             self.assertEqual(ret.size, expected.size)
@@ -581,8 +635,8 @@ class ConstructorLikeBaseTest(object):
             self.assertEqual(ret.strides, expected.strides)
             self.check_result_value(ret, expected)
             # test writability
-            ret.fill(123)
-            expected.fill(123)
+            self.mutate_array(ret)
+            self.mutate_array(expected)
             np.testing.assert_equal(ret, expected)
 
 
@@ -641,6 +695,16 @@ class TestNdZerosLike(TestNdEmptyLike):
 
     def check_result_value(self, ret, expected):
         np.testing.assert_equal(ret, expected)
+
+    @unittest.skipIf(numpy_version <= (1, 6),
+                     "zeros_like() broken on Numpy 1.6 with structured dtype")
+    def test_like_structured(self):
+        super(TestNdZerosLike, self).test_like_structured()
+
+    @unittest.skipIf(numpy_version <= (1, 6),
+                     "zeros_like() broken on Numpy 1.6 with structured dtype")
+    def test_like_dtype_structured(self):
+        super(TestNdZerosLike, self).test_like_dtype_structured()
 
 
 @unittest.skipIf(numpy_version < (1, 7), "test requires Numpy 1.7 or later")

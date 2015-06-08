@@ -276,15 +276,16 @@ class CallableTemplate(FunctionTemplate):
         sig = typer(*args, **kws)
 
         # Unpack optional type if no matching signature
-        if sig is None and any(isinstance(x, types.Optional) for x in args):
-            def unpack_opt(x):
-                if isinstance(x, types.Optional):
-                    return x.type
-                else:
-                    return x
+        if sig is None:
+            if any(isinstance(x, types.Optional) for x in args):
+                def unpack_opt(x):
+                    if isinstance(x, types.Optional):
+                        return x.type
+                    else:
+                        return x
 
-            args = list(map(unpack_opt, args))
-            sig = typer(*args, **kws)
+                args = list(map(unpack_opt, args))
+                sig = typer(*args, **kws)
             if sig is None:
                 return
 

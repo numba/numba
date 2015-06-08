@@ -80,6 +80,19 @@ def return_generator_expr(x):
     return (i*2 for i in x)
 
 
+def gen_ndindex(shape):
+    for ind in np.ndindex(shape):
+        yield ind
+
+def gen_flat(arr):
+    for val in arr.flat:
+        yield val
+
+def gen_ndenumerate(arr):
+    for tup in np.ndenumerate(arr):
+        yield tup
+
+
 class TestGenerators(TestCase):
 
     def check_generator(self, pygen, cgen):
@@ -203,6 +216,45 @@ class TestGenerators(TestCase):
 
     def test_consume_gen3(self):
         self.check_consume_generator(gen3)
+
+    # Check generator storage of some types
+
+    def check_ndindex(self, flags=no_pyobj_flags):
+        pyfunc = gen_ndindex
+        cr = compile_isolated(pyfunc, (types.UniTuple(types.intp, 2),),
+                              flags=flags)
+        shape = (2, 3)
+        pygen = pyfunc(shape)
+        cgen = cr.entry_point(shape)
+        self.check_generator(pygen, cgen)
+
+    def test_ndindex(self):
+        self.check_ndindex()
+
+    def test_ndindex_objmode(self):
+        self.check_ndindex(flags=forceobj_flags)
+
+    def check_np_flat(self, pyfunc, flags=no_pyobj_flags):
+        cr = compile_isolated(pyfunc, (types.Array(types.int32, 2, "C"),),
+                              flags=flags)
+        arr = np.arange(6, dtype=np.int32).reshape((2, 3))
+        self.check_generator(pyfunc(arr), cr.entry_point(arr))
+        cr = compile_isolated(pyfunc, (types.Array(types.int32, 2, "A"),),
+                              flags=flags)
+        arr = arr.T
+        self.check_generator(pyfunc(arr), cr.entry_point(arr))
+
+    def test_np_flat(self):
+        self.check_np_flat(gen_flat)
+
+    def test_np_flat_objmode(self):
+        self.check_np_flat(gen_flat, flags=forceobj_flags)
+
+    def test_ndenumerate(self):
+        self.check_np_flat(gen_ndenumerate)
+
+    def test_ndenumerate_objmode(self):
+        self.check_np_flat(gen_ndenumerate, flags=forceobj_flags)
 
 
 class TestGenExprs(TestCase):

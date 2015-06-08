@@ -1082,6 +1082,23 @@ class EphemeralPointer(CPointer):
     """
 
 
+class EphemeralArray(Type):
+    """
+    Similar to EphemeralPointer, but pointing to an array of elements,
+    rather than a single one.  The array size must be known at compile-time.
+    """
+
+    def __init__(self, dtype, count):
+        self.dtype = dtype
+        self.count = count
+        name = "*%s[%d]" % (dtype, count)
+        super(EphemeralArray, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.dtype, self.count
+
+
 class Object(Type):
     mutable = True
 

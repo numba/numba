@@ -48,10 +48,37 @@ class BaseLower(object):
     def init(self):
         pass
 
+    def init_pyapi(self):
+        """
+        Init the Python API and Environment Manager for the function being
+        lowered.
+        """
+        if self.pyapi is not None:
+            return
+        self.pyapi = self.context.get_python_api(self.builder)
+
+        # Store environment argument for later use
+        self.envarg = self.call_conv.get_env_argument(self.function)
+        # Sanity check
+        with cgutils.if_unlikely(self.builder,
+                                 cgutils.is_null(self.builder, self.envarg)):
+            self.pyapi.err_set_string(
+                "PyExc_SystemError",
+                "Numba internal error: object mode function called "
+                "without an environment")
+            self.call_conv.return_exc(self.builder)
+
+        self.env_body = self.context.get_env_body(self.builder, self.envarg)
+        self.env_manager = self.pyapi.get_env_manager(self.env, self.env_body)
+
     def pre_lower(self):
         """
         Called before lowering all blocks.
         """
+        # A given Lower object can be used for several LL functions
+        # (for generators) and it's important to use a new API and
+        # EnvironmentManager.
+        self.pyapi = None
 
     def post_lower(self):
         """
@@ -154,10 +181,10 @@ class BaseLower(object):
         if self.genlower:
             self.context.create_cpython_wrapper(self.library,
                                                 self.genlower.gendesc,
-                                                self.call_helper,
+                                                self.env, self.call_helper,
                                                 release_gil=release_gil)
         self.context.create_cpython_wrapper(self.library, self.fndesc,
-                                            self.call_helper,
+                                            self.env, self.call_helper,
                                             release_gil=release_gil)
 
     def setup_function(self, fndesc):
@@ -188,8 +215,12 @@ class Lower(BaseLower):
                 if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
                     callexpr = inst.value
                     # NPM function returns new reference
-                    if isinstance(self.typeof(callexpr.func.name),
-                                  types.Dispatcher):
+                    fnty = self.typeof(callexpr.func.name)
+                    if (isinstance(fnty, types.Dispatcher)
+                        or (isinstance(fnty, types.Function)
+                            and getattr(fnty.template,
+                                        'return_new_reference',
+                                        False))):
                         self.decref(ty, val)
 
         elif isinstance(inst, ir.Branch):
@@ -258,6 +289,7 @@ class Lower(BaseLower):
                 pass
             else:
                 self.decref(self.typeof(inst.value), val)
+                self._delete_variable(inst.value)
 
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
@@ -450,9 +482,9 @@ class Lower(BaseLower):
             pointer = self.loadvar(expr.func.name)
             # If the external function pointer uses libpython
             if fnty.requires_gil:
-                pyapi = self.context.get_python_api(self.builder)
+                self.init_pyapi()
                 # Acquire the GIL
-                gil_state = pyapi.gil_ensure()
+                gil_state = self.pyapi.gil_ensure()
                 # Make PyObjects
                 newargvals = []
                 pyvals = []
@@ -460,7 +492,8 @@ class Lower(BaseLower):
                                                 argvals):
                     # Adjust argument values to pyobjects
                     if exptyp == types.ffi_forced_object:
-                        obj = pyapi.from_native_value(aval, gottyp)
+                        obj = self.pyapi.from_native_value(aval, gottyp,
+                                                           self.env_manager)
                         newargvals.append(obj)
                         pyvals.append(obj)
                     else:
@@ -471,10 +504,10 @@ class Lower(BaseLower):
                                                          newargvals, fnty.cconv)
                 # Release PyObjects
                 for obj in pyvals:
-                    pyapi.decref(obj)
+                    self.pyapi.decref(obj)
 
                 # Release the GIL
-                pyapi.gil_release(gil_state)
+                self.pyapi.gil_release(gil_state)
             # If the external function pointer does NOT use libpython
             else:
                 res = self.context.call_function_pointer(self.builder, pointer,
@@ -711,3 +744,10 @@ class Lower(BaseLower):
             return
 
         self.context.nrt_decref(self.builder, typ, val)
+
+    def _delete_variable(self, varname):
+        """
+        Zero-fill variable to avoid crashing due to extra ir.Del
+        """
+        storage = self.getvar(varname)
+        self.builder.store(Constant.null(storage.type.pointee), storage)

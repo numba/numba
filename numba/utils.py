@@ -23,12 +23,14 @@ if IS_PY3:
     INT_TYPES = (int,)
     longint = int
     get_ident = threading.get_ident
+    intern = sys.intern
 else:
     import thread
     import __builtin__ as builtins
     INT_TYPES = (int, long)
     longint = long
     get_ident = thread.get_ident
+    intern = intern
 
 try:
     from inspect import signature as pysignature
