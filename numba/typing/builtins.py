@@ -196,15 +196,16 @@ class BinOpFloorDiv(ConcreteTemplate):
 @builtin
 class BinOpPower(ConcreteTemplate):
     key = "**"
-    cases = [signature(types.intp, types.intp, types.intp)]
+    cases = [signature(op, op, op)
+             for op in (types.intp, types.int64)]
     cases += [signature(types.float64, types.float64, op)
-             for op in sorted(types.signed_domain)]
+              for op in sorted(types.signed_domain)]
     cases += [signature(types.float64, types.float64, op)
-             for op in sorted(types.unsigned_domain)]
+              for op in sorted(types.unsigned_domain)]
     cases += [signature(op, op, op)
-             for op in sorted(types.real_domain)]
+              for op in sorted(types.real_domain)]
     cases += [signature(op, op, op)
-             for op in sorted(types.complex_domain)]
+              for op in sorted(types.complex_domain)]
 
 
 class PowerBuiltin(BinOpPower):
