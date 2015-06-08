@@ -9,7 +9,7 @@ import sys
 import inspect
 from collections import namedtuple
 
-from numba import utils
+from numba import errors, utils
 from numba.config import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
@@ -255,10 +255,6 @@ class ByteCodeOperation(object):
         self.args = args
 
 
-class ByteCodeSupportError(Exception):
-    pass
-
-
 class ByteCodeBase(object):
     __slots__ = (
         'func', 'func_name', 'func_qualname', 'filename',
@@ -325,10 +321,10 @@ class ByteCode(ByteCodeBase):
         code = get_code_object(func)
         pysig = utils.pysignature(func)
         if not code:
-            raise ByteCodeSupportError("%s does not provide its bytecode" %
-                                       func)
+            raise errors.ByteCodeSupportError(
+                "%s does not provide its bytecode" % func)
         if code.co_cellvars:
-            raise ByteCodeSupportError("does not support cellvars")
+            raise NotImplementedError("cell vars are not supported")
 
         table = utils.SortedMap(ByteCodeIter(code))
         labels = set(dis.findlabels(code.co_code))

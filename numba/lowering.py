@@ -9,17 +9,7 @@ from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
-
-
-class LoweringError(Exception):
-    def __init__(self, msg, loc):
-        self.msg = msg
-        self.loc = loc
-        super(LoweringError, self).__init__("%s\n%s" % (msg, loc.strformat()))
-
-
-class ForbiddenConstruct(LoweringError):
-    pass
+from .errors import LoweringError
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))

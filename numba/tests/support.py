@@ -9,11 +9,9 @@ import sys
 
 import numpy as np
 
-from numba import config, typing, utils
+from numba import config, errors, typing, utils
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
-from numba.lowering import LoweringError
 from numba.targets import cpu
-from numba.typeinfer import TypingError
 import numba.unittest_support as unittest
 
 
@@ -86,8 +84,9 @@ class TestCase(unittest.TestCase):
         A context manager that asserts the enclosed code block fails
         compiling in nopython mode.
         """
-        with self.assertRaises(
-            (LoweringError, TypingError, TypeError, NotImplementedError)) as cm:
+        _accepted_errors = (errors.LoweringError, errors.TypingError,
+                            TypeError, NotImplementedError)
+        with self.assertRaises(_accepted_errors) as cm:
             yield cm
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]

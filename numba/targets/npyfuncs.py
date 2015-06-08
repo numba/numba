@@ -10,7 +10,7 @@ import math
 
 from llvmlite.llvmpy import core as lc
 
-from .. import cgutils, typing, types, lowering
+from .. import cgutils, typing, types, lowering, errors
 from . import builtins
 
 # some NumPy constants. Note that we could generate some of them using
@@ -71,7 +71,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         func_name = table[ty]
     except KeyError as e:
         msg = "No {0} function for real type {1}".format(user_name, str(e))
-        raise lowering.LoweringError(msg)
+        raise errors.LoweringError(msg)
 
     mod = cgutils.get_module(builder)
     if ty in types.complex_domain:
@@ -505,7 +505,7 @@ def np_real_floor_impl(context, builder, sig, args):
         fnty = lc.Type.function(lc.Type.float(), [lc.Type.float()])
         fn = mod.get_or_insert_function(fnty, name="numba.npymath.floorf")
     else:
-        raise LoweringError("No floor function for real type {0}".format(str(ty)))
+        raise errors.LoweringError("No floor function for real type {0}".format(str(ty)))
 
     return builder.call(fn, args)
 
