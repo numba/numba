@@ -240,7 +240,7 @@ class CompilationUnit(object):
             err = self.driver.nvvmGetProgramLog(self._handle, logbuf)
             self.driver.check_error(err, 'Failed to get compilation log.')
 
-            return logbuf.value.decode('utf8') # popluate log attribute
+            return logbuf.value.decode('utf8')  # popluate log attribute
 
         return ''
 
@@ -255,7 +255,7 @@ default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
 
 # List of supported compute capability in sorted order
-SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0)
+SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2)
 
 
 def _find_arch(mycc):
@@ -274,7 +274,7 @@ def _find_arch(mycc):
                 return SUPPORTED_CC[i - 1]
 
     # CC higher than supported
-    return SUPPORTED_CC[-1]   # Choose the highest
+    return SUPPORTED_CC[-1]  # Choose the highest
 
 
 def get_arch_option(major, minor):
@@ -407,47 +407,39 @@ def llvm_to_ptx(llvmir, **opts):
     # a new semantic for cmpxchg.
     replacements = [
         ('declare i32 @___numba_cas_hack(i32*, i32, i32)',
-            ir_numba_cas_hack),
+         ir_numba_cas_hack),
         ('declare double @___numba_atomic_double_add(double*, double)',
-            ir_numba_atomic_double_add),
+         ir_numba_atomic_double_add),
         ('declare double @___numba_atomic_double_max(double*, double)',
-            ir_numba_atomic_double_max)]
+         ir_numba_atomic_double_max)]
 
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
 
-    llvmir = llvm33_to_32_ir(llvmir)
+    llvmir = llvm36_to_34_ir(llvmir)
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
     ptx = cu.compile(**opts)
     return ptx
 
 
-re_fnattr_ref = re.compile('#\d+')
-re_fnattr_def = re.compile('attributes\s+(#\d+)\s*=\s*{((?:\s*\w+)+)\s*}')
+re_metadata_def = re.compile(r"\!.+=(.*)")
 
 
-def llvm33_to_32_ir(ir):
-    """rewrite function attributes in the IR
+def llvm36_to_34_ir(ir):
     """
+    rewrite metadata
+    """
+    buf = []
+    for line in ir.splitlines():
+        if (line.startswith('!') and
+                line[1].isdigit() and
+                    'metadata' not in line):
+            line = line.replace('!{', 'metadata !{')
+            line = line.replace('!"', 'metadata !"')
+        buf.append(line)
 
-    invalid_attrs = frozenset(['noduplicate'])
-
-    attrs = {}
-    for m in re_fnattr_def.finditer(ir):
-        ct, text = m.groups()
-        attrs[ct] = ' '.join(set(text.split()) - invalid_attrs)
-
-    def scanline(line):
-        if line.startswith('define') or line.startswith('declare'):
-            for k, v in attrs.items():
-                if k in line:
-                    return line.replace(k, v)
-        elif re_fnattr_def.match(line):
-            return '; %s' % line
-        return line
-
-    return '\n'.join(scanline(ln) for ln in ir.splitlines())
+    return '\n'.join(buf)
 
 
 def set_cuda_kernel(lfunc):
@@ -464,4 +456,3 @@ def set_cuda_kernel(lfunc):
 
 def fix_data_layout(module):
     module.data_layout = default_data_layout
-
