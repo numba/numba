@@ -1252,6 +1252,10 @@ def _make_flattening_iter_cls(flatiterty, kind):
                     ptr = cgutils.pointer_add(builder, ptr, self.stride)
                     builder.store(ptr, self.pointer)
 
+            def getitem(self, context, builder, arrty, arr, index):
+                ptr = builder.gep(arr.data, [index])
+                return builder.load(ptr)
+
         return CContiguousFlatIter
 
     else:
@@ -1361,6 +1365,22 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
                 builder.position_at_end(bbend)
 
+            def getitem(self, context, builder, arrty, arr, index):
+                ndim = arrty.ndim
+                shapes = cgutils.unpack_tuple(builder, arr.shape, count=ndim)
+                strides = cgutils.unpack_tuple(builder, arr.strides, count=ndim)
+
+                # First convert the flattened index into a regular n-dim index
+                indices = []
+                for dim in reversed(range(ndim)):
+                    indices.append(builder.urem(index, shapes[dim]))
+                    index = builder.udiv(index, shapes[dim])
+                indices.reverse()
+
+                ptr = cgutils.get_item_pointer2(builder, arr.data, shapes,
+                                                strides, arrty.layout, indices)
+                return builder.load(ptr)
+
         return FlatIter
 
 
@@ -1396,6 +1416,22 @@ def iternext_numpy_flatiter(context, builder, sig, args, result):
     arr = arrcls(context, builder, value=builder.load(flatiter.array))
 
     flatiter.iternext_specific(context, builder, arrty, arr, result)
+
+
+@builtin
+@implement('getitem', types.Kind(types.NumpyFlatType), types.Kind(types.Integer))
+def iternext_numpy_getitem(context, builder, sig, args):
+    flatiterty = sig.args[0]
+    flatiter, index = args
+
+    flatitercls = make_array_flat_cls(flatiterty)
+    flatiter = flatitercls(context, builder, value=flatiter)
+
+    arrty = flatiterty.array_type
+    arrcls = context.make_array(arrty)
+    arr = arrcls(context, builder, value=builder.load(flatiter.array))
+
+    return flatiter.getitem(context, builder, arrty, arr, index)
 
 
 @builtin
