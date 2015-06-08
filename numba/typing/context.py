@@ -119,8 +119,9 @@ class BaseContext(object):
 
         Unknown types will be mapped to pyobject.
         """
-        # Force all integers (except bools) to be 64-bit
-        if isinstance(val, utils.INT_TYPES) and not isinstance(val, bool):
+        # Force regular Python ints (not bools or Numpy integers) to be 64-bit
+        if (isinstance(val, utils.INT_TYPES)
+            and not isinstance(val, (bool, numpy.number))):
             return types.int64
 
         tp = self.resolve_data_type(val)
