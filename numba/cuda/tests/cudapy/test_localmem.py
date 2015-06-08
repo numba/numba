@@ -5,7 +5,7 @@ from numba.cuda.testing import unittest
 
 
 def culocal(A, B):
-    C = cuda.local.array(100, dtype=int32)
+    C = cuda.local.array(1000, dtype=int32)
     for i in range(C.shape[0]):
         C[i] = A[i]
     for i in range(C.shape[0]):
