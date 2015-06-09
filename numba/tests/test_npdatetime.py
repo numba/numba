@@ -13,8 +13,8 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.typeinfer import TypingError
 from numba import config, jit, npdatetime, types, vectorize
+from numba.errors import TypingError
 from .support import TestCase, skip_on_numpy_16
 
 

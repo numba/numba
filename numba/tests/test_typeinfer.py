@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import types, typeinfer, typing, jit
+from numba import types, typeinfer, typing, jit, errors
 
 
 class TestArgRetCasting(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestArgRetCasting(unittest.TestCase):
         return_type = types.float32
         try:
             cres = compile_isolated(foo, args, return_type)
-        except typeinfer.TypingError as e:
+        except errors.TypingError as e:
             pass
         else:
             self.fail("Should complain about array casting to float32")

@@ -10,7 +10,7 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              from_dtype)
 from ..numpy_support import version as numpy_version
 
-from ..typeinfer import TypingError
+from ..errors import TypingError
 
 registry = Registry()
 builtin = registry.register

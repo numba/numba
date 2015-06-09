@@ -19,16 +19,7 @@ import itertools
 
 from numba import ir, types, utils, config, six
 from numba.utils import RANGE_ITER_OBJECTS
-
-
-class TypingError(Exception):
-    def __init__(self, msg, loc=None):
-        self.msg = msg
-        self.loc = loc
-        if loc:
-            super(TypingError, self).__init__("%s\n%s" % (msg, loc.strformat()))
-        else:
-            super(TypingError, self).__init__("%s" % (msg,))
+from .errors import TypingError
 
 
 class TypeVar(object):

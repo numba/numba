@@ -156,6 +156,7 @@ setup(name='numba',
         "numba.typeconv": ["*.cpp", "*.hpp"],
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
         "numba.annotations": ["*.html"],
+        "numba.runtime": ["*.c", "*.h"]
       },
       scripts=["numba/pycc/pycc", "bin/numba"],
       author="Continuum Analytics, Inc.",

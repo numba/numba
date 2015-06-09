@@ -413,6 +413,9 @@ def _implement_integer_operators():
     builtin(implement('~', ty)(int_invert_impl))
     builtin(implement(types.sign_type, ty)(int_sign_impl))
 
+    builtin(implement('**', ty, ty)(int_spower_impl))
+    builtin(implement(pow, ty, ty)(int_spower_impl))
+
     for ty in types.unsigned_domain:
         builtin(implement('/?', ty, ty)(int_udiv_impl))
         builtin(implement('//', ty, ty)(int_ufloordiv_impl))
@@ -442,9 +445,6 @@ def _implement_integer_operators():
         builtin(implement(pow, types.float64, ty)(int_spower_impl))
         # arithmetic shift for signed
         builtin(implement('>>', ty, types.uint32)(int_ashr_impl))
-
-    builtin(implement('**', types.intp, types.intp)(int_spower_impl))
-    builtin(implement(pow, types.intp, types.intp)(int_spower_impl))
 
 _implement_integer_operators()
 

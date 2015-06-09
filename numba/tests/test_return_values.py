@@ -4,12 +4,13 @@ Test return values
 
 from __future__ import print_function
 
+import math
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba.utils import PYVERSION
 from numba import types
-from numba.typeinfer import TypingError
-import math
+from numba.errors import TypingError
 
 
 enable_pyobj_flags = Flags()

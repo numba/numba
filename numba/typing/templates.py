@@ -4,10 +4,11 @@ Define typing templates
 from __future__ import print_function, division, absolute_import
 
 import functools
-from .. import types, utils
-from ..typeinfer import TypingError
 from functools import reduce
 import operator
+
+from .. import types, utils
+from ..errors import TypingError, UntypedAttributeError
 
 
 class Signature(object):
@@ -317,13 +318,6 @@ class ConcreteTemplate(FunctionTemplate):
         cases = getattr(self, 'cases')
         assert cases
         return self._select(cases, args, kws)
-
-
-class UntypedAttributeError(TypingError):
-    def __init__(self, value, attr):
-        msg = 'Unknown attribute "{attr}" of type {type}'.format(type=value,
-                                                              attr=attr)
-        super(UntypedAttributeError, self).__init__(msg)
 
 
 class AttributeTemplate(object):

@@ -515,25 +515,27 @@ class ExternalFunction(Function):
 class BoundFunction(Function):
     def __init__(self, template, this):
         self.this = this
+        # Create a derived template with an attribute *this*
         newcls = type(template.__name__ + '.' + str(this), (template,),
                       dict(this=this))
         super(BoundFunction, self).__init__(newcls)
 
     @property
     def key(self):
-        return (self.template.__name__, self.this)
+        return self.template.key, self.this
 
 
 class Method(Function):
     def __init__(self, template, this):
         self.this = this
+        # Create a derived template with an attribute *this*
         newcls = type(template.__name__ + '.' + str(this), (template,),
                       dict(this=this))
         super(Method, self).__init__(newcls)
 
     @property
     def key(self):
-        return (self.template.__name__, self.this)
+        return self.template.key, self.this
 
 
 class Pair(Type):
