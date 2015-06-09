@@ -107,9 +107,11 @@ class Type(object):
     # usable as a function signature).
 
     def __call__(self, *args):
+        from .typing import signature
         if len(args) == 1 and not isinstance(args[0], Type):
             return self.cast_python_value(args[0])
-        return Prototype(args=args, return_type=self)
+        return signature(self, # return_type
+                         *args)
 
     def __getitem__(self, args):
         from .types import Array
@@ -139,17 +141,6 @@ class Type(object):
 
     cast_python_value = NotImplemented
     __iter__ = NotImplemented  # ???
-
-
-class Prototype(object):
-    # XXX not a type, and not really useful: return a Signature instead?
-    def __init__(self, args, return_type):
-        self.args = args
-        self.return_type = return_type
-        self.name = "%s(%s)" % (return_type, ', '.join(str(a) for a in args))
-
-    def __repr__(self):
-        return self.name
 
 
 class Number(Type):
