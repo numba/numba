@@ -8,7 +8,7 @@ import gc
 import weakref
 
 from numba.utils import IS_PY3
-from numba import types, typing
+from numba import abstracttypes, types, typing
 from numba import unittest_support as unittest
 
 
@@ -158,16 +158,17 @@ class TestTypeNames(unittest.TestCase):
     def test_cache_trimming(self):
         # Test that the cache doesn't grow in size when types are
         # created and disposed of.
+        cache = abstracttypes._typecache
         gc.collect()
         # Keep strong references to existing types, to avoid spurious failures
-        existing_types = [wr() for wr in types._typecache]
-        cache_len = len(types._typecache)
+        existing_types = [wr() for wr in cache]
+        cache_len = len(cache)
         a = types.Dummy('xyzzyx')
         b = types.Dummy('foox')
-        self.assertEqual(len(types._typecache), cache_len + 2)
+        self.assertEqual(len(cache), cache_len + 2)
         del a, b
         gc.collect()
-        self.assertEqual(len(types._typecache), cache_len)
+        self.assertEqual(len(cache), cache_len)
 
 
 if __name__ == '__main__':

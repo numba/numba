@@ -4,166 +4,20 @@ the targets to choose their representation.
 """
 from __future__ import print_function, division, absolute_import
 
-import itertools
 import struct
 import weakref
 
 import numpy
 
-from .six import add_metaclass
+# All abstract types are exposed through this module
+from .abstracttypes import *
 from . import npdatetime, utils
-
-
-# Types are added to a global registry (_typecache) in order to assign
-# them unique integer codes for fast matching in _dispatcher.c.
-# However, we also want types to be disposable, therefore we ensure
-# each type is interned as a weak reference, so that it lives only as
-# long as necessary to keep a stable type code.
-_typecodes = itertools.count()
-
-def _autoincr():
-    n = next(_typecodes)
-    # 4 billion types should be enough, right?
-    assert n < 2 ** 32, "Limited to 4 billion types"
-    return n
-
-_typecache = {}
-
-def _on_type_disposal(wr, _pop=_typecache.pop):
-    _pop(wr, None)
-
-
-class _TypeMetaclass(type):
-    """
-    A metaclass that will intern instances after they are created.
-    This is done by first creating a new instance (including calling
-    __init__, which sets up the required attributes for equality
-    and hashing), then looking it up in the _typecache registry.
-    """
-
-    def __call__(cls, *args, **kwargs):
-        """
-        Instantiate *cls* (a Type subclass, presumably) and intern it.
-        If an interned instance already exists, it is returned, otherwise
-        the new instance is returned.
-        """
-        inst = type.__call__(cls, *args, **kwargs)
-        # Try to intern the created instance
-        wr = weakref.ref(inst, _on_type_disposal)
-        orig = _typecache.get(wr)
-        orig = orig and orig()
-        if orig is not None:
-            return orig
-        else:
-            inst._code = _autoincr()
-            _typecache[wr] = wr
-            inst.post_init()
-            return inst
-
-
-@add_metaclass(_TypeMetaclass)
-class Type(object):
-    """
-    The default behavior is to provide equality through `name` attribute.
-    Two types are equal if there `name` are equal.
-    Subclass can refine this behavior.
-    """
-
-    mutable = False
-
-    def __init__(self, name, param=False):
-        self.name = name
-        self.is_parametric = param
-
-    def post_init(self):
-        """
-        A method called when the instance is fully initialized and has
-        a registered typecode in its _code attribute.  Does nothing by
-        default, but can be overriden.
-        """
-
-    @property
-    def key(self):
-        """
-        A property used for __eq__, __ne__ and __hash__.  Can be overriden
-        in subclasses.
-        """
-        return self.name
-
-    def __repr__(self):
-        return self.name
-
-    def __hash__(self):
-        return hash(self.key)
-
-    def __eq__(self, other):
-        return self.__class__ is other.__class__ and self.key == other.key
-
-    def __ne__(self, other):
-        return not (self == other)
-
-    def __call__(self, *args):
-        if len(args) == 1 and not isinstance(args[0], Type):
-            return self.cast_python_value(args[0])
-        return Prototype(args=args, return_type=self)
-
-    def __getitem__(self, args):
-        assert not isinstance(self, Array)
-        ndim, layout = self._determine_array_spec(args)
-        return Array(dtype=self, ndim=ndim, layout=layout)
-
-    def _determine_array_spec(self, args):
-        if isinstance(args, (tuple, list)):
-            ndim = len(args)
-            if args[0].step == 1:
-                layout = 'F'
-            elif args[-1].step == 1:
-                layout = 'C'
-            else:
-                layout = 'A'
-        elif isinstance(args, slice):
-            ndim = 1
-            if args.step == 1:
-                layout = 'C'
-            else:
-                layout = 'A'
-        else:
-            ndim = 1
-            layout = 'A'
-
-        return ndim, layout
-
-
-    __iter__ = NotImplemented
-    cast_python_value = NotImplemented
-
-    def coerce(self, typingctx, other):
-        """Override this method to implement specialized coercion logic
-        for extending unify_pairs().  Only use this if the coercion logic cannot
-        be expressed as simple casting rules.
-        """
-        return NotImplemented
-
-
-class OpaqueType(Type):
-    """
-    To deal with externally defined literal types
-    """
-
-    def __init__(self, name):
-        super(OpaqueType, self).__init__(name)
 
 
 class Boolean(Type):
 
     def cast_python_value(self, value):
         return bool(value)
-
-
-class Number(Type):
-    """
-    Base class for number types.
-    """
 
 
 @utils.total_ordering
@@ -254,14 +108,6 @@ class NPDatetime(_NPDatetimeBase):
     type_name = 'datetime64'
 
 
-class Prototype(Type):
-    def __init__(self, args, return_type):
-        self.args = args
-        self.return_type = return_type
-        name = "%s(%s)" % (return_type, ', '.join(str(a) for a in args))
-        super(Prototype, self).__init__(name=name)
-
-
 class Dummy(Type):
     """
     For type that does not really have a representation and is compatible
@@ -332,19 +178,6 @@ class Macro(Type):
         return self.template
 
 
-class Callable(Type):
-    """
-    Base class for callables.
-    """
-
-    def get_call_type(self, context, args, kws):
-        """
-        Using the typing *context*, resolve the callable's signature for
-        the given arguments.  A signature object is returned, or None.
-        """
-        raise NotImplementedError
-
-
 class Function(Callable, Opaque):
     def __init__(self, template):
         self.template = template
@@ -359,18 +192,7 @@ class Function(Callable, Opaque):
         return self.template(context).apply(args, kws)
 
 
-class DTypeSpec(Opaque):
-    """
-    Base class for types usable as "dtype" arguments to various Numpy APIs
-    (e.g. np.empty()).
-    """
-
-    @property
-    def dtype(self):
-        raise NotImplementedError
-
-
-class NumberClass(Callable, DTypeSpec):
+class NumberClass(Callable, DTypeSpec, Opaque):
     """
     Type class for number classes (e.g. "np.float64").
     """
@@ -389,7 +211,7 @@ class NumberClass(Callable, DTypeSpec):
         return self.instance_type
 
 
-class DType(DTypeSpec):
+class DType(DTypeSpec, Opaque):
     """
     Type class for Numpy dtypes.
     """
@@ -554,29 +376,11 @@ class Pair(Type):
         return self.first_type, self.second_type
 
 
-class IterableType(Type):
-    """
-    Base class for iterable types.
-    Derived classes should implement the *iterator_type* attribute.
-    """
-
-
 class SimpleIterableType(IterableType):
 
     def __init__(self, name, iterator_type):
         self.iterator_type = iterator_type
         super(SimpleIterableType, self).__init__(name, param=True)
-
-
-class IteratorType(IterableType):
-    """
-    Base class for all iterator types.
-    Derived classes should implement the *yield_type* attribute.
-    """
-
-    def __init__(self, name, **kwargs):
-        self.iterator_type = self
-        super(IteratorType, self).__init__(name, **kwargs)
 
 
 class SimpleIteratorType(IteratorType):
@@ -1200,8 +1004,6 @@ class Slice3Type(Type):
     pass
 
 
-
-
 # Utils
 
 def is_int_tuple(x):
@@ -1214,7 +1016,6 @@ def is_int_tuple(x):
 
 
 # Short names
-
 
 pyobject = Opaque('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
