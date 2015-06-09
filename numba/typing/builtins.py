@@ -567,6 +567,9 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_ctypes(self, ary):
         return types.ArrayCTypes(ary)
 
+    def resolve_flags(self, ary):
+        return types.ArrayFlags(ary)
+
     def resolve_T(self, ary):
         if ary.ndim <= 1:
             retty = ary
@@ -629,6 +632,19 @@ class ArrayCTypesAttribute(AttributeTemplate):
     def resolve_data(self, ctinfo):
         return types.uintp
 
+
+@builtin_attr
+class ArrayFlagsAttribute(AttributeTemplate):
+    key = types.ArrayFlags
+
+    def resolve_contiguous(self, ctflags):
+        return types.boolean
+
+    def resolve_c_contiguous(self, ctflags):
+        return types.boolean
+
+    def resolve_f_contiguous(self, ctflags):
+        return types.boolean
 
 
 @builtin_attr

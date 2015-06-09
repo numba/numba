@@ -904,12 +904,26 @@ class ArrayCTypes(Type):
         # This depends on the ndim for the shape and strides attributes,
         # even though they are not implemented, yet.
         self.ndim = arytype.ndim
-        name = "ArrayCType(ndim={0})".format(self.ndim)
+        name = "ArrayCTypes(ndim={0})".format(self.ndim)
         super(ArrayCTypes, self).__init__(name, param=True)
 
     @property
     def key(self):
         return self.ndim
+
+
+class ArrayFlags(Type):
+    """
+    This is the type for `numpy.ndarray.flags`.
+    """
+    def __init__(self, arytype):
+        self.array_type = arytype
+        name = "ArrayFlags({0})".format(self.array_type)
+        super(ArrayFlags, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.array_type
 
 
 class NestedArray(Array):

@@ -1034,6 +1034,12 @@ def array_ctypes(context, builder, typ, value):
 
 
 @builtin_attr
+@impl_attribute(types.Kind(types.Array), "flags", types.Kind(types.ArrayFlags))
+def array_flags(context, builder, typ, value):
+    return context.get_dummy_value()
+
+
+@builtin_attr
 @impl_attribute(types.Kind(types.ArrayCTypes), "data", types.uintp)
 def array_ctypes_data(context, builder, typ, value):
     ctinfo_type = cgutils.create_struct_proxy(typ)
@@ -1042,13 +1048,33 @@ def array_ctypes_data(context, builder, typ, value):
 
 
 @builtin_attr
+@impl_attribute(types.Kind(types.ArrayFlags), "contiguous", types.boolean)
+@impl_attribute(types.Kind(types.ArrayFlags), "c_contiguous", types.boolean)
+def array_ctypes_data(context, builder, typ, value):
+    val = typ.array_type.layout == 'C'
+    return context.get_constant(types.boolean, val)
+
+@builtin_attr
+@impl_attribute(types.Kind(types.ArrayFlags), "f_contiguous", types.boolean)
+def array_ctypes_data(context, builder, typ, value):
+    layout = typ.array_type.layout
+    val = layout == 'F' if typ.array_type.ndim > 1 else layout in 'CF'
+    return context.get_constant(types.boolean, val)
+
+
+@builtin_attr
 @impl_attribute_generic(types.Kind(types.Array))
 def array_record_getattr(context, builder, typ, value, attr):
+    """
+    Generic getattr() implementation for record arrays: fetch the given
+    record member.
+    """
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
 
     rectype = typ.dtype
-    assert isinstance(rectype, types.Record)
+    if not isinstance(rectype, types.Record):
+        raise AttributeError("attribute %r of %s not defined" % (attr, typ))
     dtype = rectype.typeof(attr)
     offset = rectype.offset(attr)
 

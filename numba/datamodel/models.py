@@ -195,6 +195,7 @@ class PrimitiveModel(DataModel):
 @register_default(types.Macro)
 @register_default(types.NumberClass)
 @register_default(types.DType)
+@register_default(types.ArrayFlags)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
