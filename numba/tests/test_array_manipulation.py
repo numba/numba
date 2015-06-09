@@ -51,6 +51,7 @@ def bad_float_index(arr):
     # fails typing
     return arr[1, 2.0]
 
+
 class TestArrayManipulation(TestCase):
 
     def test_reshape_array(self, flags=enable_pyobj_flags):
