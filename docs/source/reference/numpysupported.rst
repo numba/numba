@@ -91,6 +91,12 @@ The following attributes of Numpy arrays are supported:
 * :attr:`~numpy.ndarray.strides`
 * :attr:`~numpy.ndarray.T`
 
+``.flat`` objects
+'''''''''''''''''
+
+The object returned by the :attr:`~numpy.ndarray.flat` attribute supports
+indexing, but be careful: indexing is very slow on non-C-contiguous arrays.
+
 Calculation
 -----------
 
