@@ -240,7 +240,7 @@ class CompilationUnit(object):
             err = self.driver.nvvmGetProgramLog(self._handle, logbuf)
             self.driver.check_error(err, 'Failed to get compilation log.')
 
-            return logbuf.value.decode('utf8')  # popluate log attribute
+            return logbuf.value.decode('utf8')  # populate log attribute
 
         return ''
 
