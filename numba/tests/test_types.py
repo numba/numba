@@ -50,6 +50,15 @@ class TestTypeNames(unittest.TestCase):
         b = types.ExternalFunctionPointer(sig=sig_a, get_pointer=object())
         self.assertNotEqual(a, b)
 
+        # Different template classes bearing the same name
+        class DummyTemplate(object):
+            key = "foo"
+        a = types.BoundFunction(DummyTemplate, types.int32)
+        class DummyTemplate(object):
+            key = "bar"
+        b = types.BoundFunction(DummyTemplate, types.int32)
+        self.assertNotEqual(a, b)
+
     def test_ordering(self):
         def check_order(values):
             for i in range(len(values)):

@@ -4,7 +4,7 @@ import collections
 import dis
 import sys
 
-from numba import ir, controlflow, dataflow, utils
+from numba import ir, controlflow, dataflow, utils, errors
 from numba.utils import builtins
 
 
@@ -467,7 +467,7 @@ class Interpreter(object):
         else:
             try:
                 return fn(inst, **kws)
-            except ir.NotDefinedError as e:
+            except errors.NotDefinedError as e:
                 if e.loc is None:
                     e.loc = self.loc
                 raise e

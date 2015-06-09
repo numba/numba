@@ -1,8 +1,9 @@
 from __future__ import print_function
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types
-from numba.typeinfer import TypingError
+from numba.errors import TypingError
 
 
 def what():
@@ -18,6 +19,7 @@ def bar(x):
 
 def issue_868(a):
     return a.shape * 2
+
 
 class TestTypingError(unittest.TestCase):
     def test_unknown_function(self):
@@ -48,6 +50,7 @@ class TestTypingError(unittest.TestCase):
             self.assertTrue(e.msg.startswith('Undeclared'))
         else:
             self.fail('Should raise error')
+
 
 if __name__ == '__main__':
     unittest.main()

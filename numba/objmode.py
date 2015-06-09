@@ -8,7 +8,8 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from . import cgutils, generators, ir, types, utils
-from .lowering import BaseLower, ForbiddenConstruct
+from .errors import ForbiddenConstruct
+from .lowering import BaseLower
 from .utils import builtins, intern
 
 
