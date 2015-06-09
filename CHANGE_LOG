@@ -1,3 +1,10 @@
+Version 0.19.2
+--------------
+
+This release fixes the source distribution on pypi.  The only change is in the
+setup.py file.  We do not plan to provide a conda package as this release is
+essentially the same as 0.19.1 for conda user.
+
 
 Version 0.19.1
 --------------
