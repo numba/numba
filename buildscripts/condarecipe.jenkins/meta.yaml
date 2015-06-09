@@ -19,14 +19,14 @@ requirements:
     - argparse        [py26]
     - numpy
     # On channel https://binstar.org/numba/
-    - llvmlite 0.5.1
+    - llvmlite 0.6*
     - funcsigs       [py26 or py27]
   run:
     - python
     - argparse        [py26]
     - numpy
     # On channel https://binstar.org/numba/
-    - llvmlite 0.5.1
+    - llvmlite 0.6*
     - funcsigs       [py26 or py27]
 test:
   requires:
