@@ -106,7 +106,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
                 context.call_conv.return_user_exc(builder, ValueError,
                                                   ("range() arg 3 must not be zero",))
 
-            with cgutils.ifelse(builder, sign_differs) as (then, orelse):
+            with builder.if_else(sign_differs) as (then, orelse):
                 with then:
                     builder.store(zero, self.count)
 
@@ -127,7 +127,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
             is_valid = builder.icmp(lc.ICMP_SGT, count, zero)
             result.set_valid(is_valid)
 
-            with cgutils.ifthen(builder, is_valid):
+            with builder.if_then(is_valid):
                 value = builder.load(self.iter)
                 result.yield_(value)
                 one = context.get_constant(int_type, 1)

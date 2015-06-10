@@ -139,8 +139,7 @@ def timedelta_neg_impl(context, builder, sig, args):
 def timedelta_abs_impl(context, builder, sig, args):
     val, = args
     ret = alloc_timedelta_result(builder)
-    with cgutils.ifelse(builder,
-                        cgutils.is_scalar_neg(builder, val)) as (then, otherwise):
+    with builder.if_else(cgutils.is_scalar_neg(builder, val)) as (then, otherwise):
         with then:
             builder.store(builder.neg(val), ret)
         with otherwise:
@@ -153,12 +152,12 @@ def timedelta_sign_impl(context, builder, sig, args):
     val, = args
     ret = alloc_timedelta_result(builder)
     zero = Constant.int(TIMEDELTA64, 0)
-    with cgutils.ifelse(builder, builder.icmp(lc.ICMP_SGT, val, zero)
+    with builder.if_else(builder.icmp(lc.ICMP_SGT, val, zero)
                         ) as (gt_zero, le_zero):
         with gt_zero:
             builder.store(Constant.int(TIMEDELTA64, 1), ret)
         with le_zero:
-            with cgutils.ifelse(builder, builder.icmp(lc.ICMP_EQ, val, zero)
+            with builder.if_else(builder.icmp(lc.ICMP_EQ, val, zero)
                                 ) as (eq_zero, lt_zero):
                 with eq_zero:
                     builder.store(Constant.int(TIMEDELTA64, 0), ret)
@@ -275,7 +274,7 @@ def _create_timedelta_comparison_impl(ll_op, default_value):
         [va, vb] = args
         [ta, tb] = sig.args
         ret = alloc_boolean_result(builder)
-        with cgutils.ifelse(builder, are_not_nat(builder, [va, vb])) as (then, otherwise):
+        with builder.if_else(are_not_nat(builder, [va, vb])) as (then, otherwise):
             with then:
                 try:
                     norm_a, norm_b = normalize_timedeltas(context, builder, va, vb, ta, tb)
@@ -297,7 +296,7 @@ def _create_timedelta_ordering_impl(ll_op):
         [va, vb] = args
         [ta, tb] = sig.args
         ret = alloc_boolean_result(builder)
-        with cgutils.ifelse(builder, are_not_nat(builder, [va, vb])) as (then, otherwise):
+        with builder.if_else(are_not_nat(builder, [va, vb])) as (then, otherwise):
             with then:
                 norm_a, norm_b = normalize_timedeltas(context, builder, va, vb, ta, tb)
                 builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
@@ -355,7 +354,7 @@ def year_to_days(builder, year_val):
     # First approximation
     days = scale_by_constant(builder, year_val, 365)
     # Adjust for leap years
-    with cgutils.ifelse(builder, cgutils.is_neg_int(builder, year_val)) \
+    with builder.if_else(cgutils.is_neg_int(builder, year_val)) \
         as (if_neg, if_pos):
         with if_pos:
             # At or after 1970:
@@ -422,8 +421,7 @@ def reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit):
         year, month = cgutils.divmod_by_constant(builder, dt_val, 12)
 
         # Then deduce the number of days
-        with cgutils.ifelse(builder,
-                            is_leap_year(builder, year)) as (then, otherwise):
+        with builder.if_else(is_leap_year(builder, year)) as (then, otherwise):
             with then:
                 addend = builder.load(cgutils.gep(builder, leap_array,
                                                   0, month))
@@ -538,8 +536,7 @@ def _create_datetime_comparison_impl(ll_op):
         unit_b = tb.unit
         ret_unit = npdatetime.get_best_unit(unit_a, unit_b)
         ret = alloc_boolean_result(builder)
-        with cgutils.ifelse(builder,
-                            are_not_nat(builder, [va, vb])) as (then, otherwise):
+        with builder.if_else(are_not_nat(builder, [va, vb])) as (then, otherwise):
             with then:
                 norm_a = convert_datetime_for_arith(builder, va, unit_a, ret_unit)
                 norm_b = convert_datetime_for_arith(builder, vb, unit_b, ret_unit)

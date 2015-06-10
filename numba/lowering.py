@@ -466,8 +466,8 @@ class Lower(BaseLower):
             # Handle a named external function
             fndesc = funcdesc.ExternalFunctionDescriptor(
                 fnty.symbol, fnty.sig.return_type, fnty.sig.args)
-            func = self.context.declare_external_function(
-                    cgutils.get_module(self.builder), fndesc)
+            func = self.context.declare_external_function(self.builder.module,
+                                                          fndesc)
             res = self.context.call_external_function(
                 self.builder, func, fndesc.argtypes, argvals)
 
