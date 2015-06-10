@@ -4,7 +4,7 @@ from numba.cuda.compiler import compile_kernel
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import skip_on_cudasim
 from numba import unittest_support as unittest
-from numba import types
+from numba import types, utils
 
 def has_nvvm_lib():
     try:
@@ -16,6 +16,7 @@ def has_nvvm_lib():
 
 
 @skip_on_cudasim('libNVVM not supported in simulator')
+@unittest.skipIf(utils.MACHINE_BITS == 32, "CUDA not support for 32-bit")
 @unittest.skipIf(not has_nvvm_lib(), "No libNVVM")
 class TestNvvmWithoutCuda(unittest.TestCase):
     def test_nvvm_llvm_to_ptx(self):
