@@ -32,7 +32,7 @@ test:
   requires:
     - argparse       [py26]
     - unittest2      [py26]
-    - cudatoolkit
+    - cudatoolkit    [win64 or linux64 or osx]
     - jinja2
   files:
     - mandel.py
