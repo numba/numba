@@ -143,6 +143,13 @@ class Type(object):
         raise NotImplementedError
 
 
+class Dummy(Type):
+    """
+    Base class for types that do not really have a representation and are
+    compatible with a void*.
+    """
+
+
 class Number(Type):
     """
     Base class for number types.

@@ -108,27 +108,17 @@ class NPDatetime(_NPDatetimeBase):
     type_name = 'datetime64'
 
 
-class Dummy(Type):
-    """
-    For type that does not really have a representation and is compatible
-    with a void*.
-    """
-    pass
-
-
 class Phantom(Dummy):
     """
     A type that cannot be materialized.  A Phantom cannot be used as
     argument or return type.
     """
-    pass
 
 
 class Opaque(Dummy):
     """
     A type that is a opaque pointer.
     """
-    pass
 
 
 class Kind(Type):
@@ -1021,7 +1011,7 @@ pyobject = Opaque('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
 none = NoneType('none')
 Any = Phantom('any')
-string = Dummy('str')
+string = Opaque('str')
 
 # No operation is defined on voidptr
 # Can only pass it around
