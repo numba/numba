@@ -67,6 +67,12 @@ def abs_usecase(x):
     return abs(x)
 
 
+def make_add_constant(const):
+    def add_constant(x):
+        return x + const
+    return add_constant
+
+
 @skip_on_numpy_16
 class TestModuleHelpers(TestCase):
     """
@@ -208,6 +214,27 @@ class TestMiscCompiling(TestCase):
         # Same with the signature in string form
         sig = "NPTimedelta('s')(NPTimedelta('s'), int64)"
         _check_explicit_signature(sig)
+
+    def test_constant_datetime(self):
+        def check(const):
+            pyfunc = make_add_constant(const)
+            f = jit(nopython=True)(pyfunc)
+            x = TD(4, 'D')
+            expected = pyfunc(x)
+            self.assertPreciseEqual(f(x), expected)
+        check(DT('2001-01-01'))
+        check(DT('NaT', 'D'))
+
+    def test_constant_timedelta(self):
+        def check(const):
+            pyfunc = make_add_constant(const)
+            f = jit(nopython=True)(pyfunc)
+            x = TD(4, 'D')
+            expected = pyfunc(x)
+            self.assertPreciseEqual(f(x), expected)
+        check(TD(4, 'D'))
+        check(TD(-4, 'D'))
+        check(TD('NaT', 'D'))
 
 
 @skip_on_numpy_16
