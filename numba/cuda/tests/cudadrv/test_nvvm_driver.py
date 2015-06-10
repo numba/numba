@@ -68,17 +68,19 @@ class TestNvvmDriver(unittest.TestCase):
         for arch in SUPPORTED_CC:
             self._test_nvvm_support(arch=arch)
 
+    @unittest.skipIf(True, "No new CC unknown to NVVM yet")
     def test_nvvm_future_support(self):
         """Test unsupported CC to help track the feature support
         """
+        # List known CC but unsupported by NVVM
         future_archs = [
-            (5, 2),
+            # (5, 2),  # for example
         ]
         for arch in future_archs:
             pat = r"-arch=compute_{0}{1}".format(*arch)
             with self.assertRaises(NvvmError) as raises:
                 self._test_nvvm_support(arch=arch)
-                self.assertIn(pat, raises.msg)
+            self.assertIn(pat, raises.msg)
 
 
 @skip_on_cudasim('NVVM Driver unsupported in the simulator')
@@ -112,6 +114,7 @@ class TestLibDevice(unittest.TestCase):
 
 
 gpu64 = '''
+target triple="nvptx64-"
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
 
 define i32 @ave(i32 %a, i32 %b) {
@@ -146,6 +149,7 @@ declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 '''
 
 gpu32 = '''
+target triple="nvptx-"
 target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
 
 define i32 @ave(i32 %a, i32 %b) {

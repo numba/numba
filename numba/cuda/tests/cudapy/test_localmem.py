@@ -5,7 +5,7 @@ from numba.cuda.testing import unittest
 
 
 def culocal(A, B):
-    C = cuda.local.array(100, dtype=int32)
+    C = cuda.local.array(1000, dtype=int32)
     for i in range(C.shape[0]):
         C[i] = A[i]
     for i in range(C.shape[0]):
@@ -32,7 +32,7 @@ class TestCudaLocalMem(unittest.TestCase):
     def test_local_array(self):
         jculocal = cuda.jit('void(int32[:], int32[:])')(culocal)
         self.assertTrue('.local' in jculocal.ptx)
-        A = numpy.arange(100, dtype='int32')
+        A = numpy.arange(1000, dtype='int32')
         B = numpy.zeros_like(A)
         jculocal(A, B)
         self.assertTrue(numpy.all(A == B))
