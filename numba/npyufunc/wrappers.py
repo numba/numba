@@ -80,7 +80,7 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
 
     def store(retval):
         is_error = cgutils.is_null(builder, retval)
-        with cgutils.ifelse(builder, is_error) as (if_error, if_ok):
+        with builder.if_else(is_error) as (if_error, if_ok):
             with if_error:
                 msg = context.insert_const_string(pyapi.module,
                                                   "object mode ufunc")
@@ -187,7 +187,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
 
     else:
 
-        with cgutils.ifelse(builder, unit_strided) as (is_unit_strided,
+        with builder.if_else(unit_strided) as (is_unit_strided,
                                                        is_strided):
 
             with is_unit_strided:
@@ -329,7 +329,7 @@ class _GufuncWrapper(object):
                 step_offset += ary.ndim
             arrays.append(ary)
 
-        bbreturn = cgutils.get_function(builder).append_basic_block('.return')
+        bbreturn = builder.append_basic_block('.return')
 
         # Prologue
         self.gen_prologue(builder)
@@ -405,10 +405,9 @@ def build_gufunc_wrapper(library, context, func, signature, sin, sout, fndesc,
 
 def _prepare_call_to_object_mode(context, builder, func, signature, args,
                                  env):
-    mod = cgutils.get_module(builder)
+    mod = builder.module
 
-    thisfunc = cgutils.get_function(builder)
-    bb_core_return = thisfunc.append_basic_block('ufunc.core.return')
+    bb_core_return = builder.append_basic_block('ufunc.core.return')
 
     pyapi = context.get_python_api(builder)
 

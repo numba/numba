@@ -160,7 +160,7 @@ def iternext_array(context, builder, sig, args, result):
     is_valid = builder.icmp(lc.ICMP_SLT, index, nitems)
     result.set_valid(is_valid)
 
-    with cgutils.ifthen(builder, is_valid):
+    with builder.if_then(is_valid):
         value = _getitem_array1d(context, builder, arrayty, ary, index,
                                  wraparound=False)
         result.yield_(value)
@@ -418,26 +418,26 @@ def setitem_array1d_slice(context, builder, sig, args):
 
     b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
     # bail if step is 0
-    with cgutils.ifthen(builder, b_step_eq_zero):
+    with builder.if_then(b_step_eq_zero):
         context.call_conv.return_user_exc(builder, ValueError,
                                           ("slice step cannot be zero",))
 
     # adjust for negative indices for start
     start = cgutils.alloca_once_value(builder, slicestruct.start)
     b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
-    with cgutils.ifthen(builder, b_start_lt_zero):
+    with builder.if_then(b_start_lt_zero):
         add = builder.add(builder.load(start), shapes[0])
         builder.store(add, start)
 
     b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
-    with cgutils.ifthen(builder, b_start_lt_zero):
+    with builder.if_then(b_start_lt_zero):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
         builder.store(cond, start)
 
     b_start_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(start), shapes[0])
     ONE = Constant.int(shapes[0].type, 1)
-    with cgutils.ifthen(builder, b_start_geq_len):
+    with builder.if_then(b_start_geq_len):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
         builder.store(cond, start)
@@ -445,25 +445,25 @@ def setitem_array1d_slice(context, builder, sig, args):
     # adjust stop for negative value
     stop = cgutils.alloca_once_value(builder, slicestruct.stop)
     b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
-    with cgutils.ifthen(builder, b_stop_lt_zero):
+    with builder.if_then(b_stop_lt_zero):
         add = builder.add(builder.load(stop), shapes[0])
         builder.store(add, stop)
 
     b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
-    with cgutils.ifthen(builder, b_stop_lt_zero):
+    with builder.if_then(b_stop_lt_zero):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
         builder.store(cond, start)
 
     b_stop_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(stop), shapes[0])
     ONE = Constant.int(shapes[0].type, 1)
-    with cgutils.ifthen(builder, b_stop_geq_len):
+    with builder.if_then(b_stop_geq_len):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
         builder.store(cond, stop)
 
     b_step_gt_zero = builder.icmp(lc.ICMP_SGT, slicestruct.step, ZERO)
-    with cgutils.ifelse(builder, b_step_gt_zero) as (then0, otherwise0):
+    with builder.if_else(b_step_gt_zero) as (then0, otherwise0):
         with then0:
             with cgutils.for_range_slice(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type) as loop_idx1:
                 ptr = cgutils.get_item_pointer(builder, aryty, ary,
@@ -854,7 +854,7 @@ def _np_round_intrinsic(tp):
 
 def _np_round_float(context, builder, tp, val):
     llty = context.get_value_type(tp)
-    module = cgutils.get_module(builder)
+    module = builder.module
     fnty = lc.Type.function(llty, [llty])
     fn = module.get_or_insert_function(fnty, name=_np_round_intrinsic(tp))
     return builder.call(fn, (val,))
@@ -1100,7 +1100,7 @@ def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
     zero = context.get_constant(types.intp, 0)
     one = context.get_constant(types.intp, 1)
 
-    bbend = cgutils.append_basic_block(builder, 'end_increment')
+    bbend = builder.append_basic_block('end_increment')
 
     if end_flag is not None:
         builder.store(cgutils.false_byte, end_flag)
@@ -1166,7 +1166,7 @@ def make_ndindex_cls(nditerty):
             zero = context.get_constant(types.intp, 0)
             one = context.get_constant(types.intp, 1)
 
-            bbend = cgutils.append_basic_block(builder, 'end')
+            bbend = builder.append_basic_block('end')
 
             exhausted = cgutils.as_bool_bit(builder, builder.load(self.exhausted))
             with cgutils.if_unlikely(builder, exhausted):
@@ -1307,7 +1307,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 zero = context.get_constant(types.intp, 0)
                 one = context.get_constant(types.intp, 1)
 
-                bbend = cgutils.append_basic_block(builder, 'end')
+                bbend = builder.append_basic_block('end')
 
                 # Catch already computed iterator exhaustion
                 is_exhausted = cgutils.as_bool_bit(

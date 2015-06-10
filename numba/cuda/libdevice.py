@@ -15,7 +15,7 @@ def bool_implement(nvname, ty):
     def core(context, builder, sig, args):
         assert sig.return_type == types.boolean, nvname
         fty = context.get_value_type(ty)
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
         fnty = Type.function(Type.int(), [fty])
         fn = lmod.get_or_insert_function(fnty, name=nvname)
         result = builder.call(fn, args)
@@ -28,7 +28,7 @@ def bool_implement(nvname, ty):
 def unary_implement(nvname, ty):
     def core(context, builder, sig, args):
         fty = context.get_value_type(ty)
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
         fnty = Type.function(fty, [fty])
         fn = lmod.get_or_insert_function(fnty, name=nvname)
         return builder.call(fn, args)
@@ -39,7 +39,7 @@ def unary_implement(nvname, ty):
 def binary_implement(nvname, ty):
     def core(context, builder, sig, args):
         fty = context.get_value_type(ty)
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
         fnty = Type.function(fty, [fty, fty])
         fn = lmod.get_or_insert_function(fnty, name=nvname)
         return builder.call(fn, args)
@@ -51,7 +51,7 @@ def powi_implement(nvname):
     def core(context, builder, sig, args):
         [base, pow] = args
         [basety, powty] = sig.args
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
         fty = context.get_value_type(basety)
         ity = context.get_value_type(types.int32)
         fnty = Type.function(fty, [fty, ity])

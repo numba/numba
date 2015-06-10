@@ -211,7 +211,7 @@ class GeneratorLower(BaseGeneratorLower):
             need_args_cleanup = builder.icmp_signed(
                 '==', resume_index, Constant.int(resume_index.type, 0))
 
-            with cgutils.ifthen(builder, need_args_cleanup):
+            with builder.if_then(need_args_cleanup):
                 gen_args_ptr = cgutils.gep(builder, genptr, 0, 1, name="gen_args")
                 assert len(self.fndesc.argtypes) == len(gen_args_ptr.type.pointee)
                 for elem_idx, argty in enumerate(self.fndesc.argtypes):

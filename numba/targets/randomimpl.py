@@ -113,7 +113,7 @@ def get_next_int(context, builder, state_ptr, nbits):
     ret = cgutils.alloca_once_value(builder, ir.Constant(int64_t, 0))
 
     is_32b = builder.icmp_unsigned('<=', nbits, c32)
-    with cgutils.ifelse(builder, is_32b) as (ifsmall, iflarge):
+    with builder.if_else(is_32b) as (ifsmall, iflarge):
         with ifsmall:
             low = get_shifted_int(nbits)
             builder.store(builder.zext(low, int64_t), ret)
@@ -236,7 +236,7 @@ def _gauss_impl(context, builder, sig, args, state):
     gauss_ptr = get_gauss_ptr(builder, state_ptr)
     has_gauss_ptr = get_has_gauss_ptr(builder, state_ptr)
     has_gauss = cgutils.is_true(builder, builder.load(has_gauss_ptr))
-    with cgutils.ifelse(builder, has_gauss) as (then, otherwise):
+    with builder.if_else(has_gauss) as (then, otherwise):
         with then:
             # if has_gauss: return it
             builder.store(builder.load(gauss_ptr), ret)
@@ -280,12 +280,12 @@ def _randrange_impl(context, builder, start, stop, step, state):
     # n = stop - start
     builder.store(builder.sub(stop, start), nptr)
 
-    with cgutils.ifthen(builder, builder.icmp_signed('<', step, zero)):
+    with builder.if_then(builder.icmp_signed('<', step, zero)):
         # n = (n + step + 1) // step
         w = builder.add(builder.add(builder.load(nptr), step), one)
         n = builder.sdiv(w, step)
         builder.store(n, nptr)
-    with cgutils.ifthen(builder, builder.icmp_signed('>', step, one)):
+    with builder.if_then(builder.icmp_signed('>', step, one)):
         # n = (n + step - 1) // step
         w = builder.sub(builder.add(builder.load(nptr), step), one)
         n = builder.sdiv(w, step)
@@ -302,8 +302,8 @@ def _randrange_impl(context, builder, start, stop, step, state):
     nbits = builder.trunc(builder.call(fn, [n, cgutils.true_bit]), int32_t)
     nbits = builder.sub(ir.Constant(int32_t, ty.width), nbits)
 
-    bbwhile = cgutils.append_basic_block(builder, "while")
-    bbend = cgutils.append_basic_block(builder, "while.end")
+    bbwhile = builder.append_basic_block("while")
+    bbend = builder.append_basic_block("while.end")
     builder.branch(bbwhile)
 
     builder.position_at_end(bbwhile)
@@ -952,13 +952,13 @@ def poisson_impl(context, builder, sig, args):
     state_ptr = get_np_state_ptr(context, builder)
 
     retptr = cgutils.alloca_once(builder, int64_t, name="ret")
-    bbcont = cgutils.append_basic_block(builder, "bbcont")
-    bbend = cgutils.append_basic_block(builder, "bbend")
+    bbcont = builder.append_basic_block("bbcont")
+    bbend = builder.append_basic_block("bbend")
 
     if len(args) == 1:
         lam, = args
         big_lam = builder.fcmp_ordered('>=', lam, ir.Constant(double, 10.0))
-        with cgutils.ifthen(builder, big_lam):
+        with builder.if_then(big_lam):
             # For lambda >= 10.0, we switch to a more accurate
             # algorithm (see _helperlib.c).
             fnty = ir.FunctionType(int64_t, (rnd_state_ptr_t, double))

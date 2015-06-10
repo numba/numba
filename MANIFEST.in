@@ -1,4 +1,8 @@
 include README.rst setup.py runtests.py versioneer.py CHANGE_LOG AUTHORS LICENSE
-recursive-include docs *.ipynb *.txt *.py Makefile *.rstls
+
+recursive-include numba *.c *.cpp *.h *.hpp *.inc
+recursive-include docs *.ipynb *.txt *.py Makefile *.rst
+recursive-include examples *.py
+
 prune docs/_build
 prune docs/gh-pages

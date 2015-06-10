@@ -46,7 +46,7 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
     # it is quite common in NumPy to have loops implemented as a call
     # to the double version of the function, wrapped in casts. This
     # helper function facilitates that.
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     lty = context.get_argument_type(ty)
     fnty = lc.Type.function(lty, [lty]*len(sig.args))
     fn = mod.get_or_insert_function(fnty, name=func_name)
@@ -73,7 +73,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         msg = "No {0} function for real type {1}".format(user_name, str(e))
         raise errors.LoweringError(msg)
 
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     if ty in types.complex_domain:
         # In numba struct types are always passed by pointer. So the call has to
         # be transformed from "result = func(ops...)" to "func(&result, ops...).
@@ -133,7 +133,7 @@ def np_int_sdiv_impl(context, builder, sig, args):
     num_is_min_int = builder.icmp(lc.ICMP_EQ, MIN_INT, num)
     could_cause_sigfpe = builder.and_(den_is_minus_one, num_is_min_int)
     force_zero = builder.or_(den_is_zero, could_cause_sigfpe)
-    with cgutils.ifelse(builder, force_zero, expect=False) as (then, otherwise):
+    with builder.if_else(force_zero, likely=False) as (then, otherwise):
         with then:
             bb_then = builder.basic_block
         with otherwise:
@@ -191,7 +191,7 @@ def np_int_udiv_impl(context, builder, sig, args):
 
     ZERO = lc.Constant.int(lltype, 0)
     div_by_zero = builder.icmp(lc.ICMP_EQ, ZERO, den)
-    with cgutils.ifelse(builder, div_by_zero, expect=False) as (then, otherwise):
+    with builder.if_else(div_by_zero, likely=False) as (then, otherwise):
         with then:
             # division by zero
             bb_then = builder.basic_block
@@ -297,13 +297,13 @@ def np_complex_div_impl(context, builder, sig, args):
     in2r_abs = _fabs(context, builder, in2r)
     in2i_abs = _fabs(context, builder, in2i)
     in2r_abs_ge_in2i_abs = builder.fcmp(lc.FCMP_OGE, in2r_abs, in2i_abs)
-    with cgutils.ifelse(builder, in2r_abs_ge_in2i_abs) as (then, otherwise):
+    with builder.if_else(in2r_abs_ge_in2i_abs) as (then, otherwise):
         with then:
             # if abs(denominator.real) == 0 and abs(denominator.imag) == 0
             in2r_is_zero = builder.fcmp(lc.FCMP_OEQ, in2r_abs, ZERO)
             in2i_is_zero = builder.fcmp(lc.FCMP_OEQ, in2i_abs, ZERO)
             in2_is_zero = builder.and_(in2r_is_zero, in2i_is_zero)
-            with cgutils.ifelse(builder, in2_is_zero) as (inn_then, inn_otherwise):
+            with builder.if_else(in2_is_zero) as (inn_then, inn_otherwise):
                 with inn_then:
                     # division by 0.
                     # fdiv generates the appropriate NAN/INF/NINF
@@ -430,7 +430,7 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     in2i_abs = _fabs(context, builder, in2i)
     in2r_abs_ge_in2i_abs = builder.fcmp(lc.FCMP_OGE, in2r_abs, in2i_abs)
 
-    with cgutils.ifelse(builder, in2r_abs_ge_in2i_abs) as (then, otherwise):
+    with builder.if_else(in2r_abs_ge_in2i_abs) as (then, otherwise):
         with then:
             rat = builder.fdiv(in2i, in2r)
             # out.real = floor((in1r+in1i*rat)/(in2r + in2i*rat))
@@ -497,7 +497,7 @@ def np_real_floor_impl(context, builder, sig, args):
     assert len(sig.args) == 1
     ty = sig.args[0]
     assert ty == sig.return_type, "must have homogeneous types"
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     if ty == types.float64:
         fnty = lc.Type.function(lc.Type.double(), [lc.Type.double()])
         fn = mod.get_or_insert_function(fnty, name="numba.npymath.floor")
@@ -872,7 +872,7 @@ def np_complex_reciprocal_impl(context, builder, sig, args):
     in1i_abs = _fabs(context, builder, in1i)
     in1i_abs_le_in1r_abs = builder.fcmp(lc.FCMP_OLE, in1i_abs, in1r_abs)
 
-    with cgutils.ifelse(builder, in1i_abs_le_in1r_abs) as (then, otherwise):
+    with builder.if_else(in1i_abs_le_in1r_abs) as (then, otherwise):
         with then:
             r = builder.fdiv(in1i, in1r)
             tmp0 = builder.fmul(in1i, r)
@@ -1056,7 +1056,7 @@ def np_complex_asin_impl(context, builder, sig, args):
     abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
     any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
     complex_binary_sig = typing.signature(*[ty]*3)
-    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+    with builder.if_else(any_gt_epsilon) as (then, otherwise):
         with then:
             # ... then use formula:
             # - j * log(j * x + sqrt(1 - sqr(x)))
@@ -1149,7 +1149,7 @@ def np_complex_atan_impl(context, builder, sig, args):
     abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
     any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
     binary_sig = typing.signature(*[ty]*3)
-    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+    with builder.if_else(any_gt_epsilon) as (then, otherwise):
         with then:
             # ... then use formula
             # 0.5j * log((j + x)/(j - x))
@@ -1384,7 +1384,7 @@ def np_complex_asinh_impl(context, builder, sig, args):
     abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
     any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
     binary_sig = typing.signature(*[ty]*3)
-    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+    with builder.if_else(any_gt_epsilon) as (then, otherwise):
         with then:
             # ... then use formula
             # log(sqrt(1+sqr(x)) + x)
@@ -1489,7 +1489,7 @@ def np_complex_atanh_impl(context, builder, sig, args):
     abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
     any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
     binary_sig = typing.signature(*[ty]*3)
-    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+    with builder.if_else(any_gt_epsilon) as (then, otherwise):
         with then:
             # ... then use formula
             # 0.5 * log((1 + x)/(1 - x))

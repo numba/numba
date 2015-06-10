@@ -68,7 +68,7 @@ def user_function(fndesc, libs):
     """
 
     def imp(context, builder, sig, args):
-        func = context.declare_function(cgutils.get_module(builder), fndesc)
+        func = context.declare_function(builder.module, fndesc)
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
             builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
@@ -87,7 +87,7 @@ def user_generator(gendesc, libs):
     """
 
     def imp(context, builder, sig, args):
-        func = context.declare_function(cgutils.get_module(builder), gendesc)
+        func = context.declare_function(builder.module, gendesc)
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
             builder, func, gendesc.restype, gendesc.argtypes, args, env=None)
@@ -103,7 +103,7 @@ def python_attr_impl(cls, attr, atyp):
     def imp(context, builder, typ, value):
         api = context.get_python_api(builder)
         aval = api.object_getattr_string(value, attr)
-        with cgutils.ifthen(builder, cgutils.is_null(builder, aval)):
+        with builder.if_then(cgutils.is_null(builder, aval)):
             context.call_conv.return_exc(builder)
 
         if isinstance(atyp, types.Method):

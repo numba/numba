@@ -81,7 +81,7 @@ SREG_MAPPING = {
 
 
 def call_sreg(builder, name):
-    module = cgutils.get_module(builder)
+    module = builder.module
     fnty = lc.Type.function(lc.Type.int(), ())
     fn = module.get_or_insert_function(fnty, name=SREG_MAPPING[name])
     return builder.call(fn, ())
