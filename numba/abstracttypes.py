@@ -139,8 +139,8 @@ class Type(object):
 
         return ndim, layout
 
-    cast_python_value = NotImplemented
-    __iter__ = NotImplemented  # ???
+    def cast_python_value(self, args):
+        raise NotImplementedError
 
 
 class Number(Type):
