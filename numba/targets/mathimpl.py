@@ -118,7 +118,7 @@ def unary_math_intr(fn, intrcode):
     @implement(fn, types.float32)
     def f32impl(context, builder, sig, args):
         [val] = args
-        mod = cgutils.get_module(builder)
+        mod = builder.module
         lty = context.get_value_type(types.float32)
         intr = lc.Function.intrinsic(mod, intrcode, [lty])
         return builder.call(intr, args)
@@ -127,7 +127,7 @@ def unary_math_intr(fn, intrcode):
     @implement(fn, types.float64)
     def f64impl(context, builder, sig, args):
         [val] = args
-        mod = cgutils.get_module(builder)
+        mod = builder.module
         lty = context.get_value_type(types.float64)
         intr = lc.Function.intrinsic(mod, intrcode, [lty])
         return builder.call(intr, args)
@@ -142,7 +142,7 @@ def _float_input_unary_math_extern_impl(extern_func, input_type, restype=None):
     """
     def implementer(context, builder, sig, args):
         [val] = args
-        mod = cgutils.get_module(builder)
+        mod = builder.module
         lty = context.get_value_type(input_type)
         fnty = Type.function(lty, [lty])
         fn = mod.get_or_insert_function(fnty, name=extern_func)
@@ -293,7 +293,7 @@ def frexp_impl(context, builder, sig, args):
         "float": "numba_frexpf",
         "double": "numba_frexp",
         }[str(fltty)]
-    fn = cgutils.get_module(builder).get_or_insert_function(fnty, name=fname)
+    fn = builder.module.get_or_insert_function(fnty, name=fname)
     res = builder.call(fn, (val, expptr))
     return cgutils.make_anonymous_struct(builder, (res, builder.load(expptr)))
 
@@ -308,7 +308,7 @@ def ldexp_impl(context, builder, sig, args):
         "float": "numba_ldexpf",
         "double": "numba_ldexp",
         }[str(fltty)]
-    fn = cgutils.get_module(builder).get_or_insert_function(fnty, name=fname)
+    fn = builder.module.get_or_insert_function(fnty, name=fname)
     return builder.call(fn, (val, exp))
 
 
@@ -338,7 +338,7 @@ def atan2_u64_impl(context, builder, sig, args):
 @implement(math.atan2, types.float32, types.float32)
 def atan2_f32_impl(context, builder, sig, args):
     assert len(args) == 2
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     fnty = Type.function(Type.float(), [Type.float(), Type.float()])
     fn = mod.get_or_insert_function(fnty, name="atan2f")
     return builder.call(fn, args)
@@ -347,7 +347,7 @@ def atan2_f32_impl(context, builder, sig, args):
 @implement(math.atan2, types.float64, types.float64)
 def atan2_f64_impl(context, builder, sig, args):
     assert len(args) == 2
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     fnty = Type.function(Type.double(), [Type.double(), Type.double()])
     # Workaround atan2() issues under Windows
     fname = "atan2_fixed" if sys.platform == "win32" else "atan2"

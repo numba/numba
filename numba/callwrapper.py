@@ -35,9 +35,8 @@ class _ArgManager(object):
             self.builder.branch(self.nextblk)
 
         # Write the cleanup block for this argument
-        cleanupblk = cgutils.append_basic_block(self.builder,
-                                                "arg%d.err" % self.arg_count)
-        with cgutils.goto_block(self.builder, cleanupblk):
+        cleanupblk = self.builder.append_basic_block("arg%d.err" % self.arg_count)
+        with self.builder.goto_block(cleanupblk):
             # NRT cleanup
 
             if self.context.enable_nrt:
@@ -126,8 +125,8 @@ class PyCallWrapper(object):
             builder.ret(api.get_null_object())
 
         # Block that returns after erroneous argument unboxing/cleanup
-        endblk = cgutils.append_basic_block(builder, "arg.end")
-        with cgutils.goto_block(builder, endblk):
+        endblk = builder.append_basic_block("arg.end")
+        with builder.goto_block(endblk):
             builder.ret(api.get_null_object())
 
         cleanup_manager = _ArgManager(self.context, builder, api, endblk, nargs)
@@ -154,14 +153,14 @@ class PyCallWrapper(object):
         # Determine return status
         with cgutils.if_likely(builder, status.is_ok):
             # Ok => return boxed Python value
-            with cgutils.ifthen(builder, status.is_none):
+            with builder.if_then(status.is_none):
                 api.return_none()
 
             retval = api.from_native_return(res, self._simplified_return_type(),
                                             env_manager)
             builder.ret(retval)
 
-        with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
+        with builder.if_then(builder.not_(status.is_python_exc)):
             # User exception raised
             self.make_exception_switch(api, builder, status)
 
@@ -174,14 +173,14 @@ class PyCallWrapper(object):
         """
         code = status.code
         # Handle user exceptions
-        with cgutils.ifthen(builder, status.is_user_exc):
+        with builder.if_then(status.is_user_exc):
             exc = api.unserialize(status.excinfoptr)
             with cgutils.if_likely(builder,
                                    cgutils.is_not_null(builder, exc)):
                 api.raise_object(exc)  # steals ref
             builder.ret(api.get_null_object())
 
-        with cgutils.ifthen(builder, status.is_stop_iteration):
+        with builder.if_then(status.is_stop_iteration):
             api.err_set_none("PyExc_StopIteration")
             builder.ret(api.get_null_object())
 

@@ -111,7 +111,7 @@ class CUDATargetContext(BaseContext):
         with cgutils.if_likely(builder, status.is_ok):
             builder.ret_void()
 
-        with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
+        with builder.if_then(builder.not_(status.is_python_exc)):
             # User exception raised
             old = Constant.null(gv_exc.type.pointee)
 
@@ -128,7 +128,7 @@ class CUDATargetContext(BaseContext):
 
             # If the xchange is successful, save the thread ID.
             sreg = nvvmutils.SRegBuilder(builder)
-            with cgutils.ifthen(builder, changed):
+            with builder.if_then(changed):
                 for dim, ptr, in zip("xyz", gv_tid):
                     val = sreg.tid(dim)
                     builder.store(val, ptr)

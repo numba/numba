@@ -78,7 +78,7 @@ def int_divmod(context, builder, x, y):
     cond = builder.and_(xmody_istrue, y_xor_xmody_ltz)
 
     bb1 = builder.basic_block
-    with cgutils.ifthen(builder, cond):
+    with builder.if_then(cond):
         xmody_plus_y = builder.add(xmody, y)
         xdivy_minus_1 = builder.sub(xdivy, ONE)
         bb2 = builder.basic_block
@@ -143,7 +143,7 @@ def int_urem_impl(context, builder, sig, args):
 
 
 def int_spower_impl(context, builder, sig, args):
-    module = cgutils.get_module(builder)
+    module = builder.module
     x, y = args
 
     # Cast x to float64 to ensure enough precision for the result
@@ -165,7 +165,7 @@ def int_spower_impl(context, builder, sig, args):
 
 
 def int_upower_impl(context, builder, sig, args):
-    module = cgutils.get_module(builder)
+    module = builder.module
     x, y = args
     if y.type.width > 32:
         y = builder.trunc(y, Type.int(32))
@@ -189,16 +189,16 @@ def int_power_func_body(context, builder, x, y):
     builder.store(counter, pcounter)
     builder.store(result, presult)
 
-    bbcond = cgutils.append_basic_block(builder, ".cond")
-    bbbody = cgutils.append_basic_block(builder, ".body")
-    bbexit = cgutils.append_basic_block(builder, ".exit")
+    bbcond = builder.append_basic_block(".cond")
+    bbbody = builder.append_basic_block(".body")
+    bbexit = builder.append_basic_block(".exit")
 
     del counter
     del result
 
     builder.branch(bbcond)
 
-    with cgutils.goto_block(builder, bbcond):
+    with builder.goto_block(bbcond):
         counter = builder.load(pcounter)
         ONE = Constant.int(counter.type, 1)
         ZERO = Constant.null(counter.type)
@@ -206,7 +206,7 @@ def int_power_func_body(context, builder, x, y):
         pred = builder.icmp(lc.ICMP_SGT, counter, ZERO)
         builder.cbranch(pred, bbbody, bbexit)
 
-    with cgutils.goto_block(builder, bbbody):
+    with builder.goto_block(bbbody):
         result = builder.load(presult)
         builder.store(builder.mul(result, x), presult)
         builder.branch(bbcond)
@@ -356,26 +356,26 @@ def int_sign_impl(context, builder, sig, args):
 
     presult = cgutils.alloca_once(builder, x.type)
 
-    bb_zero = cgutils.append_basic_block(builder, ".zero")
-    bb_postest = cgutils.append_basic_block(builder, ".postest")
-    bb_pos = cgutils.append_basic_block(builder, ".pos")
-    bb_neg = cgutils.append_basic_block(builder, ".neg")
-    bb_exit = cgutils.append_basic_block(builder, ".exit")
+    bb_zero = builder.append_basic_block(".zero")
+    bb_postest = builder.append_basic_block(".postest")
+    bb_pos = builder.append_basic_block(".pos")
+    bb_neg = builder.append_basic_block(".neg")
+    bb_exit = builder.append_basic_block(".exit")
 
     builder.cbranch(cmp_zero, bb_zero, bb_postest)
 
-    with cgutils.goto_block(builder, bb_zero):
+    with builder.goto_block(bb_zero):
         builder.store(ZERO, presult)
         builder.branch(bb_exit)
 
-    with cgutils.goto_block(builder, bb_postest):
+    with builder.goto_block(bb_postest):
         builder.cbranch(cmp_pos, bb_pos, bb_neg)
 
-    with cgutils.goto_block(builder, bb_pos):
+    with builder.goto_block(bb_pos):
         builder.store(POS, presult)
         builder.branch(bb_exit)
 
-    with cgutils.goto_block(builder, bb_neg):
+    with builder.goto_block(bb_neg):
         builder.store(NEG, presult)
         builder.branch(bb_exit)
 
@@ -519,7 +519,7 @@ def real_divmod(context, builder, x, y):
     assert x.type == y.type
     floatty = x.type
 
-    module = cgutils.get_module(builder)
+    module = builder.module
     fname = ".numba.python.rem.%s" % x.type
     fnty = Type.function(floatty, (floatty, floatty, Type.pointer(floatty)))
     fn = module.get_or_insert_function(fnty, fname)
@@ -599,10 +599,10 @@ def real_divmod_func_body(context, builder, vx, wx):
     wx_ltz = builder.fcmp(lc.FCMP_OLT, wx, ZERO)
     mod_ltz = builder.fcmp(lc.FCMP_OLT, mod, ZERO)
 
-    with cgutils.ifthen(builder, mod_istrue):
+    with builder.if_then(mod_istrue):
         wx_ltz_ne_mod_ltz = builder.icmp(lc.ICMP_NE, wx_ltz, mod_ltz)
 
-        with cgutils.ifthen(builder, wx_ltz_ne_mod_ltz):
+        with builder.if_then(wx_ltz_ne_mod_ltz):
             mod = builder.fadd(mod, wx)
             div = builder.fsub(div, ONE)
             builder.store(mod, pmod)
@@ -617,7 +617,7 @@ def real_divmod_func_body(context, builder, vx, wx):
         builder.store(mod, pmod)
         del mod
 
-        with cgutils.ifthen(builder, wx_ltz):
+        with builder.if_then(wx_ltz):
             mod = builder.load(pmod)
             mod = builder.fsub(ZERO, mod)
             builder.store(mod, pmod)
@@ -626,8 +626,8 @@ def real_divmod_func_body(context, builder, vx, wx):
     div = builder.load(pdiv)
     div_istrue = builder.fcmp(lc.FCMP_ONE, div, ZERO)
 
-    with cgutils.ifthen(builder, div_istrue):
-        module = cgutils.get_module(builder)
+    with builder.if_then(div_istrue):
+        module = builder.module
         floorfn = lc.Function.intrinsic(module, lc.INTR_FLOOR, [wx.type])
         floordiv = builder.call(floorfn, [div])
         floordivdiff = builder.fsub(div, floordiv)
@@ -664,7 +664,7 @@ def real_floordiv_impl(context, builder, sig, args):
 
 def real_power_impl(context, builder, sig, args):
     x, y = args
-    module = cgutils.get_module(builder)
+    module = builder.module
     if context.implement_powi_as_math_call:
         imp = context.get_function(math.pow, sig)
         return imp(builder, args)
@@ -724,11 +724,11 @@ def real_sign_impl(context, builder, sig, args):
     is_pos = builder.fcmp(lc.FCMP_OGT, x, ZERO)
     is_neg = builder.fcmp(lc.FCMP_OLT, x, ZERO)
 
-    with cgutils.ifelse(builder, is_pos) as (gt_zero, not_gt_zero):
+    with builder.if_else(is_pos) as (gt_zero, not_gt_zero):
         with gt_zero:
             builder.store(POS, presult)
         with not_gt_zero:
-            with cgutils.ifelse(builder, is_neg) as (lt_zero, not_lt_zero):
+            with builder.if_else(is_neg) as (lt_zero, not_lt_zero):
                 with lt_zero:
                     builder.store(NEG, presult)
                 with not_lt_zero:
@@ -835,7 +835,7 @@ def complex128_power_impl(context, builder, sig, args):
     a = Complex128(context, builder, value=ca)
     b = Complex128(context, builder, value=cb)
     c = Complex128(context, builder)
-    module = cgutils.get_module(builder)
+    module = builder.module
     pa = a._getpointer()
     pb = b._getpointer()
     pc = c._getpointer()
@@ -848,7 +848,7 @@ def complex128_power_impl(context, builder, sig, args):
     b_imag_is_zero = builder.fcmp(lc.FCMP_OEQ, b.imag, ZERO)
     b_is_two = builder.and_(b_real_is_two, b_imag_is_zero)
 
-    with cgutils.ifelse(builder, b_is_two) as (then, otherwise):
+    with builder.if_else(b_is_two) as (then, otherwise):
         with then:
             # Lower as multiplication
             res = complex_mul_impl(context, builder, sig, (ca, ca))
@@ -1177,7 +1177,7 @@ def iternext_unituple(context, builder, sig, args, result):
     is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
     result.set_valid(is_valid)
 
-    with cgutils.ifthen(builder, is_valid):
+    with builder.if_then(is_valid):
         getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
                                        types.intp)
         result.yield_(getitem_unituple(context, builder, getitem_sig, [tup, idx]))
@@ -1191,23 +1191,23 @@ def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
 
-    bbelse = cgutils.append_basic_block(builder, "switch.else")
-    bbend = cgutils.append_basic_block(builder, "switch.end")
+    bbelse = builder.append_basic_block("switch.else")
+    bbend = builder.append_basic_block("switch.end")
     switch = builder.switch(idx, bbelse, n=tupty.count)
 
-    with cgutils.goto_block(builder, bbelse):
+    with builder.goto_block(bbelse):
         context.call_conv.return_user_exc(builder, IndexError,
                                           ("tuple index out of range",))
 
     lrtty = context.get_value_type(tupty.dtype)
-    with cgutils.goto_block(builder, bbend):
+    with builder.goto_block(bbend):
         phinode = builder.phi(lrtty)
 
     for i in range(tupty.count):
         ki = context.get_constant(types.intp, i)
-        bbi = cgutils.append_basic_block(builder, "switch.%d" % i)
+        bbi = builder.append_basic_block("switch.%d" % i)
         switch.add_case(ki, bbi)
-        with cgutils.goto_block(builder, bbi):
+        with builder.goto_block(bbi):
             value = builder.extract_value(tup, i)
             builder.branch(bbend)
             phinode.add_incoming(value, bbi)
@@ -1330,7 +1330,7 @@ def _round_intrinsic(tp):
 def round_impl_unary(context, builder, sig, args):
     fltty = sig.args[0]
     llty = context.get_value_type(fltty)
-    module = cgutils.get_module(builder)
+    module = builder.module
     fnty = Type.function(llty, [llty])
     fn = module.get_or_insert_function(fnty, name=_round_intrinsic(fltty))
     res = builder.call(fn, args)
@@ -1476,12 +1476,12 @@ def tuple_cmp_ordered(context, builder, op, sig, args):
     tu, tv = sig.args
     u, v = args
     res = cgutils.alloca_once_value(builder, cgutils.true_bit)
-    bbend = cgutils.append_basic_block(builder, "cmp_end")
+    bbend = builder.append_basic_block("cmp_end")
     for i, (ta, tb) in enumerate(zip(tu.types, tv.types)):
         a = builder.extract_value(u, i)
         b = builder.extract_value(v, i)
         not_equal = generic_compare(context, builder, '!=', (ta, tb), (a, b))
-        with cgutils.ifthen(builder, not_equal):
+        with builder.if_then(not_equal):
             pred = generic_compare(context, builder, op, (ta, tb), (a, b))
             builder.store(pred, res)
             builder.branch(bbend)
