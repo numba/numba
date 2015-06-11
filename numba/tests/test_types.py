@@ -10,13 +10,14 @@ import weakref
 from numba.utils import IS_PY3
 from numba import abstracttypes, types, typing
 from numba import unittest_support as unittest
+from .support import TestCase
 
 
 class Dummy(object):
     pass
 
 
-class TestTypeNames(unittest.TestCase):
+class TestTypeNames(TestCase):
 
     def test_equality(self):
         self.assertEqual(types.int32, types.int32)
@@ -169,6 +170,29 @@ class TestTypeNames(unittest.TestCase):
         del a, b
         gc.collect()
         self.assertEqual(len(cache), cache_len)
+
+    def test_array_notation(self):
+        def check(arrty, scalar, ndim, layout):
+            self.assertIs(arrty.dtype, scalar)
+            self.assertEqual(arrty.ndim, ndim)
+            self.assertEqual(arrty.layout, layout)
+        scalar = types.int32
+        check(scalar[:], scalar, 1, 'A')
+        check(scalar[::1], scalar, 1, 'C')
+        check(scalar[:,:], scalar, 2, 'A')
+        check(scalar[:,::1], scalar, 2, 'C')
+        check(scalar[::1,:], scalar, 2, 'F')
+
+    def test_call_notation(self):
+        # Function call signature
+        i = types.int32
+        d = types.double
+        self.assertEqual(i(), typing.signature(i))
+        self.assertEqual(i(d), typing.signature(i, d))
+        self.assertEqual(i(d, d), typing.signature(i, d, d))
+        # Value cast
+        self.assertPreciseEqual(i(42.5), 42)
+        self.assertPreciseEqual(d(-5), -5.0)
 
 
 if __name__ == '__main__':

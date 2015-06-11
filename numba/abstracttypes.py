@@ -57,9 +57,10 @@ class _TypeMetaclass(ABCMeta):
 @add_metaclass(_TypeMetaclass)
 class Type(object):
     """
-    The default behavior is to provide equality through `name` attribute.
-    Two types are equal if there `name` are equal.
-    Subclass can refine this behavior.
+    The base class for all Numba types.
+    It is essential that proper equality comparison is implemented.  The
+    default implementation uses the "key" property (overridable in subclasses)
+    for both comparison and hashing, to ensure sane behaviour.
     """
 
     mutable = False
@@ -115,11 +116,16 @@ class Type(object):
                          *args)
 
     def __getitem__(self, args):
+        """
+        Return an array of this type.
+        """
         from .types import Array
         ndim, layout = self._determine_array_spec(args)
         return Array(dtype=self, ndim=ndim, layout=layout)
 
     def _determine_array_spec(self, args):
+        # XXX non-contiguous by default, even for 1d arrays,
+        # doesn't sound very intuitive
         if isinstance(args, (tuple, list)):
             ndim = len(args)
             if args[0].step == 1:
