@@ -206,7 +206,7 @@ class TestCase(unittest.TestCase):
             self.assertEqual(dtype, self._fix_dtype(second.dtype))
             self.assertEqual(first.ndim, second.ndim)
             self.assertEqual(first.shape, second.shape)
-            self.assertEqual(first.itemsize, second.itemsize)
+            # itemsize is already checked by the dtype test above
             self.assertEqual(self._fix_strides(first), self._fix_strides(second))
             if first.dtype != dtype:
                 first = first.astype(dtype)
