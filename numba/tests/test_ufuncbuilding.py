@@ -81,10 +81,16 @@ class TestUfuncBuilding(unittest.TestCase):
         self.assertFalse(cres.objectmode)
         ufunc = ufb.build_ufunc()
 
+        def check(a):
+            b = ufunc(a, a)
+            self.assertTrue(numpy.all(a + a == b))
+            self.assertEqual(b.dtype, numpy.dtype('complex64'))
+
         a = numpy.arange(10, dtype='complex64') + 1j
-        b = ufunc(a, a)
-        self.assertTrue(numpy.all(a + a == b))
-        self.assertEqual(b.dtype, numpy.dtype('complex64'))
+        check(a)
+        # Non-contiguous dimension
+        a = a[::2]
+        check(a)
 
     def test_ufunc_forceobj(self):
         ufb = UFuncBuilder(add, targetoptions={'forceobj': True})

@@ -1002,7 +1002,7 @@ class BaseContext(object):
         fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
             [self.get_value_type(types.intp)])
         # NOTE: safe alloc really slows allocations down
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc")
         return builder.call(fn, [size])
 
     def nrt_meminfo_data(self, builder, meminfo):

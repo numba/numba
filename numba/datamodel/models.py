@@ -712,7 +712,6 @@ class CContiguousFlatIter(StructModel):
         ndim = array_type.ndim
         members = [('array', types.EphemeralPointer(array_type)),
                    ('stride', types.intp),
-                   ('pointer', types.EphemeralPointer(types.CPointer(dtype))),
                    ('index', types.EphemeralPointer(types.intp)),
                    ]
         if need_indices:

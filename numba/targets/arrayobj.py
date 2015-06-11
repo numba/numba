@@ -28,7 +28,20 @@ def make_array(array_type):
     Return the Structure representation of the given *array_type*
     (an instance of types.Array).
     """
-    return cgutils.create_struct_proxy(array_type)
+    base = cgutils.create_struct_proxy(array_type)
+    class ArrayStruct(base):
+        @property
+        def shape(self):
+            """
+            Override .shape to inform LLVM that its elements are all positive.
+            """
+            tup = base.__getattr__(self, "shape")
+            builder = self._builder
+            for val in cgutils.unpack_tuple(builder, tup, array_type.ndim):
+                builder.assume(builder.icmp_signed('>=', val,
+                                                   cgutils.get_null_value(val.type)))
+            return tup
+    return ArrayStruct
 
 
 def get_itemsize(context, array_type):
@@ -1229,7 +1242,6 @@ def _make_flattening_iter_cls(flatiterty, kind):
             def init_specific(self, context, builder, arrty, arr):
                 zero = context.get_constant(types.intp, 0)
                 self.index = cgutils.alloca_once_value(builder, zero)
-                self.pointer = cgutils.alloca_once_value(builder, arr.data)
                 # We can't trust strides[-1] to always contain the right
                 # step value, see
                 # http://docs.scipy.org/doc/numpy-dev/release.html#npy-relaxed-strides-checking
@@ -1247,6 +1259,11 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
                     self.indices = indices
 
+            # NOTE: Using gep() instead of explicit pointer addition helps
+            # LLVM vectorize the loop (since the stride is known and
+            # constant).  This is not possible in the non-contiguous case,
+            # where the strides are unknown at compile-time.
+
             def iternext_specific(self, context, builder, arrty, arr, result):
                 zero = context.get_constant(types.intp, 0)
                 one = context.get_constant(types.intp, 1)
@@ -1259,7 +1276,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 result.set_valid(is_valid)
 
                 with cgutils.if_likely(builder, is_valid):
-                    ptr = builder.load(self.pointer)
+                    ptr = builder.gep(arr.data, [index])
                     value = context.unpack_value(builder, arrty.dtype, ptr)
                     if kind == 'flat':
                         result.yield_(value)
@@ -1275,8 +1292,6 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
                     index = builder.add(index, one)
                     builder.store(index, self.index)
-                    ptr = cgutils.pointer_add(builder, ptr, self.stride)
-                    builder.store(ptr, self.pointer)
 
             def getitem(self, context, builder, arrty, arr, index):
                 ptr = builder.gep(arr.data, [index])
