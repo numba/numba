@@ -67,9 +67,18 @@ class TestUfuncBuilding(unittest.TestCase):
         self.assertFalse(cres.objectmode)
         ufunc = ufb.build_ufunc()
 
-        a = numpy.arange(10, dtype='int32')
-        b = ufunc(a, a)
-        self.assertTrue(numpy.all(a + a == b))
+        def check(a):
+            b = ufunc(a, a)
+            self.assertTrue(numpy.all(a + a == b))
+            self.assertEqual(b.dtype, a.dtype)
+
+        a = numpy.arange(12, dtype='int32')
+        check(a)
+        # Non-contiguous dimension
+        a = a[::2]
+        check(a)
+        a = a.reshape((2, 3))
+        check(a)
 
         # Metadata
         self.assertEqual(ufunc.__name__, "add")
@@ -84,12 +93,14 @@ class TestUfuncBuilding(unittest.TestCase):
         def check(a):
             b = ufunc(a, a)
             self.assertTrue(numpy.all(a + a == b))
-            self.assertEqual(b.dtype, numpy.dtype('complex64'))
+            self.assertEqual(b.dtype, a.dtype)
 
-        a = numpy.arange(10, dtype='complex64') + 1j
+        a = numpy.arange(12, dtype='complex64') + 1j
         check(a)
         # Non-contiguous dimension
         a = a[::2]
+        check(a)
+        a = a.reshape((2, 3))
         check(a)
 
     def test_ufunc_forceobj(self):
