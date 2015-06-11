@@ -90,7 +90,7 @@ HTML = _readenv("NUMBA_DUMP_HTML", str, None)
 PYVERSION = sys.version_info[:2]
 
 # Disable CUDA support
-DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, 0)
+DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, int(MACHINE_BITS==32))
 
 # Allow interpreter fallback so that Numba @jit decorator will never fail
 # Use for migrating from old numba (<0.12) which supported closure, and other
