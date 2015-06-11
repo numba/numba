@@ -369,15 +369,23 @@ class Pair(Type):
 class SimpleIterableType(IterableType):
 
     def __init__(self, name, iterator_type):
-        self.iterator_type = iterator_type
+        self._iterator_type = iterator_type
         super(SimpleIterableType, self).__init__(name, param=True)
+
+    @property
+    def iterator_type(self):
+        return self._iterator_type
 
 
 class SimpleIteratorType(IteratorType):
 
     def __init__(self, name, yield_type):
-        self.yield_type = yield_type
+        self._yield_type = yield_type
         super(SimpleIteratorType, self).__init__(name, param=True)
+
+    @property
+    def yield_type(self):
+        return self._yield_type
 
 
 class RangeType(SimpleIterableType):
@@ -388,7 +396,7 @@ class RangeIteratorType(SimpleIteratorType):
     pass
 
 
-class Generator(IteratorType):
+class Generator(SimpleIteratorType):
     """
     Type class for Numba-compiled generator objects.
     """
@@ -398,35 +406,34 @@ class Generator(IteratorType):
         self.gen_func = gen_func
         self.arg_types = tuple(arg_types)
         self.state_types = tuple(state_types)
-        self.yield_type = yield_type
         self.has_finalizer = has_finalizer
         name = "%s generator(func=%s, args=%s, has_finalizer=%s)" % (
-            self.yield_type, self.gen_func, self.arg_types,
+            yield_type, self.gen_func, self.arg_types,
             self.has_finalizer)
-        super(Generator, self).__init__(name, param=True)
+        super(Generator, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
 
 
-class NumpyFlatType(IteratorType):
+class NumpyFlatType(SimpleIteratorType):
     """
     Type class for `ndarray.flat()` objects.
     """
 
     def __init__(self, arrty):
         self.array_type = arrty
-        self.yield_type = arrty.dtype
+        yield_type = arrty.dtype
         name = "array.flat({arrayty})".format(arrayty=arrty)
-        super(NumpyFlatType, self).__init__(name, param=True)
+        super(NumpyFlatType, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.array_type
 
 
-class NumpyNdEnumerateType(IteratorType):
+class NumpyNdEnumerateType(SimpleIteratorType):
     """
     Type class for `np.ndenumerate()` objects.
     """
@@ -435,32 +442,32 @@ class NumpyNdEnumerateType(IteratorType):
         self.array_type = arrty
         # XXX making this a uintp has the side effect of forcing some
         # arithmetic operations to return a float result.
-        self.yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
+        yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
         name = "ndenumerate({arrayty})".format(arrayty=arrty)
-        super(NumpyNdEnumerateType, self).__init__(name, param=True)
+        super(NumpyNdEnumerateType, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.array_type
 
 
-class NumpyNdIndexType(IteratorType):
+class NumpyNdIndexType(SimpleIteratorType):
     """
     Type class for `np.ndindex()` objects.
     """
 
     def __init__(self, ndim):
         self.ndim = ndim
-        self.yield_type = UniTuple(intp, self.ndim)
+        yield_type = UniTuple(intp, self.ndim)
         name = "ndindex(dims={ndim})".format(ndim=ndim)
-        super(NumpyNdIndexType, self).__init__(name, param=True)
+        super(NumpyNdIndexType, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.ndim
 
 
-class EnumerateType(IteratorType):
+class EnumerateType(SimpleIteratorType):
     """
     Type class for `enumerate` objects.
     Type instances are parametered with the underlying source type.
@@ -468,16 +475,16 @@ class EnumerateType(IteratorType):
 
     def __init__(self, iterable_type):
         self.source_type = iterable_type.iterator_type
-        self.yield_type = Tuple([intp, self.source_type.yield_type])
+        yield_type = Tuple([intp, self.source_type.yield_type])
         name = 'enumerate(%s)' % (self.source_type)
-        super(EnumerateType, self).__init__(name, param=True)
+        super(EnumerateType, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.source_type
 
 
-class ZipType(IteratorType):
+class ZipType(SimpleIteratorType):
     """
     Type class for `zip` objects.
     Type instances are parametered with the underlying source types.
@@ -485,9 +492,9 @@ class ZipType(IteratorType):
 
     def __init__(self, iterable_types):
         self.source_types = tuple(tp.iterator_type for tp in iterable_types)
-        self.yield_type = Tuple(tp.yield_type for tp in self.source_types)
+        yield_type = Tuple(tp.yield_type for tp in self.source_types)
         name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)
-        super(ZipType, self).__init__(name, param=True)
+        super(ZipType, self).__init__(name, yield_type)
 
     @property
     def key(self):
@@ -550,7 +557,7 @@ class Record(Type):
         return [(f, t) for f, (t, _) in self.fields.items()]
 
 
-class ArrayIterator(IteratorType):
+class ArrayIterator(SimpleIteratorType):
     """
     Type class for iterators of array and buffer objects.
     """
@@ -560,10 +567,10 @@ class ArrayIterator(IteratorType):
         name = "iter(%s)" % (self.array_type,)
         nd = array_type.ndim
         if nd == 0 or nd == 1:
-            self.yield_type = array_type.dtype
+            yield_type = array_type.dtype
         else:
-            self.yield_type = array_type.copy(ndim=array_type.ndim - 1)
-        super(ArrayIterator, self).__init__(name, param=True)
+            yield_type = array_type.copy(ndim=array_type.ndim - 1)
+        super(ArrayIterator, self).__init__(name, yield_type)
 
 
 class Buffer(IterableType):
@@ -593,7 +600,11 @@ class Buffer(IterableType):
                 type_name = "readonly %s" % type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Buffer, self).__init__(name, param=True)
-        self.iterator_type = ArrayIterator(self)
+        self._iterator_type = ArrayIterator(self)
+
+    @property
+    def iterator_type(self):
+        return self._iterator_type
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
@@ -763,7 +774,11 @@ class UniTuple(IterableType, BaseTuple):
         self.count = count
         name = "(%s x %d)" % (dtype, count)
         super(UniTuple, self).__init__(name, param=True)
-        self.iterator_type = UniTupleIter(self)
+        self._iterator_type = UniTupleIter(self)
+
+    @property
+    def iterator_type(self):
+        return self._iterator_type
 
     def getitem(self, ind):
         return self.dtype, intp
@@ -799,13 +814,13 @@ class UniTuple(IterableType, BaseTuple):
         return NotImplemented
 
 
-class UniTupleIter(IteratorType):
+class UniTupleIter(SimpleIteratorType):
 
     def __init__(self, unituple):
         self.unituple = unituple
-        self.yield_type = unituple.dtype
+        yield_type = unituple.dtype
         name = 'iter(%s)' % unituple
-        super(UniTupleIter, self).__init__(name, param=True)
+        super(UniTupleIter, self).__init__(name, yield_type)
 
     @property
     def key(self):

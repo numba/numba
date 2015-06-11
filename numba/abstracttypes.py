@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from abc import ABCMeta, abstractmethod, abstractproperty
 import itertools
 import weakref
 
@@ -25,7 +26,7 @@ def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
 
 
-class _TypeMetaclass(type):
+class _TypeMetaclass(ABCMeta):
     """
     A metaclass that will intern instances after they are created.
     This is done by first creating a new instance (including calling
@@ -161,12 +162,13 @@ class Callable(Type):
     Base class for callables.
     """
 
+    @abstractmethod
     def get_call_type(self, context, args, kws):
         """
         Using the typing *context*, resolve the callable's signature for
         the given arguments.  A signature object is returned, or None.
         """
-        raise NotImplementedError
+        pass
 
 
 class DTypeSpec(Type):
@@ -175,16 +177,23 @@ class DTypeSpec(Type):
     (e.g. np.empty()).
     """
 
-    @property
+    @abstractproperty
     def dtype(self):
-        raise NotImplementedError
+        """
+        The actual dtype denoted by this dtype spec (a Type instance).
+        """
 
 
 class IterableType(Type):
     """
     Base class for iterable types.
-    Derived classes should implement the *iterator_type* attribute.
     """
+
+    @abstractproperty
+    def iterator_type(self):
+        """
+        The iterator type obtained when calling iter() (explicitly or implicitly).
+        """
 
 
 class IteratorType(IterableType):
@@ -194,5 +203,16 @@ class IteratorType(IterableType):
     """
 
     def __init__(self, name, **kwargs):
-        self.iterator_type = self
+        self._iterator_type = self
         super(IteratorType, self).__init__(name, **kwargs)
+
+    @abstractproperty
+    def yield_type(self):
+        """
+        The type of values yielded by the iterator.
+        """
+
+    @property
+    def iterator_type(self):
+        return self._iterator_type
+
