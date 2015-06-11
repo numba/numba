@@ -463,6 +463,12 @@ class TestArrayMethods(TestCase):
     def test_array_cumsum_global(self):
         self.check_cumulative(array_cumsum_global)
 
+    def test_array_cumprod(self):
+        self.check_cumulative(array_cumprod)
+
+    def test_array_cumprod_global(self):
+        self.check_cumulative(array_cumprod_global)
+
     def check_aggregation_magnitude(self, pyfunc, is_prod=False):
         """
         Check that integer overflows are avoided (issue #931).
