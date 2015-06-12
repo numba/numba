@@ -410,6 +410,8 @@ def normalize_index(index):
         return types.intp if index.signed else types.uintp
 
 
+# XXX Should there be a base Sequence type for plain 1d sequences?
+
 @builtin
 class GetItemUniTuple(AbstractTemplate):
     key = "getitem"
@@ -418,6 +420,17 @@ class GetItemUniTuple(AbstractTemplate):
         tup, idx = args
         if isinstance(tup, types.UniTuple):
             return signature(tup.dtype, tup, normalize_index(idx))
+
+
+@builtin
+class GetItemFlat(AbstractTemplate):
+    key = "getitem"
+
+    def generic(self, args, kws):
+        obj, idx = args
+        if (isinstance(obj, types.NumpyFlatType)
+            and isinstance(idx, types.Integer)):
+            return signature(obj.array_type.dtype, obj, normalize_index(idx))
 
 
 @builtin
@@ -554,6 +567,9 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_ctypes(self, ary):
         return types.ArrayCTypes(ary)
 
+    def resolve_flags(self, ary):
+        return types.ArrayFlags(ary)
+
     def resolve_T(self, ary):
         if ary.ndim <= 1:
             retty = ary
@@ -616,6 +632,19 @@ class ArrayCTypesAttribute(AttributeTemplate):
     def resolve_data(self, ctinfo):
         return types.uintp
 
+
+@builtin_attr
+class ArrayFlagsAttribute(AttributeTemplate):
+    key = types.ArrayFlags
+
+    def resolve_contiguous(self, ctflags):
+        return types.boolean
+
+    def resolve_c_contiguous(self, ctflags):
+        return types.boolean
+
+    def resolve_f_contiguous(self, ctflags):
+        return types.boolean
 
 
 @builtin_attr

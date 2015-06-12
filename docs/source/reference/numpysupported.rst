@@ -83,6 +83,7 @@ Attributes
 The following attributes of Numpy arrays are supported:
 
 * :attr:`~numpy.ndarray.dtype`
+* :attr:`~numpy.ndarray.flags`
 * :attr:`~numpy.ndarray.flat`
 * :attr:`~numpy.ndarray.itemsize`
 * :attr:`~numpy.ndarray.ndim`
@@ -90,6 +91,19 @@ The following attributes of Numpy arrays are supported:
 * :attr:`~numpy.ndarray.size`
 * :attr:`~numpy.ndarray.strides`
 * :attr:`~numpy.ndarray.T`
+
+The ``flags`` object
+''''''''''''''''''''
+
+The object returned by the :attr:`~numpy.ndarray.flags` attribute supports
+the ``contiguous``, ``c_contiguous`` and ``f_contiguous`` attributes.
+
+The ``flat`` object
+'''''''''''''''''''
+
+The object returned by the :attr:`~numpy.ndarray.flat` attribute supports
+iteration and indexing, but be careful: indexing is very slow on
+non-C-contiguous arrays.
 
 Calculation
 -----------
