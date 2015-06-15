@@ -24,6 +24,8 @@ from .builtins import Slice
 
 
 def assume_positive(builder, val):
+    # NOTE: can't use range metadata as it may only be attached to a couple
+    # instruction kinds such as `load`.
     builder.assume(builder.icmp_signed('>=', val,
                                        cgutils.get_null_value(val.type)))
 
