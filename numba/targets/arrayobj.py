@@ -23,11 +23,34 @@ from numba.targets.imputils import (builtin, builtin_attr, implement,
 from .builtins import Slice
 
 
-def assume_positive(builder, val):
-    # NOTE: can't use range metadata as it may only be attached to a couple
-    # instruction kinds such as `load`.
-    builder.assume(builder.icmp_signed('>=', val,
-                                       cgutils.get_null_value(val.type)))
+def increment_index(builder, val):
+    """
+    Increment an index *val*.
+    """
+    one = Constant.int(val.type, 1)
+    # We pass the "nsw" flag in the hope that LLVM understands the index
+    # never changes sign.  Unfortunately this doesn't always work
+    # (e.g. ndindex()).
+    return builder.add(val, one, flags=['nsw'])
+
+
+def set_range_metadata(builder, load, lower_bound, upper_bound):
+    """
+    Set the "range" metadata on a load instruction.
+    Note the interval is in the form [lower_bound, upper_bound).
+    """
+    range_operands = [Constant.int(load.type, lower_bound),
+                      Constant.int(load.type, upper_bound)]
+    md = builder.module.add_metadata(range_operands)
+    load.set_metadata("range", md)
+
+
+def mark_positive(builder, load):
+    """
+    Mark the result of a load instruction as positive (or zero).
+    """
+    upper_bound = 1 << (load.type.width - 1) - 1
+    set_range_metadata(builder, load, 0, upper_bound)
 
 
 def make_array(array_type):
@@ -48,10 +71,9 @@ def make_array(array_type):
             if ndim == 0:
                 return base.__getattr__(self, "shape")
 
-            # Inform LLVM that all dimensions are >= 0.
             # Unfortunately, we can't use llvm.assume as its presence can
-            # seriously pessimize performance.
-            # Note that this currently isn't improving anything,
+            # seriously pessimize performance,
+            # *and* the range metadata currently isn't improving anything here,
             # see https://llvm.org/bugs/show_bug.cgi?id=23848 !
             ptr = self._get_ptr_by_name("shape")
             dims = []
@@ -59,13 +81,7 @@ def make_array(array_type):
                 dimptr = cgutils.gep(builder, ptr, 0, i)
                 load = builder.load(dimptr)
                 dims.append(load)
-
-                # Add range metadata to the load instruction
-                upper_bound = 1 << (load.type.width - 1) - 1
-                range_operands = [Constant.int(load.type, 0),
-                                  Constant.int(load.type, upper_bound)]
-                md = builder.module.add_metadata(range_operands)
-                load.set_metadata("range", md)
+                mark_positive(builder, load)
 
             return cgutils.pack_array(builder, dims)
 
@@ -1193,7 +1209,7 @@ def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
 
     for dim in reversed(range(ndim)):
         idxptr = cgutils.gep(builder, indices, dim)
-        idx = builder.add(builder.load(idxptr), one)
+        idx = increment_index(builder, builder.load(idxptr))
 
         count = shape[dim]
         in_bounds = builder.icmp(lc.ICMP_SLT, idx, count)
@@ -1261,6 +1277,9 @@ def make_ndindex_cls(nditerty):
 
             indices = [builder.load(cgutils.gep(builder, self.indices, dim))
                        for dim in range(ndim)]
+            for load in indices:
+                mark_positive(builder, load)
+
             result.yield_(cgutils.pack_array(builder, indices, zero.type))
             result.set_valid(True)
 

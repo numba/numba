@@ -132,7 +132,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
                 result.yield_(value)
                 one = context.get_constant(int_type, 1)
 
-                builder.store(builder.sub(count, one), countptr)
+                builder.store(builder.sub(count, one, flags=["nsw"]), countptr)
                 builder.store(builder.add(value, self.step), self.iter)
 
 
