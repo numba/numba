@@ -397,6 +397,9 @@ class BaseContext(object):
         elif ty in types.real_domain:
             return Constant.real(lty, val)
 
+        elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+            return Constant.real(lty, val.astype(numpy.int64))
+
         elif isinstance(ty, types.UniTuple):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
