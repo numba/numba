@@ -36,17 +36,39 @@ def make_array(array_type):
     (an instance of types.Array).
     """
     base = cgutils.create_struct_proxy(array_type)
+    ndim = array_type.ndim
+
     class ArrayStruct(base):
         @property
         def shape(self):
             """
             Override .shape to inform LLVM that its elements are all positive.
             """
-            tup = base.__getattr__(self, "shape")
             builder = self._builder
-            for val in cgutils.unpack_tuple(builder, tup, array_type.ndim):
-                assume_positive(builder, val)
-            return tup
+            if ndim == 0:
+                return base.__getattr__(self, "shape")
+
+            # Inform LLVM that all dimensions are >= 0.
+            # Unfortunately, we can't use llvm.assume as its presence can
+            # seriously pessimize performance.
+            # Note that this currently isn't improving anything,
+            # see https://llvm.org/bugs/show_bug.cgi?id=23848 !
+            ptr = self._get_ptr_by_name("shape")
+            dims = []
+            for i in range(ndim):
+                dimptr = cgutils.gep(builder, ptr, 0, i)
+                load = builder.load(dimptr)
+                dims.append(load)
+
+                # Add range metadata to the load instruction
+                upper_bound = 1 << (load.type.width - 1) - 1
+                range_operands = [Constant.int(load.type, 0),
+                                  Constant.int(load.type, upper_bound)]
+                md = builder.module.add_metadata(range_operands)
+                load.set_metadata("range", md)
+
+            return cgutils.pack_array(builder, dims)
+
     return ArrayStruct
 
 
@@ -967,7 +989,26 @@ def array_dtype(context, builder, typ, value):
 def array_shape(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
-    return array.shape
+    ndim = typ.ndim
+    if ndim == 0:
+        return array.shape
+    else:
+        ptr = array._get_ptr_by_name("shape")
+        shape = []
+        for i in range(ndim):
+            dimptr = cgutils.gep(builder, ptr, 0, i)
+            load = builder.load(dimptr)
+            shape.append(load)
+
+            # Add range metadata to the load instruction
+            upper_bound = 1 << (load.type.width - 1) - 1
+            upper_bound = 2 ** 30
+            range_operands = [Constant.int(load.type, 0),
+                              Constant.int(load.type, upper_bound)]
+            md = builder.module.add_metadata(range_operands)
+            load.set_metadata("range", md)
+
+        return cgutils.pack_array(builder, shape)
 
 
 @builtin_attr
