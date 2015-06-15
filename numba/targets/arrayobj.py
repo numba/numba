@@ -23,6 +23,11 @@ from numba.targets.imputils import (builtin, builtin_attr, implement,
 from .builtins import Slice
 
 
+def assume_positive(builder, val):
+    builder.assume(builder.icmp_signed('>=', val,
+                                       cgutils.get_null_value(val.type)))
+
+
 def make_array(array_type):
     """
     Return the Structure representation of the given *array_type*
@@ -38,8 +43,7 @@ def make_array(array_type):
             tup = base.__getattr__(self, "shape")
             builder = self._builder
             for val in cgutils.unpack_tuple(builder, tup, array_type.ndim):
-                builder.assume(builder.icmp_signed('>=', val,
-                                                   cgutils.get_null_value(val.type)))
+                assume_positive(builder, val)
             return tup
     return ArrayStruct
 

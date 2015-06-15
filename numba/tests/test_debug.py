@@ -54,11 +54,11 @@ class DebugTestBase(TestCase):
     def _check_dump_func_opt_llvm(self, out):
         self.assertIn('--FUNCTION OPTIMIZED DUMP %s' % self.func_name, out)
         # allocas have been optimized away
-        self.assertIn('add i64 %arg.somearg, 1', out)
+        self.assertIn('add nsw i64 %arg.somearg, 1', out)
 
     def _check_dump_optimized_llvm(self, out):
         self.assertIn('--OPTIMIZED DUMP %s' % self.func_name, out)
-        self.assertIn('add i64 %arg.somearg, 1', out)
+        self.assertIn('add nsw i64 %arg.somearg, 1', out)
 
     def _check_dump_assembly(self, out):
         self.assertIn('--ASSEMBLY %s' % self.func_name, out)
