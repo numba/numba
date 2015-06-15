@@ -166,18 +166,14 @@ class CUDATargetContext(BaseContext):
         """
         lmod = builder.basic_block.function.module
         text = Constant.stringz(string)
-        name = "__conststring__.%s" % string
         charty = Type.int(8)
 
-        for gv in lmod.global_values:
-            if gv.name == name and gv.type.pointee == text.type:
-                break
-        else:
-            gv = lmod.add_global_variable(text.type, name=name,
-                                          addrspace=nvvm.ADDRSPACE_CONSTANT)
-            gv.linkage = LINKAGE_INTERNAL
-            gv.global_constant = True
-            gv.initializer = text
+        # Rely on llvmlite to deduplicate the name
+        gv = lmod.add_global_variable(text.type, name="__conststring__",
+                                      addrspace=nvvm.ADDRSPACE_CONSTANT)
+        gv.linkage = LINKAGE_INTERNAL
+        gv.global_constant = True
+        gv.initializer = text
 
         constcharptrty = Type.pointer(charty, nvvm.ADDRSPACE_CONSTANT)
         charptr = builder.bitcast(gv, constcharptrty)
