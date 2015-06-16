@@ -226,6 +226,28 @@ class TestUnify(unittest.TestCase):
         self.assert_unify(aty, bty, types.Tuple((types.Optional(types.int32),
                                                  types.Optional(types.int64))))
 
+    def test_arrays(self):
+        aty = types.Array(types.int32, 3, "C")
+        bty = types.Array(types.int32, 3, "A")
+        self.assert_unify(aty, bty, bty)
+        aty = types.Array(types.int32, 3, "C")
+        bty = types.Array(types.int32, 3, "F")
+        self.assert_unify(aty, bty, types.Array(types.int32, 3, "A"))
+        aty = types.Array(types.int32, 3, "C")
+        bty = types.Array(types.int32, 3, "C", readonly=True)
+        self.assert_unify(aty, bty, bty)
+        aty = types.Array(types.int32, 3, "A")
+        bty = types.Array(types.int32, 3, "C", readonly=True)
+        self.assert_unify(aty, bty,
+                          types.Array(types.int32, 3, "A", readonly=True))
+        # Failures
+        aty = types.Array(types.int32, 2, "C")
+        bty = types.Array(types.int32, 3, "C")
+        self.assert_unify_failure(aty, bty)
+        aty = types.Array(types.int32, 2, "C")
+        bty = types.Array(types.uint32, 2, "C")
+        self.assert_unify_failure(aty, bty)
+
 
 class TestUnifyUseCases(unittest.TestCase):
     """

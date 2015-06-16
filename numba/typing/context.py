@@ -350,7 +350,7 @@ class BaseContext(object):
         if first == second:
             return first
 
-        # Types with special unification ruler
+        # Types with special unification rules
         unified = first.unify(self, second)
         if unified is not None:
             return unified
@@ -361,28 +361,27 @@ class BaseContext(object):
 
         # TODO: should add an option to reject unsafe type conversion
 
-        # Types with simple coercion rule
+        # For numbers, use Numpy's rules
+        if first in types.number_domain and second in types.number_domain:
+            a = numpy.dtype(str(first))
+            b = numpy.dtype(str(second))
+            sel = numpy.promote_types(a, b)
+            return getattr(types, str(sel))
+
+        # Other types with simple coercion rules
         forward = self.type_compatibility(fromty=first, toty=second)
         backward = self.type_compatibility(fromty=second, toty=first)
 
-        strong = ('exact', 'promote')
-        weak = ('safe', 'unsafe')
-        if forward in strong:
+        safe = ('exact', 'promote', 'safe')
+        if forward in safe:
             return second
-        elif backward in strong:
+        elif backward in safe:
             return first
         elif forward is None and backward is None:
             return types.pyobject
-        elif forward in weak or backward in weak:
-            # Use numpy to pick a type that
-            if first in types.number_domain and second in types.number_domain:
-                a = numpy.dtype(str(first))
-                b = numpy.dtype(str(second))
-                sel = numpy.promote_types(a, b)
-                return getattr(types, str(sel))
 
-        # Failed to unify
-        # XXX unreachable?
+        # There exists only an unsafe conversion from one type to the other
+        # XXX should we return pyobject instead?
         msg = ("Cannot unify {{{first}, {second}}}\n"
                "{first}->{second}::{forward}\n"
                "{second}->{first}::{backward} ")

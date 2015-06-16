@@ -700,6 +700,17 @@ class Array(Buffer):
     def key(self):
         return self.dtype, self.ndim, self.layout, self.mutable
 
+    def unify(self, typingctx, other):
+        if (isinstance(other, Array) and other.ndim == self.ndim
+            and other.dtype == self.dtype):
+            if self.layout == other.layout:
+                layout = self.layout
+            else:
+                layout = 'A'
+            readonly = not (self.mutable and other.mutable)
+            return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
+                         readonly=readonly)
+
 
 class ArrayCTypes(Type):
     """
