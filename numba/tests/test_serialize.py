@@ -51,7 +51,7 @@ class TestDispatcherPickling(TestCase):
     def test_call_nopython(self):
         self.run_with_protocols(self.check_call, add_nopython, 5.5, (1.2, 4.3))
         # Object mode is disabled
-        self.run_with_protocols(self.check_call, add_nopython, TypeError, ("a", "bc"))
+        self.run_with_protocols(self.check_call, add_nopython, TypingError, ("a", "bc"))
 
     def test_call_nopython_fail(self):
         # Compilation fails

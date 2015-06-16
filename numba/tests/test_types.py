@@ -8,15 +8,16 @@ import gc
 import weakref
 
 from numba.utils import IS_PY3
-from numba import types, typing
+from numba import abstracttypes, types, typing
 from numba import unittest_support as unittest
+from .support import TestCase
 
 
 class Dummy(object):
     pass
 
 
-class TestTypeNames(unittest.TestCase):
+class TestTypeNames(TestCase):
 
     def test_equality(self):
         self.assertEqual(types.int32, types.int32)
@@ -158,16 +159,40 @@ class TestTypeNames(unittest.TestCase):
     def test_cache_trimming(self):
         # Test that the cache doesn't grow in size when types are
         # created and disposed of.
+        cache = abstracttypes._typecache
         gc.collect()
         # Keep strong references to existing types, to avoid spurious failures
-        existing_types = [wr() for wr in types._typecache]
-        cache_len = len(types._typecache)
+        existing_types = [wr() for wr in cache]
+        cache_len = len(cache)
         a = types.Dummy('xyzzyx')
         b = types.Dummy('foox')
-        self.assertEqual(len(types._typecache), cache_len + 2)
+        self.assertEqual(len(cache), cache_len + 2)
         del a, b
         gc.collect()
-        self.assertEqual(len(types._typecache), cache_len)
+        self.assertEqual(len(cache), cache_len)
+
+    def test_array_notation(self):
+        def check(arrty, scalar, ndim, layout):
+            self.assertIs(arrty.dtype, scalar)
+            self.assertEqual(arrty.ndim, ndim)
+            self.assertEqual(arrty.layout, layout)
+        scalar = types.int32
+        check(scalar[:], scalar, 1, 'A')
+        check(scalar[::1], scalar, 1, 'C')
+        check(scalar[:,:], scalar, 2, 'A')
+        check(scalar[:,::1], scalar, 2, 'C')
+        check(scalar[::1,:], scalar, 2, 'F')
+
+    def test_call_notation(self):
+        # Function call signature
+        i = types.int32
+        d = types.double
+        self.assertEqual(i(), typing.signature(i))
+        self.assertEqual(i(d), typing.signature(i, d))
+        self.assertEqual(i(d, d), typing.signature(i, d, d))
+        # Value cast
+        self.assertPreciseEqual(i(42.5), 42)
+        self.assertPreciseEqual(d(-5), -5.0)
 
 
 if __name__ == '__main__':
