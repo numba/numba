@@ -177,7 +177,8 @@ class BaseContext(object):
             except NotImplementedError:
                 return
             layout = numpy_support.map_layout(ary)
-            return types.Array(dtype, ary.ndim, layout)
+            readonly = not ary.flags.writeable
+            return types.Array(dtype, ary.ndim, layout, readonly=readonly)
 
         elif sys.version_info >= (2, 7) and not isinstance(val, numpy.generic):
             try:
