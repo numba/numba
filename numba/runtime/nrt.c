@@ -3,6 +3,10 @@
 #include "nrt.h"
 #include "assert.h"
 
+#if !defined MIN
+#define MIN(a, b) ((a) < (b)) ? (a) : (b)
+#endif
+
 
 typedef int (*atomic_meminfo_cas_func)(MemInfo * volatile *ptr, MemInfo *cmp,
                                        MemInfo *repl, MemInfo **oldptr);
@@ -207,9 +211,15 @@ MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
 static
 void nrt_internal_dtor(void *ptr, void *info) {
     NRT_Debug(nrt_debug_print("nrt_internal_dtor %p, %p\n", ptr, info));
-    if (info != NULL) {
-        memset(ptr, 0xDE, (size_t)info);  /* for safety */
-    }
+    NRT_Free(ptr);
+}
+
+static
+void nrt_internal_dtor_safe(void *ptr, void *info) {
+    size_t size = (size_t) info;
+    NRT_Debug(nrt_debug_print("nrt_internal_dtor_safe %p, %p\n", ptr, info));
+    /* See NRT_MemInfo_alloc_safe() */
+    memset(ptr, 0xDE, MIN(size, 256));
     NRT_Free(ptr);
 }
 
@@ -221,9 +231,11 @@ MemInfo* NRT_MemInfo_alloc(size_t size) {
 
 MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
     void *data = NRT_Allocate(size);
-    memset(data, 0xCB, size);
+    /* Only fill up a couple cachelines with debug markers, to minimize
+       footprint. */
+    memset(data, 0xCB, MIN(size, 256));
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p %llu\n", data, size));
-    return NRT_MemInfo_new(data, size, nrt_internal_dtor, (void*)size);
+    return NRT_MemInfo_new(data, size, nrt_internal_dtor_safe, (void*)size);
 }
 
 void NRT_MemInfo_destroy(MemInfo *mi) {
