@@ -484,17 +484,8 @@ class TypeInferer(object):
             if isinstance(term, ir.Return):
                 rettypes.add(typemap[term.value.name])
 
-        if types.none in rettypes:
-            # Special case None return
-            rettypes = rettypes - set([types.none])
-            if rettypes:
-                unified = self.context.unify_types(*rettypes)
-                return types.Optional(unified)
-            else:
-                return types.none
-        elif rettypes:
-            unified = self.context.unify_types(*rettypes)
-            return unified
+        if rettypes:
+            return self.context.unify_types(*rettypes)
         else:
             return types.none
 

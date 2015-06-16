@@ -823,9 +823,8 @@ class UniTuple(IterableType, BaseTuple):
         """
         if isinstance(other, UniTuple) and len(self) == len(other):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
-            return UniTuple(dtype=dtype, count=self.count)
-
-        return None
+            if dtype != pyobject:
+                return UniTuple(dtype=dtype, count=self.count)
 
 
 class UniTupleIter(SimpleIteratorType):
@@ -875,12 +874,8 @@ class Tuple(BaseTuple):
             unified = [typingctx.unify_pairs(ta, tb)
                        for ta, tb in zip(self, other)]
 
-            if any(t == pyobject for t in unified):
-                return None
-
-            return Tuple(unified)
-
-        return None
+            if all(t != pyobject for t in unified):
+                return Tuple(unified)
 
 
 class CPointer(Type):
@@ -940,7 +935,7 @@ class Object(Type):
 class Optional(Type):
     def __init__(self, typ):
         assert typ != none
-        assert not isinstance(typ, Optional)
+        assert not isinstance(typ, (Optional, NoneType))
         self.type = typ
         name = "?%s" % typ
         super(Optional, self).__init__(name, param=True)
@@ -961,14 +956,14 @@ class Optional(Type):
     def unify(self, typingctx, other):
         if isinstance(other, Optional):
             unified = typingctx.unify_pairs(self.type, other.type)
-
         else:
             unified = typingctx.unify_pairs(self.type, other)
 
         if unified != pyobject:
-            return Optional(unified)
-
-        return None
+            if isinstance(unified, Optional):
+                return unified
+            else:
+                return Optional(unified)
 
 
 class NoneType(Opaque):

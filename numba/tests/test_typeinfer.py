@@ -46,6 +46,7 @@ class TestArgRetCasting(unittest.TestCase):
 
 
 class TestUnify(unittest.TestCase):
+
     int_unify = {
         ('uint8', 'uint8'): 'uint8',
         ('int8', 'int8'): 'int8',
@@ -93,6 +94,144 @@ class TestUnify(unittest.TestCase):
         ('uint64', 'int64'): 'float64',
     }
 
+    def assert_unify(self, aty, bty, expected):
+        ctx = typing.Context()
+        template = "{0}, {1} -> {2} != {3}"
+        unified = ctx.unify_types(aty, bty)
+        self.assertEqual(unified, expected,
+                         msg=template.format(aty, bty, unified, expected))
+        unified = ctx.unify_types(bty, aty)
+        self.assertEqual(unified, expected,
+                         msg=template.format(bty, aty, unified, expected))
+
+    def assert_unify_failure(self, aty, bty):
+        self.assert_unify(aty, bty, types.pyobject)
+
+    def test_integer(self):
+        ctx = typing.Context()
+        for aty, bty in itertools.product(types.integer_domain,
+                                          types.integer_domain):
+            key = (str(aty), str(bty))
+            try:
+                expected = self.int_unify[key]
+            except KeyError:
+                expected = self.int_unify[key[::-1]]
+            self.assert_unify(aty, bty, getattr(types, expected))
+
+    def unify_number_pair_test(self, n):
+        """
+        Test all permutations of N-combinations of numeric types and ensure
+        that the order of types in the sequence is irrelevant.
+        """
+        ctx = typing.Context()
+        for tys in itertools.combinations(types.number_domain, n):
+            res = [ctx.unify_types(*comb)
+                   for comb in itertools.permutations(tys)]
+            first_result = res[0]
+            # Sanity check
+            self.assertIsInstance(first_result, types.Number)
+            # All results must be equal
+            for other in res[1:]:
+                self.assertEqual(first_result, other)
+
+    def test_unify_number_pair(self):
+        self.unify_number_pair_test(2)
+        self.unify_number_pair_test(3)
+
+    def test_none_to_optional(self):
+        """
+        Test unification to optional type
+        """
+        ctx = typing.Context()
+        for tys in itertools.combinations(types.number_domain, 2):
+            tys = list(tys) + [types.none]
+            res = [ctx.unify_types(*comb)
+                   for comb in itertools.permutations(tys)]
+            # All result must be equal
+            first_result = res[0]
+            self.assertIsInstance(first_result, types.Optional)
+            for other in res[1:]:
+                self.assertEqual(first_result, other)
+
+    def test_none(self):
+        aty = types.none
+        bty = types.none
+        self.assert_unify(aty, bty, types.none)
+
+    def test_optional(self):
+        aty = types.Optional(types.int32)
+        bty = types.none
+        self.assert_unify(aty, bty, aty)
+        aty = types.Optional(types.int32)
+        bty = types.Optional(types.int64)
+        self.assert_unify(aty, bty, bty)
+        aty = types.Optional(types.int32)
+        bty = types.int64
+        self.assert_unify(aty, bty, types.Optional(types.int64))
+        # Failure
+        aty = types.Optional(types.int32)
+        bty = types.Optional(types.len_type)
+        self.assert_unify_failure(aty, bty)
+
+    def test_tuple(self):
+        aty = types.UniTuple(types.int32, 3)
+        bty = types.UniTuple(types.int64, 3)
+        self.assert_unify(aty, bty, types.UniTuple(types.int64, 3))
+        # (Tuple, UniTuple) -> Tuple
+        aty = types.UniTuple(types.int32, 2)
+        bty = types.Tuple((types.int16, types.int64))
+        self.assert_unify(aty, bty, types.Tuple((types.int32, types.int64)))
+        # (Tuple, Tuple) -> Tuple
+        aty = types.Tuple((types.int8, types.int16, types.int32))
+        bty = types.Tuple((types.int32, types.int16, types.int8))
+        self.assert_unify(aty, bty, types.Tuple((types.int32, types.int16, types.int32)))
+        aty = types.Tuple((types.int8, types.int32))
+        bty = types.Tuple((types.int32, types.int8))
+        self.assert_unify(aty, bty, types.Tuple((types.int32, types.int32)))
+        # Different number kinds
+        aty = types.UniTuple(types.float64, 3)
+        bty = types.UniTuple(types.complex64, 3)
+        self.assert_unify(aty, bty, types.UniTuple(types.complex128, 3))
+        # Tuples of tuples
+        aty = types.UniTuple(types.Tuple((types.uint32, types.float32)), 2)
+        bty = types.UniTuple(types.Tuple((types.int16, types.float32)), 2)
+        self.assert_unify(aty, bty,
+                          types.UniTuple(types.Tuple((types.int64, types.float32)), 2))
+        # Failures
+        aty = types.UniTuple(types.int32, 1)
+        bty = types.UniTuple(types.len_type, 1)
+        self.assert_unify_failure(aty, bty)
+        aty = types.UniTuple(types.int32, 1)
+        bty = types.UniTuple(types.int32, 2)
+        self.assert_unify_failure(aty, bty)
+        aty = types.Tuple((types.int8, types.len_type))
+        bty = types.Tuple((types.int32, types.int8))
+        self.assert_unify_failure(aty, bty)
+
+    def test_optional_tuple(self):
+        # Unify to optional tuple
+        aty = types.none
+        bty = types.UniTuple(types.int32, 2)
+        self.assert_unify(aty, bty, types.Optional(types.UniTuple(types.int32, 2)))
+        aty = types.Optional(types.UniTuple(types.int16, 2))
+        bty = types.UniTuple(types.int32, 2)
+        self.assert_unify(aty, bty, types.Optional(types.UniTuple(types.int32, 2)))
+        # Unify to tuple of optionals
+        aty = types.Tuple((types.none, types.int32))
+        bty = types.Tuple((types.int16, types.none))
+        self.assert_unify(aty, bty, types.Tuple((types.Optional(types.int16),
+                                                 types.Optional(types.int32))))
+        aty = types.Tuple((types.Optional(types.int32), types.int64))
+        bty = types.Tuple((types.int16, types.Optional(types.int8)))
+        self.assert_unify(aty, bty, types.Tuple((types.Optional(types.int32),
+                                                 types.Optional(types.int64))))
+
+
+class TestUnifyUseCases(unittest.TestCase):
+    """
+    Concrete cases where unification would fail.
+    """
+
     @staticmethod
     def _actually_test_complex_unify():
         def pyfunc(a):
@@ -121,7 +260,7 @@ class TestUnify(unittest.TestCase):
             subproc = subprocess.Popen(
                 [sys.executable, '-c',
                  'import numba.tests.test_typeinfer as test_mod\n' +
-                 'test_mod.TestUnify._actually_test_complex_unify()'],
+                 'test_mod.TestUnifyUseCases._actually_test_complex_unify()'],
                 env=env)
             subproc.wait()
             self.assertEqual(subproc.returncode, 0, 'Child process failed.')
@@ -139,52 +278,6 @@ class TestUnify(unittest.TestCase):
         args = (types.int32, types.int64)
         # Check if compilation is successful
         cres = compile_isolated(foo, args)
-
-    def test_integer_unify(self):
-        ctx = typing.Context()
-        for aty, bty in itertools.product(types.integer_domain,
-                                          types.integer_domain):
-            unified = ctx.unify_types(aty, bty)
-            key = (str(aty), str(bty))
-            try:
-                expected = self.int_unify[key]
-            except KeyError:
-                expected = self.int_unify[key[::-1]]
-            msg = "{0}, {1} -> {2} != {3}".format(aty, bty, unified, expected)
-            self.assertEqual(unified, getattr(types, expected), msg=msg)
-
-    def unify_number_pair_test(self, n):
-        """
-        Test all permutations of N-combinations of numeric types and ensure
-        that the order of types in the sequence is irrelevant.
-        """
-        ctx = typing.Context()
-        for tys in itertools.combinations(types.number_domain, n):
-            res = [ctx.unify_types(*comb)
-                   for comb in itertools.permutations(tys)]
-            # All result must be equal
-            first_result = res[0]
-            for other in res[1:]:
-                self.assertEqual(first_result, other)
-
-    def test_unify_number_pair(self):
-        self.unify_number_pair_test(2)
-        self.unify_number_pair_test(3)
-
-    def test_unify_to_optional(self):
-        """
-        Test unification to optional type
-        """
-        ctx = typing.Context()
-        for tys in itertools.combinations(types.number_domain, 2):
-            tys = list(tys) + [types.none]
-            res = [ctx.unify_types(*comb)
-                   for comb in itertools.permutations(tys)]
-            # All result must be equal
-            first_result = res[0]
-            self.assertIsInstance(first_result, types.Optional)
-            for other in res[1:]:
-                self.assertEqual(first_result, other)
 
 
 def issue_797(x0, y0, x1, y1, grid):
@@ -228,7 +321,8 @@ def issue_1080(a, b):
     return b
 
 
-class TestIssue(unittest.TestCase):
+class TestMiscIssues(unittest.TestCase):
+
     def test_issue_797(self):
         """https://github.com/numba/numba/issues/797#issuecomment-58592401
 
@@ -245,13 +339,6 @@ class TestIssue(unittest.TestCase):
         """
         foo = jit(nopython=True)(issue_1080)
         foo(True, False)
-
-
-class TestCoercion(unittest.TestCase):
-    """
-    Test coercion of binary operations.
-    """
-
 
 
 if __name__ == '__main__':
