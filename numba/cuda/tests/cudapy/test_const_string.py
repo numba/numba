@@ -1,14 +1,17 @@
 from __future__ import print_function
 
 import re
-from numba.cuda.testing import unittest
-from numba.cuda.descriptor import CUDATargetDesc
-from numba.cuda.cudadrv.nvvm import llvm_to_ptx, ADDRSPACE_CONSTANT
+from numba.cuda.testing import unittest, skip_on_cudasim
 from llvmlite import ir
 
 
+@skip_on_cudasim("This is testing CUDA backend code generation")
 class TestCudaConstString(unittest.TestCase):
     def test_const_string(self):
+        # These imports is incompatible with CUDASIM
+        from numba.cuda.descriptor import CUDATargetDesc
+        from numba.cuda.cudadrv.nvvm import llvm_to_ptx, ADDRSPACE_CONSTANT
+
         targetctx = CUDATargetDesc.targetctx
         mod = targetctx.create_module("")
         textstring = 'A Little Brown Fox'
