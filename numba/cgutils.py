@@ -96,10 +96,7 @@ class StructProxy(object):
                 self._builder.store(value, self._value)
 
     def _get_ptr_by_index(self, index):
-        geped = self._builder.gep(self._value,
-                                  [Constant.int(Type.int(), 0),
-                                   Constant.int(Type.int(), index)])
-        return geped
+        return gep_inbounds(self._builder, self._value, 0, index)
 
     def _get_ptr_by_name(self, attrname):
         index = self._datamodel.get_field_position(attrname)
@@ -200,7 +197,7 @@ class Structure(object):
             self._typemap.append(tp)
 
     def _get_ptr_by_index(self, index):
-        ptr = self._builder.gep(self._value, self._fdmap[index])
+        ptr = self._builder.gep(self._value, self._fdmap[index], inbounds=True)
         return ptr
 
     def _get_ptr_by_name(self, attrname):
@@ -634,7 +631,7 @@ def is_struct_ptr(ltyp):
 
 
 def get_record_member(builder, record, offset, typ):
-    pval = inbound_gep(builder, record, 0, offset)
+    pval = gep_inbounds(builder, record, 0, offset)
     assert not is_pointer(pval.type.pointee)
     return builder.bitcast(pval, Type.pointer(typ))
 
@@ -643,19 +640,14 @@ def is_neg_int(builder, val):
     return builder.icmp(lc.ICMP_SLT, val, get_null_value(val.type))
 
 
-def inbound_gep(builder, ptr, *inds):
-    idx = []
-    for i in inds:
-        if isinstance(i, int):
-            ind = Constant.int(Type.int(32), i)
-        else:
-            ind = i
-        idx.append(ind)
-    return builder.gep(ptr, idx, inbounds=True)
+def gep_inbounds(builder, ptr, *inds, **kws):
+    return gep(builder, ptr, *inds, inbounds=True, **kws)
 
 
 def gep(builder, ptr, *inds, **kws):
     name = kws.pop('name', '')
+    inbounds = kws.pop('inbounds', False)
+    assert not kws
     idx = []
     for i in inds:
         if isinstance(i, int):
@@ -664,7 +656,7 @@ def gep(builder, ptr, *inds, **kws):
         else:
             ind = i
         idx.append(ind)
-    return builder.gep(ptr, idx, name=name)
+    return builder.gep(ptr, idx, name=name, inbounds=inbounds)
 
 
 def pointer_add(builder, ptr, offset, return_type=None):

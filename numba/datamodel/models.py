@@ -262,7 +262,7 @@ class EphemeralArrayModel(PointerModel):
         return ir.ArrayType(self._pointee_be_type, self._fe_type.count)
 
     def as_data(self, builder, value):
-        values = [builder.load(cgutils.gep(builder, value, i))
+        values = [builder.load(cgutils.gep_inbounds(builder, value, i))
                   for i in range(self._fe_type.count)]
         return cgutils.pack_array(builder, values)
 
@@ -430,7 +430,7 @@ class StructModel(CompositeModel):
     def load_from_data_pointer(self, builder, ptr):
         values = []
         for i, model in enumerate(self._models):
-            elem_ptr = cgutils.gep(builder, ptr, 0, i)
+            elem_ptr = cgutils.gep_inbounds(builder, ptr, 0, i)
             val = model.load_from_data_pointer(builder, elem_ptr)
             values.append(val)
 

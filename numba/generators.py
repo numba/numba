@@ -61,6 +61,17 @@ class BaseGeneratorLower(object):
 
         self.resume_blocks = {}
 
+    def get_arg_ptr(self, builder, genptr, arg_index):
+        return cgutils.gep_inbounds(builder, genptr, 0, 1, arg_index)
+
+    def get_resume_index_ptr(self, builder, genptr):
+        return cgutils.gep_inbounds(builder, genptr, 0, 0,
+                                    name='gen.resume_index')
+
+    def get_state_ptr(self, builder, genptr):
+        return cgutils.gep_inbounds(builder, genptr, 0, 2,
+                                    name='gen.state')
+
     def lower_init_func(self, lower):
         """
         Lower the generator's initialization function (which will fill up
@@ -115,12 +126,10 @@ class BaseGeneratorLower(object):
         # Extract argument values and other information from generator struct
         genptr, = self.call_conv.get_arguments(function)
         for i, ty in enumerate(self.gentype.arg_types):
-            argptr = cgutils.gep(builder, genptr, 0, 1, i)
+            argptr = self.get_arg_ptr(builder, genptr, i)
             lower.fnargs[i] = self.context.unpack_value(builder, ty, argptr)
-        self.resume_index_ptr = cgutils.gep(builder, genptr, 0, 0,
-                                            name='gen.resume_index')
-        self.gen_state_ptr = cgutils.gep(builder, genptr, 0, 2,
-                                         name='gen.state')
+        self.resume_index_ptr = self.get_resume_index_ptr(builder, genptr)
+        self.gen_state_ptr = self.get_state_ptr(builder, genptr)
 
         prologue = function.append_basic_block("generator_prologue")
 
@@ -197,8 +206,7 @@ class GeneratorLower(BaseGeneratorLower):
         state variables.
         """
         if self.context.enable_nrt:
-            resume_index_ptr = cgutils.gep(builder, genptr, 0, 0,
-                                           name='gen.resume_index')
+            resume_index_ptr = self.get_resume_index_ptr(builder, genptr)
             resume_index = builder.load(resume_index_ptr)
 
             # If resume_index is 0, next() was never called
@@ -212,19 +220,17 @@ class GeneratorLower(BaseGeneratorLower):
                 '==', resume_index, Constant.int(resume_index.type, 0))
 
             with builder.if_then(need_args_cleanup):
-                gen_args_ptr = cgutils.gep(builder, genptr, 0, 1, name="gen_args")
-                assert len(self.fndesc.argtypes) == len(gen_args_ptr.type.pointee)
                 for elem_idx, argty in enumerate(self.fndesc.argtypes):
-                    argptr = cgutils.gep(builder, gen_args_ptr, 0, elem_idx)
+                    argptr = self.get_arg_ptr(builder, genptr, elem_idx)
                     argval = builder.load(argptr)
                     self.context.nrt_decref(builder, argty, argval)
 
             # Always run the finalizer to clear the block
-            gen_state_ptr = cgutils.gep(builder, genptr, 0, 2, name='gen.state')
+            gen_state_ptr = self.get_state_ptr(builder, genptr)
 
             for state_index in range(len(self.gentype.state_types)):
-                state_slot = cgutils.gep(builder, gen_state_ptr,
-                                         0, state_index)
+                state_slot = cgutils.gep_inbounds(builder, gen_state_ptr,
+                                                  0, state_index)
                 ty = self.gentype.state_types[state_index]
                 val = self.context.unpack_value(builder, ty, state_slot)
                 if self.context.enable_nrt:
@@ -271,8 +277,7 @@ class PyGeneratorLower(BaseGeneratorLower):
         state variables.
         """
         pyapi = self.context.get_python_api(builder)
-        resume_index_ptr = cgutils.gep(builder, genptr, 0, 0,
-                                       name='gen.resume_index')
+        resume_index_ptr = self.get_resume_index_ptr(builder, genptr)
         resume_index = builder.load(resume_index_ptr)
         # If resume_index is 0, next() was never called
         # If resume_index is -1, generator terminated cleanly
@@ -283,11 +288,10 @@ class PyGeneratorLower(BaseGeneratorLower):
 
         with cgutils.if_unlikely(builder, need_cleanup):
             # Decref all live vars (some may be NULL)
-            gen_state_ptr = cgutils.gep(builder, genptr, 0, 2,
-                                        name='gen.state')
+            gen_state_ptr = self.get_state_ptr(builder, genptr)
             for state_index in range(len(self.gentype.state_types)):
-                state_slot = cgutils.gep(builder, gen_state_ptr,
-                                         0, state_index)
+                state_slot = cgutils.gep_inbounds(builder, gen_state_ptr,
+                                                  0, state_index)
                 ty = self.gentype.state_types[state_index]
                 val = self.context.unpack_value(builder, ty, state_slot)
                 pyapi.decref(val)
@@ -318,8 +322,8 @@ class LowerYield(object):
     def lower_yield_suspend(self):
         # Save live vars in state
         for state_index, name in zip(self.live_var_indices, self.live_vars):
-            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
-                                     0, state_index)
+            state_slot = cgutils.gep_inbounds(self.builder, self.gen_state_ptr,
+                                              0, state_index)
             ty = self.gentype.state_types[state_index]
             val = self.lower.loadvar(name)
             self.context.pack_value(self.builder, ty, val, state_slot)
@@ -333,8 +337,8 @@ class LowerYield(object):
         self.genlower.create_resumption_block(self.lower, self.inst.index)
         # Reload live vars from state
         for state_index, name in zip(self.live_var_indices, self.live_vars):
-            state_slot = cgutils.gep(self.builder, self.gen_state_ptr,
-                                     0, state_index)
+            state_slot = cgutils.gep_inbounds(self.builder, self.gen_state_ptr,
+                                              0, state_index)
             ty = self.gentype.state_types[state_index]
             val = self.context.unpack_value(self.builder, ty, state_slot)
             self.lower.storevar(val, name)

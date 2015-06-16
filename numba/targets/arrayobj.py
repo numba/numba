@@ -78,7 +78,7 @@ def make_array(array_type):
             ptr = self._get_ptr_by_name("shape")
             dims = []
             for i in range(ndim):
-                dimptr = cgutils.gep(builder, ptr, 0, i)
+                dimptr = cgutils.gep_inbounds(builder, ptr, 0, i)
                 load = builder.load(dimptr)
                 dims.append(load)
                 mark_positive(builder, load)
@@ -591,11 +591,11 @@ def _attempt_nocopy_reshape(context, builder, aryty, ary, newnd, newshape,
         fnty, name="numba_attempt_nocopy_reshape")
 
     nd = lc.Constant.int(ll_intp, aryty.ndim)
-    shape = cgutils.gep(builder, ary._get_ptr_by_name('shape'), 0, 0)
-    strides = cgutils.gep(builder, ary._get_ptr_by_name('strides'), 0, 0)
+    shape = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('shape'), 0, 0)
+    strides = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('strides'), 0, 0)
     newnd = lc.Constant.int(ll_intp, newnd)
-    newshape = cgutils.gep(builder, newshape, 0, 0)
-    newstrides = cgutils.gep(builder, newstrides, 0, 0)
+    newshape = cgutils.gep_inbounds(builder, newshape, 0, 0)
+    newstrides = cgutils.gep_inbounds(builder, newstrides, 0, 0)
     is_f_order = lc.Constant.int(ll_intc, 0)
     res = builder.call(fn, [nd, shape, strides,
                             newnd, newshape, newstrides,
@@ -673,8 +673,8 @@ def _change_dtype(context, builder, oldty, newty, ary):
     new_itemsize = context.get_constant(types.intp, get_itemsize(context, newty))
 
     nd = lc.Constant.int(ll_intp, newty.ndim)
-    shape = cgutils.gep(builder, ary._get_ptr_by_name('shape'), 0, 0)
-    strides = cgutils.gep(builder, ary._get_ptr_by_name('strides'), 0, 0)
+    shape = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('shape'), 0, 0)
+    strides = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('strides'), 0, 0)
     layout = lc.Constant.int(ll_char, ord(newty.layout))
     res = builder.call(fn, [nd, shape, strides,
                             old_itemsize, new_itemsize, layout])
@@ -1012,7 +1012,7 @@ def array_shape(context, builder, typ, value):
         ptr = array._get_ptr_by_name("shape")
         shape = []
         for i in range(ndim):
-            dimptr = cgutils.gep(builder, ptr, 0, i)
+            dimptr = cgutils.gep_inbounds(builder, ptr, 0, i)
             load = builder.load(dimptr)
             shape.append(load)
 
@@ -1208,7 +1208,7 @@ def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
         builder.store(cgutils.false_byte, end_flag)
 
     for dim in reversed(range(ndim)):
-        idxptr = cgutils.gep(builder, indices, dim)
+        idxptr = cgutils.gep_inbounds(builder, indices, dim)
         idx = increment_index(builder, builder.load(idxptr))
 
         count = shape[dim]
@@ -1250,7 +1250,7 @@ def make_ndindex_cls(nditerty):
             exhausted = cgutils.alloca_once_value(builder, cgutils.false_byte)
 
             for dim in range(ndim):
-                idxptr = cgutils.gep(builder, indices, dim)
+                idxptr = cgutils.gep_inbounds(builder, indices, dim)
                 builder.store(zero, idxptr)
                 # 0-sized dimensions really indicate an empty array,
                 # but we have to catch that condition early to avoid
@@ -1275,7 +1275,7 @@ def make_ndindex_cls(nditerty):
                 result.set_valid(False)
                 builder.branch(bbend)
 
-            indices = [builder.load(cgutils.gep(builder, self.indices, dim))
+            indices = [builder.load(cgutils.gep_inbounds(builder, self.indices, dim))
                        for dim in range(ndim)]
             for load in indices:
                 mark_positive(builder, load)
@@ -1320,7 +1320,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                         size=context.get_constant(types.intp, arrty.ndim))
 
                     for dim in range(arrty.ndim):
-                        idxptr = cgutils.gep(builder, indices, dim)
+                        idxptr = cgutils.gep_inbounds(builder, indices, dim)
                         builder.store(zero, idxptr)
 
                     self.indices = indices
@@ -1349,7 +1349,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                     else:
                         # ndenumerate(): fetch and increment indices
                         indices = self.indices
-                        idxvals = [builder.load(cgutils.gep(builder, indices, dim))
+                        idxvals = [builder.load(cgutils.gep_inbounds(builder, indices, dim))
                                    for dim in range(ndim)]
                         idxtuple = cgutils.pack_array(builder, idxvals)
                         result.yield_(
@@ -1391,8 +1391,8 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
                 # Initialize indices and pointers with their start values.
                 for dim in range(ndim):
-                    idxptr = cgutils.gep(builder, indices, dim)
-                    ptrptr = cgutils.gep(builder, pointers, dim)
+                    idxptr = cgutils.gep_inbounds(builder, indices, dim)
+                    ptrptr = cgutils.gep_inbounds(builder, pointers, dim)
                     builder.store(data, ptrptr)
                     builder.store(zero, idxptr)
                     # 0-sized dimensions really indicate an empty array,
@@ -1429,14 +1429,14 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 result.set_valid(True)
 
                 # Current pointer inside last dimension
-                last_ptr = cgutils.gep(builder, pointers, ndim - 1)
+                last_ptr = cgutils.gep_inbounds(builder, pointers, ndim - 1)
                 ptr = builder.load(last_ptr)
                 value = context.unpack_value(builder, arrty.dtype, ptr)
                 if kind == 'flat':
                     result.yield_(value)
                 else:
                     # ndenumerate() => yield (indices, value)
-                    idxvals = [builder.load(cgutils.gep(builder, indices, dim))
+                    idxvals = [builder.load(cgutils.gep_inbounds(builder, indices, dim))
                                for dim in range(ndim)]
                     idxtuple = cgutils.pack_array(builder, idxvals)
                     result.yield_(
@@ -1445,7 +1445,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 # Update indices and pointers by walking from inner
                 # dimension to outer.
                 for dim in reversed(range(ndim)):
-                    idxptr = cgutils.gep(builder, indices, dim)
+                    idxptr = cgutils.gep_inbounds(builder, indices, dim)
                     idx = builder.add(builder.load(idxptr), one)
 
                     count = shapes[dim]
@@ -1454,13 +1454,13 @@ def _make_flattening_iter_cls(flatiterty, kind):
                     with cgutils.if_likely(builder, in_bounds):
                         # Index is valid => pointer can simply be incremented.
                         builder.store(idx, idxptr)
-                        ptrptr = cgutils.gep(builder, pointers, dim)
+                        ptrptr = cgutils.gep_inbounds(builder, pointers, dim)
                         ptr = builder.load(ptrptr)
                         ptr = cgutils.pointer_add(builder, ptr, stride)
                         builder.store(ptr, ptrptr)
                         # Reset pointers in inner dimensions
                         for inner_dim in range(dim + 1, ndim):
-                            ptrptr = cgutils.gep(builder, pointers, inner_dim)
+                            ptrptr = cgutils.gep_inbounds(builder, pointers, inner_dim)
                             builder.store(ptr, ptrptr)
                         builder.branch(bbend)
                     # Reset index and continue with next dimension
