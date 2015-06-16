@@ -235,11 +235,11 @@ class UArrayArg(object):
         self.is_unit_strided = builder.icmp(ICMP_EQ, self.abisize, self.step)
         self.builder = builder
 
-    def load(self, ind):
-        offset = self.builder.mul(self.step, ind)
-        return self.load_direct(offset)
-
     def load_direct(self, byteoffset):
+        """
+        Generic load from the given *byteoffset*.  load_aligned() is
+        preferred if possible.
+        """
         ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)
         return self.context.unpack_value(self.builder, self.fe_type, ptr)
 
@@ -248,10 +248,6 @@ class UArrayArg(object):
         # vectorize the loop.
         ptr = self.builder.gep(self.dataptr, [ind])
         return self.context.unpack_value(self.builder, self.fe_type, ptr)
-
-    def store(self, value, ind):
-        offset = self.builder.mul(self.step, ind)
-        self.store_direct(value, offset)
 
     def store_direct(self, value, byteoffset):
         ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)
