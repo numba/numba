@@ -49,9 +49,9 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
     mod = builder.module
     lty = context.get_argument_type(ty)
     fnty = lc.Type.function(lty, [lty]*len(sig.args))
-    fn = mod.get_or_insert_function(fnty, name=func_name)
+    fn = cgutils.insert_pure_function(mod, fnty, name=func_name)
     cast_args = [context.cast(builder, arg, argty, ty)
-             for arg, argty in zip(args, sig.args) ]
+                 for arg, argty in zip(args, sig.args) ]
 
     result = builder.call(fn, cast_args)
     return context.cast(builder, result, types.float64, sig.return_type)
@@ -94,6 +94,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         call_argltys = [context.get_value_type(ty).as_pointer()
                         for ty in call_argtys]
         fnty = lc.Type.function(lc.Type.void(), call_argltys)
+        # Note: the function isn't pure here (it writes to its pointer args)
         fn = mod.get_or_insert_function(fnty, name=func_name)
         builder.call(fn, call_args)
         retval = builder.load(call_args[0])
@@ -101,7 +102,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         argtypes = [context.get_argument_type(aty) for aty in sig.args]
         restype = context.get_argument_type(sig.return_type)
         fnty = lc.Type.function(restype, argtypes)
-        fn = mod.get_or_insert_function(fnty, name=func_name)
+        fn = cgutils.insert_pure_function(mod, fnty, name=func_name)
         retval = context.call_external_function(builder, fn, sig.args, args)
     return retval
 
@@ -500,10 +501,10 @@ def np_real_floor_impl(context, builder, sig, args):
     mod = builder.module
     if ty == types.float64:
         fnty = lc.Type.function(lc.Type.double(), [lc.Type.double()])
-        fn = mod.get_or_insert_function(fnty, name="numba.npymath.floor")
+        fn = cgutils.insert_pure_function(mod, fnty, name="numba.npymath.floor")
     elif ty == types.float32:
         fnty = lc.Type.function(lc.Type.float(), [lc.Type.float()])
-        fn = mod.get_or_insert_function(fnty, name="numba.npymath.floorf")
+        fn = cgutils.insert_pure_function(mod, fnty, name="numba.npymath.floorf")
     else:
         raise errors.LoweringError("No floor function for real type {0}".format(str(ty)))
 
