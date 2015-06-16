@@ -333,8 +333,13 @@ class BaseContext(object):
             """
             return getattr(obj, 'bitwidth', hash(obj))
 
-        return functools.reduce(
-            self.unify_pairs, sorted(typelist, key=keyfunc))
+        typelist = sorted(typelist, key=keyfunc)
+        unified = typelist[0]
+        for tp in typelist[1:]:
+            unified = self.unify_pairs(unified, tp)
+            if unified is None:
+                break
+        return unified
 
     def unify_pairs(self, first, second):
         """
@@ -344,15 +349,14 @@ class BaseContext(object):
         if first == second:
             return first
 
-        # Types with special coercion rule
-        first_coerce = first.coerce(self, second)
-        second_coerce = second.coerce(self, first)
+        # Types with special unification ruler
+        unified = first.unify(self, second)
+        if unified is not None:
+            return unified
 
-        if first_coerce is not NotImplemented:
-            return first_coerce
-
-        elif second_coerce is not NotImplemented:
-            return second_coerce
+        unified = second.unify(self, first)
+        if unified is not None:
+            return unified
 
         # TODO: should add an option to reject unsafe type conversion
 
@@ -376,8 +380,8 @@ class BaseContext(object):
                 sel = numpy.promote_types(a, b)
                 return getattr(types, str(sel))
 
-
         # Failed to unify
+        # XXX unreachable?
         msg = ("Cannot unify {{{first}, {second}}}\n"
                "{first}->{second}::{forward}\n"
                "{second}->{first}::{backward} ")

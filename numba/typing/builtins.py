@@ -831,7 +831,8 @@ class Max(AbstractTemplate):
                 return
 
         retty = self.context.unify_types(*args)
-        return signature(retty, *args)
+        if retty is not None:
+            return signature(retty, *args)
 
 
 class Min(AbstractTemplate):
@@ -848,7 +849,8 @@ class Min(AbstractTemplate):
                 return
 
         retty = self.context.unify_types(*args)
-        return signature(retty, *args)
+        if retty is not None:
+            return signature(retty, *args)
 
 
 class Round(ConcreteTemplate):

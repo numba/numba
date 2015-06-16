@@ -817,7 +817,7 @@ class UniTuple(IterableType, BaseTuple):
     def types(self):
         return (self.dtype,) * self.count
 
-    def coerce(self, typingctx, other):
+    def unify(self, typingctx, other):
         """
         Unify UniTuples with their dtype
         """
@@ -825,7 +825,7 @@ class UniTuple(IterableType, BaseTuple):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
             return UniTuple(dtype=dtype, count=self.count)
 
-        return NotImplemented
+        return None
 
 
 class UniTupleIter(SimpleIteratorType):
@@ -866,7 +866,7 @@ class Tuple(BaseTuple):
     def __iter__(self):
         return iter(self.types)
 
-    def coerce(self, typingctx, other):
+    def unify(self, typingctx, other):
         """
         Unify elements of Tuples/UniTuples
         """
@@ -876,11 +876,11 @@ class Tuple(BaseTuple):
                        for ta, tb in zip(self, other)]
 
             if any(t == pyobject for t in unified):
-                return NotImplemented
+                return None
 
             return Tuple(unified)
 
-        return NotImplemented
+        return None
 
 
 class CPointer(Type):
@@ -958,7 +958,7 @@ class Optional(Type):
     def key(self):
         return self.type
 
-    def coerce(self, typingctx, other):
+    def unify(self, typingctx, other):
         if isinstance(other, Optional):
             unified = typingctx.unify_pairs(self.type, other.type)
 
@@ -968,11 +968,11 @@ class Optional(Type):
         if unified != pyobject:
             return Optional(unified)
 
-        return NotImplemented
+        return None
 
 
 class NoneType(Opaque):
-    def coerce(self, typingctx, other):
+    def unify(self, typingctx, other):
         """Turns anything to a Optional type
         """
         if isinstance(other, Optional):

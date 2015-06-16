@@ -45,24 +45,54 @@ class TestArgRetCasting(unittest.TestCase):
         self.assertEqual(typemap['iters'], types.uint32)
 
 
-class TestTupleUnify(unittest.TestCase):
-    def test_int_tuple_unify(self):
-        """
-        Test issue #493
-        """
-
-        def foo(an_int32, an_int64):
-            a = an_int32, an_int32
-            while True:  # infinite loop
-                a = an_int32, an_int64
-            return a
-
-        args = (types.int32, types.int64)
-        # Check if compilation is successful
-        cres = compile_isolated(foo, args)
-
-
 class TestUnify(unittest.TestCase):
+    int_unify = {
+        ('uint8', 'uint8'): 'uint8',
+        ('int8', 'int8'): 'int8',
+        ('uint16', 'uint16'): 'uint16',
+        ('int16', 'int16'): 'int16',
+        ('uint32', 'uint32'): 'uint32',
+        ('int32', 'int32'): 'int32',
+        ('uint64', 'uint64'): 'uint64',
+        ('int64', 'int64'): 'int64',
+
+        ('int8', 'uint8'): 'int16',
+        ('int8', 'uint16'): 'int32',
+        ('int8', 'uint32'): 'int64',
+
+        ('uint8', 'int32'): 'int32',
+        ('uint8', 'uint64'): 'uint64',
+
+        ('int16', 'int8'): 'int16',
+        ('int16', 'uint8'): 'int16',
+        ('int16', 'uint16'): 'int32',
+        ('int16', 'uint32'): 'int64',
+        ('int16', 'int64'): 'int64',
+        ('int16', 'uint64'): 'float64',
+
+        ('uint16', 'uint8'): 'uint16',
+        ('uint16', 'uint32'): 'uint32',
+        ('uint16', 'int32'): 'int32',
+        ('uint16', 'uint64'): 'uint64',
+
+        ('int32', 'int8'): 'int32',
+        ('int32', 'int16'): 'int32',
+        ('int32', 'uint32'): 'int64',
+        ('int32', 'int64'): 'int64',
+
+        ('uint32', 'uint8'): 'uint32',
+        ('uint32', 'int64'): 'int64',
+        ('uint32', 'uint64'): 'uint64',
+
+        ('int64', 'int8'): 'int64',
+        ('int64', 'uint8'): 'int64',
+        ('int64', 'uint16'): 'int64',
+
+        ('uint64', 'int8'): 'float64',
+        ('uint64', 'int32'): 'float64',
+        ('uint64', 'int64'): 'float64',
+    }
+
     @staticmethod
     def _actually_test_complex_unify():
         def pyfunc(a):
@@ -96,10 +126,37 @@ class TestUnify(unittest.TestCase):
             subproc.wait()
             self.assertEqual(subproc.returncode, 0, 'Child process failed.')
 
-    def unify_pair_test(self, n):
+    def test_int_tuple_unify(self):
+        """
+        Test issue #493
+        """
+        def foo(an_int32, an_int64):
+            a = an_int32, an_int32
+            while True:  # infinite loop
+                a = an_int32, an_int64
+            return a
+
+        args = (types.int32, types.int64)
+        # Check if compilation is successful
+        cres = compile_isolated(foo, args)
+
+    def test_integer_unify(self):
+        ctx = typing.Context()
+        for aty, bty in itertools.product(types.integer_domain,
+                                          types.integer_domain):
+            unified = ctx.unify_types(aty, bty)
+            key = (str(aty), str(bty))
+            try:
+                expected = self.int_unify[key]
+            except KeyError:
+                expected = self.int_unify[key[::-1]]
+            msg = "{0}, {1} -> {2} != {3}".format(aty, bty, unified, expected)
+            self.assertEqual(unified, getattr(types, expected), msg=msg)
+
+    def unify_number_pair_test(self, n):
         """
         Test all permutations of N-combinations of numeric types and ensure
-        that the unification matches
+        that the order of types in the sequence is irrelevant.
         """
         ctx = typing.Context()
         for tys in itertools.combinations(types.number_domain, n):
@@ -110,18 +167,13 @@ class TestUnify(unittest.TestCase):
             for other in res[1:]:
                 self.assertEqual(first_result, other)
 
-    def test_unify_pair(self):
-        self.unify_pair_test(2)
-        self.unify_pair_test(3)
-
-    def test_bitwidth_number_types(self):
-        """All numeric types have bitwidth attribute
-        """
-        for ty in types.number_domain:
-            self.assertTrue(hasattr(ty, "bitwidth"))
+    def test_unify_number_pair(self):
+        self.unify_number_pair_test(2)
+        self.unify_number_pair_test(3)
 
     def test_unify_to_optional(self):
-        """Test unification to optional type
+        """
+        Test unification to optional type
         """
         ctx = typing.Context()
         for tys in itertools.combinations(types.number_domain, 2):
@@ -199,66 +251,7 @@ class TestCoercion(unittest.TestCase):
     """
     Test coercion of binary operations.
     """
-    references = {
-        ('uint8', 'uint8'): 'uint8',
-        ('int8', 'int8'): 'int8',
-        ('uint16', 'uint16'): 'uint16',
-        ('int16', 'int16'): 'int16',
-        ('uint32', 'uint32'): 'uint32',
-        ('int32', 'int32'): 'int32',
-        ('uint64', 'uint64'): 'uint64',
-        ('int64', 'int64'): 'int64',
 
-        ('int8', 'uint8'): 'int16',
-        ('int8', 'uint16'): 'int32',
-        ('int8', 'uint32'): 'int64',
-
-        ('uint8', 'int32'): 'int32',
-        ('uint8', 'uint64'): 'uint64',
-
-        ('int16', 'int8'): 'int16',
-        ('int16', 'uint8'): 'int16',
-        ('int16', 'uint16'): 'int32',
-        ('int16', 'uint32'): 'int64',
-        ('int16', 'int64'): 'int64',
-        ('int16', 'uint64'): 'float64',
-
-        ('uint16', 'uint8'): 'uint16',
-        ('uint16', 'uint32'): 'uint32',
-        ('uint16', 'int32'): 'int32',
-        ('uint16', 'uint64'): 'uint64',
-
-        ('int32', 'int8'): 'int32',
-        ('int32', 'int16'): 'int32',
-        ('int32', 'uint32'): 'int64',
-        ('int32', 'int64'): 'int64',
-
-        ('uint32', 'uint8'): 'uint32',
-        ('uint32', 'int64'): 'int64',
-        ('uint32', 'uint64'): 'uint64',
-
-        ('int64', 'int8'): 'int64',
-        ('int64', 'uint8'): 'int64',
-        ('int64', 'uint16'): 'int64',
-
-        ('uint64', 'int8'): 'float64',
-        ('uint64', 'int32'): 'float64',
-        ('uint64', 'int64'): 'float64',
-    }
-
-    def test_integer(self):
-        ctx = typing.Context()
-        for ut, st in itertools.product(types.integer_domain,
-                                        types.integer_domain):
-            unified = ctx.unify_types(ut, st)
-            self._check_unify(ut, st, unified)
-
-    def _check_unify(self, aty, bty, unified):
-        key = (str(aty), str(bty))
-        expect = self.references.get(key,
-                                     self.references.get(tuple(reversed(key))))
-        msg = "{0}, {1} -> {2} != {3}".format(aty, bty, unified, expect)
-        self.assertEqual(str(unified), expect, msg=msg)
 
 
 if __name__ == '__main__':

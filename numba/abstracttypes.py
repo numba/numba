@@ -96,12 +96,14 @@ class Type(object):
     def __ne__(self, other):
         return not (self == other)
 
-    def coerce(self, typingctx, other):
-        """Override this method to implement specialized coercion logic
-        for extending unify_pairs().  Only use this if the coercion logic cannot
-        be expressed as simple casting rules.
+    def unify(self, typingctx, other):
         """
-        return NotImplemented
+        Try to unify this type with the *other*.  A third type must
+        be returned, or None if unification is not possible.
+        Only override this if the coercion logic cannot be expressed
+        as simple casting rules.
+        """
+        return None
 
     # User-facing helpers.  These are not part of the core Type API but
     # are provided so that users can write e.g. `numba.boolean(1.5)`
