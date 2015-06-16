@@ -708,7 +708,7 @@ class TestIndexing(TestCase):
         arr.flags.writeable = False
         with self.assertRaises((TypeError, errors.TypingError)) as raises:
             setitem_usecase(arr, 1, 42)
-        self.assertIn("Cannot modify value of type readonly array(int64, 1d, C)",
+        self.assertIn("Cannot modify value of type readonly array",
                       str(raises.exception))
 
 
