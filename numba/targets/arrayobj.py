@@ -49,7 +49,7 @@ def mark_positive(builder, load):
     """
     Mark the result of a load instruction as positive (or zero).
     """
-    upper_bound = 1 << (load.type.width - 1) - 1
+    upper_bound = (1 << (load.type.width - 1)) - 1
     set_range_metadata(builder, load, 0, upper_bound)
 
 
@@ -1005,26 +1005,7 @@ def array_dtype(context, builder, typ, value):
 def array_shape(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
-    ndim = typ.ndim
-    if ndim == 0:
-        return array.shape
-    else:
-        ptr = array._get_ptr_by_name("shape")
-        shape = []
-        for i in range(ndim):
-            dimptr = cgutils.gep_inbounds(builder, ptr, 0, i)
-            load = builder.load(dimptr)
-            shape.append(load)
-
-            # Add range metadata to the load instruction
-            upper_bound = 1 << (load.type.width - 1) - 1
-            upper_bound = 2 ** 30
-            range_operands = [Constant.int(load.type, 0),
-                              Constant.int(load.type, upper_bound)]
-            md = builder.module.add_metadata(range_operands)
-            load.set_metadata("range", md)
-
-        return cgutils.pack_array(builder, shape)
+    return array.shape
 
 
 @builtin_attr
