@@ -501,7 +501,7 @@ class SetItemBuffer(AbstractTemplate):
         ary, idx, val = args
         if isinstance(ary, types.Buffer):
             if not ary.mutable:
-                raise TypeError("Immutable array")
+                raise TypeError("Cannot modify value of type %s" %(ary,))
             return signature(types.none, ary, normalize_index(idx), ary.dtype)
 
 
