@@ -103,8 +103,7 @@ class Type(object):
         If successful, must return a string describing the conversion, e.g.
         "exact", "promote", "unsafe", "safe"; otherwise None is returned.
         """
-        # By default, convertibility is checked with the type manager
-        return typingctx.tm.check_compatible(self, other)
+        return None
 
     def can_convert_from(self, typingctx, other):
         """
@@ -171,6 +170,11 @@ class Number(Type):
     """
     Base class for number types.
     """
+
+    def can_convert_to(self, typingctx, other):
+        # Convertibility of numbers is checked with the type manager
+        # (the rules are predefined at startup there)
+        return typingctx.tm.check_compatible(self, other)
 
 
 class Callable(Type):
