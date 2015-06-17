@@ -175,11 +175,6 @@ class TestUnify(unittest.TestCase):
             # All results must be equal
             for res in results:
                 self.assertEqual(res, expected)
-            #res = set(res)
-            #first_result = res[0]
-            #self.assertIsInstance(first_result, types.Optional)
-            #for other in res[1:]:
-                #self.assertEqual(first_result, other)
 
     def test_none(self):
         aty = types.none
