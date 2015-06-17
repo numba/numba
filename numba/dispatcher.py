@@ -7,7 +7,7 @@ import sys
 from numba import _dispatcher, compiler, utils, types
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, types, typing
-from numba.typing.templates import resolve_overload, fold_arguments
+from numba.typing.templates import fold_arguments
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method, next
 
@@ -192,8 +192,9 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         assert not kws, "kwargs not handled"
         args = tuple([self.typeof_pyval(a) for a in args])
         sigs = [cr.signature for cr in self._compileinfos.values()]
-        res = resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
-        print("res =", res)
+        # This will raise
+        self.typingctx.resolve_overload(self.py_func, sigs, args, kws,
+                                        allow_ambiguous=False)
 
     def _explain_matching_error(self, *args, **kws):
         assert not kws, "kwargs not handled"

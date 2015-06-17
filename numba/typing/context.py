@@ -20,6 +20,30 @@ from numba import numpy_support, utils
 from . import ctypes_utils, cffi_utils, bufproto
 
 
+class Rating(object):
+    __slots__ = 'promote', 'safe_convert', "unsafe_convert"
+
+    def __init__(self):
+        self.promote = 0
+        self.safe_convert = 0
+        self.unsafe_convert = 0
+
+    def astuple(self):
+        """Returns a tuple suitable for comparing with the worse situation
+        start first.
+        """
+        return (self.unsafe_convert, self.safe_convert, self.promote)
+
+    def __add__(self, other):
+        if type(self) is not type(other):
+            return NotImplemented
+        rsum = Rating()
+        rsum.promote = self.promote + other.promote
+        rsum.safe_convert = self.safe_convert + other.safe_convert
+        rsum.unsafe_convert = self.unsafe_convert + other.unsafe_convert
+        return rsum
+
+
 class BaseContext(object):
     """A typing context for storing function typing constrain template.
     """
@@ -324,6 +348,73 @@ class BaseContext(object):
 
         else:
             return self.tm.check_compatible(fromty, toty)
+
+    def _rate_arguments(self, actualargs, formalargs):
+        """
+        Rate the actual arguments for compatibility against the formal
+        arguments.  A Rating instance is returned, or None if incompatible.
+        """
+        if len(actualargs) != len(formalargs):
+            return None
+        rate = Rating()
+        for actual, formal in zip(actualargs, formalargs):
+            by = self.type_compatibility(actual, formal)
+            if by is None:
+                return None
+
+            if by == 'promote':
+                rate.promote += 1
+            elif by == 'safe':
+                rate.safe_convert += 1
+            elif by == 'unsafe':
+                rate.unsafe_convert += 1
+            elif by == 'exact':
+                pass
+            else:
+                raise Exception("unreachable", by)
+
+        return rate
+
+    def resolve_overload(self, key, cases, args, kws,
+                         allow_ambiguous=True):
+        """
+        Given actual *args* and *kws*, find the best matching
+        signature in *cases*, or None if none matches.
+        *key* is used for error reporting purposes.
+        If *allow_ambiguous* is False, a tie in the best matches
+        will raise an error.
+        """
+        assert not kws, "Keyword arguments are not supported, yet"
+        # Rate each case
+        candidates = []
+        for case in cases:
+            if len(args) == len(case.args):
+                rating = self._rate_arguments(args, case.args)
+                if rating is not None:
+                    candidates.append((rating.astuple(), case))
+
+        # Find the best case
+        candidates.sort(key=lambda i: i[0])
+        if candidates:
+            best_rate, best = candidates[0]
+            if not allow_ambiguous:
+                # Find whether there is a tie
+                tied = []
+                for rate, case in candidates:
+                    if rate != best_rate:
+                        break
+                    tied.append(case)
+                if len(tied) > 1:
+                    args = (key, args, '\n'.join(map(str, tied)))
+                    msg = "Ambiguous overloading for %s %s\n%s" % args
+                    raise TypeError(msg)
+            # Simply return the best matching candidate in order.
+            # If there is a tie, since list.sort() is stable, the first case
+            # in the original order is returned.
+            # (this can happen if e.g. a function template exposes
+            #  (int32, int32) -> int32 and (int64, int64) -> int64,
+            #  and you call it with (int16, int16) arguments)
+            return candidates[0][1]
 
     def unify_types(self, *typelist):
         # Sort the type list according to bit width before doing
