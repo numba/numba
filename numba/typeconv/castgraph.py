@@ -1,38 +1,22 @@
 from __future__ import print_function, absolute_import
+
 from collections import defaultdict
+import enum
+
 from numba.utils import total_ordering
 
 
-@total_ordering
-class _RelValue(object):
-    """Ordered categorical value
+class Conversion(enum.IntEnum):
     """
-
-    def __init__(self, name, precedence):
-        self._name = name
-        self._precedence = precedence
-
-    def __repr__(self):
-        return self._name
-
-    def __lt__(self, other):
-        if isinstance(other, _RelValue):
-            return self._precedence < other._precedence
-        else:
-            return NotImplemented
-
-    def __eq__(self, other):
-        if isinstance(other, _RelValue):
-            return self._precedence == other._precedence
-        else:
-            return NotImplemented
-
-
-# Define the casting relations
-Nil = _RelValue('Nil', 0)
-Promote = _RelValue('Promote', 1)
-Safe = _RelValue('Safe', 2)
-Unsafe = _RelValue('Unsafe', 3)
+    A conversion kind from one type to the other.  The enum members
+    are ordered from stricter to looser.
+    """
+    exact = 1
+    promote = 2
+    safe = 3
+    unsafe = 4
+    # This value is only used internally
+    nil = 99
 
 
 class CastSet(object):
@@ -45,11 +29,8 @@ class CastSet(object):
         self._rels = {}
 
     def insert(self, to, rel):
-        setrel = min(rel, self.get(to))
-        if setrel is Nil:
-            setrel = rel
-
-        old = self._rels.get(to)
+        old = self.get(to)
+        setrel = min(rel, old)
         self._rels[to] = setrel
         return old != setrel
 
@@ -57,7 +38,7 @@ class CastSet(object):
         return self._rels.items()
 
     def get(self, item):
-        return self._rels.get(item, Nil)
+        return self._rels.get(item, Conversion.nil)
 
     def __len__(self):
         return len(self._rels)
@@ -134,11 +115,11 @@ class TypeGraph(object):
         self.propagate(a, b, rel)
 
     def promote(self, a, b):
-        self.insert_rule(a, b, Promote)
+        self.insert_rule(a, b, Conversion.promote)
 
     def safe(self, a, b):
-        self.insert_rule(a, b, Safe)
+        self.insert_rule(a, b, Conversion.safe)
 
     def unsafe(self, a, b):
-        self.insert_rule(a, b, Unsafe)
+        self.insert_rule(a, b, Conversion.unsafe)
 

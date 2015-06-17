@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import
-from . import _typeconv, castgraph
+
+from . import _typeconv, castgraph, Conversion
 
 
 class TypeManager(object):
@@ -14,7 +15,10 @@ class TypeManager(object):
                                          allow_unsafe)
 
     def check_compatible(self, fromty, toty):
-        return _typeconv.check_compatible(self._ptr, fromty._code, toty._code)
+        name = _typeconv.check_compatible(self._ptr, fromty._code, toty._code)
+        conv = Conversion[name] if name is not None else None
+        assert conv is not Conversion.nil
+        return conv
 
     def set_compatible(self, fromty, toty, by):
         _typeconv.set_compatible(self._ptr, fromty._code, toty._code, by)
@@ -87,11 +91,11 @@ class TypeCastingRules(object):
         """
         Callback for updating.
         """
-        if rel == castgraph.Promote:
+        if rel == Conversion.promote:
             self._tm.set_promote(a, b)
-        elif rel == castgraph.Safe:
+        elif rel == Conversion.safe:
             self._tm.set_safe_convert(a, b)
-        elif rel == castgraph.Unsafe:
+        elif rel == Conversion.unsafe:
             self._tm.set_unsafe_convert(a, b)
         else:
             raise AssertionError(rel)

@@ -5,7 +5,7 @@ from numba import unittest_support as unittest
 from numba import types
 from numba.typeconv.typeconv import TypeManager, TypeCastingRules
 from numba.typeconv import rules
-from numba.typeconv import castgraph
+from numba.typeconv import castgraph, Conversion
 
 
 class CompatibilityTestMixin(unittest.TestCase):
@@ -22,23 +22,25 @@ class CompatibilityTestMixin(unittest.TestCase):
         c64 = types.complex64
         c128 = types.complex128
 
-        self.assertEqual(check_compatible(i32, i64), 'promote')
-        self.assertEqual(check_compatible(i32, f32), 'unsafe')
-        self.assertEqual(check_compatible(i32, f64), 'safe')
-        self.assertEqual(check_compatible(i32, u32), 'unsafe')
-        self.assertEqual(check_compatible(u32, i32), 'unsafe')
-        self.assertEqual(check_compatible(u32, i64), 'safe')
+        self.assertEqual(check_compatible(i32, i32), Conversion.exact)
 
-        self.assertEqual(check_compatible(f32, c64), 'safe')
-        self.assertEqual(check_compatible(f64, c128), 'safe')
-        self.assertEqual(check_compatible(f64, c64), 'unsafe')
+        self.assertEqual(check_compatible(i32, i64), Conversion.promote)
+        self.assertEqual(check_compatible(i32, f32), Conversion.unsafe)
+        self.assertEqual(check_compatible(i32, f64), Conversion.safe)
+        self.assertEqual(check_compatible(i32, u32), Conversion.unsafe)
+        self.assertEqual(check_compatible(u32, i32), Conversion.unsafe)
+        self.assertEqual(check_compatible(u32, i64), Conversion.safe)
+
+        self.assertEqual(check_compatible(f32, c64), Conversion.safe)
+        self.assertEqual(check_compatible(f64, c128), Conversion.safe)
+        self.assertEqual(check_compatible(f64, c64), Conversion.unsafe)
 
         # Propagated compatibility relationships
-        self.assertEqual(check_compatible(i16, f64), 'safe')
-        self.assertEqual(check_compatible(i16, i64), 'promote')
-        self.assertEqual(check_compatible(i32, c64), 'unsafe')
-        self.assertEqual(check_compatible(i32, c128), 'safe')
-        self.assertEqual(check_compatible(i32, u64), 'unsafe')
+        self.assertEqual(check_compatible(i16, f64), Conversion.safe)
+        self.assertEqual(check_compatible(i16, i64), Conversion.promote)
+        self.assertEqual(check_compatible(i32, c64), Conversion.unsafe)
+        self.assertEqual(check_compatible(i32, c128), Conversion.safe)
+        self.assertEqual(check_compatible(i32, u64), Conversion.unsafe)
 
         for ta, tb in itertools.product(types.number_domain,
                                         types.number_domain):
@@ -157,19 +159,19 @@ class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):
 
         def base_test():
             # As declared
-            self.assertEqual(tm.check_compatible(i32, i64), 'promote')
-            self.assertEqual(tm.check_compatible(i32, f64), 'safe')
-            self.assertEqual(tm.check_compatible(f32, f64), 'promote')
-            self.assertEqual(tm.check_compatible(i64, i32), 'unsafe')
-            self.assertEqual(tm.check_compatible(f64, i32), 'unsafe')
-            self.assertEqual(tm.check_compatible(f64, f32), 'unsafe')
+            self.assertEqual(tm.check_compatible(i32, i64), Conversion.promote)
+            self.assertEqual(tm.check_compatible(i32, f64), Conversion.safe)
+            self.assertEqual(tm.check_compatible(f32, f64), Conversion.promote)
+            self.assertEqual(tm.check_compatible(i64, i32), Conversion.unsafe)
+            self.assertEqual(tm.check_compatible(f64, i32), Conversion.unsafe)
+            self.assertEqual(tm.check_compatible(f64, f32), Conversion.unsafe)
 
             # Propagated
-            self.assertEqual(tm.check_compatible(i64, f64), 'unsafe')
-            self.assertEqual(tm.check_compatible(f64, i64), 'unsafe')
-            self.assertEqual(tm.check_compatible(i64, f32), 'unsafe')
-            self.assertEqual(tm.check_compatible(i32, f32), 'unsafe')
-            self.assertEqual(tm.check_compatible(f32, i32), 'unsafe')
+            self.assertEqual(tm.check_compatible(i64, f64), Conversion.unsafe)
+            self.assertEqual(tm.check_compatible(f64, i64), Conversion.unsafe)
+            self.assertEqual(tm.check_compatible(i64, f32), Conversion.unsafe)
+            self.assertEqual(tm.check_compatible(i32, f32), Conversion.unsafe)
+            self.assertEqual(tm.check_compatible(f32, i32), Conversion.unsafe)
 
         # Test base graph
         base_test()
@@ -188,11 +190,11 @@ class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):
         base_test()
 
         # To "made up" type
-        self.assertEqual(tm.check_compatible(i64, made_up), 'unsafe')
-        self.assertEqual(tm.check_compatible(i32, made_up), 'safe')
-        self.assertEqual(tm.check_compatible(f32, made_up), 'promote')
-        self.assertEqual(tm.check_compatible(made_up, f64), 'unsafe')
-        self.assertEqual(tm.check_compatible(made_up, i64), 'unsafe')
+        self.assertEqual(tm.check_compatible(i64, made_up), Conversion.unsafe)
+        self.assertEqual(tm.check_compatible(i32, made_up), Conversion.safe)
+        self.assertEqual(tm.check_compatible(f32, made_up), Conversion.promote)
+        self.assertEqual(tm.check_compatible(made_up, f64), Conversion.unsafe)
+        self.assertEqual(tm.check_compatible(made_up, i64), Conversion.unsafe)
 
     def test_castgraph_propagate(self):
         saved = []
@@ -207,35 +209,35 @@ class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):
         f64 = types.float64
         f32 = types.float32
 
-        tg.insert_rule(i32, i64, castgraph.Promote)
-        tg.insert_rule(i64, i32, castgraph.Unsafe)
+        tg.insert_rule(i32, i64, Conversion.promote)
+        tg.insert_rule(i64, i32, Conversion.unsafe)
 
         saved.append(None)
 
-        tg.insert_rule(i32, f64, castgraph.Safe)
-        tg.insert_rule(f64, i32, castgraph.Unsafe)
+        tg.insert_rule(i32, f64, Conversion.safe)
+        tg.insert_rule(f64, i32, Conversion.unsafe)
 
         saved.append(None)
 
-        tg.insert_rule(f32, f64, castgraph.Promote)
-        tg.insert_rule(f64, f32, castgraph.Unsafe)
+        tg.insert_rule(f32, f64, Conversion.promote)
+        tg.insert_rule(f64, f32, Conversion.unsafe)
 
-        self.assertIn((i32, i64, castgraph.Promote), saved[0:2])
-        self.assertIn((i64, i32, castgraph.Unsafe), saved[0:2])
+        self.assertIn((i32, i64, Conversion.promote), saved[0:2])
+        self.assertIn((i64, i32, Conversion.unsafe), saved[0:2])
         self.assertIs(saved[2], None)
 
-        self.assertIn((i32, f64, castgraph.Safe), saved[3:7])
-        self.assertIn((f64, i32, castgraph.Unsafe), saved[3:7])
-        self.assertIn((i64, f64, castgraph.Unsafe), saved[3:7])
-        self.assertIn((i64, f64, castgraph.Unsafe), saved[3:7])
+        self.assertIn((i32, f64, Conversion.safe), saved[3:7])
+        self.assertIn((f64, i32, Conversion.unsafe), saved[3:7])
+        self.assertIn((i64, f64, Conversion.unsafe), saved[3:7])
+        self.assertIn((i64, f64, Conversion.unsafe), saved[3:7])
         self.assertIs(saved[7], None)
 
-        self.assertIn((f32, f64, castgraph.Promote), saved[8:14])
-        self.assertIn((f64, f32, castgraph.Unsafe), saved[8:14])
-        self.assertIn((f32, i32, castgraph.Unsafe), saved[8:14])
-        self.assertIn((i32, f32, castgraph.Unsafe), saved[8:14])
-        self.assertIn((f32, i64, castgraph.Unsafe), saved[8:14])
-        self.assertIn((i64, f32, castgraph.Unsafe), saved[8:14])
+        self.assertIn((f32, f64, Conversion.promote), saved[8:14])
+        self.assertIn((f64, f32, Conversion.unsafe), saved[8:14])
+        self.assertIn((f32, i32, Conversion.unsafe), saved[8:14])
+        self.assertIn((i32, f32, Conversion.unsafe), saved[8:14])
+        self.assertIn((f32, i64, Conversion.unsafe), saved[8:14])
+        self.assertIn((i64, f32, Conversion.unsafe), saved[8:14])
         self.assertEqual(len(saved[14:]), 0)
 
 

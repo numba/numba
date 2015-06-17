@@ -8,6 +8,8 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types, typeinfer, typing, jit, errors
+from numba.typeconv import Conversion
+
 from .test_typeconv import CompatibilityTestMixin
 
 
@@ -295,17 +297,35 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
     def test_tuple(self):
         aty = types.UniTuple(i32, 3)
         bty = types.UniTuple(i64, 3)
-        self.check_can_convert(aty, aty, "exact")
-        self.check_can_convert(aty, bty, "promote")
+        self.check_can_convert(aty, aty, Conversion.exact)
+        self.check_can_convert(aty, bty, Conversion.promote)
         aty = types.UniTuple(i32, 3)
         bty = types.UniTuple(f64, 3)
-        self.check_can_convert(aty, bty, "safe")
+        self.check_can_convert(aty, bty, Conversion.safe)
+        aty = types.Tuple((i32, i32))
+        bty = types.Tuple((i32, i64))
+        self.check_can_convert(aty, bty, Conversion.promote)
         # Failures
         aty = types.UniTuple(i64, 3)
         bty = types.UniTuple(types.none, 3)
         self.check_cannot_convert(aty, bty)
         aty = types.UniTuple(i64, 2)
         bty = types.UniTuple(i64, 3)
+
+    def test_arrays(self):
+        aty = types.Array(i32, 3, "C")
+        bty = types.Array(i32, 3, "A")
+        self.check_can_convert(aty, bty, Conversion.safe)
+        # Failures
+        aty = types.Array(i32, 2, "C")
+        bty = types.Array(i32, 3, "C")
+        self.check_cannot_convert(aty, bty)
+        aty = types.Array(i32, 2, "C")
+        bty = types.Array(i64, 2, "C")
+        self.check_cannot_convert(aty, bty)
+        aty = types.Array(i32, 2, "C")
+        bty = types.Array(i32, 2, "F")
+        self.check_cannot_convert(aty, bty)
 
 
 class TestUnifyUseCases(unittest.TestCase):

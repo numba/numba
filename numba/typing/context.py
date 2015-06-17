@@ -9,7 +9,7 @@ import weakref
 import numpy
 
 from numba import types
-from numba.typeconv import rules
+from numba.typeconv import Conversion, rules
 from . import templates
 
 # Initialize declarations
@@ -336,19 +336,13 @@ class BaseContext(object):
     def can_convert(self, fromty, toty):
         """
         Check whether conversion is possible from *fromty* to *toty*.
-        If successful, returns a string describing the conversion, e.g.
-        "exact", "promote", "unsafe", "safe"; otherwise None is returned.
+        If successful, return a numba.typeconv.Conversion instance;
+        otherwise None is returned.
         """
         if fromty == toty:
-            return 'exact'
-
-        elif (isinstance(fromty, types.UniTuple) and
-                  isinstance(toty, types.UniTuple) and
-                      len(fromty) == len(toty)):
-            return self.can_convert(fromty.dtype, toty.dtype)
-
+            return Conversion.exact
         else:
-            return self.tm.check_compatible(fromty, toty)
+            return fromty.can_convert_to(self, toty)
 
     def _rate_arguments(self, actualargs, formalargs):
         """
@@ -363,13 +357,13 @@ class BaseContext(object):
             if by is None:
                 return None
 
-            if by == 'promote':
+            if by == Conversion.promote:
                 rate.promote += 1
-            elif by == 'safe':
+            elif by == Conversion.safe:
                 rate.safe_convert += 1
-            elif by == 'unsafe':
+            elif by == Conversion.unsafe:
                 rate.unsafe_convert += 1
-            elif by == 'exact':
+            elif by == Conversion.exact:
                 pass
             else:
                 raise Exception("unreachable", by)
@@ -464,12 +458,11 @@ class BaseContext(object):
         forward = self.can_convert(fromty=first, toty=second)
         backward = self.can_convert(fromty=second, toty=first)
 
-        safe = ('exact', 'promote', 'safe')
-        if forward in safe:
+        if forward is not None and forward <= Conversion.safe:
             return second
-        elif backward in safe:
+        elif backward is not None and backward <= Conversion.safe:
             return first
-        elif forward is None and backward is None:
+        if forward is None and backward is None:
             return types.pyobject
 
         # There exists only an unsafe conversion from one type to the other

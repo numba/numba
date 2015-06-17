@@ -837,6 +837,10 @@ class UniTuple(IterableType, BaseTuple):
             if dtype != pyobject:
                 return UniTuple(dtype=dtype, count=self.count)
 
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UniTuple) and len(self) == len(other):
+            return typingctx.can_convert(self.dtype, other.dtype)
+
 
 class UniTupleIter(SimpleIteratorType):
 
@@ -881,12 +885,20 @@ class Tuple(BaseTuple):
         Unify elements of Tuples/UniTuples
         """
         # Other is UniTuple or Tuple
-        if isinstance(other, (UniTuple, Tuple)) and len(self) == len(other):
+        if isinstance(other, BaseTuple) and len(self) == len(other):
             unified = [typingctx.unify_pairs(ta, tb)
                        for ta, tb in zip(self, other)]
 
             if all(t != pyobject for t in unified):
                 return Tuple(unified)
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, BaseTuple) and len(self) == len(other):
+            kinds = [typingctx.can_convert(ta, tb)
+                     for ta, tb in zip(self, other)]
+            if any(kind is None for kind in kinds):
+                return
+            return max(kinds)
 
 
 class CPointer(Type):

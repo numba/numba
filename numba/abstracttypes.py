@@ -105,6 +105,15 @@ class Type(object):
         """
         return None
 
+    def can_convert_to(self, typingctx, other):
+        """
+        Check whether this type can be converted to the *other*.
+        If successful, must return a string describing the conversion, e.g.
+        "exact", "promote", "unsafe", "safe"; otherwise None is returned.
+        """
+        # By default, convertibility is checked with the type manager
+        return typingctx.tm.check_compatible(self, other)
+
     # User-facing helpers.  These are not part of the core Type API but
     # are provided so that users can write e.g. `numba.boolean(1.5)`
     # (returns True) or `types.int32(types.int32[:])` (returns something
