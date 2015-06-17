@@ -342,7 +342,14 @@ class BaseContext(object):
         if fromty == toty:
             return Conversion.exact
         else:
-            return fromty.can_convert_to(self, toty)
+            forward = fromty.can_convert_to(self, toty)
+            backward = toty.can_convert_from(self, fromty)
+            if backward is None:
+                return forward
+            elif forward is None:
+                return backward
+            else:
+                return min(forward, backward)
 
     def _rate_arguments(self, actualargs, formalargs):
         """
@@ -353,22 +360,40 @@ class BaseContext(object):
             return None
         rate = Rating()
         for actual, formal in zip(actualargs, formalargs):
-            by = self.can_convert(actual, formal)
-            if by is None:
+            conv = self.can_convert(actual, formal)
+            if conv is None:
                 return None
 
-            if by == Conversion.promote:
+            if conv == Conversion.promote:
                 rate.promote += 1
-            elif by == Conversion.safe:
+            elif conv == Conversion.safe:
                 rate.safe_convert += 1
-            elif by == Conversion.unsafe:
+            elif conv == Conversion.unsafe:
                 rate.unsafe_convert += 1
-            elif by == Conversion.exact:
+            elif conv == Conversion.exact:
                 pass
             else:
-                raise Exception("unreachable", by)
+                raise Exception("unreachable", conv)
 
         return rate
+
+    def install_possible_conversions(self, actualargs, formalargs):
+        """
+        Install possible conversions from the actual argument types to
+        the formal argument types in the C++ type manager.
+        Returns True if all conversions are possible.
+        """
+        if len(actualargs) != len(formalargs):
+            return False
+        for actual, formal in zip(actualargs, formalargs):
+            if self.tm.check_compatible(actual, formal) is not None:
+                continue
+            conv = self.can_convert(actual, formal)
+            if conv is None:
+                return False
+            assert conv is not Conversion.exact
+            self.tm.set_compatible(actual, formal, conv)
+        return True
 
     def resolve_overload(self, key, cases, args, kws,
                          allow_ambiguous=True):

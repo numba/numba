@@ -183,21 +183,43 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             print('=' * 80, file=file)
 
     def _explain_ambiguous(self, *args, **kws):
+        """
+        Callback for the C _Dispatcher object.
+        """
         assert not kws, "kwargs not handled"
         args = tuple([self.typeof_pyval(a) for a in args])
         # The order here must be deterministic for testing purposes, which
         # is ensured by the OrderedDict.
-        sigs = [cr.signature for cr in self._compileinfos.values()]
+        sigs = self.nopython_signatures
         # This will raise
         self.typingctx.resolve_overload(self.py_func, sigs, args, kws,
                                         allow_ambiguous=False)
 
     def _explain_matching_error(self, *args, **kws):
+        """
+        Callback for the C _Dispatcher object.
+        """
         assert not kws, "kwargs not handled"
         args = [self.typeof_pyval(a) for a in args]
         msg = ("No matching definition for argument type(s) %s"
                % ', '.join(map(str, args)))
         raise TypeError(msg)
+
+    def _search_new_conversions(self, *args, **kws):
+        """
+        Callback for the C _Dispatcher object.
+        Search for approximately matching signatures for the given arguments,
+        and ensure the corresponding conversions are registered in the C++
+        type manager.
+        """
+        assert not kws, "kwargs not handled"
+        args = [self.typeof_pyval(a) for a in args]
+        found = False
+        for sig in self.nopython_signatures:
+            conv = self.typingctx.install_possible_conversions(args, sig.args)
+            if conv:
+                found = True
+        return found
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)

@@ -12,6 +12,7 @@ import numpy
 # All abstract types are exposed through this module
 from .abstracttypes import *
 from . import npdatetime, utils
+from .typeconv import Conversion
 
 
 class Boolean(Type):
@@ -675,16 +676,6 @@ class Array(Buffer):
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Array, self).__init__(dtype, ndim, layout, name=name)
 
-    def post_init(self):
-        """
-        Install conversion from this layout (if non-'A') to 'A' layout.
-        """
-        if self.layout != 'A':
-            from numba.typeconv.rules import default_casting_rules as tcr
-            ary_any = self.copy(layout='A')
-            # XXX This will make the types immortal
-            tcr.safe(self, ary_any)
-
     def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
         if dtype is None:
             dtype = self.dtype
@@ -701,6 +692,9 @@ class Array(Buffer):
         return self.dtype, self.ndim, self.layout, self.mutable
 
     def unify(self, typingctx, other):
+        """
+        Unify this with the *other* Array.
+        """
         if (isinstance(other, Array) and other.ndim == self.ndim
             and other.dtype == self.dtype):
             if self.layout == other.layout:
@@ -710,6 +704,16 @@ class Array(Buffer):
             readonly = not (self.mutable and other.mutable)
             return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
                          readonly=readonly)
+
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this Array to the *other*.
+        """
+        if (isinstance(other, Array) and other.ndim == self.ndim
+            and other.dtype == self.dtype):
+            if (other.layout in ('A', self.layout)
+                and (self.mutable or not other.mutable)):
+                return Conversion.safe
 
 
 class ArrayCTypes(Type):
@@ -838,6 +842,9 @@ class UniTuple(IterableType, BaseTuple):
                 return UniTuple(dtype=dtype, count=self.count)
 
     def can_convert_to(self, typingctx, other):
+        """
+        Convert this UniTuple to another one.
+        """
         if isinstance(other, UniTuple) and len(self) == len(other):
             return typingctx.can_convert(self.dtype, other.dtype)
 
@@ -893,6 +900,9 @@ class Tuple(BaseTuple):
                 return Tuple(unified)
 
     def can_convert_to(self, typingctx, other):
+        """
+        Convert this Tuple to another UniTuple or Tuple.
+        """
         if isinstance(other, BaseTuple) and len(self) == len(other):
             kinds = [typingctx.can_convert(ta, tb)
                      for ta, tb in zip(self, other)]
@@ -963,18 +973,27 @@ class Optional(Type):
         name = "?%s" % typ
         super(Optional, self).__init__(name, param=True)
 
-    def post_init(self):
-        """
-        Install conversion from optional(T) to T
-        """
-        from numba.typeconv.rules import default_casting_rules as tcr
-        tcr.safe(self, self.type)
-        tcr.promote(self.type, self)
-        tcr.promote(none, self)
-
     @property
     def key(self):
         return self.type
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, Optional):
+            return typingctx.can_convert(self.type, other.type)
+        else:
+            conv = typingctx.can_convert(self.type, other)
+            if conv is not None:
+                return max(conv, Conversion.safe)
+
+    def can_convert_from(self, typingctx, other):
+        if other is none:
+            return Conversion.promote
+        elif isinstance(other, Optional):
+            return typingctx.can_convert(other.type, self.type)
+        else:
+            conv = typingctx.can_convert(other, self.type)
+            if conv is not None:
+                return max(conv, Conversion.promote)
 
     def unify(self, typingctx, other):
         if isinstance(other, Optional):

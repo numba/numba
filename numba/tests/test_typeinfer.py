@@ -163,18 +163,23 @@ class TestUnify(unittest.TestCase):
 
     def test_none_to_optional(self):
         """
-        Test unification to optional type
+        Test unification of `none` and multiple number types to optional type
         """
         ctx = typing.Context()
         for tys in itertools.combinations(types.number_domain, 2):
-            tys = list(tys) + [types.none]
-            res = [ctx.unify_types(*comb)
-                   for comb in itertools.permutations(tys)]
-            # All result must be equal
-            first_result = res[0]
-            self.assertIsInstance(first_result, types.Optional)
-            for other in res[1:]:
-                self.assertEqual(first_result, other)
+            # First unify without none, to provide the control value
+            tys = list(tys)
+            expected = types.Optional(ctx.unify_types(*tys))
+            results = [ctx.unify_types(*comb)
+                       for comb in itertools.permutations(tys  + [types.none])]
+            # All results must be equal
+            for res in results:
+                self.assertEqual(res, expected)
+            #res = set(res)
+            #first_result = res[0]
+            #self.assertIsInstance(first_result, types.Optional)
+            #for other in res[1:]:
+                #self.assertEqual(first_result, other)
 
     def test_none(self):
         aty = types.none
@@ -277,12 +282,12 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
     Test for conversion between types with a typing context.
     """
 
-    def check_can_convert(self, aty, bty, expected):
+    def assert_can_convert(self, aty, bty, expected):
         ctx = typing.Context()
         got = ctx.can_convert(aty, bty)
         self.assertEqual(got, expected)
 
-    def check_cannot_convert(self, aty, bty):
+    def assert_cannot_convert(self, aty, bty):
         ctx = typing.Context()
         got = ctx.can_convert(aty, bty)
         self.assertIsNone(got)
@@ -297,35 +302,65 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
     def test_tuple(self):
         aty = types.UniTuple(i32, 3)
         bty = types.UniTuple(i64, 3)
-        self.check_can_convert(aty, aty, Conversion.exact)
-        self.check_can_convert(aty, bty, Conversion.promote)
+        self.assert_can_convert(aty, aty, Conversion.exact)
+        self.assert_can_convert(aty, bty, Conversion.promote)
         aty = types.UniTuple(i32, 3)
         bty = types.UniTuple(f64, 3)
-        self.check_can_convert(aty, bty, Conversion.safe)
+        self.assert_can_convert(aty, bty, Conversion.safe)
         aty = types.Tuple((i32, i32))
         bty = types.Tuple((i32, i64))
-        self.check_can_convert(aty, bty, Conversion.promote)
+        self.assert_can_convert(aty, bty, Conversion.promote)
         # Failures
         aty = types.UniTuple(i64, 3)
         bty = types.UniTuple(types.none, 3)
-        self.check_cannot_convert(aty, bty)
+        self.assert_cannot_convert(aty, bty)
         aty = types.UniTuple(i64, 2)
         bty = types.UniTuple(i64, 3)
 
     def test_arrays(self):
+        # Different layouts
         aty = types.Array(i32, 3, "C")
         bty = types.Array(i32, 3, "A")
-        self.check_can_convert(aty, bty, Conversion.safe)
-        # Failures
-        aty = types.Array(i32, 2, "C")
-        bty = types.Array(i32, 3, "C")
-        self.check_cannot_convert(aty, bty)
-        aty = types.Array(i32, 2, "C")
-        bty = types.Array(i64, 2, "C")
-        self.check_cannot_convert(aty, bty)
+        self.assert_can_convert(aty, bty, Conversion.safe)
         aty = types.Array(i32, 2, "C")
         bty = types.Array(i32, 2, "F")
-        self.check_cannot_convert(aty, bty)
+        self.assert_cannot_convert(aty, bty)
+        # Different mutabilities
+        aty = types.Array(i32, 3, "C")
+        bty = types.Array(i32, 3, "C", readonly=True)
+        self.assert_can_convert(aty, aty, Conversion.exact)
+        self.assert_can_convert(bty, bty, Conversion.exact)
+        self.assert_can_convert(aty, bty, Conversion.safe)
+        self.assert_cannot_convert(bty, aty)
+        # Various failures
+        aty = types.Array(i32, 2, "C")
+        bty = types.Array(i32, 3, "C")
+        self.assert_cannot_convert(aty, bty)
+        aty = types.Array(i32, 2, "C")
+        bty = types.Array(i64, 2, "C")
+        self.assert_cannot_convert(aty, bty)
+
+    def test_optional(self):
+        aty = types.int32
+        bty = types.Optional(i32)
+        self.assert_can_convert(types.none, bty, Conversion.promote)
+        self.assert_can_convert(aty, bty, Conversion.promote)
+        self.assert_cannot_convert(bty, types.none)
+        self.assert_can_convert(bty, aty, Conversion.safe)  # XXX ???
+        # Optional array
+        aty = types.Array(i32, 2, "C")
+        bty = types.Optional(aty)
+        self.assert_can_convert(types.none, bty, Conversion.promote)
+        self.assert_can_convert(aty, bty, Conversion.promote)
+        self.assert_can_convert(bty, aty, Conversion.safe)
+        aty = types.Array(i32, 2, "C")
+        bty = types.Optional(aty.copy(layout="A"))
+        self.assert_can_convert(aty, bty, Conversion.safe)  # C -> A
+        self.assert_cannot_convert(bty, aty)                # A -> C
+        aty = types.Array(i32, 2, "C")
+        bty = types.Optional(aty.copy(layout="F"))
+        self.assert_cannot_convert(aty, bty)
+        self.assert_cannot_convert(bty, aty)
 
 
 class TestUnifyUseCases(unittest.TestCase):

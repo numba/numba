@@ -243,10 +243,12 @@ int _typecode_fallback(DispatcherObject *dispatcher, PyObject *val,
     }
 
     tmpcode = PyObject_GetAttrString(tmptype, "_code");
-    if (!retain_reference)
+    if (!retain_reference) {
         Py_DECREF(tmptype);
-    if (tmpcode == NULL)
+    }
+    if (tmpcode == NULL) {
         return -1;
+    }
     typecode = PyLong_AsLong(tmpcode);
     Py_DECREF(tmpcode);
     return typecode;
@@ -496,6 +498,33 @@ void explain_matching_error(PyObject *dispatcher, PyObject *args, PyObject *kws)
                   "No matching definition");
 }
 
+static
+int search_new_conversions(PyObject *dispatcher, PyObject *args, PyObject *kws)
+{
+    PyObject *callback, *result;
+    int res;
+
+    callback = PyObject_GetAttrString(dispatcher,
+                                      "_search_new_conversions");
+    if (!callback) {
+        return -1;
+    }
+    result = PyObject_Call(callback, args, kws);
+    Py_DECREF(callback);
+    if (result == NULL) {
+        return -1;
+    }
+    if (!PyBool_Check(result)) {
+        Py_DECREF(result);
+        PyErr_SetString(PyExc_TypeError,
+                        "_search_new_conversions() should return a boolean");
+        return -1;
+    }
+    res = (result == Py_True) ? 1 : 0;
+    Py_DECREF(result);
+    return res;
+}
+
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
 call_cfunc(PyObject *cfunc, PyObject *args, PyObject *kws)
@@ -688,6 +717,24 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
        has been disabled. */
     cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
                                !self->can_compile);
+
+    if (matches == 0 && !self->can_compile) {
+        /*
+         * If we can't compile a new specialization, look for
+         * matching signatures for which conversions haven't been
+         * registered on the C++ TypeManager.
+         */
+        int res = search_new_conversions((PyObject *) self, args, kws);
+        if (res < 0) {
+            retval = NULL;
+            goto CLEANUP;
+        }
+        if (res > 0) {
+            /* Retry with the newly registered conversions */
+            cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
+                                       !self->can_compile);
+        }
+    }
 
     if (matches == 1) {
         /* Definition is found */

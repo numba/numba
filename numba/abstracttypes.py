@@ -50,7 +50,6 @@ class _TypeMetaclass(ABCMeta):
         else:
             inst._code = _autoincr()
             _typecache[wr] = wr
-            inst.post_init()
             return inst
 
 
@@ -68,13 +67,6 @@ class Type(object):
     def __init__(self, name, param=False):
         self.name = name
         self.is_parametric = param
-
-    def post_init(self):
-        """
-        A method called when the instance is fully initialized and has
-        a registered typecode in its _code attribute.  Does nothing by
-        default, but can be overriden.
-        """
 
     @property
     def key(self):
@@ -113,6 +105,13 @@ class Type(object):
         """
         # By default, convertibility is checked with the type manager
         return typingctx.tm.check_compatible(self, other)
+
+    def can_convert_from(self, typingctx, other):
+        """
+        Similar to *can_convert_to*, but in reverse.  Only needed if
+        the type provides conversion from other types.
+        """
+        return None
 
     # User-facing helpers.  These are not part of the core Type API but
     # are provided so that users can write e.g. `numba.boolean(1.5)`
