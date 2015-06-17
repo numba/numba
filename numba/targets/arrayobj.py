@@ -1581,8 +1581,11 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
             "Don't know how to allocate array with layout '{0}'.".format(
                 arrtype.layout))
 
-    meminfo = context.nrt_meminfo_alloc(builder,
-                                        size=builder.mul(itemsize, arrlen))
+    allocsize = builder.mul(itemsize, arrlen)
+    # NOTE: AVX prefer 32-byte alignment
+    meminfo = context.nrt_meminfo_alloc_aligned(builder, size=allocsize,
+                                                align=32)
+
     data = context.nrt_meminfo_data(builder, meminfo)
 
     intp_t = context.get_value_type(types.intp)
