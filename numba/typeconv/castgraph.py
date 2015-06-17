@@ -11,10 +11,21 @@ class Conversion(enum.IntEnum):
     A conversion kind from one type to the other.  The enum members
     are ordered from stricter to looser.
     """
+    # The two types are identical
     exact = 1
+    # The two types are of the same kind, the destination type has more
+    # extension or precision than the source type (e.g. float32 -> float64,
+    # or int32 -> int64)
     promote = 2
+    # The source type can be converted to the destination type without loss
+    # of information (e.g. int32 -> int64).  Note that the conversion may
+    # still fail explicitly at runtime (e.g. Optional(int32) -> int32)
     safe = 3
+    # The conversion may appear to succeed at runtime while losing information
+    # or precision (e.g. int32 -> uint32, float64 -> float32, int64 -> int32,
+    # etc.)
     unsafe = 4
+
     # This value is only used internally
     nil = 99
 
