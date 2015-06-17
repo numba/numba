@@ -4,7 +4,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils, njit
+from numba import types, utils, njit, errors
 from numba.tests import usecases
 from .support import TestCase
 
@@ -111,6 +111,10 @@ def boolean_indexing_usecase(a, mask):
 def empty_tuple_usecase(a):
     return a[()]
 
+
+@njit
+def setitem_usecase(a, index, value):
+    a[index] = value
 
 def slicing_1d_usecase_set(a, b, start, stop, step):
     a[start:stop:step] = b
@@ -694,7 +698,19 @@ class TestIndexing(TestCase):
         with self.assertTypingError():
             self.test_2d_slicing_set(flags=Noflags)
 
+    def test_setitem(self):
+        arr = np.arange(5)
+        setitem_usecase(arr, 1, 42)
+        self.assertEqual(list(arr), [0, 42, 2, 3, 4])
+
+    def test_setitem_readonly(self):
+        arr = np.arange(5)
+        arr.flags.writeable = False
+        with self.assertRaises((TypeError, errors.TypingError)) as raises:
+            setitem_usecase(arr, 1, 42)
+        self.assertIn("Cannot modify value of type readonly array",
+                      str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
-

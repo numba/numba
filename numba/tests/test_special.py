@@ -36,21 +36,24 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
         """
         Test special.typeof() with ndarray values.
         """
-        def check(arr, ndim, layout):
+        def check(arr, ndim, layout, mutable):
             ty = special.typeof(arr)
             self.assertIsInstance(ty, types.Array)
             self.assertEqual(ty.ndim, ndim)
             self.assertEqual(ty.layout, layout)
+            self.assertEqual(ty.mutable, mutable)
 
         a1 = np.arange(10)
-        check(a1, 1, 'C')
+        check(a1, 1, 'C', True)
         a2 = np.arange(10).reshape(2, 5)
-        check(a2, 2, 'C')
-        check(a2.T, 2, 'F')
+        check(a2, 2, 'C', True)
+        check(a2.T, 2, 'F', True)
         a3 = (np.arange(60))[::2].reshape((2, 5, 3))
-        check(a3, 3, 'A')
+        check(a3, 3, 'A', True)
         a4 = np.arange(1).reshape(())
-        check(a4, 0, 'C')
+        check(a4, 0, 'C', True)
+        a4.flags.writeable = False
+        check(a4, 0, 'C', False)
 
 
 if __name__ == '__main__':
