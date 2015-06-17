@@ -122,7 +122,7 @@ class BaseContext(object):
     def resolve_setattr(self, target, attr, value):
         if isinstance(target, types.Record):
             expectedty = target.typeof(attr)
-            if self.type_compatibility(value, expectedty) is not None:
+            if self.can_convert(value, expectedty) is not None:
                 return templates.signature(types.void, target, value)
 
     def resolve_module_constants(self, typ, attr):
@@ -333,10 +333,11 @@ class BaseContext(object):
         at = templates.ClassAttrTemplate(self, clsty, attrs)
         self.insert_attributes(at)
 
-    def type_compatibility(self, fromty, toty):
+    def can_convert(self, fromty, toty):
         """
-        Returns None or a string describing the conversion e.g. exact, promote,
-        unsafe, safe.
+        Check whether conversion is possible from *fromty* to *toty*.
+        If successful, returns a string describing the conversion, e.g.
+        "exact", "promote", "unsafe", "safe"; otherwise None is returned.
         """
         if fromty == toty:
             return 'exact'
@@ -344,7 +345,7 @@ class BaseContext(object):
         elif (isinstance(fromty, types.UniTuple) and
                   isinstance(toty, types.UniTuple) and
                       len(fromty) == len(toty)):
-            return self.type_compatibility(fromty.dtype, toty.dtype)
+            return self.can_convert(fromty.dtype, toty.dtype)
 
         else:
             return self.tm.check_compatible(fromty, toty)
@@ -358,7 +359,7 @@ class BaseContext(object):
             return None
         rate = Rating()
         for actual, formal in zip(actualargs, formalargs):
-            by = self.type_compatibility(actual, formal)
+            by = self.can_convert(actual, formal)
             if by is None:
                 return None
 
@@ -460,8 +461,8 @@ class BaseContext(object):
             return getattr(types, str(sel))
 
         # Other types with simple coercion rules
-        forward = self.type_compatibility(fromty=first, toty=second)
-        backward = self.type_compatibility(fromty=second, toty=first)
+        forward = self.can_convert(fromty=first, toty=second)
+        backward = self.can_convert(fromty=second, toty=first)
 
         safe = ('exact', 'promote', 'safe')
         if forward in safe:

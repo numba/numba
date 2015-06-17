@@ -8,7 +8,48 @@ from numba.typeconv import rules
 from numba.typeconv import castgraph
 
 
-class TestTypeConv(unittest.TestCase):
+class CompatibilityTestMixin(unittest.TestCase):
+
+    def check_number_compatibility(self, check_compatible):
+        i16 = types.int16
+        i32 = types.int32
+        i64 = types.int64
+        u16 = types.uint16
+        u32 = types.uint32
+        u64 = types.uint64
+        f32 = types.float32
+        f64 = types.float64
+        c64 = types.complex64
+        c128 = types.complex128
+
+        self.assertEqual(check_compatible(i32, i64), 'promote')
+        self.assertEqual(check_compatible(i32, f32), 'unsafe')
+        self.assertEqual(check_compatible(i32, f64), 'safe')
+        self.assertEqual(check_compatible(i32, u32), 'unsafe')
+        self.assertEqual(check_compatible(u32, i32), 'unsafe')
+        self.assertEqual(check_compatible(u32, i64), 'safe')
+
+        self.assertEqual(check_compatible(f32, c64), 'safe')
+        self.assertEqual(check_compatible(f64, c128), 'safe')
+        self.assertEqual(check_compatible(f64, c64), 'unsafe')
+
+        # Propagated compatibility relationships
+        self.assertEqual(check_compatible(i16, f64), 'safe')
+        self.assertEqual(check_compatible(i16, i64), 'promote')
+        self.assertEqual(check_compatible(i32, c64), 'unsafe')
+        self.assertEqual(check_compatible(i32, c128), 'safe')
+        self.assertEqual(check_compatible(i32, u64), 'unsafe')
+
+        for ta, tb in itertools.product(types.number_domain,
+                                        types.number_domain):
+            if ta in types.complex_domain and tb not in types.complex_domain:
+                continue
+            self.assertTrue(check_compatible(ta, tb) is not None,
+                            msg="No cast from %s to %s" % (ta, tb))
+
+
+class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):
+
     def test_typeconv(self):
         tm = TypeManager()
 
@@ -33,25 +74,9 @@ class TestTypeConv(unittest.TestCase):
         with self.assertRaises(TypeError):
             sel = tm.select_overload(sig, ovs, False)
 
-    def test_default(self):
+    def test_default_rules(self):
         tm = rules.default_type_manager
-
-        i16 = types.int16
-        i32 = types.int32
-        i64 = types.int64
-        f32 = types.float32
-
-        self.assertEqual(tm.check_compatible(i32, i64), 'promote')
-        self.assertEqual(tm.check_compatible(i32, f32), 'unsafe')
-
-        self.assertEqual(tm.check_compatible(i16, i64), 'promote')
-
-        for ta, tb in itertools.product(types.number_domain,
-                                        types.number_domain):
-            if ta in types.complex_domain and tb not in types.complex_domain:
-                continue
-            self.assertTrue(tm.check_compatible(ta, tb) is not None,
-                            msg="No cast from %s to %s" % (ta, tb))
+        self.check_number_compatibility(tm.check_compatible)
 
     def test_overload1(self):
         tm = rules.default_type_manager
@@ -124,7 +149,7 @@ class TestTypeConv(unittest.TestCase):
         i64 = types.int64
         f64 = types.float64
         f32 = types.float32
-        made_up = types.Type("made_up")
+        made_up = types.Dummy("made_up")
 
         tcr.promote_unsafe(i32, i64)
         tcr.safe_unsafe(i32, f64)

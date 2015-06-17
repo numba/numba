@@ -44,7 +44,7 @@ class TypeVar(object):
             if set(types) != self.typeset:
                 [expect] = list(self.typeset)
                 for ty in types:
-                    if self.context.type_compatibility(ty, expect) is None:
+                    if self.context.can_convert(ty, expect) is None:
                         raise TypingError("No conversion from %s to %s for "
                                           "'%s'" % (ty, expect, self.var))
         else:
@@ -56,7 +56,7 @@ class TypeVar(object):
     def lock(self, typ):
         if self.locked:
             [expect] = list(self.typeset)
-            if self.context.type_compatibility(typ, expect) is None:
+            if self.context.can_convert(typ, expect) is None:
                 raise TypingError("No conversion from %s to %s for "
                                   "'%s'" % (typ, expect, self.var))
         else:

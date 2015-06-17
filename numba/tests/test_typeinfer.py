@@ -1,10 +1,28 @@
 from __future__ import print_function, division, absolute_import
+
 import os, sys, subprocess
 import itertools
+
 import numpy as np
+
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types, typeinfer, typing, jit, errors
+from .test_typeconv import CompatibilityTestMixin
+
+
+i8 = types.int8
+i16 = types.int16
+i32 = types.int32
+i64 = types.int64
+u8 = types.uint8
+u16 = types.uint16
+u32 = types.uint32
+u64 = types.uint64
+f32 = types.float32
+f64 = types.float64
+c64 = types.complex64
+c128 = types.complex128
 
 
 class TestArgRetCasting(unittest.TestCase):
@@ -12,8 +30,8 @@ class TestArgRetCasting(unittest.TestCase):
         def foo(x):
             return x
 
-        args = (types.int32,)
-        return_type = types.float32
+        args = (i32,)
+        return_type = f32
         cres = compile_isolated(foo, args, return_type)
         self.assertTrue(isinstance(cres.entry_point(123), float))
         self.assertEqual(cres.signature.args, args)
@@ -23,8 +41,8 @@ class TestArgRetCasting(unittest.TestCase):
         def foo(x):
             return x
 
-        args = (types.Array(types.int32, 1, 'C'),)
-        return_type = types.float32
+        args = (types.Array(i32, 1, 'C'),)
+        return_type = f32
         try:
             cres = compile_isolated(foo, args, return_type)
         except errors.TypingError as e:
@@ -37,15 +55,18 @@ class TestArgRetCasting(unittest.TestCase):
             a = range(iters)
             return iters
 
-        args = (types.uint32,)
-        return_type = types.uint8
+        args = (u32,)
+        return_type = u8
         cres = compile_isolated(foo, args, return_type)
         typemap = cres.type_annotation.typemap
         # Argument "iters" must be uint32
-        self.assertEqual(typemap['iters'], types.uint32)
+        self.assertEqual(typemap['iters'], u32)
 
 
 class TestUnify(unittest.TestCase):
+    """
+    Tests for type unification with a typing context.
+    """
 
     int_unify = {
         ('uint8', 'uint8'): 'uint8',
@@ -159,94 +180,132 @@ class TestUnify(unittest.TestCase):
         self.assert_unify(aty, bty, types.none)
 
     def test_optional(self):
-        aty = types.Optional(types.int32)
+        aty = types.Optional(i32)
         bty = types.none
         self.assert_unify(aty, bty, aty)
-        aty = types.Optional(types.int32)
-        bty = types.Optional(types.int64)
+        aty = types.Optional(i32)
+        bty = types.Optional(i64)
         self.assert_unify(aty, bty, bty)
-        aty = types.Optional(types.int32)
-        bty = types.int64
-        self.assert_unify(aty, bty, types.Optional(types.int64))
+        aty = types.Optional(i32)
+        bty = i64
+        self.assert_unify(aty, bty, types.Optional(i64))
         # Failure
-        aty = types.Optional(types.int32)
+        aty = types.Optional(i32)
         bty = types.Optional(types.len_type)
         self.assert_unify_failure(aty, bty)
 
     def test_tuple(self):
-        aty = types.UniTuple(types.int32, 3)
-        bty = types.UniTuple(types.int64, 3)
-        self.assert_unify(aty, bty, types.UniTuple(types.int64, 3))
+        aty = types.UniTuple(i32, 3)
+        bty = types.UniTuple(i64, 3)
+        self.assert_unify(aty, bty, types.UniTuple(i64, 3))
         # (Tuple, UniTuple) -> Tuple
-        aty = types.UniTuple(types.int32, 2)
-        bty = types.Tuple((types.int16, types.int64))
-        self.assert_unify(aty, bty, types.Tuple((types.int32, types.int64)))
+        aty = types.UniTuple(i32, 2)
+        bty = types.Tuple((i16, i64))
+        self.assert_unify(aty, bty, types.Tuple((i32, i64)))
         # (Tuple, Tuple) -> Tuple
-        aty = types.Tuple((types.int8, types.int16, types.int32))
-        bty = types.Tuple((types.int32, types.int16, types.int8))
-        self.assert_unify(aty, bty, types.Tuple((types.int32, types.int16, types.int32)))
-        aty = types.Tuple((types.int8, types.int32))
-        bty = types.Tuple((types.int32, types.int8))
-        self.assert_unify(aty, bty, types.Tuple((types.int32, types.int32)))
+        aty = types.Tuple((i8, i16, i32))
+        bty = types.Tuple((i32, i16, i8))
+        self.assert_unify(aty, bty, types.Tuple((i32, i16, i32)))
+        aty = types.Tuple((i8, i32))
+        bty = types.Tuple((i32, i8))
+        self.assert_unify(aty, bty, types.Tuple((i32, i32)))
         # Different number kinds
-        aty = types.UniTuple(types.float64, 3)
-        bty = types.UniTuple(types.complex64, 3)
-        self.assert_unify(aty, bty, types.UniTuple(types.complex128, 3))
+        aty = types.UniTuple(f64, 3)
+        bty = types.UniTuple(c64, 3)
+        self.assert_unify(aty, bty, types.UniTuple(c128, 3))
         # Tuples of tuples
-        aty = types.UniTuple(types.Tuple((types.uint32, types.float32)), 2)
-        bty = types.UniTuple(types.Tuple((types.int16, types.float32)), 2)
+        aty = types.UniTuple(types.Tuple((u32, f32)), 2)
+        bty = types.UniTuple(types.Tuple((i16, f32)), 2)
         self.assert_unify(aty, bty,
-                          types.UniTuple(types.Tuple((types.int64, types.float32)), 2))
+                          types.UniTuple(types.Tuple((i64, f32)), 2))
         # Failures
-        aty = types.UniTuple(types.int32, 1)
+        aty = types.UniTuple(i32, 1)
         bty = types.UniTuple(types.len_type, 1)
         self.assert_unify_failure(aty, bty)
-        aty = types.UniTuple(types.int32, 1)
-        bty = types.UniTuple(types.int32, 2)
+        aty = types.UniTuple(i32, 1)
+        bty = types.UniTuple(i32, 2)
         self.assert_unify_failure(aty, bty)
-        aty = types.Tuple((types.int8, types.len_type))
-        bty = types.Tuple((types.int32, types.int8))
+        aty = types.Tuple((i8, types.len_type))
+        bty = types.Tuple((i32, i8))
         self.assert_unify_failure(aty, bty)
 
     def test_optional_tuple(self):
         # Unify to optional tuple
         aty = types.none
-        bty = types.UniTuple(types.int32, 2)
-        self.assert_unify(aty, bty, types.Optional(types.UniTuple(types.int32, 2)))
-        aty = types.Optional(types.UniTuple(types.int16, 2))
-        bty = types.UniTuple(types.int32, 2)
-        self.assert_unify(aty, bty, types.Optional(types.UniTuple(types.int32, 2)))
+        bty = types.UniTuple(i32, 2)
+        self.assert_unify(aty, bty, types.Optional(types.UniTuple(i32, 2)))
+        aty = types.Optional(types.UniTuple(i16, 2))
+        bty = types.UniTuple(i32, 2)
+        self.assert_unify(aty, bty, types.Optional(types.UniTuple(i32, 2)))
         # Unify to tuple of optionals
-        aty = types.Tuple((types.none, types.int32))
-        bty = types.Tuple((types.int16, types.none))
-        self.assert_unify(aty, bty, types.Tuple((types.Optional(types.int16),
-                                                 types.Optional(types.int32))))
-        aty = types.Tuple((types.Optional(types.int32), types.int64))
-        bty = types.Tuple((types.int16, types.Optional(types.int8)))
-        self.assert_unify(aty, bty, types.Tuple((types.Optional(types.int32),
-                                                 types.Optional(types.int64))))
+        aty = types.Tuple((types.none, i32))
+        bty = types.Tuple((i16, types.none))
+        self.assert_unify(aty, bty, types.Tuple((types.Optional(i16),
+                                                 types.Optional(i32))))
+        aty = types.Tuple((types.Optional(i32), i64))
+        bty = types.Tuple((i16, types.Optional(i8)))
+        self.assert_unify(aty, bty, types.Tuple((types.Optional(i32),
+                                                 types.Optional(i64))))
 
     def test_arrays(self):
-        aty = types.Array(types.int32, 3, "C")
-        bty = types.Array(types.int32, 3, "A")
+        aty = types.Array(i32, 3, "C")
+        bty = types.Array(i32, 3, "A")
         self.assert_unify(aty, bty, bty)
-        aty = types.Array(types.int32, 3, "C")
-        bty = types.Array(types.int32, 3, "F")
-        self.assert_unify(aty, bty, types.Array(types.int32, 3, "A"))
-        aty = types.Array(types.int32, 3, "C")
-        bty = types.Array(types.int32, 3, "C", readonly=True)
+        aty = types.Array(i32, 3, "C")
+        bty = types.Array(i32, 3, "F")
+        self.assert_unify(aty, bty, types.Array(i32, 3, "A"))
+        aty = types.Array(i32, 3, "C")
+        bty = types.Array(i32, 3, "C", readonly=True)
         self.assert_unify(aty, bty, bty)
-        aty = types.Array(types.int32, 3, "A")
-        bty = types.Array(types.int32, 3, "C", readonly=True)
+        aty = types.Array(i32, 3, "A")
+        bty = types.Array(i32, 3, "C", readonly=True)
         self.assert_unify(aty, bty,
-                          types.Array(types.int32, 3, "A", readonly=True))
+                          types.Array(i32, 3, "A", readonly=True))
         # Failures
-        aty = types.Array(types.int32, 2, "C")
-        bty = types.Array(types.int32, 3, "C")
+        aty = types.Array(i32, 2, "C")
+        bty = types.Array(i32, 3, "C")
         self.assert_unify_failure(aty, bty)
-        aty = types.Array(types.int32, 2, "C")
-        bty = types.Array(types.uint32, 2, "C")
+        aty = types.Array(i32, 2, "C")
+        bty = types.Array(u32, 2, "C")
         self.assert_unify_failure(aty, bty)
+
+
+class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
+    """
+    Test for conversion between types with a typing context.
+    """
+
+    def check_can_convert(self, aty, bty, expected):
+        ctx = typing.Context()
+        got = ctx.can_convert(aty, bty)
+        self.assertEqual(got, expected)
+
+    def check_cannot_convert(self, aty, bty):
+        ctx = typing.Context()
+        got = ctx.can_convert(aty, bty)
+        self.assertIsNone(got)
+
+    def test_convert_number_types(self):
+        # Check that Context.can_convert() is compatible with the default
+        # number conversion rules registered in the typeconv module
+        # (which is used internally by the C _Dispatcher object).
+        ctx = typing.Context()
+        self.check_number_compatibility(ctx.can_convert)
+
+    def test_tuple(self):
+        aty = types.UniTuple(i32, 3)
+        bty = types.UniTuple(i64, 3)
+        self.check_can_convert(aty, aty, "exact")
+        self.check_can_convert(aty, bty, "promote")
+        aty = types.UniTuple(i32, 3)
+        bty = types.UniTuple(f64, 3)
+        self.check_can_convert(aty, bty, "safe")
+        # Failures
+        aty = types.UniTuple(i64, 3)
+        bty = types.UniTuple(types.none, 3)
+        self.check_cannot_convert(aty, bty)
+        aty = types.UniTuple(i64, 2)
+        bty = types.UniTuple(i64, 3)
 
 
 class TestUnifyUseCases(unittest.TestCase):
@@ -262,7 +321,7 @@ class TestUnifyUseCases(unittest.TestCase):
                 res += a[i]
             return res
 
-        argtys = [types.Array(types.complex128, 1, 'C')]
+        argtys = [types.Array(c128, 1, 'C')]
         cres = compile_isolated(pyfunc, argtys)
         return (pyfunc, cres)
 
@@ -297,7 +356,7 @@ class TestUnifyUseCases(unittest.TestCase):
                 a = an_int32, an_int64
             return a
 
-        args = (types.int32, types.int64)
+        args = (i32, i64)
         # Check if compilation is successful
         cres = compile_isolated(foo, args)
 
