@@ -1008,6 +1008,20 @@ class BaseContext(object):
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         return builder.call(fn, [size])
 
+    def nrt_meminfo_alloc(self, builder, size):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+            [self.get_value_type(types.intp),
+             self.get_value_type(types.uint32)])
+
+        fn = mod.get_or_insert_function(fnty,
+                                        name="NRT_MemInfo_alloc_safe_aligned")
+
+        align = self.get_constant(types.uint32, 16)
+        return builder.call(fn, [size, align])
+
     def nrt_meminfo_data(self, builder, meminfo):
         if not self.enable_nrt:
             raise Exception("Require NRT")
