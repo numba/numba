@@ -232,7 +232,7 @@ MemInfo* NRT_MemInfo_alloc(size_t size) {
 MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
     void *data = NRT_Allocate(size);
     /* Only fill up a couple cachelines with debug markers, to minimize
-       footprint. */
+       overhead. */
     memset(data, 0xCB, MIN(size, 256));
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p %llu\n", data, size));
     return NRT_MemInfo_new(data, size, nrt_internal_dtor_safe, (void*)size);
