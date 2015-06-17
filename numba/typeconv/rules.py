@@ -16,6 +16,7 @@ def dump_number_rules():
 def _init_casting_rules(tm):
     tcr = TypeCastingRules(tm)
     tcr.safe_unsafe(types.boolean, types.int8)
+    tcr.safe_unsafe(types.boolean, types.uint8)
 
     tcr.promote_unsafe(types.int8, types.int16)
     tcr.promote_unsafe(types.uint8, types.uint16)

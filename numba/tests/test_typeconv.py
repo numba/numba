@@ -11,9 +11,12 @@ from numba.typeconv import castgraph, Conversion
 class CompatibilityTestMixin(unittest.TestCase):
 
     def check_number_compatibility(self, check_compatible):
+        b = types.boolean
+        i8 = types.int8
         i16 = types.int16
         i32 = types.int32
         i64 = types.int64
+        u8 = types.uint8
         u16 = types.uint16
         u32 = types.uint32
         u64 = types.uint64
@@ -23,6 +26,11 @@ class CompatibilityTestMixin(unittest.TestCase):
         c128 = types.complex128
 
         self.assertEqual(check_compatible(i32, i32), Conversion.exact)
+
+        self.assertEqual(check_compatible(b, i8), Conversion.safe)
+        self.assertEqual(check_compatible(b, u8), Conversion.safe)
+        self.assertEqual(check_compatible(i8, b), Conversion.unsafe)
+        self.assertEqual(check_compatible(u8, b), Conversion.unsafe)
 
         self.assertEqual(check_compatible(i32, i64), Conversion.promote)
         self.assertEqual(check_compatible(i32, f32), Conversion.unsafe)

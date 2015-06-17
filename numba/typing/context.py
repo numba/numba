@@ -342,6 +342,12 @@ class BaseContext(object):
         if fromty == toty:
             return Conversion.exact
         else:
+            # First check with the type manager (some rules are predefined
+            # at startup there, see n.typeconv.rules)
+            conv = self.tm.check_compatible(fromty, toty)
+            if conv is not None:
+                return conv
+
             forward = fromty.can_convert_to(self, toty)
             backward = toty.can_convert_from(self, fromty)
             if backward is None:
@@ -381,7 +387,7 @@ class BaseContext(object):
         """
         Install possible conversions from the actual argument types to
         the formal argument types in the C++ type manager.
-        Returns True if all conversions are possible.
+        Return True if all arguments can be converted.
         """
         if len(actualargs) != len(formalargs):
             return False
