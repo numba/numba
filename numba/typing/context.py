@@ -342,12 +342,13 @@ class BaseContext(object):
         if fromty == toty:
             return Conversion.exact
         else:
-            # First check with the type manager (some rules are predefined
-            # at startup there, see n.typeconv.rules)
+            # First check with the type manager (some rules are registered
+            # at startup there, see numba.typeconv.rules)
             conv = self.tm.check_compatible(fromty, toty)
             if conv is not None:
                 return conv
 
+            # Fall back on type-specific rules
             forward = fromty.can_convert_to(self, toty)
             backward = toty.can_convert_from(self, fromty)
             if backward is None:
@@ -461,8 +462,8 @@ class BaseContext(object):
 
     def unify_pairs(self, first, second):
         """
-        Choose PyObject type as the abstract if we fail to determine a concrete
-        type.
+        Try to unify the two given types.  A third type is returned,
+        or None in case of failure.
         """
         if first == second:
             return first
@@ -476,32 +477,12 @@ class BaseContext(object):
         if unified is not None:
             return unified
 
-        # TODO: should add an option to reject unsafe type conversion
+        # Other types with simple conversion rules
+        conv = self.can_convert(fromty=first, toty=second)
+        if conv is not None and conv <= Conversion.safe:
+            return conv
 
-        # For numbers, use Numpy's rules
-        if first in types.number_domain and second in types.number_domain:
-            a = numpy.dtype(str(first))
-            b = numpy.dtype(str(second))
-            sel = numpy.promote_types(a, b)
-            return getattr(types, str(sel))
-
-        # Other types with simple coercion rules
-        forward = self.can_convert(fromty=first, toty=second)
-        backward = self.can_convert(fromty=second, toty=first)
-
-        if forward is not None and forward <= Conversion.safe:
-            return second
-        elif backward is not None and backward <= Conversion.safe:
-            return first
-        if forward is None and backward is None:
-            return types.pyobject
-
-        # There exists only an unsafe conversion from one type to the other
-        # XXX should we return pyobject instead?
-        msg = ("Cannot unify {{{first}, {second}}}\n"
-               "{first}->{second}::{forward}\n"
-               "{second}->{first}::{backward} ")
-        raise AssertionError(msg.format(**locals()))
+        return types.pyobject
 
 
 class Context(BaseContext):

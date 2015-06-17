@@ -4,6 +4,8 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 import itertools
 import weakref
 
+import numpy
+
 from .six import add_metaclass
 
 
@@ -170,6 +172,19 @@ class Number(Type):
     """
     Base class for number types.
     """
+
+    def unify(self, typingctx, other):
+        """
+        Unify the two number types using Numpy's rules.
+        """
+        from . import numpy_support
+        if isinstance(other, Number):
+            # XXX: this can produce unsafe conversions,
+            # e.g. would unify {int64, uint64} to float64
+            a = numpy_support.as_dtype(self)
+            b = numpy_support.as_dtype(other)
+            sel = numpy.promote_types(a, b)
+            return numpy_support.from_dtype(sel)
 
 
 class Callable(Type):
