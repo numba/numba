@@ -394,6 +394,7 @@ class BaseContext(object):
             return False
         for actual, formal in zip(actualargs, formalargs):
             if self.tm.check_compatible(actual, formal) is not None:
+                # This conversion is already known
                 continue
             conv = self.can_convert(actual, formal)
             if conv is None:
@@ -425,7 +426,7 @@ class BaseContext(object):
         if candidates:
             best_rate, best = candidates[0]
             if not allow_ambiguous:
-                # Find whether there is a tie
+                # Find whether there is a tie and if so, raise an error
                 tied = []
                 for rate, case in candidates:
                     if rate != best_rate:
@@ -441,7 +442,7 @@ class BaseContext(object):
             # (this can happen if e.g. a function template exposes
             #  (int32, int32) -> int32 and (int64, int64) -> int64,
             #  and you call it with (int16, int16) arguments)
-            return candidates[0][1]
+            return best
 
     def unify_types(self, *typelist):
         # Sort the type list according to bit width before doing
