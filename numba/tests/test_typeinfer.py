@@ -211,6 +211,9 @@ class TestUnify(unittest.TestCase):
         aty = types.Tuple((i8, i32))
         bty = types.Tuple((i32, i8))
         self.assert_unify(aty, bty, types.Tuple((i32, i32)))
+        aty = types.Tuple((i8, i16))
+        bty = types.Tuple((i16, i8))
+        self.assert_unify(aty, bty, types.Tuple((i16, i16)))
         # Different number kinds
         aty = types.UniTuple(f64, 3)
         bty = types.UniTuple(c64, 3)
@@ -356,6 +359,67 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
         bty = types.Optional(aty.copy(layout="F"))
         self.assert_cannot_convert(aty, bty)
         self.assert_cannot_convert(bty, aty)
+
+
+class TestResolveOverload(unittest.TestCase):
+    """
+    Tests for typing.Context.resolve_overload().
+    """
+
+    def assert_resolve_overload(self, cases, args, expected):
+        ctx = typing.Context()
+        got = ctx.resolve_overload("foo", cases, args, {})
+        self.assertEqual(got, expected)
+
+    def test_non_ambiguous_match(self):
+        def check(args, expected):
+            self.assert_resolve_overload(cases, args, expected)
+            # Order shouldn't matter here
+            self.assert_resolve_overload(cases[::-1], args, expected)
+
+        cases = [i8(i8, i8), i32(i32, i32), f64(f64, f64)]
+        # Exact match
+        check((i8, i8), cases[0])
+        check((i32, i32), cases[1])
+        check((f64, f64), cases[2])
+        # "Promote" conversion
+        check((i8, i16), cases[1])
+        check((i32, i8), cases[1])
+        check((i32, i8), cases[1])
+        check((f32, f32), cases[2])
+        # "Safe" conversion
+        check((u32, u32), cases[2])
+        # "Unsafe" conversion
+        check((i64, i64), cases[2])
+
+    def test_ambiguous_match(self):
+        # When the best match is ambiguous (there is a tie), the first
+        # best case in original sequence order should be returned.
+        def check(args, expected, expected_reverse):
+            self.assert_resolve_overload(cases, args, expected)
+            self.assert_resolve_overload(cases[::-1], args, expected_reverse)
+
+        cases = [i16(i16, i16), i32(i32, i32), f64(f64, f64)]
+        # Two "promote" conversions
+        check((i8, i8), cases[0], cases[1])
+        # Two "safe" conversions
+        check((u16, u16), cases[1], cases[2])
+
+        cases = [i32(i32, i32), f32(f32, f32)]
+        # Two "unsafe" conversions
+        check((u32, u32), cases[0], cases[1])
+
+    def test_ambiguous_error(self):
+        ctx = typing.Context()
+        cases = [i16(i16, i16), i32(i32, i32)]
+        with self.assertRaises(TypeError) as raises:
+            ctx.resolve_overload("foo", cases, (i8, i8), {},
+                                 allow_ambiguous=False)
+        self.assertEqual(str(raises.exception).splitlines(),
+                         ["Ambiguous overloading for foo (int8, int8):",
+                          "(int16, int16) -> int16",
+                          "(int32, int32) -> int32",
+                          ])
 
 
 class TestUnifyUseCases(unittest.TestCase):

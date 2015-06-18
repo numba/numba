@@ -33,11 +33,17 @@ class CompatibilityTestMixin(unittest.TestCase):
         self.assertEqual(check_compatible(u8, b), Conversion.unsafe)
 
         self.assertEqual(check_compatible(i32, i64), Conversion.promote)
-        self.assertEqual(check_compatible(i32, f32), Conversion.unsafe)
-        self.assertEqual(check_compatible(i32, f64), Conversion.safe)
         self.assertEqual(check_compatible(i32, u32), Conversion.unsafe)
         self.assertEqual(check_compatible(u32, i32), Conversion.unsafe)
         self.assertEqual(check_compatible(u32, i64), Conversion.safe)
+
+        self.assertEqual(check_compatible(i32, f32), Conversion.unsafe)
+        self.assertEqual(check_compatible(u32, f32), Conversion.unsafe)
+        self.assertEqual(check_compatible(i32, f64), Conversion.safe)
+        self.assertEqual(check_compatible(u32, f64), Conversion.safe)
+        # Note this is inconsistent with i32 -> f32...
+        self.assertEqual(check_compatible(i64, f64), Conversion.safe)
+        self.assertEqual(check_compatible(u64, f64), Conversion.safe)
 
         self.assertEqual(check_compatible(f32, c64), Conversion.safe)
         self.assertEqual(check_compatible(f64, c128), Conversion.safe)

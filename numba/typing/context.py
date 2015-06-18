@@ -434,7 +434,7 @@ class BaseContext(object):
                     tied.append(case)
                 if len(tied) > 1:
                     args = (key, args, '\n'.join(map(str, tied)))
-                    msg = "Ambiguous overloading for %s %s\n%s" % args
+                    msg = "Ambiguous overloading for %s %s:\n%s" % args
                     raise TypeError(msg)
             # Simply return the best matching candidate in order.
             # If there is a tie, since list.sort() is stable, the first case
