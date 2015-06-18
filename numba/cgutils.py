@@ -652,10 +652,17 @@ def is_neg_int(builder, val):
 
 
 def gep_inbounds(builder, ptr, *inds, **kws):
+    """
+    Same as *gep*, but add the `inbounds` keyword.
+    """
     return gep(builder, ptr, *inds, inbounds=True, **kws)
 
 
 def gep(builder, ptr, *inds, **kws):
+    """
+    Emit a getelementptr instruction for the given pointer and indices.
+    The indices can be LLVM values or Python int constants.
+    """
     name = kws.pop('name', '')
     inbounds = kws.pop('inbounds', False)
     assert not kws
