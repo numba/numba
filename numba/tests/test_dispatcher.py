@@ -221,7 +221,7 @@ class TestDispatcher(TestCase):
         # as the actual argument types.
         self.assertRegexpMatches(
             str(cm.exception),
-            r"Ambiguous overloading for <function add [^>]*> \(float64, float64\)\n"
+            r"Ambiguous overloading for <function add [^>]*> \(float64, float64\):\n"
             r"\(float32, float64\) -> float64\n"
             r"\(float64, float32\) -> float64"
             )
