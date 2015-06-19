@@ -450,8 +450,8 @@ def register_inplace_binary_operator_kernel(operator, kernel):
     def lower_binary_operator(context, builder, sig, args):
         if len(args) == 2:
             # Output is saved to the first operand
-            sig.args = list(sig.args)
-            sig.args.append(sig.args[0])
+            sig = typing.signature(sig.return_type,
+                    *(list(sig.args) + [sig.args[0]]))
             args = list(args)
             args.append(args[0])
         else:
