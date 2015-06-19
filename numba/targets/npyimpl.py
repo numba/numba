@@ -446,6 +446,25 @@ def register_binary_operator_kernel(operator, kernel):
     register(implement(operator, _arr_kind, _any)(lower_binary_operator))
 
 
+def register_inplace_binary_operator_kernel(operator, kernel):
+    def lower_binary_operator(context, builder, sig, args):
+        if len(args) == 2:
+            # Output is saved to the first operand
+            sig.args = list(sig.args)
+            sig.args.append(sig.args[0])
+            args = list(args)
+            args.append(args[0])
+        else:
+            raise NotImplementedError("Oh! this was unexpected")
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
+                                  explicit_output=True)
+    _any = types.Any
+    _arr_kind = types.Kind(types.Array)
+    register(implement(operator, _arr_kind, _arr_kind)(lower_binary_operator))
+    register(implement(operator, _any, _arr_kind)(lower_binary_operator))
+    register(implement(operator, _arr_kind, _any)(lower_binary_operator))
+
+
 ################################################################################
 # Use the contents of ufunc_db to initialize the supported ufuncs
 
@@ -477,10 +496,16 @@ def array_positive_impl(context, builder, sig, args):
 for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
                 npydecl.NumpyRulesArrayOperator._op_map):
     for operator, ufunc_name in _op_map.items():
+        inplace_bin = False
+        if ufunc_name[:3] == 'in_':
+            ufunc_name = ufunc_name[3:]
+            inplace_bin = True
         ufunc = getattr(numpy, ufunc_name)
         kernel = _kernels[ufunc]
         if ufunc.nin == 1:
             register_unary_operator_kernel(operator, kernel)
+        elif ufunc.nin == 2 and inplace_bin:
+            register_inplace_binary_operator_kernel(operator, kernel)
         elif ufunc.nin == 2:
             register_binary_operator_kernel(operator, kernel)
         else:

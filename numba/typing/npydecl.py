@@ -168,6 +168,11 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
          '<': "less",
         '<=': "less_equal",
         '!=': "not_equal",
+        '+=': "in_add",
+        '-=': "in_subtract",
+        '*=': "in_multiply",
+        '/=': "in_true_divide",
+       '//=': "in_floor_divide",
     }
 
     @property
