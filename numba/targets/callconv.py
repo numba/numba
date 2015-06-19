@@ -178,7 +178,7 @@ class MinimalCallConv(BaseCallConv):
 
     def decorate_function(self, fn, args, fe_argtypes):
         """
-        Set names of function arguments.
+        Set names and attributes of function arguments.
         """
         arginfo = self.context.get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),

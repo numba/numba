@@ -225,30 +225,29 @@ class UArrayArg(object):
         self.fe_type = fe_type
         offset = self.context.get_constant(types.intp, i)
         offseted_args = self.builder.load(builder.gep(args, [offset]))
-        self.data_type = context.get_data_type(fe_type).as_pointer()
-        self.dataptr = self.builder.bitcast(offseted_args, self.data_type)
-        sizeof = self.context.get_abi_sizeof(self.data_type)
+        data_type = context.get_data_type(fe_type)
+        self.dataptr = self.builder.bitcast(offseted_args,
+                                            data_type.as_pointer())
+        sizeof = self.context.get_abi_sizeof(data_type)
         self.abisize = self.context.get_constant(types.intp, sizeof)
         offseted_step = self.builder.gep(steps, [offset])
         self.step = self.builder.load(offseted_step)
         self.is_unit_strided = builder.icmp(ICMP_EQ, self.abisize, self.step)
         self.builder = builder
 
-    def load(self, ind):
-        offset = self.builder.mul(self.step, ind)
-        return self.load_direct(offset)
-
     def load_direct(self, byteoffset):
+        """
+        Generic load from the given *byteoffset*.  load_aligned() is
+        preferred if possible.
+        """
         ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)
         return self.context.unpack_value(self.builder, self.fe_type, ptr)
 
     def load_aligned(self, ind):
-        byteoffset = self.builder.mul(self.step, ind)
-        return self.load_direct(byteoffset)
-
-    def store(self, value, ind):
-        offset = self.builder.mul(self.step, ind)
-        self.store_direct(value, offset)
+        # Using gep() instead of explicit pointer addition helps LLVM
+        # vectorize the loop.
+        ptr = self.builder.gep(self.dataptr, [ind])
+        return self.context.unpack_value(self.builder, self.fe_type, ptr)
 
     def store_direct(self, value, byteoffset):
         ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)

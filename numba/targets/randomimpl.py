@@ -47,16 +47,25 @@ rnd_state_ptr_t = ir.PointerType(rnd_state_t)
 
 # Accessors
 def get_index_ptr(builder, state_ptr):
-    return cgutils.gep(builder, state_ptr, 0, 0)
+    return cgutils.gep_inbounds(builder, state_ptr, 0, 0)
 
 def get_array_ptr(builder, state_ptr):
-    return cgutils.gep(builder, state_ptr, 0, 1)
+    return cgutils.gep_inbounds(builder, state_ptr, 0, 1)
 
 def get_has_gauss_ptr(builder, state_ptr):
-    return cgutils.gep(builder, state_ptr, 0, 2)
+    return cgutils.gep_inbounds(builder, state_ptr, 0, 2)
 
 def get_gauss_ptr(builder, state_ptr):
-    return cgutils.gep(builder, state_ptr, 0, 3)
+    return cgutils.gep_inbounds(builder, state_ptr, 0, 3)
+
+def get_rnd_shuffle(builder):
+    """
+    Get the internal function to shuffle the MT taste.
+    """
+    fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t,))
+    fn = builder.function.module.get_or_insert_function(fnty, "numba_rnd_shuffle")
+    fn.args[0].add_attribute("nocapture")
+    return fn
 
 
 def get_next_int32(context, builder, state_ptr):
@@ -67,13 +76,12 @@ def get_next_int32(context, builder, state_ptr):
     idx = builder.load(idxptr)
     need_reshuffle = builder.icmp_unsigned('>=', idx, N_const)
     with cgutils.if_unlikely(builder, need_reshuffle):
-        fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t,))
-        fn = builder.function.module.get_or_insert_function(fnty, "numba_rnd_shuffle")
+        fn = get_rnd_shuffle(builder)
         builder.call(fn, (state_ptr,))
         builder.store(const_int(0), idxptr)
     idx = builder.load(idxptr)
     array_ptr = get_array_ptr(builder, state_ptr)
-    y = builder.load(cgutils.gep(builder, array_ptr, 0, idx))
+    y = builder.load(cgutils.gep_inbounds(builder, array_ptr, 0, idx))
     idx = builder.add(idx, const_int(1))
     builder.store(idx, idxptr)
     # Tempering
