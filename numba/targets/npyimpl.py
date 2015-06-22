@@ -496,20 +496,19 @@ def array_positive_impl(context, builder, sig, args):
 for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
                 npydecl.NumpyRulesArrayOperator._op_map):
     for operator, ufunc_name in _op_map.items():
-        inplace_bin = False
-        if ufunc_name[:3] == 'in_':
-            ufunc_name = ufunc_name[3:]
-            inplace_bin = True
         ufunc = getattr(numpy, ufunc_name)
         kernel = _kernels[ufunc]
         if ufunc.nin == 1:
             register_unary_operator_kernel(operator, kernel)
-        elif ufunc.nin == 2 and inplace_bin:
-            register_inplace_binary_operator_kernel(operator, kernel)
         elif ufunc.nin == 2:
             register_binary_operator_kernel(operator, kernel)
         else:
             raise RuntimeError("There shouldn't be any non-unary or binary operators")
+
+for operator, ufunc_name in npydecl.NumpyRulesInplaceArrayOperator._op_map.items():
+    ufunc = getattr(numpy, ufunc_name)
+    kernel = _kernels[ufunc]
+    register_inplace_binary_operator_kernel(operator, kernel)
 
 
 del _kernels

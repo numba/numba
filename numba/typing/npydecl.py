@@ -168,11 +168,6 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
          '<': "less",
         '<=': "less_equal",
         '!=': "not_equal",
-        '+=': "in_add",
-        '-=': "in_subtract",
-        '*=': "in_multiply",
-        '/=': "in_true_divide",
-       '//=': "in_floor_divide",
     }
 
     @property
@@ -209,6 +204,23 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         except TypingError:
             sig = None
         return sig
+
+
+class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
+    _op_map = {
+        '+=': "add",
+        '-=': "subtract",
+        '*=': "multiply",
+        '/=': "true_divide",
+       '//=': "floor_divide",
+        '%=': "remainder",
+       '**=': "power",
+       '<<=': "left_shift",
+       '>>=': "right_shift",
+        '&=': "bitwise_and",
+        '|=': "bitwise_or",
+        '^=': "bitwise_xor",
+            }
 
 
 class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
