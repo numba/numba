@@ -100,8 +100,8 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_radians(self, mod):
         return types.Function(Math_radians)
 
-    # def resolve_hypot(self, mod):
-    #     return types.Function(Math_hypot)
+    def resolve_hypot(self, mod):
+        return types.Function(Math_hypot)
 
     def resolve_copysign(self, mod):
         return types.Function(Math_copysign)
@@ -229,14 +229,14 @@ class Math_degrees(Math_unary):
     key = math.degrees
 
 
-# class Math_hypot(ConcreteTemplate):
-#     key = math.hypot
-#     cases = [
-#         signature(types.float64, types.int64, types.int64),
-#         signature(types.float64, types.uint64, types.uint64),
-#         signature(types.float32, types.float32, types.float32),
-#         signature(types.float64, types.float64, types.float64),
-#     ]
+class Math_hypot(ConcreteTemplate):
+    key = math.hypot
+    cases = [
+        signature(types.float64, types.int64, types.int64),
+        signature(types.float64, types.uint64, types.uint64),
+        signature(types.float32, types.float32, types.float32),
+        signature(types.float64, types.float64, types.float64),
+    ]
 
 
 class Math_binary(ConcreteTemplate):

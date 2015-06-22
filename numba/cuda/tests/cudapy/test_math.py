@@ -106,6 +106,11 @@ def math_sqrt(A, B):
     B[i] = math.sqrt(A[i])
 
 
+def math_hypot(A, B, C):
+    i = cuda.grid(1)
+    C[i] = math.hypot(A[i], B[i])
+
+
 def math_pow(A, B, C):
     i = cuda.grid(1)
     C[i] = math.pow(A[i], B[i])
@@ -373,6 +378,15 @@ class TestCudaMath(unittest.TestCase):
     def test_math_sqrt(self):
         self.unary_template_float32(math_sqrt, np.sqrt)
         self.unary_template_float64(math_sqrt, np.sqrt)
+
+    #------------------------------------------------------------------------------
+    # test_math_hypot
+
+
+    def test_math_hypot(self):
+        self.binary_template_float32(math_hypot, np.hypot)
+        self.binary_template_float64(math_hypot, np.hypot)
+
 
     #------------------------------------------------------------------------------
     # test_math_pow
