@@ -905,6 +905,44 @@ def array_argmax(context, builder, sig, args):
     return context.compile_internal(builder, array_argmax_impl, sig, args)
 
 
+@builtin
+@implement(numpy.median, types.Kind(types.Array))
+@implement("array.mean", types.Kind(types.Array))
+def array_median(context, builder, sig, args):
+    # XXX: the implementation doesn't work for the case if array is not one
+    # dimentional
+    def partition(A, p, r):
+        # TODO: make it randomized
+        x = A[r]
+        i = p-1
+        for j in range(p, r):
+            if A[j] <= x:
+                i += 1
+                A[i], A[j] = A[j], A[i]
+        A[i+1], A[r] = A[r], A[i+1]
+        return i + 1
+
+    def select(arry, k):
+        n = arry.shape[0]
+        temp_arry = arry.copy()
+        i = partition(temp_arry, 0, n-1)
+        while i != k:
+            if i < k:
+                i = partition(temp_arry, i+1, n-1)
+            else:
+                i = partition(temp_arry, 0, i-1)
+        return temp_arry[k]
+
+    def median(arry):
+        n = arry.shape[0]
+        if n % 2 == 0:
+            return (select(arry, n//2 - 1) + select(arry, n//2))/2
+        else:
+            return select(arry, n//2)
+
+    return context.compile_internal(builder, median, sig, args)
+
+
 def _np_round_intrinsic(tp):
     # np.round() always rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)
