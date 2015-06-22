@@ -14,6 +14,8 @@ from .six import add_metaclass
 # However, we also want types to be disposable, therefore we ensure
 # each type is interned as a weak reference, so that it lives only as
 # long as necessary to keep a stable type code.
+# NOTE: some types can still be made immortal elsewhere (for example
+# in _dispatcher.c's internal caches).
 _typecodes = itertools.count()
 
 def _autoincr():
