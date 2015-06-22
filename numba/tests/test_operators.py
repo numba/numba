@@ -520,8 +520,8 @@ class TestOperators(TestCase):
     #
 
     def run_binop_ints(self, pyfunc, flags=force_pyobj_flags):
-        x_operands = [-2, 0, 1]
-        y_operands = [-1, 1, 3]
+        x_operands = [-5, 0, 1, 2]
+        y_operands = [-3, -1, 1, 3]
 
         types_list = [(types.int32, types.int32),
                       (types.int64, types.int64)]

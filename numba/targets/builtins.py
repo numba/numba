@@ -13,13 +13,29 @@ from .. import typing, types, cgutils, utils, intrinsics
 
 #-------------------------------------------------------------------------------
 
+def _int_arith_flags(rettype):
+    """
+    Return the modifier flags for integer arithmetic.
+    """
+    if rettype.signed:
+        # Ignore the effects of signed overflow.  This is important for
+        # optimization of some indexing operations.  For example
+        # array[i+1] could see `i+1` trigger a signed overflow and
+        # give a negative number.  With Python's indexing, a negative
+        # index is treated differently: its resolution has a runtime cost.
+        # Telling LLVM to ignore signed overflows allows it to optimize
+        # away the check for a negative `i+1` if it knows `i` is positive.
+        return ['nsw']
+    else:
+        return []
+
 
 def int_add_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
-    return builder.add(a, b)
+    return builder.add(a, b, flags=_int_arith_flags(sig.return_type))
 
 
 def int_sub_impl(context, builder, sig, args):
@@ -27,7 +43,7 @@ def int_sub_impl(context, builder, sig, args):
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
-    return builder.sub(a, b)
+    return builder.sub(a, b, flags=_int_arith_flags(sig.return_type))
 
 
 def int_mul_impl(context, builder, sig, args):
@@ -35,7 +51,7 @@ def int_mul_impl(context, builder, sig, args):
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
-    return builder.mul(a, b)
+    return builder.mul(a, b, flags=_int_arith_flags(sig.return_type))
 
 
 def int_udiv_impl(context, builder, sig, args):

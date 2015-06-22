@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 import re
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from numba.config import MACHINE_BITS
 from numba import cgutils
@@ -162,8 +162,9 @@ def remove_redundant_nrt_refct(ll_module):
     except NameError:
         return ll_module
 
-    incref_map = defaultdict(list)
-    decref_map = defaultdict(list)
+
+    incref_map = defaultdict(deque)
+    decref_map = defaultdict(deque)
     scopes = []
 
     # Parse IR module as text
@@ -191,8 +192,9 @@ def remove_redundant_nrt_refct(ll_module):
             # Push
             scopes.append((incref_map, decref_map))
             # Reset
-            incref_map = defaultdict(list)
-            decref_map = defaultdict(list)
+            incref_map = defaultdict(deque)
+            decref_map = defaultdict(deque)
+
 
     # Phase 2:
     # Determine which refct ops are unnecessary
@@ -205,7 +207,7 @@ def remove_redundant_nrt_refct(ll_module):
             # Mark the incref/decref pairs from the tail for removal
             for _ in range(min(len(increfs), len(decrefs))):
                 to_remove.add(increfs.pop())
-                to_remove.add(decrefs.pop())
+                to_remove.add(decrefs.popleft())
 
     # Phase 3
     # Remove all marked instructions

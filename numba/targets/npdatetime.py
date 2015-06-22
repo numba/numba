@@ -424,11 +424,11 @@ def reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit):
         with builder.if_else(is_leap_year(builder, year)) as (then, otherwise):
             with then:
                 addend = builder.load(cgutils.gep(builder, leap_array,
-                                                  0, month))
+                                                  0, month, inbounds=True))
                 builder.store(addend, days)
             with otherwise:
                 addend = builder.load(cgutils.gep(builder, normal_array,
-                                                  0, month))
+                                                  0, month, inbounds=True))
                 builder.store(addend, days)
 
         days_val = year_to_days(builder, year)
