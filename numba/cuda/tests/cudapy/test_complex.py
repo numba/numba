@@ -1,4 +1,4 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function, absolute_import, division
 
 import cmath
 import math
@@ -48,7 +48,7 @@ def compile_scalar_func(pyfunc, argtypes, restype):
             for v, inp in zip(vs, inputs):
                 inp[i] = v
         args = [output] + inputs
-        kernel[math.ceil(n / 256), 256](*args)
+        kernel[int(math.ceil(n / 256)), 256](*args)
         return list(output)
     return kernel_wrapper
 
