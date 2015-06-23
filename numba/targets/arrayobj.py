@@ -907,30 +907,44 @@ def array_argmax(context, builder, sig, args):
 
 @builtin
 @implement(numpy.median, types.Kind(types.Array))
-@implement("array.mean", types.Kind(types.Array))
+@implement("array.median", types.Kind(types.Array))
 def array_median(context, builder, sig, args):
-    # XXX: the implementation doesn't work for the case if array is not one
-    # dimentional
-    def partition(A, p, r):
-        # TODO: make it randomized
-        x = A[r]
-        i = p-1
-        for j in range(p, r):
+    def partition(A, low, high):
+        # median of three {low, middle, high}
+        middle = (low+high) // 2
+        if A[middle] > A[high]:
+            A[middle], A[high] = A[high], A[middle]
+        if A[low] > A[high]:
+            A[high], A[low] = A[low], A[high]
+        if A[middle] > A[low]:
+            A[low], A[middle] = A[middle], A[low]
+
+        # choose the middle as the pivot
+        A[high], A[middle] = A[middle], A[high]
+
+        x = A[high]
+        i = low-1
+        for j in range(low, high):
             if A[j] <= x:
                 i += 1
                 A[i], A[j] = A[j], A[i]
-        A[i+1], A[r] = A[r], A[i+1]
+        A[i+1], A[high] = A[high], A[i+1]
         return i + 1
 
     def select(arry, k):
         n = arry.shape[0]
-        temp_arry = arry.copy()
-        i = partition(temp_arry, 0, n-1)
+        temp_arry = arry.flatten()
+        high = n-1
+        low = 0
+        # NOTE: high is inclusive
+        i = partition(temp_arry, low, high)
         while i != k:
             if i < k:
-                i = partition(temp_arry, i+1, n-1)
+                low = i+1
+                i = partition(temp_arry, low, high)
             else:
-                i = partition(temp_arry, 0, i-1)
+                high = i-1
+                i = partition(temp_arry, low, high)
         return temp_arry[k]
 
     def median(arry):
