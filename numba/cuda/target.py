@@ -9,6 +9,8 @@ from numba import typing, types, cgutils
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
+from numba.targets import cmathimpl
+from numba.typing import cmathdecl
 from numba.funcdesc import transform_arg_name
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
@@ -24,6 +26,7 @@ class CUDATypingContext(typing.BaseContext):
 
         self.install(cudadecl.registry)
         self.install(cudamath.registry)
+        self.install(cmathdecl.registry)
 
 # -----------------------------------------------------------------------------
 # Implementation
@@ -46,6 +49,7 @@ class CUDATargetContext(BaseContext):
 
         self.install_registry(cudaimpl.registry)
         self.install_registry(libdevice.registry)
+        self.install_registry(cmathimpl.registry)
         self._target_data = ll.create_target_data(nvvm.default_data_layout)
 
     def jit_codegen(self):
