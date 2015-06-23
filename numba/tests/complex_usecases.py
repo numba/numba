@@ -80,7 +80,12 @@ def phase_usecase(x):
 def polar_usecase(x):
     return cmath.polar(x)
 
+_two = 2.0
+
 def polar_as_complex_usecase(x):
+    # HACK: clear errno by invoking float.__pow__
+    # (workaround for http://bugs.python.org/issue24489)
+    _two ** _two
     return complex(*cmath.polar(x))
 
 def rect_usecase(r, phi):
