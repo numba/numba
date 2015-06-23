@@ -157,13 +157,13 @@ class TestArrayReductions(TestCase):
     def test_median_odd(self):
         arr = np.arange(101)
         np.random.shuffle(arr)
-        npr, nbr = run_comparative(array_argmax, arr)
+        npr, nbr = run_comparative(array_median, arr)
         self.assertPreciseEqual(npr, nbr)
 
     def test_median_even(self):
         arr = np.arange(100)
         np.random.shuffle(arr)
-        npr, nbr = run_comparative(array_argmax, arr)
+        npr, nbr = run_comparative(array_median, arr)
         self.assertPreciseEqual(npr, nbr)
 
     def test_array_sum_global(self):
