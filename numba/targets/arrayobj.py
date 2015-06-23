@@ -233,9 +233,11 @@ def getitem_arraynd_intp(context, builder, sig, args):
     adapted_ary = arystty(context, builder, ary)
     ndim = aryty.ndim
     if ndim == 1:
+        # Return a value
         result = _getitem_array1d(context, builder, aryty, adapted_ary, idx,
                                   wraparound=idxty.signed)
     elif ndim > 1:
+        # Return a subview over the array
         out_ary_ty = make_array(aryty.copy(ndim = ndim - 1))
         out_ary = out_ary_ty(context, builder)
         in_shapes = cgutils.unpack_tuple(builder, adapted_ary.shape, count=ndim)
