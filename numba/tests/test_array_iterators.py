@@ -8,6 +8,18 @@ from numba.compiler import compile_isolated
 from .support import TestCase, CompilationCache
 
 
+def array_iter(arr):
+    total = 0
+    for i, v in enumerate(arr):
+        total += i * v
+    return total
+
+def array_view_iter(arr, idx):
+    total = 0
+    for i, v in enumerate(arr[idx]):
+        total += i * v
+    return total
+
 def array_flat(arr, out):
     for i, v in enumerate(arr.flat):
         out[i] = v
@@ -57,6 +69,20 @@ class TestArrayIterators(TestCase):
     def setUp(self):
         self.ccache = CompilationCache()
 
+    def check_array_iter(self, arr):
+        pyfunc = array_iter
+        cres = compile_isolated(pyfunc, [typeof(arr)])
+        cfunc = cres.entry_point
+        expected = pyfunc(arr)
+        self.assertPreciseEqual(cfunc(arr), expected)
+
+    def check_array_view_iter(self, arr, index):
+        pyfunc = array_view_iter
+        cres = compile_isolated(pyfunc, [typeof(arr), typeof(index)])
+        cfunc = cres.entry_point
+        expected = pyfunc(arr, index)
+        self.assertPreciseEqual(cfunc(arr, index), expected)
+
     def check_array_flat(self, arr, arrty=None):
         out = np.zeros(arr.size, dtype=arr.dtype)
         nb_out = out.copy()
@@ -81,6 +107,23 @@ class TestArrayIterators(TestCase):
 
     def check_array_ndenumerate_sum(self, arr, arrty):
         self.check_array_unary(arr, arrty, array_ndenumerate_sum)
+
+    def test_array_iter(self):
+        # Test iterating over a 1d array
+        arr = np.arange(6)
+        self.check_array_iter(arr)
+        arr = arr[::2]
+        self.assertFalse(arr.flags.c_contiguous)
+        self.assertFalse(arr.flags.f_contiguous)
+        self.check_array_iter(arr)
+
+    def test_array_view_iter(self):
+        # Test iterating over a 1d view over a 2d array
+        arr = np.arange(12).reshape((3, 4))
+        self.check_array_view_iter(arr, 1)
+        self.check_array_view_iter(arr.T, 1)
+        arr = arr[::2]
+        self.check_array_view_iter(arr, 1)
 
     def test_array_flat_3d(self):
         arr = np.arange(24).reshape(4, 2, 3)
