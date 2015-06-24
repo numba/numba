@@ -90,7 +90,7 @@ def make_array(array_type):
 
 def get_itemsize(context, array_type):
     """
-    Return the item size for the given array type.
+    Return the item size for the given array or buffer type.
     """
     llty = context.get_data_type(array_type.dtype)
     return context.get_abi_sizeof(llty)
@@ -2058,3 +2058,43 @@ def array_copy(context, builder, sig, args):
             builder.store(builder.load(src_ptr), dest_ptr)
 
     return ret._getvalue()
+
+
+@builtin
+@implement(numpy.frombuffer, types.Kind(types.Buffer))
+@implement(numpy.frombuffer, types.Kind(types.Buffer), types.Kind(types.DTypeSpec))
+def np_frombuffer(context, builder, sig, args):
+    bufty = sig.args[0]
+    aryty = sig.return_type
+
+    buf = make_array(bufty)(context, builder, value=args[0])
+    out_ary_ty = make_array(aryty)
+    out_ary = out_ary_ty(context, builder)
+    out_datamodel = out_ary._datamodel
+
+    itemsize = get_itemsize(context, aryty)
+    ll_itemsize = lc.Constant.int(buf.itemsize.type, itemsize)
+    nbytes = builder.mul(buf.nitems, buf.itemsize)
+
+    # Check that the buffer size is compatible
+    rem = builder.srem(nbytes, ll_itemsize)
+    is_incompatible = cgutils.is_not_null(builder, rem)
+    with builder.if_then(is_incompatible, likely=False):
+        msg = "buffer size must be a multiple of element size"
+        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+    shape = cgutils.pack_array(builder, [builder.sdiv(nbytes, ll_itemsize)])
+    strides = cgutils.pack_array(builder, [ll_itemsize])
+    data = builder.bitcast(buf.data,
+                           context.get_value_type(out_datamodel.get_type('data')))
+
+    populate_array(out_ary,
+                   data=data,
+                   shape=shape,
+                   strides=strides,
+                   itemsize=ll_itemsize,
+                   meminfo=buf.meminfo,
+                   parent=buf.parent,)
+
+    return out_ary._getvalue()
+

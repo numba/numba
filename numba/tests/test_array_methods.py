@@ -1,6 +1,7 @@
 from __future__ import division
 
 from itertools import product
+import sys
 
 import numpy as np
 
@@ -75,6 +76,23 @@ def make_array_view(newtype):
     def array_view(arr):
         return arr.view(newtype)
     return array_view
+
+def np_frombuffer(b):
+    """
+    np.frombuffer() on a Python-allocated buffer.
+    """
+    return np.frombuffer(b)
+
+def np_frombuffer_dtype(b, dtype):
+    return np.frombuffer(b, dtype=dtype)
+
+def np_frombuffer_allocated(shape):
+    """
+    np.frombuffer() on a Numba-allocated buffer.
+    """
+    arr = np.ones(shape, dtype=np.int32)
+    return np.frombuffer(arr)
+
 
 
 class TestArrayMethods(TestCase):
@@ -309,6 +327,48 @@ class TestArrayMethods(TestCase):
         check_err(arr, np.int64)
         check_err(arr, dt1)
         check_err(arr, dt2)
+
+    def test_np_frombuffer(self):
+        pyfunc = np_frombuffer
+
+        def run(buf):
+            cres = self.ccache.compile(pyfunc, (typeof(buf),))
+            return cres.entry_point(buf)
+        def check(buf):
+            old_refcnt = sys.getrefcount(buf)
+            expected = pyfunc(buf)
+            got = run(buf)
+            self.assertPreciseEqual(got, expected)
+            del expected
+            self.assertEqual(sys.getrefcount(buf), old_refcnt + 1)
+            del got
+            self.assertEqual(sys.getrefcount(buf), old_refcnt)
+
+        b = bytearray(range(16))
+        check(b)
+        if sys.version_info >= (3,):
+            check(bytes(b))
+            check(memoryview(b))
+        check(np.arange(12))
+
+        with self.assertRaises(ValueError) as raises:
+            run(b"x" * 3)
+        self.assertEqual("buffer size must be a multiple of element size",
+                         str(raises.exception))
+
+    def test_np_frombuffer_allocated(self):
+        pyfunc = np_frombuffer_allocated
+
+        def run(shape):
+            cres = self.ccache.compile(pyfunc, (typeof(shape),))
+            return cres.entry_point(shape)
+        def check(shape):
+            expected = pyfunc(shape)
+            got = run(shape)
+            self.assertPreciseEqual(got, expected)
+
+        check((16,))
+        check((4, 4))
 
 
 if __name__ == '__main__':
