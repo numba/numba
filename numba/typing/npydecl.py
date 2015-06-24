@@ -312,6 +312,7 @@ supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 
 NumpyRulesUnaryArrayOperator.install_operations()
 NumpyRulesArrayOperator.install_operations()
+NumpyRulesInplaceArrayOperator.install_operations()
 
 supported_array_operators = set(
     NumpyRulesUnaryArrayOperator._op_map.keys()).union(
