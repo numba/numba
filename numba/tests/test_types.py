@@ -17,7 +17,7 @@ class Dummy(object):
     pass
 
 
-class TestTypeNames(TestCase):
+class TestTypes(TestCase):
 
     def test_equality(self):
         self.assertEqual(types.int32, types.int32)
@@ -193,6 +193,13 @@ class TestTypeNames(TestCase):
         # Value cast
         self.assertPreciseEqual(i(42.5), 42)
         self.assertPreciseEqual(d(-5), -5.0)
+
+    def test_bitwidth_number_types(self):
+        """
+        All numeric types have bitwidth attribute
+        """
+        for ty in types.number_domain:
+            self.assertTrue(hasattr(ty, "bitwidth"))
 
 
 if __name__ == '__main__':

@@ -466,7 +466,9 @@ class GetItemBuffer(AbstractTemplate):
             if ary.ndim == 1:
                 res = ary.dtype
             elif not ary.slice_is_copy and ary.ndim > 1:
-                res = ary.copy(ndim=ary.ndim - 1)
+                # Left-index into a F-contiguous array gives a non-contiguous view
+                layout = 'C' if ary.layout == 'C' else 'A'
+                res = ary.copy(ndim=ary.ndim - 1, layout=layout)
             else:
                 return
 
@@ -831,7 +833,8 @@ class Max(AbstractTemplate):
                 return
 
         retty = self.context.unify_types(*args)
-        return signature(retty, *args)
+        if retty is not None:
+            return signature(retty, *args)
 
 
 class Min(AbstractTemplate):
@@ -848,7 +851,8 @@ class Min(AbstractTemplate):
                 return
 
         retty = self.context.unify_types(*args)
-        return signature(retty, *args)
+        if retty is not None:
+            return signature(retty, *args)
 
 
 class Round(ConcreteTemplate):

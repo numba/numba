@@ -12,6 +12,7 @@ import numpy
 # All abstract types are exposed through this module
 from .abstracttypes import *
 from . import npdatetime, utils
+from .typeconv import Conversion
 
 
 class Boolean(Type):
@@ -675,16 +676,6 @@ class Array(Buffer):
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Array, self).__init__(dtype, ndim, layout, name=name)
 
-    def post_init(self):
-        """
-        Install conversion from this layout (if non-'A') to 'A' layout.
-        """
-        if self.layout != 'A':
-            from numba.typeconv.rules import default_casting_rules as tcr
-            ary_any = self.copy(layout='A')
-            # XXX This will make the types immortal
-            tcr.safe(self, ary_any)
-
     def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
         if dtype is None:
             dtype = self.dtype
@@ -699,6 +690,30 @@ class Array(Buffer):
     @property
     def key(self):
         return self.dtype, self.ndim, self.layout, self.mutable
+
+    def unify(self, typingctx, other):
+        """
+        Unify this with the *other* Array.
+        """
+        if (isinstance(other, Array) and other.ndim == self.ndim
+            and other.dtype == self.dtype):
+            if self.layout == other.layout:
+                layout = self.layout
+            else:
+                layout = 'A'
+            readonly = not (self.mutable and other.mutable)
+            return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
+                         readonly=readonly)
+
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this Array to the *other*.
+        """
+        if (isinstance(other, Array) and other.ndim == self.ndim
+            and other.dtype == self.dtype):
+            if (other.layout in ('A', self.layout)
+                and (self.mutable or not other.mutable)):
+                return Conversion.safe
 
 
 class ArrayCTypes(Type):
@@ -817,15 +832,21 @@ class UniTuple(IterableType, BaseTuple):
     def types(self):
         return (self.dtype,) * self.count
 
-    def coerce(self, typingctx, other):
+    def unify(self, typingctx, other):
         """
         Unify UniTuples with their dtype
         """
         if isinstance(other, UniTuple) and len(self) == len(other):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
-            return UniTuple(dtype=dtype, count=self.count)
+            if dtype != pyobject:
+                return UniTuple(dtype=dtype, count=self.count)
 
-        return NotImplemented
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this UniTuple to another one.
+        """
+        if isinstance(other, UniTuple) and len(self) == len(other):
+            return typingctx.can_convert(self.dtype, other.dtype)
 
 
 class UniTupleIter(SimpleIteratorType):
@@ -866,21 +887,28 @@ class Tuple(BaseTuple):
     def __iter__(self):
         return iter(self.types)
 
-    def coerce(self, typingctx, other):
+    def unify(self, typingctx, other):
         """
         Unify elements of Tuples/UniTuples
         """
         # Other is UniTuple or Tuple
-        if isinstance(other, (UniTuple, Tuple)) and len(self) == len(other):
+        if isinstance(other, BaseTuple) and len(self) == len(other):
             unified = [typingctx.unify_pairs(ta, tb)
                        for ta, tb in zip(self, other)]
 
-            if any(t == pyobject for t in unified):
-                return NotImplemented
+            if all(t != pyobject for t in unified):
+                return Tuple(unified)
 
-            return Tuple(unified)
-
-        return NotImplemented
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this Tuple to another UniTuple or Tuple.
+        """
+        if isinstance(other, BaseTuple) and len(self) == len(other):
+            kinds = [typingctx.can_convert(ta, tb)
+                     for ta, tb in zip(self, other)]
+            if any(kind is None for kind in kinds):
+                return
+            return max(kinds)
 
 
 class CPointer(Type):
@@ -940,39 +968,48 @@ class Object(Type):
 class Optional(Type):
     def __init__(self, typ):
         assert typ != none
-        assert not isinstance(typ, Optional)
+        assert not isinstance(typ, (Optional, NoneType))
         self.type = typ
         name = "?%s" % typ
         super(Optional, self).__init__(name, param=True)
-
-    def post_init(self):
-        """
-        Install conversion from optional(T) to T
-        """
-        from numba.typeconv.rules import default_casting_rules as tcr
-        tcr.safe(self, self.type)
-        tcr.promote(self.type, self)
-        tcr.promote(none, self)
 
     @property
     def key(self):
         return self.type
 
-    def coerce(self, typingctx, other):
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, Optional):
+            return typingctx.can_convert(self.type, other.type)
+        else:
+            conv = typingctx.can_convert(self.type, other)
+            if conv is not None:
+                return max(conv, Conversion.safe)
+
+    def can_convert_from(self, typingctx, other):
+        if other is none:
+            return Conversion.promote
+        elif isinstance(other, Optional):
+            return typingctx.can_convert(other.type, self.type)
+        else:
+            conv = typingctx.can_convert(other, self.type)
+            if conv is not None:
+                return max(conv, Conversion.promote)
+
+    def unify(self, typingctx, other):
         if isinstance(other, Optional):
             unified = typingctx.unify_pairs(self.type, other.type)
-
         else:
             unified = typingctx.unify_pairs(self.type, other)
 
         if unified != pyobject:
-            return Optional(unified)
-
-        return NotImplemented
+            if isinstance(unified, Optional):
+                return unified
+            else:
+                return Optional(unified)
 
 
 class NoneType(Opaque):
-    def coerce(self, typingctx, other):
+    def unify(self, typingctx, other):
         """Turns anything to a Optional type
         """
         if isinstance(other, Optional):

@@ -227,8 +227,8 @@ def _build_array(context, builder, array_ty, arg_arrays):
     dest_ndim = make_intp_const(array_ty.ndim)
     dest_shape = cgutils.alloca_once(builder, intp_ty, array_ty.ndim,
                                      "dest_shape")
-    dest_shape_addrs = tuple(builder.gep(dest_shape, [make_intp_const(index)])
-                           for index in range(array_ty.ndim))
+    dest_shape_addrs = tuple(cgutils.gep_inbounds(builder, dest_shape, index)
+                             for index in range(array_ty.ndim))
 
     # Initialize the destination shape with all ones.
     for dest_shape_addr in dest_shape_addrs:
@@ -243,7 +243,7 @@ def _build_array(context, builder, array_ty, arg_arrays):
         arg_ndim = make_intp_const(arg.ndim)
         for index in range(arg.ndim):
             builder.store(builder.extract_value(arg.ary.shape, index),
-                          builder.gep(src_shape, [make_intp_const(index)]))
+                          cgutils.gep_inbounds(builder, src_shape, index))
         arg_result = context.compile_internal(
             builder, _broadcast_onto, _broadcast_onto_sig,
             [arg_ndim, src_shape, dest_ndim, dest_shape])

@@ -145,7 +145,7 @@ def _float_input_unary_math_extern_impl(extern_func, input_type, restype=None):
         mod = builder.module
         lty = context.get_value_type(input_type)
         fnty = Type.function(lty, [lty])
-        fn = mod.get_or_insert_function(fnty, name=extern_func)
+        fn = cgutils.insert_pure_function(builder.module, fnty, name=extern_func)
         res = builder.call(fn, (val,))
         if restype is None:
             return res
@@ -308,7 +308,7 @@ def ldexp_impl(context, builder, sig, args):
         "float": "numba_ldexpf",
         "double": "numba_ldexp",
         }[str(fltty)]
-    fn = builder.module.get_or_insert_function(fnty, name=fname)
+    fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
     return builder.call(fn, (val, exp))
 
 
@@ -340,7 +340,7 @@ def atan2_f32_impl(context, builder, sig, args):
     assert len(args) == 2
     mod = builder.module
     fnty = Type.function(Type.float(), [Type.float(), Type.float()])
-    fn = mod.get_or_insert_function(fnty, name="atan2f")
+    fn = cgutils.insert_pure_function(builder.module, fnty, name="atan2f")
     return builder.call(fn, args)
 
 @register
@@ -351,7 +351,7 @@ def atan2_f64_impl(context, builder, sig, args):
     fnty = Type.function(Type.double(), [Type.double(), Type.double()])
     # Workaround atan2() issues under Windows
     fname = "atan2_fixed" if sys.platform == "win32" else "atan2"
-    fn = mod.get_or_insert_function(fnty, name=fname)
+    fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
     return builder.call(fn, args)
 
 

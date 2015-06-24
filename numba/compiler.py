@@ -224,6 +224,9 @@ class Pipeline(object):
     """
     def __init__(self, typingctx, targetctx, library, args, return_type, flags,
                  locals):
+        # Make sure the environment is reloaded
+        config.reload_config()
+
         self.typingctx = typingctx
 
         subtargetoptions = {}

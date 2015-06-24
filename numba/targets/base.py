@@ -1004,8 +1004,8 @@ class BaseContext(object):
         mod = builder.module
         fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
                                    [self.get_value_type(types.intp)])
-        # NOTE: safe alloc really slows allocations down
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
+        fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
     def nrt_meminfo_alloc_aligned(self, builder, size, align):
@@ -1020,7 +1020,6 @@ class BaseContext(object):
         intp = self.get_value_type(types.intp)
         u32 = self.get_value_type(types.uint32)
         fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(), [intp, u32])
-        # NOTE: safe alloc really slows allocations down
         fn = mod.get_or_insert_function(fnty,
                                         name="NRT_MemInfo_alloc_safe_aligned")
         if isinstance(align, int):
@@ -1036,43 +1035,37 @@ class BaseContext(object):
         voidptr = llvmir.IntType(8).as_pointer()
         fnty = llvmir.FunctionType(voidptr, [voidptr])
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
+        fn.return_value.add_attribute("noalias")
         return builder.call(fn, [meminfo])
 
     def get_nrt_meminfo(self, builder, typ, value):
         return self.data_model_manager[typ].get_nrt_meminfo(builder, value)
 
-    def nrt_incref(self, builder, typ, value):
+    def _call_nrt_incref_decref(self, builder, typ, value, funcname):
         if not self.enable_nrt:
             raise Exception("Require NRT")
 
         members = self.data_model_manager[typ].traverse(builder, value)
         for mt, mv in members:
-            self.nrt_incref(builder, mt, mv)
+            self._call_nrt_incref_decref(builder, mt, mv, funcname)
 
         meminfo = self.get_nrt_meminfo(builder, typ, value)
         if meminfo:
             mod = builder.module
             fnty = llvmir.FunctionType(llvmir.VoidType(),
-                [llvmir.IntType(8).as_pointer()])
-            fn = mod.get_or_insert_function(fnty, name="NRT_incref")
-
+                                       [llvmir.IntType(8).as_pointer()])
+            fn = mod.get_or_insert_function(fnty, name=funcname)
+            # XXX "nonnull" causes a crash in test_dyn_array: can this
+            # function be called with a NULL pointer?
+            fn.args[0].add_attribute("noalias")
+            fn.args[0].add_attribute("nocapture")
             builder.call(fn, [meminfo])
+
+    def nrt_incref(self, builder, typ, value):
+        self._call_nrt_incref_decref(builder, typ, value, "NRT_incref")
 
     def nrt_decref(self, builder, typ, value):
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
-
-        members = self.data_model_manager[typ].traverse(builder, value)
-        for mt, mv in members:
-            self.nrt_decref(builder, mt, mv)
-
-        meminfo = self.get_nrt_meminfo(builder, typ, value)
-        if meminfo:
-            mod = builder.module
-            fnty = llvmir.FunctionType(llvmir.VoidType(),
-                [llvmir.IntType(8).as_pointer()])
-            fn = mod.get_or_insert_function(fnty, name="NRT_decref")
-            builder.call(fn, [meminfo])
+        self._call_nrt_incref_decref(builder, typ, value, "NRT_decref")
 
 
 class _wrap_impl(object):

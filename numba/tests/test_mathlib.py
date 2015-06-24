@@ -562,7 +562,7 @@ class TestMathLib(TestCase):
         pyfunc = lgamma
         x_values = [1., -0.9, -0.1, 0.1, 200., 1e10, 1e30, float('inf')]
         x_types = [types.float32, types.float64] * (len(x_values) // 2)
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags, prec='double')
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_lgamma_npm(self):
