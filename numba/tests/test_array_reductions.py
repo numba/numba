@@ -181,6 +181,12 @@ class TestArrayReductions(TestCase):
         npr, nbr = run_comparative(array_median, arr)
         self.assertPreciseEqual(npr, nbr)
 
+    def test_median_global(self):
+        arr = np.arange(100)
+        np.random.shuffle(arr)
+        npr, nbr = run_comparative(array_median_global, arr)
+        self.assertPreciseEqual(npr, nbr)
+
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
         arrty = typeof(arr)
