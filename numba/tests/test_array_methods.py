@@ -351,6 +351,8 @@ class TestArrayMethods(TestCase):
             check(bytes(b))
             check(memoryview(b))
         check(np.arange(12))
+        b = np.arange(12).reshape((3, 4))
+        check(b)
 
         with self.assertRaises(ValueError) as raises:
             run(b"x" * 3)

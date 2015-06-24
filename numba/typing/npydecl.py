@@ -604,7 +604,7 @@ class NdFromBuffer(CallableTemplate):
 
     def generic(self):
         def typer(buffer, dtype=None):
-            if not isinstance(buffer, types.Buffer) or buffer.layout == 'A':
+            if not isinstance(buffer, types.Buffer) or buffer.layout != 'C':
                 return
             if dtype is None:
                 nb_dtype = types.float64
