@@ -28,10 +28,11 @@ class NativeValue(object):
 
 class EnvironmentManager(object):
 
-    def __init__(self, pyapi, env, env_body):
+    def __init__(self, pyapi, env, env_body, env_ptr):
         self.pyapi = pyapi
         self.env = env
         self.env_body = env_body
+        self.env_ptr = env_ptr
 
     def add_const(self, const):
         """
@@ -89,8 +90,16 @@ class PythonAPI(object):
         self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
 
-    def get_env_manager(self, env, env_body):
-        return EnvironmentManager(self, env, env_body)
+    def get_env_manager(self, env, env_body, env_ptr):
+        is_null = cgutils.is_null(self.builder, env_ptr)
+        with cgutils.if_unlikely(self.builder, is_null):
+            # Fatal error due to error in numba
+            self.context.debug_print(self.builder,
+                                     "Fatal error: missing Environment")
+            # Let LLVM lower a trap
+            self.builder.unreachable()
+
+        return EnvironmentManager(self, env, env_body, env_ptr)
 
     # ------ Python API -----
 
@@ -1168,7 +1177,7 @@ class PythonAPI(object):
             return self.from_native_tuple(val, typ, env_manager)
 
         elif isinstance(typ, types.Generator):
-            return self.from_native_generator(val, typ)
+            return self.from_native_generator(val, typ, env_manager.env_ptr)
 
         elif isinstance(typ, types.CharSeq):
             return self.from_native_charseq(val, typ)

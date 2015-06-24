@@ -69,7 +69,8 @@ class BaseLower(object):
             self.call_conv.return_exc(self.builder)
 
         self.env_body = self.context.get_env_body(self.builder, self.envarg)
-        self.env_manager = self.pyapi.get_env_manager(self.env, self.env_body)
+        self.env_manager = self.pyapi.get_env_manager(self.env, self.env_body,
+                                                      self.envarg)
 
     def pre_lower(self):
         """

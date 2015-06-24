@@ -142,7 +142,7 @@ class PyCallWrapper(object):
         # Extract the Environment object from the Closure
         envptr = self.context.get_env_from_closure(builder, closure)
         env_body = self.context.get_env_body(builder, envptr)
-        env_manager = api.get_env_manager(self.env, env_body)
+        env_manager = api.get_env_manager(self.env, env_body, envptr)
 
         status, res = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
