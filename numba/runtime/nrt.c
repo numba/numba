@@ -44,6 +44,11 @@ struct MemSys{
 static MemSys TheMSys;
 
 
+typedef struct {
+    size_t total_size;
+} AlignHeader;
+
+
 static
 MemInfo *nrt_pop_meminfo_list(MemInfo * volatile *list) {
     MemInfo *old, *repl, *head;
@@ -238,6 +243,39 @@ MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
     return NRT_MemInfo_new(data, size, nrt_internal_dtor_safe, (void*)size);
 }
 
+static
+void nrt_internal_aligned_dtor(void *ptr, void *info) {
+    NRT_Debug(nrt_debug_print("nrt_internal_aligned_dtor %p, %p\n", ptr, info));
+    NRT_Free(info);
+}
+
+static
+void nrt_internal_aligned_safe_dtor(void *ptr, void *info) {
+    AlignHeader *header = info;
+    NRT_Debug(nrt_debug_print("nrt_internal_aligned_safe_dtor %p, %p\n", ptr,
+                              info));
+    if (header->total_size) {
+        memset(header, 0xDE, header->total_size);  /* for safety */
+    }
+    NRT_Free(info);
+}
+
+MemInfo* NRT_MemInfo_alloc_aligned(size_t size, unsigned align) {
+    void *data = NULL;
+    void *base = NRT_MemAlign(&data, size, align);
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_aligned %p\n", data));
+    return NRT_MemInfo_new(data, size, nrt_internal_aligned_dtor, base);
+}
+
+MemInfo* NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
+    void *data = NULL;
+    void *base = NRT_MemAlign(&data, size, align);
+    memset(data, 0xCB, size);
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe_aligned %p %llu\n",
+                              data, size));
+    return NRT_MemInfo_new(data, size, nrt_internal_aligned_safe_dtor, base);
+}
+
 void NRT_MemInfo_destroy(MemInfo *mi) {
     NRT_MemSys_insert_meminfo(mi);
 }
@@ -293,4 +331,37 @@ void* NRT_Allocate(size_t size) {
 void NRT_Free(void *ptr) {
     NRT_Debug(nrt_debug_print("NRT_Free %p\n", ptr));
     free(ptr);
+}
+
+void* NRT_MemAlign(void **ptr, size_t size, unsigned align) {
+    AlignHeader *base;
+    size_t intptr;
+    unsigned offset;
+    unsigned remainder;
+
+    /* Allocate extra space for padding and book keeping */
+    size_t total_size = size + 2 * align + sizeof(AlignHeader);
+    base = (AlignHeader*) NRT_Allocate(total_size);
+
+    /* The AlignHeader goes first, so skip sizeof(AlignHeader) */
+    intptr = (size_t) (base + 1);
+
+    /* See if we are aligned */
+    remainder = intptr % align;
+    if (remainder == 0){
+        /* Yes */
+        offset = 0;
+    } else {
+        /* No, move forward `offset` bytes */
+        offset = align - remainder;
+    }
+
+    /* Store the aligned pointer to the output parameter */
+    *ptr = (void*) (intptr + offset);
+
+    /* Remember the total allocated size */
+    base->total_size = total_size;
+
+    /* Return the pointer for deallocation with NRT_Free() */
+    return base;
 }

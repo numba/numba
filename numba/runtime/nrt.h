@@ -103,6 +103,7 @@ MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
  */
 MemInfo* NRT_MemInfo_alloc(size_t size);
 
+
 /*
  * The "safe" NRT_MemInfo_alloc performs additional steps to help debug
  * memory errors.
@@ -111,6 +112,13 @@ MemInfo* NRT_MemInfo_alloc(size_t size);
  *   - may do more in the future
  */
 MemInfo* NRT_MemInfo_alloc_safe(size_t size);
+
+/*
+ * Aligned versions of the NRT_MemInfo_alloc and NRT_MemInfo_alloc_safe.
+ * These take an additional argument `align` for number of bytes to align to.
+ */
+MemInfo* NRT_MemInfo_alloc_aligned(size_t size, unsigned align);
+MemInfo* NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align);
 
 /*
  * Internal API.
@@ -169,3 +177,11 @@ void* NRT_Allocate(size_t size);
  * Deallocate memory pointed by `ptr`.
  */
 void NRT_Free(void *ptr);
+
+/*
+ * Allocate memory of `size` bytes on the given `align` byte boundary
+ * The allocated output is stored to `ptr`.
+ * The return value is the base pointer to be passed to NRT_Free
+ */
+void* NRT_MemAlign(void **ptr, size_t size, unsigned align);
+
