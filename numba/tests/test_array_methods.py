@@ -83,8 +83,8 @@ def np_frombuffer(b):
     """
     return np.frombuffer(b)
 
-def np_frombuffer_dtype(b, dtype):
-    return np.frombuffer(b, dtype=dtype)
+def np_frombuffer_dtype(b):
+    return np.frombuffer(b, dtype=np.complex64)
 
 def np_frombuffer_allocated(shape):
     """
@@ -93,6 +93,9 @@ def np_frombuffer_allocated(shape):
     arr = np.ones(shape, dtype=np.int32)
     return np.frombuffer(arr)
 
+def np_frombuffer_allocated_dtype(shape):
+    arr = np.ones(shape, dtype=np.int32)
+    return np.frombuffer(arr, dtype=np.complex64)
 
 
 class TestArrayMethods(TestCase):
@@ -328,9 +331,7 @@ class TestArrayMethods(TestCase):
         check_err(arr, dt1)
         check_err(arr, dt2)
 
-    def test_np_frombuffer(self):
-        pyfunc = np_frombuffer
-
+    def check_np_frombuffer(self, pyfunc):
         def run(buf):
             cres = self.ccache.compile(pyfunc, (typeof(buf),))
             return cres.entry_point(buf)
@@ -356,9 +357,13 @@ class TestArrayMethods(TestCase):
         self.assertEqual("buffer size must be a multiple of element size",
                          str(raises.exception))
 
-    def test_np_frombuffer_allocated(self):
-        pyfunc = np_frombuffer_allocated
+    def test_np_frombuffer(self):
+        self.check_np_frombuffer(np_frombuffer)
 
+    def test_np_frombuffer_dtype(self):
+        self.check_np_frombuffer(np_frombuffer_dtype)
+
+    def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
             cres = self.ccache.compile(pyfunc, (typeof(shape),))
             return cres.entry_point(shape)
@@ -369,6 +374,13 @@ class TestArrayMethods(TestCase):
 
         check((16,))
         check((4, 4))
+        check((1, 0, 1))
+
+    def test_np_frombuffer_allocated(self):
+        self.check_np_frombuffer_allocated(np_frombuffer_allocated)
+
+    def test_np_frombuffer_allocated(self):
+        self.check_np_frombuffer_allocated(np_frombuffer_allocated_dtype)
 
 
 if __name__ == '__main__':
