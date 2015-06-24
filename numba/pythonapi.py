@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import namedtuple
 import contextlib
 import pickle
 
@@ -12,6 +13,44 @@ from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
 from numba import numpy_support
 from numba import types, utils, cgutils, lowering, _helperlib
+
+
+
+class _Registry(object):
+
+    def __init__(self):
+        self.functions = {}
+
+    def register(self, typeclass):
+        assert issubclass(typeclass, types.Type)
+        def decorator(func):
+            self.functions[typeclass] = func
+            return func
+        return decorator
+
+    def lookup(self, typeclass):
+        assert issubclass(typeclass, types.Type)
+        for cls in typeclass.__mro__:
+            func = self.functions.get(cls)
+            if func is not None:
+                return func
+        return None
+
+# Registries of boxing / unboxing implementation
+_boxers = _Registry()
+_unboxers = _Registry()
+
+box = _boxers.register
+
+class _BoxContext(namedtuple("_BoxContext",
+                  ("context", "builder", "pyapi", "env_manager"))):
+    """
+    An object containing the facilities necessary for boxing implementations.
+    """
+    __slots__ = ()
+
+    def box(self, typ, val):
+        return self.pyapi.from_native_value(val, typ, self.env_manager)
 
 
 class NativeValue(object):
@@ -67,6 +106,7 @@ class PythonAPI(object):
         """
         Note: Maybe called multiple times when lowering a function
         """
+        from numba.targets import boxing
         self.context = context
         self.builder = builder
 
@@ -1105,83 +1145,12 @@ class PythonAPI(object):
         return out
 
     def from_native_value(self, val, typ, env_manager=None):
-        if typ == types.pyobject:
-            return val
+        impl = _boxers.lookup(typ.__class__)
+        if impl is None:
+            raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
 
-        elif typ == types.boolean:
-            longval = self.builder.zext(val, self.long)
-            return self.bool_from_long(longval)
-
-        elif typ in types.unsigned_domain:
-            ullval = self.builder.zext(val, self.ulonglong)
-            return self.long_from_ulonglong(ullval)
-
-        elif typ in types.signed_domain:
-            ival = self.builder.sext(val, self.longlong)
-            return self.long_from_longlong(ival)
-
-        elif typ == types.float32:
-            dbval = self.builder.fpext(val, self.double)
-            return self.float_from_double(dbval)
-
-        elif typ == types.float64:
-            return self.float_from_double(val)
-
-        elif typ == types.complex128:
-            cmplxcls = self.context.make_complex(typ)
-            cval = cmplxcls(self.context, self.builder, value=val)
-            return self.complex_from_doubles(cval.real, cval.imag)
-
-        elif typ == types.complex64:
-            cmplxcls = self.context.make_complex(typ)
-            cval = cmplxcls(self.context, self.builder, value=val)
-            freal = self.context.cast(self.builder, cval.real,
-                                      types.float32, types.float64)
-            fimag = self.context.cast(self.builder, cval.imag,
-                                      types.float32, types.float64)
-            return self.complex_from_doubles(freal, fimag)
-
-        elif isinstance(typ, types.NPDatetime):
-            return self.create_np_datetime(val, typ.unit_code)
-
-        elif isinstance(typ, types.NPTimedelta):
-            return self.create_np_timedelta(val, typ.unit_code)
-
-        elif typ == types.none:
-            ret = self.make_none()
-            return ret
-
-        elif isinstance(typ, types.Optional):
-            return self.from_native_return(val, typ.type, env_manager)
-
-        elif isinstance(typ, types.Array):
-            return self.from_native_array(val, typ, env_manager)
-
-        elif isinstance(typ, types.Record):
-            # Note we will create a copy of the record
-            # This is the only safe way.
-            size = Constant.int(Type.int(), val.type.pointee.count)
-            ptr = self.builder.bitcast(val, Type.pointer(Type.int(8)))
-            return self.recreate_record(ptr, size, typ.dtype, env_manager)
-
-        elif isinstance(typ, (types.Tuple, types.UniTuple)):
-            return self.from_native_tuple(val, typ, env_manager)
-
-        elif isinstance(typ, types.Generator):
-            return self.from_native_generator(val, typ)
-
-        elif isinstance(typ, types.CharSeq):
-            return self.from_native_charseq(val, typ)
-
-        elif isinstance(typ, types.DType):
-            return self.from_native_dtype(val, typ)
-
-        elif typ == types.voidptr:
-            ll_intp = self.context.get_value_type(types.uintp)
-            addr = self.builder.ptrtoint(val, ll_intp)
-            return self.from_native_value(addr, types.uintp, env_manager)
-
-        raise NotImplementedError(typ)
+        c = _BoxContext(self.context, self.builder, self, env_manager)
+        return impl(c, typ, val)
 
     def to_native_int(self, obj, typ):
         ll_type = self.context.get_argument_type(typ)
@@ -1232,24 +1201,6 @@ class PythonAPI(object):
             errcode = self.numba_array_adaptor(ary, ptr)
         failed = cgutils.is_not_null(self.builder, errcode)
         return self.builder.load(aryptr), failed
-
-    def from_native_array(self, ary, typ, env_manager):
-        builder = self.builder
-        nativearycls = self.context.make_array(typ)
-        nativeary = nativearycls(self.context, builder, value=ary)
-        if self.context.enable_nrt:
-            np_dtype = numpy_support.as_dtype(typ.dtype)
-            dtypeptr = env_manager.read_const(env_manager.add_const(np_dtype))
-            newary = self.nrt_adapt_ndarray_to_python(typ, ary, dtypeptr)
-            return newary
-        else:
-            parent = nativeary.parent
-            self.incref(parent)
-            return parent
-
-    def from_native_dtype(self, val, typ):
-        np_dtype = numpy_support.as_dtype(typ.dtype)
-        return self.unserialize(self.serialize_object(np_dtype))
 
     def to_native_optional(self, obj, typ):
         """
@@ -1314,19 +1265,6 @@ class PythonAPI(object):
             value = cgutils.make_anonymous_struct(self.builder, values)
         return NativeValue(value, is_error=is_error, cleanup=cleanup)
 
-    def from_native_tuple(self, val, typ, env_manager):
-        """
-        Convert native array or structure *val* to a tuple object.
-        """
-        tuple_val = self.tuple_new(typ.count)
-
-        for i, dtype in enumerate(typ):
-            item = self.builder.extract_value(val, i)
-            obj = self.from_native_value(item, dtype, env_manager)
-            self.tuple_setitem(tuple_val, i, obj)
-
-        return tuple_val
-
     def to_native_generator(self, obj, typ):
         """
         Extract the generator structure pointer from a generator *obj*
@@ -1376,39 +1314,6 @@ class PythonAPI(object):
 
         return self.builder.call(fn,
                                  (state_size, initial_state, genfn, finalizer, env))
-
-    def from_native_charseq(self, val, typ):
-        builder = self.builder
-        rawptr = cgutils.alloca_once_value(builder, value=val)
-        strptr = builder.bitcast(rawptr, self.cstring)
-        fullsize = self.context.get_constant(types.intp, typ.count)
-        zero = self.context.get_constant(types.intp, 0)
-        count = cgutils.alloca_once_value(builder, zero)
-
-        bbend = builder.append_basic_block("end.string.count")
-
-        # Find the length of the string
-        with cgutils.loop_nest(builder, [fullsize], fullsize.type) as [idx]:
-            # Get char at idx
-            ch = builder.load(builder.gep(strptr, [idx]))
-            # Store the current index as count
-            builder.store(idx, count)
-            # Check if the char is a null-byte
-            ch_is_null = cgutils.is_null(builder, ch)
-            # If the char is a null-byte
-            with builder.if_then(ch_is_null):
-                # Jump to the end
-                builder.branch(bbend)
-
-        # This is reached if there is no null-byte in the string
-        # Then, set count to the fullsize
-        builder.store(fullsize, count)
-        # Jump to the end
-        builder.branch(bbend)
-
-        builder.position_at_end(bbend)
-        strlen = builder.load(count)
-        return self.bytes_from_string_and_size(strptr, strlen)
 
     def numba_array_adaptor(self, ary, ptr):
         assert not self.context.enable_nrt
