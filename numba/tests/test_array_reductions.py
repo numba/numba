@@ -166,6 +166,21 @@ class TestArrayReductions(TestCase):
         npr, nbr = run_comparative(array_median, arr)
         self.assertPreciseEqual(npr, nbr)
 
+    def test_median_sorted(self):
+        arr = np.arange(100)
+        npr, nbr = run_comparative(array_median, arr)
+        self.assertPreciseEqual(npr, nbr)
+
+    def test_median_revsorted(self):
+        arr = np.arange(100, 0, -1)
+        npr, nbr = run_comparative(array_median, arr)
+        self.assertPreciseEqual(npr, nbr)
+
+    def test_median_duplicate(self):
+        arr = np.ones(100)
+        npr, nbr = run_comparative(array_median, arr)
+        self.assertPreciseEqual(npr, nbr)
+
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
         arrty = typeof(arr)
