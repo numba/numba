@@ -340,7 +340,7 @@ void* NRT_MemAlign(void **ptr, size_t size, unsigned align) {
     unsigned remainder;
 
     /* Allocate extra space for padding and book keeping */
-    size_t total_size = size + align + sizeof(AlignHeader);
+    size_t total_size = size + 2 * align + sizeof(AlignHeader);
     base = (AlignHeader*) NRT_Allocate(total_size);
 
     /* The AlignHeader goes first, so skip sizeof(AlignHeader) */
