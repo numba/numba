@@ -135,6 +135,16 @@ def unbox_nptimedelta(c, typ, obj):
     return NativeValue(val, is_error=c.pyapi.c_api_error())
 
 
+@box(types.RawPointer)
+def box_raw_pointer(c, typ, val):
+    """
+    Convert a raw pointer to a Python int.
+    """
+    ll_intp = c.context.get_value_type(types.uintp)
+    addr = c.builder.ptrtoint(val, ll_intp)
+    return c.box(types.uintp, addr)
+
+
 #
 # Composite types
 #
@@ -220,16 +230,6 @@ def unbox_charseq(c, typ, obj):
 
     ret = c.builder.load(outspace)
     return NativeValue(ret, is_error=c.builder.not_(ok))
-
-
-@box(types.RawPointer)
-def box_raw_pointer(c, typ, val):
-    """
-    Convert a raw pointer to a Python int.
-    """
-    ll_intp = c.context.get_value_type(types.uintp)
-    addr = c.builder.ptrtoint(val, ll_intp)
-    return c.box(types.uintp, addr)
 
 
 @unbox(types.Optional)
