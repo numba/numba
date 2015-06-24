@@ -9,7 +9,6 @@ from numba.tests.support import TestCase
 import numba.unittest_support as unittest
 from numba import testing
 
-
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
@@ -25,6 +24,7 @@ def make_consumer(gen_func):
         for y in gen_func(x):
             res += y
         return res
+
     return consumer
 
 
@@ -32,17 +32,20 @@ def gen1(x):
     for i in range(x):
         yield i
 
+
 def gen2(x):
     for i in range(x):
         yield i
         for j in range(1, 3):
             yield i + j
 
+
 def gen3(x):
     # Polymorphic yield types must be unified
     yield x
     yield x + 1.5
     yield x + 1j
+
 
 def gen4(x, y, z):
     for i in range(3):
@@ -51,6 +54,7 @@ def gen4(x, y, z):
     return
     yield x
 
+
 def gen5():
     # The bytecode for this generator doesn't contain any YIELD_VALUE
     # (it's optimized away).  We fail typing it, since the yield type
@@ -58,12 +62,14 @@ def gen5():
     if 0:
         yield 1
 
+
 def gen6(a, b):
     # Infinite loop: exercise computation of state variables
     x = a + 1
     while True:
         y = b + 2
         yield x + y
+
 
 def gen7(arr):
     # Array variable in generator state
@@ -77,16 +83,18 @@ def genobj(x):
 
 
 def return_generator_expr(x):
-    return (i*2 for i in x)
+    return (i * 2 for i in x)
 
 
 def gen_ndindex(shape):
     for ind in np.ndindex(shape):
         yield ind
 
+
 def gen_flat(arr):
     for val in arr.flat:
         yield val
+
 
 def gen_ndenumerate(arr):
     for tup in np.ndenumerate(arr):
@@ -94,7 +102,6 @@ def gen_ndenumerate(arr):
 
 
 class TestGenerators(TestCase):
-
     def check_generator(self, pygen, cgen):
         self.assertEqual(next(cgen), next(pygen))
         # Use list comprehensions to make sure we trash the generator's
@@ -258,7 +265,6 @@ class TestGenerators(TestCase):
 
 
 class TestGenExprs(TestCase):
-
     @testing.allow_interpreter_mode
     def test_return_generator_expr(self):
         pyfunc = return_generator_expr
@@ -267,10 +273,10 @@ class TestGenExprs(TestCase):
         self.assertEqual(sum(cfunc([1, 2, 3])), sum(pyfunc([1, 2, 3])))
 
 
-
 def nrt_gen0(ary):
     for elem in ary:
         yield elem
+
 
 def nrt_gen1(ary1, ary2):
     for e1, e2 in zip(ary1, ary2):
@@ -295,7 +301,6 @@ class TestNrtArrayGen(TestCase):
         self.assertEqual(sys.getrefcount(py_ary),
                          sys.getrefcount(c_ary))
 
-
     def test_nrt_gen1(self):
         pygen = nrt_gen1
         cgen = jit(nopython=True)(pygen)
@@ -316,7 +321,7 @@ class TestNrtArrayGen(TestCase):
         self.assertEqual(sys.getrefcount(py_ary1),
                          sys.getrefcount(c_ary1))
         self.assertEqual(sys.getrefcount(py_ary2),
-                          sys.getrefcount(c_ary2))
+                         sys.getrefcount(c_ary2))
 
     def test_combine_gen0_gen1(self):
         """
@@ -381,6 +386,28 @@ class TestNrtArrayGen(TestCase):
         # Check reference count
         self.assertEqual(sys.getrefcount(py_ary),
                          sys.getrefcount(c_ary))
+
+
+class TestGeneratorWithNRT(TestCase):
+    def test_issue_1254(self):
+        """
+        Missing environment for returning array
+        """
+
+        @jit(nopython=True)
+        def random_directions(n):
+            for i in range(n):
+                vec = np.empty(3)
+                vec[:] = 12
+                yield vec
+
+        outputs = list(random_directions(5))
+        self.assertEqual(len(outputs), 5)
+
+        expect = np.empty(3)
+        expect[:] = 12
+        for got in outputs:
+            np.testing.assert_equal(expect, got)
 
 
 if __name__ == '__main__':
