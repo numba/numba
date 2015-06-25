@@ -25,7 +25,7 @@ before_install:
   - export PATH=$HOME/miniconda3/bin:$PATH
   - PY_MAJOR_MINOR=${TRAVIS_PYTHON_VERSION:0:3}
   # Setup environment
-  - conda create -n travisci --yes python=$PY_MAJOR_MINOR $NUMPY cffi
+  - conda create -n travisci --yes python=$PY_MAJOR_MINOR $NUMPY cffi pip
   - source activate travisci
   - CONDA_INSTALL="conda install --yes -q"
   - PIP_INSTALL="pip install -q"
@@ -50,7 +50,7 @@ before_install:
   # Force g++ 4.8 to be the default version
   - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
   # Install dependencies for building the documentation
-  - $CONDA_INSTALL pip sphinx pygments
+  - $CONDA_INSTALL sphinx pygments
   - $PIP_INSTALL sphinxjp.themecore sphinxjp.themes.basicstrap
 
   # Install boost for impyla
