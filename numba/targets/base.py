@@ -1008,6 +1008,26 @@ class BaseContext(object):
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
+    def nrt_meminfo_alloc_aligned(self, builder, size, align):
+        """
+        Allocate a new MemInfo of `size` bytes and and align the data pointer
+        to `align` bytes.  The `align` arg can be either a Python int or a LLVM
+        uint32 value.
+        """
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        intp = self.get_value_type(types.intp)
+        u32 = self.get_value_type(types.uint32)
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(), [intp, u32])
+        fn = mod.get_or_insert_function(fnty,
+                                        name="NRT_MemInfo_alloc_safe_aligned")
+        if isinstance(align, int):
+            align = self.get_constant(types.uint32, align)
+        else:
+            assert align.type == u32, "align must be a uint32"
+        return builder.call(fn, [size, align])
+
     def nrt_meminfo_data(self, builder, meminfo):
         if not self.enable_nrt:
             raise Exception("Require NRT")
