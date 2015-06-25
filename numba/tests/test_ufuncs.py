@@ -87,6 +87,14 @@ def _make_binary_ufunc_op_usecase(ufunc_op):
     return fn
 
 
+def _make_inplace_ufunc_op_usecase(ufunc_op):
+    ldict = {}
+    exec("def fn(x,y):\n    x{0}y\n    return x".format(ufunc_op), globals(), ldict)
+    fn = ldict["fn"]
+    fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
+    return fn
+
+
 def _as_dtype_value(tyargs, args):
     """Convert python values into numpy scalar objects.
     """
@@ -245,6 +253,61 @@ class TestUFuncs(TestCase):
             expected = pyfunc(input_operand)
             result = cfunc(input_operand)
             np.testing.assert_array_almost_equal(expected, result)
+
+    def inplace_op_test(self, operator, flags=enable_nrt_flags,
+                      skip_inputs=[], additional_inputs=[],
+                      int_output_type=None, float_output_type=None,
+                      positive_rhs=False):
+        operator_func = _make_inplace_ufunc_op_usecase(operator)
+        inputs = list(self.inputs)
+        inputs.extend(additional_inputs)
+        pyfunc = operator_func
+        for input_tuple in inputs:
+            input_operand1, input_type = input_tuple
+            input_dtype = numpy_support.as_dtype(
+                getattr(input_type, "dtype", input_type))
+            input_type1 = input_type
+
+            if input_type in skip_inputs:
+                continue
+
+            if positive_rhs:
+                zero = np.zeros(1, dtype=input_dtype)[0]
+            # If we only use two scalars, the code generator will not
+            # select the ufunctionalized operator, so we mix it up.
+            if isinstance(input_type, types.Array):
+                input_operand0 = input_operand1
+                input_type0 = input_type
+                if positive_rhs and np.any(input_operand1 < zero):
+                    continue
+            else:
+                input_operand0 = (np.random.random(10) * 100).astype(
+                    input_dtype)
+                input_type0 = typeof(input_operand0)
+                if positive_rhs and input_operand1 < zero:
+                    continue
+
+            # Don't cache function which mutates the input
+            cr = self.cache.compile_no_cache(pyfunc, (input_type0, input_type1),
+                    flags=flags)
+            # NOTE:the inplace test func mutates the input doesn't return anything
+            # Therefore we need to create a copy of it.
+            input_operand0_copy = input_operand0.copy()
+            input_operand1_copy = input_operand1.copy()
+            cfunc = cr.entry_point
+            expected = pyfunc(input_operand0, input_operand1)
+            result = cfunc(input_operand0_copy, input_operand1_copy)
+            np.testing.assert_array_almost_equal(expected, result)
+            np.testing.assert_array_almost_equal(input_operand0, input_operand0_copy)
+
+    def inplace_int_op_test(self, *args, **kws):
+        if 'skip_inputs' not in kws:
+            kws['skip_inputs'] = []
+        kws['skip_inputs'].extend([
+            types.float32, types.float64,
+            types.Array(types.float32, 1, 'C'),
+            types.Array(types.float64, 1, 'C')])
+        return self.inplace_op_test(*args, **kws)
 
     def binary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
@@ -1182,6 +1245,45 @@ class TestUFuncs(TestCase):
 
     def test_bitwise_xor_array_op(self):
         self.binary_int_op_test('^')
+
+    def test_inplace_add_array_op(self):
+        self.inplace_op_test('+=')
+
+    def test_inplace_subtract_array_op(self):
+        self.inplace_op_test('-=')
+
+    def test_inplace_multiply_array_op(self):
+        self.inplace_op_test('*=')
+
+    def test_inplace_divide_array_op(self):
+        int_out_type = None
+        if PYVERSION >= (3, 0):
+            int_out_type = types.float64
+        self.inplace_op_test('/=', int_output_type=int_out_type)
+
+    def test_inplace_floor_divide_array_op(self):
+        self.inplace_op_test('//=')
+
+    def test_inplace_remainder_array_op(self):
+        self.inplace_op_test('%=')
+
+    def test_inplace_power_array_op(self):
+        self.inplace_op_test('**=')
+
+    def test_inplace_left_shift_array_op(self):
+        self.inplace_int_op_test('<<=', positive_rhs=True)
+
+    def test_inplace_right_shift_array_op(self):
+        self.inplace_int_op_test('>>=', positive_rhs=True)
+
+    def test_inplace_bitwise_and_array_op(self):
+        self.inplace_int_op_test('&=')
+
+    def test_inplace_bitwise_or_array_op(self):
+        self.inplace_int_op_test('|=')
+
+    def test_inplace_bitwise_xor_array_op(self):
+        self.inplace_int_op_test('^=')
 
     def test_equal_array_op(self):
         self.binary_op_test('==')
