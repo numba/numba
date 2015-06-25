@@ -472,6 +472,8 @@ class BaseContext(object):
         return self.generators[genty][1]
 
     def get_bound_function(self, builder, obj, ty):
+        if self.enable_nrt:
+            self.nrt_incref(builder, ty, obj)
         return obj
 
     def get_attribute(self, val, typ, attr):

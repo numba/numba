@@ -712,6 +712,8 @@ def array_view(context, builder, sig, args):
         msg = "new type not compatible with array"
         context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
+    if context.enable_nrt:
+        context.nrt_incref(builder, retty, ret._getvalue())
     return ret._getvalue()
 
 
