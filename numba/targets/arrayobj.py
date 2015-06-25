@@ -561,6 +561,8 @@ def array_transpose(context, builder, sig, args):
 
 def array_T(context, builder, typ, value):
     if typ.ndim <= 1:
+        if context.enable_nrt:
+            context.nrt_incref(builder, typ, value)
         return value
     else:
         ary = make_array(typ)(context, builder, value)
