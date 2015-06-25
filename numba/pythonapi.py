@@ -145,7 +145,12 @@ class PythonAPI(object):
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
 
     def get_env_manager(self, env, env_body, env_ptr):
-        is_null = cgutils.is_null(self.builder, env_ptr)
+        return EnvironmentManager(self, env, env_body, env_ptr)
+
+    def emit_environment_sentry(self, envptr):
+        """Emits LLVM code to ensure the `envptr` is not NULL
+        """
+        is_null = cgutils.is_null(self.builder, envptr)
         with cgutils.if_unlikely(self.builder, is_null):
             # NOTE: We cannot guarantee libc "puts" symbol is available in
             #       all compilation mode.
@@ -155,7 +160,6 @@ class PythonAPI(object):
             # Let LLVM lower a trap
             self.builder.unreachable()
 
-        return EnvironmentManager(self, env, env_body, env_ptr)
 
     # ------ Python API -----
 
