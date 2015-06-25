@@ -888,17 +888,18 @@ class PythonAPI(object):
         assert self.context.enable_nrt, "NRT required"
 
         intty = ir.IntType(32)
-        fnty = Type.function(self.pyobj, [self.voidptr, intty, self.pyobj])
+        fnty = Type.function(self.pyobj,
+                             [self.voidptr, intty, intty, self.pyobj])
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
-        dtype = numpy_support.as_dtype(aryty.dtype)
 
         ndim = self.context.get_constant(types.int32, aryty.ndim)
+        writable = self.context.get_constant(types.int32, int(aryty.mutable))
 
         aryptr = cgutils.alloca_once_value(self.builder, ary)
         return self.builder.call(fn, [self.builder.bitcast(aryptr,
                                                            self.voidptr),
-                                      ndim, dtypeptr])
+                                      ndim, writable, dtypeptr])
 
     def nrt_adapt_ndarray_from_python(self, ary, ptr):
         assert self.context.enable_nrt

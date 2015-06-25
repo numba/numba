@@ -1,6 +1,7 @@
 from __future__ import division
 
 from itertools import product
+import sys
 
 import numpy as np
 
@@ -75,6 +76,26 @@ def make_array_view(newtype):
     def array_view(arr):
         return arr.view(newtype)
     return array_view
+
+def np_frombuffer(b):
+    """
+    np.frombuffer() on a Python-allocated buffer.
+    """
+    return np.frombuffer(b)
+
+def np_frombuffer_dtype(b):
+    return np.frombuffer(b, dtype=np.complex64)
+
+def np_frombuffer_allocated(shape):
+    """
+    np.frombuffer() on a Numba-allocated buffer.
+    """
+    arr = np.ones(shape, dtype=np.int32)
+    return np.frombuffer(arr)
+
+def np_frombuffer_allocated_dtype(shape):
+    arr = np.ones(shape, dtype=np.int32)
+    return np.frombuffer(arr, dtype=np.complex64)
 
 
 class TestArrayMethods(TestCase):
@@ -309,6 +330,63 @@ class TestArrayMethods(TestCase):
         check_err(arr, np.int64)
         check_err(arr, dt1)
         check_err(arr, dt2)
+
+    @unittest.skipIf(sys.version_info < (2, 7),
+                     "buffer protocol not supported on Python 2.6")
+    def check_np_frombuffer(self, pyfunc):
+        def run(buf):
+            cres = self.ccache.compile(pyfunc, (typeof(buf),))
+            return cres.entry_point(buf)
+        def check(buf):
+            old_refcnt = sys.getrefcount(buf)
+            expected = pyfunc(buf)
+            got = run(buf)
+            self.assertPreciseEqual(got, expected)
+            del expected
+            self.assertEqual(sys.getrefcount(buf), old_refcnt + 1)
+            del got
+            self.assertEqual(sys.getrefcount(buf), old_refcnt)
+
+        b = bytearray(range(16))
+        check(b)
+        if sys.version_info >= (3,):
+            check(bytes(b))
+            check(memoryview(b))
+        check(np.arange(12))
+        b = np.arange(12).reshape((3, 4))
+        check(b)
+
+        with self.assertRaises(ValueError) as raises:
+            run(bytearray(b"xxx"))
+        self.assertEqual("buffer size must be a multiple of element size",
+                         str(raises.exception))
+
+    def test_np_frombuffer(self):
+        self.check_np_frombuffer(np_frombuffer)
+
+    def test_np_frombuffer_dtype(self):
+        self.check_np_frombuffer(np_frombuffer_dtype)
+
+    @unittest.skipIf(sys.version_info < (2, 7),
+                     "buffer protocol not supported on Python 2.6")
+    def check_np_frombuffer_allocated(self, pyfunc):
+        def run(shape):
+            cres = self.ccache.compile(pyfunc, (typeof(shape),))
+            return cres.entry_point(shape)
+        def check(shape):
+            expected = pyfunc(shape)
+            got = run(shape)
+            self.assertPreciseEqual(got, expected)
+
+        check((16,))
+        check((4, 4))
+        check((1, 0, 1))
+
+    def test_np_frombuffer_allocated(self):
+        self.check_np_frombuffer_allocated(np_frombuffer_allocated)
+
+    def test_np_frombuffer_allocated(self):
+        self.check_np_frombuffer_allocated(np_frombuffer_allocated_dtype)
 
 
 if __name__ == '__main__':

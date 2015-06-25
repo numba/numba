@@ -146,6 +146,7 @@ The following top-level functions are supported:
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.eye`
+* :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full`
 * :func:`numpy.full_like`
 * :func:`numpy.identity`
