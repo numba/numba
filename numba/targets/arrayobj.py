@@ -144,6 +144,9 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     for k, v in attrs.items():
         setattr(array, k, v)
 
+    if context.enable_nrt:
+        context.nrt_incref(builder, array._fe_type, array._getvalue())
+
     return array
 
 

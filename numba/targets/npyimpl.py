@@ -308,7 +308,12 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
 
         val_out = kernel.generate(*vals_in)
         output.store_data(loop_indices, val_out)
-    return arguments[-1].return_val
+
+    retval = arguments[-1].return_val
+
+    if context.enable_nrt:
+        context.nrt_incref(builder, sig.return_type, retval)
+    return retval
 
 
 # Kernels are the code to be executed inside the multidimensional loop.

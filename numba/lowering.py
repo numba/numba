@@ -208,20 +208,24 @@ class Lower(BaseLower):
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
-            self.storevar(val, inst.target.name)
-            # TODO: emit incref/decref in the numba IR properly.
-            # Workaround due to lack of proper incref/decref info.
             if self.context.enable_nrt:
-                if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
-                    callexpr = inst.value
-                    # NPM function returns new reference
-                    fnty = self.typeof(callexpr.func.name)
-                    if (isinstance(fnty, types.Dispatcher)
-                        or (isinstance(fnty, types.Function)
-                            and getattr(fnty.template,
-                                        'return_new_reference',
-                                        False))):
-                        self.decref(ty, val)
+                if not (isinstance(inst.value, ir.Expr)):
+                    self.incref(ty, val)
+
+            self.storevar(val, inst.target.name)
+            # # TODO: emit incref/decref in the numba IR properly.
+            # # Workaround due to lack of proper incref/decref info.
+            # if self.context.enable_nrt:
+            #     if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
+            #         callexpr = inst.value
+            #         # NPM function returns new reference
+            #         fnty = self.typeof(callexpr.func.name)
+            #         if (isinstance(fnty, types.Dispatcher)
+            #             or (isinstance(fnty, types.Function)
+            #                 and getattr(fnty.template,
+            #                             'return_new_reference',
+            #                             False))):
+            #             self.decref(ty, val)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -675,12 +679,17 @@ class Lower(BaseLower):
             tup = self.context.get_constant_undef(resty)
             for i in range(len(castvals)):
                 tup = self.builder.insert_value(tup, castvals[i], i)
+
+            self.incref(resty, tup)
             return tup
 
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             castval = self.context.cast(self.builder, val, ty, resty)
+            # No-Op cast needs to incref
+            if castval == val and self.context.enable_nrt:
+                self.incref(ty, val)
             return castval
 
         elif expr.op in self.context.special_ops:
@@ -723,8 +732,6 @@ class Lower(BaseLower):
             raise AssertionError(msg)
 
         self.builder.store(value, ptr)
-        # Incref
-        self.incref(fetype, value)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
