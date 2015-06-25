@@ -355,7 +355,7 @@ class TestArrayMethods(TestCase):
         check(b)
 
         with self.assertRaises(ValueError) as raises:
-            run(b"x" * 3)
+            run(bytearray(b"xxx"))
         self.assertEqual("buffer size must be a multiple of element size",
                          str(raises.exception))
 
