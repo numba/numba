@@ -383,7 +383,7 @@ def unbox_tuple(c, typ, obj):
 
 @box(types.Generator)
 def box_generator(c, typ, val):
-    return c.pyapi.from_native_generator(val, typ)
+    return c.pyapi.from_native_generator(val, typ, c.env_manager.env_ptr)
 
 @unbox(types.Generator)
 def unbox_generator(c, typ, obj):
