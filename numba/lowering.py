@@ -408,26 +408,14 @@ class Lower(BaseLower):
 
     def lower_inplace_binop(self, resty, expr):
         lhs = expr.lhs
-        rhs = expr.rhs
         lty = self.typeof(lhs.name)
-        rty = self.typeof(rhs.name)
-        lhs = self.loadvar(lhs.name)
-        rhs = self.loadvar(rhs.name)
-
         # inplace operators on non-mutable types reuse the same
         # definition as the corresponding copying operators.
         if not lty.mutable:
+            expr.fn = expr.fn[:-1] # strip the right '='
             return self.lower_binop(resty, expr)
-
-        # Get function
-        signature = self.fndesc.calltypes[expr]
-        impl = self.context.get_function(expr.fn, signature)
-        # Convert argument to match
-        lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
-        rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
-        res = impl(self.builder, (lhs, rhs))
-        return self.context.cast(self.builder, res, signature.return_type,
-                                 resty)
+        else:
+            return self.lower_binop(resty, expr)
 
     def _cast_var(self, var, ty):
         """
