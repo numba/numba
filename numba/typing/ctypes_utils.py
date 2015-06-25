@@ -9,6 +9,7 @@ import sys
 
 from numba import types
 from . import templates
+from .typeof import typeof_impl
 
 
 CTYPES_MAP = {
@@ -49,6 +50,12 @@ def is_ctypes_funcptr(obj):
     else:
         # Does it define argtypes and restype
         return hasattr(obj, 'argtypes') and hasattr(obj, 'restype')
+
+
+@typeof_impl.register(ctypes._CFuncPtr)
+def typeof_ctypes_function(val, c):
+    if is_ctypes_funcptr(val):
+        return make_function_type(val)
 
 
 def get_pointer(ctypes_func):

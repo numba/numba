@@ -119,10 +119,13 @@ class ValueTypingTestBase(object):
         self.assertIn(f(1), (types.int32, types.int64))
         self.assertIs(f(1.0), types.float64)
         self.assertIs(f(1.0j), types.complex128)
+        self.assertIs(f(True), types.bool_)
+        self.assertIs(f(False), types.bool_)
         # Numpy scalar types get converted by from_dtype()
         for name in ('int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32',
                      'int64', 'uint64', 'intc', 'uintc', 'intp', 'uintp',
-                     'float32', 'float64', 'complex64', 'complex128'):
+                     'float32', 'float64', 'complex64', 'complex128',
+                     'bool_'):
             val = getattr(np, name)()
             self.assertIs(f(val), getattr(types, name))
 
