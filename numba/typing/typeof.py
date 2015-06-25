@@ -3,7 +3,6 @@ from __future__ import print_function, absolute_import
 from collections import namedtuple
 import ctypes
 import enum
-from functools import singledispatch
 import sys
 
 import numpy as np

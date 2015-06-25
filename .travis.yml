@@ -27,14 +27,17 @@ before_install:
   # Setup environment
   - conda create -n travisci --yes python=$PY_MAJOR_MINOR $NUMPY cffi
   - source activate travisci
+  - CONDA_INSTALL="conda install --yes -q"
+  - PIP_INSTALL="pip install -q"
   # Install llvmdev (separate channel, for now)
-  - conda install --yes -c numba llvmdev="3.6*"
+  - $CONDA_INSTALL -c numba llvmdev="3.6*"
   # Install unittest2 for Python 2
-  - if [ $PY_MAJOR_MINOR == "2.6" ]; then conda install --yes unittest2 argparse; fi
+  - if [ $PY_MAJOR_MINOR == "2.6" ]; then $CONDA_INSTALL unittest2 argparse; fi
   # Install enum34 for Python < 3.4
-  - if [ $PY_MAJOR_MINOR \< "3.4" ]; then conda install --yes enum34; fi
+  - if [ $PY_MAJOR_MINOR \< "3.4" ]; then $CONDA_INSTALL enum34; fi
+  - if [ $PY_MAJOR_MINOR \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
   # Install funcsigs for Python < 3.3
-  - if [ $PY_MAJOR_MINOR \< "3.3" ]; then conda install --yes -c numba funcsigs; fi
+  - if [ $PY_MAJOR_MINOR \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
   # The next couple lines fix a crash with multiprocessing on Travis
   # and are not specific to using Miniconda
   - sudo rm -rf /dev/shm
@@ -47,8 +50,8 @@ before_install:
   # Force g++ 4.8 to be the default version
   - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
   # Install dependencies for building the documentation
-  - conda install --yes pip sphinx pygments
-  - pip install sphinxjp.themecore sphinxjp.themes.basicstrap
+  - $CONDA_INSTALL pip sphinx pygments
+  - $PIP_INSTALL sphinxjp.themecore sphinxjp.themes.basicstrap
 
   # Install boost for impyla
   #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
