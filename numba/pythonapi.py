@@ -147,18 +147,21 @@ class PythonAPI(object):
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
 
-    def emit_environment_sentry(self, envptr):
+    def emit_environment_sentry(self, envptr, return_pyobject=False):
         """Emits LLVM code to ensure the `envptr` is not NULL
         """
         is_null = cgutils.is_null(self.builder, envptr)
         with cgutils.if_unlikely(self.builder, is_null):
-            # NOTE: We cannot guarantee libc "puts" symbol is available in
-            #       all compilation mode.
-            # # Fatal error due to error in numba
-            # self.context.debug_print(self.builder,
-            #                          "Fatal error: missing Environment")
-            # Let LLVM lower a trap
-            self.builder.unreachable()
+            if return_pyobject:
+                fnty = self.builder.function.type.pointee
+                assert fnty.return_type == self.pyobj
+                self.err_set_string("PyExc_RuntimeError",
+                                    "missing Environment")
+                self.builder.ret(self.get_null_object())
+            else:
+                self.context.call_conv.return_user_exc(self.builder,
+                                                       RuntimeError,
+                                                       ("missing Environment",))
 
 
     # ------ Python API -----
