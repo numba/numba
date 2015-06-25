@@ -93,9 +93,11 @@ class PythonAPI(object):
     def get_env_manager(self, env, env_body, env_ptr):
         is_null = cgutils.is_null(self.builder, env_ptr)
         with cgutils.if_unlikely(self.builder, is_null):
-            # Fatal error due to error in numba
-            self.context.debug_print(self.builder,
-                                     "Fatal error: missing Environment")
+            # NOTE: We cannot guarantee libc "puts" symbol is available in
+            #       all compilation mode.
+            # # Fatal error due to error in numba
+            # self.context.debug_print(self.builder,
+            #                          "Fatal error: missing Environment")
             # Let LLVM lower a trap
             self.builder.unreachable()
 
