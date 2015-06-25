@@ -122,6 +122,18 @@ class Opaque(Dummy):
     """
 
 
+class PyObject(Dummy):
+    """
+    A generic CPython object.
+    """
+
+
+class RawPointer(Dummy):
+    """
+    A raw pointer without any specific meaning.
+    """
+
+
 class Kind(Type):
     def __init__(self, of):
         self.of = of
@@ -1073,7 +1085,7 @@ def is_int_tuple(x):
 
 # Short names
 
-pyobject = Opaque('pyobject')
+pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
 none = NoneType('none')
 Any = Phantom('any')
@@ -1081,7 +1093,7 @@ string = Opaque('str')
 
 # No operation is defined on voidptr
 # Can only pass it around
-voidptr = Opaque('void*')
+voidptr = RawPointer('void*')
 
 # For NRT GC
 meminfo_pointer = Opaque("MemInfo*")
