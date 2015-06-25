@@ -331,6 +331,8 @@ class TestArrayMethods(TestCase):
         check_err(arr, dt1)
         check_err(arr, dt2)
 
+    @unittest.skipIf(sys.version_info < (2, 7),
+                     "buffer protocol not supported on Python 2.6")
     def check_np_frombuffer(self, pyfunc):
         def run(buf):
             cres = self.ccache.compile(pyfunc, (typeof(buf),))
@@ -365,6 +367,8 @@ class TestArrayMethods(TestCase):
     def test_np_frombuffer_dtype(self):
         self.check_np_frombuffer(np_frombuffer_dtype)
 
+    @unittest.skipIf(sys.version_info < (2, 7),
+                     "buffer protocol not supported on Python 2.6")
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
             cres = self.ccache.compile(pyfunc, (typeof(shape),))
