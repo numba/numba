@@ -448,7 +448,10 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
         PyArray_CLEARFLAGS(array, NPY_ARRAY_WRITEABLE);
     }
 #else
-    if (!writeable) {
+    if (writeable) {
+        array->flags |= NPY_WRITEABLE;
+    }
+    else {
         array->flags &= ~NPY_WRITEABLE;
     }
 #endif
