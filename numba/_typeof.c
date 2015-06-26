@@ -119,6 +119,22 @@ string_writer_put_intp(string_writer_t *w, npy_intp v)
     return 0;
 }
 
+static inline int
+string_writer_put_string(string_writer_t *w, const char *s)
+{
+    if (s == NULL) {
+        return string_writer_put_char(w, 0);
+    }
+    else {
+        size_t N = strlen(s) + 1;
+        if (string_writer_ensure(w, N))
+            return -1;
+        memcpy(w->buf + w->n, s, N);
+        w->n += N;
+        return 0;
+    }
+}
+
 enum opcode {
     OP_START_TUPLE = '(',
     OP_END_TUPLE = ')',
@@ -130,6 +146,7 @@ enum opcode {
     OP_BYTES = 'b',
     OP_NONE = 'n',
 
+    OP_BUFFER = 'B',
     OP_NP_SCALAR = 'S',
     OP_NP_ARRAY = 'A',
     OP_NP_DTYPE = 'D'
@@ -229,11 +246,49 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
             TRY(string_writer_put_char, w, 'R');
         return compute_dtype_fingerprint(w, PyArray_DESCR(ary));
     }
+    if (PyObject_CheckBuffer(val)) {
+        Py_buffer buf;
+        int flags = PyBUF_ND | PyBUF_STRIDES | PyBUF_FORMAT;
+        char contig;
+        int ndim;
+        char readonly;
+
+        /* Attempt to get a writable buffer, then fallback on read-only */
+        if (PyObject_GetBuffer(val, &buf, flags | PyBUF_WRITABLE)) {
+            PyErr_Clear();
+            if (PyObject_GetBuffer(val, &buf, flags))
+                goto _unrecognized;
+        }
+        if (PyBuffer_IsContiguous(&buf, 'C'))
+            contig = 'C';
+        else if (PyBuffer_IsContiguous(&buf, 'F'))
+            contig = 'F';
+        else
+            contig = 'A';
+        ndim = buf.ndim;
+        readonly = buf.readonly ? 'R' : 'W';
+        if (string_writer_put_char(w, OP_BUFFER) ||
+            string_writer_put_int32(w, ndim) ||
+            string_writer_put_char(w, contig) ||
+            string_writer_put_char(w, readonly) ||
+            string_writer_put_string(w, buf.format) ||
+            /* We serialize the object's Python type as well, to
+               distinguish between types which have Numba specializations
+               (e.g. array.array() vs. memoryview)
+            */
+            string_writer_put_intp(w, (npy_intp) Py_TYPE(val))) {
+            PyBuffer_Release(&buf);
+            return -1;
+        }
+        PyBuffer_Release(&buf);
+        return 0;
+    }
     if (PyArray_DescrCheck(val)) {
         TRY(string_writer_put_char, w, OP_NP_DTYPE);
         return compute_dtype_fingerprint(w, (PyArray_Descr *) val);
     }
 
+_unrecognized:
     /* Type not recognized */
     return fingerprint_unrecognized(val);
 }
