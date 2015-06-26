@@ -43,6 +43,18 @@ def call_stuff(a0, a1):
 def are_roots_imaginary(As, Bs, Cs):
     return (Bs ** 2 - 4 * As * Cs) < 0
 
+# From issue #1264
+def distance_matrix(vectors):
+    n_vectors = vectors.shape[0]
+    result = np.empty((n_vectors, n_vectors), dtype=np.float64)
+
+    for i in range(n_vectors):
+        for j in range(i, n_vectors):
+            result[i,j] = result[j,i] = np.sum(
+                (vectors[i] - vectors[j]) ** 2) ** 0.5
+
+    return result
+
 
 class RewritesTester(Pipeline):
     @classmethod
@@ -268,6 +280,12 @@ class TestRewriteIssues(unittest.TestCase):
         self.assertIs(out_c, out_d)
         self.assertIs(out_c, arr)
 
+    def test_issue_1264(self):
+        n = 100
+        x = np.random.uniform(size=n*3).reshape((n,3))
+        expected = distance_matrix(x)
+        actual = njit(distance_matrix)(x)
+        np.testing.assert_array_almost_equal(expected, actual)
 
 
 if __name__ == "__main__":
