@@ -365,6 +365,10 @@ PyObject* try_to_return_parent(arystruct_t *arystruct, int ndim,
     int i;
     PyArrayObject *array = (PyArrayObject *)arystruct->parent;
 
+    if (!PyArray_Check(arystruct->parent))
+        /* Parent is a generic buffer-providing object */
+        goto RETURN_ARRAY_COPY;
+
     if (PyArray_DATA(array) != arystruct->data)
         goto RETURN_ARRAY_COPY;
 
@@ -393,12 +397,12 @@ RETURN_ARRAY_COPY:
 
 static
 PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
-                                      PyArray_Descr *descr) {
-    PyObject *array;
+                                      int writeable, PyArray_Descr *descr) {
+    PyArrayObject *array;
     MemInfoObject *miobj = NULL;
     PyObject *args;
     npy_intp *shape, *strides;
-    int flags=0;
+    int flags = 0;
 
     if (!PyArray_DescrCheck(descr)) {
         PyErr_Format(PyExc_TypeError,
@@ -408,8 +412,9 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
     }
 
     if (arystruct->parent) {
-        array = try_to_return_parent(arystruct, ndim, descr);
-        if (array) return array;
+        PyObject *obj = try_to_return_parent(arystruct, ndim, descr);
+        if (obj)
+            return obj;
     }
 
     if (arystruct->meminfo) {
@@ -418,39 +423,55 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
         args = PyTuple_New(1);
         /* SETITEM steals reference */
         PyTuple_SET_ITEM(args, 0, PyLong_FromVoidPtr(arystruct->meminfo));
-        if(MemInfo_init(miobj, args, NULL)) {
+        if (MemInfo_init(miobj, args, NULL)) {
             return NULL;
         }
         Py_DECREF(args);
-        /* Set writable */
-#if NPY_API_VERSION >= 0x00000007
-        flags |= NPY_ARRAY_WRITEABLE;
-#endif
     }
 
     shape = arystruct->shape_and_strides;
     strides = shape + ndim;
     Py_INCREF((PyObject *) descr);
-    array = PyArray_NewFromDescr(&PyArray_Type, descr, ndim,
-                                 shape, strides, arystruct->data,
-                                 flags, (PyObject*)miobj);
+    array = (PyArrayObject *) PyArray_NewFromDescr(&PyArray_Type, descr, ndim,
+                                                   shape, strides, arystruct->data,
+                                                   flags, (PyObject *) miobj);
+
+    if (array == NULL)
+        return NULL;
+
+    /* Set writable */
+#if NPY_API_VERSION >= 0x00000007
+    if (writeable) {
+        PyArray_ENABLEFLAGS(array, NPY_ARRAY_WRITEABLE);
+    }
+    else {
+        PyArray_CLEARFLAGS(array, NPY_ARRAY_WRITEABLE);
+    }
+#else
+    if (writeable) {
+        array->flags |= NPY_WRITEABLE;
+    }
+    else {
+        array->flags &= ~NPY_WRITEABLE;
+    }
+#endif
 
     if (miobj) {
         /* Set the MemInfoObject as the base object */
 #if NPY_API_VERSION >= 0x00000007
-        if (-1 == PyArray_SetBaseObject((PyArrayObject*)array,
-                                        (PyObject *)miobj))
+        if (-1 == PyArray_SetBaseObject(array,
+                                        (PyObject *) miobj))
         {
             Py_DECREF(array);
             Py_DECREF(miobj);
             return NULL;
         }
 #else
-        PyArray_BASE((PyArrayObject*)array) = (PyObject*) miobj;
+        PyArray_BASE(array) = (PyObject *) miobj;
 #endif
 
     }
-    return array;
+    return (PyObject *) array;
 }
 
 static void

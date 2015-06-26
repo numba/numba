@@ -243,6 +243,9 @@ class TestAssertPreciseEqual(TestCase):
         self.ne(a, b.T.copy().T)
         # Different ndim
         self.ne(a, b.flatten())
+        # Different writeability
+        b.flags.writeable = False
+        self.ne(a, b)
         # Precision
         a = np.arange(1, 3, dtype=np.float64)
         b = a * (1.0 + DBL_EPSILON)

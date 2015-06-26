@@ -204,10 +204,15 @@ class TestCase(unittest.TestCase):
         if compare_family == "ndarray":
             dtype = self._fix_dtype(first.dtype)
             self.assertEqual(dtype, self._fix_dtype(second.dtype))
-            self.assertEqual(first.ndim, second.ndim)
-            self.assertEqual(first.shape, second.shape)
+            self.assertEqual(first.ndim, second.ndim,
+                             "different number of dimensions")
+            self.assertEqual(first.shape, second.shape,
+                             "different shapes")
+            self.assertEqual(first.flags.writeable, second.flags.writeable,
+                             "different mutability")
             # itemsize is already checked by the dtype test above
-            self.assertEqual(self._fix_strides(first), self._fix_strides(second))
+            self.assertEqual(self._fix_strides(first), self._fix_strides(second),
+                             "different strides")
             if first.dtype != dtype:
                 first = first.astype(dtype)
             if second.dtype != dtype:

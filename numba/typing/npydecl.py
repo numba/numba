@@ -598,6 +598,28 @@ class NdLinspace(AbstractTemplate):
 builtin_global(numpy.linspace, types.Function(NdLinspace))
 
 
+@builtin
+class NdFromBuffer(CallableTemplate):
+    key = numpy.frombuffer
+
+    def generic(self):
+        def typer(buffer, dtype=None):
+            if not isinstance(buffer, types.Buffer) or buffer.layout != 'C':
+                return
+            if dtype is None:
+                nb_dtype = types.float64
+            else:
+                nb_dtype = _parse_dtype(dtype)
+
+            if nb_dtype is not None:
+                return types.Array(dtype=nb_dtype, ndim=1, layout='C',
+                                   readonly=not buffer.mutable)
+
+        return typer
+
+builtin_global(numpy.frombuffer, types.Function(NdFromBuffer))
+
+
 # -----------------------------------------------------------------------------
 # Miscellaneous functions
 
