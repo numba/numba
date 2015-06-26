@@ -933,11 +933,11 @@ def array_median(context, builder, sig, args):
         A[i+1], A[high] = A[high], A[i+1]
         return i + 1
 
-    sig_partition = typing.signature(float64, *(sig.args[0], int64, int64))
-    cache_key = (partition.__code__, sig_partition)
+    sig_partition = typing.signature(int64, *(sig.args[0], int64, int64))
     cres = context.compile_only_no_cache(builder, partition, sig_partition)
-    fndesc = cres.fndesc
-    context.cached_internal_func[cache_key] = fndesc
+    llvm_func_name = cres.fndesc.llvm_func_name
+    _partition = types.ExternalFunction(llvm_func_name,
+            sig_partition)
 
     def select(arry, k):
         n = arry.shape[0]
@@ -947,31 +947,32 @@ def array_median(context, builder, sig, args):
         high = n-1
         low = 0
         # NOTE: high is inclusive
-        i = partition(temp_arry, low, high)
+        i = _partition(temp_arry, low, high)
         while i != k:
             if i < k:
                 low = i+1
-                i = partition(temp_arry, low, high)
+                i = _partition(temp_arry, low, high)
+                i = k
             else:
                 high = i-1
-                i = partition(temp_arry, low, high)
+                i = _partition(temp_arry, low, high)
+                i = k
         return temp_arry[k]
 
     sig_select = typing.signature(float64, *(sig.args[0], int64))
-    cache_key = (select.__code__, sig_select)
     cres = context.compile_only_no_cache(builder, select, sig_select)
-    fndesc = cres.fndesc
-    context.cached_internal_func[cache_key] = fndesc
+    llvm_func_name = cres.fndesc.llvm_func_name
+    _select = types.ExternalFunction(
+        llvm_func_name, sig_select)
 
     def median(arry):
         n = arry.shape[0]
         if n % 2 == 0:
-            return (select(arry, n//2 - 1) + select(arry, n//2))/2
+            return (_select(arry, n//2 - 1) + _select(arry, n//2))/2
         else:
-            return select(arry, n//2)
+            return _select(arry, n//2)
 
-    return context.compile_internal(builder, median, sig,
-            args,locals={"select":select, "partition":partition})
+    return context.compile_internal(builder, median, sig, args)
 
 
 def _np_round_intrinsic(tp):
