@@ -402,5 +402,5 @@ class LiftedLoop(_OverloadedBase):
             return cres.entry_point
 
 
-# Initialize dispatcher
-_dispatcher.init_types(dict((str(t), t._code) for t in types.number_domain))
+# Initialize typeof machinery
+_dispatcher.typeof_init(dict((str(t), t._code) for t in types.number_domain))

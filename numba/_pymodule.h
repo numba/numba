@@ -1,6 +1,8 @@
 #ifndef NUMBA_PY_MODULE_H_
 #define NUMBA_PY_MODULE_H_
 
+#define PY_SSIZE_T_CLEAN
+
 #include <Python.h>
 #include <structmember.h>
 

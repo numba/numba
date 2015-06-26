@@ -1,5 +1,5 @@
 """
-Basic tests for the numba.special module.
+Tests for the typeof() machinery.
 """
 
 from __future__ import print_function
