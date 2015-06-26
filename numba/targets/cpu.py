@@ -78,6 +78,10 @@ class CPUContext(BaseContext):
         From the pointer *clo* to a _dynfunc.Closure, get a pointer
         to the enclosed _dynfunc.Environment.
         """
+        with cgutils.if_unlikely(builder, cgutils.is_null(builder, clo)):
+            self.debug_print(builder, "Fatal error: missing _dynfunc.Closure")
+            builder.unreachable()
+
         clo_body_ptr = cgutils.pointer_add(
             builder, clo, _dynfunc._impl_info['offsetof_closure_body'])
         clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)

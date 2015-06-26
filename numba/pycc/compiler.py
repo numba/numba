@@ -146,7 +146,7 @@ class _Compiler(object):
         self.exported_function_types = {}
 
         typing_ctx = CPUTarget.typing_context
-        target_ctx = CPUTarget.target_context
+        target_ctx = CPUTarget.target_context.subtarget(aot_mode=True)
 
         codegen = target_ctx.aot_codegen(self.module_name)
         library = codegen.create_library(self.module_name)
