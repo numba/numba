@@ -934,7 +934,10 @@ def array_median(context, builder, sig, args):
         return i + 1
 
     sig_partition = typing.signature(float64, *(sig.args[0], int64, int64))
-    context.compile_only_no_cache(builder, partition, sig_partition)
+    cache_key = (partition.__code__, sig_partition)
+    cres = context.compile_only_no_cache(builder, partition, sig_partition)
+    fndesc = cres.fndesc
+    context.cached_internal_func[cache_key] = fndesc
 
     def select(arry, k):
         n = arry.shape[0]
@@ -955,7 +958,10 @@ def array_median(context, builder, sig, args):
         return temp_arry[k]
 
     sig_select = typing.signature(float64, *(sig.args[0], int64))
-    context.compile_only_no_cache(builder, select, sig_select)
+    cache_key = (select.__code__, sig_select)
+    cres = context.compile_only_no_cache(builder, select, sig_select)
+    fndesc = cres.fndesc
+    context.cached_internal_func[cache_key] = fndesc
 
     def median(arry):
         n = arry.shape[0]
@@ -964,7 +970,8 @@ def array_median(context, builder, sig, args):
         else:
             return select(arry, n//2)
 
-    return context.compile_internal(builder, median, sig, args)
+    return context.compile_internal(builder, median, sig,
+            args,locals={"select":select, "partition":partition})
 
 
 def _np_round_intrinsic(tp):
