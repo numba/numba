@@ -909,6 +909,8 @@ def array_argmax(context, builder, sig, args):
 @implement(numpy.median, types.Kind(types.Array))
 @implement("array.median", types.Kind(types.Array))
 def array_median(context, builder, sig, args):
+    from numba import typing, int64, float64
+
     def partition(A, low, high):
         # median of three {low, middle, high}
         middle = (low+high) // 2
@@ -931,9 +933,14 @@ def array_median(context, builder, sig, args):
         A[i+1], A[high] = A[high], A[i+1]
         return i + 1
 
+    sig_partition = typing.signature(float64, *(sig.args[0], int64, int64))
+    context.compile_only_no_cache(builder, partition, sig_partition)
+
     def select(arry, k):
         n = arry.shape[0]
-        temp_arry = arry.flatten()
+        # temp_arry = arry.flatten()
+        # Using copy till I implement flatten()
+        temp_arry = arry.copy()
         high = n-1
         low = 0
         # NOTE: high is inclusive
@@ -946,6 +953,9 @@ def array_median(context, builder, sig, args):
                 high = i-1
                 i = partition(temp_arry, low, high)
         return temp_arry[k]
+
+    sig_select = typing.signature(float64, *(sig.args[0], int64))
+    context.compile_only_no_cache(builder, select, sig_select)
 
     def median(arry):
         n = arry.shape[0]
