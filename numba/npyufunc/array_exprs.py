@@ -285,32 +285,43 @@ def _lower_array_expr(lowerer, expr):
     '''Lower an array expression built by RewriteArrayExprs.
     '''
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
-    expr_args = sorted(set(expr.list_vars()), key=lambda x: x.name)
-    expr_arg_names = [arg.name for arg in expr_args]
+    expr_var_list = expr.list_vars()
+    expr_var_map = {}
+    for expr_var in expr_var_list:
+        expr_var_name = expr_var.name
+        expr_var_new_name = expr_var_name.replace("$", "_").replace(".", "_")
+        expr_var_map[expr_var_new_name] = expr_var_name, expr_var
+        expr_var.name = expr_var_new_name
+    expr_filename = expr_var_list[0].loc.filename
+    # Parameters are the names internal to the new closure.
+    expr_params = sorted(expr_var_map.keys())
+    # Arguments are the names external to the new closure (except in
+    # Python abstract syntax, apparently...)
+    expr_args = [expr_var_map[key][0] for key in expr_params]
     if hasattr(ast, "arg"):
         # Should be Python 3.x
-        ast_args = [ast.arg(arg_name, None)
-                    for arg_name in expr_arg_names]
+        ast_args = [ast.arg(param_name, None)
+                    for param_name in expr_params]
     else:
         # Should be Python 2.x
-        ast_args = [ast.Name(arg_name, ast.Param())
-                    for arg_name in expr_arg_names]
+        ast_args = [ast.Name(param_name, ast.Param())
+                    for param_name in expr_params]
     # Parse a stub function to ensure the AST is populated with
     # reasonable defaults for the Python version.
     ast_module = ast.parse('def {0}(): return'.format(expr_name),
-                           expr_args[0].loc.filename, 'exec')
+                           expr_filename, 'exec')
     assert hasattr(ast_module, 'body') and len(ast_module.body) == 1
     ast_fn = ast_module.body[0]
     ast_fn.args.args = ast_args
     ast_fn.body[0].value, namespace = _arr_expr_to_ast(expr.expr)
     ast.fix_missing_locations(ast_module)
-    code_obj = compile(ast_module, expr_args[0].loc.filename, 'exec')
+    code_obj = compile(ast_module, expr_filename, 'exec')
     six.exec_(code_obj, namespace)
     impl = namespace[expr_name]
 
     context = lowerer.context
     builder = lowerer.builder
-    outer_sig = expr.ty(*(lowerer.typeof(name) for name in expr_arg_names))
+    outer_sig = expr.ty(*(lowerer.typeof(name) for name in expr_args))
     inner_sig_args = []
     for argty in outer_sig.args:
         if isinstance(argty, types.Array):
@@ -335,6 +346,6 @@ def _lower_array_expr(lowerer, expr):
             return self.cast(result, inner_sig.return_type,
                              self.outer_sig.return_type)
 
-    args = [lowerer.loadvar(name) for name in expr_arg_names]
+    args = [lowerer.loadvar(name) for name in expr_args]
     return npyimpl.numpy_ufunc_kernel(
         context, builder, outer_sig, args, ExprKernel, explicit_output=False)
