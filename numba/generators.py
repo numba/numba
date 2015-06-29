@@ -319,14 +319,14 @@ class LowerYield(object):
                                               0, state_index)
             ty = self.gentype.state_types[state_index]
             val = self.lower.loadvar(name)
+            # IncRef newly stored value
+            if self.context.enable_nrt:
+                self.lower.incref(ty, val)
             # Load and DecRef previously stored value
             oldval = self.context.unpack_value(self.builder, ty, state_slot)
             if self.context.enable_nrt:
                 self.lower.decref(ty, oldval)
             self.context.pack_value(self.builder, ty, val, state_slot)
-            # IncRef newly stored value
-            if self.context.enable_nrt:
-                self.lower.incref(ty, val)
         # Save resume index
         indexval = Constant.int(self.resume_index_ptr.type.pointee,
                                 self.inst.index)
