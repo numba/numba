@@ -410,8 +410,12 @@ typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
     return PyLong_AsLong(typecodeobj);
 
 _fallback:
-    /* Not found in fingerprint map, invoke pure Python typeof() and cache result */
-    typecode = typecode_fallback(dispatcher, val);
+    /* Not found in fingerprint map, invoke pure Python typeof() and
+     * cache result.
+     * Note we have to keep the type alive forever as explained
+     * above in _typecode_fallback().
+     */
+    typecode = typecode_fallback_keep_ref(dispatcher, val);
     if (typecode >= 0) {
         int res;
         typecodeobj = PyLong_FromLong(typecode);
@@ -421,10 +425,10 @@ _fallback:
         }
         res = PyDict_SetItem(fingerprint_map, fingerprint, typecodeobj);
         Py_DECREF(typecodeobj);
-        Py_DECREF(fingerprint);
         if (res)
-            return -1;
+            typecode = -1;
     }
+    Py_DECREF(fingerprint);
     return typecode;
 }
 
