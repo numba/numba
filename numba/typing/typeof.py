@@ -61,22 +61,6 @@ def _typeof_buffer(val, c):
         return type_class(dtype, m.ndim, layout=layout,
                           readonly=m.readonly)
 
-if sys.version_info >= (2, 7):
-    # For speed
-    _tp_bytearray = types.ByteArray(types.uint8, 1, "C")
-
-    @typeof_impl.register(bytearray)
-    def _typeof_bytearray(val, c):
-        return _tp_bytearray
-
-if sys.version_info >= (3,):
-    # For speed
-    _tp_bytes = types.Bytes(types.uint8, 1, "C")
-
-    @typeof_impl.register(bytes)
-    def _typeof_bytes(val, c):
-        return _tp_bytes
-
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):
