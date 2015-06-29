@@ -40,7 +40,7 @@ def f(a, indices):
     # fill the array with differing values.
     for idx in indices:
         # Let another thread run
-        sleep(1 * sleep_factor)
+        sleep(10 * sleep_factor)
         a[idx] = PyThread_get_thread_ident()
 
 f_sig = "void(int64[:], intp[:])"
@@ -52,7 +52,7 @@ def lifted_f(a, indices):
     object()   # Force object mode
     for idx in indices:
         # Let another thread run
-        sleep(1 * sleep_factor)
+        sleep(10 * sleep_factor)
         a[idx] = PyThread_get_thread_ident()
 
 def object_f(a, indices):
@@ -61,7 +61,7 @@ def object_f(a, indices):
     """
     for idx in indices:
         # Let another thread run
-        sleep(1 * sleep_factor)
+        sleep(10 * sleep_factor)
         object()   # Force object mode
         a[idx] = PyThread_get_thread_ident()
 
