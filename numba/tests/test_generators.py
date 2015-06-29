@@ -402,18 +402,52 @@ class TestNrtArrayGen(TestCase):
 
             return gen1
 
-        arr = np.arange(10)
-        py_res, py_old = factory(gen0)(arr)
+        py_arr = np.arange(10)
+        c_arr = py_arr.copy()
+        py_res, py_old = factory(gen0)(py_arr)
         c_gen = jit(nopython=True)(factory(jit(nopython=True)(gen0)))
-        c_res, c_old = c_gen(arr)
+        c_res, c_old = c_gen(c_arr)
+
+        self.assertIsNot(py_arr, c_arr)
+        self.assertIs(py_old, py_arr)
+        self.assertIs(c_old, c_arr)
 
         np.testing.assert_equal(py_res, c_res)
 
         self.assertEqual(sys.getrefcount(py_res),
                          sys.getrefcount(c_res))
 
+        # The below test will fail due to generator finalizer not invoked.
+        # This kept a reference of the c_old.
+        #
+        # self.assertEqual(sys.getrefcount(py_old),
+        #                  sys.getrefcount(c_old))
+
+    @unittest.expectedFailure
+    def test_nrt_nested_gen_refct(self):
+        def gen0(arr):
+            yield arr
+
+        def factory(gen0):
+            def gen1(arr):
+                for out in gen0(arr):
+                    return out
+
+            return gen1
+
+        py_arr = np.arange(10)
+        c_arr = py_arr.copy()
+        py_old = factory(gen0)(py_arr)
+        c_gen = jit(nopython=True)(factory(jit(nopython=True)(gen0)))
+        c_old = c_gen(c_arr)
+
+        self.assertIsNot(py_arr, c_arr)
+        self.assertIs(py_old, py_arr)
+        self.assertIs(c_old, c_arr)
+
         self.assertEqual(sys.getrefcount(py_old),
                          sys.getrefcount(c_old))
+
 
 
 class TestGeneratorWithNRT(TestCase):
@@ -441,10 +475,6 @@ class TestGeneratorWithNRT(TestCase):
         """
         Double-free for locally allocated, non escaping NRT objects
         """
-
-        from numba import jit
-        import numpy as np
-
         def py_gen(rmin, rmax, nr):
             a = np.linspace(rmin, rmax, nr)
             yield a[0]
