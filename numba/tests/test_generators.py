@@ -387,6 +387,34 @@ class TestNrtArrayGen(TestCase):
         self.assertEqual(sys.getrefcount(py_ary),
                          sys.getrefcount(c_ary))
 
+    def test_nrt_nested_gen(self):
+
+        def gen0(arr):
+            for i in range(arr.size):
+                yield arr
+
+        def factory(gen0):
+            def gen1(arr):
+                out = np.zeros_like(arr)
+                for x in gen0(arr):
+                    out = out + x
+                return out, arr
+
+            return gen1
+
+        arr = np.arange(10)
+        py_res, py_old = factory(gen0)(arr)
+        c_gen = jit(nopython=True)(factory(jit(nopython=True)(gen0)))
+        c_res, c_old = c_gen(arr)
+
+        np.testing.assert_equal(py_res, c_res)
+
+        self.assertEqual(sys.getrefcount(py_res),
+                         sys.getrefcount(c_res))
+
+        self.assertEqual(sys.getrefcount(py_old),
+                         sys.getrefcount(c_old))
+
 
 class TestGeneratorWithNRT(TestCase):
     def test_issue_1254(self):
@@ -429,7 +457,6 @@ class TestGeneratorWithNRT(TestCase):
         c_res = list(c_gen(-2, 2, 100))
 
         self.assertEqual(py_res, c_res)
-
 
         def py_driver(args):
             rmin, rmax, nr = args
