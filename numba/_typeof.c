@@ -533,53 +533,6 @@ static int dtype_num_to_typecode(int type_num) {
 }
 
 static
-int get_cached_typecode(PyArray_Descr* descr) {
-    PyObject* tmpobject = PyDict_GetItem(typecache, (PyObject*)descr);
-    if (tmpobject == NULL)
-        return -1;
-
-    return PyLong_AsLong(tmpobject);
-}
-
-static
-void cache_typecode(PyArray_Descr* descr, int typecode) {
-    PyObject* value = PyLong_FromLong(typecode);
-    PyDict_SetItem(typecache, (PyObject*)descr, value);
-    Py_DECREF(value);
-}
-
-static
-PyObject* ndarray_key(int ndim, int layout, PyArray_Descr* descr) {
-    PyObject* tmpndim = PyLong_FromLong(ndim);
-    PyObject* tmplayout = PyLong_FromLong(layout);
-    PyObject* key = PyTuple_Pack(3, tmpndim, tmplayout, descr);
-    Py_DECREF(tmpndim);
-    Py_DECREF(tmplayout);
-    return key;
-}
-
-static
-int get_cached_ndarray_typecode(int ndim, int layout, PyArray_Descr* descr) {
-    PyObject* key = ndarray_key(ndim, layout, descr);
-    PyObject *tmpobject = PyDict_GetItem(ndarray_typecache, key);
-    if (tmpobject == NULL)
-        return -1;
-
-    Py_DECREF(key);
-    return PyLong_AsLong(tmpobject);
-}
-
-static
-void cache_ndarray_typecode(int ndim, int layout, PyArray_Descr* descr,
-                            int typecode) {
-    PyObject* key = ndarray_key(ndim, layout, descr);
-    PyObject* value = PyLong_FromLong(typecode);
-    PyDict_SetItem(ndarray_typecache, key, value);
-    Py_DECREF(key);
-    Py_DECREF(value);
-}
-
-static
 int typecode_ndarray(PyObject *dispatcher, PyArrayObject *ary) {
     int typecode;
     int dtype;
@@ -615,68 +568,14 @@ int typecode_ndarray(PyObject *dispatcher, PyArrayObject *ary) {
 
 FALLBACK:
     /* Slower path, for non-trivial array types */
-
-    /* If this isn't a structured array then we can't use the cache */
-    if (PyArray_TYPE(ary) != NPY_VOID)
-        return typecode_using_fingerprint(dispatcher, (PyObject *) ary);
-
-    /* Check type cache */
-    typecode = get_cached_ndarray_typecode(ndim, layout, PyArray_DESCR(ary));
-    if (typecode == -1) {
-        /* First use of this type, use fallback and populate the cache */
-        typecode = typecode_fallback_keep_ref(dispatcher, (PyObject*)ary);
-        cache_ndarray_typecode(ndim, layout, PyArray_DESCR(ary), typecode);
-    }
-    return typecode;
-}
-
-static
-int typecode_arrayscalar(PyObject *dispatcher, PyObject* aryscalar) {
-    int typecode;
-    PyArray_Descr *descr;
-    descr = PyArray_DescrFromScalar(aryscalar);
-    if (!descr)
-        return typecode_using_fingerprint(dispatcher, aryscalar);
-
-    /* Is it a structured scalar? */
-    if (descr->type_num == NPY_VOID) {
-        typecode = get_cached_typecode(descr);
-        if (typecode == -1) {
-            /* Resolve through fallback then populate cache */
-            typecode = typecode_fallback_keep_ref(dispatcher, aryscalar);
-            cache_typecode(descr, typecode);
-        }
-        Py_DECREF(descr);
-        return typecode;
-    }
-
-    /* Is it one of the well-known basic types? */
-    typecode = dtype_num_to_typecode(descr->type_num);
-    Py_DECREF(descr);
-    if (typecode == -1)
-        return typecode_using_fingerprint(dispatcher, aryscalar);
-    return BASIC_TYPECODES[typecode];
+    return typecode_using_fingerprint(dispatcher, (PyObject *) ary);
 }
 
 int
 typeof_typecode(PyObject *dispatcher, PyObject *val)
 {
-    PyTypeObject *tyobj = val->ob_type;
-    /* This needs to be kept in sync with Dispatcher.typeof_pyval(),
-     * otherwise funny things may happen.
-     */
-    if (tyobj == &PyInt_Type || tyobj == &PyLong_Type)
-        return tc_intp;
-    else if (tyobj == &PyFloat_Type)
-        return tc_float64;
-    else if (tyobj == &PyComplex_Type)
-        return tc_complex128;
-    /* Array scalar handling */
-    else if (PyArray_CheckScalar(val)) {
-        return typecode_arrayscalar(dispatcher, val);
-    }
-    /* Array handling */
-    else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
+    /* Fast array handling */
+    if (PyType_IsSubtype(Py_TYPE(val), &PyArray_Type)) {
         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
     }
 
