@@ -395,8 +395,15 @@ typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
             return -1;
     }
     fingerprint = typeof_compute_fingerprint(val);
-    if (fingerprint == NULL)
+    if (fingerprint == NULL) {
+        if (PyErr_ExceptionMatches(PyExc_NotImplementedError)) {
+            /* Can't compute a type fingerprint for the given value,
+               fall back on typeof() without caching. */
+            PyErr_Clear();
+            return typecode_fallback(dispatcher, val);
+        }
         return -1;
+    }
     typecodeobj = PyDict_GetItem(fingerprint_map, fingerprint);
     if (typecodeobj == NULL)
         goto _fallback;

@@ -196,6 +196,11 @@ class DistinctChecker(object):
 class TestFingerprint(TestCase):
     """
     Tests for _dispatcher.compute_fingerprint()
+
+    Each fingerprint must denote values of only one Numba type (this is
+    the condition for correctness), but values of a Numba type may be
+    denoted by several distinct fingerprints (it only makes the cache
+    less efficient).
     """
 
     def test_floats(self):
