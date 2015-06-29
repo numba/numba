@@ -30,40 +30,40 @@ else:
     sleep = ctypes.CDLL(ctypes.util.find_library("c")).usleep
     sleep.argtypes = [ctypes.c_uint]
     sleep.restype = ctypes.c_int
-    sleep_factor = 1000  # milliseconds
+    sleep_factor = 1000  # microseconds
 
 
-def f(a, offset):
+def f(a, indices):
     # If run from one thread at a time, the function will always fill the
     # array with identical values.
     # If run from several threads at a time, the function will probably
     # fill the array with differing values.
-    for idx in range(a.size):
+    for idx in indices:
         # Let another thread run
         sleep(1 * sleep_factor)
-        a[(idx + offset) % a.size] = PyThread_get_thread_ident()
+        a[idx] = PyThread_get_thread_ident()
 
-f_sig = "void(int64[:], intp)"
+f_sig = "void(int64[:], intp[:])"
 
-def lifted_f(a, offset):
+def lifted_f(a, indices):
     """
     Same as f(), but inside a lifted loop
     """
     object()   # Force object mode
-    for idx in range(a.size):
+    for idx in indices:
         # Let another thread run
         sleep(1 * sleep_factor)
-        a[(idx + offset) % a.size] = PyThread_get_thread_ident()
+        a[idx] = PyThread_get_thread_ident()
 
-def object_f(a, offset):
+def object_f(a, indices):
     """
     Same as f(), but in object mode
     """
-    for idx in range(a.size):
+    for idx in indices:
         # Let another thread run
         sleep(1 * sleep_factor)
         object()   # Force object mode
-        a[(idx + offset) % a.size] = PyThread_get_thread_ident()
+        a[idx] = PyThread_get_thread_ident()
 
 
 class TestGILRelease(TestCase):
@@ -76,13 +76,14 @@ class TestGILRelease(TestCase):
         threads = []
         # Warm up compilation, since we don't want that to interfere with
         # the test proper.
-        func(self.make_test_array(1), 0)
+        func(self.make_test_array(1), np.arange(1, dtype=np.intp))
         arr = self.make_test_array(50)
         for i in range(n_threads):
-            # Ensure different threads have equally distributed start offsets
-            # into the array.
-            offset = i * arr.size // n_threads
-            t = threading.Thread(target=func, args=(arr, offset))
+            # Ensure different threads write into the array in different
+            # orders.
+            indices = np.arange(arr.size, dtype=np.intp)
+            np.random.shuffle(indices)
+            t = threading.Thread(target=func, args=(arr, indices))
             threads.append(t)
         for t in threads:
             t.start()
@@ -176,7 +177,7 @@ class TestGILRelease(TestCase):
                             and "Code running in object mode won't allow parallel execution" in str(w.message)
                             for w in wlist), wlist)
         # Just check it doesn't crash.
-        cfunc(self.make_test_array(1), 0)
+        self.run_in_threads(cfunc, 2)
 
 
 if __name__ == '__main__':
