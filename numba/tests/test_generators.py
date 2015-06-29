@@ -452,7 +452,6 @@ class TestGeneratorWithNRT(TestCase):
 
         c_gen = jit(nopython=True)(py_gen)
 
-        #### COMMENTING OUT THE NEXT TWO LINES FIXES THE SEGFAULT
         py_res = list(py_gen(-2, 2, 100))
         c_res = list(c_gen(-2, 2, 100))
 
