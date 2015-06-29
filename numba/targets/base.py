@@ -152,6 +152,9 @@ class BaseContext(object):
     # NRT
     enable_nrt = False
 
+    # PYCC
+    aot_mode = False
+
     def __init__(self, typing_context):
         _load_global_helpers()
         self.address_size = utils.MACHINE_BITS
