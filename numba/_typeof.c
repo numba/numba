@@ -1,8 +1,9 @@
+#include "_pymodule.h"
+
 #include <string.h>
 #include <time.h>
 #include <assert.h>
 
-#include "_pymodule.h"
 #include "_typeof.h"
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
@@ -180,6 +181,7 @@ compute_dtype_fingerprint(string_writer_t *w, PyArray_Descr *descr)
         TRY(string_writer_put_char, w, (char) typenum);
         return string_writer_put_intp(w, (npy_intp) descr);
     }
+#if NPY_API_VERSION >= 0x00000007
     if (PyTypeNum_ISDATETIME(typenum)) {
         PyArray_DatetimeMetaData *md;
         md = &(((PyArray_DatetimeDTypeMetaData *)descr->c_metadata)->meta);
@@ -187,6 +189,7 @@ compute_dtype_fingerprint(string_writer_t *w, PyArray_Descr *descr)
         TRY(string_writer_put_char, w, (char) md->base);
         return string_writer_put_int32(w, (char) md->num);
     }
+#endif
 
     return fingerprint_unrecognized((PyObject *) descr);
 }

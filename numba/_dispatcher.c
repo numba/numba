@@ -1,8 +1,9 @@
+#include "_pymodule.h"
+
 #include <string.h>
 #include <time.h>
 #include <assert.h>
 
-#include "_pymodule.h"
 #include "_dispatcher.h"
 #include "_typeof.h"
 

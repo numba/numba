@@ -12,6 +12,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import cffi_support, numpy_support, types
+from numba.npdatetime import NPDATETIME_SUPPORTED
 from numba.special import typeof
 from numba._dispatcher import compute_fingerprint
 
@@ -245,6 +246,8 @@ class TestFingerprint(TestCase):
         self.assertNotEqual(compute_fingerprint(v1),
                             compute_fingerprint(v2))
 
+    @unittest.skipUnless(NPDATETIME_SUPPORTED,
+                         "np.datetime64 unsupported on this version")
     def test_datetime(self):
         a = np.datetime64(1, 'Y')
         b = np.datetime64(2, 'Y')
@@ -324,9 +327,10 @@ class TestFingerprint(TestCase):
         distinct.add(compute_fingerprint(arr))
         distinct.add(compute_fingerprint(memoryview(arr)))
 
-        m = mmap.mmap(-1, 16384)
-        distinct.add(compute_fingerprint(m))
-        self.assertEqual(compute_fingerprint(memoryview(m)), m_uint8_1d)
+        if sys.version_info >= (3,):
+            m = mmap.mmap(-1, 16384)
+            distinct.add(compute_fingerprint(m))
+            self.assertEqual(compute_fingerprint(memoryview(m)), m_uint8_1d)
 
     def test_dtype(self):
         distinct = DistinctChecker()
