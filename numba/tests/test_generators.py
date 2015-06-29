@@ -409,6 +409,54 @@ class TestGeneratorWithNRT(TestCase):
         for got in outputs:
             np.testing.assert_equal(expect, got)
 
+    def test_issue_1265(self):
+        """
+        Double-free for locally allocated, non escaping NRT objects
+        """
+
+        from numba import jit
+        import numpy as np
+
+        def py_gen(rmin, rmax, nr):
+            a = np.linspace(rmin, rmax, nr)
+            yield a[0]
+            yield a[1]
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        #### COMMENTING OUT THE NEXT TWO LINES FIXES THE SEGFAULT
+        py_res = list(py_gen(-2, 2, 100))
+        c_res = list(c_gen(-2, 2, 100))
+
+        self.assertEqual(py_res, c_res)
+
+
+        def py_driver(args):
+            rmin, rmax, nr = args
+            points = np.empty(nr, dtype=np.complex128)
+            for i, c in enumerate(py_gen(rmin, rmax, nr)):
+                points[i] = c
+
+            return points
+
+        @jit(nopython=True)
+        def c_driver(args):
+            rmin, rmax, nr = args
+            points = np.empty(nr, dtype=np.complex128)
+            for i, c in enumerate(c_gen(rmin, rmax, nr)):
+                points[i] = c
+
+            return points
+
+        n = 2
+        patches = (-2, -1, n)
+
+        py_res = py_driver(patches)
+        # The error will cause a segfault here
+        c_res = c_driver(patches)
+
+        np.testing.assert_equal(py_res, c_res)
+
 
 if __name__ == '__main__':
     unittest.main()

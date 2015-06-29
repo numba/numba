@@ -209,21 +209,11 @@ class GeneratorLower(BaseGeneratorLower):
             resume_index_ptr = self.get_resume_index_ptr(builder, genptr)
             resume_index = builder.load(resume_index_ptr)
 
-            # If resume_index is 0, next() was never called
-            # Note: The init func has to acquire the reference
-            #       of all arguments; otherwise, they will be destroyed at the
-            #       end of the init func.  The proper release of these
-            #       references relies on the actual NPM function, which is
-            #       never called if the generator exit before any entry into
-            #       the NPM function.
-            need_args_cleanup = builder.icmp_signed(
-                '==', resume_index, Constant.int(resume_index.type, 0))
-
-            with builder.if_then(need_args_cleanup):
-                for elem_idx, argty in enumerate(self.fndesc.argtypes):
-                    argptr = self.get_arg_ptr(builder, genptr, elem_idx)
-                    argval = builder.load(argptr)
-                    self.context.nrt_decref(builder, argty, argval)
+            # Always dereference all arguments
+            for elem_idx, argty in enumerate(self.fndesc.argtypes):
+                argptr = self.get_arg_ptr(builder, genptr, elem_idx)
+                argval = builder.load(argptr)
+                self.context.nrt_decref(builder, argty, argval)
 
             # Always run the finalizer to clear the block
             gen_state_ptr = self.get_state_ptr(builder, genptr)
@@ -326,7 +316,14 @@ class LowerYield(object):
                                               0, state_index)
             ty = self.gentype.state_types[state_index]
             val = self.lower.loadvar(name)
+            # Load and DecRef previously stored value
+            oldval = self.context.unpack_value(self.builder, ty, state_slot)
+            if self.context.enable_nrt:
+                self.lower.decref(ty, oldval)
             self.context.pack_value(self.builder, ty, val, state_slot)
+            # IncRef newly stored value
+            if self.context.enable_nrt:
+                self.lower.incref(ty, val)
         # Save resume index
         indexval = Constant.int(self.resume_index_ptr.type.pointee,
                                 self.inst.index)
