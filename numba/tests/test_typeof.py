@@ -300,10 +300,11 @@ class TestFingerprint(TestCase):
         s = compute_fingerprint(b'')
         self.assertEqual(compute_fingerprint(b'xx'), s)
         distinct.add(s)
-        distinct.add(compute_fingerprint(memoryview(b'')))
         distinct.add(compute_fingerprint(bytearray()))
-        m_uint8_1d = compute_fingerprint(memoryview(bytearray()))
-        distinct.add(m_uint8_1d)
+        if sys.version_info >= (2, 7):
+            distinct.add(compute_fingerprint(memoryview(b'')))
+            m_uint8_1d = compute_fingerprint(memoryview(bytearray()))
+            distinct.add(m_uint8_1d)
 
         if sys.version_info >= (3,):
             arr = array.array('B', [42])
@@ -316,16 +317,20 @@ class TestFingerprint(TestCase):
 
         arr = np.empty(16, dtype=np.uint8)
         distinct.add(compute_fingerprint(arr))
-        self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
+        if sys.version_info >= (2, 7):
+            self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
         arr = arr.reshape((4, 4))
         distinct.add(compute_fingerprint(arr))
-        distinct.add(compute_fingerprint(memoryview(arr)))
+        if sys.version_info >= (2, 7):
+            distinct.add(compute_fingerprint(memoryview(arr)))
         arr = arr.T
         distinct.add(compute_fingerprint(arr))
-        distinct.add(compute_fingerprint(memoryview(arr)))
+        if sys.version_info >= (2, 7):
+            distinct.add(compute_fingerprint(memoryview(arr)))
         arr = arr[::2]
         distinct.add(compute_fingerprint(arr))
-        distinct.add(compute_fingerprint(memoryview(arr)))
+        if sys.version_info >= (2, 7):
+            distinct.add(compute_fingerprint(memoryview(arr)))
 
         if sys.version_info >= (3,):
             m = mmap.mmap(-1, 16384)
