@@ -3,25 +3,8 @@
 #include <string>
 #include <vector>
 
-/*
-This object must be int sized
-*/
-class Type{
-public:
-    Type();
-    Type(int id);
-    Type(const Type& other);
-    Type& operator = (const Type& other);
-    bool valid() const;
-    bool operator ==(const Type& other) const;
-    bool operator !=(const Type& other) const;
-    bool operator <(const Type& other) const;
 
-    int get() const;
-
-private:
-    int id;
-};
+typedef int Type;
 
 enum TypeCompatibleCode{
     // No match
@@ -41,7 +24,6 @@ enum TypeCompatibleCode{
 };
 
 typedef std::pair<Type, Type> TypePair;
-//typedef std::map<TypePair, TypeCompatibleCode> TCCMap;
 
 struct TCCRecord {
     TypePair key;
@@ -50,18 +32,21 @@ struct TCCRecord {
 
 typedef std::vector<TCCRecord> TCCMapBin;
 
-enum {TCCMAP_SIZE = 512};
-
 class TCCMap {
 public:
+    TCCMap();
+
     unsigned int hash(const TypePair &key) const;
     void insert(const TypePair &key, TypeCompatibleCode val);
     TypeCompatibleCode find(const TypePair &key) const;
 private:
+    /* Must be a power of two */
+    static const int TCCMAP_SIZE = 512;
     TCCMapBin records[TCCMAP_SIZE];
+    int nb_records;
 };
 
-struct Rating{
+struct Rating {
     unsigned int promote;
     unsigned int safe_convert;
     unsigned int unsafe_convert;
@@ -85,7 +70,7 @@ public:
     void addSafeConversion(Type from, Type to);
     void addCompatibility(Type from, Type to, TypeCompatibleCode by);
 
-    TypeCompatibleCode isCompatible(const Type &from, const Type &to) const;
+    TypeCompatibleCode isCompatible(Type from, Type to) const;
 
     /**
     Output stored in selected.

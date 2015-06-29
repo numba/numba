@@ -6,44 +6,18 @@
 #include "typeconv.hpp"
 
 
-// ----- Type -----
-
-Type::Type() :id(-1) { }
-
-Type::Type(int id) :id(id) { }
-
-Type::Type(const Type& other) :id(other.id) { }
-
-Type& Type::operator = (const Type& other) {
-    id = other.id;
-    return *this;
-}
-
-bool Type::valid() const {
-    return id != -1;
-}
-
-bool Type::operator == (const Type& other) const {
-    return id == other.id;
-}
-
-bool Type::operator != (const Type& other) const {
-    return id != other.id;
-}
-
-bool Type:: operator < (const Type& other) const {
-    return id < other.id;
-}
-
-int Type::get() const { return id; }
-
 // ------ TypeManager ------
+
+TCCMap::TCCMap()
+    : nb_records(0)
+{
+}
 
 unsigned int TCCMap::hash(const TypePair &key) const {
     const int mult = 1000003;
     int x = 0x345678;
-    x = (x ^ key.first.get()) * mult;
-    x = (x ^ key.second.get()) * mult;
+    x = (x ^ key.first) * mult;
+    x = (x ^ key.second);
     return x;
 }
 
@@ -60,6 +34,7 @@ void TCCMap::insert(const TypePair &key, TypeCompatibleCode val) {
         }
     }
     bin.push_back(data);
+    nb_records++;
 }
 
 TypeCompatibleCode TCCMap::find(const TypePair &key) const {
@@ -124,7 +99,7 @@ void TypeManager::addCompatibility(Type from, Type to, TypeCompatibleCode tcc) {
     tccmap.insert(pair, tcc);
 }
 
-TypeCompatibleCode TypeManager::isCompatible(const Type &from, const Type &to) const {
+TypeCompatibleCode TypeManager::isCompatible(Type from, Type to) const {
     if (from == to)
         return TCC_EXACT;
     TypePair pair(from, to);
