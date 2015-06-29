@@ -96,6 +96,7 @@ class BaseGeneratorLower(object):
         resume_index = self.context.get_constant(types.int32, 0)
         # Structure index #1: the function arguments
         argsty = retty.elements[1]
+        statesty = retty.elements[2]
 
         # Incref all NRT objects before storing into generator states
         if self.context.enable_nrt:
@@ -104,9 +105,14 @@ class BaseGeneratorLower(object):
 
         argsval = cgutils.make_anonymous_struct(builder, lower.fnargs,
                                                 argsty)
+
+        # Zero initialize states
+        statesval = Constant.null(statesty)
         gen_struct = cgutils.make_anonymous_struct(builder,
-                                                   [resume_index, argsval],
+                                                   [resume_index, argsval,
+                                                    statesval],
                                                    retty)
+
         retval = self.box_generator_struct(lower, gen_struct)
         self.call_conv.return_value(builder, retval)
 
@@ -206,9 +212,6 @@ class GeneratorLower(BaseGeneratorLower):
         state variables.
         """
         if self.context.enable_nrt:
-            resume_index_ptr = self.get_resume_index_ptr(builder, genptr)
-            resume_index = builder.load(resume_index_ptr)
-
             # Always dereference all arguments
             for elem_idx, argty in enumerate(self.fndesc.argtypes):
                 argptr = self.get_arg_ptr(builder, genptr, elem_idx)
