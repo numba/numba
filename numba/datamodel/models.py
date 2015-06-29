@@ -840,6 +840,14 @@ class GeneratorModel(CompositeModel):
     def from_return(self, builder, value):
         return value
 
+    def as_data(self, builder, value):
+        return builder.load(value)
+
+    def from_data(self, builder, value):
+        stack = cgutils.alloca_once(builder, value.type)
+        builder.store(value, stack)
+        return stack
+
 
 @register_default(types.ArrayCTypes)
 class ArrayCTypesModel(StructModel):
