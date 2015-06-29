@@ -42,7 +42,7 @@ typedef struct {
     char *buf;
     size_t n;
     size_t allocated;
-    char static_buf[256];
+    char static_buf[40];
 } string_writer_t;
 
 static void
