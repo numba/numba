@@ -44,19 +44,19 @@ typedef std::pair<Type, Type> TypePair;
 //typedef std::map<TypePair, TypeCompatibleCode> TCCMap;
 
 struct TCCRecord {
-   TypePair key;
-   TypeCompatibleCode val;
+    TypePair key;
+    TypeCompatibleCode val;
 };
 
 typedef std::vector<TCCRecord> TCCMapBin;
 
-enum {TCCMAP_SIZE = 71};
+enum {TCCMAP_SIZE = 512};
 
 class TCCMap {
 public:
-    unsigned int hash(TypePair key) const;
-    void insert(TypePair key, TypeCompatibleCode val);
-    TypeCompatibleCode find(TypePair key) const;
+    unsigned int hash(const TypePair &key) const;
+    void insert(const TypePair &key, TypeCompatibleCode val);
+    TypeCompatibleCode find(const TypePair &key) const;
 private:
     TCCMapBin records[TCCMAP_SIZE];
 };
@@ -85,19 +85,20 @@ public:
     void addSafeConversion(Type from, Type to);
     void addCompatibility(Type from, Type to, TypeCompatibleCode by);
 
-    TypeCompatibleCode isCompatible(Type from, Type to) const;
+    TypeCompatibleCode isCompatible(const Type &from, const Type &to) const;
 
     /**
     Output stored in selected.
     Returns
         Number of matches
     */
-    int selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
-                       int ovct, bool allow_unsafe) const;
+    int selectOverload(const Type sig[], const Type ovsigs[], int &selected,
+                       int sigsz, int ovct, bool allow_unsafe) const;
 
 private:
-    int _selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
-                        int ovct, bool allow_unsafe, Rating ratings[]) const;
+    int _selectOverload(const Type sig[], const Type ovsigs[], int &selected,
+                        int sigsz, int ovct, bool allow_unsafe,
+                        Rating ratings[], int candidates[]) const;
 
     TCCMap tccmap;
 };
