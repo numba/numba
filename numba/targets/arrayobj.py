@@ -719,7 +719,6 @@ def array_view(context, builder, sig, args):
 @implement(numpy.sum, types.Kind(types.Array))
 @implement("array.sum", types.Kind(types.Array))
 def array_sum(context, builder, sig, args):
-    [arrty] = sig.args
 
     def array_sum_impl(arr):
         c = 0
@@ -735,7 +734,6 @@ def array_sum(context, builder, sig, args):
 @implement(numpy.prod, types.Kind(types.Array))
 @implement("array.prod", types.Kind(types.Array))
 def array_prod(context, builder, sig, args):
-    [arrty] = sig.args
 
     def array_prod_impl(arr):
         c = 1
@@ -795,7 +793,6 @@ def array_cumprod(context, builder, sig, args):
 @implement(numpy.mean, types.Kind(types.Array))
 @implement("array.mean", types.Kind(types.Array))
 def array_mean(context, builder, sig, args):
-    [arrty] = sig.args
 
     def array_mean_impl(arr):
         # Can't use the naive `arr.sum() / arr.size`, as it would return

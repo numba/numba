@@ -104,6 +104,35 @@ class TestFromDtype(TestCase):
         """
         self.check_datetime_types('m', types.NPTimedelta)
 
+    def test_struct_types(self):
+        def check(dtype, fields, size, aligned):
+            tp = numpy_support.from_dtype(dtype)
+            self.assertIsInstance(tp, types.Record)
+            self.assertIs(tp.dtype, dtype)
+            self.assertEqual(tp.fields, fields)
+            self.assertEqual(tp.size, size)
+            self.assertEqual(tp.aligned, aligned)
+
+        dtype = np.dtype([('a', np.int16), ('b', np.int32)])
+        check(dtype,
+              fields={'a': (types.int16, 0),
+                      'b': (types.int32, 2)},
+              size=6, aligned=False)
+
+        dtype = np.dtype([('a', np.int16), ('b', np.int32)], align=True)
+        check(dtype,
+              fields={'a': (types.int16, 0),
+                      'b': (types.int32, 4)},
+              size=8, aligned=True)
+
+        dtype = np.dtype([('m', np.int32), ('n', 'S5')])
+        # A heuristic is used on Numpy 1.6
+        aligned = False if np.__version__ >= '1.7' else True
+        check(dtype,
+              fields={'m': (types.int32, 0),
+                      'n': (types.CharSeq(5), 4)},
+              size=9, aligned=aligned)
+
 
 class ValueTypingTestBase(object):
     """

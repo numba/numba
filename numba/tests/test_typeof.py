@@ -11,7 +11,7 @@ import sys
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import cffi_support, types
+from numba import cffi_support, numpy_support, types
 from numba.special import typeof
 from numba._dispatcher import compute_fingerprint
 
@@ -98,12 +98,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
             self.assertEqual(ty.layout, layout)
 
         dtype = np.dtype([('m', np.int32), ('n', 'S5')])
-        rec_ty = types.Record(id=id(dtype),
-                              fields={'m': (types.int32, 0),
-                                      'n': (types.CharSeq(5), 4)},
-                              size=9,
-                              aligned=False,
-                              dtype=dtype)
+        rec_ty = numpy_support.from_struct_dtype(dtype)
 
         arr = np.empty(4, dtype=dtype)
         check(arr, rec_ty, 1, "C")
@@ -153,12 +148,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(typeof(dtype), types.DType(types.int64))
 
         dtype = np.dtype([('m', np.int32), ('n', 'S5')])
-        rec_ty = types.Record(id=id(dtype),
-                              fields={'m': (types.int32, 0),
-                                      'n': (types.CharSeq(5), 4)},
-                              size=9,
-                              aligned=False,
-                              dtype=dtype)
+        rec_ty = numpy_support.from_struct_dtype(dtype)
         self.assertEqual(typeof(dtype), types.DType(rec_ty))
 
     def test_ctypes(self):

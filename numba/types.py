@@ -210,6 +210,10 @@ class NumberClass(Callable, DTypeSpec, Opaque):
         return self.template(context).apply(args, kws)
 
     @property
+    def key(self):
+        return self.instance_type
+
+    @property
     def dtype(self):
         return self.instance_type
 
@@ -224,6 +228,10 @@ class DType(DTypeSpec, Opaque):
         self._dtype = dtype
         name = "dtype(%s)" % (dtype,)
         super(DTypeSpec, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.dtype
 
     @property
     def dtype(self):

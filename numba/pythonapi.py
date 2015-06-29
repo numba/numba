@@ -81,10 +81,11 @@ class NativeValue(object):
 
 class EnvironmentManager(object):
 
-    def __init__(self, pyapi, env, env_body):
+    def __init__(self, pyapi, env, env_body, env_ptr):
         self.pyapi = pyapi
         self.env = env
         self.env_body = env_body
+        self.env_ptr = env_ptr
 
     def add_const(self, const):
         """
@@ -143,8 +144,25 @@ class PythonAPI(object):
         self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
 
-    def get_env_manager(self, env, env_body):
-        return EnvironmentManager(self, env, env_body)
+    def get_env_manager(self, env, env_body, env_ptr):
+        return EnvironmentManager(self, env, env_body, env_ptr)
+
+    def emit_environment_sentry(self, envptr, return_pyobject=False):
+        """Emits LLVM code to ensure the `envptr` is not NULL
+        """
+        is_null = cgutils.is_null(self.builder, envptr)
+        with cgutils.if_unlikely(self.builder, is_null):
+            if return_pyobject:
+                fnty = self.builder.function.type.pointee
+                assert fnty.return_type == self.pyobj
+                self.err_set_string("PyExc_RuntimeError",
+                                    "missing Environment")
+                self.builder.ret(self.get_null_object())
+            else:
+                self.context.call_conv.return_user_exc(self.builder,
+                                                       RuntimeError,
+                                                       ("missing Environment",))
+
 
     # ------ Python API -----
 
