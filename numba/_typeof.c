@@ -60,17 +60,30 @@ string_writer_clear(string_writer_t *w)
         free(w->buf);
 }
 
+static void
+string_writer_move(string_writer_t *dest, const string_writer_t *src)
+{
+    dest->n = src->n;
+    dest->allocated = src->allocated;
+    if (src->buf == src->static_buf) {
+        dest->buf = dest->static_buf;
+        memcpy(dest->buf, src->buf, src->n);
+    }
+    else {
+        dest->buf = src->buf;
+    }
+}
+
 static inline int
 string_writer_ensure(string_writer_t *w, size_t bytes)
 {
-    size_t newsize;
     if (w->n + bytes <= w->allocated)
         return 0;
-    newsize = (w->allocated << 2) + 1;
+    w->allocated = (w->allocated << 2) + 1;
     if (w->buf == w->static_buf)
-        w->buf = malloc(newsize);
+        w->buf = malloc(w->allocated);
     else
-        w->buf = realloc(w->buf, newsize);
+        w->buf = realloc(w->buf, w->allocated);
     if (w->buf) {
         return 0;
     }
@@ -424,16 +437,6 @@ typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
     int typecode;
     string_writer_t w;
 
-    if (fingerprint_hashtable == NULL) {
-        fingerprint_hashtable = _Py_hashtable_new(sizeof(int),
-                                                  hash_writer,
-                                                  compare_writer);
-        if (fingerprint_hashtable == NULL) {
-            PyErr_NoMemory();
-            return -1;
-        }
-    }
-
     string_writer_init(&w);
 
     if (compute_fingerprint(&w, val)) {
@@ -464,7 +467,10 @@ typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
             PyErr_NoMemory();
             return -1;
         }
-        memcpy(key, &w, sizeof(string_writer_t));
+        /* Ownership of the string writer's buffer will be transferred
+         * to the hash table.
+         */
+        string_writer_move(key, &w);
         if (_Py_HASHTABLE_SET(fingerprint_hashtable, key, typecode)) {
             string_writer_clear(&w);
             PyErr_NoMemory();
@@ -631,6 +637,14 @@ typeof_init(PyObject *self, PyObject *args)
     ndarray_typecache = PyDict_New();
     if (typecache == NULL || ndarray_typecache == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "failed to create type cache");
+        return NULL;
+    }
+
+    fingerprint_hashtable = _Py_hashtable_new(sizeof(int),
+                                              hash_writer,
+                                              compare_writer);
+    if (fingerprint_hashtable == NULL) {
+        PyErr_NoMemory();
         return NULL;
     }
 
