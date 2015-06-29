@@ -379,6 +379,56 @@ int typecode_fallback_keep_ref(PyObject *dispatcher, PyObject *val) {
     return _typecode_fallback(dispatcher, val, 1);
 }
 
+
+/* A cache mapping fingerprints to typecodes */
+static PyObject *fingerprint_map = NULL;
+
+static int
+typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
+{
+    PyObject *fingerprint, *typecodeobj;
+    int typecode;
+
+    if (fingerprint_map == NULL) {
+        fingerprint_map = PyDict_New();
+        if (fingerprint_map == NULL)
+            return -1;
+    }
+    fingerprint = typeof_compute_fingerprint(val);
+    if (fingerprint == NULL)
+        return -1;
+    typecodeobj = PyDict_GetItem(fingerprint_map, fingerprint);
+    if (typecodeobj == NULL)
+        goto _fallback;
+    Py_DECREF(fingerprint);
+    if (!PyLong_Check(typecodeobj)) {
+        PyErr_Format(PyExc_TypeError,
+                     "unexpected type for typecode: '%s'",
+                     Py_TYPE(fingerprint)->tp_name);
+        return -1;
+    }
+    return PyLong_AsLong(typecodeobj);
+
+_fallback:
+    /* Not found in fingerprint map, invoke pure Python typeof() and cache result */
+    typecode = typecode_fallback(dispatcher, val);
+    if (typecode >= 0) {
+        int res;
+        typecodeobj = PyLong_FromLong(typecode);
+        if (typecodeobj == NULL) {
+            Py_DECREF(fingerprint);
+            return -1;
+        }
+        res = PyDict_SetItem(fingerprint_map, fingerprint, typecodeobj);
+        Py_DECREF(typecodeobj);
+        Py_DECREF(fingerprint);
+        if (res)
+            return -1;
+    }
+    return typecode;
+}
+
+
 /*
  * Direct lookup table for extra-fast typecode resolution of simple array types.
  */
@@ -522,7 +572,7 @@ FALLBACK:
 
     /* If this isn't a structured array then we can't use the cache */
     if (PyArray_TYPE(ary) != NPY_VOID)
-        return typecode_fallback(dispatcher, (PyObject*)ary);
+        return typecode_using_fingerprint(dispatcher, (PyObject *) ary);
 
     /* Check type cache */
     typecode = get_cached_ndarray_typecode(ndim, layout, PyArray_DESCR(ary));
@@ -537,11 +587,12 @@ FALLBACK:
 static
 int typecode_arrayscalar(PyObject *dispatcher, PyObject* aryscalar) {
     int typecode;
-    PyArray_Descr* descr;
+    PyArray_Descr *descr;
     descr = PyArray_DescrFromScalar(aryscalar);
     if (!descr)
-        return typecode_fallback(dispatcher, aryscalar);
+        return typecode_using_fingerprint(dispatcher, aryscalar);
 
+    /* Is it a structured scalar? */
     if (descr->type_num == NPY_VOID) {
         typecode = get_cached_typecode(descr);
         if (typecode == -1) {
@@ -553,10 +604,11 @@ int typecode_arrayscalar(PyObject *dispatcher, PyObject* aryscalar) {
         return typecode;
     }
 
+    /* Is it one of the well-known basic types? */
     typecode = dtype_num_to_typecode(descr->type_num);
     Py_DECREF(descr);
     if (typecode == -1)
-        return typecode_fallback(dispatcher, aryscalar);
+        return typecode_using_fingerprint(dispatcher, aryscalar);
     return BASIC_TYPECODES[typecode];
 }
 
@@ -582,7 +634,7 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
     }
 
-    return typecode_fallback(dispatcher, val);
+    return typecode_using_fingerprint(dispatcher, val);
 }
 
 PyObject *
