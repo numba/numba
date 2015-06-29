@@ -108,7 +108,9 @@ class TestFromDtype(TestCase):
         def check(dtype, fields, size, aligned):
             tp = numpy_support.from_dtype(dtype)
             self.assertIsInstance(tp, types.Record)
-            self.assertIs(tp.dtype, dtype)
+            # Note: the dtype may be equal but not identical, since the
+            # Numba types are interned.
+            self.assertEqual(tp.dtype, dtype)
             self.assertEqual(tp.fields, fields)
             self.assertEqual(tp.size, size)
             self.assertEqual(tp.aligned, aligned)
