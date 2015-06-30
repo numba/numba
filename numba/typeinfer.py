@@ -485,7 +485,12 @@ class TypeInferer(object):
                 rettypes.add(typemap[term.value.name])
 
         if rettypes:
-            return self.context.unify_types(*rettypes)
+            unified = self.context.unify_types(*rettypes)
+            if unified is types.pyobject:
+                raise TypingError("Can't unify return type from the "
+                                  "following types: %s"
+                                  % ", ".join(sorted(map(str, rettypes))))
+            return unified
         else:
             return types.none
 

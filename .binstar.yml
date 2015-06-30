@@ -25,9 +25,9 @@ platform:
 
 # The engine are the initial conda packages you want to run with
 engine:
- - python=2.6 argparse funcsigs unittest2
- #- python=2.7 funcsigs
- #- python=3.3
+ - python=2.6 argparse funcsigs singledispatch unittest2
+ #- python=2.7 funcsigs singledispatch
+ #- python=3.3 singledispatch
  - python=3.4
 
 ## The env param is an environment variable list
