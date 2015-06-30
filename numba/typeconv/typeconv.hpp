@@ -3,25 +3,8 @@
 #include <string>
 #include <vector>
 
-/*
-This object must be int sized
-*/
-class Type{
-public:
-    Type();
-    Type(int id);
-    Type(const Type& other);
-    Type& operator = (const Type& other);
-    bool valid() const;
-    bool operator ==(const Type& other) const;
-    bool operator !=(const Type& other) const;
-    bool operator <(const Type& other) const;
 
-    int get() const;
-
-private:
-    int id;
-};
+typedef int Type;
 
 enum TypeCompatibleCode{
     // No match
@@ -41,27 +24,29 @@ enum TypeCompatibleCode{
 };
 
 typedef std::pair<Type, Type> TypePair;
-//typedef std::map<TypePair, TypeCompatibleCode> TCCMap;
 
 struct TCCRecord {
-   TypePair key;
-   TypeCompatibleCode val;
+    TypePair key;
+    TypeCompatibleCode val;
 };
 
 typedef std::vector<TCCRecord> TCCMapBin;
 
-enum {TCCMAP_SIZE = 71};
-
 class TCCMap {
 public:
-    unsigned int hash(TypePair key) const;
-    void insert(TypePair key, TypeCompatibleCode val);
-    TypeCompatibleCode find(TypePair key) const;
+    TCCMap();
+
+    unsigned int hash(const TypePair &key) const;
+    void insert(const TypePair &key, TypeCompatibleCode val);
+    TypeCompatibleCode find(const TypePair &key) const;
 private:
+    /* Must be a power of two */
+    static const int TCCMAP_SIZE = 512;
     TCCMapBin records[TCCMAP_SIZE];
+    int nb_records;
 };
 
-struct Rating{
+struct Rating {
     unsigned int promote;
     unsigned int safe_convert;
     unsigned int unsafe_convert;
@@ -92,12 +77,13 @@ public:
     Returns
         Number of matches
     */
-    int selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
-                       int ovct, bool allow_unsafe) const;
+    int selectOverload(const Type sig[], const Type ovsigs[], int &selected,
+                       int sigsz, int ovct, bool allow_unsafe) const;
 
 private:
-    int _selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
-                        int ovct, bool allow_unsafe, Rating ratings[]) const;
+    int _selectOverload(const Type sig[], const Type ovsigs[], int &selected,
+                        int sigsz, int ovct, bool allow_unsafe,
+                        Rating ratings[], int candidates[]) const;
 
     TCCMap tccmap;
 };
