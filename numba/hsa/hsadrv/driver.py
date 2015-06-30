@@ -737,34 +737,27 @@ class Signal(object):
 
 
 class BrigModule(object):
-    def __init__(self, brig_module_id):
-        self._id = brig_module_id
-
-    def __del__(self):
-        elf_utils.destroy_brig_module(self._id)
+    def __init__(self, brig_buffer):
+        """
+        Take a byte buffer of a Brig module
+        """
+        ty = ctypes.POINTER(drvapi.hsa_ext_module_t)
+        self._buffer = brig_buffer
+        self._id = ctypes.cast(id(self._buffer), ty)
 
     @classmethod
     def from_file(cls, file_name):
-        result = ctypes.POINTER(drvapi.hsa_ext_brig_module_t)()
-        elf_utils.create_brig_module_from_brig_file(
-            file_name.encode('utf8'),
-            ctypes.byref(result))
-        return BrigModule(result.contents)
+        with open(file_name, 'rb') as fin:
+            buf = fin.read()
 
-    @classmethod
-    def from_memory(cls, binary):
-        result = ctypes.POINTER(drvapi.hsa_ext_brig_module_t)()
-        elf_utils.create_brig_module_from_memory(
-            ctypes.create_string_buffer(binary), len(binary),
-            ctypes.byref(result))
-        return BrigModule(result.contents)
+        return BrigModule(buf)
 
-    def find_symbol_offset(self, symbol_name):
-        symbol_offset = drvapi.hsa_ext_brig_code_section_offset32_t()
-        elf_utils.find_symbol_offset(self._id, symbol_name.encode('utf8'),
-                                     ctypes.byref(symbol_offset))
+    def __len__(self):
+        return len(self._buffer)
 
-        return symbol_offset.value
+    def __repr__(self):
+        return "<BrigModule id={0} size={1}bytes>".format(hex(id(self)),
+                                                          len(self))
 
 
 class Program(object):
