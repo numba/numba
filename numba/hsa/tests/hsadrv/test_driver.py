@@ -64,8 +64,7 @@ class TestBrigModule(unittest.TestCase):
     def test_from_file(self):
         brig_file = get_brig_file()
         brig_module = BrigModule.from_file(brig_file)
-        offset = brig_module.find_symbol_offset('&__vector_copy_kernel')
-        self.assertNotEqual(offset, 0)
+        self.assertGreater(len(brig_module), 0)
 
 
 class TestProgram(_TestBase):

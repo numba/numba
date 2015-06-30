@@ -12,6 +12,13 @@ brig = BrigModule.from_file(os.path.join('numba',
                                          'hsadrv',
                                          'vector_copy.brig'))
 
-print(brig)
+program = hsa.create_program()
+print(program)
 
 
+program.add_module(brig)
+print('isa', hex(agent.isa))
+
+program.finalize(agent.isa)
+
+print("HERE")

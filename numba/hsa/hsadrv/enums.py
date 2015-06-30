@@ -447,3 +447,6 @@ HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO = 1
 # nearest representable number and that ties should be broken by selecting
 # the value with an even least significant bit.
 HSA_DEFAULT_FLOAT_ROUNDING_MODE_NEAR = 2
+
+# hsa_code_object_type_t
+HSA_CODE_OBJECT_TYPE_PROGRAM = 0

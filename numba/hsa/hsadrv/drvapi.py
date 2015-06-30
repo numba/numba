@@ -36,6 +36,11 @@ hsa_region_t = ctypes.c_uint64
 
 hsa_uintptr_t = ctypes.c_uint64
 
+hsa_isa_t = ctypes.c_uint64
+
+hsa_code_object_type_t = ctypes.c_int
+hsa_code_object_t = ctypes.c_uint64
+
 # HSA Structures ###############################################################
 class hsa_queue_t(ctypes.Structure):
     """In theory, this should be aligned to 64 bytes. In any case, allocation
@@ -148,17 +153,17 @@ hsa_ext_control_directive_present64_t = ctypes.c_uint64
 
 class hsa_ext_control_directives_t(ctypes.Structure):
     _fields_ = [
-        ('enabled_control_directives', hsa_ext_control_directive_present64_t),
-        ('enable_break_exceptions', hsa_ext_exception_kind16_t),
-        ('enable_detect_exceptions', hsa_ext_exception_kind16_t),
+        ('control_directives_mask', hsa_ext_control_directive_present64_t),
+        ('break_exceptions_mask', hsa_ext_exception_kind16_t),
+        ('detect_exceptions_mask', hsa_ext_exception_kind16_t),
         ('max_dynamic_group_size', ctypes.c_uint32),
-        ('max_flat_grid_size', ctypes.c_uint32),
+        ('max_flat_grid_size', ctypes.c_uint64),
         ('max_flat_workgroup_size', ctypes.c_uint32),
-        ('requested_workgroups_per_cu', ctypes.c_uint32),
-        ('required_grid_size', hsa_dim3_t),
+        ('reserved1', ctypes.c_uint32),
+        ('required_grid_size', ctypes.c_uint64),
         ('required_workgroup_size', hsa_dim3_t),
         ('required_dim', ctypes.c_uint8),
-        ('reserved', ctypes.c_uint8 * 75),
+        ('reserved2', ctypes.c_uint8 * 75),
     ]
 
 hsa_ext_code_kind32_t = ctypes.c_uint32
@@ -1057,27 +1062,25 @@ API_PROTOTYPES = {
         'errcheck': _check_error
     },
 
-    # hsa_status_t hsa_ext_finalize_program(
+    # hsa_status_t HSA_API hsa_ext_program_finalize(
     #     hsa_ext_program_t program,
-    #     hsa_agent_t agent,
-    #     size_t finalization_request_count,
-    #     hsa_ext_finalization_request_t *finalization_request_list,
-    #     hsa_ext_control_directives_t *control_directives,
-    #     hsa_ext_error_message_callback_t error_message_callback,
-    #     uint8_t optimization_level,
+    #     hsa_isa_t isa,
+    #     int32_t call_convention,
+    #     hsa_ext_control_directives_t control_directives,
     #     const char *options,
-    #     int debug_information);
-    'hsa_ext_finalize_program': {
+    #     hsa_code_object_type_t code_object_type,
+    #     hsa_code_object_t *code_object);
+
+    'hsa_ext_program_finalize': {
         'restype': hsa_status_t,
         'argtypes': [hsa_ext_program_t,
-                     hsa_agent_t,
-                     ctypes.c_size_t,
-                     _PTR(hsa_ext_finalization_request_t),
-                     _PTR(hsa_ext_control_directives_t),
-                     hsa_ext_error_message_callback_t,
-                     ctypes.c_uint8,
+                     hsa_isa_t,
+                     ctypes.c_int32,
+                     hsa_ext_control_directives_t,
                      ctypes.c_char_p,
-                     ctypes.c_int],
+                     hsa_code_object_type_t,
+                     _PTR(hsa_code_object_t),
+                     ],
         'errcheck': _check_error
     },
 

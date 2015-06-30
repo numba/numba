@@ -244,15 +244,14 @@ class Driver(object):
         self._initialize_agents()
         return self._agent_map.values()
 
-    def create_program(self, device_list,
-                       model=enums.HSA_MACHINE_MODEL_LARGE,
-                       profile=enums.HSA_PROFILE_FULL):
-        device_list_len = len(device_list)
-        device_list_type = drvapi.hsa_agent_t * device_list_len
-        devices = device_list_type(*[d._id for d in device_list])
-        program = drvapi.hsa_ext_program_handle_t()
-        self.hsa_ext_program_create(devices, device_list_len, model, profile,
-                                    ctypes.byref(program))
+    def create_program(self, model=enums.HSA_MACHINE_MODEL_LARGE,
+                       profile=enums.HSA_PROFILE_FULL,
+                       rounding_mode=enums.HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT,
+                       options=None):
+        program = drvapi.hsa_ext_program_t()
+        assert options is None
+        self.hsa_ext_program_create(model, profile, rounding_mode,
+                                    options, ctypes.byref(program))
         return Program(program)
 
     def release_program(self, prog):
@@ -424,6 +423,7 @@ class Agent(HsaWrapper):
         'node': (enums.HSA_AGENT_INFO_NODE, ctypes.c_uint32),
         '_device': (enums.HSA_AGENT_INFO_DEVICE, drvapi.hsa_device_type_t),
         'cache_size': (enums.HSA_AGENT_INFO_CACHE_SIZE, ctypes.c_uint32 * 4),
+        'isa': (enums.HSA_AGENT_INFO_ISA, drvapi.hsa_isa_t)
         # 'image1d_max_dim': (
         # enums.HSA_EXT_AGENT_INFO_IMAGE1D_MAX_DIM, drvapi.hsa_dim3_t),
         # 'image2d_max_dim': (
@@ -741,9 +741,10 @@ class BrigModule(object):
         """
         Take a byte buffer of a Brig module
         """
-        ty = ctypes.POINTER(drvapi.hsa_ext_module_t)
-        self._buffer = brig_buffer
-        self._id = ctypes.cast(id(self._buffer), ty)
+        buf = ctypes.create_string_buffer(brig_buffer)
+        self._buffer = buf
+        self._id = ctypes.cast(ctypes.addressof(buf),
+                               drvapi.hsa_ext_module_t)
 
     @classmethod
     def from_file(cls, file_name):
@@ -759,7 +760,6 @@ class BrigModule(object):
         return "<BrigModule id={0} size={1}bytes>".format(hex(id(self)),
                                                           len(self))
 
-
 class Program(object):
     def __init__(self, program_id):
         self._drv = hsa
@@ -771,43 +771,33 @@ class Program(object):
         hsa.release_program(self)
 
     def add_module(self, module):
-        result = drvapi.hsa_ext_brig_module_handle_t()
-        hsa.hsa_ext_add_module(self._id, module._id, ctypes.byref(result))
-        return BrigModuleHandle(result)
+        hsa.hsa_ext_program_add_module(self._id, module._id)
 
-    def finalize(self, device, module, symbol,
-                 call_convention=0,
-                 error_message_callback=None,
-                 opt_level=0,
-                 options=None,
-                 debug_info=0):
-        request = drvapi.hsa_ext_finalization_request_t()
-        request.module.handle = module._id.handle
-        request.program_call_convention = call_convention
-        request.symbol = symbol
-
-        cb_typ = drvapi.hsa_ext_error_message_callback_t
-        cb = error_message_callback
-        cb = ctypes.cast(None, cb_typ) if cb is None else cb_typ(cb)
-
-        hsa.hsa_ext_finalize_program(self._id, device._id, 1,
-                                     ctypes.byref(request),
-                                     None,  # control_directives
-                                     cb,
-                                     opt_level,
+    def finalize(self, isa, callconv=0, options=None):
+        code_object = drvapi.hsa_code_object_t()
+        control_directives = drvapi.hsa_ext_control_directives_t()
+        ctypes.memset(ctypes.byref(control_directives), 0,
+                      ctypes.sizeof(control_directives))
+        hsa.hsa_ext_program_finalize(self._id,
+                                     isa,
+                                     callconv,
+                                     control_directives,
                                      options,
-                                     debug_info)
+                                     enums.HSA_CODE_OBJECT_TYPE_PROGRAM,
+                                     ctypes.byref(code_object))
+        return CodeObject(code_object)
 
-        kernel_id = ctypes.POINTER(drvapi.hsa_ext_code_descriptor_t)()
-        hsa.hsa_ext_query_kernel_descriptor_address(
-            self._id, module._id, symbol,
-            ctypes.byref(kernel_id))
 
-        return CodeDescriptor(kernel_id.contents)
+class CodeObject(object):
+    def __init__(self, code_object):
+        self._id = code_object
+
+
 
 
 class BrigModuleHandle(object):
     def __init__(self, module_handle_id):
+        raise NotImplementedError("Remove this")
         self._id = module_handle_id
 
     def __del__(self):
