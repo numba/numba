@@ -363,6 +363,13 @@ class TestFingerprint(TestCase):
         distinct.add(compute_fingerprint((1, (), np.empty(5))))
         distinct.add(compute_fingerprint((1, (), np.empty((5, 1)))))
 
+    def test_complicated_type(self):
+        # Generating a large fingerprint
+        t = None
+        for i in range(1000):
+            t = (t,)
+        s = compute_fingerprint(t)
+
 
 if __name__ == '__main__':
     unittest.main()

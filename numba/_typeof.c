@@ -40,7 +40,7 @@ typedef struct {
     char *buf;
     size_t n;
     size_t allocated;
-    char static_buf[256];
+    char static_buf[40];
 } string_writer_t;
 
 static void
@@ -62,14 +62,18 @@ static inline int
 string_writer_ensure(string_writer_t *w, size_t bytes)
 {
     size_t newsize;
-    if (w->n + bytes <= w->allocated)
+    bytes += w->n;
+    if (bytes <= w->allocated)
         return 0;
     newsize = (w->allocated << 2) + 1;
+    if (newsize < bytes)
+        newsize = bytes;
     if (w->buf == w->static_buf)
         w->buf = malloc(newsize);
     else
         w->buf = realloc(w->buf, newsize);
     if (w->buf) {
+        w->allocated = newsize;
         return 0;
     }
     else {
