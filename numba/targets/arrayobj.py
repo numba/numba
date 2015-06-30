@@ -937,8 +937,8 @@ def array_median(context, builder, sig, args):
 
     def select(arry, k):
         n = arry.shape[0]
+        # XXX: assuming flat array till array.flatten is implemented
         # temp_arry = arry.flatten()
-        # Using copy till I implement flatten()
         temp_arry = arry.copy()
         high = n-1
         low = 0
