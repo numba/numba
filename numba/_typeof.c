@@ -77,14 +77,19 @@ string_writer_move(string_writer_t *dest, const string_writer_t *src)
 static inline int
 string_writer_ensure(string_writer_t *w, size_t bytes)
 {
-    if (w->n + bytes <= w->allocated)
+    size_t newsize;
+    bytes += w->n;
+    if (bytes <= w->allocated)
         return 0;
-    w->allocated = (w->allocated << 2) + 1;
+    newsize = (w->allocated << 2) + 1;
+    if (newsize < bytes)
+        newsize = bytes;
     if (w->buf == w->static_buf)
-        w->buf = malloc(w->allocated);
+        w->buf = malloc(newsize);
     else
-        w->buf = realloc(w->buf, w->allocated);
+        w->buf = realloc(w->buf, newsize);
     if (w->buf) {
+        w->allocated = newsize;
         return 0;
     }
     else {
