@@ -434,3 +434,16 @@ HSA_EXECUTABLE_SYMBOL_INFO_INDIRECT_FUNCTION_OBJECT = 23
 # agent does not support the Full Profile. The type of this attribute is
 # uint32_t.
 HSA_EXECUTABLE_SYMBOL_INFO_INDIRECT_FUNCTION_CALL_CONVENTION = 16
+
+
+# hsa_default_float_rounding_mode_t
+
+# Use a default floating-point rounding mode specified elsewhere.
+HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT = 0
+# Operations that specify the default floating-point mode are rounded to zero
+# by default.
+HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO = 1
+# Operations that specify the default floating-point mode are rounded to the
+# nearest representable number and that ties should be broken by selecting
+# the value with an even least significant bit.
+HSA_DEFAULT_FLOAT_ROUNDING_MODE_NEAR = 2

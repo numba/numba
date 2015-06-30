@@ -245,8 +245,8 @@ class Driver(object):
         return self._agent_map.values()
 
     def create_program(self, device_list,
-                       model=enums.HSA_EXT_BRIG_MACHINE_LARGE,
-                       profile=enums.HSA_EXT_BRIG_PROFILE_FULL):
+                       model=enums.HSA_MACHINE_MODEL_LARGE,
+                       profile=enums.HSA_PROFILE_FULL):
         device_list_len = len(device_list)
         device_list_type = drvapi.hsa_agent_t * device_list_len
         devices = device_list_type(*[d._id for d in device_list])
@@ -424,19 +424,19 @@ class Agent(HsaWrapper):
         'node': (enums.HSA_AGENT_INFO_NODE, ctypes.c_uint32),
         '_device': (enums.HSA_AGENT_INFO_DEVICE, drvapi.hsa_device_type_t),
         'cache_size': (enums.HSA_AGENT_INFO_CACHE_SIZE, ctypes.c_uint32 * 4),
-        'image1d_max_dim': (
-        enums.HSA_EXT_AGENT_INFO_IMAGE1D_MAX_DIM, drvapi.hsa_dim3_t),
-        'image2d_max_dim': (
-        enums.HSA_EXT_AGENT_INFO_IMAGE2D_MAX_DIM, drvapi.hsa_dim3_t),
-        'image3d_max_dim': (
-        enums.HSA_EXT_AGENT_INFO_IMAGE3D_MAX_DIM, drvapi.hsa_dim3_t),
-        'image_array_max_size': (
-        enums.HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_SIZE, ctypes.c_uint32),
-        'image_rd_max': (
-        enums.HSA_EXT_AGENT_INFO_IMAGE_RD_MAX, ctypes.c_uint32),
-        'image_rdwr_max': (
-        enums.HSA_EXT_AGENT_INFO_IMAGE_RDWR_MAX, ctypes.c_uint32),
-        'sampler_max': (enums.HSA_EXT_AGENT_INFO_SAMPLER_MAX, ctypes.c_uint32),
+        # 'image1d_max_dim': (
+        # enums.HSA_EXT_AGENT_INFO_IMAGE1D_MAX_DIM, drvapi.hsa_dim3_t),
+        # 'image2d_max_dim': (
+        # enums.HSA_EXT_AGENT_INFO_IMAGE2D_MAX_DIM, drvapi.hsa_dim3_t),
+        # 'image3d_max_dim': (
+        # enums.HSA_EXT_AGENT_INFO_IMAGE3D_MAX_DIM, drvapi.hsa_dim3_t),
+        # 'image_array_max_size': (
+        # enums.HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_SIZE, ctypes.c_uint32),
+        # 'image_rd_max': (
+        # enums.HSA_EXT_AGENT_INFO_IMAGE_RD_MAX, ctypes.c_uint32),
+        # 'image_rdwr_max': (
+        # enums.HSA_EXT_AGENT_INFO_IMAGE_RDWR_MAX, ctypes.c_uint32),
+        # 'sampler_max': (enums.HSA_EXT_AGENT_INFO_SAMPLER_MAX, ctypes.c_uint32),
     }
 
     def __init__(self, agent_id):
@@ -446,7 +446,7 @@ class Agent(HsaWrapper):
         self._id = agent_id
         self._recycler = hsa._recycler
         self._queues = set()
-        self._initialize_regions()
+        # self._initialize_regions()
 
     @property
     def device(self):
@@ -473,8 +473,11 @@ class Agent(HsaWrapper):
         self._regions = [MemRegion.instance_for(self, region_id)
                          for region_id in region_ids]
 
-    def _create_queue(self, queue_type, size, callback=None, data=None,
-                      private_segment_size=None, group_segment_size=None):
+    def _create_queue(self, size, callback=None, data=None,
+                      private_segment_size=None, group_segment_size=None,
+                      queue_type=None):
+        assert queue_type is not None
+        assert size <= self.queue_max_size
         cb_typ = drvapi.HSA_QUEUE_CALLBACK_FUNC
         cb = ctypes.cast(None, cb_typ) if callback is None else cb_typ(callback)
         result = ctypes.POINTER(drvapi.hsa_queue_t)()
@@ -482,9 +485,9 @@ class Agent(HsaWrapper):
                                 if private_segment_size is None
                                 else private_segment_size)
         group_segment_size = (ctypes.c_uint32(-1)
-                                if group_segment_size is None
-                                else group_segment_size)
-        hsa.hsa_queue_create(self._id, size, queue_type, cb, data,
+                              if group_segment_size is None
+                              else group_segment_size)
+        hsa.hsa_queue_create(self._id, 2, queue_type, cb, data,
                              private_segment_size, group_segment_size,
                              ctypes.byref(result))
 
@@ -546,20 +549,20 @@ class MemRegion(HsaWrapper):
     This will wrap and provide an OO interface for hsa_region_t C-API elements
     """
     _hsa_info_function = 'hsa_region_get_info'
-    _hsa_properties = {
-        'base': (enums.HSA_REGION_INFO_BASE, drvapi.hsa_uintptr_t),
-        'size': (enums.HSA_REGION_INFO_SIZE, ctypes.c_size_t),
-        '_agent': (enums.HSA_REGION_INFO_AGENT, drvapi.hsa_agent_t),
-        '_flags': (enums.HSA_REGION_INFO_FLAGS, drvapi.hsa_region_flag_t),
-        'segment': (enums.HSA_REGION_INFO_SEGMENT, drvapi.hsa_segment_t),
-        'alloc_max_size': (
-        enums.HSA_REGION_INFO_ALLOC_MAX_SIZE, ctypes.c_size_t),
-        'alloc_granule': (enums.HSA_REGION_INFO_ALLOC_GRANULE, ctypes.c_size_t),
-        'alloc_alignment': (
-        enums.HSA_REGION_INFO_ALLOC_ALIGNMENT, ctypes.c_size_t),
-        'bandwidth': (enums.HSA_REGION_INFO_BANDWIDTH, ctypes.c_uint32),
-        'node': (enums.HSA_REGION_INFO_NODE, ctypes.c_uint32),
-    }
+    # _hsa_properties = {
+    #     'base': (enums.HSA_REGION_INFO_BASE, drvapi.hsa_uintptr_t),
+    #     'size': (enums.HSA_REGION_INFO_SIZE, ctypes.c_size_t),
+    #     '_agent': (enums.HSA_REGION_INFO_AGENT, drvapi.hsa_agent_t),
+    #     '_flags': (enums.HSA_REGION_INFO_FLAGS, drvapi.hsa_region_flag_t),
+    #     'segment': (enums.HSA_REGION_INFO_SEGMENT, drvapi.hsa_segment_t),
+    #     'alloc_max_size': (
+    #     enums.HSA_REGION_INFO_ALLOC_MAX_SIZE, ctypes.c_size_t),
+    #     'alloc_granule': (enums.HSA_REGION_INFO_ALLOC_GRANULE, ctypes.c_size_t),
+    #     'alloc_alignment': (
+    #     enums.HSA_REGION_INFO_ALLOC_ALIGNMENT, ctypes.c_size_t),
+    #     'bandwidth': (enums.HSA_REGION_INFO_BANDWIDTH, ctypes.c_uint32),
+    #     'node': (enums.HSA_REGION_INFO_NODE, ctypes.c_uint32),
+    # }
 
     def __init__(self, agent, region_id):
         """Do not instantiate MemRegion objects directly, use the factory class

@@ -43,11 +43,11 @@ class hsa_queue_t(ctypes.Structure):
     _fields_ = [
         ('type', hsa_queue_type_t),
         ('features', ctypes.c_uint32),
-        ('base_address', ctypes.c_uint64),
+        ('base_address', ctypes.c_void_p),  # if LARGE MODEL
         ('doorbell_signal', hsa_signal_t),
         ('size', ctypes.c_uint32),
+        ('reserved1', ctypes.c_uint32),
         ('id', ctypes.c_uint32),
-        ('service_queue', ctypes.c_uint64)
         ]
 
 class hsa_packet_header_t(ctypes.Structure):
@@ -122,9 +122,10 @@ hsa_runtime_alloc_data_callback_t = ctypes.CFUNCTYPE(
 
 
 # finalize types ###############################################################
-hsa_ext_brig_profile8_t = ctypes.c_uint8
-hsa_ext_brig_machine_model8_t = ctypes.c_uint8
+hsa_profile_t = ctypes.c_uint32
+hsa_machine_model_t = ctypes.c_uint32
 hsa_ext_brig_section_id32_t = ctypes.c_uint32
+hsa_default_float_rounding_mode_t = ctypes.c_uint32
 
 class hsa_ext_brig_section_header_t(ctypes.Structure):
     _fields_ = [
@@ -134,20 +135,7 @@ class hsa_ext_brig_section_header_t(ctypes.Structure):
         ('name', ctypes.c_char * 1),
     ]
 
-class hsa_ext_brig_module_t(ctypes.Structure):
-    # do not directly instantiate this for now.
-    # sections is actually a variable lenght array whose lenght is
-    # given by section_count (though it is guaranteed to have at
-    # least 3). The sections themshelves have structure, but for
-    # now we are treating them as opaque.
-    #
-    # This supports loading Brig-elfs using the elf_utils C module.
-    # We will need to improve this in order to support creating our
-    # kernels without going to an elf-file.
-    _fields_ = [
-        ('section_count', ctypes.c_uint32),
-        ('sections', ctypes.c_void_p * 3),
-    ]
+hsa_ext_module_t = ctypes.c_void_p
 
 class hsa_ext_brig_module_handle_t(ctypes.Structure):
     _fields_ = [
@@ -201,8 +189,8 @@ class hsa_ext_code_descriptor_t(ctypes.Structure):
         ('program_call_convention', hsa_ext_program_call_convention_id32_t),
         ('module', hsa_ext_brig_module_handle_t),
         ('symbol', hsa_ext_brig_code_section_offset32_t),
-        ('hsail_profile', hsa_ext_brig_profile8_t),
-        ('hsail_machine_model', hsa_ext_brig_machine_model8_t),
+        ('hsail_profile', hsa_profile_t),
+        ('hsail_machine_model', hsa_machine_model_t),
         ('_reserved1', ctypes.c_uint16),
         ('debug_information', hsa_ext_debug_information_handle_t),
         ('agent_vendor', ctypes.c_char * 24),
@@ -231,7 +219,7 @@ hsa_ext_symbol_definition_callback_t = ctypes.CFUNCTYPE(
         hsa_ext_brig_module_handle_t, # module
         hsa_ext_brig_code_section_offset32_t, # symbol
         _PTR(hsa_ext_brig_module_handle_t), # definition module
-        _PTR(_PTR(hsa_ext_brig_module_t)), # definition_module_brig
+        _PTR(_PTR(hsa_ext_module_t)), # definition_module_brig
         _PTR(hsa_ext_brig_code_section_offset32_t)
 )
 
@@ -273,7 +261,7 @@ class hsa_ext_brig_module_handle_t(ctypes.Structure):
     ]
 
 
-class hsa_ext_program_handle_t(ctypes.Structure):
+class hsa_ext_program_t(ctypes.Structure):
     _fields_ = [
         ('handle', ctypes.c_uint64),
     ]
@@ -1034,45 +1022,43 @@ API_PROTOTYPES = {
 
     # linker ###################################################################
 
-    # hsa_status_t hsa_ext_program_create(
-    #     hsa_agent_t *agents,
-    #     uint32_t agent_count,
-    #     hsa_ext_brig_machine_model8_t machine_model,
-    #     hsa_ext_brig_profile8_t profile,
-    #     hsa_ext_program_handle_t *program);
+    # hsa_status_t HSA_API hsa_ext_program_create(
+    #             hsa_machine_model_t machine_model,
+    #             hsa_profile_t profile,
+    #             hsa_default_float_rounding_mode_t default_float_rounding_mode,
+    #             const char *options,
+    #             hsa_ext_program_t *program);
     'hsa_ext_program_create': {
         'restype': hsa_status_t,
-        'argtypes': [_PTR(hsa_agent_t),
-                     ctypes.c_uint32,
-                     hsa_ext_brig_machine_model8_t,
-                     hsa_ext_brig_profile8_t,
-                     _PTR(hsa_ext_program_handle_t)],
+        'argtypes': [hsa_machine_model_t,
+                     hsa_profile_t,
+                     hsa_default_float_rounding_mode_t,
+                     ctypes.c_char_p,
+                     _PTR(hsa_ext_program_t)],
         'errcheck': _check_error
     },
 
 
     # hsa_status_t HSA_API hsa_ext_program_destroy(
-    #     hsa_ext_program_handle_t program);
+    #     hsa_ext_program_t program);
     'hsa_ext_program_destroy': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t],
+        'argtypes': [hsa_ext_program_t],
         'errcheck': _check_error
     },
 
-    # hsa_status_t hsa_ext_add_module(
-    #     hsa_ext_program_handle_t program,
-    #     hsa_ext_brig_module_t *brig_module,
-    #     hsa_ext_brig_module_handle_t *module);
-    'hsa_ext_add_module': {
+    # hsa_status_t HSA_API hsa_ext_program_add_module(
+    #     hsa_ext_program_t program,
+    #     hsa_ext_module_t module);
+    'hsa_ext_program_add_module': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
-                     _PTR(hsa_ext_brig_module_t),
-                     _PTR(hsa_ext_brig_module_handle_t)],
+        'argtypes': [hsa_ext_program_t,
+                     hsa_ext_module_t],
         'errcheck': _check_error
     },
 
     # hsa_status_t hsa_ext_finalize_program(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_agent_t agent,
     #     size_t finalization_request_count,
     #     hsa_ext_finalization_request_t *finalization_request_list,
@@ -1083,7 +1069,7 @@ API_PROTOTYPES = {
     #     int debug_information);
     'hsa_ext_finalize_program': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_agent_t,
                      ctypes.c_size_t,
                      _PTR(hsa_ext_finalization_request_t),
@@ -1096,80 +1082,80 @@ API_PROTOTYPES = {
     },
 
     # hsa_status_t HSA_API hsa_ext_query_program_agent_count(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     uint32_t *program_agent_count);
     'hsa_ext_query_program_agent_count': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      _PTR(ctypes.c_uint32)],
         'errcheck': _check_error
     },
 
     # hsa_status_t HSA_API hsa_ext_query_program_agent_id(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_agent_t agent,
     #     hsa_ext_program_agent_id_t *program_agent_id);
     'hsa_ext_query_program_agent_id': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_agent_t,
                      _PTR(hsa_ext_program_agent_id_t)],
         'errcheck': _check_error
     },
 
     # hsa_status_t HSA_API hsa_ext_query_program_agents(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     uint32_t program_agent_count,
     #     hsa_agent_t *agents);
     'hsa_ext_query_program_agents': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      ctypes.c_uint32,
                      _PTR(hsa_agent_t)],
         'errcheck': _check_error
     },
 
     # hsa_status_t HSA_API hsa_ext_query_program_module_count(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     uint32_t *program_module_count);
     'hsa_ext_query_program_module_count': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t, _PTR(ctypes.c_uint32)],
+        'argtypes': [hsa_ext_program_t, _PTR(ctypes.c_uint32)],
         'errcheck': _check_error
     },
 
     # hsa_status_t HSA_API hsa_ext_query_program_modules(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     uint32_t program_module_count,
     #     hsa_ext_brig_module_handle_t *modules);
     'hsa_ext_query_program_modules': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      ctypes.c_uint32,
                      _PTR(hsa_ext_brig_module_handle_t)],
         'errcheck': _check_error
     },
 
     # hsa_status_t HSA_API hsa_ext_query_program_brig_module(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_ext_brig_module_handle_t module,
-    #     hsa_ext_brig_module_t **brig_module);
+    #     hsa_ext_module_t **brig_module);
     'hsa_ext_query_program_brig_module': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_ext_brig_module_handle_t,
-                     _PTR(_PTR(hsa_ext_brig_module_t))],
+                     _PTR(_PTR(hsa_ext_module_t))],
         'errcheck': _check_error
     },
 
     # hsa_status_t HSA_API hsa_ext_query_call_convention(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_agent_t agent,
     #     hsa_ext_program_call_convention_id32_t *first_call_convention_id,
     #     uint32_t *call_convention_count);
     'hsa_ext_query_call_convention': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_agent_t,
                      _PTR(hsa_ext_program_call_convention_id32_t),
                      _PTR(ctypes.c_uint32)],
@@ -1177,32 +1163,32 @@ API_PROTOTYPES = {
     },
 
     # hsa_status_t HSA_API hsa_ext_query_symbol_definition(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_ext_brig_module_handle_t module,
     #     hsa_ext_brig_code_section_offset32_t symbol,
     #     hsa_ext_brig_module_handle_t *definition_module,
-    #     hsa_ext_brig_module_t **definition_module_brig,
+    #     hsa_ext_module_t **definition_module_brig,
     #     hsa_ext_brig_code_section_offset32_t *definition_symbol);
     'hsa_ext_query_symbol_definition': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_ext_brig_module_handle_t,
                      hsa_ext_brig_code_section_offset32_t,
                      _PTR(hsa_ext_brig_module_handle_t),
-                     _PTR(_PTR(hsa_ext_brig_module_t)),
+                     _PTR(_PTR(hsa_ext_module_t)),
                      _PTR(hsa_ext_brig_code_section_offset32_t)],
         'errcheck': _check_error
     },
 
     # hsa_status_t HSA_API hsa_ext_define_program_allocation_global_variable_address(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_ext_brig_module_handle_t module,
     #     hsa_ext_brig_code_section_offset32_t symbol,
     #     hsa_ext_error_message_callback_t error_message_callback,
     #     void *address);
     'hsa_ext_define_program_allocation_global_variable_address': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_ext_brig_module_handle_t,
                      hsa_ext_brig_code_section_offset32_t,
                      hsa_ext_error_message_callback_t,
@@ -1211,13 +1197,13 @@ API_PROTOTYPES = {
     },
 
     # hsa_status_t HSA_API hsa_ext_query_program_allocation_global_variable_address(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_ext_brig_module_handle_t module,
     #     hsa_ext_brig_code_section_offset32_t symbol,
     #     void** address);
     'hsa_ext_query_program_allocation_global_variable_address': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_ext_brig_module_handle_t,
                      hsa_ext_brig_code_section_offset32_t,
                      _PTR(ctypes.c_void_p)],
@@ -1225,7 +1211,7 @@ API_PROTOTYPES = {
     },
 
     # hsa_status_t HSA_API hsa_ext_define_agent_allocation_global_variable_address(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_agent_t agent,
     #     hsa_ext_brig_module_handle_t module,
     #     hsa_ext_brig_code_section_offset32_t symbol,
@@ -1233,7 +1219,7 @@ API_PROTOTYPES = {
     #     void *address);
     'hsa_ext_define_agent_allocation_global_variable_address': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_agent_t,
                      hsa_ext_brig_module_handle_t,
                      hsa_ext_brig_code_section_offset32_t,
@@ -1243,14 +1229,14 @@ API_PROTOTYPES = {
     },
 
     # hsa_status_t HSA_API hsa_ext_query_agent_global_variable_address(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_agent_t agent,
     #     hsa_ext_brig_module_handle_t module,
     #     hsa_ext_brig_code_section_offset32_t symbol,
     #     void** address);
     'hsa_ext_query_agent_global_variable_address': {
         'retype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_agent_t,
                      hsa_ext_brig_module_handle_t,
                      hsa_ext_brig_code_section_offset32_t,
@@ -1259,7 +1245,7 @@ API_PROTOTYPES = {
     },
 
     # hsa_status_t HSA_API hsa_ext_define_readonly_variable_address(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_agent_t agent,
     #     hsa_ext_brig_module_handle_t module,
     #     hsa_ext_brig_code_section_offset32_t symbol,
@@ -1267,7 +1253,7 @@ API_PROTOTYPES = {
     #     void* address);
     'hsa_ext_define_readonly_variable_address': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_agent_t,
                      hsa_ext_brig_module_handle_t,
                      hsa_ext_brig_code_section_offset32_t,
@@ -1277,14 +1263,14 @@ API_PROTOTYPES = {
     },
 
     # hsa_status_t HSA_API hsa_ext_query_readonly_variable_address(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_agent_t agent,
     #     hsa_ext_brig_module_handle_t module,
     #     hsa_ext_brig_code_section_offset32_t symbol,
     #     void** address);
     'hsa_ext_query_readonly_variable_address': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_agent_t,
                      hsa_ext_brig_module_handle_t,
                      hsa_ext_brig_code_section_offset32_t,
@@ -1293,13 +1279,13 @@ API_PROTOTYPES = {
     },
 
     # hsa_status_t hsa_ext_query_kernel_descriptor_address(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_ext_brig_module_handle_t module,
     #     hsa_ext_brig_code_section_offset32_t symbol,
     #     hsa_ext_code_descriptor_t** kernel_descriptor);
     'hsa_ext_query_kernel_descriptor_address': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_ext_brig_module_handle_t,
                      hsa_ext_brig_code_section_offset32_t,
                      _PTR(_PTR(hsa_ext_code_descriptor_t))],
@@ -1307,13 +1293,13 @@ API_PROTOTYPES = {
     },
 
     # hsa_status_t HSA_API hsa_ext_query_indirect_function_descriptor_address(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_ext_brig_module_handle_t module,
     #     hsa_ext_brig_code_section_offset32_t symbol,
     #     hsa_ext_code_descriptor_t** indirect_function_descriptor);
     'hsa_ext_query_indirect_function_descriptor_address': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_ext_brig_module_handle_t,
                      hsa_ext_brig_code_section_offset32_t,
                      _PTR(_PTR(hsa_ext_code_descriptor_t))],
@@ -1321,21 +1307,21 @@ API_PROTOTYPES = {
     },
 
     # hsa_status_t HSA_API hsa_ext_validate_program(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_ext_error_message_callback_t error_message_callback);
     'hsa_ext_validate_program': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t, hsa_ext_error_message_callback_t],
+        'argtypes': [hsa_ext_program_t, hsa_ext_error_message_callback_t],
         'errcheck': _check_error
     },
 
     # hsa_status_t HSA_API hsa_ext_validate_program_module(
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_ext_brig_module_handle_t module,
     #     hsa_ext_error_message_callback_t error_message_callback);
     'hsa_ext_validate_program_module': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_ext_program_handle_t,
+        'argtypes': [hsa_ext_program_t,
                      hsa_ext_brig_module_handle_t,
                      hsa_ext_error_message_callback_t],
         'errcheck': _check_error
@@ -1343,7 +1329,7 @@ API_PROTOTYPES = {
 
     # hsa_status_t HSA_API hsa_ext_serialize_program(
     #     hsa_runtime_caller_t caller,
-    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_program_t program,
     #     hsa_runtime_alloc_data_callback_t alloc_serialize_data_callback,
     #     hsa_ext_error_message_callback_t error_message_callback,
     #     int debug_information,
@@ -1351,7 +1337,7 @@ API_PROTOTYPES = {
     'hsa_ext_serialize_program': {
         'restype': hsa_status_t,
         'argtypes': [hsa_runtime_caller_t,
-                     hsa_ext_program_handle_t,
+                     hsa_ext_program_t,
                      hsa_runtime_alloc_data_callback_t,
                      hsa_ext_error_message_callback_t,
                      ctypes.c_int,
@@ -1366,7 +1352,7 @@ API_PROTOTYPES = {
     #     hsa_ext_agent_allocation_symbol_address_t agent_allocation_symbol_address,
     #     hsa_ext_error_message_callback_t error_message_callback,
     #     int debug_information,
-    #     hsa_ext_program_handle_t **program);
+    #     hsa_ext_program_t **program);
     'hsa_ext_deserialize_program': {
         'restype': hsa_status_t,
         'argtypes': [ctypes.c_void_p,
@@ -1374,7 +1360,7 @@ API_PROTOTYPES = {
                      hsa_ext_agent_allocation_symbol_address_t,
                      hsa_ext_error_message_callback_t,
                      ctypes.c_int,
-                     _PTR(_PTR(hsa_ext_program_handle_t))],
+                     _PTR(_PTR(hsa_ext_program_t))],
         'errcheck': _check_error
     },
 }

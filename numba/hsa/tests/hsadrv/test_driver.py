@@ -30,13 +30,15 @@ class TestAgents(unittest.TestCase):
 
     def test_agents_create_queue_single(self):
         for agent in hsa.agents:
-            queue = agent.create_queue_single(2 ** 5)
-            self.assertIsInstance(queue, Queue)
+            if agent.is_component:
+                queue = agent.create_queue_single(2 ** 5)
+                self.assertIsInstance(queue, Queue)
 
     def test_agents_create_queue_multi(self):
         for agent in hsa.agents:
-            queue = agent.create_queue_multi(2 ** 5)
-            self.assertIsInstance(queue, Queue)
+            if agent.is_component:
+                queue = agent.create_queue_multi(2 ** 5)
+                self.assertIsInstance(queue, Queue)
 
 
 class _TestBase(unittest.TestCase):
