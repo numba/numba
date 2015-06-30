@@ -6,26 +6,6 @@ import llvmlite.llvmpy.core as lc
 from llvmlite import ir
 
 
-def fix_powi_calls(mod):
-    """Replace llvm.powi.f64 intrinsic because we don't have compiler-rt.
-    """
-    orig = mod.globals.get('llvm.powi.f64')
-    if orig is not None:
-        # Build a wrapper function for powi() to re-direct the intrinsic call
-        # to pow().
-        powinstr = mod.declare_intrinsic('llvm.pow', [ir.DoubleType()])
-        repl = ir.Function(mod, orig.function_type, name=".numba.powi_fix")
-        repl.linkage = 'internal'
-        builder = ir.IRBuilder(repl.append_basic_block())
-        base, power = repl.args
-        power = builder.sitofp(power, ir.DoubleType())
-        call = builder.call(powinstr, [base, power])
-        builder.ret(call)
-
-        # Replace all calls in the module
-        ir.replace_all_calls(mod, orig, repl)
-
-
 class _DivmodFixer(ir.Visitor):
     def visit_Instruction(self, instr):
         if instr.type == ir.IntType(64):
@@ -101,19 +81,6 @@ class IntrinsicMapping(object):
                 if fn.name not in self.availintr:
                     yield fn
 
-
-def powi_as_pow(context, fn):
-    builder = lc.Builder.new(fn.append_basic_block(""))
-    x, y = fn.args
-    fy = builder.sitofp(y, x.type)
-    pow = lc.Function.intrinsic(fn.module, lc.INTR_POW, [x.type])
-    builder.ret(builder.call(pow, (x, fy)))
-
-
-MAPPING = {
-    "llvm.powi.f32": powi_as_pow,
-    "llvm.powi.f64": powi_as_pow,
-}
 
 AVAILINTR = ()
 
