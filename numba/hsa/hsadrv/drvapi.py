@@ -291,7 +291,8 @@ HSA_ITER_AGENT_CALLBACK_FUNC = ctypes.CFUNCTYPE(
 HSA_QUEUE_CALLBACK_FUNC = ctypes.CFUNCTYPE(
     None,  # return value
     hsa_status_t,
-    _PTR(hsa_queue_t))
+    _PTR(hsa_queue_t),
+    ctypes.c_void_p)
 
 HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC = ctypes.CFUNCTYPE(
     hsa_status_t, # return value
@@ -371,20 +372,21 @@ API_PROTOTYPES = {
     },
 
     # Queues ###################################################################
-    # hsa_status_t hsa_queue_create(
-    #     hsa_agent_t agent,
-    #     uint32_t size,
-    #     hsa_queue_type_t tyoe,
-    #     void (*callback)(hsa_status_t status, hsa_queue_t *source),
-    #     const hsa_queue_t *service_queue,
-    #     hsa_queue_t **queue)
+    # hsa_status_t HSA_API
+    # hsa_queue_create(hsa_agent_t agent, uint32_t size, hsa_queue_type_t type,
+    #                  void (*callback)(hsa_status_t status, hsa_queue_t *source,
+    #                                   void *data),
+    #                  void *data, uint32_t private_segment_size,
+    #                  uint32_t group_segment_size, hsa_queue_t **queue);
     'hsa_queue_create': {
         'restype': hsa_status_t,
         'argtypes': [hsa_agent_t,
                      ctypes.c_uint32,
                      hsa_queue_type_t,
                      HSA_QUEUE_CALLBACK_FUNC,
-                     _PTR(hsa_queue_t),
+                     ctypes.c_void_p, # data
+                     ctypes.c_uint32, # private segment size
+                     ctypes.c_uint32, # group segment size
                      _PTR(_PTR(hsa_queue_t))],
         'errcheck': _check_error
     },

@@ -11,6 +11,7 @@ import ctypes
 import struct
 import weakref
 import logging
+from functools import partialmethod
 
 from numba.hsa.profiler import profiler as _prof
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 from numba.utils import total_ordering
 from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError, HsaWarning
-from . import enums, drvapi, elf_utils
+from . import enums, drvapi
 
 
 class HsaKernelTimedOut(HsaDriverError):
@@ -454,7 +455,7 @@ class Agent(HsaWrapper):
 
     @property
     def is_component(self):
-        return (self.feature & enums.HSA_AGENT_FEATURE_DISPATCH) != 0
+        return (self.feature & enums.HSA_AGENT_FEATURE_KERNEL_DISPATCH) != 0
 
     @property
     def regions(self):
@@ -472,29 +473,30 @@ class Agent(HsaWrapper):
         self._regions = [MemRegion.instance_for(self, region_id)
                          for region_id in region_ids]
 
-    def create_queue_single(self, size, callback=None, service_queue=None):
+    def _create_queue(self, queue_type, size, callback=None, data=None,
+                      private_segment_size=None, group_segment_size=None):
         cb_typ = drvapi.HSA_QUEUE_CALLBACK_FUNC
         cb = ctypes.cast(None, cb_typ) if callback is None else cb_typ(callback)
-        sq = None if service_queue is None else service_queue._id
         result = ctypes.POINTER(drvapi.hsa_queue_t)()
-        hsa.hsa_queue_create(self._id, size, enums.HSA_QUEUE_TYPE_SINGLE,
-                             cb, sq, ctypes.byref(result))
+        private_segment_size = (ctypes.c_uint32(-1)
+                                if private_segment_size is None
+                                else private_segment_size)
+        group_segment_size = (ctypes.c_uint32(-1)
+                                if group_segment_size is None
+                                else group_segment_size)
+        hsa.hsa_queue_create(self._id, size, queue_type, cb, data,
+                             private_segment_size, group_segment_size,
+                             ctypes.byref(result))
 
         q = Queue(self, result)
         self._queues.add(q)
         return weakref.proxy(q)
 
-    def create_queue_multi(self, size, callback=None, service_queue=None):
-        cb_typ = drvapi.HSA_QUEUE_CALLBACK_FUNC
-        cb = ctypes.cast(None, cb_typ) if callback is None else cb_typ(callback)
-        sq = None if service_queue is None else service_queue._id
-        result = ctypes.POINTER(drvapi.hsa_queue_t)()
-        hsa.hsa_queue_create(self._id, size, enums.HSA_QUEUE_TYPE_MULTI,
-                             cb, sq, ctypes.byref(result))
+    create_queue_single = partialmethod(_create_queue,
+                                        queue_type=enums.HSA_QUEUE_TYPE_SINGLE)
 
-        q = Queue(self, result)
-        self._queues.add(q)
-        return weakref.proxy(q)
+    create_queue_multi = partialmethod(_create_queue,
+                                       queue_type=enums.HSA_QUEUE_TYPE_MULTI)
 
     def release(self):
         """
@@ -624,7 +626,7 @@ class Queue(object):
 
         # Populate packet
         aql = drvapi.hsa_dispatch_packet_t()
-        aql.header.type = enums.HSA_PACKET_TYPE_ALWAYS_RESERVED
+        aql.header.type = enums.HSA_PACKET_TYPE_VENDOR_SPECIFIC
         aql.header.acquire_fence_scope = enums.HSA_FENCE_SCOPE_SYSTEM
         aql.header.release_fence_scope = enums.HSA_FENCE_SCOPE_SYSTEM
         aql.header.barrier = 1
@@ -654,7 +656,7 @@ class Queue(object):
                                    ctypes.POINTER(drvapi.hsa_dispatch_packet_t))
 
         free_slot_types = (enums.HSA_PACKET_TYPE_INVALID,
-                           enums.HSA_PACKET_TYPE_ALWAYS_RESERVED)
+                           enums.HSA_PACKET_TYPE_VENDOR_SPECIFIC)
         while packet_array[real_index].header.type not in free_slot_types:
             # Spin until the slot is ready
             pass
@@ -662,7 +664,7 @@ class Queue(object):
         # Copy the packet to the storage
         packet_array[real_index] = aql
         # The packet type must be stored last
-        packet_array[real_index].header.type = enums.HSA_PACKET_TYPE_DISPATCH
+        packet_array[real_index].header.type = enums.HSA_PACKET_TYPE_KERNEL_DISPATCH
 
         # Ring the doorbell
         hsa.hsa_signal_store_relaxed(self.doorbell_signal, index)
@@ -723,7 +725,7 @@ class Signal(object):
         else:
             # timeout as seconds
             expire = timeout * hsa.timestamp_frequency * mhz
-        hsa.hsa_signal_wait_acquire(self._id, enums.HSA_NE, one, expire,
+        hsa.hsa_signal_wait_acquire(self._id, enums.HSA_SIGNAL_CONDITION_NE, one, expire,
                                     enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
         return self.load_relaxed() != one
 
