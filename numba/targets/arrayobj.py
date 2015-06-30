@@ -933,10 +933,7 @@ def array_median(context, builder, sig, args):
         return i + 1
 
     sig_partition = typing.signature(int64, *(sig.args[0], int64, int64))
-    cres = context.compile_only_no_cache(builder, partition, sig_partition)
-    llvm_func_name = cres.fndesc.llvm_func_name
-    _partition = types.ExternalFunction(llvm_func_name,
-            sig_partition)
+    _partition = context.compile_subroutine(builder, partition, sig_partition)
 
     def select(arry, k):
         n = arry.shape[0]
@@ -951,18 +948,15 @@ def array_median(context, builder, sig, args):
             if i < k:
                 low = i+1
                 i = _partition(temp_arry, low, high)
-                i = k
             else:
                 high = i-1
                 i = _partition(temp_arry, low, high)
-                i = k
         return temp_arry[k]
 
+    # XXX: Output is not necessarity float64, it should as the same type as that
+    # of array.
     sig_select = typing.signature(float64, *(sig.args[0], int64))
-    cres = context.compile_only_no_cache(builder, select, sig_select)
-    llvm_func_name = cres.fndesc.llvm_func_name
-    _select = types.ExternalFunction(
-        llvm_func_name, sig_select)
+    _select = context.compile_subroutine(builder, select, sig_select)
 
     def median(arry):
         n = arry.shape[0]
