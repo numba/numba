@@ -327,7 +327,7 @@ def _check_error(result, func, arguments):
         else:
             warnname = WARN_MAP.get(result, "UNKNOWN_HSA_INFO")
             msg = "Call to {0} returned {1}".format(func.__name__, warnname)
-            warnings.warn(msg, HsaWarning(msg))
+            warnings.warn(msg, HsaWarning)
 
 
 # The API prototypes
