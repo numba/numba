@@ -906,7 +906,6 @@ def array_argmax(context, builder, sig, args):
 
 @builtin
 @implement(numpy.median, types.Kind(types.Array))
-@implement("array.median", types.Kind(types.Array))
 def array_median(context, builder, sig, args):
     from numba import typing, int64, float64
 

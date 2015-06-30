@@ -77,9 +77,6 @@ def array_argmax(arr):
 def array_argmax_global(arr):
     return np.argmax(arr)
 
-def array_median(arr):
-    return arr.median()
-
 def array_median_global(arr):
     return np.median(arr)
 
@@ -157,33 +154,27 @@ class TestArrayReductions(TestCase):
     def test_median_odd(self):
         arr = np.arange(101)
         np.random.shuffle(arr)
-        npr, nbr = run_comparative(array_median, arr)
+        npr, nbr = run_comparative(array_median_global, arr)
         self.assertPreciseEqual(npr, nbr)
 
     def test_median_even(self):
         arr = np.arange(100)
         np.random.shuffle(arr)
-        npr, nbr = run_comparative(array_median, arr)
+        npr, nbr = run_comparative(array_median_global, arr)
         self.assertPreciseEqual(npr, nbr)
 
     def test_median_sorted(self):
         arr = np.arange(100)
-        npr, nbr = run_comparative(array_median, arr)
+        npr, nbr = run_comparative(array_median_global, arr)
         self.assertPreciseEqual(npr, nbr)
 
     def test_median_revsorted(self):
         arr = np.arange(100, 0, -1)
-        npr, nbr = run_comparative(array_median, arr)
+        npr, nbr = run_comparative(array_median_global, arr)
         self.assertPreciseEqual(npr, nbr)
 
     def test_median_duplicate(self):
         arr = np.ones(100)
-        npr, nbr = run_comparative(array_median, arr)
-        self.assertPreciseEqual(npr, nbr)
-
-    def test_median_global(self):
-        arr = np.arange(100)
-        np.random.shuffle(arr)
         npr, nbr = run_comparative(array_median_global, arr)
         self.assertPreciseEqual(npr, nbr)
 
