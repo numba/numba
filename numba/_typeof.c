@@ -26,8 +26,9 @@ static int BASIC_TYPECODES[12];
 
 static int tc_intp;
 
-static PyObject* typecache;
-static PyObject* ndarray_typecache;
+static PyObject *typecache;
+static PyObject *ndarray_typecache;
+static PyObject *structured_dtypes;
 
 static PyObject *str_typeof_pyval = NULL;
 
@@ -178,12 +179,21 @@ compute_dtype_fingerprint(string_writer_t *w, PyArray_Descr *descr)
     if (typenum < NPY_OBJECT)
         return string_writer_put_char(w, (char) typenum);
     if (typenum == NPY_VOID) {
-        /* Structured dtype, serialize the dtype pointer.  In most cases,
-         * people reuse the same dtype instance; otherwise the cache
-         * will just be less efficient (but as correct).
+        /* Structured dtype: serialize the dtype pointer.  Unfortunately,
+         * some structured dtypes can be ephemeral, so we have to
+         * intern them to avoid pointer reuse and fingerprint collisions.
+         * (e.g. np.recarray(dtype=some_dtype) creates a new dtype
+         *  equal to some_dtype)
          */
+        PyObject *interned = PyDict_GetItem(structured_dtypes,
+                                            (PyObject *) descr);
+        if (interned == NULL) {
+            interned = (PyObject *) descr;
+            if (PyDict_SetItem(structured_dtypes, interned, interned))
+                return -1;
+        }
         TRY(string_writer_put_char, w, (char) typenum);
-        return string_writer_put_intp(w, (npy_intp) descr);
+        return string_writer_put_intp(w, (npy_intp) interned);
     }
 #if NPY_API_VERSION >= 0x00000007
     if (PyTypeNum_ISDATETIME(typenum)) {
@@ -702,7 +712,9 @@ typeof_init(PyObject *self, PyObject *args)
 
     typecache = PyDict_New();
     ndarray_typecache = PyDict_New();
-    if (typecache == NULL || ndarray_typecache == NULL) {
+    structured_dtypes = PyDict_New();
+    if (typecache == NULL || ndarray_typecache == NULL ||
+        structured_dtypes == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "failed to create type cache");
         return NULL;
     }
