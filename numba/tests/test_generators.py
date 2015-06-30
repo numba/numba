@@ -387,6 +387,68 @@ class TestNrtArrayGen(TestCase):
         self.assertEqual(sys.getrefcount(py_ary),
                          sys.getrefcount(c_ary))
 
+    def test_nrt_nested_gen(self):
+
+        def gen0(arr):
+            for i in range(arr.size):
+                yield arr
+
+        def factory(gen0):
+            def gen1(arr):
+                out = np.zeros_like(arr)
+                for x in gen0(arr):
+                    out = out + x
+                return out, arr
+
+            return gen1
+
+        py_arr = np.arange(10)
+        c_arr = py_arr.copy()
+        py_res, py_old = factory(gen0)(py_arr)
+        c_gen = jit(nopython=True)(factory(jit(nopython=True)(gen0)))
+        c_res, c_old = c_gen(c_arr)
+
+        self.assertIsNot(py_arr, c_arr)
+        self.assertIs(py_old, py_arr)
+        self.assertIs(c_old, c_arr)
+
+        np.testing.assert_equal(py_res, c_res)
+
+        self.assertEqual(sys.getrefcount(py_res),
+                         sys.getrefcount(c_res))
+
+        # The below test will fail due to generator finalizer not invoked.
+        # This kept a reference of the c_old.
+        #
+        # self.assertEqual(sys.getrefcount(py_old),
+        #                  sys.getrefcount(c_old))
+
+    @unittest.expectedFailure
+    def test_nrt_nested_gen_refct(self):
+        def gen0(arr):
+            yield arr
+
+        def factory(gen0):
+            def gen1(arr):
+                for out in gen0(arr):
+                    return out
+
+            return gen1
+
+        py_arr = np.arange(10)
+        c_arr = py_arr.copy()
+        py_old = factory(gen0)(py_arr)
+        c_gen = jit(nopython=True)(factory(jit(nopython=True)(gen0)))
+        c_old = c_gen(c_arr)
+
+        self.assertIsNot(py_arr, c_arr)
+        self.assertIs(py_old, py_arr)
+        self.assertIs(c_old, c_arr)
+
+        self.assertEqual(sys.getrefcount(py_old),
+                         sys.getrefcount(c_old))
+
+
 
 class TestGeneratorWithNRT(TestCase):
     def test_issue_1254(self):
@@ -408,6 +470,48 @@ class TestGeneratorWithNRT(TestCase):
         expect[:] = 12
         for got in outputs:
             np.testing.assert_equal(expect, got)
+
+    def test_issue_1265(self):
+        """
+        Double-free for locally allocated, non escaping NRT objects
+        """
+        def py_gen(rmin, rmax, nr):
+            a = np.linspace(rmin, rmax, nr)
+            yield a[0]
+            yield a[1]
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        py_res = list(py_gen(-2, 2, 100))
+        c_res = list(c_gen(-2, 2, 100))
+
+        self.assertEqual(py_res, c_res)
+
+        def py_driver(args):
+            rmin, rmax, nr = args
+            points = np.empty(nr, dtype=np.complex128)
+            for i, c in enumerate(py_gen(rmin, rmax, nr)):
+                points[i] = c
+
+            return points
+
+        @jit(nopython=True)
+        def c_driver(args):
+            rmin, rmax, nr = args
+            points = np.empty(nr, dtype=np.complex128)
+            for i, c in enumerate(c_gen(rmin, rmax, nr)):
+                points[i] = c
+
+            return points
+
+        n = 2
+        patches = (-2, -1, n)
+
+        py_res = py_driver(patches)
+        # The error will cause a segfault here
+        c_res = c_driver(patches)
+
+        np.testing.assert_equal(py_res, c_res)
 
 
 if __name__ == '__main__':
