@@ -16,6 +16,7 @@ def dump_number_rules():
 def _init_casting_rules(tm):
     tcr = TypeCastingRules(tm)
     tcr.safe_unsafe(types.boolean, types.int8)
+    tcr.safe_unsafe(types.boolean, types.uint8)
 
     tcr.promote_unsafe(types.int8, types.int16)
     tcr.promote_unsafe(types.uint8, types.uint16)
@@ -33,6 +34,10 @@ def _init_casting_rules(tm):
     tcr.safe_unsafe(types.int32, types.float64)
 
     tcr.unsafe_unsafe(types.int32, types.float32)
+    # XXX this is inconsistent with the above; but we want to prefer
+    # float64 over int64 when typing a heterogenous operation,
+    # e.g. `float64 + int64`.  Perhaps we need more granularity in the
+    # conversion kinds.
     tcr.safe_unsafe(types.int64, types.float64)
     tcr.safe_unsafe(types.uint64, types.float64)
 

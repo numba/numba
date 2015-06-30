@@ -101,6 +101,7 @@ binarys += [('__nv_copysign', '__nv_copysignf', math.copysign)]
 binarys += [('__nv_atan2', '__nv_atan2f', math.atan2)]
 binarys += [('__nv_pow', '__nv_powf', math.pow)]
 binarys += [('__nv_fmod', '__nv_fmodf', math.fmod)]
+binarys += [('__nv_hypot', '__nv_hypotf', math.hypot)]
 
 
 for name64, name32, key in booleans:

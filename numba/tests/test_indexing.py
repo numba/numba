@@ -87,6 +87,13 @@ def slicing_3d_usecase2(a, index0, stop1, index2):
         total += b[i] * (i + 1)
     return total
 
+def partial_1d_usecase(a, index):
+    b = a[index]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
 def integer_indexing_1d_usecase(a, i):
     return a[i]
 
@@ -482,6 +489,7 @@ class TestIndexing(TestCase):
         self.test_1d_integer_indexing(flags=Noflags)
 
     def test_integer_indexing_1d_for_2d(self, flags=enable_pyobj_flags):
+        # Test partial (1d) indexing of a 2d array
         pyfunc = integer_indexing_1d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
@@ -492,8 +500,14 @@ class TestIndexing(TestCase):
         self.assertTrue((pyfunc(a, 9) == cfunc(a, 9)).all())
         self.assertTrue((pyfunc(a, -1) == cfunc(a, -1)).all())
 
+        arraytype = types.Array(types.int32, 2, 'A')
+        cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
+        cfunc = cr.entry_point
 
-    def test_integer_indexing_1d_for_2d(self):
+        a = np.arange(20, dtype='i4').reshape(5, 4)[::2]
+        self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
+
+    def test_integer_indexing_1d_for_2d_npm(self):
         with self.assertTypingError():
             self.test_integer_indexing_1d_for_2d(flags=Noflags)
 
@@ -555,6 +569,30 @@ class TestIndexing(TestCase):
         self.assertEqual(pyfunc(a, 0, 0), cfunc(a, 0, 0))
         self.assertEqual(pyfunc(a, 9, 9), cfunc(a, 9, 9))
         self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
+
+    def test_partial_1d_indexing(self, flags=enable_pyobj_flags):
+        pyfunc = partial_1d_usecase
+
+        def check(arr, arraytype):
+            cr = compile_isolated(pyfunc, (arraytype, types.int32),
+                                  flags=flags)
+            cfunc = cr.entry_point
+            self.assertEqual(pyfunc(arr, 0), cfunc(arr, 0))
+            n = arr.shape[0] - 1
+            self.assertEqual(pyfunc(arr, n), cfunc(arr, n))
+            self.assertEqual(pyfunc(arr, -1), cfunc(arr, -1))
+
+        a = np.arange(12, dtype='i4').reshape((4, 3))
+        arraytype = types.Array(types.int32, 2, 'C')
+        check(a, arraytype)
+
+        a = np.arange(12, dtype='i4').reshape((3, 4)).T
+        arraytype = types.Array(types.int32, 2, 'F')
+        check(a, arraytype)
+
+        a = np.arange(12, dtype='i4').reshape((3, 4))[::2]
+        arraytype = types.Array(types.int32, 2, 'A')
+        check(a, arraytype)
 
     def test_ellipse(self, flags=enable_pyobj_flags):
         pyfunc = ellipse_usecase

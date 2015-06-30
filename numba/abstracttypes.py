@@ -4,6 +4,8 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 import itertools
 import weakref
 
+import numpy
+
 from .six import add_metaclass
 
 
@@ -12,6 +14,8 @@ from .six import add_metaclass
 # However, we also want types to be disposable, therefore we ensure
 # each type is interned as a weak reference, so that it lives only as
 # long as necessary to keep a stable type code.
+# NOTE: some types can still be made immortal elsewhere (for example
+# in _dispatcher.c's internal caches).
 _typecodes = itertools.count()
 
 def _autoincr():
@@ -50,7 +54,6 @@ class _TypeMetaclass(ABCMeta):
         else:
             inst._code = _autoincr()
             _typecache[wr] = wr
-            inst.post_init()
             return inst
 
 
@@ -68,13 +71,6 @@ class Type(object):
     def __init__(self, name, param=False):
         self.name = name
         self.is_parametric = param
-
-    def post_init(self):
-        """
-        A method called when the instance is fully initialized and has
-        a registered typecode in its _code attribute.  Does nothing by
-        default, but can be overriden.
-        """
 
     @property
     def key(self):
@@ -96,12 +92,29 @@ class Type(object):
     def __ne__(self, other):
         return not (self == other)
 
-    def coerce(self, typingctx, other):
-        """Override this method to implement specialized coercion logic
-        for extending unify_pairs().  Only use this if the coercion logic cannot
-        be expressed as simple casting rules.
+    def unify(self, typingctx, other):
         """
-        return NotImplemented
+        Try to unify this type with the *other*.  A third type must
+        be returned, or None if unification is not possible.
+        Only override this if the coercion logic cannot be expressed
+        as simple casting rules.
+        """
+        return None
+
+    def can_convert_to(self, typingctx, other):
+        """
+        Check whether this type can be converted to the *other*.
+        If successful, must return a string describing the conversion, e.g.
+        "exact", "promote", "unsafe", "safe"; otherwise None is returned.
+        """
+        return None
+
+    def can_convert_from(self, typingctx, other):
+        """
+        Similar to *can_convert_to*, but in reverse.  Only needed if
+        the type provides conversion from other types.
+        """
+        return None
 
     # User-facing helpers.  These are not part of the core Type API but
     # are provided so that users can write e.g. `numba.boolean(1.5)`
@@ -161,6 +174,19 @@ class Number(Type):
     """
     Base class for number types.
     """
+
+    def unify(self, typingctx, other):
+        """
+        Unify the two number types using Numpy's rules.
+        """
+        from . import numpy_support
+        if isinstance(other, Number):
+            # XXX: this can produce unsafe conversions,
+            # e.g. would unify {int64, uint64} to float64
+            a = numpy_support.as_dtype(self)
+            b = numpy_support.as_dtype(other)
+            sel = numpy.promote_types(a, b)
+            return numpy_support.from_dtype(sel)
 
 
 class Callable(Type):

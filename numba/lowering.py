@@ -69,7 +69,9 @@ class BaseLower(object):
             self.call_conv.return_exc(self.builder)
 
         self.env_body = self.context.get_env_body(self.builder, self.envarg)
-        self.env_manager = self.pyapi.get_env_manager(self.env, self.env_body)
+        self.pyapi.emit_environment_sentry(self.envarg)
+        self.env_manager = self.pyapi.get_env_manager(self.env, self.env_body,
+                                                      self.envarg)
 
     def pre_lower(self):
         """
@@ -470,6 +472,11 @@ class Lower(BaseLower):
                                                           fndesc)
             res = self.context.call_external_function(
                 self.builder, func, fndesc.argtypes, argvals)
+
+        elif isinstance(fnty, types.NumbaFunction):
+            # Handle a compiled Numba function
+            res = self.context.call_internal(self.builder, fnty.fndesc,
+                                             fnty.sig, argvals)
 
         elif isinstance(fnty, types.Method):
             # Method of objects are handled differently

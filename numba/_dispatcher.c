@@ -203,9 +203,10 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 
 static PyObject *str_typeof_pyval = NULL;
 
-/* For void types, we need to keep a reference to the returned type object so
-   that it cannot be deleted. This is because of the following events occurring
-   when first using a @jit function for a given set of types:
+/* When we want to cache the type's typecode for later lookup, we need to
+   keep a reference to the returned type object so that it cannot be
+   deleted. This is because of the following events occurring when first
+   using a @jit function for a given set of types:
 
     1. typecode_fallback requests a new typecode for an arbitrary Python value;
        this implies creating a Numba type object (on the first dispatcher call);
@@ -215,14 +216,15 @@ static PyObject *str_typeof_pyval = NULL;
     3. we have to compile: compile_and_invoke() is called, it will invoke
        Dispatcher_Insert to register the new signature.
 
-   The reference returned in step 1 is deleted as soon as we call Py_DECREF() on
-   it, since we are holding the only reference. If this happens and we use the
-   typecode we got to populate the cache, then the cache won't ever return the
-   correct typecode, and the dispatcher will never successfully match the typecodes
-   with those of some already-compiled instance. So we need to make sure that we
-   don't call Py_DECREF() on objects whose typecode will be used to populate the
-   cache. This is ensured by calling _typecode_fallback with retain_reference ==
-   0.
+   The reference to the Numba type object returned in step 1 is deleted as
+   soon as we call Py_DECREF() on it, since we are holding the only
+   reference. If this happens and we use the typecode we got to populate the
+   cache, then the cache won't ever return the correct typecode, and the
+   dispatcher will never successfully match the typecodes with those of
+   some already-compiled instance. So we need to make sure that we don't
+   call Py_DECREF() on objects whose typecode will be used to populate the
+   cache. This is ensured by calling _typecode_fallback with
+   retain_reference == 0.
 
    Note that technically we are leaking the reference, since we do not continue
    to hold a pointer to the type object that we get back from typeof_pyval.
@@ -243,10 +245,12 @@ int _typecode_fallback(DispatcherObject *dispatcher, PyObject *val,
     }
 
     tmpcode = PyObject_GetAttrString(tmptype, "_code");
-    if (!retain_reference)
+    if (!retain_reference) {
         Py_DECREF(tmptype);
-    if (tmpcode == NULL)
+    }
+    if (tmpcode == NULL) {
         return -1;
+    }
     typecode = PyLong_AsLong(tmpcode);
     Py_DECREF(tmpcode);
     return typecode;
@@ -264,11 +268,16 @@ int typecode_fallback_keep_ref(DispatcherObject *dispatcher, PyObject *val) {
     return _typecode_fallback(dispatcher, val, 1);
 }
 
+/*
+ * Direct lookup table for extra-fast typecode resolution of simple array types.
+ */
+
 #define N_DTYPES 12
 #define N_NDIM 5    /* Fast path for up to 5D array */
 #define N_LAYOUT 3
 static int cached_arycode[N_NDIM][N_LAYOUT][N_DTYPES];
 
+/* Convert a Numpy dtype number to an internal index into cached_arycode */
 static int dtype_num_to_typecode(int type_num) {
     int dtype;
     switch(type_num) {
@@ -309,6 +318,7 @@ static int dtype_num_to_typecode(int type_num) {
         dtype = 11;
         break;
     default:
+        /* Type not included in the global lookup table */
         dtype = -1;
     }
     return dtype;
@@ -382,7 +392,7 @@ int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
     dtype = dtype_num_to_typecode(PyArray_TYPE(ary));
     if (dtype == -1) goto FALLBACK;
 
-    /* "Fast" path, using table lookup */
+    /* Fast path, using direct table lookup */
     assert(layout < N_LAYOUT);
     assert(ndim <= N_NDIM);
     assert(dtype < N_DTYPES);
@@ -390,13 +400,13 @@ int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
     typecode = cached_arycode[ndim - 1][layout][dtype];
     if (typecode == -1) {
         /* First use of this table entry, so it requires populating */
-        typecode = typecode_fallback(dispatcher, (PyObject*)ary);
+        typecode = typecode_fallback_keep_ref(dispatcher, (PyObject*)ary);
         cached_arycode[ndim - 1][layout][dtype] = typecode;
     }
     return typecode;
 
 FALLBACK:
-    /* "Slow" path */
+    /* Slower path, for non-trivial array types */
 
     /* If this isn't a structured array then we can't use the cache */
     if (PyArray_TYPE(ary) != NPY_VOID)
@@ -494,6 +504,33 @@ void explain_matching_error(PyObject *dispatcher, PyObject *args, PyObject *kws)
 {
     explain_issue(dispatcher, args, kws, "_explain_matching_error",
                   "No matching definition");
+}
+
+static
+int search_new_conversions(PyObject *dispatcher, PyObject *args, PyObject *kws)
+{
+    PyObject *callback, *result;
+    int res;
+
+    callback = PyObject_GetAttrString(dispatcher,
+                                      "_search_new_conversions");
+    if (!callback) {
+        return -1;
+    }
+    result = PyObject_Call(callback, args, kws);
+    Py_DECREF(callback);
+    if (result == NULL) {
+        return -1;
+    }
+    if (!PyBool_Check(result)) {
+        Py_DECREF(result);
+        PyErr_SetString(PyExc_TypeError,
+                        "_search_new_conversions() should return a boolean");
+        return -1;
+    }
+    res = (result == Py_True) ? 1 : 0;
+    Py_DECREF(result);
+    return res;
 }
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
@@ -688,6 +725,24 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
        has been disabled. */
     cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
                                !self->can_compile);
+
+    if (matches == 0 && !self->can_compile) {
+        /*
+         * If we can't compile a new specialization, look for
+         * matching signatures for which conversions haven't been
+         * registered on the C++ TypeManager.
+         */
+        int res = search_new_conversions((PyObject *) self, args, kws);
+        if (res < 0) {
+            retval = NULL;
+            goto CLEANUP;
+        }
+        if (res > 0) {
+            /* Retry with the newly registered conversions */
+            cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
+                                       !self->can_compile);
+        }
+    }
 
     if (matches == 1) {
         /* Definition is found */

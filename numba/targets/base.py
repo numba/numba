@@ -152,6 +152,9 @@ class BaseContext(object):
     # NRT
     enable_nrt = False
 
+    # PYCC
+    aot_mode = False
+
     def __init__(self, typing_context):
         _load_global_helpers()
         self.address_size = utils.MACHINE_BITS
@@ -858,23 +861,32 @@ class BaseContext(object):
         codegen.add_linking_library(cres.library)
         return cres
 
-    def compile_internal(self, builder, impl, sig, args, locals={}):
-        """Invoke compiler to implement a function for a nopython function
+    def compile_subroutine(self, builder, impl, sig, locals={}):
+        """
+        Compile the function *impl* for the given *sig* (in nopython mode).
+        Return a placeholder object that's callable from another Numba
+        function.
         """
         cache_key = (impl.__code__, sig)
         if impl.__closure__:
             # XXX This obviously won't work if a cell's value is
             # unhashable.
             cache_key += tuple(c.cell_contents for c in impl.__closure__)
-        fndesc = self.cached_internal_func.get(cache_key)
-
-        if fndesc is None:
+        ty = self.cached_internal_func.get(cache_key)
+        if ty is None:
             cres = self.compile_only_no_cache(builder, impl, sig,
                                               locals=locals)
-            fndesc = cres.fndesc
-            self.cached_internal_func[cache_key] = fndesc
+            ty = types.NumbaFunction(cres.fndesc, sig)
+            self.cached_internal_func[cache_key] = ty
+        return ty
 
-        return self.call_internal(builder, fndesc, sig, args)
+    def compile_internal(self, builder, impl, sig, args, locals={}):
+        """
+        Like compile_subroutine(), but also call the function with the given
+        *args*.
+        """
+        ty = self.compile_subroutine(builder, impl, sig, locals)
+        return self.call_internal(builder, ty.fndesc, sig, args)
 
     def call_internal(self, builder, fndesc, sig, args):
         """Given the function descriptor of an internally compiled function,
@@ -1007,6 +1019,26 @@ class BaseContext(object):
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
+
+    def nrt_meminfo_alloc_aligned(self, builder, size, align):
+        """
+        Allocate a new MemInfo of `size` bytes and and align the data pointer
+        to `align` bytes.  The `align` arg can be either a Python int or a LLVM
+        uint32 value.
+        """
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        intp = self.get_value_type(types.intp)
+        u32 = self.get_value_type(types.uint32)
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(), [intp, u32])
+        fn = mod.get_or_insert_function(fnty,
+                                        name="NRT_MemInfo_alloc_safe_aligned")
+        if isinstance(align, int):
+            align = self.get_constant(types.uint32, align)
+        else:
+            assert align.type == u32, "align must be a uint32"
+        return builder.call(fn, [size, align])
 
     def nrt_meminfo_data(self, builder, meminfo):
         if not self.enable_nrt:

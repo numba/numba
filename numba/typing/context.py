@@ -9,7 +9,7 @@ import weakref
 import numpy
 
 from numba import types
-from numba.typeconv import rules
+from numba.typeconv import Conversion, rules
 from . import templates
 
 # Initialize declarations
@@ -18,6 +18,30 @@ from . import (
     randomdecl)
 from numba import numpy_support, utils
 from . import ctypes_utils, cffi_utils, bufproto
+
+
+class Rating(object):
+    __slots__ = 'promote', 'safe_convert', "unsafe_convert"
+
+    def __init__(self):
+        self.promote = 0
+        self.safe_convert = 0
+        self.unsafe_convert = 0
+
+    def astuple(self):
+        """Returns a tuple suitable for comparing with the worse situation
+        start first.
+        """
+        return (self.unsafe_convert, self.safe_convert, self.promote)
+
+    def __add__(self, other):
+        if type(self) is not type(other):
+            return NotImplemented
+        rsum = Rating()
+        rsum.promote = self.promote + other.promote
+        rsum.safe_convert = self.safe_convert + other.safe_convert
+        rsum.unsafe_convert = self.unsafe_convert + other.unsafe_convert
+        return rsum
 
 
 class BaseContext(object):
@@ -98,7 +122,7 @@ class BaseContext(object):
     def resolve_setattr(self, target, attr, value):
         if isinstance(target, types.Record):
             expectedty = target.typeof(attr)
-            if self.type_compatibility(value, expectedty) is not None:
+            if self.can_convert(value, expectedty) is not None:
                 return templates.signature(types.void, target, value)
 
     def resolve_module_constants(self, typ, attr):
@@ -220,7 +244,7 @@ class BaseContext(object):
         if tp is not None:
             return tp
 
-        if isinstance(val, types.ExternalFunction):
+        if isinstance(val, (types.ExternalFunction, types.NumbaFunction)):
             return val
 
         if isinstance(val, type) and issubclass(val, BaseException):
@@ -309,21 +333,116 @@ class BaseContext(object):
         at = templates.ClassAttrTemplate(self, clsty, attrs)
         self.insert_attributes(at)
 
-    def type_compatibility(self, fromty, toty):
+    def can_convert(self, fromty, toty):
         """
-        Returns None or a string describing the conversion e.g. exact, promote,
-        unsafe, safe.
+        Check whether conversion is possible from *fromty* to *toty*.
+        If successful, return a numba.typeconv.Conversion instance;
+        otherwise None is returned.
         """
         if fromty == toty:
-            return 'exact'
-
-        elif (isinstance(fromty, types.UniTuple) and
-                  isinstance(toty, types.UniTuple) and
-                      len(fromty) == len(toty)):
-            return self.type_compatibility(fromty.dtype, toty.dtype)
-
+            return Conversion.exact
         else:
-            return self.tm.check_compatible(fromty, toty)
+            # First check with the type manager (some rules are registered
+            # at startup there, see numba.typeconv.rules)
+            conv = self.tm.check_compatible(fromty, toty)
+            if conv is not None:
+                return conv
+
+            # Fall back on type-specific rules
+            forward = fromty.can_convert_to(self, toty)
+            backward = toty.can_convert_from(self, fromty)
+            if backward is None:
+                return forward
+            elif forward is None:
+                return backward
+            else:
+                return min(forward, backward)
+
+    def _rate_arguments(self, actualargs, formalargs):
+        """
+        Rate the actual arguments for compatibility against the formal
+        arguments.  A Rating instance is returned, or None if incompatible.
+        """
+        if len(actualargs) != len(formalargs):
+            return None
+        rate = Rating()
+        for actual, formal in zip(actualargs, formalargs):
+            conv = self.can_convert(actual, formal)
+            if conv is None:
+                return None
+
+            if conv == Conversion.promote:
+                rate.promote += 1
+            elif conv == Conversion.safe:
+                rate.safe_convert += 1
+            elif conv == Conversion.unsafe:
+                rate.unsafe_convert += 1
+            elif conv == Conversion.exact:
+                pass
+            else:
+                raise Exception("unreachable", conv)
+
+        return rate
+
+    def install_possible_conversions(self, actualargs, formalargs):
+        """
+        Install possible conversions from the actual argument types to
+        the formal argument types in the C++ type manager.
+        Return True if all arguments can be converted.
+        """
+        if len(actualargs) != len(formalargs):
+            return False
+        for actual, formal in zip(actualargs, formalargs):
+            if self.tm.check_compatible(actual, formal) is not None:
+                # This conversion is already known
+                continue
+            conv = self.can_convert(actual, formal)
+            if conv is None:
+                return False
+            assert conv is not Conversion.exact
+            self.tm.set_compatible(actual, formal, conv)
+        return True
+
+    def resolve_overload(self, key, cases, args, kws,
+                         allow_ambiguous=True):
+        """
+        Given actual *args* and *kws*, find the best matching
+        signature in *cases*, or None if none matches.
+        *key* is used for error reporting purposes.
+        If *allow_ambiguous* is False, a tie in the best matches
+        will raise an error.
+        """
+        assert not kws, "Keyword arguments are not supported, yet"
+        # Rate each case
+        candidates = []
+        for case in cases:
+            if len(args) == len(case.args):
+                rating = self._rate_arguments(args, case.args)
+                if rating is not None:
+                    candidates.append((rating.astuple(), case))
+
+        # Find the best case
+        candidates.sort(key=lambda i: i[0])
+        if candidates:
+            best_rate, best = candidates[0]
+            if not allow_ambiguous:
+                # Find whether there is a tie and if so, raise an error
+                tied = []
+                for rate, case in candidates:
+                    if rate != best_rate:
+                        break
+                    tied.append(case)
+                if len(tied) > 1:
+                    args = (key, args, '\n'.join(map(str, tied)))
+                    msg = "Ambiguous overloading for %s %s:\n%s" % args
+                    raise TypeError(msg)
+            # Simply return the best matching candidate in order.
+            # If there is a tie, since list.sort() is stable, the first case
+            # in the original order is returned.
+            # (this can happen if e.g. a function template exposes
+            #  (int32, int32) -> int32 and (int64, int64) -> int64,
+            #  and you call it with (int16, int16) arguments)
+            return best
 
     def unify_types(self, *typelist):
         # Sort the type list according to bit width before doing
@@ -334,55 +453,37 @@ class BaseContext(object):
             """
             return getattr(obj, 'bitwidth', hash(obj))
 
-        return functools.reduce(
-            self.unify_pairs, sorted(typelist, key=keyfunc))
+        typelist = sorted(typelist, key=keyfunc)
+        unified = typelist[0]
+        for tp in typelist[1:]:
+            unified = self.unify_pairs(unified, tp)
+            if unified is None:
+                break
+        return unified
 
     def unify_pairs(self, first, second):
         """
-        Choose PyObject type as the abstract if we fail to determine a concrete
-        type.
+        Try to unify the two given types.  A third type is returned,
+        or None in case of failure.
         """
         if first == second:
             return first
 
-        # Types with special coercion rule
-        first_coerce = first.coerce(self, second)
-        second_coerce = second.coerce(self, first)
+        # Types with special unification rules
+        unified = first.unify(self, second)
+        if unified is not None:
+            return unified
 
-        if first_coerce is not NotImplemented:
-            return first_coerce
+        unified = second.unify(self, first)
+        if unified is not None:
+            return unified
 
-        elif second_coerce is not NotImplemented:
-            return second_coerce
+        # Other types with simple conversion rules
+        conv = self.can_convert(fromty=first, toty=second)
+        if conv is not None and conv <= Conversion.safe:
+            return conv
 
-        # TODO: should add an option to reject unsafe type conversion
-
-        # Types with simple coercion rule
-        forward = self.type_compatibility(fromty=first, toty=second)
-        backward = self.type_compatibility(fromty=second, toty=first)
-
-        strong = ('exact', 'promote')
-        weak = ('safe', 'unsafe')
-        if forward in strong:
-            return second
-        elif backward in strong:
-            return first
-        elif forward is None and backward is None:
-            return types.pyobject
-        elif forward in weak or backward in weak:
-            # Use numpy to pick a type that
-            if first in types.number_domain and second in types.number_domain:
-                a = numpy.dtype(str(first))
-                b = numpy.dtype(str(second))
-                sel = numpy.promote_types(a, b)
-                return getattr(types, str(sel))
-
-
-        # Failed to unify
-        msg = ("Cannot unify {{{first}, {second}}}\n"
-               "{first}->{second}::{forward}\n"
-               "{second}->{first}::{backward} ")
-        raise AssertionError(msg.format(**locals()))
+        return types.pyobject
 
 
 class Context(BaseContext):

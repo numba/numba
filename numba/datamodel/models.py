@@ -180,6 +180,8 @@ class PrimitiveModel(DataModel):
 
 
 @register_default(types.Opaque)
+@register_default(types.PyObject)
+@register_default(types.RawPointer)
 @register_default(types.NoneType)
 @register_default(types.Function)
 @register_default(types.Type)
@@ -191,6 +193,7 @@ class PrimitiveModel(DataModel):
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
 @register_default(types.ExternalFunction)
+@register_default(types.NumbaFunction)
 @register_default(types.Method)
 @register_default(types.Macro)
 @register_default(types.NumberClass)
