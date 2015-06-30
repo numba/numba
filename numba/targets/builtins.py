@@ -172,7 +172,7 @@ def int_power_impl(context, builder, sig, args):
         else:
             invert = False
             exp = b
-        if b > 0x10000:
+        if exp > 0x10000:
             # Optimization cutoff: fallback on the generic algorithm
             return math.pow(a, float(b))
         while True:
