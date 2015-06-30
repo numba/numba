@@ -473,6 +473,11 @@ class Lower(BaseLower):
             res = self.context.call_external_function(
                 self.builder, func, fndesc.argtypes, argvals)
 
+        elif isinstance(fnty, types.NumbaFunction):
+            # Handle a compiled Numba function
+            res = self.context.call_internal(self.builder, fnty.fndesc,
+                                             fnty.sig, argvals)
+
         elif isinstance(fnty, types.Method):
             # Method of objects are handled differently
             fnobj = self.loadvar(expr.func.name)
