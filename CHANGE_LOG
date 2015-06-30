@@ -1,3 +1,42 @@
+Version 0.20.0
+--------------
+
+This release updates Numba to use LLVM 3.6 and CUDA 7 for CUDA support.
+Following the platform deprecation in CUDA 7, Numba's CUDA feature is no longer
+supported on all 32-bit platforms.  The oldest supported version of Windows
+is Windows 7.
+
+
+Fixes:
+
+* Issue #1131: Handling of negative zeros in np.conjugate() and np.arccos()
+* Issue #1188: Fix slow array return
+* Issue #1203: Support indexing ndarray.flat
+* Issue #1164: Avoid warnings from CUDA context at shutdown
+* Issue #1229: Respect the writeable flag in arrays
+* Issue #1244: Fixes bug in refcount pruning pass
+* Issue #1251: Fix partial left-indexing of Fortran contiguous array
+* Issue #1264: Fix compilation error in array expression
+* Issue #1254: Error when yielding array objects
+* Issue #1276: Fixes nested generator use
+
+
+Improvments:
+
+* PR #1200: Migrate cgutils to llvmlite
+* PR #1190: Support more array methods: .transpose(), .T, .copy(), .reshape(),
+            .view9)
+* PR #1214: Simplify setup.py and avoid manual maintenance
+* PR #1217: Support datatime64 and timedelta64 constants
+* PR #1236: Reload environment variables when compiling
+* PR #1225: Various speed improvements
+* PR #1252: Support cmath module in CUDA
+* PR #1238: Use 32-byte aligned allocator to optimize for AVX
+* PR #1258: Support numpy.frombuffer()
+* PR #1274: Use TravisCI container infrastructure for lower wait time
+* PR #1279: Micro-optimize overload resolution in call dispatch
+
+
 Version 0.19.2
 --------------
 
