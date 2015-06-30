@@ -924,13 +924,13 @@ def array_median(context, builder, sig, args):
         A[high], A[middle] = A[middle], A[high]
 
         x = A[high]
-        i = low-1
+        i = low
         for j in range(low, high):
             if A[j] <= x:
-                i += 1
                 A[i], A[j] = A[j], A[i]
-        A[i+1], A[high] = A[high], A[i+1]
-        return i + 1
+                i += 1
+        A[i], A[high] = A[high], A[i]
+        return i
 
     sig_partition = typing.signature(int64, *(sig.args[0], int64, int64))
     _partition = context.compile_subroutine(builder, partition, sig_partition)
