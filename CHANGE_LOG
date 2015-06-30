@@ -20,6 +20,7 @@ Improvements:
 * PR #1258: Support numpy.frombuffer()
 * PR #1274: Use TravisCI container infrastructure for lower wait time
 * PR #1279: Micro-optimize overload resolution in call dispatch
+* Issue #1248: Improve error message when return type unification fails
 
 Fixes:
 
@@ -32,7 +33,6 @@ Fixes:
 * Issue #1264: Fix compilation error in array expression
 * Issue #1254: Fix error when yielding array objects
 * Issue #1276: Fix nested generator use
-
 
 
 Version 0.19.2
