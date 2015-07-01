@@ -155,7 +155,7 @@ class BaseContext(object):
         if tp is not None:
             return tp
 
-        if isinstance(val, types.ExternalFunction):
+        if isinstance(val, (types.ExternalFunction, types.NumbaFunction)):
             return val
 
         if isinstance(val, type) and issubclass(val, BaseException):

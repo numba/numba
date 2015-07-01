@@ -335,6 +335,7 @@ class ExternalFunctionPointer(Function):
 class ExternalFunction(Function):
     """
     A named native function (resolvable by LLVM).
+    For internal use only.
     """
 
     def __init__(self, symbol, sig):
@@ -343,6 +344,30 @@ class ExternalFunction(Function):
         self.sig = sig
         template = typing.make_concrete_template(symbol, symbol, [sig])
         super(ExternalFunction, self).__init__(template)
+
+    @property
+    def key(self):
+        return self.symbol, self.sig
+
+
+class NumbaFunction(Function):
+    """
+    A named native function with the Numba calling convention
+    (resolvable by LLVM).
+    For internal use only.
+    """
+
+    def __init__(self, fndesc, sig):
+        from . import typing
+        self.fndesc = fndesc
+        self.sig = sig
+        template = typing.make_concrete_template(fndesc.qualname,
+                                                 fndesc.qualname, [sig])
+        super(NumbaFunction, self).__init__(template)
+
+    @property
+    def key(self):
+        return self.fndesc.unique_name, self.sig
 
 
 class BoundFunction(Function):
