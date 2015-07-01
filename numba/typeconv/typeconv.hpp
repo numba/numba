@@ -52,7 +52,6 @@ struct Rating {
     unsigned int unsafe_convert;
 
     Rating();
-    void bad();
 
     bool operator < (const Rating &other) const;
     bool operator == (const Rating &other) const;

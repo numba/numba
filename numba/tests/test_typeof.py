@@ -294,6 +294,13 @@ class TestFingerprint(TestCase):
         arr = np.empty(5, dtype=recordtype2)
         distinct.add(compute_fingerprint(arr))
 
+        # np.recarray() is peculiar: it creates a new dtype instance in
+        # its constructor; check that the fingerprint remains efficient
+        a = np.recarray(1, dtype=recordtype)
+        b = np.recarray(1, dtype=recordtype)
+        self.assertEqual(compute_fingerprint(a),
+                         compute_fingerprint(b))
+
     def test_buffers(self):
         distinct = DistinctChecker()
 
@@ -349,6 +356,13 @@ class TestFingerprint(TestCase):
 
         distinct.add(recordtype)
         distinct.add(recordtype2)
+
+        # np.recarray() is peculiar: it creates a new dtype instance in
+        # its constructor; check that the fingerprint remains efficient
+        a = np.recarray(1, dtype=recordtype)
+        b = np.recarray(1, dtype=recordtype)
+        self.assertEqual(compute_fingerprint(a.dtype),
+                         compute_fingerprint(b.dtype))
 
     def test_tuples(self):
         distinct = DistinctChecker()
