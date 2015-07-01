@@ -682,7 +682,7 @@ int typecode_arrayscalar(PyObject *dispatcher, PyObject* aryscalar) {
 int
 typeof_typecode(PyObject *dispatcher, PyObject *val)
 {
-    PyTypeObject *tyobj = val->ob_type;
+    PyTypeObject *tyobj = Py_TYPE(val);
     /* This needs to be kept in sync with Dispatcher.typeof_pyval(),
      * otherwise funny things may happen.
      */
