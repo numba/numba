@@ -100,7 +100,11 @@ class _NPDatetimeBase(Type):
         return self.unit_code < other.unit_code
 
     def cast_python_value(self, value):
-        return getattr(numpy, self.type_name)(value, self.unit)
+        cls = getattr(numpy, self.type_name)
+        if self.unit:
+            return cls(value, self.unit)
+        else:
+            return cls(value)
 
 
 @utils.total_ordering

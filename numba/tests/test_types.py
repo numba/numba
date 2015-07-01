@@ -203,7 +203,9 @@ class TestTypes(TestCase):
             ty = types.NPTimedelta('s')
             self.assertPreciseEqual(ty(5), np.timedelta64(5, 's'))
             self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT', 's'))
-
+            ty = types.NPTimedelta('')
+            self.assertPreciseEqual(ty(5), np.timedelta64(5))
+            self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
     def test_bitwidth_number_types(self):
         """
