@@ -17,6 +17,15 @@ branches:
     - master
     - llvmlite2
 
+sudo: false
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - g++-4.8
+
 before_install:
   # Install Miniconda
   - wget http://repo.continuum.io/miniconda/Miniconda3-3.7.0-Linux-x86_64.sh -O miniconda.sh
@@ -33,22 +42,11 @@ before_install:
   - $CONDA_INSTALL -c numba llvmdev="3.6*"
   # Install unittest2 for Python 2
   - if [ $PY_MAJOR_MINOR == "2.6" ]; then $CONDA_INSTALL unittest2 argparse; fi
-  # Install enum34 for Python < 3.4
+  # Install enum34 and singledispatch for Python < 3.4
   - if [ $PY_MAJOR_MINOR \< "3.4" ]; then $CONDA_INSTALL enum34; fi
   - if [ $PY_MAJOR_MINOR \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
   # Install funcsigs for Python < 3.3
   - if [ $PY_MAJOR_MINOR \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
-  # The next couple lines fix a crash with multiprocessing on Travis
-  # and are not specific to using Miniconda
-  - sudo rm -rf /dev/shm
-  - sudo ln -s /run/shm /dev/shm
-  # We need this line to have g++ 4.8 available in apt
-  # (Travis' default gcc version doesn't support C++11).
-  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-  - sudo apt-get update -qq
-  - sudo apt-get install -qq gcc-4.8 g++-4.8
-  # Force g++ 4.8 to be the default version
-  - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
   # Install dependencies for building the documentation
   - $CONDA_INSTALL sphinx pygments
   - $PIP_INSTALL sphinxjp.themecore sphinxjp.themes.basicstrap
@@ -60,6 +58,7 @@ before_install:
 
 install:
     # Build and install llvmlite from source
+    - export CXX=g++-4.8
     - git clone git://github.com/numba/llvmlite.git -q
     - cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
     # Build numba extensions without silencing compile errors

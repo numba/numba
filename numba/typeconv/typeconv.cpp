@@ -1,53 +1,27 @@
 #include <cstring>
 #include <algorithm>
 #include <limits.h>
+
 #include "typeconv.hpp"
 
 
-// ----- Type -----
-
-Type::Type() :id(-1) { }
-
-Type::Type(int id) :id(id) { } 
-
-Type::Type(const Type& other) :id(other.id) { }
-
-Type& Type::operator = (const Type& other) {
-    id = other.id;
-    return *this;
-}
-
-bool Type::valid() const {
-    return id != -1;
-}
-
-bool Type::operator == (const Type& other) const {
-    return id == other.id;
-}
-
-bool Type::operator != (const Type& other) const {
-    return id != other.id;
-}
-
-bool Type:: operator < (const Type& other) const {
-    return id < other.id;
-}
-
-int Type::get() const { return id; }
-
 // ------ TypeManager ------
 
-unsigned int TCCMap::hash(TypePair key) const {
-    int a = key.first.get() * 9973;
-    int b = key.second.get() * 10007;
-
-    a += b;
-    b = (b << 17) | (b >> (32 - 17));
-    return b ^ a;
+TCCMap::TCCMap()
+    : nb_records(0)
+{
 }
 
-void TCCMap::insert(TypePair key, TypeCompatibleCode val) {
-    unsigned int i = hash(key) % TCCMAP_SIZE;
+unsigned int TCCMap::hash(const TypePair &key) const {
+    const int mult = 1000003;
+    int x = 0x345678;
+    x = (x ^ key.first) * mult;
+    x = (x ^ key.second);
+    return x;
+}
+
+void TCCMap::insert(const TypePair &key, TypeCompatibleCode val) {
+    unsigned int i = hash(key) & (TCCMAP_SIZE - 1);
     TCCMapBin &bin = records[i];
     TCCRecord data;
     data.key = key;
@@ -59,10 +33,11 @@ void TCCMap::insert(TypePair key, TypeCompatibleCode val) {
         }
     }
     bin.push_back(data);
+    nb_records++;
 }
 
-TypeCompatibleCode TCCMap::find(TypePair key) const {
-    unsigned int i = hash(key) % TCCMAP_SIZE;
+TypeCompatibleCode TCCMap::find(const TypePair &key) const {
+    unsigned int i = hash(key) & (TCCMAP_SIZE - 1);
     const TCCMapBin &bin = records[i];
     for (unsigned int j = 0; j < bin.size(); ++j) {
         if (bin[j].key == key) {
@@ -70,6 +45,26 @@ TypeCompatibleCode TCCMap::find(TypePair key) const {
         }
     }
     return TCC_FALSE;
+}
+
+// ----- Ratings -----
+Rating::Rating() : promote(0), safe_convert(0), unsafe_convert(0) { }
+
+inline bool Rating::operator < (const Rating &other) const {
+    if (unsafe_convert < other.unsafe_convert)
+        return true;
+    else if (unsafe_convert > other.unsafe_convert)
+        return false;
+    if (safe_convert < other.safe_convert)
+        return true;
+    else if (safe_convert > other.safe_convert)
+        return false;
+    return (promote < other.promote);
+}
+
+inline bool Rating::operator == (const Rating &other) const {
+    return promote == other.promote && safe_convert == other.safe_convert &&
+           unsafe_convert == other.unsafe_convert;
 }
 
 // ------ TypeManager ------
@@ -111,40 +106,45 @@ TypeCompatibleCode TypeManager::isCompatible(Type from, Type to) const {
 }
 
 
-int TypeManager::selectOverload(Type sig[], Type ovsigs[], int &selected,
+int TypeManager::selectOverload(const Type sig[], const Type ovsigs[],
+                                int &selected,
                                 int sigsz, int ovct, bool allow_unsafe) const {
     int count;
     if (ovct <= 16) {
         Rating ratings[16];
+        int candidates[16];
         count = _selectOverload(sig, ovsigs, selected, sigsz, ovct,
-                                allow_unsafe, ratings);
+                                allow_unsafe, ratings, candidates);
     }
     else {
         Rating *ratings = new Rating[ovct];
+        int *candidates = new int[ovct];
         count = _selectOverload(sig, ovsigs, selected, sigsz, ovct,
-                                allow_unsafe, ratings);
+                                allow_unsafe, ratings, candidates);
         delete [] ratings;
+        delete [] candidates;
     }
     return count;
 }
 
-int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int &selected,
-                                 int sigsz, int ovct, bool allow_unsafe,
-                                 Rating ratings[]) const {
+int TypeManager::_selectOverload(const Type sig[], const Type ovsigs[],
+                                 int &selected, int sigsz, int ovct,
+                                 bool allow_unsafe, Rating ratings[],
+                                 int candidates[]) const {
     // Generate rating table
     // Use a penalize scheme.
-    int badcount = 0;
-    for (int i = 0; i < ovct; ++i) {
-        Type* entry = &ovsigs[i * sigsz];
+    int nb_candidates = 0;
 
-        Rating &rate = ratings[i];
+    for (int i = 0; i < ovct; ++i) {
+        const Type *entry = &ovsigs[i * sigsz];
+        Rating rate;
+
         for (int j = 0; j < sigsz; ++j) {
             TypeCompatibleCode tcc = isCompatible(sig[j], entry[j]);
             if (tcc == TCC_FALSE ||
                 (tcc == TCC_CONVERT_UNSAFE && !allow_unsafe)) {
-                rate.bad();
-                ++badcount;
-                break; // stop the loop early for incompatbile type
+                // stop the loop early
+                goto _incompatible;
             }
             switch(tcc) {
             case TCC_PROMOTE:
@@ -160,22 +160,27 @@ int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int &selected,
                 break;
             }
         }
+        ratings[nb_candidates] = rate;
+        candidates[nb_candidates] = i;
+        nb_candidates++;
+    _incompatible:
+        ;
     }
 
-    // Fast path for no match
-    if (badcount == ovct)
+    // Bail if no match
+    if (nb_candidates == 0)
         return 0;
 
     // Find lowest rating
-    Rating best;
-    best.bad();
+    Rating best = ratings[0];
+    selected = candidates[0];
 
-    int matchcount = 0;
-    for (int i = 0; i < ovct; ++i) {
-        if (ratings[i] < best){
+    int matchcount = 1;
+    for (int i = 1; i < nb_candidates; ++i) {
+        if (ratings[i] < best) {
             best = ratings[i];
+            selected = candidates[i];
             matchcount = 1;
-            selected = i;
         }
         else if (ratings[i] == best) {
             matchcount += 1;
@@ -183,34 +188,6 @@ int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int &selected,
     }
     return matchcount;
 }
-
-// ----- Ratings -----
-Rating::Rating() :promote(0), safe_convert(0), unsafe_convert(0) { }
-
-void Rating::bad() {
-    // Max out everything
-    promote = UINT_MAX;
-    safe_convert = UINT_MAX;
-    unsafe_convert = UINT_MAX;
-}
-
-bool Rating::operator < (const Rating &other) const {
-    if (unsafe_convert < other.unsafe_convert)
-        return true;
-    else if (unsafe_convert > other.unsafe_convert)
-        return false;
-    if (safe_convert < other.safe_convert)
-        return true;
-    else if (safe_convert > other.safe_convert)
-        return false;
-    return (promote < other.promote);
-}
-
-bool Rating::operator == (const Rating &other) const {
-    return promote == other.promote && safe_convert == other.safe_convert &&
-           unsafe_convert == other.unsafe_convert;
-}
-
 
 // ----- utils -----
 
