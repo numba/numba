@@ -21,8 +21,6 @@ static int tc_complex64;
 static int tc_complex128;
 static int BASIC_TYPECODES[12];
 
-static int tc_intp;
-
 static PyObject* typecache;
 static PyObject* ndarray_typecache;
 
@@ -281,7 +279,7 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
      * otherwise funny things may happen.
      */
     if (tyobj == &PyInt_Type || tyobj == &PyLong_Type)
-        return tc_intp;
+        return tc_int64;
     else if (tyobj == &PyFloat_Type)
         return tc_float64;
     else if (tyobj == &PyComplex_Type)
@@ -330,18 +328,6 @@ typeof_init(PyObject *self, PyObject *args)
     UNWRAP_TYPE(complex128)
 
     #undef UNWRAP_TYPE
-
-    switch(sizeof(void*)) {
-    case 4:
-        tc_intp = tc_int32;
-        break;
-    case 8:
-        tc_intp = tc_int64;
-        break;
-    default:
-        PyErr_SetString(PyExc_AssertionError, "sizeof(void*) != {4, 8}");
-        return NULL;
-    }
 
     typecache = PyDict_New();
     ndarray_typecache = PyDict_New();

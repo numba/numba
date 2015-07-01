@@ -24,6 +24,7 @@ def typeof(val, purpose=Purpose.argument):
     """
     Get the Numba type of a Python value for the given purpose.
     """
+    # Note the behaviour for Purpose.argument must match _typeof.c.
     c = _TypeofContext(purpose)
     return typeof_impl(val, c)
 
@@ -92,6 +93,7 @@ def _typeof_bool(val, c):
 
 def _typeof_int(val, c):
     if c.purpose is Purpose.argument:
+        # As in _typeof.c
         return types.int64
     else:
         nbits = utils.bit_length(val)
