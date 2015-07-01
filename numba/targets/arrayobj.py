@@ -13,7 +13,7 @@ import llvmlite.llvmpy.core as lc
 import numba.ctypes_support as ctypes
 import numpy
 from llvmlite.llvmpy.core import Constant
-from numba import types, cgutils
+from numba import types, cgutils, typing
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (builtin, builtin_attr, implement,
@@ -907,11 +907,8 @@ def array_argmax(context, builder, sig, args):
 @builtin
 @implement(numpy.median, types.Kind(types.Array))
 def array_median(context, builder, sig, args):
-    from numba import typing, int64, float64
 
     def partition(A, low, high):
-        # Arrange {low, middle, high}
-
         mid = (low+high) // 2
         # median of three {low, middle, high}
         LM = A[low] <= A[mid]
@@ -937,7 +934,7 @@ def array_median(context, builder, sig, args):
         A[i], A[high] = A[high], A[i]
         return i
 
-    sig_partition = typing.signature(int64, *(sig.args[0], int64, int64))
+    sig_partition = typing.signature(types.intp, *(sig.args[0], types.intp, types.intp))
     _partition = context.compile_subroutine(builder, partition, sig_partition)
 
     def select(arry, k):
@@ -958,9 +955,7 @@ def array_median(context, builder, sig, args):
                 i = _partition(temp_arry, low, high)
         return temp_arry[k]
 
-    # XXX: Output is not necessarity float64, it should as the same type as that
-    # of array.
-    sig_select = typing.signature(float64, *(sig.args[0], int64))
+    sig_select = typing.signature(sig.args[0].dtype, *(sig.args[0], types.intp))
     _select = context.compile_subroutine(builder, select, sig_select)
 
     def median(arry):
