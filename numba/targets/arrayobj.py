@@ -910,17 +910,23 @@ def array_median(context, builder, sig, args):
     from numba import typing, int64, float64
 
     def partition(A, low, high):
-        # median of three {low, middle, high}
-        middle = (low+high) // 2
-        if A[middle] > A[high]:
-            A[middle], A[high] = A[high], A[middle]
-        if A[low] > A[high]:
-            A[high], A[low] = A[low], A[high]
-        if A[middle] > A[low]:
-            A[low], A[middle] = A[middle], A[low]
+        # Arrange {low, middle, high}
 
-        # choose the middle as the pivot
-        A[high], A[middle] = A[middle], A[high]
+        mid = (low+high) // 2
+        # median of three {low, middle, high}
+        LM = A[low] <= A[mid]
+        MH = A[mid] <= A[high]
+        LH = A[low] <= A[high]
+
+        if LM == MH:
+            median3 = mid
+        elif LH != LM:
+            median3 = low
+        else:
+            median3 = high
+
+        # choose median3 as the pivot
+        A[high], A[median3] = A[median3], A[high]
 
         x = A[high]
         i = low
