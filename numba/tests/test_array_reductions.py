@@ -262,7 +262,6 @@ class TestArrayReductions(TestCase):
         self.check_aggregation_magnitude(array_std)
         self.check_aggregation_magnitude(array_std_global)
 
-    @skip_on_numpy_16
     def _do_check_nptimedelta(self, pyfunc, arr):
         arrty = typeof(arr)
 
@@ -279,13 +278,15 @@ class TestArrayReductions(TestCase):
         arr[arr.size // 2] = 'NaT'
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         # Test with all NaTs
-        arr.fill('NaT')
+        arr.fill(arrty.dtype('NaT'))
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
 
+    @skip_on_numpy_16
     def check_npdatetime(self, pyfunc):
         arr = np.arange(10).astype(dtype='M8[Y]')
         self._do_check_nptimedelta(pyfunc, arr)
 
+    @skip_on_numpy_16
     def check_nptimedelta(self, pyfunc):
         arr = np.arange(10).astype(dtype='m8[s]')
         self._do_check_nptimedelta(pyfunc, arr)

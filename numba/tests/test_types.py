@@ -199,8 +199,10 @@ class TestTypes(TestCase):
         if NPDATETIME_SUPPORTED:
             ty = types.NPDatetime('Y')
             self.assertPreciseEqual(ty('1900'), np.datetime64('1900', 'Y'))
+            self.assertPreciseEqual(ty('NaT'), np.datetime64('NaT', 'Y'))
             ty = types.NPTimedelta('s')
             self.assertPreciseEqual(ty(5), np.timedelta64(5, 's'))
+            self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT', 's'))
 
 
     def test_bitwidth_number_types(self):
