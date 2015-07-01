@@ -839,15 +839,35 @@ def array_std(context, builder, sig, args):
 @implement(numpy.min, types.Kind(types.Array))
 @implement("array.min", types.Kind(types.Array))
 def array_min(context, builder, sig, args):
-    def array_min_impl(arry):
-        for v in arry.flat:
-            min_value = v
-            break
+    ty = sig.args[0].dtype
+    if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+        # NaT is smaller than every other value, but it is
+        # ignored as far as min() is concerned.
+        nat = ty('NaT')
 
-        for v in arry.flat:
-            if v < min_value:
+        def array_min_impl(arry):
+            min_value = nat
+            it = arry.flat
+            for v in it:
+                if v != nat:
+                    min_value = v
+                    break
+
+            for v in it:
+                if v != nat and v < min_value:
+                    min_value = v
+            return min_value
+
+    else:
+        def array_min_impl(arry):
+            for v in arry.flat:
                 min_value = v
-        return min_value
+                break
+
+            for v in arry.flat:
+                if v < min_value:
+                    min_value = v
+            return min_value
     return context.compile_internal(builder, array_min_impl, sig, args)
 
 
@@ -871,6 +891,8 @@ def array_max(context, builder, sig, args):
 @implement(numpy.argmin, types.Kind(types.Array))
 @implement("array.argmin", types.Kind(types.Array))
 def array_argmin(context, builder, sig, args):
+    # XXX argmin() is inconsistent with min() on NaT values:
+    # https://github.com/numpy/numpy/issues/6030
     def array_argmin_impl(arry):
         for v in arry.flat:
             min_value = v

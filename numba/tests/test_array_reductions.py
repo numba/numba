@@ -270,9 +270,16 @@ class TestArrayReductions(TestCase):
         cfunc = cres.entry_point
 
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        # Test with different orders
         arr = arr[::-1].copy()  # Keep 'C' layout
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         np.random.shuffle(arr)
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        # Test with a NaT
+        arr[arr.size // 2] = 'NaT'
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        # Test with all NaTs
+        arr.fill('NaT')
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
 
     def check_npdatetime(self, pyfunc):
