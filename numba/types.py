@@ -574,20 +574,27 @@ class UnicodeCharSeq(Type):
 
 
 class Record(Type):
+    """
+    A Numpy structured scalar.  *descr* is the string representation
+    of the Numpy dtype; *fields* of mapping of field names to
+    (type, offset) tuples; *size* the bytesize of a record;
+    *aligned* whether the fields are aligned; *dtype* the Numpy dtype
+    instance.
+    """
     mutable = True
 
-    def __init__(self, id, fields, size, aligned, dtype):
-        self.id = id
+    def __init__(self, descr, fields, size, aligned, dtype):
+        self.descr = descr
         self.fields = fields.copy()
         self.size = size
         self.aligned = aligned
         self.dtype = dtype
-        name = 'Record(%s)' % id
+        name = 'Record(%s)' % descr
         super(Record, self).__init__(name)
 
     @property
     def key(self):
-        return (self.dtype, self.size, self.aligned)
+        return (self.size, self.aligned, self.dtype)
 
     def __len__(self):
         return len(self.fields)
