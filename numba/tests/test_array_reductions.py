@@ -8,7 +8,7 @@ from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
 from numba.numpy_support import as_dtype
-from .support import TestCase, CompilationCache
+from .support import TestCase, CompilationCache, skip_on_numpy_16
 
 
 def array_cumprod(arr):
@@ -261,6 +261,52 @@ class TestArrayReductions(TestCase):
     def test_std_magnitude(self):
         self.check_aggregation_magnitude(array_std)
         self.check_aggregation_magnitude(array_std_global)
+
+    @skip_on_numpy_16
+    def _do_check_nptimedelta(self, pyfunc, arr):
+        arrty = typeof(arr)
+
+        cres = compile_isolated(pyfunc, [arrty])
+        cfunc = cres.entry_point
+
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        arr = arr[::-1].copy()  # Keep 'C' layout
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        np.random.shuffle(arr)
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+
+    def check_npdatetime(self, pyfunc):
+        arr = np.arange(10).astype(dtype='M8[Y]')
+        self._do_check_nptimedelta(pyfunc, arr)
+
+    def check_nptimedelta(self, pyfunc):
+        arr = np.arange(10).astype(dtype='m8[s]')
+        self._do_check_nptimedelta(pyfunc, arr)
+
+    def test_min_npdatetime(self):
+        self.check_npdatetime(array_min)
+        self.check_nptimedelta(array_min)
+
+    def test_max_npdatetime(self):
+        self.check_npdatetime(array_max)
+        self.check_nptimedelta(array_max)
+
+    def test_argmin_npdatetime(self):
+        self.check_npdatetime(array_argmin)
+        self.check_nptimedelta(array_argmin)
+
+    def test_argmax_npdatetime(self):
+        self.check_npdatetime(array_argmax)
+        self.check_nptimedelta(array_argmax)
+
+    def test_sum_npdatetime(self):
+        self.check_nptimedelta(array_sum)
+
+    def test_cumsum_npdatetime(self):
+        self.check_nptimedelta(array_cumsum)
+
+    def test_mean_npdatetime(self):
+        self.check_nptimedelta(array_mean)
 
     @classmethod
     def install_generated_tests(cls):

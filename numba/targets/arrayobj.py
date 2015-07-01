@@ -719,9 +719,10 @@ def array_view(context, builder, sig, args):
 @implement(numpy.sum, types.Kind(types.Array))
 @implement("array.sum", types.Kind(types.Array))
 def array_sum(context, builder, sig, args):
+    zero = sig.return_type(0)
 
     def array_sum_impl(arr):
-        c = 0
+        c = zero
         for v in arr.flat:
             c += v
         return c
@@ -751,13 +752,14 @@ def array_prod(context, builder, sig, args):
 def array_cumsum(context, builder, sig, args):
     scalar_dtype = sig.return_type.dtype
     dtype = as_dtype(scalar_dtype)
+    zero = scalar_dtype(0)
 
     def array_cumsum_impl(arr):
         size = 1
         for i in arr.shape:
             size = size * i
         out = numpy.empty(size, dtype)
-        c = 0
+        c = zero
         for idx, v in enumerate(arr.flat):
             c += v
             out[idx] = c
@@ -793,11 +795,12 @@ def array_cumprod(context, builder, sig, args):
 @implement(numpy.mean, types.Kind(types.Array))
 @implement("array.mean", types.Kind(types.Array))
 def array_mean(context, builder, sig, args):
+    zero = sig.return_type(0)
 
     def array_mean_impl(arr):
         # Can't use the naive `arr.sum() / arr.size`, as it would return
         # a wrong result on integer sum overflow.
-        c = 0
+        c = zero
         for v in arr.flat:
             c += v
         return c / arr.size

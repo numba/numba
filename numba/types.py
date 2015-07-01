@@ -99,6 +99,9 @@ class _NPDatetimeBase(Type):
         # also greater...).
         return self.unit_code < other.unit_code
 
+    def cast_python_value(self, value):
+        return getattr(numpy, self.type_name)(value, self.unit)
+
 
 @utils.total_ordering
 class NPTimedelta(_NPDatetimeBase):
