@@ -151,6 +151,7 @@ The following top-level functions are supported:
 * :func:`numpy.full_like`
 * :func:`numpy.identity`
 * :func:`numpy.linspace` (only the 3-argument form)
+* :func:`numpy.median` (only the first argument)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :func:`numpy.ones`
@@ -158,7 +159,6 @@ The following top-level functions are supported:
 * :func:`numpy.round_`
 * :func:`numpy.zeros`
 * :func:`numpy.zeros_like`
-* :func:`numpy.median` (only the first argument)
 
 The following constructors are supported, only with a numeric input:
 
