@@ -13,7 +13,7 @@ import llvmlite.llvmpy.core as lc
 import numba.ctypes_support as ctypes
 import numpy
 from llvmlite.llvmpy.core import Constant
-from numba import types, cgutils
+from numba import types, cgutils, typing
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (builtin, builtin_attr, implement,
@@ -902,6 +902,70 @@ def array_argmax(context, builder, sig, args):
             idx += 1
         return max_idx
     return context.compile_internal(builder, array_argmax_impl, sig, args)
+
+
+@builtin
+@implement(numpy.median, types.Kind(types.Array))
+def array_median(context, builder, sig, args):
+
+    def partition(A, low, high):
+        mid = (low+high) // 2
+        # median of three {low, middle, high}
+        LM = A[low] <= A[mid]
+        MH = A[mid] <= A[high]
+        LH = A[low] <= A[high]
+
+        if LM == MH:
+            median3 = mid
+        elif LH != LM:
+            median3 = low
+        else:
+            median3 = high
+
+        # choose median3 as the pivot
+        A[high], A[median3] = A[median3], A[high]
+
+        x = A[high]
+        i = low
+        for j in range(low, high):
+            if A[j] <= x:
+                A[i], A[j] = A[j], A[i]
+                i += 1
+        A[i], A[high] = A[high], A[i]
+        return i
+
+    sig_partition = typing.signature(types.intp, *(sig.args[0], types.intp, types.intp))
+    _partition = context.compile_subroutine(builder, partition, sig_partition)
+
+    def select(arry, k):
+        n = arry.shape[0]
+        # XXX: assuming flat array till array.flatten is implemented
+        # temp_arry = arry.flatten()
+        temp_arry = arry.copy()
+        high = n-1
+        low = 0
+        # NOTE: high is inclusive
+        i = _partition(temp_arry, low, high)
+        while i != k:
+            if i < k:
+                low = i+1
+                i = _partition(temp_arry, low, high)
+            else:
+                high = i-1
+                i = _partition(temp_arry, low, high)
+        return temp_arry[k]
+
+    sig_select = typing.signature(sig.args[0].dtype, *(sig.args[0], types.intp))
+    _select = context.compile_subroutine(builder, select, sig_select)
+
+    def median(arry):
+        n = arry.shape[0]
+        if n % 2 == 0:
+            return (_select(arry, n//2 - 1) + _select(arry, n//2))/2
+        else:
+            return _select(arry, n//2)
+
+    return context.compile_internal(builder, median, sig, args)
 
 
 def _np_round_intrinsic(tp):
