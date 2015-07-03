@@ -442,7 +442,7 @@ class Agent(HsaWrapper):
         self._id = agent_id
         self._recycler = hsa._recycler
         self._queues = set()
-        # self._initialize_regions()
+        self._initialize_regions()
 
     @property
     def device(self):
@@ -460,8 +460,8 @@ class Agent(HsaWrapper):
     def _initialize_regions(self):
         region_ids = []
 
-        def on_region(agent_id, ctxt):
-            region_ids.append(agent_id)
+        def on_region(region_id, ctxt):
+            region_ids.append(region_id)
             return enums.HSA_STATUS_SUCCESS
 
         callback = drvapi.HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC(on_region)
@@ -545,6 +545,16 @@ class MemRegion(HsaWrapper):
     This will wrap and provide an OO interface for hsa_region_t C-API elements
     """
     _hsa_info_function = 'hsa_region_get_info'
+    _hsa_properties = {
+        'segment': (
+            enums.HSA_REGION_INFO_SEGMENT,
+            drvapi.hsa_segment_t
+        ),
+        '_flags': (
+            enums.HSA_REGION_INFO_GLOBAL_FLAGS,
+            drvapi.hsa_region_flag_t
+        ),
+    }
     # _hsa_properties = {
     #     'base': (enums.HSA_REGION_INFO_BASE, drvapi.hsa_uintptr_t),
     #     'size': (enums.HSA_REGION_INFO_SIZE, ctypes.c_size_t),
@@ -572,7 +582,7 @@ class MemRegion(HsaWrapper):
 
     @property
     def supports_kernargs(self):
-        return self._flags & enums.HSA_REGION_FLAG_KERNARG
+        return self._flags & enums.HSA_REGION_GLOBAL_FLAG_KERNARG
 
     def allocate(self, ctypes_type):
         buff = ctypes.c_void_p()
@@ -705,6 +715,9 @@ class Signal(object):
 
     def __init__(self, signal_id):
         self._id = signal_id
+        self._as_parameter_ = self._id
+        self._recycler = hsa._recycler
+        self._finalizer = hsa.hsa_signal_destroy
 
     def load_relaxed(self):
         return hsa.hsa_signal_load_relaxed(self._id)
@@ -729,7 +742,8 @@ class Signal(object):
         return self.load_relaxed() != one
 
     def __del__(self):
-        hsa.hsa_signal_destroy(self._id)
+        self._recycler.free(self)
+
 
 
 class BrigModule(object):
@@ -837,8 +851,9 @@ class Executable(object):
         return Symbol(symbol)
 
 
-class Symbol(object):
-    attributes = {
+class Symbol(HsaWrapper):
+    _hsa_info_function = 'hsa_executable_symbol_get_info'
+    _hsa_properties = {
         'kernel_object': (
             enums.HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT,
             ctypes.c_uint64,
@@ -859,24 +874,6 @@ class Symbol(object):
 
     def __init__(self, symbol_id):
         self._id = symbol_id
-
-    def __getattr__(self, name):
-        """
-        Read symbol attributes lazily
-        """
-        try:
-            (enumval, ctyp) = self.attributes[name]
-        except KeyError:
-            raise AttributeError(name)
-        else:
-            ret = self._get_info(ctyp, enumval)
-            setattr(self, name, ret.value)
-            return ret.value
-
-    def _get_info(self, ctyp, enumval):
-        ret = ctyp()
-        hsa.hsa_executable_symbol_get_info(self._id, enumval, ctypes.byref(ret))
-        return ret
 
 
 class Context(object):
