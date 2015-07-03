@@ -450,3 +450,20 @@ HSA_DEFAULT_FLOAT_ROUNDING_MODE_NEAR = 2
 
 # hsa_code_object_type_t
 HSA_CODE_OBJECT_TYPE_PROGRAM = 0
+
+
+# hsa_executable_state_t
+
+# Executable state, which allows the user to load code objects and define
+# external variables. Variable addresses, kernel code handles, and
+# indirect function code handles are not available in query operations until
+# the executable is frozen (zero always returned).
+
+HSA_EXECUTABLE_STATE_UNFROZEN = 0
+
+# Executable state, which allows the user to query variable addresses,
+# kernel code handles, and indirect function code handles using query
+# operation. Loading new code objects, as well as defining external variables
+# is not allowed in this state.
+
+HSA_EXECUTABLE_STATE_FROZEN = 1

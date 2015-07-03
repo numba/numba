@@ -793,22 +793,73 @@ class CodeObject(object):
         self._id = code_object
 
 
+class Executable(object):
+    def __init__(self):
+        ex = drvapi.hsa_executable_t()
+        hsa.hsa_executable_create(enums.HSA_PROFILE_FULL,
+                                  enums.HSA_EXECUTABLE_STATE_UNFROZEN,
+                                  None,
+                                  ctypes.byref(ex))
+        self._id = ex
+
+    def load(self, agent, code_object):
+        hsa.hsa_executable_load_code_object(self._id, agent._id,
+                                            code_object._id, None)
+
+    def freeze(self):
+        """Freeze executable before we can query for symbol"""
+        hsa.hsa_executable_freeze(self._id, None)
+
+    def get_symbol(self, agent, name):
+        symbol = drvapi.hsa_executable_symbol_t()
+        hsa.hsa_executable_get_symbol(self._id, None,
+                                      ctypes.create_string_buffer(
+                                          name.encode('ascii')),
+                                      agent._id, 0,
+                                      ctypes.byref(symbol))
+        return Symbol(symbol)
 
 
-class BrigModuleHandle(object):
-    def __init__(self, module_handle_id):
-        raise NotImplementedError("Remove this")
-        self._id = module_handle_id
+class Symbol(object):
+    attributes = {
+        'kernel_object': (
+            enums.HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT,
+            ctypes.c_uint64,
+        ),
+        'kernarg_segment_size': (
+            enums.HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE,
+            ctypes.c_uint32,
+        ),
+        'group_segment_size': (
+            enums.HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_GROUP_SEGMENT_SIZE,
+            ctypes.c_uint32,
+        ),
+        'private_segment_size': (
+            enums.HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE,
+            ctypes.c_uint32,
+        ),
+    }
 
-    def __del__(self):
-        # this handle seems to be owned by the program, probably valid within that
-        # program...
-        pass
+    def __init__(self, symbol_id):
+        self._id = symbol_id
 
+    def __getattr__(self, name):
+        """
+        Read symbol attributes lazily
+        """
+        try:
+            (enumval, ctyp) = self.attributes[name]
+        except KeyError:
+            raise AttributeError(name)
+        else:
+            ret = self._get_info(ctyp, enumval)
+            setattr(self, name, ret.value)
+            return ret.value
 
-class CodeDescriptor(object):
-    def __init__(self, code_descriptor_id):
-        self._id = code_descriptor_id
+    def _get_info(self, ctyp, enumval):
+        ret = ctyp()
+        hsa.hsa_executable_symbol_get_info(self._id, enumval, ctypes.byref(ret))
+        return ret
 
 
 class Context(object):

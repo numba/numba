@@ -27,6 +27,8 @@ hsa_agent_info_t = ctypes.c_int # enum
 hsa_segment_t = ctypes.c_int # enum
 hsa_region_flag_t = ctypes.c_int # enum
 hsa_region_info_t = ctypes.c_int # enum
+hsa_executable_state_t = ctypes.c_int # enum
+hsa_executable_symbol_info_t = ctypes.c_int # enum
 
 hsa_signal_value_t = ctypes.c_uint64 if enums.HSA_LARGE_MODEL else ctypes.c_uint32
 
@@ -40,6 +42,9 @@ hsa_isa_t = ctypes.c_uint64
 
 hsa_code_object_type_t = ctypes.c_int
 hsa_code_object_t = ctypes.c_uint64
+
+hsa_executable_t = ctypes.c_uint64
+hsa_executable_symbol_t = ctypes.c_uint64
 
 # HSA Structures ###############################################################
 class hsa_queue_t(ctypes.Structure):
@@ -1365,5 +1370,86 @@ API_PROTOTYPES = {
                      ctypes.c_int,
                      _PTR(_PTR(hsa_ext_program_t))],
         'errcheck': _check_error
+    },
+
+    # hsa_status_t HSA_API hsa_executable_create(
+    #     hsa_profile_t profile,
+    #     hsa_executable_state_t executable_state,
+    #     const char *options,
+    #     hsa_executable_t *executable);
+
+    "hsa_executable_create": {
+        'restype': hsa_status_t,
+        'argtypes': [hsa_profile_t,
+                     hsa_executable_state_t,
+                     ctypes.c_char_p,
+                     ctypes.POINTER(hsa_executable_t)],
+        'errcheck': _check_error,
+    },
+
+    # hsa_status_t HSA_API hsa_executable_load_code_object(
+    #     hsa_executable_t executable,
+    #     hsa_agent_t agent,
+    #     hsa_code_object_t code_object,
+    #     const char *options);
+
+    "hsa_executable_load_code_object": {
+        'errcheck': _check_error,
+        'restype': hsa_status_t,
+        'argtypes': [
+            hsa_executable_t,
+            hsa_agent_t,
+            hsa_code_object_t,
+            ctypes.c_char_p,
+        ],
+    },
+
+    # hsa_status_t HSA_API hsa_executable_freeze(
+    #     hsa_executable_t executable,
+    #     const char *options);
+
+    "hsa_executable_freeze": {
+        'errcheck': _check_error,
+        'restype': hsa_status_t,
+        'argtypes': [
+            hsa_executable_t,
+            ctypes.c_char_p,
+        ],
+    },
+
+    # hsa_status_t HSA_API hsa_executable_get_symbol(
+    #     hsa_executable_t executable,
+    #     const char *module_name,
+    #     const char *symbol_name,
+    #     hsa_agent_t agent,
+    #     int32_t call_convention,
+    #     hsa_executable_symbol_t *symbol);
+
+    "hsa_executable_get_symbol": {
+        'errcheck': _check_error,
+        'restype': hsa_status_t,
+        'argtypes': [
+            hsa_executable_t,
+            ctypes.c_char_p,  # module_name (must be NULL for program linkage)
+            ctypes.c_char_p,  # symbol_name
+            hsa_agent_t,
+            ctypes.c_int32,
+            ctypes.POINTER(hsa_executable_symbol_t),
+        ],
+    },
+
+    # hsa_status_t HSA_API hsa_executable_symbol_get_info(
+    #     hsa_executable_symbol_t executable_symbol,
+    #     hsa_executable_symbol_info_t attribute,
+    #     void *value);
+
+    "hsa_executable_symbol_get_info": {
+        'errcheck': _check_error,
+        'restype': hsa_status_t,
+        'argtypes': [
+            hsa_executable_symbol_t,
+            hsa_executable_symbol_info_t,
+            ctypes.c_void_p,
+        ],
     },
 }
