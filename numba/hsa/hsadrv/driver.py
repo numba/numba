@@ -766,9 +766,11 @@ class Program(object):
         assert options is None
         hsa.hsa_ext_program_create(model, profile, rounding_mode,
                                    options, ctypes.byref(self._id))
+        self._as_parameter_ = self._id
+        self._recycler = hsa._recycler
 
     def __del__(self):
-        self._finalizer(self._id)
+        self._recycler.free(self)
 
     def add_module(self, module):
         hsa.hsa_ext_program_add_module(self._id, module._id)
@@ -794,6 +796,12 @@ class Program(object):
 class CodeObject(object):
     def __init__(self, code_object):
         self._id = code_object
+        self._as_parameter_ = self._id
+        self._finalizer = hsa.hsa_code_object_destroy
+        self._recycler = hsa._recycler
+
+    def __del__(self):
+        self._recycler.free(self)
 
 
 class Executable(object):
@@ -804,6 +812,12 @@ class Executable(object):
                                   None,
                                   ctypes.byref(ex))
         self._id = ex
+        self._as_parameter_ = self._id
+        self._finalizer = hsa.hsa_executable_destroy
+        self._recycler = hsa._recycler
+
+    def __del__(self):
+        self._recycler.free(self)
 
     def load(self, agent, code_object):
         hsa.hsa_executable_load_code_object(self._id, agent._id,

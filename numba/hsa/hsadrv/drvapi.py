@@ -1452,4 +1452,26 @@ API_PROTOTYPES = {
             ctypes.c_void_p,
         ],
     },
+
+    # hsa_status_t HSA_API hsa_executable_destroy(
+    #     hsa_executable_t executable);
+
+    "hsa_executable_destroy": {
+        'errcheck': _check_error,
+        'restype': hsa_status_t,
+        'argtypes': [
+            hsa_executable_t,
+        ],
+    },
+
+    # hsa_status_t HSA_API hsa_code_object_destroy(
+    #     hsa_code_object_t code_object);
+
+    "hsa_code_object_destroy": {
+        'errcheck': _check_error,
+        'restype': hsa_status_t,
+        'argtypes': [
+            hsa_code_object_t,
+        ],
+    },
 }
