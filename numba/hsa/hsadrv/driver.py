@@ -254,10 +254,6 @@ class Driver(object):
                                     options, ctypes.byref(program))
         return Program(program)
 
-    def release_program(self, prog):
-        assert isinstance(prog, Program)
-        self._recycler.free(prog)
-
     def create_signal(self, initial_value, consumers=None):
         if consumers is not None:
             consumers_len = len(consumers)
@@ -761,19 +757,26 @@ class BrigModule(object):
                                                           len(self))
 
 class Program(object):
-    def __init__(self, program_id):
-        self._drv = hsa
-        self._id = program_id
-        self._as_parameter_ = self._id
+    def __init__(self, model=enums.HSA_MACHINE_MODEL_LARGE,
+                 profile=enums.HSA_PROFILE_FULL,
+                 rounding_mode=enums.HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT,
+                 options=None):
+        self._id = drvapi.hsa_ext_program_t()
         self._finalizer = hsa.hsa_ext_program_destroy
+        assert options is None
+        hsa.hsa_ext_program_create(model, profile, rounding_mode,
+                                   options, ctypes.byref(self._id))
 
-    def release(self):
-        hsa.release_program(self)
+    def __del__(self):
+        self._finalizer(self._id)
 
     def add_module(self, module):
         hsa.hsa_ext_program_add_module(self._id, module._id)
 
     def finalize(self, isa, callconv=0, options=None):
+        """
+        The program object is safe to be deleted after ``finalize``.
+        """
         code_object = drvapi.hsa_code_object_t()
         control_directives = drvapi.hsa_ext_control_directives_t()
         ctypes.memset(ctypes.byref(control_directives), 0,

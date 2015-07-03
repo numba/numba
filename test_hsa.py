@@ -1,5 +1,5 @@
 import os.path
-from numba.hsa.hsadrv.driver import hsa, BrigModule, Executable
+from numba.hsa.hsadrv.driver import hsa, BrigModule, Executable, Program
 
 agent = list(hsa.agents)[1]
 print(agent)
@@ -12,18 +12,16 @@ brig = BrigModule.from_file(os.path.join('numba',
                                          'hsadrv',
                                          'vector_copy.brig'))
 
-program = hsa.create_program()
+program = Program()
 print(program)
 
 program.add_module(brig)
 print('isa', hex(agent.isa))
 
 code = program.finalize(agent.isa)
-
+del program
 ex = Executable()
-
 ex.load(agent, code)
-
 ex.freeze()
 
 sym = ex.get_symbol(agent, "&__vector_copy_kernel")
@@ -32,3 +30,6 @@ print(sym.kernel_object)
 print(sym.kernarg_segment_size)
 print(sym.group_segment_size)
 print(sym.private_segment_size)
+
+
+# hsa.create
