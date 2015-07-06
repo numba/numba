@@ -719,9 +719,10 @@ def array_view(context, builder, sig, args):
 @implement(numpy.sum, types.Kind(types.Array))
 @implement("array.sum", types.Kind(types.Array))
 def array_sum(context, builder, sig, args):
+    zero = sig.return_type(0)
 
     def array_sum_impl(arr):
-        c = 0
+        c = zero
         for v in arr.flat:
             c += v
         return c
@@ -751,13 +752,14 @@ def array_prod(context, builder, sig, args):
 def array_cumsum(context, builder, sig, args):
     scalar_dtype = sig.return_type.dtype
     dtype = as_dtype(scalar_dtype)
+    zero = scalar_dtype(0)
 
     def array_cumsum_impl(arr):
         size = 1
         for i in arr.shape:
             size = size * i
         out = numpy.empty(size, dtype)
-        c = 0
+        c = zero
         for idx, v in enumerate(arr.flat):
             c += v
             out[idx] = c
@@ -793,11 +795,12 @@ def array_cumprod(context, builder, sig, args):
 @implement(numpy.mean, types.Kind(types.Array))
 @implement("array.mean", types.Kind(types.Array))
 def array_mean(context, builder, sig, args):
+    zero = sig.return_type(0)
 
     def array_mean_impl(arr):
         # Can't use the naive `arr.sum() / arr.size`, as it would return
         # a wrong result on integer sum overflow.
-        c = 0
+        c = zero
         for v in arr.flat:
             c += v
         return c / arr.size
@@ -836,15 +839,35 @@ def array_std(context, builder, sig, args):
 @implement(numpy.min, types.Kind(types.Array))
 @implement("array.min", types.Kind(types.Array))
 def array_min(context, builder, sig, args):
-    def array_min_impl(arry):
-        for v in arry.flat:
-            min_value = v
-            break
+    ty = sig.args[0].dtype
+    if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+        # NaT is smaller than every other value, but it is
+        # ignored as far as min() is concerned.
+        nat = ty('NaT')
 
-        for v in arry.flat:
-            if v < min_value:
+        def array_min_impl(arry):
+            min_value = nat
+            it = arry.flat
+            for v in it:
+                if v != nat:
+                    min_value = v
+                    break
+
+            for v in it:
+                if v != nat and v < min_value:
+                    min_value = v
+            return min_value
+
+    else:
+        def array_min_impl(arry):
+            for v in arry.flat:
                 min_value = v
-        return min_value
+                break
+
+            for v in arry.flat:
+                if v < min_value:
+                    min_value = v
+            return min_value
     return context.compile_internal(builder, array_min_impl, sig, args)
 
 
@@ -868,6 +891,8 @@ def array_max(context, builder, sig, args):
 @implement(numpy.argmin, types.Kind(types.Array))
 @implement("array.argmin", types.Kind(types.Array))
 def array_argmin(context, builder, sig, args):
+    # XXX argmin() is inconsistent with min() on NaT values:
+    # https://github.com/numpy/numpy/issues/6030
     def array_argmin_impl(arry):
         for v in arry.flat:
             min_value = v
