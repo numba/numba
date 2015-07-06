@@ -21,7 +21,8 @@ class TestLowLevelApi(unittest.TestCase):
             except Exception as e:
                 missing_functions.append("'{0}': {1}".format(fname, str(e)))
 
-        self.assertEqual(len(missing_functions), 0, msg='\n'.join(missing_functions))
+        self.assertEqual(len(missing_functions), 0,
+                         msg='\n'.join(missing_functions))
 
 
 class TestAgents(unittest.TestCase):
@@ -92,32 +93,23 @@ class TestMemory(_TestBase):
         hsa.hsa_memory_deregister(src.ctypes.data, src.nbytes)
 
     def test_allocate(self):
-        my_region = drvapi.hsa_region_t(0)
-
-        def _callback(region, result):
-            flags = drvapi.hsa_region_flag_t()
-            hsa.hsa_region_get_info(region, enums.HSA_REGION_INFO_FLAGS,
-                                    ctypes.byref(flags))
-            if not (flags.value & enums.HSA_REGION_FLAG_KERNARG):
-                result.value = region
-            return enums.HSA_STATUS_SUCCESS
-
-        callback = drvapi.HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC(_callback)
-        hsa.hsa_agent_iterate_regions(self.cpu._id, callback, my_region)
-
-        self.assertNotEqual(my_region.value, 0)
-
-        src = np.random.random(1024).astype(np.float32)
-
-        ptr = ctypes.c_void_p(0)
-        hsa.hsa_memory_allocate(my_region, src.nbytes, ctypes.byref(ptr))
+        regions = self.gpu.regions
+        # More than one region
+        self.assertGreater(len(regions), 0)
+        # Find kernel argument regions
+        kernarg_regions = [r for r in regions if r.supports_kernargs]
+        self.assertGreater(len(kernarg_regions), 0)
+        # Test allocating at the kernel argument region
+        kernarg_resgion = kernarg_regions[0]
+        nelem = 10
+        ptr = kernarg_resgion.allocate(ctypes.c_float * nelem)
+        self.assertNotEqual(ctypes.addressof(ptr), 0,
+                            "pointer must not be NULL")
+        # # Test writing to it
+        src = np.random.random(nelem).astype(np.float32)
         ctypes.memmove(ptr, src.ctypes.data, src.nbytes)
-
-        data = ctypes.cast(ptr, ctypes.POINTER(ctypes.c_float))
-
         for i in range(src.size):
-            self.assertEqual(data[i], src[i])
-
+            self.assertEqual(ptr[i], src[i])
         hsa.hsa_memory_free(ptr)
 
 
