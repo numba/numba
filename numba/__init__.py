@@ -50,13 +50,14 @@ from_dtype
 """.split() + types.__all__ + special.__all__ + errors.__all__
 
 
+_min_llvmlite_version = (0, 6, 0)
+
 def _sentry_llvm_version():
     """
     Make sure we meet min llvmlite version
     """
     import warnings
     import llvmlite
-    min_version = (0, 6, 0)
 
     # Only look at the the major, minor and bugfix version numbers.
     # Ignore other stuffs
@@ -64,11 +65,11 @@ def _sentry_llvm_version():
     m = regex.match(llvmlite.__version__)
     if m:
         ver = tuple(map(int, m.groups()))
-        if ver < min_version:
+        if ver < _min_llvmlite_version:
             msg = ("Numba requires at least version %d.%d.%d of llvmlite.\n"
                    "Installed version is %s.\n"
                    "Please update llvmlite." %
-                   (min_version + (llvmlite.__version__,)))
+                   (_min_llvmlite_version + (llvmlite.__version__,)))
             raise ImportError(msg)
     else:
         # Not matching?
