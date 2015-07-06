@@ -86,22 +86,7 @@ ext_mviewbuf = Extension(name='numba.mviewbuf',
 
 
 ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
-
                ext_helperlib, ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf]
-
-
-HSA_PATH = os.getenv("HSA_PATH", '/opt/hsa')
-
-# TODO: merge this two files into something in the numba repo
-hsa_support_srcs = ['numba/hsa/hsadrv/elf_utils.c']
-hsa_support_include = [os.path.join(HSA_PATH, 'include')]
-hsa_support_lib = [os.path.join(HSA_PATH, 'lib')]
-ext_hsa_support = Extension(name='numba.hsa.hsadrv._hsa_support',
-                            sources=hsa_support_srcs,
-                            include_dirs=hsa_support_include,
-                            extra_compile_args=['-std=c99'],
-                            extra_link_args=['-lelf'])
-ext_modules.append(ext_hsa_support)
 
 
 packages = [
