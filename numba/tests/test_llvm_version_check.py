@@ -20,9 +20,9 @@ class TestLlvmVersion(unittest.TestCase):
         self.addCleanup(cleanup)
 
         # explicitly test all 4 cases of version string
-        version_pass = '0.1.0'
-        git_version_pass = '0.1.0-10-g92584ed'
-        rc_version_pass = '0.1.1rc1'
+        version_pass = '0.6.0'
+        git_version_pass = '0.6.0-10-g92584ed'
+        rc_version_pass = '0.6.1rc1'
         version_fail = '0.0.9'
         git_version_fail = '0.0.9-10-g92584ed'
 
