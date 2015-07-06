@@ -205,7 +205,13 @@ def remove_redundant_nrt_refct(ll_module):
             increfs = incref_map[val]
             decrefs = decref_map[val]
             # Mark the incref/decref pairs from the tail for removal
-            for _ in range(min(len(increfs), len(decrefs))):
+            ref_pair_ct = min(len(increfs), len(decrefs))
+            # Note: If the basicblock is the allocation site of the NRT object,
+            #       we must leave one incref/decref pair because NRT object
+            #       refcounts are initialized to zero.
+            #       Another reason to do the refcount semantic update ASAP.
+            ref_pair_to_remove = ref_pair_ct - 1
+            for _ in range(ref_pair_to_remove):
                 to_remove.add(increfs.pop())
                 to_remove.add(decrefs.popleft())
 
