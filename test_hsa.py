@@ -50,6 +50,10 @@ hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
 hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
 hsa.hsa_memory_register(ctypes.byref(kernargs), ctypes.sizeof(kernargs))
 
+queue.dispatch(sym, kernargs,
+               workgroup_size=(256,),
+               grid_size=(1024 * 1024,))
 
-# queue.dispatch(code_descriptor, kernargs, workgroup_size=(256,), grid_size=(
-#     1024*1024,))
+
+print(src)
+print(dst)

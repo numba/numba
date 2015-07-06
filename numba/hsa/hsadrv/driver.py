@@ -621,7 +621,7 @@ class Queue(object):
         return getattr(self._id.contents, fname)
 
     @_prof.mark("hsa.queue.dispatch")
-    def dispatch(self, code_descriptor, kernargs,
+    def dispatch(self, symbol, kernargs,
                  workgroup_size=None,
                  grid_size=None,
                  signal=None):
@@ -631,52 +631,59 @@ class Queue(object):
         assert grid_size >= workgroup_size
         s = signal if signal is not None else hsa.create_signal(1)
 
-        cd = code_descriptor._id
+        # Note: following vector_copy.c
+
+        # Obtain the current queue write index
+        index = hsa.hsa_queue_load_write_index_relaxed(self._id)
+
+        # Write AQL packet at the calculated queue index address
+        queue_struct = self._id.contents
+        queue_mask = queue_struct.size - 1
+
+        dispatch_packet_t = drvapi.hsa_kernel_dispatch_packet_t
+        packet_array_t = (dispatch_packet_t * (queue_struct.size - 1))
+
+        queue_offset = index & queue_mask
+        queue = packet_array_t.from_address(queue_struct.base_address)
+
+        packet = queue[queue_offset]
 
         # Populate packet
-        aql = drvapi.hsa_dispatch_packet_t()
-        aql.header.type = enums.HSA_PACKET_TYPE_VENDOR_SPECIFIC
-        aql.header.acquire_fence_scope = enums.HSA_FENCE_SCOPE_SYSTEM
-        aql.header.release_fence_scope = enums.HSA_FENCE_SCOPE_SYSTEM
-        aql.header.barrier = 1
-        aql.group_segment_size = cd.workgroup_group_segment_byte_size
-        aql.private_segment_size = cd.workitem_private_segment_byte_size
-        aql.dimensions = dims
-        aql.workgroup_size_x = workgroup_size[0]
-        aql.workgroup_size_y = workgroup_size[1] if dims > 1 else 1
-        aql.workgroup_size_z = workgroup_size[2] if dims > 2 else 1
-        aql.grid_size_x = grid_size[0]
-        aql.grid_size_y = grid_size[1] if dims > 1 else 1
-        aql.grid_size_z = grid_size[2] if dims > 2 else 1
-        total_size = aql.grid_size_x * aql.grid_size_y * aql.grid_size_z
-        assert total_size < 2 ** 63, "Launch with grid size >= 2**63"
-        aql.kernel_object_address = cd.code.handle
-        aql.kernarg_address = ctypes.addressof(kernargs)
-        aql.completion_signal = s._id
+        packet.setup |= 1 << enums.HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS
 
-        # Allocate queue slot
-        q = self._id
-        index = hsa.hsa_queue_load_write_index_relaxed(q)
-        hsa.hsa_queue_store_write_index_relaxed(q, index + 1)
-        queue_mask = q.contents.size - 1
-        real_index = index & queue_mask
+        packet.workgroup_size_x = workgroup_size[0]
+        packet.workgroup_size_y = workgroup_size[1] if dims > 1 else 1
+        packet.workgroup_size_z = workgroup_size[2] if dims > 2 else 1
 
-        packet_array = ctypes.cast(q.contents.base_address,
-                                   ctypes.POINTER(drvapi.hsa_dispatch_packet_t))
+        packet.grid_size_x = grid_size[0]
+        packet.grid_size_y = grid_size[1] if dims > 1 else 1
+        packet.grid_size_z = grid_size[2] if dims > 2 else 1
 
-        free_slot_types = (enums.HSA_PACKET_TYPE_INVALID,
-                           enums.HSA_PACKET_TYPE_VENDOR_SPECIFIC)
-        while packet_array[real_index].header.type not in free_slot_types:
-            # Spin until the slot is ready
-            pass
+        packet.completion_signal = s._id
 
-        # Copy the packet to the storage
-        packet_array[real_index] = aql
-        # The packet type must be stored last
-        packet_array[real_index].header.type = enums.HSA_PACKET_TYPE_KERNEL_DISPATCH
+        packet.kernel_object = symbol.kernel_object
+        packet.kernarg_address = ctypes.addressof(kernargs)
 
+        packet.private_segment_size = symbol.private_segment_size
+        packet.group_segment_size = symbol.group_segment_size
+
+        header = 0
+        header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE
+        header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE
+        header |= enums.HSA_PACKET_TYPE_KERNEL_DISPATCH << enums.HSA_PACKET_HEADER_TYPE
+
+        # Original example calls for an atomic store.
+        # Since we are on x86, store of aligned 16 bit is atomic.
+        # The C code is
+        # __atomic_store_n((uint16_t*)(&dispatch_packet->header), header, __ATOMIC_RELEASE);
+        packet.header = header
+
+        # Increment write index
+        hsa.hsa_queue_store_write_index_relaxed(self._id, index + 1)
         # Ring the doorbell
-        hsa.hsa_signal_store_relaxed(self.doorbell_signal, index)
+        hsa.hsa_signal_store_relaxed(self._id.contents.doorbell_signal, index)
+
+        # Wait on the dispatch completion signal
 
         # synchronous if no signal was provided
         if signal is None:
@@ -733,12 +740,13 @@ class Signal(object):
         mhz = 10 ** 6
         if timeout is None:
             # Infinite
-            expire = -1
+            expire = -1   # UINT_MAX
         else:
             # timeout as seconds
             expire = timeout * hsa.timestamp_frequency * mhz
-        hsa.hsa_signal_wait_acquire(self._id, enums.HSA_SIGNAL_CONDITION_NE, one, expire,
-                                    enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
+        hsa.hsa_signal_wait_acquire(self._id, enums.HSA_SIGNAL_CONDITION_NE,
+                                    one, expire,
+                                    enums.HSA_WAIT_STATE_BLOCKED)
         return self.load_relaxed() != one
 
     def __del__(self):

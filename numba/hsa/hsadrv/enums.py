@@ -105,7 +105,7 @@ HSA_FENCE_SCOPE_SYSTEM                        = 2
 
 # hsa_wait_state_t
 # The application thread may be rescheduled while waiting on the signal.
-HSA_WAIT_STATE_BLOCKED = 0,
+HSA_WAIT_STATE_BLOCKED = 0
 # The application thread stays active while waiting on a signal.
 HSA_WAIT_STATE_ACTIVE = 1
 
@@ -467,3 +467,16 @@ HSA_EXECUTABLE_STATE_UNFROZEN = 0
 # is not allowed in this state.
 
 HSA_EXECUTABLE_STATE_FROZEN = 1
+
+
+# hsa_kernel_dispatch_packet_setup_t
+HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS = 0
+
+
+
+# hsa_packet_header_t
+HSA_PACKET_HEADER_TYPE = 0
+HSA_PACKET_HEADER_BARRIER = 8
+HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE = 9
+HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE = 11
+

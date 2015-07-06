@@ -17,7 +17,7 @@ hsa_packet_type_t = ctypes.c_int # enum
 hsa_queue_type_t = ctypes.c_int # enum
 hsa_queue_feature_t = ctypes.c_int # enum
 hsa_fence_scope_t = ctypes.c_int # enum
-hsa_wait_expectancy_t = ctypes.c_int # enum
+hsa_wait_state_t = ctypes.c_int # enum
 hsa_signal_condition_t = ctypes.c_int # enum
 hsa_extension_t = ctypes.c_int # enum
 hsa_agent_feature_t = ctypes.c_int # enum
@@ -60,59 +60,49 @@ class hsa_queue_t(ctypes.Structure):
         ('id', ctypes.c_uint32),
         ]
 
-class hsa_packet_header_t(ctypes.Structure):
-    _pack_ = 1
+class hsa_kernel_dispatch_packet_t(ctypes.Structure):
     _fields_ = [
-        ('type', ctypes.c_uint16, 8),
-        ('barrier', ctypes.c_uint16, 1),
-        ('acquire_fence_scope', ctypes.c_uint16, 2),
-        ('release_fence_scope', ctypes.c_uint16, 2),
-        ('reserved', ctypes.c_uint16, 3),
-    ]
-
-class hsa_dispatch_packet_t(ctypes.Structure):
-    """This should be aligned to HSA_PACKET_ALIGN_BYTES (64)"""
-    _fields_ = [
-        ('header', hsa_packet_header_t),
-        ('dimensions', ctypes.c_uint16, 2),
-        ('reserved', ctypes.c_uint16, 14),
+        ('header', ctypes.c_uint16),
+        ('setup', ctypes.c_uint16),
         ('workgroup_size_x', ctypes.c_uint16),
         ('workgroup_size_y', ctypes.c_uint16),
         ('workgroup_size_z', ctypes.c_uint16),
-        ('reserved2', ctypes.c_uint16),
+        ('reserved0', ctypes.c_uint16), # Must be zero
         ('grid_size_x', ctypes.c_uint32),
         ('grid_size_y', ctypes.c_uint32),
         ('grid_size_z', ctypes.c_uint32),
         ('private_segment_size', ctypes.c_uint32),
         ('group_segment_size', ctypes.c_uint32),
-        ('kernel_object_address', ctypes.c_uint64),
+        ('kernel_object', ctypes.c_uint64),
+        # ifdef HSA_LARGE_MODEL
         ('kernarg_address', ctypes.c_uint64),
-        ('reserved3', ctypes.c_uint64),
+        # SMALL Machine has a reversed uint32
+        ('reserved2', ctypes.c_uint64), # Must be zero
         ('completion_signal', hsa_signal_t),
     ]
-
-class hsa_agent_dispatch_packet_t(ctypes.Structure):
-    """This should be aligned to HSA_PACKET_ALIGN_BYTES (64)"""
-    _fields_ = [
-        ('header', hsa_packet_header_t),
-        ('type', ctypes.c_uint16),
-        ('reserved2', ctypes.c_uint32),
-        ('return_address', ctypes.c_uint64),
-        ('arg', ctypes.c_uint64 * 4),
-        ('reserved3', ctypes.c_uint64),
-        ('completion_signal', hsa_signal_t),
-    ]
-
-class hsa_barrier_packet_t(ctypes.Structure):
-    """This should be aligned to HSA_PACKET_ALIGN_BYTES (64)"""
-    _fields_ = [
-        ('header', hsa_packet_header_t),
-        ('reserved2', ctypes.c_uint16),
-        ('reserved3', ctypes.c_uint32),
-        ('dep_signal', hsa_signal_t * 5),
-        ('reserved4', ctypes.c_uint64),
-        ('completion_signal', hsa_signal_t),
-    ]
+#
+# class hsa_agent_dispatch_packet_t(ctypes.Structure):
+#     """This should be aligned to HSA_PACKET_ALIGN_BYTES (64)"""
+#     _fields_ = [
+#         ('header', hsa_packet_header_t),
+#         ('type', ctypes.c_uint16),
+#         ('reserved2', ctypes.c_uint32),
+#         ('return_address', ctypes.c_uint64),
+#         ('arg', ctypes.c_uint64 * 4),
+#         ('reserved3', ctypes.c_uint64),
+#         ('completion_signal', hsa_signal_t),
+#     ]
+#
+# class hsa_barrier_packet_t(ctypes.Structure):
+#     """This should be aligned to HSA_PACKET_ALIGN_BYTES (64)"""
+#     _fields_ = [
+#         ('header', hsa_packet_header_t),
+#         ('reserved2', ctypes.c_uint16),
+#         ('reserved3', ctypes.c_uint32),
+#         ('dep_signal', hsa_signal_t * 5),
+#         ('reserved4', ctypes.c_uint64),
+#         ('completion_signal', hsa_signal_t),
+#     ]
 
 # HSA common definitions #######################################################
 hsa_powertwo8_t = ctypes.c_uint8
@@ -640,34 +630,34 @@ API_PROTOTYPES = {
         'argtypes': [hsa_signal_t, hsa_signal_value_t],
     },
 
-    # hsa_signal_value_t hsa_signal_wait_relaxed(
-    #     hsa_signal_t signal,
-    #     hsa_signal_condition_t condition,
-    #     hsa_signal_value_t compare_value,
-    #     uint64_t timeout_hint,
-    #     hsa_wait_expectancy_t wait_expectancy_hint);
-    'hsa_signal_wait_relaxed': {
-        'restype': hsa_signal_value_t,
-        'argtypes': [hsa_signal_t,
-                     hsa_signal_condition_t,
-                     hsa_signal_value_t,
-                     ctypes.c_uint64,
-                     hsa_wait_expectancy_t],
-    },
+    # # hsa_signal_value_t hsa_signal_wait_relaxed(
+    # #     hsa_signal_t signal,
+    # #     hsa_signal_condition_t condition,
+    # #     hsa_signal_value_t compare_value,
+    # #     uint64_t timeout_hint,
+    # #     hsa_wait_expectancy_t wait_expectancy_hint);
+    # 'hsa_signal_wait_relaxed': {
+    #     'restype': hsa_signal_value_t,
+    #     'argtypes': [hsa_signal_t,
+    #                  hsa_signal_condition_t,
+    #                  hsa_signal_value_t,
+    #                  ctypes.c_uint64,
+    #                  hsa_wait_expectancy_t],
+    # },
 
-    # hsa_signal_value_t hsa_signal_wait_acquire(
-    #     hsa_signal_t signal,
-    #     hsa_signal_condition_t condition,
-    #     hsa_signal_value_t compare_value,
-    #     uint64_t timeout_hint,
-    #     hsa_wait_expectancy_t wait_expectancy_hint);
+    # hsa_signal_value_t HSA_API
+    #     hsa_signal_wait_acquire(hsa_signal_t signal,
+    #                             hsa_signal_condition_t condition,
+    #                             hsa_signal_value_t compare_value,
+    #                             uint64_t timeout_hint,
+    #                             hsa_wait_state_t wait_state_hint);
     'hsa_signal_wait_acquire': {
         'restype': hsa_signal_value_t,
         'argtypes': [hsa_signal_t,
                      hsa_signal_condition_t,
                      hsa_signal_value_t,
                      ctypes.c_uint64,
-                     hsa_wait_expectancy_t]
+                     hsa_wait_state_t]
     },
 
     # void hsa_signal_and_relaxed(
