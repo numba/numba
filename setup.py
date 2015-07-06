@@ -127,7 +127,7 @@ packages = find_packages("numba", "numba")
 
 install_requires = ['llvmlite', 'numpy']
 if sys.version_info < (3, 4):
-    install_requires.append('enum34')
+    install_requires.extend(['enum34', 'singledispatch'])
 if sys.version_info < (3, 3):
     install_requires.append('funcsigs')
 
