@@ -11,6 +11,7 @@ import numpy
 from numba import types
 from numba.typeconv import Conversion, rules
 from . import templates
+from .typeof import typeof, Purpose
 
 # Initialize declarations
 from . import (
@@ -138,109 +139,19 @@ class BaseContext(object):
         """
         Return the numba type of a Python value that is being used
         as a function argument.  Integer types will all be considered
-        int64, regardless of size.  Numpy arrays will be accepted in
-        "C" or "F" layout.
+        int64, regardless of size.
 
-        Unknown types will be mapped to pyobject.
+        None is returned for unsupported types.
         """
-        # Force regular Python ints (not bools or Numpy integers) to be 64-bit
-        if (isinstance(val, utils.INT_TYPES)
-            and not isinstance(val, (bool, numpy.number))):
-            return types.int64
-
-        tp = self.resolve_data_type(val)
-        if tp is None:
-            tp = getattr(val, "_numba_type_", types.pyobject)
-        return tp
-
-    def resolve_data_type(self, val):
-        """
-        Return the numba type of a Python value representing data
-        (e.g. a number or an array, but not more sophisticated types
-         such as functions, etc.)
-
-        This function can return None to if it cannot decide.
-        """
-        if val is True or val is False:
-            return types.boolean
-
-        # Under 2.x, we must guard against numpy scalars (np.intXY
-        # subclasses Python int but get_number_type() wouldn't infer the
-        # right bit width -- perhaps it should?).
-        elif (not isinstance(val, numpy.number)
-              and isinstance(val, utils.INT_TYPES + (float,))):
-            return self.get_number_type(val)
-
-        elif val is None:
-            return types.none
-
-        elif isinstance(val, str):
-            return types.string
-
-        elif isinstance(val, complex):
-            return types.complex128
-
-        elif isinstance(val, tuple):
-            tys = [self.resolve_value_type(v) for v in val]
-            distinct_types = set(tys)
-            if len(distinct_types) == 1:
-                return types.UniTuple(tys[0], len(tys))
-            else:
-                return types.Tuple(tys)
-
-        elif ctypes_utils.is_ctypes_funcptr(val):
-            return ctypes_utils.make_function_type(val)
-
-        elif cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
-            return cffi_utils.make_function_type(val)
-
-        elif numpy_support.is_array(val):
-            ary = val
-            try:
-                dtype = numpy_support.from_dtype(ary.dtype)
-            except NotImplementedError:
-                return
-            layout = numpy_support.map_layout(ary)
-            readonly = not ary.flags.writeable
-            return types.Array(dtype, ary.ndim, layout, readonly=readonly)
-
-        elif sys.version_info >= (2, 7) and not isinstance(val, numpy.generic):
-            try:
-                m = memoryview(val)
-            except TypeError:
-                pass
-            else:
-                # Object has the buffer protocol
-                try:
-                    dtype = bufproto.decode_pep3118_format(m.format, m.itemsize)
-                except ValueError:
-                    pass
-                else:
-                    type_class = bufproto.get_type_class(type(val))
-                    layout = bufproto.infer_layout(m)
-                    return type_class(dtype, m.ndim, layout=layout,
-                                      readonly=m.readonly)
-
-        if isinstance(val, numpy.dtype):
-            tp = numpy_support.from_dtype(val)
-            return types.DType(tp)
-
-        else:
-            # Matching here is quite broad, so we have to do it after
-            # the more specific matches above.
-            try:
-                return numpy_support.map_arrayscalar_type(val)
-            except NotImplementedError:
-                pass
-
-        return
+        return typeof(val, Purpose.argument)
 
     def resolve_value_type(self, val):
         """
-        Return the numba type of a Python value
-        Return None if fail to type.
+        Return the numba type of a Python value that is being used
+        as a runtime constant.
+        None is returned for unsupported types.
         """
-        tp = self.resolve_data_type(val)
+        tp = typeof(val, Purpose.constant)
         if tp is not None:
             return tp
 

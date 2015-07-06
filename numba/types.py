@@ -99,6 +99,13 @@ class _NPDatetimeBase(Type):
         # also greater...).
         return self.unit_code < other.unit_code
 
+    def cast_python_value(self, value):
+        cls = getattr(numpy, self.type_name)
+        if self.unit:
+            return cls(value, self.unit)
+        else:
+            return cls(value)
+
 
 @utils.total_ordering
 class NPTimedelta(_NPDatetimeBase):
@@ -210,6 +217,10 @@ class NumberClass(Callable, DTypeSpec, Opaque):
         return self.template(context).apply(args, kws)
 
     @property
+    def key(self):
+        return self.instance_type
+
+    @property
     def dtype(self):
         return self.instance_type
 
@@ -224,6 +235,10 @@ class DType(DTypeSpec, Opaque):
         self._dtype = dtype
         name = "dtype(%s)" % (dtype,)
         super(DTypeSpec, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.dtype
 
     @property
     def dtype(self):
@@ -566,20 +581,27 @@ class UnicodeCharSeq(Type):
 
 
 class Record(Type):
+    """
+    A Numpy structured scalar.  *descr* is the string representation
+    of the Numpy dtype; *fields* of mapping of field names to
+    (type, offset) tuples; *size* the bytesize of a record;
+    *aligned* whether the fields are aligned; *dtype* the Numpy dtype
+    instance.
+    """
     mutable = True
 
-    def __init__(self, id, fields, size, aligned, dtype):
-        self.id = id
+    def __init__(self, descr, fields, size, aligned, dtype):
+        self.descr = descr
         self.fields = fields.copy()
         self.size = size
         self.aligned = aligned
         self.dtype = dtype
-        name = 'Record(%s)' % id
+        name = 'Record(%s)' % descr
         super(Record, self).__init__(name)
 
     @property
     def key(self):
-        return (self.dtype, self.size, self.aligned)
+        return (self.size, self.aligned, self.dtype)
 
     def __len__(self):
         return len(self.fields)

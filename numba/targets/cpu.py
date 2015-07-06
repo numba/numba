@@ -108,10 +108,6 @@ class CPUContext(BaseContext):
     def post_lowering(self, func):
         mod = func.module
 
-        if (sys.platform.startswith('linux') or
-                sys.platform.startswith('win32')):
-            intrinsics.fix_powi_calls(mod)
-
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
             # calls to compiler-rt

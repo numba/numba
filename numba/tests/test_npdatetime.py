@@ -293,6 +293,8 @@ class TestTimedeltaArithmetic(TestCase):
             self.assertPreciseEqual(f(a, b), expected)
             self.assertPreciseEqual(f(b, a), expected)
 
+        # non-int64 int * timedelta64
+        check(TD(3), np.uint32(2), TD(6))
         # int * timedelta64
         check(TD(3), 2, TD(6))
         check(TD(3, 'ps'), 2, TD(6, 'ps'))
@@ -314,6 +316,8 @@ class TestTimedeltaArithmetic(TestCase):
             self.assertPreciseEqual(div(a, b), expected)
             self.assertPreciseEqual(floordiv(a, b), expected)
 
+        # timedelta64 / non-int64 int
+        check(TD(-3, 'ps'), np.uint32(2), TD(-1, 'ps'))
         # timedelta64 / int
         check(TD(3), 2, TD(1))
         check(TD(-3, 'ps'), 2, TD(-1, 'ps'))

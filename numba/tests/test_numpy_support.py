@@ -104,6 +104,36 @@ class TestFromDtype(TestCase):
         """
         self.check_datetime_types('m', types.NPTimedelta)
 
+    def test_struct_types(self):
+        def check(dtype, fields, size, aligned):
+            tp = numpy_support.from_dtype(dtype)
+            self.assertIsInstance(tp, types.Record)
+            # Only check for dtype equality, as the Numba type may be interned
+            self.assertEqual(tp.dtype, dtype)
+            self.assertEqual(tp.fields, fields)
+            self.assertEqual(tp.size, size)
+            self.assertEqual(tp.aligned, aligned)
+
+        dtype = np.dtype([('a', np.int16), ('b', np.int32)])
+        check(dtype,
+              fields={'a': (types.int16, 0),
+                      'b': (types.int32, 2)},
+              size=6, aligned=False)
+
+        dtype = np.dtype([('a', np.int16), ('b', np.int32)], align=True)
+        check(dtype,
+              fields={'a': (types.int16, 0),
+                      'b': (types.int32, 4)},
+              size=8, aligned=True)
+
+        dtype = np.dtype([('m', np.int32), ('n', 'S5')])
+        # A heuristic is used on Numpy 1.6
+        aligned = False if np.__version__ >= '1.7' else True
+        check(dtype,
+              fields={'m': (types.int32, 0),
+                      'n': (types.CharSeq(5), 4)},
+              size=9, aligned=aligned)
+
 
 class ValueTypingTestBase(object):
     """
@@ -119,10 +149,13 @@ class ValueTypingTestBase(object):
         self.assertIn(f(1), (types.int32, types.int64))
         self.assertIs(f(1.0), types.float64)
         self.assertIs(f(1.0j), types.complex128)
+        self.assertIs(f(True), types.bool_)
+        self.assertIs(f(False), types.bool_)
         # Numpy scalar types get converted by from_dtype()
         for name in ('int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32',
                      'int64', 'uint64', 'intc', 'uintc', 'intp', 'uintp',
-                     'float32', 'float64', 'complex64', 'complex128'):
+                     'float32', 'float64', 'complex64', 'complex128',
+                     'bool_'):
             val = getattr(np, name)()
             self.assertIs(f(val), getattr(types, name))
 
