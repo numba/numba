@@ -5,7 +5,7 @@ import ctypes
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.hsa.hsadrv.driver import hsa, Queue, BrigModule
+from numba.hsa.hsadrv.driver import hsa, Queue, Program, Executable, BrigModule
 from numba.hsa.hsadrv import drvapi, enums
 
 
@@ -72,11 +72,17 @@ class TestProgram(_TestBase):
         brig_file = get_brig_file()
         symbol = '&__vector_copy_kernel'
         brig_module = BrigModule.from_file(brig_file)
-        symbol_offset = brig_module.find_symbol_offset(symbol)
-        program = hsa.create_program([self.gpu])
-        module = program.add_module(brig_module)
-        code_descriptor = program.finalize(self.gpu, module, symbol_offset)
-        self.assertGreater(code_descriptor._id.kernarg_segment_byte_size, 0)
+
+        program = Program()
+        program.add_module(brig_module)
+        code = program.finalize(self.gpu.isa)
+
+        ex = Executable()
+        ex.load(self.gpu, code)
+        ex.freeze()
+
+        sym = ex.get_symbol(self.gpu, symbol)
+        self.assertGreater(sym.kernarg_segment_size, 0)
 
 
 class TestMemory(_TestBase):
