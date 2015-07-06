@@ -46,9 +46,9 @@ from_dtype
 """.split() + types.__all__ + special.__all__ + errors.__all__
 
 
-def _sentry_llvm_version():
+def _ensure_llvm():
     """
-    Make sure we meet min llvmlite version
+    Make sure llvmlite is operational.
     """
     import warnings
     import llvmlite
@@ -70,7 +70,11 @@ def _sentry_llvm_version():
         # Not matching?
         warnings.warn("llvmlite version format not recognized!")
 
-_sentry_llvm_version()
+    from llvmlite.binding import check_jit_execution
+    check_jit_execution()
+
+
+_ensure_llvm()
 
 
 # Process initialization
