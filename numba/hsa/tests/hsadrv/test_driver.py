@@ -6,7 +6,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.hsa.hsadrv.driver import hsa, Queue, Program, Executable, BrigModule
-from numba.hsa.hsadrv import drvapi, enums
+from numba.hsa.hsadrv import drvapi
 
 
 class TestLowLevelApi(unittest.TestCase):
@@ -87,6 +87,13 @@ class TestProgram(_TestBase):
 
 
 class TestMemory(_TestBase):
+    def test_region_list(self):
+        self.assertGreater(len(self.gpu.regions.globals), 0)
+        self.assertGreater(len(self.gpu.regions.groups), 0)
+        # The following maybe empty
+        # print(self.gpu.regions.privates)
+        # print(self.gpu.regions.readonlys)
+
     def test_register(self):
         src = np.random.random(1024).astype(np.float32)
         hsa.hsa_memory_register(src.ctypes.data, src.nbytes)

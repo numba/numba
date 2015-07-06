@@ -12,14 +12,13 @@ import struct
 import weakref
 import logging
 from functools import partialmethod
+from collections import Sequence
 
 from numba.hsa.profiler import profiler as _prof
-
-#logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 from numba.utils import total_ordering
 from numba import config
-from .error import HsaSupportError, HsaDriverError, HsaApiError, HsaWarning
+from .error import HsaSupportError, HsaDriverError, HsaApiError
 from . import enums, drvapi
 
 
@@ -44,7 +43,9 @@ def _find_driver():
         _raise_driver_not_found()
 
     # Determine DLL type
-    if struct.calcsize('P') != 8 or sys.platform == 'win32' or sys.platform == 'darwin':
+    if (struct.calcsize('P') != 8
+        or sys.platform == 'win32'
+        or sys.platform == 'darwin'):
         _raise_platform_not_supported()
     else:
         # Assume to be *nix like and 64 bit
@@ -238,7 +239,6 @@ class Driver(object):
         self._initialize_api()
         return self.initialization_error is None
 
-
     @property
     def agents(self):
         self._initialize_agents()
@@ -419,20 +419,7 @@ class Agent(HsaWrapper):
         'node': (enums.HSA_AGENT_INFO_NODE, ctypes.c_uint32),
         '_device': (enums.HSA_AGENT_INFO_DEVICE, drvapi.hsa_device_type_t),
         'cache_size': (enums.HSA_AGENT_INFO_CACHE_SIZE, ctypes.c_uint32 * 4),
-        'isa': (enums.HSA_AGENT_INFO_ISA, drvapi.hsa_isa_t)
-        # 'image1d_max_dim': (
-        # enums.HSA_EXT_AGENT_INFO_IMAGE1D_MAX_DIM, drvapi.hsa_dim3_t),
-        # 'image2d_max_dim': (
-        # enums.HSA_EXT_AGENT_INFO_IMAGE2D_MAX_DIM, drvapi.hsa_dim3_t),
-        # 'image3d_max_dim': (
-        # enums.HSA_EXT_AGENT_INFO_IMAGE3D_MAX_DIM, drvapi.hsa_dim3_t),
-        # 'image_array_max_size': (
-        # enums.HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_SIZE, ctypes.c_uint32),
-        # 'image_rd_max': (
-        # enums.HSA_EXT_AGENT_INFO_IMAGE_RD_MAX, ctypes.c_uint32),
-        # 'image_rdwr_max': (
-        # enums.HSA_EXT_AGENT_INFO_IMAGE_RDWR_MAX, ctypes.c_uint32),
-        # 'sampler_max': (enums.HSA_EXT_AGENT_INFO_SAMPLER_MAX, ctypes.c_uint32),
+        'isa': (enums.HSA_AGENT_INFO_ISA, drvapi.hsa_isa_t),
     }
 
     def __init__(self, agent_id):
@@ -466,8 +453,8 @@ class Agent(HsaWrapper):
 
         callback = drvapi.HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC(on_region)
         hsa.hsa_agent_iterate_regions(self._id, callback, None)
-        self._regions = [MemRegion.instance_for(self, region_id)
-                         for region_id in region_ids]
+        self._regions = _RegionList([MemRegion.instance_for(self, region_id)
+                                   for region_id in region_ids])
 
     def _create_queue(self, size, callback=None, data=None,
                       private_segment_size=None, group_segment_size=None,
@@ -539,6 +526,29 @@ class Agent(HsaWrapper):
         return Context(self)
 
 
+class _RegionList(Sequence):
+    __slots__ = '_all', 'globals', 'readonlys', 'privates', 'groups'
+
+    def __init__(self, lst):
+        self._all = tuple(lst)
+        self.globals = tuple(x for x in lst if x.kind == 'global')
+        self.readonlys = tuple(x for x in lst if x.kind == 'readonly')
+        self.privates = tuple(x for x in lst if x.kind == 'private')
+        self.groups = tuple(x for x in lst if x.kind == 'group')
+
+    def __len__(self):
+        return len(self._all)
+
+    def __contains__(self, item):
+        return item in self._all
+
+    def __reversed__(self):
+        return reversed(self._all)
+
+    def __getitem__(self, idx):
+        return self._all[idx]
+
+
 class MemRegion(HsaWrapper):
     """Abstracts a HSA memory region.
 
@@ -548,33 +558,41 @@ class MemRegion(HsaWrapper):
     _hsa_properties = {
         'segment': (
             enums.HSA_REGION_INFO_SEGMENT,
-            drvapi.hsa_segment_t
+            drvapi.hsa_region_segment_t
         ),
         '_flags': (
             enums.HSA_REGION_INFO_GLOBAL_FLAGS,
             drvapi.hsa_region_flag_t
         ),
+        'size': (enums.HSA_REGION_INFO_SIZE,
+                 ctypes.c_size_t),
+        'alloc_max_size': (enums.HSA_REGION_INFO_ALLOC_MAX_SIZE,
+                           ctypes.c_size_t),
+        'alloc_alignment': (enums.HSA_REGION_INFO_RUNTIME_ALLOC_ALIGNMENT,
+                            ctypes.c_size_t),
+        'alloc_granule': (enums.HSA_REGION_INFO_RUNTIME_ALLOC_GRANULE,
+                          ctypes.c_size_t),
+        'alloc_allowed': (enums.HSA_REGION_INFO_RUNTIME_ALLOC_ALLOWED,
+                          ctypes.c_bool),
     }
-    # _hsa_properties = {
-    #     'base': (enums.HSA_REGION_INFO_BASE, drvapi.hsa_uintptr_t),
-    #     'size': (enums.HSA_REGION_INFO_SIZE, ctypes.c_size_t),
-    #     '_agent': (enums.HSA_REGION_INFO_AGENT, drvapi.hsa_agent_t),
-    #     '_flags': (enums.HSA_REGION_INFO_FLAGS, drvapi.hsa_region_flag_t),
-    #     'segment': (enums.HSA_REGION_INFO_SEGMENT, drvapi.hsa_segment_t),
-    #     'alloc_max_size': (
-    #     enums.HSA_REGION_INFO_ALLOC_MAX_SIZE, ctypes.c_size_t),
-    #     'alloc_granule': (enums.HSA_REGION_INFO_ALLOC_GRANULE, ctypes.c_size_t),
-    #     'alloc_alignment': (
-    #     enums.HSA_REGION_INFO_ALLOC_ALIGNMENT, ctypes.c_size_t),
-    #     'bandwidth': (enums.HSA_REGION_INFO_BANDWIDTH, ctypes.c_uint32),
-    #     'node': (enums.HSA_REGION_INFO_NODE, ctypes.c_uint32),
-    # }
+
+    _segment_name_map = {
+        enums.HSA_REGION_SEGMENT_GLOBAL: 'global',
+        enums.HSA_REGION_SEGMENT_READONLY: 'readonly',
+        enums.HSA_REGION_SEGMENT_PRIVATE: 'private',
+        enums.HSA_REGION_SEGMENT_GROUP: 'group',
+    }
 
     def __init__(self, agent, region_id):
         """Do not instantiate MemRegion objects directly, use the factory class
         method 'instance_for' to ensure MemRegion identity"""
         self._id = region_id
         self._owner_agent = agent
+        self._kind = self._segment_name_map[self.segment]
+
+    @property
+    def kind(self):
+        return self._kind
 
     @property
     def agent(self):
@@ -582,13 +600,19 @@ class MemRegion(HsaWrapper):
 
     @property
     def supports_kernargs(self):
-        return self._flags & enums.HSA_REGION_GLOBAL_FLAG_KERNARG
+        if self.kind == 'global':
+            return self._flags & enums.HSA_REGION_GLOBAL_FLAG_KERNARG
+        else:
+            return False
 
     def allocate(self, ctypes_type):
+        assert self.alloc_allowed
+        alloc_size = ctypes.sizeof(ctypes_type)
+        assert alloc_size <= self.alloc_max_size
         buff = ctypes.c_void_p()
-        hsa.hsa_memory_allocate(self._id, ctypes.sizeof(ctypes_type),
+        hsa.hsa_memory_allocate(self._id, alloc_size,
                                 ctypes.byref(buff))
-        return ctypes.cast(buff, ctypes.POINTER(ctypes_type)).contents
+        return ctypes_type.from_address(buff.value)
 
     def free(self, ptr):
         hsa.hsa_memory_free(ptr)
