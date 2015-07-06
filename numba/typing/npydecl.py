@@ -332,7 +332,7 @@ def _numpy_redirect(fname):
                dict(key=numpy_function, method_name=fname))
     builtin_global(numpy_function, types.Function(cls))
 
-for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
+for func in ['min', 'max', 'sum', 'prod', 'mean', 'median', 'var', 'std',
              'cumsum', 'cumprod', 'argmin', 'argmax']:
     _numpy_redirect(func)
 
