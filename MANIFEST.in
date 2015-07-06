@@ -6,3 +6,4 @@ recursive-include examples *.py
 
 prune docs/_build
 prune docs/gh-pages
+include numba/_version.py

@@ -5,16 +5,12 @@ from __future__ import print_function, division, absolute_import
 import re
 
 from . import testing, decorators
-from ._version import get_versions
 from . import errors, special, types, config
 
 # Re-export typeof
 from .special import *
 from .errors import *
 from .pycc.decorators import export, exportmany
-
-# Version
-__version__ = get_versions()['version']
 
 # Re-export all type names
 from .types import *
@@ -82,3 +78,7 @@ _sentry_llvm_version()
 from .targets.randomimpl import random_init
 random_init()
 del random_init
+
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions
