@@ -56,7 +56,7 @@ def _sentry_llvm_version():
     """
     import warnings
     import llvmlite
-    min_version = (0, 1, 0)
+    min_version = (0, 6, 0)
 
     # Only look at the the major, minor and bugfix version numbers.
     # Ignore other stuffs
