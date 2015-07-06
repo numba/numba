@@ -299,7 +299,9 @@ class TestArrayReductions(TestCase):
         cfunc = cres.entry_point
 
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
-        # Test with different orders
+        # Even vs. odd size, for np.median
+        self.assertPreciseEqual(cfunc(arr[:-1]), pyfunc(arr[:-1]))
+        # Test with different orders, for np.median
         arr = arr[::-1].copy()  # Keep 'C' layout
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         np.random.shuffle(arr)
@@ -336,6 +338,9 @@ class TestArrayReductions(TestCase):
     def test_argmax_npdatetime(self):
         self.check_npdatetime(array_argmax)
         self.check_nptimedelta(array_argmax)
+
+    def test_median_npdatetime(self):
+        self.check_nptimedelta(array_median_global)
 
     def test_sum_npdatetime(self):
         self.check_nptimedelta(array_sum)

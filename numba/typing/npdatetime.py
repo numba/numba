@@ -74,15 +74,19 @@ class TimedeltaMixOp(AbstractTemplate):
         left, right = args
         if isinstance(right, types.NPTimedelta):
             td, other = right, left
+            sig_factory = lambda other: signature(td, other, td)
         elif isinstance(left, types.NPTimedelta):
             td, other = left, right
+            sig_factory = lambda other: signature(td, td, other)
         else:
+            return
+        if not isinstance(other, (types.Float, types.Integer)):
             return
         # Force integer types to convert to signed because it matches
         # timedelta64 semantics better.
-        if other not in types.signed_domain and other not in types.real_domain:
-            return
-        return signature(td, left, right)
+        if isinstance(other, types.Integer):
+            other = types.int64
+        return sig_factory(other)
 
 
 class TimedeltaDivOp(AbstractTemplate):
@@ -99,10 +103,12 @@ class TimedeltaDivOp(AbstractTemplate):
             if (npdatetime.can_cast_timedelta_units(left.unit, right.unit)
                 or npdatetime.can_cast_timedelta_units(right.unit, left.unit)):
                 return signature(types.float64, left, right)
-        # Force integer types to convert to signed because it matches
-        # timedelta64 semantics better.
-        elif right in types.signed_domain or right in types.real_domain:
+        elif isinstance(right, (types.Float)):
             return signature(left, left, right)
+        elif isinstance(right, (types.Integer)):
+            # Force integer types to convert to signed because it matches
+            # timedelta64 semantics better.
+            return signature(left, left, types.int64)
 
 
 @builtin
