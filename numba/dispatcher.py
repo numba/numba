@@ -1,3 +1,5 @@
+# -*- coding: utf8 -*-
+
 from __future__ import print_function, division, absolute_import
 
 import functools
@@ -8,6 +10,7 @@ from numba import _dispatcher, compiler, utils, types
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, types, typing
 from numba.typing.templates import fold_arguments
+from numba.typing.typeof import typeof
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method, next
 
@@ -230,7 +233,9 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        tp = self.typingctx.resolve_argument_type(val)
+        # Not going through the resolve_argument_type() indirection
+        # can shape a couple µs.
+        tp = typeof(val)
         if tp is None:
             tp = types.pyobject
         return tp
@@ -399,5 +404,5 @@ class LiftedLoop(_OverloadedBase):
             return cres.entry_point
 
 
-# Initialize dispatcher
-_dispatcher.init_types(dict((str(t), t._code) for t in types.number_domain))
+# Initialize typeof machinery
+_dispatcher.typeof_init(dict((str(t), t._code) for t in types.number_domain))

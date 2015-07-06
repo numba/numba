@@ -60,6 +60,9 @@ class TestTypes(TestCase):
         b = types.BoundFunction(DummyTemplate, types.int32)
         self.assertNotEqual(a, b)
 
+        # Different dtypes
+        self.assertNotEqual(types.DType(types.int32), types.DType(types.int64))
+
     def test_ordering(self):
         def check_order(values):
             for i in range(len(values)):

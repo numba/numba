@@ -41,6 +41,15 @@ except ImportError:
         raise ImportError("please install the 'funcsigs' package "
                           "('pip install funcsigs')")
 
+try:
+    from functools import singledispatch
+except ImportError:
+    try:
+        from singledispatch import singledispatch
+    except ImportError:
+        raise ImportError("please install the 'singledispatch' package "
+                          "('pip install singledispatch')")
+
 
 _shutting_down = False
 
