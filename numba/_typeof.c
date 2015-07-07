@@ -296,6 +296,33 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
     return typecode_fallback(dispatcher, val);
 }
 
+
+#if PY_MAJOR_VERSION >= 3
+    static
+    void* wrap_import_array() {
+        import_array(); /* import array returns NULL on failure */
+        return (void*)1;
+    }
+#else
+    static
+    void wrap_import_array() {
+        import_array();
+    }
+#endif
+
+
+static
+int
+init_numpy() {
+    #if PY_MAJOR_VERSION >= 3
+        return wrap_import_array() != NULL;
+    #else
+        wrap_import_array();
+        return 1;   /* always succeed */
+    #endif
+}
+
+
 PyObject *
 typeof_init(PyObject *self, PyObject *args)
 {
@@ -304,7 +331,9 @@ typeof_init(PyObject *self, PyObject *args)
     int index = 0;
 
     /* Initialize Numpy API */
-    import_array();
+    if ( ! init_numpy() ) {
+        return NULL;
+    }
 
     #define UNWRAP_TYPE(S)                                              \
         if(!(tmpobj = PyDict_GetItemString(dict, #S))) return NULL;     \
