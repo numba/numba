@@ -1,8 +1,9 @@
+#include "_pymodule.h"
+
 #include <string.h>
 #include <time.h>
 #include <assert.h>
 
-#include "_pymodule.h"
 #include "_dispatcher.h"
 #include "_typeof.h"
 
@@ -491,9 +492,18 @@ static PyTypeObject DispatcherType = {
 };
 
 
+static PyObject *compute_fingerprint(PyObject *self, PyObject *args)
+{
+    PyObject *val;
+    if (!PyArg_ParseTuple(args, "O:compute_fingerprint", &val))
+        return NULL;
+    return typeof_compute_fingerprint(val);
+}
+
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(typeof_init),
+    declmethod(compute_fingerprint),
     { NULL },
 #undef declmethod
 };

@@ -32,6 +32,7 @@
     #define PyString_FromString PyUnicode_FromString
     #define PyString_InternFromString PyUnicode_InternFromString
     #define PyInt_Type PyLong_Type
+    #define PyInt_Check PyLong_Check
 #endif
 
 
