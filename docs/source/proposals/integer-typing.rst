@@ -53,7 +53,7 @@ This has several non-obvious side-effects:
    this is desirable or not is an open question; it is good for correctness,
    but potentially bad for performance.
 
-2. In trying to follow the correctness over performance rule, some values
+2. In trying to follow the correctness over predictability rule, some values
    can actually leave the integer realm.  For example, ``int64 + uint64``
    is typed ``float64`` in order to avoid magnitude losses (but incidentally
    will lose precision on large integer values...), again following Numpy's
