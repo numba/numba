@@ -41,7 +41,7 @@ Compile-time vs. run-time
 This document discusses dispatching when it is done at runtime, i.e.
 when a JIT-compiled function is called from pure Python.  In that context,
 performance is important.  To stay in the realm of normal function call
-overhead in Python, the overhead of dispatching should stay under the
+overhead in Python, the overhead of dispatching should stay under a
 microsecond.  Of course, *the faster the better*...
 
 When a JIT-compiled function is called from another JIT-compiled
