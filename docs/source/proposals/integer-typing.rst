@@ -167,3 +167,11 @@ on the values of constants: if a constant is too large to fit in 32 bits,
 it is typed ``int64``, which propagates through other computations.
 This would be a reminiscence of the current behaviour, but rarer and much
 more controlled still.
+
+Long-term horizon
+-----------------
+
+While we believe this proposal makes Numba's behaviour more regular and more
+predictable, it also pulls it further from general compatibility with pure
+Python semantics, where users can assume arbitrary-precision integers without
+any truncation issues.
