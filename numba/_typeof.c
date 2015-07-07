@@ -38,9 +38,11 @@ static PyObject *str_typeof_pyval = NULL;
  */
 
 typedef struct {
+    /* A buffer the fingerprint will be written to */
     char *buf;
     size_t n;
     size_t allocated;
+    /* A preallocated buffer, sufficient to fit the fingerprint for most types */
     char static_buf[40];
 } string_writer_t;
 
@@ -59,6 +61,7 @@ string_writer_clear(string_writer_t *w)
         free(w->buf);
 }
 
+/* Ensure at least *bytes* can be appended to the string writer's buffer. */
 static inline int
 string_writer_ensure(string_writer_t *w, size_t bytes)
 {
@@ -400,6 +403,9 @@ int typecode_fallback_keep_ref(PyObject *dispatcher, PyObject *val) {
 /* A cache mapping fingerprints to typecodes */
 static PyObject *fingerprint_map = NULL;
 
+/* Try to compute *val*'s typecode using its fingerprint and the
+ * fingerprint->typecode cache.
+ */
 static int
 typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
 {
