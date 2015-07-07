@@ -48,8 +48,8 @@ def _implement_integer_operators():
         register(implement(operator.le, ty, ty)(builtins.int_ule_impl))
         register(implement(operator.gt, ty, ty)(builtins.int_ugt_impl))
         register(implement(operator.ge, ty, ty)(builtins.int_uge_impl))
-        register(implement(operator.pow, types.float64, ty)(builtins.int_upower_impl))
-        register(implement(operator.ipow, types.float64, ty)(builtins.int_upower_impl))
+        register(implement(operator.pow, types.float64, ty)(builtins.int_power_impl))
+        register(implement(operator.ipow, types.float64, ty)(builtins.int_power_impl))
         register(implement(operator.rshift, ty, ty)(builtins.int_lshr_impl))
         register(implement(operator.irshift, ty, ty)(builtins.int_lshr_impl))
 
@@ -67,8 +67,8 @@ def _implement_integer_operators():
         register(implement(operator.le, ty, ty)(builtins.int_sle_impl))
         register(implement(operator.gt, ty, ty)(builtins.int_sgt_impl))
         register(implement(operator.ge, ty, ty)(builtins.int_sge_impl))
-        register(implement(operator.pow, types.float64, ty)(builtins.int_spower_impl))
-        register(implement(operator.ipow, types.float64, ty)(builtins.int_spower_impl))
+        register(implement(operator.pow, types.float64, ty)(builtins.int_power_impl))
+        register(implement(operator.ipow, types.float64, ty)(builtins.int_power_impl))
         register(implement(operator.rshift, ty, ty)(builtins.int_ashr_impl))
         register(implement(operator.irshift, ty, ty)(builtins.int_ashr_impl))
 

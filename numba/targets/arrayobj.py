@@ -13,7 +13,7 @@ import llvmlite.llvmpy.core as lc
 import numba.ctypes_support as ctypes
 import numpy
 from llvmlite.llvmpy.core import Constant
-from numba import types, cgutils
+from numba import types, cgutils, typing
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (builtin, builtin_attr, implement,
@@ -719,9 +719,10 @@ def array_view(context, builder, sig, args):
 @implement(numpy.sum, types.Kind(types.Array))
 @implement("array.sum", types.Kind(types.Array))
 def array_sum(context, builder, sig, args):
+    zero = sig.return_type(0)
 
     def array_sum_impl(arr):
-        c = 0
+        c = zero
         for v in arr.flat:
             c += v
         return c
@@ -751,13 +752,14 @@ def array_prod(context, builder, sig, args):
 def array_cumsum(context, builder, sig, args):
     scalar_dtype = sig.return_type.dtype
     dtype = as_dtype(scalar_dtype)
+    zero = scalar_dtype(0)
 
     def array_cumsum_impl(arr):
         size = 1
         for i in arr.shape:
             size = size * i
         out = numpy.empty(size, dtype)
-        c = 0
+        c = zero
         for idx, v in enumerate(arr.flat):
             c += v
             out[idx] = c
@@ -793,11 +795,12 @@ def array_cumprod(context, builder, sig, args):
 @implement(numpy.mean, types.Kind(types.Array))
 @implement("array.mean", types.Kind(types.Array))
 def array_mean(context, builder, sig, args):
+    zero = sig.return_type(0)
 
     def array_mean_impl(arr):
         # Can't use the naive `arr.sum() / arr.size`, as it would return
         # a wrong result on integer sum overflow.
-        c = 0
+        c = zero
         for v in arr.flat:
             c += v
         return c / arr.size
@@ -836,15 +839,35 @@ def array_std(context, builder, sig, args):
 @implement(numpy.min, types.Kind(types.Array))
 @implement("array.min", types.Kind(types.Array))
 def array_min(context, builder, sig, args):
-    def array_min_impl(arry):
-        for v in arry.flat:
-            min_value = v
-            break
+    ty = sig.args[0].dtype
+    if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+        # NaT is smaller than every other value, but it is
+        # ignored as far as min() is concerned.
+        nat = ty('NaT')
 
-        for v in arry.flat:
-            if v < min_value:
+        def array_min_impl(arry):
+            min_value = nat
+            it = arry.flat
+            for v in it:
+                if v != nat:
+                    min_value = v
+                    break
+
+            for v in it:
+                if v != nat and v < min_value:
+                    min_value = v
+            return min_value
+
+    else:
+        def array_min_impl(arry):
+            for v in arry.flat:
                 min_value = v
-        return min_value
+                break
+
+            for v in arry.flat:
+                if v < min_value:
+                    min_value = v
+            return min_value
     return context.compile_internal(builder, array_min_impl, sig, args)
 
 
@@ -868,6 +891,8 @@ def array_max(context, builder, sig, args):
 @implement(numpy.argmin, types.Kind(types.Array))
 @implement("array.argmin", types.Kind(types.Array))
 def array_argmin(context, builder, sig, args):
+    # XXX argmin() is inconsistent with min() on NaT values:
+    # https://github.com/numpy/numpy/issues/6030
     def array_argmin_impl(arry):
         for v in arry.flat:
             min_value = v
@@ -902,6 +927,70 @@ def array_argmax(context, builder, sig, args):
             idx += 1
         return max_idx
     return context.compile_internal(builder, array_argmax_impl, sig, args)
+
+
+@builtin
+@implement(numpy.median, types.Kind(types.Array))
+def array_median(context, builder, sig, args):
+
+    def partition(A, low, high):
+        mid = (low+high) // 2
+        # median of three {low, middle, high}
+        LM = A[low] <= A[mid]
+        MH = A[mid] <= A[high]
+        LH = A[low] <= A[high]
+
+        if LM == MH:
+            median3 = mid
+        elif LH != LM:
+            median3 = low
+        else:
+            median3 = high
+
+        # choose median3 as the pivot
+        A[high], A[median3] = A[median3], A[high]
+
+        x = A[high]
+        i = low
+        for j in range(low, high):
+            if A[j] <= x:
+                A[i], A[j] = A[j], A[i]
+                i += 1
+        A[i], A[high] = A[high], A[i]
+        return i
+
+    sig_partition = typing.signature(types.intp, *(sig.args[0], types.intp, types.intp))
+    _partition = context.compile_subroutine(builder, partition, sig_partition)
+
+    def select(arry, k):
+        n = arry.shape[0]
+        # XXX: assuming flat array till array.flatten is implemented
+        # temp_arry = arry.flatten()
+        temp_arry = arry.copy()
+        high = n-1
+        low = 0
+        # NOTE: high is inclusive
+        i = _partition(temp_arry, low, high)
+        while i != k:
+            if i < k:
+                low = i+1
+                i = _partition(temp_arry, low, high)
+            else:
+                high = i-1
+                i = _partition(temp_arry, low, high)
+        return temp_arry[k]
+
+    sig_select = typing.signature(sig.args[0].dtype, *(sig.args[0], types.intp))
+    _select = context.compile_subroutine(builder, select, sig_select)
+
+    def median(arry):
+        n = arry.shape[0]
+        if n % 2 == 0:
+            return (_select(arry, n//2 - 1) + _select(arry, n//2))/2
+        else:
+            return _select(arry, n//2)
+
+    return context.compile_internal(builder, median, sig, args)
 
 
 def _np_round_intrinsic(tp):

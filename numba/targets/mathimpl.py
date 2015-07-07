@@ -441,9 +441,9 @@ unary_math_int_impl(math.degrees, degrees_f64_impl)
 # -----------------------------------------------------------------------------
 
 for ty in types.unsigned_domain:
-    register(implement(math.pow, types.float64, ty)(builtins.int_upower_impl))
+    register(implement(math.pow, types.float64, ty)(builtins.int_power_impl))
 for ty in types.signed_domain:
-    register(implement(math.pow, types.float64, ty)(builtins.int_spower_impl))
+    register(implement(math.pow, types.float64, ty)(builtins.int_power_impl))
 
 ty = types.Kind(types.Float)
 register(implement(math.pow, ty, ty)(builtins.real_power_impl))

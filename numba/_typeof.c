@@ -40,9 +40,11 @@ static PyObject *str_typeof_pyval = NULL;
  */
 
 typedef struct {
+    /* A buffer the fingerprint will be written to */
     char *buf;
     size_t n;
     size_t allocated;
+    /* A preallocated buffer, sufficient to fit the fingerprint for most types */
     char static_buf[40];
 } string_writer_t;
 
@@ -75,6 +77,7 @@ string_writer_move(string_writer_t *dest, const string_writer_t *src)
     }
 }
 
+/* Ensure at least *bytes* can be appended to the string writer's buffer. */
 static inline int
 string_writer_ensure(string_writer_t *w, size_t bytes)
 {
@@ -446,6 +449,9 @@ compare_writer(const void *key, const _Py_hashtable_entry_t *entry)
     return memcmp(v->buf, w->buf, v->n) == 0;
 }
 
+/* Try to compute *val*'s typecode using its fingerprint and the
+ * fingerprint->typecode cache.
+ */
 static int
 typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
 {
@@ -735,8 +741,6 @@ typeof_init(PyObject *self, PyObject *args)
     UNWRAP_TYPE(complex64)
     UNWRAP_TYPE(complex128)
 
-    #undef UNWRAP_TYPE
-
     switch(sizeof(void*)) {
     case 4:
         tc_intp = tc_int32;
@@ -748,6 +752,8 @@ typeof_init(PyObject *self, PyObject *args)
         PyErr_SetString(PyExc_AssertionError, "sizeof(void*) != {4, 8}");
         return NULL;
     }
+
+    #undef UNWRAP_TYPE
 
     typecache = PyDict_New();
     ndarray_typecache = PyDict_New();

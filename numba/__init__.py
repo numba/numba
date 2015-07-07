@@ -5,16 +5,12 @@ from __future__ import print_function, division, absolute_import
 import re
 
 from . import testing, decorators
-from ._version import get_versions
 from . import errors, special, types, config
 
 # Re-export typeof
 from .special import *
 from .errors import *
 from .pycc.decorators import export, exportmany
-
-# Version
-__version__ = get_versions()['version']
 
 # Re-export all type names
 from .types import *
@@ -50,13 +46,14 @@ from_dtype
 """.split() + types.__all__ + special.__all__ + errors.__all__
 
 
-def _sentry_llvm_version():
+_min_llvmlite_version = (0, 6, 0)
+
+def _ensure_llvm():
     """
-    Make sure we meet min llvmlite version
+    Make sure llvmlite is operational.
     """
     import warnings
     import llvmlite
-    min_version = (0, 1, 0)
 
     # Only look at the the major, minor and bugfix version numbers.
     # Ignore other stuffs
@@ -64,17 +61,21 @@ def _sentry_llvm_version():
     m = regex.match(llvmlite.__version__)
     if m:
         ver = tuple(map(int, m.groups()))
-        if ver < min_version:
+        if ver < _min_llvmlite_version:
             msg = ("Numba requires at least version %d.%d.%d of llvmlite.\n"
                    "Installed version is %s.\n"
                    "Please update llvmlite." %
-                   (min_version + (llvmlite.__version__,)))
+                   (_min_llvmlite_version + (llvmlite.__version__,)))
             raise ImportError(msg)
     else:
         # Not matching?
         warnings.warn("llvmlite version format not recognized!")
 
-_sentry_llvm_version()
+    from llvmlite.binding import check_jit_execution
+    check_jit_execution()
+
+
+_ensure_llvm()
 
 
 # Process initialization
@@ -82,3 +83,7 @@ _sentry_llvm_version()
 from .targets.randomimpl import random_init
 random_init()
 del random_init
+
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions
