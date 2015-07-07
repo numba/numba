@@ -158,77 +158,35 @@ def int_urem_impl(context, builder, sig, args):
     return builder.urem(x, y)
 
 
-def int_spower_impl(context, builder, sig, args):
-    module = builder.module
-    x, y = args
+def int_power_impl(context, builder, sig, args):
+    """
+    a ^ b, where a is an integer or real, and b an integer
+    """
+    def int_power(a, b):
+        r = 1
+        if b < 0:
+            invert = True
+            exp = -b
+            if exp < 0:
+                raise OverflowError
+        else:
+            invert = False
+            exp = b
+        if exp > 0x10000:
+            # Optimization cutoff: fallback on the generic algorithm
+            return math.pow(a, float(b))
+        while True:
+            if exp & 1:
+                r *= a
+            exp >>= 1
+            if exp == 0:
+                break
+            a *= a
 
-    # Cast x to float64 to ensure enough precision for the result
-    x = context.cast(builder, x, sig.args[0], types.float64)
-    # Cast y to int32
-    y = context.cast(builder, y, sig.args[1], types.int32)
+        return 1.0 / r if invert else r
 
-    if context.implement_powi_as_math_call:
-        undersig = typing.signature(sig.return_type, types.float64,
-                                    types.int32)
-        impl = context.get_function(math.pow, undersig)
-        res = impl(builder, (x, y))
-    else:
-        powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
-        res = builder.call(powerfn, (x, y))
-
-    # Cast result back
-    return context.cast(builder, res, types.float64, sig.return_type)
-
-
-def int_upower_impl(context, builder, sig, args):
-    module = builder.module
-    x, y = args
-    if y.type.width > 32:
-        y = builder.trunc(y, Type.int(32))
-    elif y.type.width < 32:
-        y = builder.zext(y, Type.int(32))
-
-    if context.implement_powi_as_math_call:
-        undersig = typing.signature(sig.return_type, sig.args[0], types.int32)
-        impl = context.get_function(math.pow, undersig)
-        return impl(builder, (x, y))
-    else:
-        powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
-        return builder.call(powerfn, (x, y))
-
-
-def int_power_func_body(context, builder, x, y):
-    pcounter = cgutils.alloca_once(builder, y.type)
-    presult = cgutils.alloca_once(builder, x.type)
-    result = Constant.int(x.type, 1)
-    counter = y
-    builder.store(counter, pcounter)
-    builder.store(result, presult)
-
-    bbcond = builder.append_basic_block(".cond")
-    bbbody = builder.append_basic_block(".body")
-    bbexit = builder.append_basic_block(".exit")
-
-    del counter
-    del result
-
-    builder.branch(bbcond)
-
-    with builder.goto_block(bbcond):
-        counter = builder.load(pcounter)
-        ONE = Constant.int(counter.type, 1)
-        ZERO = Constant.null(counter.type)
-        builder.store(builder.sub(counter, ONE), pcounter)
-        pred = builder.icmp(lc.ICMP_SGT, counter, ZERO)
-        builder.cbranch(pred, bbbody, bbexit)
-
-    with builder.goto_block(bbbody):
-        result = builder.load(presult)
-        builder.store(builder.mul(result, x), presult)
-        builder.branch(bbcond)
-
-    builder.position_at_end(bbexit)
-    return builder.load(presult)
+    return context.compile_internal(builder, int_power, sig, args,
+                                    locals={'r': sig.return_type})
 
 
 def int_slt_impl(context, builder, sig, args):
@@ -429,8 +387,8 @@ def _implement_integer_operators():
     builtin(implement('~', ty)(int_invert_impl))
     builtin(implement(types.sign_type, ty)(int_sign_impl))
 
-    builtin(implement('**', ty, ty)(int_spower_impl))
-    builtin(implement(pow, ty, ty)(int_spower_impl))
+    builtin(implement('**', ty, ty)(int_power_impl))
+    builtin(implement(pow, ty, ty)(int_power_impl))
 
     for ty in types.unsigned_domain:
         builtin(implement('/?', ty, ty)(int_udiv_impl))
@@ -441,8 +399,8 @@ def _implement_integer_operators():
         builtin(implement('<=', ty, ty)(int_ule_impl))
         builtin(implement('>', ty, ty)(int_ugt_impl))
         builtin(implement('>=', ty, ty)(int_uge_impl))
-        builtin(implement('**', types.float64, ty)(int_upower_impl))
-        builtin(implement(pow, types.float64, ty)(int_upower_impl))
+        builtin(implement('**', types.float64, ty)(int_power_impl))
+        builtin(implement(pow, types.float64, ty)(int_power_impl))
         # logical shift for unsigned
         builtin(implement('>>', ty, types.uint32)(int_lshr_impl))
         builtin(implement(types.abs_type, ty)(uint_abs_impl))
@@ -457,8 +415,8 @@ def _implement_integer_operators():
         builtin(implement('>', ty, ty)(int_sgt_impl))
         builtin(implement('>=', ty, ty)(int_sge_impl))
         builtin(implement(types.abs_type, ty)(int_abs_impl))
-        builtin(implement('**', types.float64, ty)(int_spower_impl))
-        builtin(implement(pow, types.float64, ty)(int_spower_impl))
+        builtin(implement('**', types.float64, ty)(int_power_impl))
+        builtin(implement(pow, types.float64, ty)(int_power_impl))
         # arithmetic shift for signed
         builtin(implement('>>', ty, types.uint32)(int_ashr_impl))
 

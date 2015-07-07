@@ -151,6 +151,7 @@ The following top-level functions are supported:
 * :func:`numpy.full_like`
 * :func:`numpy.identity`
 * :func:`numpy.linspace` (only the 3-argument form)
+* :func:`numpy.median` (only the first argument)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :func:`numpy.ones`

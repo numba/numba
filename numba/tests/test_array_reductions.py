@@ -8,7 +8,7 @@ from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
 from numba.numpy_support import as_dtype
-from .support import TestCase, CompilationCache
+from .support import TestCase, CompilationCache, skip_on_numpy_16
 
 
 def array_cumprod(arr):
@@ -76,6 +76,9 @@ def array_argmax(arr):
 
 def array_argmax_global(arr):
     return np.argmax(arr)
+
+def array_median_global(arr):
+    return np.median(arr)
 
 
 def base_test_arrays(dtype):
@@ -146,6 +149,33 @@ class TestArrayReductions(TestCase):
     def test_argmax_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_argmax, arr)
+        self.assertPreciseEqual(npr, nbr)
+
+    def test_median_odd(self):
+        arr = np.arange(101)
+        np.random.shuffle(arr)
+        npr, nbr = run_comparative(array_median_global, arr)
+        self.assertPreciseEqual(npr, nbr)
+
+    def test_median_even(self):
+        arr = np.arange(100)
+        np.random.shuffle(arr)
+        npr, nbr = run_comparative(array_median_global, arr)
+        self.assertPreciseEqual(npr, nbr)
+
+    def test_median_sorted(self):
+        arr = np.arange(100)
+        npr, nbr = run_comparative(array_median_global, arr)
+        self.assertPreciseEqual(npr, nbr)
+
+    def test_median_revsorted(self):
+        arr = np.arange(100, 0, -1)
+        npr, nbr = run_comparative(array_median_global, arr)
+        self.assertPreciseEqual(npr, nbr)
+
+    def test_median_duplicate(self):
+        arr = np.ones(100)
+        npr, nbr = run_comparative(array_median_global, arr)
         self.assertPreciseEqual(npr, nbr)
 
     def test_array_sum_global(self):
@@ -261,6 +291,65 @@ class TestArrayReductions(TestCase):
     def test_std_magnitude(self):
         self.check_aggregation_magnitude(array_std)
         self.check_aggregation_magnitude(array_std_global)
+
+    def _do_check_nptimedelta(self, pyfunc, arr):
+        arrty = typeof(arr)
+
+        cres = compile_isolated(pyfunc, [arrty])
+        cfunc = cres.entry_point
+
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        # Even vs. odd size, for np.median
+        self.assertPreciseEqual(cfunc(arr[:-1]), pyfunc(arr[:-1]))
+        # Test with different orders, for np.median
+        arr = arr[::-1].copy()  # Keep 'C' layout
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        np.random.shuffle(arr)
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        # Test with a NaT
+        arr[arr.size // 2] = 'NaT'
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        # Test with all NaTs
+        arr.fill(arrty.dtype('NaT'))
+        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+
+    @skip_on_numpy_16
+    def check_npdatetime(self, pyfunc):
+        arr = np.arange(10).astype(dtype='M8[Y]')
+        self._do_check_nptimedelta(pyfunc, arr)
+
+    @skip_on_numpy_16
+    def check_nptimedelta(self, pyfunc):
+        arr = np.arange(10).astype(dtype='m8[s]')
+        self._do_check_nptimedelta(pyfunc, arr)
+
+    def test_min_npdatetime(self):
+        self.check_npdatetime(array_min)
+        self.check_nptimedelta(array_min)
+
+    def test_max_npdatetime(self):
+        self.check_npdatetime(array_max)
+        self.check_nptimedelta(array_max)
+
+    def test_argmin_npdatetime(self):
+        self.check_npdatetime(array_argmin)
+        self.check_nptimedelta(array_argmin)
+
+    def test_argmax_npdatetime(self):
+        self.check_npdatetime(array_argmax)
+        self.check_nptimedelta(array_argmax)
+
+    def test_median_npdatetime(self):
+        self.check_nptimedelta(array_median_global)
+
+    def test_sum_npdatetime(self):
+        self.check_nptimedelta(array_sum)
+
+    def test_cumsum_npdatetime(self):
+        self.check_nptimedelta(array_cumsum)
+
+    def test_mean_npdatetime(self):
+        self.check_nptimedelta(array_mean)
 
     @classmethod
     def install_generated_tests(cls):

@@ -696,8 +696,6 @@ typeof_init(PyObject *self, PyObject *args)
     UNWRAP_TYPE(complex64)
     UNWRAP_TYPE(complex128)
 
-    #undef UNWRAP_TYPE
-
     switch(sizeof(void*)) {
     case 4:
         tc_intp = tc_int32;
@@ -709,6 +707,8 @@ typeof_init(PyObject *self, PyObject *args)
         PyErr_SetString(PyExc_AssertionError, "sizeof(void*) != {4, 8}");
         return NULL;
     }
+
+    #undef UNWRAP_TYPE
 
     typecache = PyDict_New();
     ndarray_typecache = PyDict_New();

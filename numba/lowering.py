@@ -704,17 +704,8 @@ class Lower(BaseLower):
 
     def storevar(self, value, name):
         fetype = self.typeof(name)
-        # Clean up existing value stored in the variable
-        try:
-            # Load original value in variable
-            old = self.loadvar(name)
-        except KeyError:
-            # If it has not been defined, don't do anything
-            pass
-        else:
-            # Else, dereference the old value
-            self.decref(fetype, old)
-        # Store variable
+
+        # Define if not already
         if name not in self.varmap:
             # If not already defined, allocate it
             llty = self.context.get_value_type(fetype)
@@ -722,6 +713,11 @@ class Lower(BaseLower):
             # Remember the pointer
             self.varmap[name] = ptr
 
+        # Clean up existing value stored in the variable
+        old = self.loadvar(name)
+        self.decref(fetype, old)
+
+        # Store variable
         ptr = self.getvar(name)
         if value.type != ptr.type.pointee:
             msg = ("Storing {value.type} to ptr of {ptr.type.pointee}. "
