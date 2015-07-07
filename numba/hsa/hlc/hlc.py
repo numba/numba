@@ -1,6 +1,7 @@
 # A temporary wrapper to connect to the HLC LLVM binaries.
 # Currently, connect to commandline interface.
 from __future__ import print_function, absolute_import
+import sys
 from subprocess import check_call
 import tempfile
 import os
@@ -8,15 +9,21 @@ from collections import namedtuple
 
 from numba import config
 
+_real_check_call = check_call
+
+
+def check_call(*args, **kwargs):
+    print('CMD: ' + ';'.join(args), file=sys.stdout)
+    return _real_check_call(*args, **kwargs)
+
 
 os.environ['HSAILBIN'] = os.environ.get('HSAILBIN', '/opt/amd/bin')
-
 
 class CmdLine(object):
     CMD_OPT = ("$HSAILBIN/opt "
                "-O3 "
-               "-gpu "
-               "-whole "
+               # "-gpu "
+               # "-whole "
                "-verify "
                "-S "
                "-o {fout} "
@@ -29,26 +36,26 @@ class CmdLine(object):
                   "{fin}")
 
     CMD_GEN_HSAIL = ("$HSAILBIN/llc -O2 "
-                     "-march=hsail-64 "
+                     "-march=hsail64 "
                      "-filetype=asm "
                      "-o {fout} "
                      "{fin}")
 
     CMD_GEN_BRIG = ("$HSAILBIN/llc -O2 "
-                    "-march=hsail-64 "
+                    "-march=hsail64 "
                     "-filetype=obj "
                     "-o {fout} "
                     "{fin}")
 
     CMD_LINK_BUILTINS = ("$HSAILBIN/llvm-link "
-                         "-prelink-opt "
+                         # "-prelink-opt "
                          "-S "
                          "-o {fout} "
                          "{fin} "
-                         "-l$HSAILBIN/builtins-hsail.bc")
+                         "$HSAILBIN/builtins-hsail.opt.bc")
 
     CMD_LINK_LIBS = ("$HSAILBIN/llvm-link "
-                     "-prelink-opt "
+                     # "-prelink-opt "
                      "-S "
                      "-o {fout} "
                      "{fin} ")
@@ -87,7 +94,7 @@ class Module(object):
         self._finalized = False
 
     def __del__(self):
-        # return
+        return
         self.close()
 
     def close(self):
