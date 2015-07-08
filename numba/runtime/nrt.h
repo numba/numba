@@ -86,6 +86,13 @@ void NRT_MemSys_set_atomic_cas_stub(void);
  */
 void NRT_MemSys_process_defer_dtor(void);
 
+/*
+ * The following functions get internal statistics of the memory subsystem.
+ */
+size_t NRT_MemSys_get_stats_alloc();
+size_t NRT_MemSys_get_stats_free();
+
+
 /* Memory Info API */
 
 /* Create a new MemInfo

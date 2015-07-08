@@ -1,10 +1,14 @@
 from __future__ import print_function, absolute_import, division
 
+from collections import namedtuple
+
 from . import atomicops
 from llvmlite import binding as ll
 
 from numba.utils import finalize as _finalize
 from . import _nrt_python as _nrt
+
+_nrt_mstats = namedtuple("nrt_mstats", ["alloc", "free"])
 
 
 class _Runtime(object):
@@ -73,6 +77,10 @@ class _Runtime(object):
         """Process all deferred dtors.
         """
         _nrt.memsys_process_defer_dtor()
+
+    def get_allocation_stats(self):
+        return _nrt_mstats(alloc=_nrt.memsys_get_stats_alloc(),
+                                 free=_nrt.memsys_get_stats_free())
 
 
 # Alias to _nrt_python._MemInfo

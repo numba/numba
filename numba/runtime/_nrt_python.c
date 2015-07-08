@@ -63,6 +63,23 @@ memsys_process_defer_dtor(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+static
+PyObject*
+memsys_get_stats_alloc(PyObject *self, PyObject *args) {
+    if (!PyArg_ParseTuple(args, "")) {
+        return NULL;
+    }
+    return PyLong_FromSize_t(NRT_MemSys_get_stats_alloc());
+}
+
+static
+PyObject*
+memsys_get_stats_free(PyObject *self, PyObject *args) {
+    if (!PyArg_ParseTuple(args, "")) {
+        return NULL;
+    }
+    return PyLong_FromSize_t(NRT_MemSys_get_stats_free());
+}
 
 static
 void pyobject_dtor(void *ptr, void* info) {
@@ -531,9 +548,13 @@ static PyMethodDef ext_methods[] = {
     declmethod(memsys_set_atomic_inc_dec),
     declmethod(memsys_set_atomic_cas),
     declmethod(memsys_process_defer_dtor),
+    declmethod(memsys_get_stats_alloc),
+    declmethod(memsys_get_stats_free),
     declmethod(meminfo_new),
     declmethod(meminfo_alloc),
     declmethod(meminfo_alloc_safe),
+
+
     { NULL },
 #undef declmethod
 };

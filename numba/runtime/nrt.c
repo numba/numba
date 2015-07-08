@@ -37,6 +37,8 @@ struct MemSys{
     atomic_meminfo_cas_func atomic_cas;
     /* Shutdown flag */
     int shutting;
+    /* Stats */
+    size_t stats_alloc, stats_free;
 
 };
 
@@ -153,6 +155,14 @@ void NRT_MemSys_set_atomic_inc_dec(atomic_inc_dec_func inc,
 
 void NRT_MemSys_set_atomic_cas(atomic_cas_func cas) {
     TheMSys.atomic_cas = (atomic_meminfo_cas_func)cas;
+}
+
+size_t NRT_MemSys_get_stats_alloc() {
+    return TheMSys.stats_alloc;
+}
+
+size_t NRT_MemSys_get_stats_free() {
+    return TheMSys.stats_free;
 }
 
 static
@@ -337,12 +347,14 @@ void NRT_MemInfo_dump(MemInfo *mi, FILE *out) {
 void* NRT_Allocate(size_t size) {
     void *ptr = malloc(size);
     NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%llu ptr=%p\n", size, ptr));
+    TheMSys.atomic_inc(&TheMSys.stats_alloc);
     return ptr;
 }
 
 void NRT_Free(void *ptr) {
     NRT_Debug(nrt_debug_print("NRT_Free %p\n", ptr));
     free(ptr);
+    TheMSys.atomic_inc(&TheMSys.stats_free);
 }
 
 void* NRT_MemAlign(void **ptr, size_t size, unsigned align) {
