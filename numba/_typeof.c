@@ -62,7 +62,7 @@ string_writer_clear(string_writer_t *w)
 }
 
 /* Ensure at least *bytes* can be appended to the string writer's buffer. */
-static inline int
+static int
 string_writer_ensure(string_writer_t *w, size_t bytes)
 {
     size_t newsize;
@@ -86,7 +86,7 @@ string_writer_ensure(string_writer_t *w, size_t bytes)
     }
 }
 
-static inline int
+static int
 string_writer_put_char(string_writer_t *w, unsigned char c)
 {
     if (string_writer_ensure(w, 1))
@@ -95,7 +95,7 @@ string_writer_put_char(string_writer_t *w, unsigned char c)
     return 0;
 }
 
-static inline int
+static int
 string_writer_put_int32(string_writer_t *w, unsigned int v)
 {
     if (string_writer_ensure(w, 4))
@@ -108,7 +108,7 @@ string_writer_put_int32(string_writer_t *w, unsigned int v)
     return 0;
 }
 
-static inline int
+static int
 string_writer_put_intp(string_writer_t *w, npy_intp v)
 {
     const int N = sizeof(npy_intp);
@@ -128,7 +128,7 @@ string_writer_put_intp(string_writer_t *w, npy_intp v)
     return 0;
 }
 
-static inline int
+static int
 string_writer_put_string(string_writer_t *w, const char *s)
 {
     if (s == NULL) {
