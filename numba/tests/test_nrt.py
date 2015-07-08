@@ -31,11 +31,14 @@ class TestNrtMemInfo(unittest.TestCase):
         addr = 0xdeadcafe  # some made up location
 
         mi = rtsys.meminfo_new(addr, d)
+        self.assertEqual(mi.refcount, 1)
         del d
         self.assertEqual(Dummy.alive, 1)
         mi.acquire()
+        self.assertEqual(mi.refcount, 2)
         self.assertEqual(Dummy.alive, 1)
         mi.release()
+        self.assertEqual(mi.refcount, 1)
         del mi
         self.assertEqual(Dummy.alive, 0)
 
@@ -45,13 +48,16 @@ class TestNrtMemInfo(unittest.TestCase):
         addr = 0xdeadcafe  # some made up location
 
         mi = rtsys.meminfo_new(addr, d)
+        self.assertEqual(mi.refcount, 1)
         del d
         self.assertEqual(Dummy.alive, 1)
-        for _ in range(100):
+        for ct in range(100):
             mi.acquire()
+        self.assertEqual(mi.refcount, 1 + 100)
         self.assertEqual(Dummy.alive, 1)
         for _ in range(100):
             mi.release()
+        self.assertEqual(mi.refcount, 1)
         del mi
         self.assertEqual(Dummy.alive, 0)
 
@@ -61,6 +67,7 @@ class TestNrtMemInfo(unittest.TestCase):
         addr = 0xdeadcafe  # some made up location
 
         mi = rtsys.meminfo_new(addr, d)
+        self.assertEqual(mi.refcount, 1)
         # Set defer flag
         mi.defer = True
         del d
@@ -81,7 +88,9 @@ class TestNrtMemInfo(unittest.TestCase):
         addr = 0xdeadcafe  # some made up location
 
         mi = rtsys.meminfo_new(addr, d)
+        self.assertEqual(mi.refcount, 1)
         mview = memoryview(mi)
+        self.assertEqual(mi.refcount, 1)
         self.assertEqual(addr, mi.data)
         self.assertFalse(mview.readonly)
         self.assertIs(mi, mview.obj)
@@ -143,6 +152,7 @@ class TestNrtMemInfo(unittest.TestCase):
         dtype = np.dtype(np.uint32)
         bytesize = dtype.itemsize * 10
         mi = rtsys.meminfo_alloc(bytesize, safe=True)
+        self.assertEqual(mi.refcount, 1)
         addr = mi.data
         c_arr = cast(c_void_p(addr), POINTER(c_uint32 * 10))
         # Check 0xCB-filling
@@ -155,6 +165,7 @@ class TestNrtMemInfo(unittest.TestCase):
 
         arr = np.ndarray(dtype=dtype, shape=bytesize // dtype.itemsize,
                          buffer=mi)
+        self.assertEqual(mi.refcount, 1)
         del mi
         # Modify array with NumPy
         np.testing.assert_equal(np.arange(arr.size) + 1, arr)
