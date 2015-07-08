@@ -26,3 +26,4 @@ Other proposals
    :maxdepth: 1
 
    integer-typing.rst
+   extension-points.rst
