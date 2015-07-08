@@ -17,6 +17,9 @@ If some of the proposals are implemented, we should first strive
 to use and exercise them internally, before exposing the APIs to the
 public.
 
+.. note::
+   This document doesn't cover CUDA or any other non-CPU backend.
+
 
 Typing
 ======
