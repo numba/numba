@@ -553,8 +553,6 @@ static PyMethodDef ext_methods[] = {
     declmethod(meminfo_new),
     declmethod(meminfo_alloc),
     declmethod(meminfo_alloc_safe),
-
-
     { NULL },
 #undef declmethod
 };
