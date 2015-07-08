@@ -213,6 +213,16 @@ MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
     return mi;
 }
 
+size_t NRT_MemInfo_refcount(MemInfo *mi) {
+    /* Should never returns 0 for a valid MemInfo */
+    if (mi && mi->payload.data)
+        return mi->payload.refct;
+    else{
+        assert (0 && "Unreachable: MemInfo is invalid");
+        return 0;
+    }
+}
+
 static
 void nrt_internal_dtor(void *ptr, void *info) {
     NRT_Debug(nrt_debug_print("nrt_internal_dtor %p, %p\n", ptr, info));

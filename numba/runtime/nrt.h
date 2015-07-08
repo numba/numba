@@ -98,6 +98,11 @@ MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info);
 
 /*
+ * Returns the refcount of a MemInfo (must be valid).
+ */
+size_t NRT_MemInfo_refcount(MemInfo *mi);
+
+/*
  * Allocate memory of `size` bytes and return a pointer to a MemInfo structure
  * that describes the allocation
  */

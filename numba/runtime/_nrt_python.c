@@ -242,6 +242,12 @@ MemInfo_get_data(MemInfoObject *self, void *closure) {
     return PyLong_FromVoidPtr(NRT_MemInfo_data(self->meminfo));
 }
 
+static
+PyObject*
+MemInfo_get_refcount(MemInfoObject *self, void *closure) {
+    return PyLong_FromSize_t(NRT_MemInfo_refcount(self->meminfo));
+}
+
 static void
 MemInfo_dealloc(MemInfoObject *self)
 {
@@ -268,6 +274,10 @@ static PyGetSetDef MemInfo_getsets[] = {
     {"data",
      (getter)MemInfo_get_data, NULL,
      "Get the data pointer as an integer",
+     NULL},
+    {"refcount",
+     (getter)MemInfo_get_refcount, NULL,
+     "Get the refcount",
      NULL},
     {NULL}  /* Sentinel */
 };
