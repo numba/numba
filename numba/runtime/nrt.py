@@ -79,6 +79,10 @@ class _Runtime(object):
         _nrt.memsys_process_defer_dtor()
 
     def get_allocation_stats(self):
+        """
+        Returns a namedtuple of (alloc, free) for count of each
+        memory operations.
+        """
         return _nrt_mstats(alloc=_nrt.memsys_get_stats_alloc(),
                                  free=_nrt.memsys_get_stats_free())
 
