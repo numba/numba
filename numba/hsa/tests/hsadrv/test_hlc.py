@@ -6,9 +6,10 @@ from numba.hsa.hlc import hlc
 SPIR_SAMPLE = """
 ; ModuleID = 'kernel.out.bc'
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v24:32:32-v32:32:32-v48:64:64-v64:64:64-v96:128:128-v128:128:128-v192:256:256-v256:256:256-v512:512:512-v1024:1024:1024-n32"
-target triple = "spir64-unknown-unknown"
+target triple = "hsail64-pc-unknown-amdopencl"
 
-define spir_kernel void @square(float addrspace(1)* nocapture %input, float addrspace(1)* nocapture %output) {
+define spir_kernel void @copy(float addrspace(1)* nocapture %input,
+float addrspace(1)* nocapture %output) {
   %1 = load float addrspace(1)* %input, align 4, !tbaa !8
   store float %1, float addrspace(1)* %output, align 4, !tbaa !8
   ret void
@@ -21,7 +22,7 @@ define spir_kernel void @square(float addrspace(1)* nocapture %input, float addr
 !opencl.used.extensions = !{!7}
 !opencl.used.optional.core.features = !{!7}
 !opencl.compiler.options = !{!7}
-!0 = metadata !{void (float addrspace(1)*, float addrspace(1)*)* @square, metadata !1, metadata !2, metadata !3, metadata !4, metadata !5}
+!0 = metadata !{void (float addrspace(1)*, float addrspace(1)*)* @copy, metadata !1, metadata !2, metadata !3, metadata !4, metadata !5}
 !1 = metadata !{metadata !"kernel_arg_addr_space", i32 1, i32 1}
 !2 = metadata !{metadata !"kernel_arg_access_qual", metadata !"none", metadata !"none"}
 !3 = metadata !{metadata !"kernel_arg_type", metadata !"float*", metadata !"float*"}
@@ -36,11 +37,33 @@ define spir_kernel void @square(float addrspace(1)* nocapture %input, float addr
 
 
 class TestHLC(unittest.TestCase):
-    def test_hlc(self):
+    def test_hsail(self):
         hlcmod = hlc.Module()
         hlcmod.load_llvm(SPIR_SAMPLE)
         hsail = hlcmod.finalize().hsail
-        self.assertIn("prog kernel &square", hsail)
+        self.assertIn("prog kernel &copy", hsail)
+
+    def test_brig(self):
+        hlcmod = hlc.Module()
+        hlcmod.load_llvm(SPIR_SAMPLE)
+        brig = hlcmod.finalize().brig
+        # Check the first 8 bytes for the magic string
+        self.assertEqual(brig[:8].decode('latin1'), 'HSA BRIG')
+        # Try to load the symbol
+
+        from numba.hsa.hsadrv.driver import BrigModule, Program, hsa, Executable
+
+        agent = hsa.components[0]
+        brigmod = BrigModule(brig)
+        prog = Program()
+        prog.add_module(brigmod)
+        code = prog.finalize(agent.isa)
+        ex = Executable()
+        ex.load(agent, code)
+        ex.freeze()
+        sym = ex.get_symbol(agent, "&copy")
+        self.assertNotEqual(sym.kernel_object, 0)
+        self.assertGreater(sym.kernarg_segment_size, 0)
 
 
 if __name__ == '__main__':
