@@ -4,6 +4,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.runtime import rtsys
 from numba.config import PYVERSION
+from .support import MemoryLeakMixin
 
 
 class Dummy(object):
@@ -183,7 +184,7 @@ class TestNrtMemInfo(unittest.TestCase):
         # consumed by another thread.
 
 
-class TestNRTIssue(unittest.TestCase):
+class TestNRTIssue(MemoryLeakMixin, unittest.TestCase):
     def test_issue_with_refct_op_pruning(self):
         """
         GitHub Issue #1244 https://github.com/numba/numba/issues/1244

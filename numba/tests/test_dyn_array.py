@@ -8,8 +8,8 @@ import random
 from numba import unittest_support as unittest
 from numba import njit
 from numba import utils
-from numba.runtime import rtsys
 from numba.numpy_support import version as numpy_version
+from .support import MemoryLeakMixin
 
 
 nrtjit = njit(_nrt=True, nogil=True)
@@ -33,18 +33,10 @@ class BaseTest(unittest.TestCase):
 
 
 
-class NrtRefCtTest(object):
+class NrtRefCtTest(MemoryLeakMixin):
     def assert_array_nrt_refct(self, arr, expect):
         self.assertEqual(arr.base.refcount, expect)
 
-    def setUp(self):
-        self._init_nrt_stats = rtsys.get_allocation_stats()
-
-    def tearDown(self):
-        new_stats = rtsys.get_allocation_stats()
-        alloc = new_stats.alloc - self._init_nrt_stats.alloc
-        free = new_stats.free - self._init_nrt_stats.free
-        self.assertEqual(alloc, free)
 
 
 class TestDynArray(NrtRefCtTest, unittest.TestCase):

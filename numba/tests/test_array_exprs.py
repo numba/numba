@@ -8,6 +8,7 @@ from numba import unittest_support as unittest
 from numba import compiler, typing, typeof, ir
 from numba.compiler import Pipeline, _PipelineManager, Flags
 from numba.targets import cpu
+from .support import MemoryLeakMixin
 
 
 class Namespace(dict):
@@ -79,7 +80,7 @@ class RewritesTester(Pipeline):
         return cls.mk_pipeline(args, return_type, flags, locals, library, **kws)
 
 
-class TestArrayExpressions(unittest.TestCase):
+class TestArrayExpressions(MemoryLeakMixin, unittest.TestCase):
 
     def test_simple_expr(self):
         '''
@@ -260,7 +261,7 @@ class TestArrayExpressions(unittest.TestCase):
                                    ns.test_pipeline.interp.blocks)
 
 
-class TestRewriteIssues(unittest.TestCase):
+class TestRewriteIssues(MemoryLeakMixin, unittest.TestCase):
     def test_issue_1184(self):
         from numba import jit
         import numpy as np
