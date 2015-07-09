@@ -5,6 +5,8 @@
 #include <assert.h>
 
 #include "_typeof.h"
+#include "_hashtable.h"
+
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 
@@ -59,6 +61,20 @@ string_writer_clear(string_writer_t *w)
 {
     if (w->buf != w->static_buf)
         free(w->buf);
+}
+
+static void
+string_writer_move(string_writer_t *dest, const string_writer_t *src)
+{
+    dest->n = src->n;
+    dest->allocated = src->allocated;
+    if (src->buf == src->static_buf) {
+        dest->buf = dest->static_buf;
+        memcpy(dest->buf, src->buf, src->n);
+    }
+    else {
+        dest->buf = src->buf;
+    }
 }
 
 /* Ensure at least *bytes* can be appended to the string writer's buffer. */
@@ -400,8 +416,38 @@ int typecode_fallback_keep_ref(PyObject *dispatcher, PyObject *val) {
 }
 
 
-/* A cache mapping fingerprints to typecodes */
-static PyObject *fingerprint_map = NULL;
+/* A cache mapping fingerprints (string_writer_t *) to typecodes (int). */
+static _Py_hashtable_t *fingerprint_hashtable = NULL;
+
+static Py_uhash_t
+hash_writer(const void *key)
+{
+    string_writer_t *writer = (string_writer_t *) key;
+    Py_uhash_t x = 0;
+
+    /* The old FNV algorithm used by Python 2 */
+    if (writer->n > 0) {
+        unsigned char *p = (unsigned char *) writer->buf;
+        Py_ssize_t len = writer->n;
+        x ^= *p << 7;
+        while (--len >= 0)
+            x = (1000003*x) ^ *p++;
+        x ^= writer->n;
+        if (x == -1)
+            x = -2;
+    }
+    return x;
+}
+
+static int
+compare_writer(const void *key, const _Py_hashtable_entry_t *entry)
+{
+    string_writer_t *v = (string_writer_t *) key;
+    string_writer_t *w = (string_writer_t *) entry->key;
+    if (v->n != w->n)
+        return 0;
+    return memcmp(v->buf, w->buf, v->n) == 0;
+}
 
 /* Try to compute *val*'s typecode using its fingerprint and the
  * fingerprint->typecode cache.
@@ -409,16 +455,13 @@ static PyObject *fingerprint_map = NULL;
 static int
 typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
 {
-    PyObject *fingerprint, *typecodeobj;
     int typecode;
+    string_writer_t w;
 
-    if (fingerprint_map == NULL) {
-        fingerprint_map = PyDict_New();
-        if (fingerprint_map == NULL)
-            return -1;
-    }
-    fingerprint = typeof_compute_fingerprint(val);
-    if (fingerprint == NULL) {
+    string_writer_init(&w);
+
+    if (compute_fingerprint(&w, val)) {
+        string_writer_clear(&w);
         if (PyErr_ExceptionMatches(PyExc_NotImplementedError)) {
             /* Can't compute a type fingerprint for the given value,
                fall back on typeof() without caching. */
@@ -427,38 +470,34 @@ typecode_using_fingerprint(PyObject *dispatcher, PyObject *val)
         }
         return -1;
     }
-    typecodeobj = PyDict_GetItem(fingerprint_map, fingerprint);
-    if (typecodeobj == NULL)
-        goto _fallback;
-    Py_DECREF(fingerprint);
-    if (!PyLong_Check(typecodeobj)) {
-        PyErr_Format(PyExc_TypeError,
-                     "unexpected type for typecode: '%s'",
-                     Py_TYPE(fingerprint)->tp_name);
-        return -1;
+    if (_Py_HASHTABLE_GET(fingerprint_hashtable, &w, typecode) > 0) {
+        /* Cache hit */
+        string_writer_clear(&w);
+        return typecode;
     }
-    return PyLong_AsLong(typecodeobj);
 
-_fallback:
-    /* Not found in fingerprint map, invoke pure Python typeof() and
-     * cache result.
+    /* Not found in cache: invoke pure Python typeof() and cache result.
      * Note we have to keep the type alive forever as explained
      * above in _typecode_fallback().
      */
     typecode = typecode_fallback_keep_ref(dispatcher, val);
     if (typecode >= 0) {
-        int res;
-        typecodeobj = PyLong_FromLong(typecode);
-        if (typecodeobj == NULL) {
-            Py_DECREF(fingerprint);
+        string_writer_t *key = (string_writer_t *) malloc(sizeof(string_writer_t));
+        if (key == NULL) {
+            string_writer_clear(&w);
+            PyErr_NoMemory();
             return -1;
         }
-        res = PyDict_SetItem(fingerprint_map, fingerprint, typecodeobj);
-        Py_DECREF(typecodeobj);
-        if (res)
-            typecode = -1;
+        /* Ownership of the string writer's buffer will be transferred
+         * to the hash table.
+         */
+        string_writer_move(key, &w);
+        if (_Py_HASHTABLE_SET(fingerprint_hashtable, key, typecode)) {
+            string_writer_clear(&w);
+            PyErr_NoMemory();
+            return -1;
+        }
     }
-    Py_DECREF(fingerprint);
     return typecode;
 }
 
@@ -649,7 +688,7 @@ int typecode_arrayscalar(PyObject *dispatcher, PyObject* aryscalar) {
 int
 typeof_typecode(PyObject *dispatcher, PyObject *val)
 {
-    PyTypeObject *tyobj = val->ob_type;
+    PyTypeObject *tyobj = Py_TYPE(val);
     /* This needs to be kept in sync with Dispatcher.typeof_pyval(),
      * otherwise funny things may happen.
      */
@@ -751,6 +790,14 @@ typeof_init(PyObject *self, PyObject *args)
     if (typecache == NULL || ndarray_typecache == NULL ||
         structured_dtypes == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "failed to create type cache");
+        return NULL;
+    }
+
+    fingerprint_hashtable = _Py_hashtable_new(sizeof(int),
+                                              hash_writer,
+                                              compare_writer);
+    if (fingerprint_hashtable == NULL) {
+        PyErr_NoMemory();
         return NULL;
     }
 
