@@ -189,9 +189,43 @@ Code generation
 Concrete representation of values of a Numba type
 -------------------------------------------------
 
+Any concrete Numba type must be able to be represented in LLVM form
+(for variable storage, argument passing, etc.).  One defines that
+representation by implementing a datamodel class and registering it
+with a decorator.  Datamodel classes for standard types are defined
+in :mod:`numba.datamodel.models`.
+
+Proposed changes
+''''''''''''''''
+
+No change required.
+
+
 Implementation of an operation
 ------------------------------
+
+
+.. XXX Conversion between types?
+
 
 Conversion from / to Python objects
 -----------------------------------
 
+Some types need to be converted from or to Python objects, if they can
+be passed as function arguments or returned from a function.  The
+corresponding boxing and unboxing operations are implemented using
+a generic function.  The implementations for standard Numba types
+are in :mod:`numba.targets.boxing`.  For example, here is the boxing
+implementation for a boolean value::
+
+   @box(types.Boolean)
+   def box_bool(c, typ, val):
+       longval = c.builder.zext(val, c.pyapi.long)
+       return c.pyapi.bool_from_long(longval)
+
+Proposed changes
+''''''''''''''''
+
+Perhaps change the implementation signature slightly, from ``(c, typ, val)``
+to ``(typ, val, c)``, to match the one chosen for the ``typeof_impl``
+generic function.
