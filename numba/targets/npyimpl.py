@@ -255,7 +255,7 @@ def _build_array(context, builder, array_ty, arg_arrays):
 
     dest_shape_tup = tuple(builder.load(dest_shape_addr)
                            for dest_shape_addr in dest_shape_addrs)
-    array_val = arrayobj._empty_nd_impl(context, builder, array_ty,
+    ret, array_val = arrayobj._empty_nd_impl(context, builder, array_ty,
                                         dest_shape_tup)
     return _prepare_argument(context, builder, array_val._getvalue(), array_ty,
                              where='implicit output argument')
@@ -308,7 +308,8 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
 
         val_out = kernel.generate(*vals_in)
         output.store_data(loop_indices, val_out)
-    return arguments[-1].return_val
+    out = arguments[-1].return_val
+    return cgutils.NewRef(out)
 
 
 # Kernels are the code to be executed inside the multidimensional loop.
