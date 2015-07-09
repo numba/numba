@@ -16,9 +16,6 @@
 static
 PyObject*
 memsys_shutdown(PyObject *self, PyObject *args) {
-    if (!PyArg_ParseTuple(args, "")) {
-        return NULL;
-    }
     NRT_MemSys_shutdown();
     Py_RETURN_NONE;
 }
@@ -56,9 +53,6 @@ memsys_set_atomic_cas(PyObject *self, PyObject *args) {
 static
 PyObject*
 memsys_process_defer_dtor(PyObject *self, PyObject *args) {
-    if (!PyArg_ParseTuple(args, "")) {
-        return NULL;
-    }
     NRT_MemSys_process_defer_dtor();
     Py_RETURN_NONE;
 }
@@ -66,18 +60,12 @@ memsys_process_defer_dtor(PyObject *self, PyObject *args) {
 static
 PyObject*
 memsys_get_stats_alloc(PyObject *self, PyObject *args) {
-    if (!PyArg_ParseTuple(args, "")) {
-        return NULL;
-    }
     return PyLong_FromSize_t(NRT_MemSys_get_stats_alloc());
 }
 
 static
 PyObject*
 memsys_get_stats_free(PyObject *self, PyObject *args) {
-    if (!PyArg_ParseTuple(args, "")) {
-        return NULL;
-    }
     return PyLong_FromSize_t(NRT_MemSys_get_stats_free());
 }
 
@@ -548,12 +536,13 @@ NRT_decref(MemInfo* mi) {
 
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
-    declmethod(memsys_shutdown),
+#define declmethod_noargs(func) { #func , ( PyCFunction )func , METH_NOARGS, NULL }
+    declmethod_noargs(memsys_shutdown),
     declmethod(memsys_set_atomic_inc_dec),
     declmethod(memsys_set_atomic_cas),
-    declmethod(memsys_process_defer_dtor),
-    declmethod(memsys_get_stats_alloc),
-    declmethod(memsys_get_stats_free),
+    declmethod_noargs(memsys_process_defer_dtor),
+    declmethod_noargs(memsys_get_stats_alloc),
+    declmethod_noargs(memsys_get_stats_free),
     declmethod(meminfo_new),
     declmethod(meminfo_alloc),
     declmethod(meminfo_alloc_safe),
