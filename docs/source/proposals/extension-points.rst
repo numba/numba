@@ -140,6 +140,9 @@ and ``.imag`` attributes of complex numbers::
        def resolve_imag(self, ty):
            return ty.underlying_float
 
+.. note::
+   :class:`AttributeTemplate` only works for getting attributes.  Setting
+   an attribute's value is hardcoded in :mod:`numba.typeinfer`.
 
 The :class:`CallableTemplate` base class offers an easier way to parse
 flexible function signatures, by letting one define a callable that has
@@ -169,7 +172,7 @@ full signature)
 Proposed changes
 ''''''''''''''''
 
-XXX If we expose some of this, should we streamline the API first?
+If we expose some of this, should we streamline the API first?
 The class-based API can feel clumsy, one could instead imagine
 a functional API for some of the template kinds:
 
@@ -200,12 +203,53 @@ Proposed changes
 
 No change required.
 
+Conversion between types
+------------------------
+
+Implicit conversion between Numba types is currently implemented as a
+monolithic sequence of choices and type checks in the
+:meth:`BaseContext.cast` method.  To add a new implicit conversion, one
+appends a type-specific check in that method.
+
+Boolean evaluation is a special case of implicit conversion (the
+destination type being :class:`types.Boolean`).
+
+.. note::
+   Explicit conversion is seen as a regular operation, e.g. a constructor
+   call.
+
+Proposed changes
+''''''''''''''''
+
+Implicit conversion could use some kind of generic function, with multiple
+dispatch based on the source and destination types.
 
 Implementation of an operation
 ------------------------------
 
+Other operations are implemented and registered using a set of generic
+functions and decorators.  For example, here is how lookup for a the ``.ndim``
+attribute on Numpy arrays is implemented::
 
-.. XXX Conversion between types?
+   @builtin_attr
+   @impl_attribute(types.Kind(types.Array), "ndim", types.intp)
+   def array_ndim(context, builder, typ, value):
+       return context.get_constant(types.intp, typ.ndim)
+
+And here is how calling ``len()`` on a tuple value is implemented::
+
+   @builtin
+   @implement(types.len_type, types.Kind(types.BaseTuple))
+   def tuple_len(context, builder, sig, args):
+       tupty, = sig.args
+       retty = sig.return_type
+       return context.get_constant(retty, len(tupty.types))
+
+Proposed changes
+''''''''''''''''
+
+No changes required.  Perhaps review and streamine the API (drop the
+requirement to write ``types.Kind(...)`` explicitly?).
 
 
 Conversion from / to Python objects
