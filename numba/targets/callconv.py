@@ -329,14 +329,23 @@ class CPUCallConv(BaseCallConv):
 
     def decorate_function(self, fn, args, fe_argtypes):
         """
-        Set names of function arguments.
+        Set names of function arguments, and add useful attributes to them.
         """
         arginfo = self.context.get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
-        self._get_return_argument(fn).name = "retptr"
-        self._get_excinfo_argument(fn).name = "excinfo"
-        self.get_env_argument(fn).name = "env"
+        retarg = self._get_return_argument(fn)
+        retarg.name = "retptr"
+        retarg.add_attribute("nocapture")
+        retarg.add_attribute("noalias")
+        excarg = self._get_excinfo_argument(fn)
+        excarg.name = "excinfo"
+        excarg.add_attribute("nocapture")
+        excarg.add_attribute("noalias")
+        envarg = self.get_env_argument(fn)
+        envarg.name = "env"
+        envarg.add_attribute("nocapture")
+        envarg.add_attribute("noalias")
         return fn
 
     def get_arguments(self, func):
