@@ -253,6 +253,7 @@ MemInfo_get_refcount(MemInfoObject *self, void *closure) {
     size_t refct = NRT_MemInfo_refcount(self->meminfo);
     if ( refct == (size_t)-1 ) {
         PyErr_SetString(PyExc_ValueError, "invalid MemInfo");
+        return NULL;
     }
     return PyLong_FromSize_t(refct);
 }
