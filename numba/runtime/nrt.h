@@ -7,6 +7,7 @@ All functions described here are threadsafe.
 
 /* Debugging facilities - enabled at compile-time */
 /* #undef NDEBUG */
+#undef NDEBUG
 #if 0
 #   define NRT_Debug(X) X
 #else

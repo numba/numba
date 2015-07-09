@@ -206,7 +206,7 @@ class Lower(BaseLower):
 
     def lower_inst(self, inst):
         if config.DEBUG_JIT:
-            self.context.debug_print(self.builder, str(inst))
+            self.context.debug_print(self.builder, "DEBUGJIT: " + str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
@@ -214,16 +214,10 @@ class Lower(BaseLower):
             # TODO: emit incref/decref in the numba IR properly.
             # Workaround due to lack of proper incref/decref info.
             if self.context.enable_nrt:
-                if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
-                    callexpr = inst.value
-                    # NPM function returns new reference
-                    fnty = self.typeof(callexpr.func.name)
-                    if (isinstance(fnty, types.Dispatcher)
-                        or (isinstance(fnty, types.Function)
-                            and getattr(fnty.template,
-                                        'return_new_reference',
-                                        False))):
-                        self.decref(ty, val)
+                if not (isinstance(inst.value, ir.Expr) and
+                        inst.value.op == 'call'):
+                    # All calls returns a new reference
+                    self.incref(ty, val)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -726,8 +720,6 @@ class Lower(BaseLower):
             raise AssertionError(msg)
 
         self.builder.store(value, ptr)
-        # Incref
-        self.incref(fetype, value)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)

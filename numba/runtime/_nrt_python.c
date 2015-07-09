@@ -156,7 +156,7 @@ int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
     if(PyErr_Occurred()) return -1;
     self->meminfo = (MemInfo*)raw_ptr;
     self->defer = 0;
-    NRT_MemInfo_acquire(self->meminfo);
+    assert (NRT_MemInfo_refcount(self->meminfo) > 0 && "0 refcount");
     return 0;
 }
 
@@ -373,8 +373,6 @@ int NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
 
     NRT_Debug(nrt_debug_print("NRT_adapt_ndarray_from_python %p\n",
                               arystruct->meminfo));
-
-    NRT_MemInfo_acquire(arystruct->meminfo);
     return 0;
 }
 
@@ -443,6 +441,9 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
         args = PyTuple_New(1);
         /* SETITEM steals reference */
         PyTuple_SET_ITEM(args, 0, PyLong_FromVoidPtr(arystruct->meminfo));
+        /*  Note: MemInfo_init() does not incref.  This function steals the
+         *        NRT reference.
+         */
         if (MemInfo_init(miobj, args, NULL)) {
             return NULL;
         }
@@ -503,7 +504,6 @@ NRT_adapt_buffer_from_python(Py_buffer *buf, arystruct_t *arystruct)
     if (buf->obj) {
         /* Allocate new MemInfo only if the buffer has a parent */
         arystruct->meminfo = meminfo_new_from_pyobject((void*)buf->buf, buf->obj);
-        NRT_MemInfo_acquire(arystruct->meminfo);
     }
     arystruct->data = buf->buf;
     arystruct->itemsize = buf->itemsize;
