@@ -5,12 +5,10 @@ the buffer protocol.
 
 from __future__ import print_function, absolute_import, division
 
-from functools import reduce
 import math
 
 import llvmlite.llvmpy.core as lc
 
-import numba.ctypes_support as ctypes
 import numpy
 from llvmlite.llvmpy.core import Constant
 from numba import types, cgutils, typing
@@ -1749,7 +1747,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                    itemsize=itemsize,
                    meminfo=meminfo)
 
-    return ary
+    return cgutils.NewRef(ary._getvalue()), ary
 
 def _zero_fill_array(context, builder, ary):
     """
@@ -1800,16 +1798,16 @@ def _parse_empty_like_args(context, builder, sig, args):
 @implement(numpy.empty, types.Any, types.Any)
 def numpy_empty_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    return ary._getvalue()
+    ret, _ = _empty_nd_impl(context, builder, arrtype, shapes)
+    return ret
 
 @builtin
 @implement(numpy.empty_like, types.Kind(types.Array))
 @implement(numpy.empty_like, types.Kind(types.Array), types.Kind(types.DTypeSpec))
 def numpy_empty_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    return ary._getvalue()
+    ret, _ = _empty_nd_impl(context, builder, arrtype, shapes)
+    return ret
 
 
 @builtin
@@ -1817,9 +1815,9 @@ def numpy_empty_like_nd(context, builder, sig, args):
 @implement(numpy.zeros, types.Any, types.Any)
 def numpy_zeros_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    ret, ary = _empty_nd_impl(context, builder, arrtype, shapes)
     _zero_fill_array(context, builder, ary)
-    return ary._getvalue()
+    return ret
 
 
 @builtin
@@ -1827,9 +1825,9 @@ def numpy_zeros_nd(context, builder, sig, args):
 @implement(numpy.zeros_like, types.Kind(types.Array), types.Kind(types.DTypeSpec))
 def numpy_zeros_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
+    ret, ary = _empty_nd_impl(context, builder, arrtype, shapes)
     _zero_fill_array(context, builder, ary)
-    return ary._getvalue()
+    return ret
 
 
 if numpy_version >= (1, 8):
@@ -1843,7 +1841,8 @@ if numpy_version >= (1, 8):
                 arr[idx] = value
             return arr
 
-        return context.compile_internal(builder, full, sig, args)
+        res = context.compile_internal(builder, full, sig, args)
+        return cgutils.NewRef(res)
 
     @builtin
     @implement(numpy.full, types.Any, types.Any, types.Kind(types.DTypeSpec))
@@ -1855,7 +1854,8 @@ if numpy_version >= (1, 8):
                 arr[idx] = value
             return arr
 
-        return context.compile_internal(builder, full, sig, args)
+        res = context.compile_internal(builder, full, sig, args)
+        return cgutils.NewRef(res)
 
 
     @builtin
@@ -1868,7 +1868,8 @@ if numpy_version >= (1, 8):
                 arr[idx] = value
             return arr
 
-        return context.compile_internal(builder, full_like, sig, args)
+        res = context.compile_internal(builder, full_like, sig, args)
+        return cgutils.NewRef(res)
 
 
     @builtin
@@ -1881,7 +1882,8 @@ if numpy_version >= (1, 8):
                 arr[idx] = value
             return arr
 
-        return context.compile_internal(builder, full_like, sig, args)
+        res = context.compile_internal(builder, full_like, sig, args)
+        return cgutils.NewRef(res)
 
 
 @builtin
@@ -1895,8 +1897,9 @@ def numpy_ones_nd(context, builder, sig, args):
         return arr
 
     valty = sig.return_type.dtype
-    return context.compile_internal(builder, ones, sig, args,
+    res = context.compile_internal(builder, ones, sig, args,
                                     locals={'c': valty})
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.ones, types.Any, types.Kind(types.DTypeSpec))
@@ -1908,7 +1911,8 @@ def numpy_ones_dtype_nd(context, builder, sig, args):
             arr[idx] = 1
         return arr
 
-    return context.compile_internal(builder, ones, sig, args)
+    res = context.compile_internal(builder, ones, sig, args)
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.ones_like, types.Kind(types.Array))
@@ -1920,7 +1924,8 @@ def numpy_ones_like_nd(context, builder, sig, args):
             arr[idx] = 1
         return arr
 
-    return context.compile_internal(builder, ones_like, sig, args)
+    res = context.compile_internal(builder, ones_like, sig, args)
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.ones_like, types.Kind(types.Array), types.Kind(types.DTypeSpec))
@@ -1932,7 +1937,8 @@ def numpy_ones_like_dtype_nd(context, builder, sig, args):
             arr[idx] = 1
         return arr
 
-    return context.compile_internal(builder, ones_like, sig, args)
+    res = context.compile_internal(builder, ones_like, sig, args)
+    return cgutils.NewRef(res)
 
 
 @builtin
@@ -1945,7 +1951,8 @@ def numpy_identity(context, builder, sig, args):
             arr[i, i] = 1
         return arr
 
-    return context.compile_internal(builder, identity, sig, args)
+    res = context.compile_internal(builder, identity, sig, args)
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.identity, types.Kind(types.Integer), types.Kind(types.DTypeSpec))
@@ -1957,7 +1964,8 @@ def numpy_identity(context, builder, sig, args):
             arr[i, i] = 1
         return arr
 
-    return context.compile_internal(builder, identity, sig, args)
+    res = context.compile_internal(builder, identity, sig, args)
+    return cgutils.NewRef(res)
 
 
 @builtin
@@ -1967,7 +1975,8 @@ def numpy_eye(context, builder, sig, args):
     def eye(n):
         return numpy.identity(n)
 
-    return context.compile_internal(builder, eye, sig, args)
+    res = context.compile_internal(builder, eye, sig, args)
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer))
@@ -1976,7 +1985,8 @@ def numpy_eye(context, builder, sig, args):
     def eye(n, m):
         return numpy.eye(n, m, 0, numpy.float64)
 
-    return context.compile_internal(builder, eye, sig, args)
+    res = context.compile_internal(builder, eye, sig, args)
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
@@ -1986,7 +1996,8 @@ def numpy_eye(context, builder, sig, args):
     def eye(n, m, k):
         return numpy.eye(n, m, k, numpy.float64)
 
-    return context.compile_internal(builder, eye, sig, args)
+    res = context.compile_internal(builder, eye, sig, args)
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
@@ -2005,7 +2016,8 @@ def numpy_eye(context, builder, sig, args):
                 arr[i - k, i] = 1
         return arr
 
-    return context.compile_internal(builder, eye, sig, args)
+    res = context.compile_internal(builder, eye, sig, args)
+    return cgutils.NewRef(res)
 
 
 @builtin
@@ -2016,7 +2028,8 @@ def numpy_arange_1(context, builder, sig, args):
     def arange(stop):
         return numpy.arange(0, stop, 1, dtype)
 
-    return context.compile_internal(builder, arange, sig, args)
+    res = context.compile_internal(builder, arange, sig, args)
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number))
@@ -2026,7 +2039,8 @@ def numpy_arange_2(context, builder, sig, args):
     def arange(start, stop):
         return numpy.arange(start, stop, 1, dtype)
 
-    return context.compile_internal(builder, arange, sig, args)
+    res = context.compile_internal(builder, arange, sig, args)
+    return cgutils.NewRef(res)
 
 
 @builtin
@@ -2038,7 +2052,8 @@ def numpy_arange_3(context, builder, sig, args):
     def arange(start, stop, step):
         return numpy.arange(start, stop, step, dtype)
 
-    return context.compile_internal(builder, arange, sig, args)
+    res = context.compile_internal(builder, arange, sig, args)
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number),
@@ -2068,9 +2083,9 @@ def numpy_arange_4(context, builder, sig, args):
                 val += step
             return arr
 
-    return context.compile_internal(builder, arange, sig, args,
+    res = context.compile_internal(builder, arange, sig, args,
                                     locals={'nitems': types.intp})
-
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.linspace, types.Kind(types.Number), types.Kind(types.Number))
@@ -2079,7 +2094,8 @@ def numpy_linspace_2(context, builder, sig, args):
     def linspace(start, stop):
         return numpy.linspace(start, stop, 50)
 
-    return context.compile_internal(builder, linspace, sig, args)
+    res = context.compile_internal(builder, linspace, sig, args)
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.linspace, types.Kind(types.Number), types.Kind(types.Number),
@@ -2096,7 +2112,8 @@ def numpy_linspace_3(context, builder, sig, args):
             arr[i] = start + delta * (i / div)
         return arr
 
-    return context.compile_internal(builder, linspace, sig, args)
+    res = context.compile_internal(builder, linspace, sig, args)
+    return cgutils.NewRef(res)
 
 
 @builtin
@@ -2107,7 +2124,7 @@ def array_copy(context, builder, sig, args):
     shapes = cgutils.unpack_tuple(builder, ary.shape)
 
     rettype = sig.return_type
-    ret = _empty_nd_impl(context, builder, rettype, shapes)
+    ret_new_ref, ret = _empty_nd_impl(context, builder, rettype, shapes)
 
     src_data = ary.data
     dest_data = ret.data
@@ -2146,7 +2163,8 @@ def array_copy(context, builder, sig, args):
                                                  rettype.layout, indices)
             builder.store(builder.load(src_ptr), dest_ptr)
 
-    return ret._getvalue()
+    assert isinstance(ret_new_ref, cgutils.NewRef)
+    return ret_new_ref
 
 
 @builtin
@@ -2185,5 +2203,7 @@ def np_frombuffer(context, builder, sig, args):
                    meminfo=buf.meminfo,
                    parent=buf.parent,)
 
-    return out_ary._getvalue()
+    res = out_ary._getvalue()
+    context.nrt_incref(builder, aryty, res)
+    return cgutils.NewRef(res)
 

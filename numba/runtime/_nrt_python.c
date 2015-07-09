@@ -431,8 +431,11 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
 
     if (arystruct->parent) {
         PyObject *obj = try_to_return_parent(arystruct, ndim, descr);
-        if (obj)
+        if (obj){
+            /* Release NRT reference to the numpy array */
+            NRT_MemInfo_release(arystruct->meminfo, 0);
             return obj;
+        }
     }
 
     if (arystruct->meminfo) {

@@ -210,14 +210,14 @@ class Lower(BaseLower):
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
+
+            if isinstance(val, cgutils.NewRef):
+                # THe operation has explicitly returned a new reference
+                val = val.value
+            else:
+                self.incref(ty, val)
+
             self.storevar(val, inst.target.name)
-            # TODO: emit incref/decref in the numba IR properly.
-            # Workaround due to lack of proper incref/decref info.
-            if self.context.enable_nrt:
-                if not (isinstance(inst.value, ir.Expr) and
-                        inst.value.op == 'call'):
-                    # All calls returns a new reference
-                    self.incref(ty, val)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -337,36 +337,38 @@ class Lower(BaseLower):
         # In nopython mode, closure vars are frozen like globals
         if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
             if isinstance(ty, types.ExternalFunctionPointer):
-                return self.context.get_constant_generic(self.builder, ty,
+                res = self.context.get_constant_generic(self.builder, ty,
                                                          value.value)
 
             elif isinstance(ty, types.Dummy):
-                return self.context.get_dummy_value()
+                res = self.context.get_dummy_value()
 
             elif isinstance(ty, types.Array):
-                return self.context.make_constant_array(self.builder, ty,
+                res = self.context.make_constant_array(self.builder, ty,
                                                         value.value)
 
             else:
-                return self.context.get_constant_generic(self.builder, ty,
+                res = self.context.get_constant_generic(self.builder, ty,
                                                          value.value)
 
         elif isinstance(value, ir.Expr):
-            return self.lower_expr(ty, value)
+            res = self.lower_expr(ty, value)
 
         elif isinstance(value, ir.Var):
             val = self.loadvar(value.name)
             oty = self.typeof(value.name)
-            return self.context.cast(self.builder, val, oty, ty)
+            res = self.context.cast(self.builder, val, oty, ty)
 
         elif isinstance(value, ir.Arg):
-            return self.fnargs[value.index]
+            res = self.fnargs[value.index]
 
         elif isinstance(value, ir.Yield):
-            return self.lower_yield(ty, value)
+            res = self.lower_yield(ty, value)
 
         else:
             raise NotImplementedError(type(value), value)
+
+        return res
 
     def lower_yield(self, retty, inst):
         yp = self.generator_info.yield_points[inst.index]
@@ -525,11 +527,19 @@ class Lower(BaseLower):
                 argvals = [the_self] + argvals
 
             res = impl(self.builder, argvals)
+            if isinstance(res, cgutils.NewRef):
+                res = res.value
+            else:
+                if not isinstance(fnty, types.Dispatcher):
+                    self.incref(resty, res)
+
             libs = getattr(impl, "libs", ())
             for lib in libs:
                 self.library.add_linking_library(lib)
-        return self.context.cast(self.builder, res, signature.return_type,
-                                 resty)
+
+        assert not isinstance(res, cgutils.NewRef)
+        res = self.context.cast(self.builder, res, signature.return_type, resty)
+        return cgutils.NewRef(res)
 
     def lower_expr(self, resty, expr):
         if expr.op == 'binop':
@@ -697,6 +707,7 @@ class Lower(BaseLower):
         return self.builder.load(ptr)
 
     def storevar(self, value, name):
+        assert not isinstance(value, cgutils.NewRef)
         fetype = self.typeof(name)
 
         # Define if not already

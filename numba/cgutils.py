@@ -20,6 +20,11 @@ true_byte = Constant.int(Type.int(8), 1)
 false_byte = Constant.int(Type.int(8), 0)
 
 
+class NewRef(object):
+    def __init__(self, value):
+        self.value = value
+
+
 def as_bool_byte(builder, value):
     return builder.zext(value, Type.int(8))
 
