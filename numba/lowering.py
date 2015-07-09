@@ -152,6 +152,8 @@ class BaseLower(object):
         # pre_lower() may have changed the current basic block
         entry_block_tail = self.builder.basic_block
 
+        self.debug_print("# function begin: {0}".format(
+            self.fndesc.unique_name))
         # Lower all blocks
         for offset, block in self.blocks.items():
             bb = self.blkmap[offset]
@@ -199,14 +201,17 @@ class BaseLower(object):
     def typeof(self, varname):
         return self.fndesc.typemap[varname]
 
+    def debug_print(self, msg):
+        if config.DEBUG_JIT:
+            self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
+
 
 class Lower(BaseLower):
 
     GeneratorLower = generators.GeneratorLower
 
     def lower_inst(self, inst):
-        if config.DEBUG_JIT:
-            self.context.debug_print(self.builder, "DEBUGJIT: " + str(inst))
+        self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
@@ -462,6 +467,7 @@ class Lower(BaseLower):
 
         if isinstance(fnty, types.ExternalFunction):
             # Handle a named external function
+            self.debug_print("# external function")
             fndesc = funcdesc.ExternalFunctionDescriptor(
                 fnty.symbol, fnty.sig.return_type, fnty.sig.args)
             func = self.context.declare_external_function(self.builder.module,
@@ -471,16 +477,19 @@ class Lower(BaseLower):
 
         elif isinstance(fnty, types.NumbaFunction):
             # Handle a compiled Numba function
+            self.debug_print("# calling numba function")
             res = self.context.call_internal(self.builder, fnty.fndesc,
                                              fnty.sig, argvals)
 
         elif isinstance(fnty, types.Method):
+            self.debug_print("# calling method")
             # Method of objects are handled differently
             fnobj = self.loadvar(expr.func.name)
             res = self.context.call_class_method(self.builder, fnobj,
                                                  signature, argvals)
 
         elif isinstance(fnty, types.ExternalFunctionPointer):
+            self.debug_print("# calling external function pointer")
             # Handle a C function pointer
             pointer = self.loadvar(expr.func.name)
             # If the external function pointer uses libpython
@@ -518,6 +527,7 @@ class Lower(BaseLower):
 
         else:
             # Normal function resolution (for Numba-compiled functions)
+            self.debug_print("# calling normal function: {0}".format(fnty))
             impl = self.context.get_function(fnty, signature)
             if signature.recvr:
                 # The "self" object is passed as the function object
