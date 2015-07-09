@@ -1,6 +1,13 @@
 #ifndef Py_HASHTABLE_H
 #define Py_HASHTABLE_H
 
+/* Override symbols used by Numba, to avoid name clashes at link-time
+ * under Windows with Python 3.4 ("already defined in  _hashtable.obj").
+ */
+#define _Py_hashtable_new Numba_hashtable_new
+#define _Py_hashtable_get Numba_hashtable_get
+#define _Py_hashtable_set Numba_hashtable_set
+
 /* The whole API is private */
 #ifndef Py_LIMITED_API
 
