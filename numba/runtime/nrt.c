@@ -228,8 +228,7 @@ size_t NRT_MemInfo_refcount(MemInfo *mi) {
     if (mi && mi->payload.data)
         return mi->payload.refct;
     else{
-        assert (0 && "Unreachable: MemInfo is invalid");
-        return 0;
+        return (size_t)-1;
     }
 }
 
