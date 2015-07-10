@@ -354,7 +354,10 @@ class MemoryLeakMixin(object):
         new = rtsys.get_allocation_stats()
         total_alloc = new.alloc - old.alloc
         total_free = new.free - old.free
+        total_mi_alloc = new.mi_alloc - old.mi_alloc
+        total_mi_free = new.mi_free - old.mi_free
         self.assertEqual(total_alloc, total_free)
+        self.assertEqual(total_mi_alloc, total_mi_free)
 
     def setUp(self):
         super(MemoryLeakMixin, self).setUp()

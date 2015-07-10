@@ -70,6 +70,18 @@ memsys_get_stats_free(PyObject *self, PyObject *args) {
 }
 
 static
+PyObject*
+memsys_get_stats_mi_alloc(PyObject *self, PyObject *args) {
+    return PyLong_FromSize_t(NRT_MemSys_get_stats_mi_alloc());
+}
+
+static
+PyObject*
+memsys_get_stats_mi_free(PyObject *self, PyObject *args) {
+    return PyLong_FromSize_t(NRT_MemSys_get_stats_mi_free());
+}
+
+static
 void pyobject_dtor(void *ptr, void* info) {
     PyGILState_STATE gstate;
     PyObject *ownerobj = info;
@@ -547,6 +559,8 @@ static PyMethodDef ext_methods[] = {
     declmethod_noargs(memsys_process_defer_dtor),
     declmethod_noargs(memsys_get_stats_alloc),
     declmethod_noargs(memsys_get_stats_free),
+    declmethod_noargs(memsys_get_stats_mi_alloc),
+    declmethod_noargs(memsys_get_stats_mi_free),
     declmethod(meminfo_new),
     declmethod(meminfo_alloc),
     declmethod(meminfo_alloc_safe),

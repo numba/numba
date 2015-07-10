@@ -38,7 +38,7 @@ struct MemSys{
     /* Shutdown flag */
     int shutting;
     /* Stats */
-    size_t stats_alloc, stats_free;
+    size_t stats_alloc, stats_free, stats_mi_alloc, stats_mi_free;
 
 };
 
@@ -134,6 +134,7 @@ void NRT_MemSys_insert_meminfo(MemInfo *newnode) {
                               newnode));
     memset(newnode, 0, sizeof(MemInfo));  /* to catch bugs; not required */
     nrt_push_meminfo_list(&TheMSys.mi_freelist, newnode);
+    TheMSys.atomic_inc(&TheMSys.stats_mi_free);
 }
 
 MemInfo* NRT_MemSys_pop_meminfo(void) {
@@ -143,6 +144,7 @@ MemInfo* NRT_MemSys_pop_meminfo(void) {
     }
     memset(node, 0, sizeof(MemInfo));   /* to catch bugs; not required */
     NRT_Debug(nrt_debug_print("NRT_MemSys_pop_meminfo: return %p\n", node));
+    TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
     return node;
 }
 
@@ -163,6 +165,14 @@ size_t NRT_MemSys_get_stats_alloc() {
 
 size_t NRT_MemSys_get_stats_free() {
     return TheMSys.stats_free;
+}
+
+size_t NRT_MemSys_get_stats_mi_alloc() {
+    return TheMSys.stats_mi_alloc;
+}
+
+size_t NRT_MemSys_get_stats_mi_free() {
+    return TheMSys.stats_mi_free;
 }
 
 static
