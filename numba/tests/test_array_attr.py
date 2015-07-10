@@ -82,6 +82,7 @@ def array_ctypes_data(arr):
 class TestArrayAttr(MemoryLeakMixin, TestCase):
 
     def setUp(self):
+        super(TestArrayAttr, self).setUp()
         self.ccache = CompilationCache()
         self.a = np.arange(10, dtype=np.int32).reshape(2, 5)
 

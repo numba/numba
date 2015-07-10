@@ -95,6 +95,7 @@ def _as_dtype_value(tyargs, args):
 class TestUFuncs(MemoryLeakMixin, TestCase):
 
     def setUp(self):
+        super(TestUFuncs, self).setUp()
         self.inputs = [
             (np.uint32(0), types.uint32),
             (np.uint32(1), types.uint32),

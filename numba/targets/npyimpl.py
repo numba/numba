@@ -286,7 +286,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
                 context, builder,
                 lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
         arguments.append(output)
-    else:
+    elif context.enable_nrt:
         # Incref the output
         context.nrt_incref(builder, sig.return_type, args[-1])
 
