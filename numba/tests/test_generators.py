@@ -5,7 +5,7 @@ import numpy as np
 
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, MemoryLeakMixin
 import numba.unittest_support as unittest
 from numba import testing
 
@@ -101,7 +101,7 @@ def gen_ndenumerate(arr):
         yield tup
 
 
-class TestGenerators(TestCase):
+class TestGenerators(MemoryLeakMixin, TestCase):
     def check_generator(self, pygen, cgen):
         self.assertEqual(next(cgen), next(pygen))
         # Use list comprehensions to make sure we trash the generator's
@@ -284,7 +284,7 @@ def nrt_gen1(ary1, ary2):
         yield e2
 
 
-class TestNrtArrayGen(TestCase):
+class TestNrtArrayGen(MemoryLeakMixin, TestCase):
     def test_nrt_gen0(self):
         pygen = nrt_gen0
         cgen = jit(nopython=True)(pygen)
@@ -387,6 +387,9 @@ class TestNrtArrayGen(TestCase):
         self.assertEqual(sys.getrefcount(py_ary),
                          sys.getrefcount(c_ary))
 
+
+# TODO: fix nested generator and MemoryLeakMixin
+class TestNrtNestedGen(TestCase):
     def test_nrt_nested_gen(self):
 
         def gen0(arr):
@@ -484,8 +487,7 @@ class TestNrtArrayGen(TestCase):
         self.assertEqual(py_res, c_res)
 
 
-
-class TestGeneratorWithNRT(TestCase):
+class TestGeneratorWithNRT(MemoryLeakMixin, TestCase):
     def test_issue_1254(self):
         """
         Missing environment for returning array
@@ -510,6 +512,7 @@ class TestGeneratorWithNRT(TestCase):
         """
         Double-free for locally allocated, non escaping NRT objects
         """
+
         def py_gen(rmin, rmax, nr):
             a = np.linspace(rmin, rmax, nr)
             yield a[0]
