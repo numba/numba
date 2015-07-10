@@ -308,6 +308,7 @@ void NRT_MemInfo_destroy(MemInfo *mi) {
 void NRT_MemInfo_acquire(MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_acquire %p refct=%zu\n", mi,
                                                             mi->payload.refct));
+    assert(mi->payload.refct > 0 && "RefCt cannot be zero");
     TheMSys.atomic_inc(&mi->payload.refct);
 }
 
