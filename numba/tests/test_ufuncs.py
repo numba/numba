@@ -15,9 +15,8 @@ from numba.numpy_support import from_dtype
 from numba import vectorize
 from numba.config import PYVERSION
 from numba.errors import LoweringError, TypingError
-from numba.targets import cpu
 from .support import (TestCase, CompilationCache, skip_on_numpy_16,
-                      is_on_numpy_16)
+                      is_on_numpy_16, MemoryLeakMixin)
 
 from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
@@ -93,7 +92,7 @@ def _as_dtype_value(tyargs, args):
     return [np.dtype(str(ty)).type(val) for ty, val in zip(tyargs, args)]
 
 
-class TestUFuncs(TestCase):
+class TestUFuncs(MemoryLeakMixin, TestCase):
 
     def setUp(self):
         self.inputs = [

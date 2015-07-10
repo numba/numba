@@ -5,10 +5,10 @@ import sys
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
+from numba.compiler import compile_isolated
 from numba.numpy_support import from_dtype
 from numba import types, njit, typeof
-from .support import TestCase, CompilationCache
+from .support import TestCase, CompilationCache, MemoryLeakMixin
 
 
 def array_dtype(a):
@@ -79,7 +79,7 @@ def array_ctypes_data(arr):
     return arr.ctypes.data
 
 
-class TestArrayAttr(TestCase):
+class TestArrayAttr(MemoryLeakMixin, TestCase):
 
     def setUp(self):
         self.ccache = CompilationCache()
@@ -195,7 +195,7 @@ class TestNestedArrayAttr(unittest.TestCase):
         self.assertEqual(pyfunc(self.a), cfunc(self.a))
 
 
-class TestSlicedArrayAttr(unittest.TestCase):
+class TestSlicedArrayAttr(MemoryLeakMixin, unittest.TestCase):
     def test_size_after_slicing(self):
         pyfunc = size_after_slicing_usecase
         cfunc = njit(pyfunc)
@@ -207,7 +207,7 @@ class TestSlicedArrayAttr(unittest.TestCase):
             self.assertEqual(pyfunc(arr, i), cfunc(arr, i))
 
 
-class TestArrayCTypes(unittest.TestCase):
+class TestArrayCTypes(MemoryLeakMixin, unittest.TestCase):
     def test_array_ctypes_data(self):
         pyfunc = array_ctypes_data
         cfunc = njit(pyfunc)
