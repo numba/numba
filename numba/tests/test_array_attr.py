@@ -155,8 +155,9 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.check_unary_with_arrays(array_flags_f_contiguous)
 
 
-class TestNestedArrayAttr(unittest.TestCase):
+class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):
     def setUp(self):
+        super(TestNestedArrayAttr, self).setUp()
         dtype = np.dtype([('a', np.int32), ('f', np.int32, (2, 5))])
         self.a = np.recarray(1, dtype)[0]
         self.nbrecord = from_dtype(self.a.dtype)

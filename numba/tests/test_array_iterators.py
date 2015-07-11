@@ -5,7 +5,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
-from .support import TestCase, CompilationCache
+from .support import TestCase, CompilationCache, MemoryLeakMixin
 
 
 def array_iter(arr):
@@ -61,12 +61,13 @@ def np_ndindex_array(arr):
     return s
 
 
-class TestArrayIterators(TestCase):
+class TestArrayIterators(MemoryLeakMixin, TestCase):
     """
     Test array.flat, np.ndenumerate(), etc.
     """
 
     def setUp(self):
+        super(TestArrayIterators, self).setUp()
         self.ccache = CompilationCache()
 
     def check_array_iter(self, arr):

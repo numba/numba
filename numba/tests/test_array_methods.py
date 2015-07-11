@@ -9,7 +9,7 @@ from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
 from numba.numpy_support import as_dtype
-from .support import TestCase, CompilationCache
+from .support import TestCase, CompilationCache, MemoryLeakMixin
 
 
 def np_around_array(arr, decimals, out):
@@ -98,12 +98,13 @@ def np_frombuffer_allocated_dtype(shape):
     return np.frombuffer(arr, dtype=np.complex64)
 
 
-class TestArrayMethods(TestCase):
+class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
     Test various array methods and array-related functions.
     """
 
     def setUp(self):
+        super(TestArrayMethods, self).setUp()
         self.ccache = CompilationCache()
 
     def check_round_array(self, pyfunc):
