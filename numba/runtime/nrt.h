@@ -86,6 +86,13 @@ void NRT_MemSys_set_atomic_cas_stub(void);
  */
 void NRT_MemSys_process_defer_dtor(void);
 
+/*
+ * The following functions get internal statistics of the memory subsystem.
+ */
+size_t NRT_MemSys_get_stats_alloc();
+size_t NRT_MemSys_get_stats_free();
+
+
 /* Memory Info API */
 
 /* Create a new MemInfo
@@ -96,6 +103,11 @@ void NRT_MemSys_process_defer_dtor(void);
  */
 MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info);
+
+/*
+ * Returns the refcount of a MemInfo or (size_t)-1 if error.
+ */
+size_t NRT_MemInfo_refcount(MemInfo *mi);
 
 /*
  * Allocate memory of `size` bytes and return a pointer to a MemInfo structure

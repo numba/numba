@@ -16,9 +16,6 @@
 static
 PyObject*
 memsys_shutdown(PyObject *self, PyObject *args) {
-    if (!PyArg_ParseTuple(args, "")) {
-        return NULL;
-    }
     NRT_MemSys_shutdown();
     Py_RETURN_NONE;
 }
@@ -56,13 +53,21 @@ memsys_set_atomic_cas(PyObject *self, PyObject *args) {
 static
 PyObject*
 memsys_process_defer_dtor(PyObject *self, PyObject *args) {
-    if (!PyArg_ParseTuple(args, "")) {
-        return NULL;
-    }
     NRT_MemSys_process_defer_dtor();
     Py_RETURN_NONE;
 }
 
+static
+PyObject*
+memsys_get_stats_alloc(PyObject *self, PyObject *args) {
+    return PyLong_FromSize_t(NRT_MemSys_get_stats_alloc());
+}
+
+static
+PyObject*
+memsys_get_stats_free(PyObject *self, PyObject *args) {
+    return PyLong_FromSize_t(NRT_MemSys_get_stats_free());
+}
 
 static
 void pyobject_dtor(void *ptr, void* info) {
@@ -242,6 +247,17 @@ MemInfo_get_data(MemInfoObject *self, void *closure) {
     return PyLong_FromVoidPtr(NRT_MemInfo_data(self->meminfo));
 }
 
+static
+PyObject*
+MemInfo_get_refcount(MemInfoObject *self, void *closure) {
+    size_t refct = NRT_MemInfo_refcount(self->meminfo);
+    if ( refct == (size_t)-1 ) {
+        PyErr_SetString(PyExc_ValueError, "invalid MemInfo");
+        return NULL;
+    }
+    return PyLong_FromSize_t(refct);
+}
+
 static void
 MemInfo_dealloc(MemInfoObject *self)
 {
@@ -268,6 +284,10 @@ static PyGetSetDef MemInfo_getsets[] = {
     {"data",
      (getter)MemInfo_get_data, NULL,
      "Get the data pointer as an integer",
+     NULL},
+    {"refcount",
+     (getter)MemInfo_get_refcount, NULL,
+     "Get the refcount",
      NULL},
     {NULL}  /* Sentinel */
 };
@@ -517,10 +537,13 @@ NRT_decref(MemInfo* mi) {
 
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
-    declmethod(memsys_shutdown),
+#define declmethod_noargs(func) { #func , ( PyCFunction )func , METH_NOARGS, NULL }
+    declmethod_noargs(memsys_shutdown),
     declmethod(memsys_set_atomic_inc_dec),
     declmethod(memsys_set_atomic_cas),
-    declmethod(memsys_process_defer_dtor),
+    declmethod_noargs(memsys_process_defer_dtor),
+    declmethod_noargs(memsys_get_stats_alloc),
+    declmethod_noargs(memsys_get_stats_free),
     declmethod(meminfo_new),
     declmethod(meminfo_alloc),
     declmethod(meminfo_alloc_safe),

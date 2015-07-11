@@ -32,7 +32,12 @@ class BaseTest(unittest.TestCase):
                 np.testing.assert_allclose(expected, ret)
 
 
-class TestDynArray(unittest.TestCase):
+class NrtRefCtTest(object):
+    def assert_array_nrt_refct(self, arr, expect):
+        self.assertEqual(arr.base.refcount, expect)
+
+
+class TestDynArray(NrtRefCtTest, unittest.TestCase):
     def test_empty_0d(self):
         @nrtjit
         def foo():
@@ -41,6 +46,7 @@ class TestDynArray(unittest.TestCase):
             return arr
 
         arr = foo()
+        self.assert_array_nrt_refct(arr, 1)
         np.testing.assert_equal(42, arr)
         self.assertEqual(arr.size, 1)
         self.assertEqual(arr.shape, ())
@@ -61,6 +67,7 @@ class TestDynArray(unittest.TestCase):
 
         n = 3
         arr = foo(n)
+        self.assert_array_nrt_refct(arr, 1)
         np.testing.assert_equal(np.arange(n), arr)
         self.assertEqual(arr.size, n)
         self.assertEqual(arr.shape, (n,))
@@ -84,6 +91,7 @@ class TestDynArray(unittest.TestCase):
         n = 3
         expected_arr = pyfunc(m, n)
         got_arr = cfunc(m, n)
+        self.assert_array_nrt_refct(got_arr, 1)
         np.testing.assert_equal(expected_arr, got_arr)
 
         self.assertEqual(expected_arr.size, got_arr.size)
@@ -108,6 +116,7 @@ class TestDynArray(unittest.TestCase):
         p = 2
         expected_arr = pyfunc(m, n, p)
         got_arr = cfunc(m, n, p)
+        self.assert_array_nrt_refct(got_arr, 1)
         np.testing.assert_equal(expected_arr, got_arr)
 
         self.assertEqual(expected_arr.size, got_arr.size)
@@ -131,6 +140,7 @@ class TestDynArray(unittest.TestCase):
         p = 2
         expected_arr = pyfunc(m, n, p)
         got_arr = cfunc(m, n, p)
+        self.assert_array_nrt_refct(got_arr, 1)
         np.testing.assert_equal(expected_arr, got_arr)
 
         self.assertEqual(expected_arr.size, got_arr.size)
@@ -172,6 +182,7 @@ class TestDynArray(unittest.TestCase):
 
         cfunc = nrtjit(return_external_array)
         out = cfunc()
+        self.assertIsNone(out.base)
 
         yy = y[2:]
         np.testing.assert_equal(yy, out)
@@ -231,6 +242,8 @@ class TestDynArray(unittest.TestCase):
         np.testing.assert_equal(pyfunc(arr_a, arr_b),
                                 cfunc(arr_a, arr_b))
 
+        self.assert_array_nrt_refct(cfunc(arr_a, arr_b), 1)
+
         # 2D case
         arr_a = np.random.random(10).reshape(2, 5)
         arr_b = np.random.random(10).reshape(2, 5)
@@ -238,12 +251,16 @@ class TestDynArray(unittest.TestCase):
         np.testing.assert_equal(pyfunc(arr_a, arr_b),
                                 cfunc(arr_a, arr_b))
 
+        self.assert_array_nrt_refct(cfunc(arr_a, arr_b), 1)
+
         # 3D case
         arr_a = np.random.random(70).reshape(2, 5, 7)
         arr_b = np.random.random(70).reshape(2, 5, 7)
 
         np.testing.assert_equal(pyfunc(arr_a, arr_b),
                                 cfunc(arr_a, arr_b))
+
+        self.assert_array_nrt_refct(cfunc(arr_a, arr_b), 1)
 
     def test_allocation_mt(self):
         """
@@ -390,7 +407,11 @@ class TestDynArray(unittest.TestCase):
         t = 100
 
         initrefct = sys.getrefcount(x), sys.getrefcount(y)
-        np.testing.assert_equal(pyfunc(x, y, t), cfunc(x, y, t))
+        expect, got = pyfunc(x, y, t), cfunc(x, y, t)
+        self.assertIsNone(got[0].base)
+        self.assertIsNone(got[1].base)
+        np.testing.assert_equal(expect, got)
+        del expect, got
         self.assertEqual(initrefct, (sys.getrefcount(x), sys.getrefcount(y)))
 
     def test_return_tuple_of_array(self):
@@ -459,12 +480,13 @@ class TestDynArray(unittest.TestCase):
         self.assertEqual(old_refct, sys.getrefcount(arr))
 
 
-class ConstructorBaseTest(object):
+class ConstructorBaseTest(NrtRefCtTest):
 
     def check_0d(self, pyfunc):
         cfunc = nrtjit(pyfunc)
         expected = pyfunc()
         ret = cfunc()
+        self.assert_array_nrt_refct(ret, 1)
         self.assertEqual(ret.size, expected.size)
         self.assertEqual(ret.shape, expected.shape)
         self.assertEqual(ret.dtype, expected.dtype)
@@ -481,6 +503,7 @@ class ConstructorBaseTest(object):
         n = 3
         expected = pyfunc(n)
         ret = cfunc(n)
+        self.assert_array_nrt_refct(ret, 1)
         self.assertEqual(ret.size, expected.size)
         self.assertEqual(ret.shape, expected.shape)
         self.assertEqual(ret.dtype, expected.dtype)
@@ -501,6 +524,7 @@ class ConstructorBaseTest(object):
         m, n = 2, 3
         expected = pyfunc(m, n)
         ret = cfunc(m, n)
+        self.assert_array_nrt_refct(ret, 1)
         self.assertEqual(ret.size, expected.size)
         self.assertEqual(ret.shape, expected.shape)
         self.assertEqual(ret.dtype, expected.dtype)
