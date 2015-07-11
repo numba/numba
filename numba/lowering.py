@@ -215,13 +215,6 @@ class Lower(BaseLower):
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
-
-            if isinstance(val, cgutils.NewRef):
-                # THe operation has explicitly returned a new reference
-                val = val.value
-            else:
-                self.incref(ty, val)
-
             self.storevar(val, inst.target.name)
 
         elif isinstance(inst, ir.Branch):
@@ -372,6 +365,13 @@ class Lower(BaseLower):
 
         else:
             raise NotImplementedError(type(value), value)
+
+        # Perform incref if necessary
+        if isinstance(res, cgutils.NewRef):
+            # The operation has explicitly returned a new reference
+            res = res.value
+        else:
+            self.incref(ty, res)
 
         return res
 
