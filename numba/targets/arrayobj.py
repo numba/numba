@@ -144,6 +144,9 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     for k, v in attrs.items():
         setattr(array, k, v)
 
+    if context.enable_nrt:
+        context.nrt_incref(builder, array._fe_type, array._getvalue())
+
     return array
 
 
@@ -558,6 +561,8 @@ def array_transpose(context, builder, sig, args):
 
 def array_T(context, builder, typ, value):
     if typ.ndim <= 1:
+        if context.enable_nrt:
+            context.nrt_incref(builder, typ, value)
         return value
     else:
         ary = make_array(typ)(context, builder, value)
@@ -709,6 +714,8 @@ def array_view(context, builder, sig, args):
         msg = "new type not compatible with array"
         context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
+    if context.enable_nrt:
+        context.nrt_incref(builder, retty, ret._getvalue())
     return ret._getvalue()
 
 
