@@ -763,8 +763,10 @@ def array_cumsum(context, builder, sig, args):
             out[idx] = c
         return out
 
-    return context.compile_internal(builder, array_cumsum_impl, sig, args,
-                                    locals=dict(c=scalar_dtype))
+    res = context.compile_internal(builder, array_cumsum_impl, sig, args,
+                                   locals=dict(c=scalar_dtype))
+    return cgutils.NewRef(res)
+
 
 
 @builtin
@@ -785,9 +787,9 @@ def array_cumprod(context, builder, sig, args):
             out[idx] = c
         return out
 
-    return context.compile_internal(builder, array_cumprod_impl, sig, args,
-                                    locals=dict(c=scalar_dtype))
-
+    res = context.compile_internal(builder, array_cumprod_impl, sig, args,
+                                   locals=dict(c=scalar_dtype))
+    return cgutils.NewRef(res)
 
 @builtin
 @implement(numpy.mean, types.Kind(types.Array))
