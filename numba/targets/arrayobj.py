@@ -1076,7 +1076,8 @@ def array_round(context, builder, sig, args):
             out[index] = numpy.round(val, decimals)
         return out
 
-    return context.compile_internal(builder, array_round_impl, sig, args)
+    res = context.compile_internal(builder, array_round_impl, sig, args)
+    return cgutils.NewRef(res)
 
 
 #-------------------------------------------------------------------------------

@@ -9,7 +9,7 @@ from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
 from numba.numpy_support import as_dtype
-from .support import TestCase, CompilationCache, MemoryLeakMixin
+from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin
 
 
 def np_around_array(arr, decimals, out):
@@ -98,13 +98,13 @@ def np_frombuffer_allocated_dtype(shape):
     return np.frombuffer(arr, dtype=np.complex64)
 
 
-class TestArrayMethods(MemoryLeakMixin, TestCase):
+class TestArrayMethodsCustom(MemoryLeak, TestCase):
     """
-    Test various array methods and array-related functions.
+    Test np.round, np.around, ndarray.reshape
     """
 
     def setUp(self):
-        super(TestArrayMethods, self).setUp()
+        super(TestArrayMethodsCustom, self).setUp()
         self.ccache = CompilationCache()
 
     def check_round_array(self, pyfunc):
@@ -114,7 +114,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             out = np.zeros_like(arr).astype(as_dtype(outty))
             pyout = out.copy()
             _fixed_np_round(arr, decimals, pyout)
+            self.memory_leak_setup()
             cfunc(arr, decimals, out)
+            self.memory_leak_teardown()
             np.testing.assert_allclose(out, pyout)
             # Output shape mismatch
             with self.assertRaises(ValueError) as raises:
@@ -152,66 +154,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_around_array(self):
         self.check_round_array(np_around_array)
 
-    def check_round_scalar(self, unary_pyfunc, binary_pyfunc):
-        base_values = [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]
-        complex_values = [x * (1 - 1j) for x in base_values]
-        int_values = [int(x) for x in base_values]
-        argtypes = (types.float64, types.float32, types.int32,
-                    types.complex64, types.complex128)
-        argvalues = [base_values, base_values, int_values,
-                     complex_values, complex_values]
-
-        pyfunc = binary_pyfunc
-        for ty, values in zip(argtypes, argvalues):
-            cres = compile_isolated(pyfunc, (ty, types.int32))
-            cfunc = cres.entry_point
-            for decimals in (1, 0, -1):
-                for v in values:
-                    if decimals > 0:
-                        v *= 10
-                    expected = _fixed_np_round(v, decimals)
-                    got = cfunc(v, decimals)
-                    self.assertPreciseEqual(got, expected)
-
-        pyfunc = unary_pyfunc
-        for ty, values in zip(argtypes, argvalues):
-            cres = compile_isolated(pyfunc, (ty,))
-            cfunc = cres.entry_point
-            for v in values:
-                expected = _fixed_np_round(v)
-                got = cfunc(v)
-                self.assertPreciseEqual(got, expected)
-
-    def test_round_scalar(self):
-        self.check_round_scalar(np_round_unary, np_round_binary)
-
-    def test_around_scalar(self):
-        self.check_round_scalar(np_around_unary, np_around_binary)
-
-    def check_layout_dependent_func(self, pyfunc):
-        def check_arr(arr):
-            cres = compile_isolated(pyfunc, (typeof(arr),))
-            self.assertPreciseEqual(cres.entry_point(arr), pyfunc(arr))
-        arr = np.arange(24)
-        check_arr(arr)
-        check_arr(arr.reshape((3, 8)))
-        check_arr(arr.reshape((3, 8)).T)
-        check_arr(arr.reshape((3, 8))[::2])
-        check_arr(arr.reshape((2, 3, 4)))
-        check_arr(arr.reshape((2, 3, 4)).T)
-        check_arr(arr.reshape((2, 3, 4))[::2])
-        arr = np.array([0]).reshape(())
-        check_arr(arr)
-
-    def test_array_transpose(self):
-        self.check_layout_dependent_func(array_transpose)
-
-    def test_array_T(self):
-        self.check_layout_dependent_func(array_T)
-
-    def test_array_copy(self):
-        self.check_layout_dependent_func(array_copy)
-
     def test_array_reshape(self):
         pyfunc = array_reshape
         def run(arr, shape):
@@ -219,8 +161,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             return cres.entry_point(arr, shape)
         def check(arr, shape):
             expected = pyfunc(arr, shape)
+            self.memory_leak_setup()
             got = run(arr, shape)
             self.assertPreciseEqual(got, expected)
+            del got
+            self.memory_leak_teardown()
         def check_err_shape(arr, shape):
             with self.assertRaises(NotImplementedError) as raises:
                 run(arr, shape)
@@ -269,8 +214,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             return cres.entry_point(arr)
         def check(arr, dtype):
             expected = arr.view(dtype)
+            self.memory_leak_setup()
             got = run(arr, dtype)
             self.assertPreciseEqual(got, expected)
+            del got
+            self.memory_leak_teardown()
         def check_err(arr, dtype):
             with self.assertRaises(ValueError) as raises:
                 run(arr, dtype)
@@ -341,12 +289,14 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         def check(buf):
             old_refcnt = sys.getrefcount(buf)
             expected = pyfunc(buf)
+            self.memory_leak_setup()
             got = run(buf)
             self.assertPreciseEqual(got, expected)
             del expected
             self.assertEqual(sys.getrefcount(buf), old_refcnt + 1)
             del got
             self.assertEqual(sys.getrefcount(buf), old_refcnt)
+            self.memory_leak_teardown()
 
         b = bytearray(range(16))
         check(b)
@@ -367,6 +317,76 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_np_frombuffer_dtype(self):
         self.check_np_frombuffer(np_frombuffer_dtype)
+
+
+class TestArrayMethods(MemoryLeakMixin, TestCase):
+    """
+    Test various array methods and array-related functions.
+    """
+
+    def setUp(self):
+        super(TestArrayMethods, self).setUp()
+        self.ccache = CompilationCache()
+
+    def check_round_scalar(self, unary_pyfunc, binary_pyfunc):
+        base_values = [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]
+        complex_values = [x * (1 - 1j) for x in base_values]
+        int_values = [int(x) for x in base_values]
+        argtypes = (types.float64, types.float32, types.int32,
+                    types.complex64, types.complex128)
+        argvalues = [base_values, base_values, int_values,
+                     complex_values, complex_values]
+
+        pyfunc = binary_pyfunc
+        for ty, values in zip(argtypes, argvalues):
+            cres = compile_isolated(pyfunc, (ty, types.int32))
+            cfunc = cres.entry_point
+            for decimals in (1, 0, -1):
+                for v in values:
+                    if decimals > 0:
+                        v *= 10
+                    expected = _fixed_np_round(v, decimals)
+                    got = cfunc(v, decimals)
+                    self.assertPreciseEqual(got, expected)
+
+        pyfunc = unary_pyfunc
+        for ty, values in zip(argtypes, argvalues):
+            cres = compile_isolated(pyfunc, (ty,))
+            cfunc = cres.entry_point
+            for v in values:
+                expected = _fixed_np_round(v)
+                got = cfunc(v)
+                self.assertPreciseEqual(got, expected)
+
+    def test_round_scalar(self):
+        self.check_round_scalar(np_round_unary, np_round_binary)
+
+    def test_around_scalar(self):
+        self.check_round_scalar(np_around_unary, np_around_binary)
+
+    def check_layout_dependent_func(self, pyfunc):
+        def check_arr(arr):
+            cres = compile_isolated(pyfunc, (typeof(arr),))
+            self.assertPreciseEqual(cres.entry_point(arr), pyfunc(arr))
+        arr = np.arange(24)
+        check_arr(arr)
+        check_arr(arr.reshape((3, 8)))
+        check_arr(arr.reshape((3, 8)).T)
+        check_arr(arr.reshape((3, 8))[::2])
+        check_arr(arr.reshape((2, 3, 4)))
+        check_arr(arr.reshape((2, 3, 4)).T)
+        check_arr(arr.reshape((2, 3, 4))[::2])
+        arr = np.array([0]).reshape(())
+        check_arr(arr)
+
+    def test_array_transpose(self):
+        self.check_layout_dependent_func(array_transpose)
+
+    def test_array_T(self):
+        self.check_layout_dependent_func(array_T)
+
+    def test_array_copy(self):
+        self.check_layout_dependent_func(array_copy)
 
     @unittest.skipIf(sys.version_info < (2, 7),
                      "buffer protocol not supported on Python 2.6")
