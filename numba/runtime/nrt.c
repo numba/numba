@@ -125,11 +125,15 @@ void NRT_MemSys_process_defer_dtor(void) {
 }
 
 void NRT_MemSys_insert_meminfo(MemInfo *newnode) {
+    assert(newnode && "`newnode` cannot be NULL");
+    /*
     if (NULL == newnode) {
         newnode = meminfo_malloc();
     } else {
         assert(newnode->payload.refct == 0 && "RefCt must be 0");
     }
+    */
+    assert(newnode->payload.refct == 0 && "RefCt must be 0");
     NRT_Debug(nrt_debug_print("NRT_MemSys_insert_meminfo newnode=%p\n",
                               newnode));
     memset(newnode, 0, sizeof(MemInfo));  /* to catch bugs; not required */
