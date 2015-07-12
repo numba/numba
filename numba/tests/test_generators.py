@@ -264,7 +264,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         self.check_np_flat(gen_ndenumerate, flags=forceobj_flags)
 
 
-class TestGenExprs(TestCase):
+class TestGenExprs(MemoryLeakMixin, TestCase):
     @testing.allow_interpreter_mode
     def test_return_generator_expr(self):
         pyfunc = return_generator_expr

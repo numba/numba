@@ -16,7 +16,7 @@ from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     python_attr_impl,
                                     builtin_registry, impl_attribute,
-                                    type_registry, sentry_refcount_semantic,
+                                    type_registry,
                                     impl_ret_borrowed)
 from . import arrayobj, builtins, iterators, rangeobj, optional
 from numba import datamodel
@@ -1089,9 +1089,7 @@ class _wrap_impl(object):
         self._sig = sig
 
     def __call__(self, builder, args):
-        ret = self._imp(self._context, builder, self._sig, args)
-        sentry_refcount_semantic(ret, self._imp)
-        return ret
+        return self._imp(self._context, builder, self._sig, args)
 
     def __getattr__(self, item):
         return getattr(self._imp, item)

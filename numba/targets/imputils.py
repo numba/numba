@@ -29,9 +29,7 @@ def impl_attribute(ty, attr, rtype=None):
 
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = real_impl(context, builder, typ, value)
-            sentry_refcount_semantic(ret, impl)
-            return ret
+            return real_impl(context, builder, typ, value)
 
         if rtype is None:
             res.signature = typing.signature(types.Any, ty)
@@ -52,9 +50,7 @@ def impl_attribute_generic(ty):
 
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = real_impl(context, builder, typ, value, attr)
-            sentry_refcount_semantic(ret, impl)
-            return ret
+            return real_impl(context, builder, typ, value, attr)
 
         res.signature = typing.signature(types.Any, ty)
         res.attr = None
@@ -320,19 +316,26 @@ type_factory = type_registry.register
 
 
 def impl_ret_new_ref(ctx, builder, retty, ret):
+    """
+    The implementation returns a new reference.
+    """
     return ret
 
 
 def impl_ret_borrowed(ctx, builder, retty, ret):
+    """
+    The implementation returns a borrowed reference.
+    This function automatically incref so that the implementation is
+    returning a new reference.
+    """
     if ctx.enable_nrt:
         ctx.nrt_incref(builder, retty, ret)
     return ret
 
 
 def impl_ret_untracked(ctx, builder, retty, ret):
+    """
+    The return type is not a NRT object.
+    """
     return ret
-
-
-def sentry_refcount_semantic(res, impl):
-    pass
 

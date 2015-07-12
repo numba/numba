@@ -227,18 +227,6 @@ class GeneratorLower(BaseGeneratorLower):
                 argval = builder.load(argptr)
                 self.context.nrt_decref(builder, argty, argval)
 
-            # Always run the finalizer to clear the block
-            self.debug_print(builder, "# generator: clear states")
-            gen_state_ptr = self.get_state_ptr(builder, genptr)
-
-            # for state_index in range(len(self.gentype.state_types)):
-            #     state_slot = cgutils.gep_inbounds(builder, gen_state_ptr,
-            #                                       0, state_index)
-            #     ty = self.gentype.state_types[state_index]
-            #     val = self.context.unpack_value(builder, ty, state_slot)
-            #     if self.context.enable_nrt:
-            #         self.context.nrt_decref(builder, ty, val)
-
         self.debug_print(builder, "# generator: finalize end")
         builder.ret_void()
 
@@ -334,10 +322,7 @@ class LowerYield(object):
             # IncRef newly stored value
             if self.context.enable_nrt:
                 self.lower.incref(ty, val)
-            # Load and DecRef previously stored value
-            oldval = self.context.unpack_value(self.builder, ty, state_slot)
-            # if self.context.enable_nrt:
-            #     self.lower.decref(ty, oldval)
+
             self.context.pack_value(self.builder, ty, val, state_slot)
         # Save resume index
         indexval = Constant.int(self.resume_index_ptr.type.pointee,
