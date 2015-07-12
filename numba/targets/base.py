@@ -4,20 +4,20 @@ import copy
 from types import MethodType
 
 import numpy
+import inspect
 
 from llvmlite import ir as llvmir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-import numba
-from numba import types, utils, cgutils, typing, numpy_support
+from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     python_attr_impl,
                                     builtin_registry, impl_attribute,
-                                    struct_registry, type_registry)
+                                    type_registry)
 from . import arrayobj, builtins, iterators, rangeobj, optional
 from numba import datamodel
 
@@ -1087,11 +1087,18 @@ class _wrap_impl(object):
         self._sig = sig
 
     def __call__(self, builder, args):
-        return self._imp(self._context, builder, self._sig, args)
+        ret = self._imp(self._context, builder, self._sig, args)
+        if isinstance(ret, cgutils.NewRef):
+            return ret  # ret.value
+        else:
+            msg = '{0} did not return: {1}:{2}'
+            filename = inspect.getfile(self._imp)
+            lineno = self._imp.__code__.co_firstlineno
+            if ret is not None:
+                raise AssertionError(msg.format(self._imp, filename, lineno))
 
     def __getattr__(self, item):
         return getattr(self._imp, item)
 
     def __repr__(self):
         return "<wrapped %s>" % self._imp
-

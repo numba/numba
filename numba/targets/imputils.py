@@ -313,3 +313,16 @@ class _TypeRegistry(object):
 
 type_registry = _TypeRegistry()
 type_factory = type_registry.register
+
+
+def impl_ret_new_ref(ctx, builder, retty, ret):
+    assert not isinstance(ret, cgutils.NewRef)
+    return cgutils.NewRef(ret)
+
+
+def impl_ret_borrowed(ctx, builder, retty, ret):
+    assert not isinstance(ret, cgutils.NewRef)
+    if ctx.enable_nrt:
+        ctx.nrt_incref(builder, retty, ret)
+    return cgutils.NewRef(ret)
+
