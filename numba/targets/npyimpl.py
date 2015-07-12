@@ -253,7 +253,7 @@ def _build_array(context, builder, array_ty, arg_arrays):
 
     dest_shape_tup = tuple(builder.load(dest_shape_addr)
                            for dest_shape_addr in dest_shape_addrs)
-    ret, array_val = arrayobj._empty_nd_impl(context, builder, array_ty,
+    array_val = arrayobj._empty_nd_impl(context, builder, array_ty,
                                         dest_shape_tup)
     return _prepare_argument(context, builder, array_val._getvalue(), array_ty,
                              where='implicit output argument')
