@@ -879,7 +879,6 @@ def complex128_power_impl(context, builder, sig, args):
         with then:
             # Lower as multiplication
             res = complex_mul_impl(context, builder, sig, (ca, ca))
-            res = res.unwrap()
             cres = Complex128(context, builder, value=res)
             c.real = cres.real
             c.imag = cres.imag

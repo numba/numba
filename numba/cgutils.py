@@ -21,6 +21,9 @@ false_byte = Constant.int(Type.int(8), 0)
 
 
 class NewRef(object):
+    def __new__(cls, value):
+        return value
+
     def __init__(self, value):
         assert not isinstance(value, NewRef)
         self.value = value

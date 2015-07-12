@@ -1064,24 +1064,24 @@ def np_complex_asin_impl(context, builder, sig, args):
             I = context.get_constant_generic(builder, ty, 1.0j)
             ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
             ZERO = context.get_constant_generic(builder, ty, 0.0 + 0.0j)
-            xx = np_complex_square_impl(context, builder, sig, args).unwrap()
+            xx = np_complex_square_impl(context, builder, sig, args)
             one_minus_xx = builtins.complex_sub_impl(context, builder,
                                                      complex_binary_sig,
-                                                     [ONE, xx]).unwrap()
+                                                     [ONE, xx])
             sqrt_one_minus_xx = np_complex_sqrt_impl(context, builder, sig,
                                                      [one_minus_xx])
             ix = builtins.complex_mul_impl(context, builder,
                                            complex_binary_sig,
-                                           [I, args[0]]).unwrap()
+                                           [I, args[0]])
             log_arg = builtins.complex_add_impl(context, builder, sig,
-                                                [ix, sqrt_one_minus_xx]).unwrap()
+                                                [ix, sqrt_one_minus_xx])
             log = np_complex_log_impl(context, builder, sig, [log_arg])
             ilog = builtins.complex_mul_impl(context, builder,
                                              complex_binary_sig,
-                                             [I, log]).unwrap()
+                                             [I, log])
             out._setvalue(builtins.complex_sub_impl(context, builder,
                                                     complex_binary_sig,
-                                                    [ZERO, ilog]).unwrap())
+                                                    [ZERO, ilog]))
         with otherwise:
             # ... else use series expansion (to avoid loss of precision)
             coef_dict = {
@@ -1096,7 +1096,7 @@ def np_complex_asin_impl(context, builder, sig, args):
                                          ONE, xx, coef_dict[ty])
             out._setvalue(builtins.complex_mul_impl(context, builder,
                                                     complex_binary_sig,
-                                                    [args[0], tmp]).unwrap())
+                                                    [args[0], tmp]))
 
     return out._getvalue()
 
@@ -1446,16 +1446,16 @@ def np_complex_acosh_impl(context, builder, sig, args):
     x = args[0]
 
     x_plus_one = builtins.complex_add_impl(context, builder, csig2, [x,
-                                                                     ONE]).unwrap()
+                                                                     ONE])
     x_minus_one = builtins.complex_sub_impl(context, builder, csig2, [x,
-                                                                      ONE]).unwrap()
+                                                                      ONE])
     sqrt_x_plus_one = np_complex_sqrt_impl(context, builder, sig, [x_plus_one])
     sqrt_x_minus_one = np_complex_sqrt_impl(context, builder, sig, [x_minus_one])
     prod_sqrt = builtins.complex_mul_impl(context, builder, csig2,
                                           [sqrt_x_plus_one,
-                                           sqrt_x_minus_one]).unwrap()
+                                           sqrt_x_minus_one])
     log_arg = builtins.complex_add_impl(context, builder, csig2, [x,
-                                                                  prod_sqrt]).unwrap()
+                                                                  prod_sqrt])
 
     return np_complex_log_impl(context, builder, sig, [log_arg])
 

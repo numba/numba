@@ -213,7 +213,7 @@ class Lower(BaseLower):
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
-            assert not isinstance(val, cgutils.NewRef)
+            # assert not isinstance(val, cgutils.NewRef)
             self.storevar(val, inst.target.name)
 
         elif isinstance(inst, ir.Branch):
@@ -348,32 +348,32 @@ class Lower(BaseLower):
                 res = self.context.get_constant_generic(self.builder, ty,
                                                         value.value)
 
-            assert not isinstance(res, cgutils.NewRef)
+            # assert not isinstance(res, cgutils.NewRef)
             self.incref(ty, res)
             return res
 
         elif isinstance(value, ir.Expr):
             res = self.lower_expr(ty, value)
-            assert isinstance(res, cgutils.NewRef)
-            return res.unwrap()
+            # assert isinstance(res, cgutils.NewRef)
+            return res
 
         elif isinstance(value, ir.Var):
             val = self.loadvar(value.name)
             oty = self.typeof(value.name)
             res = self.context.cast(self.builder, val, oty, ty)
-            assert not isinstance(res, cgutils.NewRef)
+            # assert not isinstance(res, cgutils.NewRef)
             self.incref(ty, res)
             return res
 
         elif isinstance(value, ir.Arg):
             res = self.fnargs[value.index]
-            assert not isinstance(res, cgutils.NewRef)
+            # assert not isinstance(res, cgutils.NewRef)
             self.incref(ty, res)
             return res
 
         elif isinstance(value, ir.Yield):
             res = self.lower_yield(ty, value)
-            assert not isinstance(res, cgutils.NewRef)
+            # assert not isinstance(res, cgutils.NewRef)
             self.incref(ty, res)
             return res
 
@@ -420,8 +420,8 @@ class Lower(BaseLower):
         lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
         rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
         res = impl(self.builder, (lhs, rhs))
-        assert isinstance(res, cgutils.NewRef), impl
-        res = self.context.cast(self.builder, res.unwrap(),
+        # assert isinstance(res, cgutils.NewRef), impl
+        res = self.context.cast(self.builder, res,
                                 signature.return_type, resty)
         return cgutils.NewRef(res)
 
@@ -560,14 +560,14 @@ class Lower(BaseLower):
                 argvals = [the_self] + argvals
 
             res = impl(self.builder, argvals)
-            assert isinstance(res, cgutils.NewRef)
-            res = res.unwrap()
+            # assert isinstance(res, cgutils.NewRef)
+            res = res
 
             libs = getattr(impl, "libs", ())
             for lib in libs:
                 self.library.add_linking_library(lib)
 
-        assert not isinstance(res, cgutils.NewRef)
+        # assert not isinstance(res, cgutils.NewRef)
         res = self.context.cast(self.builder, res, signature.return_type, resty)
         return cgutils.NewRef(res)
 
@@ -589,21 +589,21 @@ class Lower(BaseLower):
             # Convert argument to match
             val = self.context.cast(self.builder, val, typ, signature.args[0])
             res = impl(self.builder, [val])
-            assert isinstance(res, cgutils.NewRef)
-            res = self.context.cast(self.builder, res.unwrap(),
+            # assert isinstance(res, cgutils.NewRef)
+            res = self.context.cast(self.builder, res,
                                     signature.return_type, resty)
             return cgutils.NewRef(res)
 
         elif expr.op == 'call':
             res = self.lower_call(resty, expr)
-            assert isinstance(res, cgutils.NewRef)
+            # assert isinstance(res, cgutils.NewRef)
             return res
 
         elif expr.op == 'pair_first':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             res = self.context.pair_first(self.builder, val, ty)
-            assert not isinstance(res, cgutils.NewRef)
+            # assert not isinstance(res, cgutils.NewRef)
             self.incref(resty, res)
             return cgutils.NewRef(res)
 
@@ -611,7 +611,7 @@ class Lower(BaseLower):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             res = self.context.pair_second(self.builder, val, ty)
-            assert not isinstance(res, cgutils.NewRef)
+            # assert not isinstance(res, cgutils.NewRef)
             self.incref(resty, res)
             return cgutils.NewRef(res)
 
@@ -623,8 +623,8 @@ class Lower(BaseLower):
             [fty] = signature.args
             castval = self.context.cast(self.builder, val, ty, fty)
             res = impl(self.builder, (castval,))
-            assert isinstance(res, cgutils.NewRef)
-            res = res.unwrap()
+            # assert isinstance(res, cgutils.NewRef)
+            res = res
             res = self.context.cast(self.builder, res, signature.return_type,
                                     resty)
             return cgutils.NewRef(res)
@@ -689,7 +689,7 @@ class Lower(BaseLower):
                     res = cgutils.NewRef(res)
                 else:
                     res = impl(self.context, self.builder, ty, val, expr.attr)
-                    assert isinstance(res, cgutils.NewRef)
+                    # assert isinstance(res, cgutils.NewRef)
             return res
 
         elif expr.op == "static_getitem":
@@ -710,8 +710,8 @@ class Lower(BaseLower):
                 impl = self.context.get_function("getitem", signature)
                 argvals = (baseval, indexval)
                 res = impl(self.builder, argvals)
-                assert isinstance(res, cgutils.NewRef)
-                res = self.context.cast(self.builder, res.unwrap(),
+                # assert isinstance(res, cgutils.NewRef)
+                res = self.context.cast(self.builder, res,
                                         signature.return_type, resty)
                 return cgutils.NewRef(res)
 
@@ -727,8 +727,8 @@ class Lower(BaseLower):
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]
             res = impl(self.builder, castvals)
-            assert isinstance(res, cgutils.NewRef)
-            res = self.context.cast(self.builder, res.unwrap(),
+            # assert isinstance(res, cgutils.NewRef)
+            res = self.context.cast(self.builder, res,
                                     signature.return_type,
                                     resty)
             return cgutils.NewRef(res)
@@ -754,7 +754,7 @@ class Lower(BaseLower):
 
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)
-            assert isinstance(res, cgutils.NewRef)
+            # assert isinstance(res, cgutils.NewRef)
             return res
 
         raise NotImplementedError(expr)
@@ -767,7 +767,7 @@ class Lower(BaseLower):
         return self.builder.load(ptr)
 
     def storevar(self, value, name):
-        assert not isinstance(value, cgutils.NewRef)
+        # assert not isinstance(value, cgutils.NewRef)
         fetype = self.typeof(name)
 
         # Define if not already

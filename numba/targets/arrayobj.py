@@ -2212,7 +2212,7 @@ def array_copy(context, builder, sig, args):
                                                  rettype.layout, indices)
             builder.store(builder.load(src_ptr), dest_ptr)
 
-    assert isinstance(ret_new_ref, cgutils.NewRef)
+    # assert isinstance(ret_new_ref, cgutils.NewRef)
     return ret_new_ref
 
 
