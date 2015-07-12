@@ -383,10 +383,6 @@ def _ufunc_db_function(ufunc):
                          for val, inty, outty in zip(args, osig.args,
                                                      isig.args)]
             res = self.fn(self.context, self.builder, isig, cast_args)
-
-            if isinstance(res, cgutils.NewRef):
-                res = res.value
-
             return self.cast(res, isig.return_type, osig.return_type)
 
     return _KernelImpl

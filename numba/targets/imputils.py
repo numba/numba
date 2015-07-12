@@ -218,9 +218,7 @@ def call_getiter(context, builder, iterable_type, val):
     """
     getiter_sig = typing.signature(iterable_type.iterator_type, iterable_type)
     getiter_impl = context.get_function('getiter', getiter_sig)
-    res = getiter_impl(builder, (val,))
-    # assert isinstance(res, cgutils.NewRef)
-    return res
+    return getiter_impl(builder, (val,))
 
 
 def call_iternext(context, builder, iterator_type, val):
@@ -322,29 +320,19 @@ type_factory = type_registry.register
 
 
 def impl_ret_new_ref(ctx, builder, retty, ret):
-    # assert not isinstance(ret, cgutils.NewRef)
-    return cgutils.NewRef(ret)
+    return ret
 
 
 def impl_ret_borrowed(ctx, builder, retty, ret):
-    # assert not isinstance(ret, cgutils.NewRef)
     if ctx.enable_nrt:
         ctx.nrt_incref(builder, retty, ret)
-    return cgutils.NewRef(ret)
+    return ret
 
 
 def impl_ret_untracked(ctx, builder, retty, ret):
-    # assert not isinstance(ret, cgutils.NewRef)
-    return cgutils.NewRef(ret)
+    return ret
 
 
 def sentry_refcount_semantic(res, impl):
     pass
-    # if not isinstance(res, cgutils.NewRef):
-    #     msg = '{0} did not return: {1}:{2} -- {3}'
-    #     filename = inspect.getfile(impl)
-    #     lineno = impl.__code__.co_firstlineno
-    #     if res is not None:
-    #         raise AssertionError(msg.format(impl, filename, lineno, type(res)))
-    #
-    # return res
+

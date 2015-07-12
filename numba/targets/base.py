@@ -572,7 +572,6 @@ class BaseContext(object):
         return self.data_model_manager[ty].as_argument(builder, val)
 
     def get_value_as_data(self, builder, ty, val):
-        assert not isinstance(val, cgutils.NewRef)
         return self.data_model_manager[ty].as_data(builder, val)
 
     def get_data_as_value(self, builder, ty, val):

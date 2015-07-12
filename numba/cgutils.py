@@ -20,25 +20,6 @@ true_byte = Constant.int(Type.int(8), 1)
 false_byte = Constant.int(Type.int(8), 0)
 
 
-class NewRef(object):
-    def __new__(cls, value):
-        return value
-
-    def __init__(self, value):
-        assert not isinstance(value, NewRef)
-        self.value = value
-        self.type = value.type
-
-    def __getattr__(self, item):
-        return getattr(self.value, item)
-
-    def __str__(self):
-        return str(self.value)
-
-    def unwrap(self):
-        return self.value
-
-
 def as_bool_byte(builder, value):
     return builder.zext(value, Type.int(8))
 
