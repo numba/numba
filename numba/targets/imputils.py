@@ -218,7 +218,9 @@ def call_getiter(context, builder, iterable_type, val):
     """
     getiter_sig = typing.signature(iterable_type.iterator_type, iterable_type)
     getiter_impl = context.get_function('getiter', getiter_sig)
-    return getiter_impl(builder, (val,))
+    res = getiter_impl(builder, (val,))
+    assert isinstance(res, cgutils.NewRef)
+    return res.value
 
 
 def call_iternext(context, builder, iterator_type, val):

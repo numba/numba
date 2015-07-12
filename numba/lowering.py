@@ -542,8 +542,9 @@ class Lower(BaseLower):
             if isinstance(res, cgutils.NewRef):
                 res = res.value
             else:
-                if not isinstance(fnty, types.Dispatcher):
-                    self.incref(resty, res)
+                assert False
+                # if not isinstance(fnty, types.Dispatcher):
+                #     self.incref(resty, res)
 
             libs = getattr(impl, "libs", ())
             for lib in libs:
@@ -636,6 +637,7 @@ class Lower(BaseLower):
             with cgutils.if_unlikely(self.builder, is_valid):
                 self.return_exception(ValueError)
 
+            self.decref(ty.iterator_type, iterobj)
             return tup
 
         elif expr.op == "getattr":

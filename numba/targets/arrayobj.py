@@ -188,7 +188,8 @@ def getiter_array(context, builder, sig, args):
     iterobj.array = array
 
     res = iterobj._getvalue()
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    out = impl_ret_borrowed(context, builder, sig.return_type, res)
+    return out
 
 
 def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
