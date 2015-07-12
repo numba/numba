@@ -4,7 +4,7 @@ Utilities to simplify the boilerplate for native lowering.
 
 from __future__ import print_function, absolute_import, division
 
-import collections
+import inspect
 import functools
 
 from .. import typing, cgutils, types
@@ -30,6 +30,7 @@ def impl_attribute(ty, attr, rtype=None):
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
             ret = real_impl(context, builder, typ, value)
+            sentry_refcount_semantic(ret, impl)
             return ret
 
         if rtype is None:
@@ -52,6 +53,7 @@ def impl_attribute_generic(ty):
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
             ret = real_impl(context, builder, typ, value, attr)
+            sentry_refcount_semantic(ret, impl)
             return ret
 
         res.signature = typing.signature(types.Any, ty)
@@ -74,7 +76,7 @@ def user_function(fndesc, libs):
             builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
         with cgutils.if_unlikely(builder, status.is_error):
             context.call_conv.return_status_propagate(builder, status)
-        return retval
+        return impl_ret_new_ref(context, builder, fndesc.restype, retval)
 
     imp.signature = typing.signature(fndesc.restype, *fndesc.argtypes)
     imp.libs = tuple(libs)
@@ -107,12 +109,13 @@ def python_attr_impl(cls, attr, atyp):
             context.call_conv.return_exc(builder)
 
         if isinstance(atyp, types.Method):
-            return aval
+            res = aval
         else:
             native = api.to_native_value(aval, atyp)
             assert native.cleanup is None
             api.decref(aval)
-            return native.value
+            res = native.value
+        return impl_ret_borrowed(context, builder, atyp, res)
 
     return imp
 
@@ -203,7 +206,8 @@ def iternext_impl(func):
         pairobj = cls(context, builder)
         func(context, builder, sig, args,
              _IternextResult(context, builder, pairobj))
-        return pairobj._getvalue()
+        return impl_ret_borrowed(context, builder,
+                                 pair_type, pairobj._getvalue())
     return wrapper
 
 
@@ -326,3 +330,19 @@ def impl_ret_borrowed(ctx, builder, retty, ret):
         ctx.nrt_incref(builder, retty, ret)
     return cgutils.NewRef(ret)
 
+
+def impl_ret_untracked(ctx, builder, retty, ret):
+    assert not isinstance(ret, cgutils.NewRef)
+    return cgutils.NewRef(ret)
+
+
+def sentry_refcount_semantic(res, impl):
+
+    if not isinstance(res, cgutils.NewRef):
+        msg = '{0} did not return: {1}:{2} -- {3}'
+        filename = inspect.getfile(impl)
+        lineno = impl.__code__.co_firstlineno
+        if res is not None:
+            raise AssertionError(msg.format(impl, filename, lineno, type(res)))
+
+    return res

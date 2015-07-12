@@ -370,6 +370,7 @@ class Lower(BaseLower):
         if isinstance(res, cgutils.NewRef):
             # The operation has explicitly returned a new reference
             res = res.value
+            assert not isinstance(res, cgutils.NewRef)
         else:
             self.incref(ty, res)
 

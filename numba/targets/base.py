@@ -4,7 +4,6 @@ import copy
 from types import MethodType
 
 import numpy
-import inspect
 
 from llvmlite import ir as llvmir
 import llvmlite.llvmpy.core as lc
@@ -17,7 +16,8 @@ from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     python_attr_impl,
                                     builtin_registry, impl_attribute,
-                                    type_registry)
+                                    type_registry, sentry_refcount_semantic,
+                                    impl_ret_borrowed)
 from . import arrayobj, builtins, iterators, rangeobj, optional
 from numba import datamodel
 
@@ -508,13 +508,15 @@ class BaseContext(object):
                         parent=None,
                     )
 
-                    return ary._getvalue()
+                    res = ary._getvalue()
+                    return impl_ret_borrowed(context, builder, typ, res)
             else:
                 @impl_attribute(typ, attr, elemty)
                 def imp(context, builder, typ, val):
                     dptr = cgutils.get_record_member(builder, val, offset,
                                                      self.get_data_type(elemty))
-                    return self.unpack_value(builder, elemty, dptr)
+                    res = self.unpack_value(builder, elemty, dptr)
+                    return impl_ret_borrowed(context, builder, typ, res)
             return imp
 
         if isinstance(typ, types.Module):
@@ -527,7 +529,7 @@ class BaseContext(object):
                 llval = self.get_constant(attrty, pyval)
                 @impl_attribute(typ, attr, attrty)
                 def imp(context, builder, typ, val):
-                    return llval
+                    return impl_ret_borrowed(context, builder, attrty, llval)
                 return imp
             # No implementation required for dummies (functions, modules...),
             # which are dealt with later
@@ -570,6 +572,7 @@ class BaseContext(object):
         return self.data_model_manager[ty].as_argument(builder, val)
 
     def get_value_as_data(self, builder, ty, val):
+        assert not isinstance(val, cgutils.NewRef)
         return self.data_model_manager[ty].as_data(builder, val)
 
     def get_data_as_value(self, builder, ty, val):
@@ -1088,14 +1091,8 @@ class _wrap_impl(object):
 
     def __call__(self, builder, args):
         ret = self._imp(self._context, builder, self._sig, args)
-        if isinstance(ret, cgutils.NewRef):
-            return ret  # ret.value
-        else:
-            msg = '{0} did not return: {1}:{2}'
-            filename = inspect.getfile(self._imp)
-            lineno = self._imp.__code__.co_firstlineno
-            if ret is not None:
-                raise AssertionError(msg.format(self._imp, filename, lineno))
+        sentry_refcount_semantic(ret, self._imp)
+        return ret
 
     def __getattr__(self, item):
         return getattr(self._imp, item)

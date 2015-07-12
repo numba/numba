@@ -5,12 +5,9 @@ Implementation of operations on numpy timedelta64.
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import npdatetime, types, typing, cgutils, utils
-from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute, impl_attribute_generic,
-                                    iterator_impl, iternext_impl,
-                                    struct_factory, type_factory)
-from numba.typing import signature
+from numba import npdatetime, types, cgutils
+from numba.targets.imputils import (builtin, implement, type_factory,
+                                    impl_ret_untracked)
 
 
 if not npdatetime.NPDATETIME_SUPPORTED:
@@ -127,12 +124,14 @@ leap_year_months_acc = make_constant_array(
 @builtin
 @implement('+', types.Kind(types.NPTimedelta))
 def timedelta_pos_impl(context, builder, sig, args):
-    return args[0]
+    res =args[0]
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
 @implement('-', types.Kind(types.NPTimedelta))
 def timedelta_neg_impl(context, builder, sig, args):
-    return builder.neg(args[0])
+    res = builder.neg(args[0])
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
 @implement(types.abs_type, types.Kind(types.NPTimedelta))
@@ -144,7 +143,8 @@ def timedelta_abs_impl(context, builder, sig, args):
             builder.store(builder.neg(val), ret)
         with otherwise:
             builder.store(val, ret)
-    return builder.load(ret)
+    res = builder.load(ret)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
 @implement(types.sign_type, types.Kind(types.NPTimedelta))
@@ -163,7 +163,8 @@ def timedelta_sign_impl(context, builder, sig, args):
                     builder.store(Constant.int(TIMEDELTA64, 0), ret)
                 with lt_zero:
                     builder.store(Constant.int(TIMEDELTA64, -1), ret)
-    return builder.load(ret)
+    res = builder.load(ret)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
 @implement('+', *TIMEDELTA_BINOP_SIG)
@@ -175,7 +176,8 @@ def timedelta_add_impl(context, builder, sig, args):
         va = scale_timedelta(context, builder, va, ta, sig.return_type)
         vb = scale_timedelta(context, builder, vb, tb, sig.return_type)
         builder.store(builder.add(va, vb), ret)
-    return builder.load(ret)
+    res = builder.load(ret)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
 @implement('-', *TIMEDELTA_BINOP_SIG)
@@ -187,7 +189,8 @@ def timedelta_sub_impl(context, builder, sig, args):
         va = scale_timedelta(context, builder, va, ta, sig.return_type)
         vb = scale_timedelta(context, builder, vb, tb, sig.return_type)
         builder.store(builder.sub(va, vb), ret)
-    return builder.load(ret)
+    res = builder.load(ret)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def _timedelta_times_number(context, builder, td_arg, td_type,
@@ -206,21 +209,24 @@ def _timedelta_times_number(context, builder, td_arg, td_type,
         builder.store(val, ret)
     return builder.load(ret)
 
+
 @builtin
 @implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
 @implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Float))
 def timedelta_times_number(context, builder, sig, args):
-    return _timedelta_times_number(context, builder,
+    res = _timedelta_times_number(context, builder,
                                    args[0], sig.args[0], args[1], sig.args[1],
                                    sig.return_type)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
 @implement('*', types.Kind(types.Integer), types.Kind(types.NPTimedelta))
 @implement('*', types.Kind(types.Float), types.Kind(types.NPTimedelta))
 def number_times_timedelta(context, builder, sig, args):
-    return _timedelta_times_number(context, builder,
+    res = _timedelta_times_number(context, builder,
                                    args[1], sig.args[1], args[0], sig.args[0],
                                    sig.return_type)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
 @implement('/', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
@@ -247,7 +253,8 @@ def timedelta_over_number(context, builder, sig, args):
         # output in a different unit.
         val = scale_timedelta(context, builder, val, sig.args[0], sig.return_type)
         builder.store(val, ret)
-    return builder.load(ret)
+    res = builder.load(ret)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
 @implement('/', *TIMEDELTA_BINOP_SIG)
@@ -264,7 +271,8 @@ def timedelta_over_timedelta(context, builder, sig, args):
         va = builder.sitofp(va, ll_ret_type)
         vb = builder.sitofp(vb, ll_ret_type)
         builder.store(builder.fdiv(va, vb), ret)
-    return builder.load(ret)
+    res = builder.load(ret)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 # Comparison operators on timedelta64
@@ -286,7 +294,8 @@ def _create_timedelta_comparison_impl(ll_op, default_value):
             with otherwise:
                 # No scaling when comparing NaTs
                 builder.store(builder.icmp(ll_op, va, vb), ret)
-        return builder.load(ret)
+        res = builder.load(ret)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
 
     return impl
 
@@ -305,7 +314,8 @@ def _create_timedelta_ordering_impl(ll_op):
                 # (i.e. NaT is <= everything else, since it's the smallest
                 #  int64 value)
                 builder.store(builder.icmp(ll_op, va, vb), ret)
-        return builder.load(ret)
+        res = builder.load(ret)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
 
     return impl
 
@@ -481,20 +491,22 @@ _datetime_minus_timedelta = _datetime_timedelta_arith('sub')
 def datetime_plus_timedelta(context, builder, sig, args):
     dt_arg, td_arg = args
     dt_type, td_type = sig.args
-    return _datetime_plus_timedelta(context, builder,
+    res = _datetime_plus_timedelta(context, builder,
                                     dt_arg, dt_type.unit,
                                     td_arg, td_type.unit,
                                     sig.return_type.unit)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
 @implement('+', types.Kind(types.NPTimedelta), types.Kind(types.NPDatetime))
 def timedelta_plus_datetime(context, builder, sig, args):
     td_arg, dt_arg = args
     td_type, dt_type = sig.args
-    return _datetime_plus_timedelta(context, builder,
+    res = _datetime_plus_timedelta(context, builder,
                                     dt_arg, dt_type.unit,
                                     td_arg, td_type.unit,
                                     sig.return_type.unit)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 # datetime64 - timedelta64
 
@@ -503,10 +515,11 @@ def timedelta_plus_datetime(context, builder, sig, args):
 def datetime_minus_timedelta(context, builder, sig, args):
     dt_arg, td_arg = args
     dt_type, td_type = sig.args
-    return _datetime_minus_timedelta(context, builder,
+    res = _datetime_minus_timedelta(context, builder,
                                      dt_arg, dt_type.unit,
                                      td_arg, td_type.unit,
                                      sig.return_type.unit)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 # datetime64 - datetime64
 
@@ -524,7 +537,8 @@ def datetime_minus_datetime(context, builder, sig, args):
         vb = convert_datetime_for_arith(builder, vb, unit_b, ret_unit)
         ret_val = builder.sub(va, vb)
         builder.store(ret_val, ret)
-    return builder.load(ret)
+    res = builder.load(ret)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 # datetime64 comparisons
 
@@ -546,7 +560,8 @@ def _create_datetime_comparison_impl(ll_op):
                 # No scaling when comparing NaTs
                 ret_val = builder.icmp(ll_op, va, vb)
                 builder.store(ret_val, ret)
-        return builder.load(ret)
+        res = builder.load(ret)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
 
     return impl
 
@@ -582,7 +597,7 @@ def datetime_max_impl(context, builder, sig, args):
     res = builder.select(in1_not_nat, res, in2)
     res = builder.select(in2_not_nat, res, in1)
 
-    return res
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def datetime_min_impl(context, builder, sig, args):
@@ -597,7 +612,7 @@ def datetime_min_impl(context, builder, sig, args):
     res = builder.select(in1_not_nat, res, in2)
     res = builder.select(in2_not_nat, res, in1)
 
-    return res
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def timedelta_max_impl(context, builder, sig, args):
@@ -612,7 +627,7 @@ def timedelta_max_impl(context, builder, sig, args):
     res = builder.select(in1_not_nat, res, in2)
     res = builder.select(in2_not_nat, res, in1)
 
-    return res
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def timedelta_min_impl(context, builder, sig, args):
@@ -627,4 +642,4 @@ def timedelta_min_impl(context, builder, sig, args):
     res = builder.select(in1_not_nat, res, in2)
     res = builder.select(in2_not_nat, res, in1)
 
-    return res
+    return impl_ret_untracked(context, builder, sig.return_type, res)

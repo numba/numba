@@ -5,15 +5,14 @@ Implementation of various iterable and iterator types.
 from numba import types, cgutils
 from numba.targets.imputils import (
     builtin, implement, iternext_impl, call_iternext, call_getiter,
-    struct_factory)
+    struct_factory, impl_ret_borrowed)
 
 
 @builtin
 @implement('getiter', types.Kind(types.IteratorType))
 def iterator_getiter(context, builder, sig, args):
     [it] = args
-    return it
-
+    return impl_ret_borrowed(context, builder, sig.return_type, it)
 
 #-------------------------------------------------------------------------------
 # builtin `enumerate` implementation
@@ -52,7 +51,8 @@ def make_enumerate_object(context, builder, sig, args):
     enum.count = countptr
     enum.iter = iterobj
 
-    return enum._getvalue()
+    res = enum._getvalue()
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @builtin
 @implement('iternext', types.Kind(types.EnumerateType))
@@ -101,7 +101,8 @@ def make_zip_object(context, builder, sig, args):
     for i, (arg, srcty) in enumerate(zip(args, sig.args)):
         zipobj[i] = call_getiter(context, builder, srcty, arg)
 
-    return zipobj._getvalue()
+    res = zipobj._getvalue()
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @builtin
 @implement('iternext', types.Kind(types.ZipType))

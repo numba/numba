@@ -13,7 +13,7 @@ from collections import namedtuple
 from llvmlite.llvmpy import core as lc
 
 from . import builtins, ufunc_db, arrayobj
-from .imputils import implement, Registry
+from .imputils import implement, Registry, impl_ret_new_ref
 from .. import typing, types, cgutils, numpy_support
 from ..config import PYVERSION
 from ..numpy_support import ufunc_find_matching_loop
@@ -144,10 +144,8 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
     def store_data(self, indices, value):
         ctx = self.context
         bld = self.builder
-
         store_value = ctx.get_value_as_data(bld, self.base_type, value)
         assert ctx.get_data_type(self.base_type) == store_value.type
-
         bld.store(store_value, self._load_effective_address(indices))
 
 
@@ -312,7 +310,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
         val_out = kernel.generate(*vals_in)
         output.store_data(loop_indices, val_out)
     out = arguments[-1].return_val
-    return cgutils.NewRef(out)
+    return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
 # Kernels are the code to be executed inside the multidimensional loop.
@@ -385,6 +383,10 @@ def _ufunc_db_function(ufunc):
                          for val, inty, outty in zip(args, osig.args,
                                                      isig.args)]
             res = self.fn(self.context, self.builder, isig, cast_args)
+
+            if isinstance(res, cgutils.NewRef):
+                res = res.value
+
             return self.cast(res, isig.return_type, osig.return_type)
 
     return _KernelImpl
