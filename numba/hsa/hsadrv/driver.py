@@ -665,7 +665,7 @@ class Queue(object):
         queue_mask = queue_struct.size - 1
 
         dispatch_packet_t = drvapi.hsa_kernel_dispatch_packet_t
-        packet_array_t = (dispatch_packet_t * (queue_struct.size - 1))
+        packet_array_t = (dispatch_packet_t * queue_struct.size)
 
         queue_offset = index & queue_mask
         queue = packet_array_t.from_address(queue_struct.base_address)
