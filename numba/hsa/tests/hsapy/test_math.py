@@ -44,7 +44,6 @@ class TestMath(unittest.TestCase):
                                            math_fn.__name__,
                                            dtype.__name__))
 
-
     def _generic_test_binary(self, math_fn, npy_fn,
                              cases=None,
                              span=(-1., 1., 1., -1.), count=128,
@@ -59,7 +58,7 @@ class TestMath(unittest.TestCase):
         for dtype in types:
             if cases is None:
                 src1 = np.linspace(span[0], span[1], count, dtype=dtype)
-                src2 = np.linspace(span[2], span[3], count, dtype=dtype) 
+                src2 = np.linspace(span[2], span[3], count, dtype=dtype)
             else:
                 src1 = np.array(cases[0], dtype=dtype)
                 src2 = np.array(cases[1], dtype=dtype)
@@ -72,14 +71,12 @@ class TestMath(unittest.TestCase):
                                            math_fn.__name__,
                                            dtype.__name__))
 
-
     def test_trig(self):
         funcs = [math.sin, math.cos, math.tan]
 
         for fn in funcs:
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(-np.pi, np.pi))
-
 
     def test_trig_inv(self):
         funcs = [(math.asin, np.arcsin),
@@ -89,22 +86,19 @@ class TestMath(unittest.TestCase):
         for fn, np_fn in funcs:
             self._generic_test_unary(fn, np_fn)
 
-
     def test_trigh(self):
         funcs = [math.sinh, math.cosh, math.tanh]
         for fn in funcs:
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(-4.0, 4.0))
 
-
     def test_trigh_inv(self):
         funcs = [(math.asinh, np.arcsinh, (-4, 4)),
-                 (math.acosh, np.arccosh, ( 1, 9)),
+                 (math.acosh, np.arccosh, (1, 9)),
                  (math.atanh, np.arctanh, (-0.9, 0.9))]
 
         for fn, np_fn, span in funcs:
             self._generic_test_unary(fn, np_fn, span=span)
-
 
     def test_classify(self):
         funcs = [math.isnan, math.isinf]
@@ -113,7 +107,6 @@ class TestMath(unittest.TestCase):
         for fn in funcs:
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      cases=cases)
-
 
     def test_floor_ceil(self):
         funcs = [math.ceil, math.floor]
@@ -132,13 +125,11 @@ class TestMath(unittest.TestCase):
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(-63.3, 63.3))
 
-
     def test_unary_exp(self):
         funcs = [math.exp, math.expm1]
         for fn in funcs:
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(-30, 30))
-
 
     def test_sqrt(self):
         funcs = [math.sqrt]
@@ -146,31 +137,26 @@ class TestMath(unittest.TestCase):
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(0, 1000))
 
-
     def test_log(self):
         funcs = [math.log, math.log10, math.log1p]
         for fn in funcs:
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      span=(0.1, 2500))
 
-
     def test_binaries(self):
         funcs = [math.copysign, math.fmod]
         for fn in funcs:
             self._generic_test_binary(fn, getattr(np, fn.__name__))
-
 
     def test_pow(self):
         funcs = [(math.pow, np.power)]
         for fn, npy_fn in funcs:
             self._generic_test_binary(fn, npy_fn)
 
-
     def test_atan2(self):
         funcs = [(math.atan2, np.arctan2)]
         for fn, npy_fn in funcs:
             self._generic_test_binary(fn, npy_fn)
-
 
     def test_erf(self):
         funcs = [math.erf, math.erfc]

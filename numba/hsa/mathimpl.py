@@ -19,7 +19,6 @@ _unary_d_d = types.float64(types.float64)
 _binary_f_ff = types.float32(types.float32, types.float32)
 _binary_d_dd = types.float64(types.float64, types.float64)
 
-
 function_descriptors = {
     'isnan': (_unary_b_f, _unary_b_d),
     'isinf': (_unary_b_f, _unary_b_d),
@@ -69,6 +68,8 @@ function_descriptors = {
 _lib_counterpart = {
     'gamma': 'tgamma'
 }
+
+
 def _mk_fn_decl(name, decl_sig):
     sym = _lib_counterpart.get(name, name)
 
@@ -81,15 +82,12 @@ def _mk_fn_decl(name, decl_sig):
     core.__name__ = name
     return core
 
-_supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2',
-              'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
-              'isnan', 'isinf',
-              'ceil', 'floor',
-              'fabs',
-              'sqrt', 'exp', 'expm1',
-              'log', 'log10', 'log1p',
-              'copysign', 'pow', 'fmod',
-              'erf', 'erfc',  'gamma', 'lgamma',
+
+_supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'sinh',
+              'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'isnan', 'isinf',
+              'ceil', 'floor', 'fabs', 'sqrt', 'exp', 'expm1', 'log',
+              'log10', 'log1p', 'copysign', 'pow', 'fmod', 'erf', 'erfc',
+              'gamma', 'lgamma',
               ]
 
 for name in _supported:
