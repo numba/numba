@@ -12,8 +12,8 @@ register = registry.register
 
 # -----------------------------------------------------------------------------
 
-_unary_b_f = types.bool_(types.float32)
-_unary_b_d = types.bool_(types.float64)
+_unary_b_f = types.int32(types.float32)
+_unary_b_d = types.int32(types.float64)
 _unary_f_f = types.float32(types.float32)
 _unary_d_d = types.float64(types.float64)
 _binary_f_ff = types.float32(types.float32, types.float32)
@@ -71,10 +71,12 @@ _lib_counterpart = {
 }
 def _mk_fn_decl(name, decl_sig):
     sym = _lib_counterpart.get(name, name)
+
     def core(context, builder, sig, args):
-        fn = _declare_function(context, builder, sym, sig, decl_sig.args,
+        fn = _declare_function(context, builder, sym, decl_sig, decl_sig.args,
                                mangler=mangle)
-        return builder.call(fn, args)
+        res = builder.call(fn, args)
+        return context.cast(builder, res, decl_sig.return_type, sig.return_type)
 
     core.__name__ = name
     return core
