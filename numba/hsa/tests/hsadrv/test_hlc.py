@@ -44,13 +44,14 @@ class TestHLC(unittest.TestCase):
         self.assertIn("prog kernel &copy", hsail)
 
     def test_brig(self):
+        # Genreate BRIG
         hlcmod = hlc.Module()
         hlcmod.load_llvm(SPIR_SAMPLE)
         brig = hlcmod.finalize().brig
         # Check the first 8 bytes for the magic string
         self.assertEqual(brig[:8].decode('latin1'), 'HSA BRIG')
-        # Try to load the symbol
 
+        # Compile
         from numba.hsa.hsadrv.driver import BrigModule, Program, hsa, Executable
 
         agent = hsa.components[0]
@@ -64,6 +65,34 @@ class TestHLC(unittest.TestCase):
         sym = ex.get_symbol(agent, "&copy")
         self.assertNotEqual(sym.kernel_object, 0)
         self.assertGreater(sym.kernarg_segment_size, 0)
+
+        # Execute
+        import ctypes
+        import numpy as np
+
+        sig = hsa.create_signal(1)
+
+        kernarg_region = [r for r in agent.regions if r.supports_kernargs][0]
+
+        kernarg_types = (ctypes.c_void_p * 2)
+        kernargs = kernarg_region.allocate(kernarg_types)
+
+        src = np.random.random(1).astype(np.float32)
+        dst = np.zeros_like(src)
+
+        kernargs[0] = src.ctypes.data
+        kernargs[1] = dst.ctypes.data
+
+        hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
+        hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
+        hsa.hsa_memory_register(ctypes.byref(kernargs),
+                                ctypes.sizeof(kernargs))
+
+        queue = agent.create_queue_single(32)
+        queue.dispatch(sym, kernargs, workgroup_size=(1,),
+                       grid_size=(1,))
+
+        np.testing.assert_equal(dst, src)
 
 
 if __name__ == '__main__':
