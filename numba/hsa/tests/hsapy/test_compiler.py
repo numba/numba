@@ -8,7 +8,8 @@ import numba.unittest_support as unittest
 from numba import hsa
 from numba import types
 from numba.hsa import compiler
-from numba.hsa.hsadrv.driver import hsa as hsart, BrigModule
+from numba.hsa.hsadrv.driver import hsa as hsart
+from numba.hsa.hsadrv.driver import BrigModule, Executable, Program
 
 
 def copy_kernel(out, inp):
@@ -54,6 +55,19 @@ class _TestBase(unittest.TestCase):
 
 
 class TestCodeLoading(_TestBase):
+    def _check(self, brig_module, symbol):
+        prog = Program()
+        prog.add_module(brig_module)
+        code = prog.finalize(self.gpu.isa)
+
+        ex = Executable()
+        ex.load(self.gpu, code)
+        ex.freeze()
+
+        sym = ex.get_symbol(self.gpu, symbol)
+        self.assertTrue(sym.kernel_object)
+        self.assertGreater(sym.kernarg_segment_size, 0)
+
     def test_loading_from_file(self):
         arytype = types.float32[:]
         kernel = compiler.compile_kernel(copy_kernel_1d, [arytype] * 2)
@@ -66,15 +80,10 @@ class TestCodeLoading(_TestBase):
         # Load BRIG file
         symbol = '&{0}'.format(kernel.entry_name)
         brig_module = BrigModule.from_file(brig_file.name)
-        symbol_offset = brig_module.find_symbol_offset(symbol)
-        self.assertTrue(symbol_offset)
-        program = hsart.create_program([self.gpu])
-        module = program.add_module(brig_module)
-        code_descriptor = program.finalize(self.gpu, module, symbol_offset)
-        self.assertGreater(code_descriptor._id.kernarg_segment_byte_size, 0)
-
         # Cleanup
         os.unlink(brig_file.name)
+
+        self._check(brig_module, symbol)
 
     def test_loading_from_memory(self):
         arytype = types.float32[:]
@@ -82,15 +91,9 @@ class TestCodeLoading(_TestBase):
 
         # Load BRIG memory
         symbol = '&{0}'.format(kernel.entry_name)
-        brig_module = BrigModule.from_memory(kernel.binary)
-        symbol_offset = brig_module.find_symbol_offset(symbol)
-        self.assertTrue(symbol_offset)
-        program = hsart.create_program([self.gpu])
-        module = program.add_module(brig_module)
-        code_descriptor = program.finalize(self.gpu, module, symbol_offset)
-        self.assertGreater(code_descriptor._id.kernarg_segment_byte_size, 0)
+        brig_module = BrigModule(kernel.binary)
 
-
+        self._check(brig_module, symbol)
 
 
 class TestExecution(unittest.TestCase):
