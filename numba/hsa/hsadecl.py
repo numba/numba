@@ -45,7 +45,7 @@ class Hsa_get_num_groups(ConcreteTemplate):
 @intrinsic
 class Hsa_get_work_dim(ConcreteTemplate):
     key = hsa.get_work_dim
-    cases = [signature(types.intp)]
+    cases = [signature(types.uint32)]
 
 
 @intrinsic

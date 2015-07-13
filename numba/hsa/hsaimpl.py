@@ -128,7 +128,7 @@ def get_work_dim_impl(context, builder, sig, args):
     get_work_dim = _declare_function(context, builder, 'get_work_dim', sig,
                                      ["void"])
     res = builder.call(get_work_dim, [])
-    return context.cast(builder, res, types.uintp, types.intp)
+    return res
 
 
 @register
