@@ -83,7 +83,7 @@ class CmdLine(object):
         check_call(cmdline, shell=True)
 
 
-re_regname = re.compile(r"%\"\.(\d+)\"")
+re_regname = re.compile(r"%\"\.([^\"]+)\"")
 
 
 class Module(object):
@@ -124,7 +124,7 @@ class Module(object):
         HLC does not like variable with '.' prefix.
         """
         def repl(mat):
-            return '%_unamed_.{0}'.format(mat.group(1))
+            return '%_dot_.{0}'.format(mat.group(1))
         return re_regname.sub(repl, llvmir)
 
     def load_llvm(self, llvmir):
