@@ -6,6 +6,7 @@ from subprocess import check_call
 import tempfile
 import os
 from collections import namedtuple
+import re
 
 from numba import config
 
@@ -82,6 +83,9 @@ class CmdLine(object):
         check_call(cmdline, shell=True)
 
 
+re_regname = re.compile(r"%\"\.(\d+)\"")
+
+
 class Module(object):
     def __init__(self):
         """
@@ -115,10 +119,22 @@ class Module(object):
         self._tempfiles.append(path)
         return path
 
+    def _preprocess(self, llvmir):
+        """
+        HLC does not like variable with '.' prefix.
+        """
+        def repl(mat):
+            return '%_unamed_.{0}'.format(mat.group(1))
+        return re_regname.sub(repl, llvmir)
+
     def load_llvm(self, llvmir):
         """
         Load LLVM with HSAIL SPIR spec
         """
+        # Preprocess LLVM IR
+        # Because HLC does not handle dot in LLVM variable names
+        llvmir = self._preprocess(llvmir)
+
         # Create temp file to store the input file
         tmp_llvm_ir, fin = self._create_temp_file("dump-llvm-ir")
         with tmp_llvm_ir:
