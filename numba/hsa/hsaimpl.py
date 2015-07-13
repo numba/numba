@@ -18,6 +18,7 @@ from . import hlc
 registry = Registry()
 register = registry.register
 
+
 # -----------------------------------------------------------------------------
 
 
@@ -55,34 +56,6 @@ def _declare_function(context, builder, name, sig, cargs,
     return fn
 
 
-def _atomic_mangle(op, ty, addrspace):
-    tyletter = mangle_type(ty)
-    as_str = "AS{0}".format(addrspace)
-    tyaddrstr = "U{0}{1}".format(len(as_str), as_str)
-    mangled = "_Z{0}atomic_{1}PV{2}{3}{3}".format(7+len(op), op, tyaddrstr,
-                                                  tyletter)
-    return mangled
-
-
-def _declare_atomic(context, builder, op, llptrty, ty):
-    """Insert declaration for an atomic builtin. This is as ugly as it gets,
-    as our mangler doesn't support (yet!) the modifiers needed, I will just
-    hardcode the signature for the atomic operations here:
-    "ty"
-    """
-    mod = cgutils.get_module(builder)
-    llty = llptrty.pointee
-    # llvm return type and args are hardcoded...
-    llretty = llty
-    llargs = [llptrty, llty]
-    fnty = Type.function(llretty, llargs)
-    sym = _atomic_mangle(op, ty, llptrty.addrspace)
-
-    fn = mod.get_or_insert_function(fnty, sym)
-    fn.calling_convention = target.CC_SPIR_FUNC
-    return fn
-
-
 @register
 @implement(stubs.get_global_id, types.uint32)
 def get_global_id_impl(context, builder, sig, args):
@@ -102,6 +75,7 @@ def get_local_id_impl(context, builder, sig, args):
     res = builder.call(get_local_id, [dim])
     return context.cast(builder, res, types.uintp, types.intp)
 
+
 @register
 @implement(stubs.get_group_id, types.uint32)
 def get_group_id_impl(context, builder, sig, args):
@@ -117,7 +91,7 @@ def get_group_id_impl(context, builder, sig, args):
 def get_num_groups_impl(context, builder, sig, args):
     [dim] = args
     get_num_groups = _declare_function(context, builder, 'get_num_groups', sig,
-                                     ['unsigned int'])
+                                       ['unsigned int'])
     res = builder.call(get_num_groups, [dim])
     return context.cast(builder, res, types.uintp, types.intp)
 
@@ -162,15 +136,17 @@ def get_local_size_impl(context, builder, sig, args):
 
 @register
 @implement(stubs.atomic.add, types.Kind(types.Array), types.intp, types.Any)
-@implement(stubs.atomic.add, types.Kind(types.Array), types.Kind(types.UniTuple), types.Any)
-@implement(stubs.atomic.add, types.Kind(types.Array), types.Kind(types.Tuple), types.Any)
+@implement(stubs.atomic.add, types.Kind(types.Array),
+           types.Kind(types.UniTuple), types.Any)
+@implement(stubs.atomic.add, types.Kind(types.Array), types.Kind(types.Tuple),
+           types.Any)
 def hsail_atomic_add_tuple(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, inds, val = args
     dtype = aryty.dtype
 
     if indty == types.intp:
-        indices = [inds] #just a single integer
+        indices = [inds]  # just a single integer
         indty = [indty]
     else:
         indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
@@ -187,8 +163,7 @@ def hsail_atomic_add_tuple(context, builder, sig, args):
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
 
-    atomic_add = _declare_atomic(context, builder, "add", ptr.type, valty)
-    return builder.call(atomic_add, (ptr, val))
+    return builder.atomic_rmw("add", ptr, val, ordering='monotonic')
 
 
 @register
