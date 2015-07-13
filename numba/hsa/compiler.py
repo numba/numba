@@ -258,8 +258,6 @@ class HSAKernel(HSAKernelBase):
         Bind kernel to device
         """
         ctx, entry = self._cacheprog.get()
-        # assert entry.code_desc._id.kernarg_segment_byte_size == ctypes.sizeof(
-        #     self._kernarg_types)
         kernarg_type = (ctypes.c_byte * entry.symbol.kernarg_segment_size)
         kernargs = entry.kernarg_region.allocate(kernarg_type)
         return ctx, entry.symbol, kernargs, entry.kernarg_region
@@ -287,8 +285,8 @@ class HSAKernel(HSAKernelBase):
             # Increment offset
             base += align
 
-        assert base == ctypes.sizeof(kernargs), \
-            "Kernel argument size is invalid"
+        assert base <= ctypes.sizeof(
+            kernargs), "Kernel argument size is invalid"
 
         # Actual Kernel launch
         qq = ctx.default_queue
@@ -299,7 +297,6 @@ class HSAKernel(HSAKernelBase):
 
         # Free kernel region
         kernarg_region.free(kernargs)
-
 
 
 def _unpack_argument(ty, val, kernelargs):
