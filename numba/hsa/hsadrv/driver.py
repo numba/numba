@@ -673,7 +673,7 @@ class Queue(object):
         packet = queue[queue_offset]
 
         # Populate packet
-        packet.setup |= 1 << enums.HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS
+        packet.setup |= dims << enums.HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS
 
         packet.workgroup_size_x = workgroup_size[0]
         packet.workgroup_size_y = workgroup_size[1] if dims > 1 else 1
