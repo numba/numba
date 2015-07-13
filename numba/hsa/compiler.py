@@ -191,7 +191,6 @@ class HSAKernelBase(object):
         return self.configure(gs, blockdim, *args[2:])
 
 
-
 _CacheEntry = namedtuple("_CachedEntry", ['symbol', 'executable',
                                           'kernarg_region'])
 
@@ -237,8 +236,6 @@ class HSAKernel(HSAKernelBase):
     """
     A HSA kernel object
     """
-    INJECTED_NARG = 0
-
     def __init__(self, llvm_module, name, argtypes):
         super(HSAKernel, self).__init__()
         self._llvm_module = llvm_module
@@ -246,9 +243,6 @@ class HSAKernel(HSAKernelBase):
         self.entry_name = name
         self.argument_types = tuple(argtypes)
         self._argloc = []
-        # Calculate argument position
-        self._injectedargsize = self.INJECTED_NARG * ctypes.sizeof(
-            ctypes.c_void_p)
         # cached finalized program
         self._cacheprog = _CachedProgram(entry_name=self.entry_name,
                                          binary=self.binary)
@@ -268,13 +262,6 @@ class HSAKernel(HSAKernelBase):
         #     self._kernarg_types)
         kernarg_type = (ctypes.c_byte * entry.symbol.kernarg_segment_size)
         kernargs = entry.kernarg_region.allocate(kernarg_type)
-        # Inject dummy argument
-        injectargs = ctypes.cast(kernargs,
-                                 ctypes.POINTER(ctypes.c_void_p *
-                                                self.INJECTED_NARG)).contents
-        for i in range(self.INJECTED_NARG):
-            injectargs[i] = 0
-
         return ctx, entry.symbol, kernargs, entry.kernarg_region
 
     def __call__(self, *args):
@@ -286,7 +273,7 @@ class HSAKernel(HSAKernelBase):
             _unpack_argument(ty, val, expanded_values)
 
         # Insert kernel arguments
-        base = self._injectedargsize
+        base = 0
         for av in expanded_values:
             # Adjust for alignemnt
             align = ctypes.sizeof(av)
