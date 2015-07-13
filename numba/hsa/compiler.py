@@ -192,7 +192,7 @@ class HSAKernelBase(object):
 
 
 
-_CacheEntry = namedtuple("_CachedEntry", ['code_desc', 'program',
+_CacheEntry = namedtuple("_CachedEntry", ['symbol', 'executable',
                                           'kernarg_region'])
 
 
@@ -203,10 +203,6 @@ class _CachedProgram(object):
         # key: hsa context
         self._cache = {}
 
-    def __del__(self):
-        for ent in self._cache.values():
-            ent.program.release()
-
     def get(self):
         ctx = devices.get_context()
         result = self._cache.get(ctx)
@@ -214,16 +210,23 @@ class _CachedProgram(object):
         if result is None:
             # Finalize
             symbol = '&{0}'.format(self._entry_name)
-            brig_module = driver.BrigModule.from_memory(self._binary)
-            symbol_offset = brig_module.find_symbol_offset(symbol)
             agent = ctx.agent
-            program = driver.hsa.create_program([agent])
-            module = program.add_module(brig_module)
-            code_desc = program.finalize(agent, module, symbol_offset)
-            kernarg_region = [r for r in agent.regions
+
+            brig_module = driver.BrigModule(self._binary)
+            prog = driver.Program()
+            prog.add_module(brig_module)
+            code = prog.finalize(agent.isa)
+            del prog
+
+            ex = driver.Executable()
+            ex.load(agent, code)
+            ex.freeze()
+            symobj = ex.get_symbol(agent, symbol)
+            kernarg_region = [r for r in agent.regions.globals
                               if r.supports_kernargs][0]
+
             # Cache the finalized program
-            result = _CacheEntry(code_desc=code_desc, program=program,
+            result = _CacheEntry(symbol=symobj, executable=ex,
                                  kernarg_region=kernarg_region)
             self._cache[ctx] = result
 
@@ -234,7 +237,7 @@ class HSAKernel(HSAKernelBase):
     """
     A HSA kernel object
     """
-    INJECTED_NARG = 6
+    INJECTED_NARG = 0
 
     def __init__(self, llvm_module, name, argtypes):
         super(HSAKernel, self).__init__()
@@ -263,8 +266,7 @@ class HSAKernel(HSAKernelBase):
         ctx, entry = self._cacheprog.get()
         # assert entry.code_desc._id.kernarg_segment_byte_size == ctypes.sizeof(
         #     self._kernarg_types)
-        kernarg_type = (ctypes.c_byte *
-                        entry.code_desc._id.kernarg_segment_byte_size)
+        kernarg_type = (ctypes.c_byte * entry.symbol.kernarg_segment_size)
         kernargs = entry.kernarg_region.allocate(kernarg_type)
         # Inject dummy argument
         injectargs = ctypes.cast(kernargs,
@@ -273,10 +275,10 @@ class HSAKernel(HSAKernelBase):
         for i in range(self.INJECTED_NARG):
             injectargs[i] = 0
 
-        return ctx, entry.code_desc, kernargs, entry.kernarg_region
+        return ctx, entry.symbol, kernargs, entry.kernarg_region
 
     def __call__(self, *args):
-        ctx, code_desc, kernargs, kernarg_region = self.bind()
+        ctx, symbol, kernargs, kernarg_region = self.bind()
 
         # Unpack pyobject values into ctypes scalar values
         expanded_values = []
@@ -305,7 +307,7 @@ class HSAKernel(HSAKernelBase):
         qq = ctx.default_queue
 
         # Dispatch
-        qq.dispatch(code_desc, kernargs, workgroup_size=self.local_size,
+        qq.dispatch(symbol, kernargs, workgroup_size=self.local_size,
                     grid_size=self.global_size)
 
         # Free kernel region
