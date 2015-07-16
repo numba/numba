@@ -187,8 +187,14 @@ def getiter_array(context, builder, sig, args):
     iterobj.index = indexptr
     iterobj.array = array
 
+    # Incref array
+    if context.enable_nrt:
+        context.nrt_incref(builder, arrayty, array)
+
     res = iterobj._getvalue()
-    out = impl_ret_borrowed(context, builder, sig.return_type, res)
+
+    # Note: a decref on the iterator will dereference all internal MemInfo*
+    out = impl_ret_new_ref(context, builder, sig.return_type, res)
     return out
 
 

@@ -539,7 +539,6 @@ class Lower(BaseLower):
                 argvals = [the_self] + argvals
 
             res = impl(self.builder, argvals)
-            res = res
 
             libs = getattr(impl, "libs", ())
             for lib in libs:
