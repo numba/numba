@@ -5,7 +5,7 @@ from __future__ import print_function, division, absolute_import
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
-from . import cgutils, types
+from . import cgutils, types, config
 from .funcdesc import FunctionDescriptor
 
 
@@ -98,7 +98,8 @@ class BaseGeneratorLower(object):
         argsty = retty.elements[1]
         statesty = retty.elements[2]
 
-        # Incref all NRT objects before storing into generator states
+        lower.debug_print("# low_init_func incref")
+        # Incref all NRT arguments before storing into generator states
         if self.context.enable_nrt:
             for argty, argval in zip(self.fndesc.argtypes, lower.fnargs):
                 self.context.nrt_incref(builder, argty, argval)
@@ -114,8 +115,9 @@ class BaseGeneratorLower(object):
                                                    retty)
 
         retval = self.box_generator_struct(lower, gen_struct)
-        self.call_conv.return_value(builder, retval)
 
+        lower.debug_print("# low_init_func before return")
+        self.call_conv.return_value(builder, retval)
         lower.post_lower()
 
     def lower_next_func(self, lower):
@@ -125,6 +127,7 @@ class BaseGeneratorLower(object):
         yielded value).
         """
         lower.setup_function(self.gendesc)
+        lower.debug_print("# lower_next_func: {0}".format(self.gendesc.unique_name))
         assert self.gendesc.argtypes[0] == self.gentype
         builder = lower.builder
         function = lower.function
@@ -194,6 +197,9 @@ class BaseGeneratorLower(object):
         lower.builder.position_at_end(block)
         self.resume_blocks[index] = block
 
+    def debug_print(self, builder, msg):
+        if config.DEBUG_JIT:
+            self.context.debug_print(builder, "DEBUGJIT: {0}".format(msg))
 
 class GeneratorLower(BaseGeneratorLower):
     """
@@ -211,24 +217,17 @@ class GeneratorLower(BaseGeneratorLower):
         Lower the body of the generator's finalizer: decref all live
         state variables.
         """
+        self.debug_print(builder, "# generator: finalize")
         if self.context.enable_nrt:
+
             # Always dereference all arguments
+            # self.debug_print(builder, "# generator: clear args")
             for elem_idx, argty in enumerate(self.fndesc.argtypes):
                 argptr = self.get_arg_ptr(builder, genptr, elem_idx)
                 argval = builder.load(argptr)
                 self.context.nrt_decref(builder, argty, argval)
 
-            # Always run the finalizer to clear the block
-            gen_state_ptr = self.get_state_ptr(builder, genptr)
-
-            for state_index in range(len(self.gentype.state_types)):
-                state_slot = cgutils.gep_inbounds(builder, gen_state_ptr,
-                                                  0, state_index)
-                ty = self.gentype.state_types[state_index]
-                val = self.context.unpack_value(builder, ty, state_slot)
-                if self.context.enable_nrt:
-                    self.context.nrt_decref(builder, ty, val)
-
+        self.debug_print(builder, "# generator: finalize end")
         builder.ret_void()
 
 class PyGeneratorLower(BaseGeneratorLower):
@@ -313,6 +312,7 @@ class LowerYield(object):
                                  for v in live_vars]
 
     def lower_yield_suspend(self):
+        self.lower.debug_print("# generator suspend")
         # Save live vars in state
         for state_index, name in zip(self.live_var_indices, self.live_vars):
             state_slot = cgutils.gep_inbounds(self.builder, self.gen_state_ptr,
@@ -322,19 +322,18 @@ class LowerYield(object):
             # IncRef newly stored value
             if self.context.enable_nrt:
                 self.lower.incref(ty, val)
-            # Load and DecRef previously stored value
-            oldval = self.context.unpack_value(self.builder, ty, state_slot)
-            if self.context.enable_nrt:
-                self.lower.decref(ty, oldval)
+
             self.context.pack_value(self.builder, ty, val, state_slot)
         # Save resume index
         indexval = Constant.int(self.resume_index_ptr.type.pointee,
                                 self.inst.index)
         self.builder.store(indexval, self.resume_index_ptr)
+        self.lower.debug_print("# generator suspend end")
 
     def lower_yield_resume(self):
         # Emit resumption point
         self.genlower.create_resumption_block(self.lower, self.inst.index)
+        self.lower.debug_print("# generator resume")
         # Reload live vars from state
         for state_index, name in zip(self.live_var_indices, self.live_vars):
             state_slot = cgutils.gep_inbounds(self.builder, self.gen_state_ptr,
@@ -345,3 +344,4 @@ class LowerYield(object):
             # Previous storevar is making an extra incref
             if self.context.enable_nrt:
                 self.lower.decref(ty, val)
+        self.lower.debug_print("# generator resume end")

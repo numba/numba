@@ -4,7 +4,7 @@ Utilities to simplify the boilerplate for native lowering.
 
 from __future__ import print_function, absolute_import, division
 
-import collections
+import inspect
 import functools
 
 from .. import typing, cgutils, types
@@ -29,8 +29,7 @@ def impl_attribute(ty, attr, rtype=None):
 
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = real_impl(context, builder, typ, value)
-            return ret
+            return real_impl(context, builder, typ, value)
 
         if rtype is None:
             res.signature = typing.signature(types.Any, ty)
@@ -51,8 +50,7 @@ def impl_attribute_generic(ty):
 
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = real_impl(context, builder, typ, value, attr)
-            return ret
+            return real_impl(context, builder, typ, value, attr)
 
         res.signature = typing.signature(types.Any, ty)
         res.attr = None
@@ -74,7 +72,7 @@ def user_function(fndesc, libs):
             builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
         with cgutils.if_unlikely(builder, status.is_error):
             context.call_conv.return_status_propagate(builder, status)
-        return retval
+        return impl_ret_new_ref(context, builder, fndesc.restype, retval)
 
     imp.signature = typing.signature(fndesc.restype, *fndesc.argtypes)
     imp.libs = tuple(libs)
@@ -107,12 +105,13 @@ def python_attr_impl(cls, attr, atyp):
             context.call_conv.return_exc(builder)
 
         if isinstance(atyp, types.Method):
-            return aval
+            res = aval
         else:
             native = api.to_native_value(aval, atyp)
             assert native.cleanup is None
             api.decref(aval)
-            return native.value
+            res = native.value
+        return impl_ret_borrowed(context, builder, atyp, res)
 
     return imp
 
@@ -203,7 +202,8 @@ def iternext_impl(func):
         pairobj = cls(context, builder)
         func(context, builder, sig, args,
              _IternextResult(context, builder, pairobj))
-        return pairobj._getvalue()
+        return impl_ret_borrowed(context, builder,
+                                 pair_type, pairobj._getvalue())
     return wrapper
 
 
@@ -313,3 +313,29 @@ class _TypeRegistry(object):
 
 type_registry = _TypeRegistry()
 type_factory = type_registry.register
+
+
+def impl_ret_new_ref(ctx, builder, retty, ret):
+    """
+    The implementation returns a new reference.
+    """
+    return ret
+
+
+def impl_ret_borrowed(ctx, builder, retty, ret):
+    """
+    The implementation returns a borrowed reference.
+    This function automatically incref so that the implementation is
+    returning a new reference.
+    """
+    if ctx.enable_nrt:
+        ctx.nrt_incref(builder, retty, ret)
+    return ret
+
+
+def impl_ret_untracked(ctx, builder, retty, ret):
+    """
+    The return type is not a NRT object.
+    """
+    return ret
+

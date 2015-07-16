@@ -8,7 +8,7 @@ from llvmlite import binding as ll
 from numba.utils import finalize as _finalize
 from . import _nrt_python as _nrt
 
-_nrt_mstats = namedtuple("nrt_mstats", ["alloc", "free"])
+_nrt_mstats = namedtuple("nrt_mstats", ["alloc", "free", "mi_alloc", "mi_free"])
 
 
 class _Runtime(object):
@@ -80,11 +80,13 @@ class _Runtime(object):
 
     def get_allocation_stats(self):
         """
-        Returns a namedtuple of (alloc, free) for count of each
-        memory operations.
+        Returns a namedtuple of (alloc, free, mi_alloc, mi_free) for count of
+        each memory operations.
         """
         return _nrt_mstats(alloc=_nrt.memsys_get_stats_alloc(),
-                                 free=_nrt.memsys_get_stats_free())
+                           free=_nrt.memsys_get_stats_free(),
+                           mi_alloc=_nrt.memsys_get_stats_mi_alloc(),
+                           mi_free=_nrt.memsys_get_stats_mi_free())
 
 
 # Alias to _nrt_python._MemInfo

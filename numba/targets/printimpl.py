@@ -4,7 +4,7 @@ This file implements print functionality for the CPU.
 from __future__ import print_function, absolute_import, division
 from llvmlite.llvmpy.core import Type
 from numba import types, typing, cgutils
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import implement, Registry, impl_ret_untracked
 
 registry = Registry()
 register = registry.register
@@ -23,7 +23,8 @@ def int_print_impl(context, builder, sig, args):
     intobj = py.long_from_ssize_t(szval)
     py.print_object(intobj)
     py.decref(intobj)
-    return context.get_dummy_value()
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @register
@@ -35,7 +36,8 @@ def real_print_impl(context, builder, sig, args):
     intobj = py.float_from_double(szval)
     py.print_object(intobj)
     py.decref(intobj)
-    return context.get_dummy_value()
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @register
@@ -51,7 +53,8 @@ def print_charseq(context, builder, sig, args):
     cstr = py.bytes_from_string_and_size(byteptr, size)
     py.print_object(cstr)
     py.decref(cstr)
-    return context.get_dummy_value()
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @register
@@ -67,4 +70,5 @@ def print_varargs(context, builder, sig, args):
         else:
             py.print_string(' ')
 
-    return context.get_dummy_value()
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)

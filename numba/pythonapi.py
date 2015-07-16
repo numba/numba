@@ -1041,8 +1041,6 @@ class PythonAPI(object):
                                                     "prevented the return of " \
                                                     "optional value"
         out = self.from_native_value(val, typ, env_manager)
-        if self.context.enable_nrt:
-            self.context.nrt_decref(self.builder, typ, val)
         return out
 
     def from_native_value(self, val, typ, env_manager=None):

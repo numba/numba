@@ -1,6 +1,5 @@
 from __future__ import print_function, absolute_import, division
 
-import contextlib
 import sys
 import numpy as np
 import threading
@@ -10,6 +9,7 @@ from numba import unittest_support as unittest
 from numba import njit
 from numba import utils
 from numba.numpy_support import version as numpy_version
+from .support import MemoryLeakMixin
 
 
 nrtjit = njit(_nrt=True, nogil=True)
@@ -32,12 +32,15 @@ class BaseTest(unittest.TestCase):
                 np.testing.assert_allclose(expected, ret)
 
 
-class NrtRefCtTest(object):
+
+class NrtRefCtTest(MemoryLeakMixin):
     def assert_array_nrt_refct(self, arr, expect):
         self.assertEqual(arr.base.refcount, expect)
 
 
+
 class TestDynArray(NrtRefCtTest, unittest.TestCase):
+
     def test_empty_0d(self):
         @nrtjit
         def foo():
@@ -544,6 +547,7 @@ class ConstructorBaseTest(NrtRefCtTest):
 class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
 
     def setUp(self):
+        super(TestNdZeros, self).setUp()
         self.pyfunc = np.zeros
 
     def check_result_value(self, ret, expected):
@@ -591,6 +595,7 @@ class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
 class TestNdOnes(TestNdZeros):
 
     def setUp(self):
+        super(TestNdOnes, self).setUp()
         self.pyfunc = np.ones
 
 
@@ -667,6 +672,7 @@ class ConstructorLikeBaseTest(object):
 class TestNdEmptyLike(ConstructorLikeBaseTest, unittest.TestCase):
 
     def setUp(self):
+        super(TestNdEmptyLike, self).setUp()
         self.pyfunc = np.empty_like
 
     def check_result_value(self, ret, expected):
@@ -715,6 +721,7 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, unittest.TestCase):
 class TestNdZerosLike(TestNdEmptyLike):
 
     def setUp(self):
+        super(TestNdZerosLike, self).setUp()
         self.pyfunc = np.zeros_like
 
     def check_result_value(self, ret, expected):
@@ -735,6 +742,7 @@ class TestNdZerosLike(TestNdEmptyLike):
 class TestNdOnesLike(TestNdZerosLike):
 
     def setUp(self):
+        super(TestNdOnesLike, self).setUp()
         self.pyfunc = np.ones_like
         self.expected_value = 1
 

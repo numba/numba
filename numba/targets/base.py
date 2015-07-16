@@ -10,14 +10,14 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-import numba
-from numba import types, utils, cgutils, typing, numpy_support
+from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     python_attr_impl,
                                     builtin_registry, impl_attribute,
-                                    struct_registry, type_registry)
+                                    type_registry,
+                                    impl_ret_borrowed)
 from . import arrayobj, builtins, iterators, rangeobj, optional
 from numba import datamodel
 
@@ -508,13 +508,15 @@ class BaseContext(object):
                         parent=None,
                     )
 
-                    return ary._getvalue()
+                    res = ary._getvalue()
+                    return impl_ret_borrowed(context, builder, typ, res)
             else:
                 @impl_attribute(typ, attr, elemty)
                 def imp(context, builder, typ, val):
                     dptr = cgutils.get_record_member(builder, val, offset,
                                                      self.get_data_type(elemty))
-                    return self.unpack_value(builder, elemty, dptr)
+                    res = self.unpack_value(builder, elemty, dptr)
+                    return impl_ret_borrowed(context, builder, typ, res)
             return imp
 
         if isinstance(typ, types.Module):
@@ -527,7 +529,7 @@ class BaseContext(object):
                 llval = self.get_constant(attrty, pyval)
                 @impl_attribute(typ, attr, attrty)
                 def imp(context, builder, typ, val):
-                    return llval
+                    return impl_ret_borrowed(context, builder, attrty, llval)
                 return imp
             # No implementation required for dummies (functions, modules...),
             # which are dealt with later
@@ -1094,4 +1096,3 @@ class _wrap_impl(object):
 
     def __repr__(self):
         return "<wrapped %s>" % self._imp
-

@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from llvmlite.llvmpy.core import Type, Builder, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils
+from numba import types, cgutils, config
 
 
 class _ArgManager(object):
@@ -146,7 +146,9 @@ class PyCallWrapper(object):
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
             innerargs, envptr)
         # Do clean up
+        self.debug_print(builder, "# callwrapper: emit_cleanup")
         cleanup_manager.emit_cleanup()
+        self.debug_print(builder, "# callwrapper: emit_cleanup end")
 
         # Determine return status
         with cgutils.if_likely(builder, status.is_ok):
@@ -211,3 +213,7 @@ class PyCallWrapper(object):
             return restype.type
         else:
             return restype
+
+    def debug_print(self, builder, msg):
+        if config.DEBUG_JIT:
+            self.context.debug_print(builder, "DEBUGJIT: {0}".format(msg))

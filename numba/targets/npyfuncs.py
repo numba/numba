@@ -1445,13 +1445,17 @@ def np_complex_acosh_impl(context, builder, sig, args):
     ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
     x = args[0]
 
-    x_plus_one = builtins.complex_add_impl(context, builder, csig2, [x, ONE])
-    x_minus_one = builtins.complex_sub_impl(context, builder, csig2, [x, ONE])
+    x_plus_one = builtins.complex_add_impl(context, builder, csig2, [x,
+                                                                     ONE])
+    x_minus_one = builtins.complex_sub_impl(context, builder, csig2, [x,
+                                                                      ONE])
     sqrt_x_plus_one = np_complex_sqrt_impl(context, builder, sig, [x_plus_one])
     sqrt_x_minus_one = np_complex_sqrt_impl(context, builder, sig, [x_minus_one])
     prod_sqrt = builtins.complex_mul_impl(context, builder, csig2,
-                                          [sqrt_x_plus_one, sqrt_x_minus_one])
-    log_arg = builtins.complex_add_impl(context, builder, csig2, [x, prod_sqrt])
+                                          [sqrt_x_plus_one,
+                                           sqrt_x_minus_one])
+    log_arg = builtins.complex_add_impl(context, builder, csig2, [x,
+                                                                  prod_sqrt])
 
     return np_complex_log_impl(context, builder, sig, [log_arg])
 

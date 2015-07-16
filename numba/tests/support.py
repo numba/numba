@@ -13,6 +13,7 @@ from numba import config, errors, typing, utils
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
+from numba.runtime import rtsys
 
 
 enable_pyobj_flags = Flags()
@@ -342,3 +343,31 @@ def captured_stderr():
        self.assertEqual(stderr.getvalue(), "hello\n")
     """
     return captured_output("stderr")
+
+
+class MemoryLeak(object):
+    def memory_leak_setup(self):
+        self.__init_stats = rtsys.get_allocation_stats()
+
+    def memory_leak_teardown(self):
+        old = self.__init_stats
+        new = rtsys.get_allocation_stats()
+        total_alloc = new.alloc - old.alloc
+        total_free = new.free - old.free
+        total_mi_alloc = new.mi_alloc - old.mi_alloc
+        total_mi_free = new.mi_free - old.mi_free
+        self.assertEqual(total_alloc, total_free)
+        self.assertEqual(total_mi_alloc, total_mi_free)
+
+
+
+
+class MemoryLeakMixin(MemoryLeak):
+
+    def setUp(self):
+        super(MemoryLeakMixin, self).setUp()
+        self.memory_leak_setup()
+
+    def tearDown(self):
+        super(MemoryLeakMixin, self).tearDown()
+        self.memory_leak_teardown()

@@ -8,10 +8,11 @@ import numpy
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import jit, types
+from .support import MemoryLeakMixin
 from .ctypes_usecases import *
 
 
-class TestCTypes(unittest.TestCase):
+class TestCTypes(MemoryLeakMixin, unittest.TestCase):
 
     def test_c_sin(self):
         pyfunc = use_c_sin

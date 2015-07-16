@@ -38,7 +38,7 @@ struct MemSys{
     /* Shutdown flag */
     int shutting;
     /* Stats */
-    size_t stats_alloc, stats_free;
+    size_t stats_alloc, stats_free, stats_mi_alloc, stats_mi_free;
 
 };
 
@@ -125,15 +125,20 @@ void NRT_MemSys_process_defer_dtor(void) {
 }
 
 void NRT_MemSys_insert_meminfo(MemInfo *newnode) {
+    assert(newnode && "`newnode` cannot be NULL");
+    /*
     if (NULL == newnode) {
         newnode = meminfo_malloc();
     } else {
         assert(newnode->payload.refct == 0 && "RefCt must be 0");
     }
+    */
+    assert(newnode->payload.refct == 0 && "RefCt must be 0");
     NRT_Debug(nrt_debug_print("NRT_MemSys_insert_meminfo newnode=%p\n",
                               newnode));
     memset(newnode, 0, sizeof(MemInfo));  /* to catch bugs; not required */
     nrt_push_meminfo_list(&TheMSys.mi_freelist, newnode);
+    TheMSys.atomic_inc(&TheMSys.stats_mi_free);
 }
 
 MemInfo* NRT_MemSys_pop_meminfo(void) {
@@ -143,6 +148,7 @@ MemInfo* NRT_MemSys_pop_meminfo(void) {
     }
     memset(node, 0, sizeof(MemInfo));   /* to catch bugs; not required */
     NRT_Debug(nrt_debug_print("NRT_MemSys_pop_meminfo: return %p\n", node));
+    TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
     return node;
 }
 
@@ -163,6 +169,14 @@ size_t NRT_MemSys_get_stats_alloc() {
 
 size_t NRT_MemSys_get_stats_free() {
     return TheMSys.stats_free;
+}
+
+size_t NRT_MemSys_get_stats_mi_alloc() {
+    return TheMSys.stats_mi_alloc;
+}
+
+size_t NRT_MemSys_get_stats_mi_free() {
+    return TheMSys.stats_mi_free;
 }
 
 static
@@ -211,11 +225,7 @@ MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info)
 {
     MemInfo * mi = NRT_MemSys_pop_meminfo();
-    /* Reference count is initialized to zero for easier implementation
-       in the compiler.  The compiler incref when value is binding to variables.
-       We need to improve the compiler pipeline to better track refcount ops.
-     */
-    mi->payload.refct = 0;
+    mi->payload.refct = 1;  /* starts with 1 refct */
     mi->payload.dtor = dtor;
     mi->payload.dtor_info = dtor_info;
     mi->payload.data = data;
@@ -302,6 +312,7 @@ void NRT_MemInfo_destroy(MemInfo *mi) {
 void NRT_MemInfo_acquire(MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_acquire %p refct=%zu\n", mi,
                                                             mi->payload.refct));
+    assert(mi->payload.refct > 0 && "RefCt cannot be zero");
     TheMSys.atomic_inc(&mi->payload.refct);
 }
 

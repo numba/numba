@@ -2,9 +2,8 @@ from __future__ import print_function
 import numba.unittest_support as unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
-from numba.tests import usecases
-from .support import TestCase
+from numba import types
+from .support import TestCase, MemoryLeakMixin
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -33,7 +32,7 @@ def create_zeros(control):
     return (np.zeros(10) == control).all()
 
 
-class TestArray(TestCase):
+class TestArray(MemoryLeakMixin, TestCase):
 
     def test_create_arrays(self, flags=enable_pyobj_flags):
         pyfunc = create_array
@@ -69,7 +68,7 @@ class TestArray(TestCase):
         cfunc = cr.entry_point
         control = np.arange(10)
         self.assertTrue(cfunc(control))
-        
+
     def test_create_arange_npm(self):
         with self.assertTypingError():
             self.test_create_arange(flags=no_pyobj_flags)
