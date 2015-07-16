@@ -99,13 +99,15 @@ Concretely:
    the rare cases where ``int64`` (on 32-bit systems) or ``uint64`` is
    required.
 
-3. Operations on integers don't promote bitwidth, potentially losing
-   magnitude information.  For example, ``int32 + int32`` is typed ``int32``
-   (as is ``int32 + int16``, ``int16 + int32``, etc.).
+3. Operations on integers promote bitwidth to ``intp``, if smaller, otherwise
+   they don't promote.  For example, on a 32-bit machine, ``int8 + int8``
+   is typed ``int32``, as is ``int32 + int32``.  However, ``int64 + int64``
+   is typed ``int64``.
 
-4. Mixed operations between signed and unsigned fall back to signed without
-   increasing bitwidth (so ``int32 + uint32`` returns ``int32`` and
-   ``int64 + uint64`` returns ``int64``).
+4. Furthermore, mixed operations between signed and unsigned fall back to
+   signed, while following the same bitwidth rule.  For example, on a
+   32-bit machine, ``int8 + uint16`` is typed ``int32``, as is
+   ``uint32 + int32``.
 
 
 Proposal impact
@@ -114,17 +116,21 @@ Proposal impact
 Semantics
 ---------
 
-With this proposal, the semantics become much clearer.  Regardless of
-whether the arguments and constants of a function were explicitly typed
-or not, the results of various expressions at any point in the function
-have easily predictable types.  When using built-in Python ``int``, the
-user gets acceptable magnitude (32 or 64 bits depending on the system's
-bitness).  If they want a custom bitwidth, they can ask for it using
-the appropriate scalar type and it will be kept accross most operations.
+With this proposal, the semantics become clearer.  Regardless of whether
+the arguments and constants of a function were explicitly typed or not,
+the results of various expressions at any point in the function have
+easily predictable types.
 
-There is also much less potential for annoyances with the type unification
-system as demonstrated above.  The user would have to force several different
-types to be faced with such an error.
+When using built-in Python ``int``, the user gets acceptable magnitude
+(32 or 64 bits depending on the system's bitness), and the type remains
+the same accross all computations.
+
+When explicitly using smaller bitwidths, intermediate results don't
+suffer from magnitude loss, since their bitwidth is promoted to ``intp``.
+
+There is also less potential for annoyances with the type unification
+system as demonstrated above.  The user would have to force several
+different types to be faced with such an error.
 
 One potential cause for concern is the discrepancy with Numpy's scalar
 semantics; but at the same time this brings Numba scalar semantics closer
