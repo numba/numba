@@ -10,3 +10,6 @@ DATALAYOUT = {
 }
 
 TRIPLE = "hsail64-pc-unknown-amdopencl"
+
+
+from . import libhlc as hlc

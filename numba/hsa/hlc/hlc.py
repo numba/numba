@@ -20,6 +20,7 @@ def check_call(*args, **kwargs):
 
 os.environ['HSAILBIN'] = os.environ.get('HSAILBIN', '/opt/amd/bin')
 
+
 class CmdLine(object):
     CMD_OPT = ("$HSAILBIN/opt "
                "-O3 "
@@ -123,8 +124,10 @@ class Module(object):
         """
         HLC does not like variable with '.' prefix.
         """
+
         def repl(mat):
             return '%_dot_.{0}'.format(mat.group(1))
+
         return re_regname.sub(repl, llvmir)
 
     def load_llvm(self, llvmir):
