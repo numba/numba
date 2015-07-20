@@ -15,11 +15,11 @@ class OpaqueModuleRef(Structure):
 
 moduleref_ptr = POINTER(OpaqueModuleRef)
 
-hlc = CDLL('~/dev/libHLC/libHLC.so')
+hlc = CDLL('/home/sklam/dev/libHLC/libHLC.so')
 hlc.HLC_ParseModule.restype = moduleref_ptr
 hlc.HLC_ModuleEmitBRIG.restype = c_size_t
 hlc.HLC_Initialize()
-utils.finalize(hlc, lambda obj: hlc.HLC_Finalize())
+utils.finalize(hlc, lambda: hlc.HLC_Finalize())
 
 
 class Error(Exception):
@@ -38,6 +38,13 @@ class HLC(object):
         mod = hlc.HLC_ParseModule(buf)
         if not mod:
             raise Error("Failed to parse assembly")
+        return mod
+
+    def parse_bitcode(self, bitcode):
+        buf = create_string_buffer(bitcode, len(bitcode))
+        mod = hlc.HLC_ParseBitcode(buf, c_size_t(len(bitcode)))
+        if not mod:
+            raise Error("Failed to parse bitcode")
         return mod
 
     def optimize(self, mod, opt=3, size=0, verify=1):
@@ -79,6 +86,8 @@ class HLC(object):
 
 
 re_regname = re.compile(r"%\"\.([^\"]+)\"")
+
+os.environ['HSAILBIN'] = os.environ.get('HSAILBIN', '/opt/amd/bin')
 
 BUILTIN_PATH = "{0}/builtins-hsail.opt.bc".format(os.environ['HSAILBIN'])
 
@@ -128,11 +137,11 @@ class Module(object):
         # Link library with the builtin modules
         with open(BUILTIN_PATH, 'rb') as builtin_fin:
             builtin_buf = builtin_fin.read()
-        builtin_mod = self._hlc.parse_assembly(builtin_buf)
+        builtin_mod = self._hlc.parse_bitcode(builtin_buf)
         self._hlc.link(main, builtin_mod)
 
         # Optimize
-        main = self._hlc.optimize(main)
+        self._hlc.optimize(main)
 
         if config.DUMP_OPTIMIZED:
             print(self._hlc.to_string(main))
