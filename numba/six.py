@@ -47,7 +47,7 @@ if PY3:
 else:
     string_types = basestring,
     integer_types = (int, long)
-    class_types = (type, types.ClassType)
+    class_types = (type, types.ClassInstanceType)
     text_type = unicode
     binary_type = str
 

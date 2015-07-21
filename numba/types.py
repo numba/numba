@@ -1119,6 +1119,31 @@ class Slice3Type(Type):
     pass
 
 
+class ClassType(Opaque):
+    def __init__(self, instance):
+        self.instance = instance
+        super(ClassType, self).__init__("class.{0}".format(instance.name))
+
+
+class ClassInstanceType(Type):
+    def __init__(self, classname, struct, methods):
+        self.classname = classname
+        self.struct = struct
+        self.methods = methods
+        super(ClassInstanceType, self).__init__("jitclass.{0}".format(
+            classname))
+
+    def get_data_type(self):
+        return ClassDataType(self)
+
+
+class ClassDataType(Type):
+    def __init__(self, classtyp):
+        self.class_type = classtyp
+        name = "data.{0}".format(self.class_type.name)
+        super(ClassDataType, self).__init__(name)
+
+
 # Utils
 
 def is_int_tuple(x):

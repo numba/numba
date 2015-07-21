@@ -429,3 +429,11 @@ def unbox_funcptr(c, typ, obj):
             c.pyapi.decref(intobj)
             c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
     return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
+
+
+@unbox(types.ClassInstanceType)
+def unbox_class(c, typ, val):
+    # XXX: not implemented
+    struct_cls = cgutils.create_struct_proxy(typ)
+    ret = struct_cls(c.context, c.builder)._getvalue()
+    return NativeValue(ret)

@@ -125,6 +125,9 @@ class BaseContext(object):
             expectedty = target.typeof(attr)
             if self.can_convert(value, expectedty) is not None:
                 return templates.signature(types.void, target, value)
+        elif target in self.attributes:
+            expectedty = self.attributes[target].resolve(target, attr)
+            return templates.signature(types.void, target, expectedty)
 
     def resolve_module_constants(self, typ, attr):
         """Resolve module-level global constants

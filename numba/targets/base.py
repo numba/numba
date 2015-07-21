@@ -435,6 +435,18 @@ class BaseContext(object):
 
             return _wrap_impl(imp, self, sig)
 
+        elif isinstance(typ, types.ClassInstanceType):
+            def imp(context, builder, sig, args):
+                instance_struct = cgutils.create_struct_proxy(typ)
+                [this, val] = args
+                inst = instance_struct(context, builder, value=this)
+                data_ptr = inst.data
+                data_struct = cgutils.create_struct_proxy(typ.get_data_type())
+                data = data_struct(context, builder, ref=data_ptr)
+                setattr(data, attr, val)
+
+            return _wrap_impl(imp, self, sig)
+
     def get_function(self, fn, sig):
         """
         Return the implementation of function *fn* for signature *sig*.

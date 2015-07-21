@@ -293,6 +293,8 @@ class Lower(BaseLower):
             assert signature is not None
             assert signature.args[0] == targetty
             impl = self.context.get_setattr(inst.attr, signature)
+            assert impl is not None, "missing impl for setattr " \
+                                     "({0}).{1}".format(targetty, inst.attr)
 
             # Convert argument to match
             value = self.context.cast(self.builder, value, valuety,
