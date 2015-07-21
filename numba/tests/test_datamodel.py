@@ -84,15 +84,15 @@ class TestTupleEmpty(test_factory()):
     fe_type = types.Tuple([])
 
 
-class Test1DArrayOfInt32(test_factory(support_as_data=False)):
+class Test1DArrayOfInt32(test_factory()):
     fe_type = types.Array(types.int32, 1, 'C')
 
 
-class Test2DArrayOfComplex128(test_factory(support_as_data=False)):
+class Test2DArrayOfComplex128(test_factory()):
     fe_type = types.Array(types.complex128, 2, 'C')
 
 
-class Test0DArrayOfInt32(test_factory(support_as_data=False)):
+class Test0DArrayOfInt32(test_factory()):
     fe_type = types.Array(types.int32, 0, 'C')
 
 
@@ -128,6 +128,9 @@ class TestArgInfo(unittest.TestCase):
 
         self.assertEqual(expect_types, got_types)
 
+        # Assign names (check this doesn't raise)
+        fi.assign_names(values, ["arg%i" for i in range(len(fe_args))])
+
         builder.ret_void()
 
         ll.parse_assembly(str(module))
@@ -142,6 +145,10 @@ class TestArgInfo(unittest.TestCase):
         fe_args = [types.Array(types.int32, 1, 'C')] * 2
         self._test_as_arguments(fe_args)
 
+    def test_two_0d_arrays(self):
+        fe_args = [types.Array(types.int32, 0, 'C')] * 2
+        self._test_as_arguments(fe_args)
+
     def test_tuples(self):
         fe_args = [types.UniTuple(types.int32, 2),
                    types.UniTuple(types.int32, 3)]
@@ -153,6 +160,19 @@ class TestArgInfo(unittest.TestCase):
         self._test_as_arguments(fe_args)
         # Nested tuple
         fe_args = [types.UniTuple(types.UniTuple(types.int32, 2), 3)]
+        self._test_as_arguments(fe_args)
+
+    def test_empty_tuples(self):
+        # Empty tuple
+        fe_args = [types.UniTuple(types.int16, 0),
+                   types.Tuple(()),
+                   types.int32]
+        self._test_as_arguments(fe_args)
+
+    def test_nested_empty_tuples(self):
+        fe_args = [types.int32,
+                   types.UniTuple(types.Tuple(()), 2),
+                   types.int64]
         self._test_as_arguments(fe_args)
 
 

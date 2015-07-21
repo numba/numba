@@ -1,7 +1,7 @@
 import numpy as np
 from numba import from_dtype, cuda
 from numba import unittest_support as unittest
-
+from numba.cuda.testing import skip_on_cudasim
 
 class TestAlignment(unittest.TestCase):
     def test_record_alignment(self):
@@ -13,7 +13,7 @@ class TestAlignment(unittest.TestCase):
             i = cuda.grid(1)
             a[i].a = a[i].b
 
-        a_recarray = np.recarray(3, dtype=rec)
+        a_recarray = np.recarray(3, dtype=rec_dtype)
         for i in range(a_recarray.size):
             a_rec = a_recarray[i]
             a_rec.a = 0
@@ -23,6 +23,7 @@ class TestAlignment(unittest.TestCase):
 
         self.assertTrue(np.all(a_recarray.a == a_recarray.b))
 
+    @skip_on_cudasim('Simulator does not check alignment')
     def test_record_alignment_error(self):
         rec_dtype = np.dtype([('a', 'int32'), ('b', 'float64')])
         rec = from_dtype(rec_dtype)

@@ -10,7 +10,7 @@ import math
 
 from llvmlite.llvmpy import core as lc
 
-from .. import cgutils, typing, types, lowering
+from .. import cgutils, typing, types, lowering, errors
 from . import builtins
 
 # some NumPy constants. Note that we could generate some of them using
@@ -46,12 +46,12 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
     # it is quite common in NumPy to have loops implemented as a call
     # to the double version of the function, wrapped in casts. This
     # helper function facilitates that.
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     lty = context.get_argument_type(ty)
     fnty = lc.Type.function(lty, [lty]*len(sig.args))
-    fn = mod.get_or_insert_function(fnty, name=func_name)
+    fn = cgutils.insert_pure_function(mod, fnty, name=func_name)
     cast_args = [context.cast(builder, arg, argty, ty)
-             for arg, argty in zip(args, sig.args) ]
+                 for arg, argty in zip(args, sig.args) ]
 
     result = builder.call(fn, cast_args)
     return context.cast(builder, result, types.float64, sig.return_type)
@@ -71,9 +71,9 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         func_name = table[ty]
     except KeyError as e:
         msg = "No {0} function for real type {1}".format(user_name, str(e))
-        raise lowering.LoweringError(msg)
+        raise errors.LoweringError(msg)
 
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     if ty in types.complex_domain:
         # In numba struct types are always passed by pointer. So the call has to
         # be transformed from "result = func(ops...)" to "func(&result, ops...).
@@ -83,36 +83,28 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         # First, prepare the return value
         complex_class = context.make_complex(ty)
         out = complex_class(context, builder)
-        call_args = [out._getvalue()] + list(args)
+        ptrargs = [cgutils.alloca_once_value(builder, arg)
+                   for arg in args]
+        call_args = [out._getpointer()] + ptrargs
         # get_value_as_argument for struct types like complex allocate stack space
         # and initialize with the value, the return value is the pointer to that
         # allocated space (ie: pointer to a copy of the value in the stack).
         # get_argument_type returns a pointer to the struct type in consonance.
         call_argtys = [ty] + list(sig.args)
-        call_argltys = [context.get_argument_type(ty) for ty in call_argtys]
+        call_argltys = [context.get_value_type(ty).as_pointer()
+                        for ty in call_argtys]
         fnty = lc.Type.function(lc.Type.void(), call_argltys)
+        # Note: the function isn't pure here (it writes to its pointer args)
         fn = mod.get_or_insert_function(fnty, name=func_name)
-
-        call_args = [context.get_value_as_argument(builder, argty, arg)
-                     for argty, arg in zip(call_argtys, call_args)]
         builder.call(fn, call_args)
         retval = builder.load(call_args[0])
     else:
         argtypes = [context.get_argument_type(aty) for aty in sig.args]
         restype = context.get_argument_type(sig.return_type)
         fnty = lc.Type.function(restype, argtypes)
-        fn = mod.get_or_insert_function(fnty, name=func_name)
+        fn = cgutils.insert_pure_function(mod, fnty, name=func_name)
         retval = context.call_external_function(builder, fn, sig.args, args)
     return retval
-
-
-
-def np_dummy_return_arg(context, builder, sig, args):
-    # sometimes a loop does nothing other than returning the first arg...
-    # for example, conjugate for non-complex numbers
-    # this function implements this.
-    _check_arity_and_homogeneity(sig, args, 1)
-    return args[0] # nothing to do...
 
 
 
@@ -142,7 +134,7 @@ def np_int_sdiv_impl(context, builder, sig, args):
     num_is_min_int = builder.icmp(lc.ICMP_EQ, MIN_INT, num)
     could_cause_sigfpe = builder.and_(den_is_minus_one, num_is_min_int)
     force_zero = builder.or_(den_is_zero, could_cause_sigfpe)
-    with cgutils.ifelse(builder, force_zero, expect=False) as (then, otherwise):
+    with builder.if_else(force_zero, likely=False) as (then, otherwise):
         with then:
             bb_then = builder.basic_block
         with otherwise:
@@ -200,7 +192,7 @@ def np_int_udiv_impl(context, builder, sig, args):
 
     ZERO = lc.Constant.int(lltype, 0)
     div_by_zero = builder.icmp(lc.ICMP_EQ, ZERO, den)
-    with cgutils.ifelse(builder, div_by_zero, expect=False) as (then, otherwise):
+    with builder.if_else(div_by_zero, likely=False) as (then, otherwise):
         with then:
             # division by zero
             bb_then = builder.basic_block
@@ -306,13 +298,13 @@ def np_complex_div_impl(context, builder, sig, args):
     in2r_abs = _fabs(context, builder, in2r)
     in2i_abs = _fabs(context, builder, in2i)
     in2r_abs_ge_in2i_abs = builder.fcmp(lc.FCMP_OGE, in2r_abs, in2i_abs)
-    with cgutils.ifelse(builder, in2r_abs_ge_in2i_abs) as (then, otherwise):
+    with builder.if_else(in2r_abs_ge_in2i_abs) as (then, otherwise):
         with then:
             # if abs(denominator.real) == 0 and abs(denominator.imag) == 0
             in2r_is_zero = builder.fcmp(lc.FCMP_OEQ, in2r_abs, ZERO)
             in2i_is_zero = builder.fcmp(lc.FCMP_OEQ, in2i_abs, ZERO)
             in2_is_zero = builder.and_(in2r_is_zero, in2i_is_zero)
-            with cgutils.ifelse(builder, in2_is_zero) as (inn_then, inn_otherwise):
+            with builder.if_else(in2_is_zero) as (inn_then, inn_otherwise):
                 with inn_then:
                     # division by 0.
                     # fdiv generates the appropriate NAN/INF/NINF
@@ -439,7 +431,7 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     in2i_abs = _fabs(context, builder, in2i)
     in2r_abs_ge_in2i_abs = builder.fcmp(lc.FCMP_OGE, in2r_abs, in2i_abs)
 
-    with cgutils.ifelse(builder, in2r_abs_ge_in2i_abs) as (then, otherwise):
+    with builder.if_else(in2r_abs_ge_in2i_abs) as (then, otherwise):
         with then:
             rat = builder.fdiv(in2i, in2r)
             # out.real = floor((in1r+in1i*rat)/(in2r + in2i*rat))
@@ -506,15 +498,15 @@ def np_real_floor_impl(context, builder, sig, args):
     assert len(sig.args) == 1
     ty = sig.args[0]
     assert ty == sig.return_type, "must have homogeneous types"
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     if ty == types.float64:
         fnty = lc.Type.function(lc.Type.double(), [lc.Type.double()])
-        fn = mod.get_or_insert_function(fnty, name="numba.npymath.floor")
+        fn = cgutils.insert_pure_function(mod, fnty, name="numba.npymath.floor")
     elif ty == types.float32:
         fnty = lc.Type.function(lc.Type.float(), [lc.Type.float()])
-        fn = mod.get_or_insert_function(fnty, name="numba.npymath.floorf")
+        fn = cgutils.insert_pure_function(mod, fnty, name="numba.npymath.floorf")
     else:
-        raise LoweringError("No floor function for real type {0}".format(str(ty)))
+        raise errors.LoweringError("No floor function for real type {0}".format(str(ty)))
 
     return builder.call(fn, args)
 
@@ -581,21 +573,6 @@ def np_complex_rint_impl(context, builder, sig, args):
     inner_sig = typing.signature(*[float_ty]*2)
     out.real = np_real_rint_impl(context, builder, inner_sig, [in1.real])
     out.imag = np_real_rint_impl(context, builder, inner_sig, [in1.imag])
-    return out._getvalue()
-
-
-########################################################################
-# NumPy conj/conjugate
-def np_complex_conjugate_impl(context, builder, sig, args):
-    _check_arity_and_homogeneity(sig, args, 1)
-    ty = sig.args[0]
-    float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
-    in1 = complex_class(context, builder, value=args[0])
-    out = complex_class(context, builder)
-    ZERO = context.get_constant(float_ty, 0.0)
-    out.real = in1.real
-    out.imag = builder.fsub(ZERO, in1.imag)
     return out._getvalue()
 
 
@@ -896,7 +873,7 @@ def np_complex_reciprocal_impl(context, builder, sig, args):
     in1i_abs = _fabs(context, builder, in1i)
     in1i_abs_le_in1r_abs = builder.fcmp(lc.FCMP_OLE, in1i_abs, in1r_abs)
 
-    with cgutils.ifelse(builder, in1i_abs_le_in1r_abs) as (then, otherwise):
+    with builder.if_else(in1i_abs_le_in1r_abs) as (then, otherwise):
         with then:
             r = builder.fdiv(in1i, in1r)
             tmp0 = builder.fmul(in1i, r)
@@ -1080,7 +1057,7 @@ def np_complex_asin_impl(context, builder, sig, args):
     abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
     any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
     complex_binary_sig = typing.signature(*[ty]*3)
-    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+    with builder.if_else(any_gt_epsilon) as (then, otherwise):
         with then:
             # ... then use formula:
             # - j * log(j * x + sqrt(1 - sqr(x)))
@@ -1139,35 +1116,6 @@ def np_real_acos_impl(context, builder, sig, args):
                                        dispatch_table, 'arccos')
 
 
-def np_complex_acos_impl(context, builder, sig, args):
-    # npymath does not provide a complex acos. The code in funcs.inc.src
-    # is translated here...
-    # - j * log(x + j * sqrt(1 - sqr(x)))
-    _check_arity_and_homogeneity(sig, args, 1)
-
-    ty = sig.args[0]
-    binary_sig = typing.signature(*[ty]*3)
-
-    ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
-    ZERO = context.get_constant_generic(builder, ty, 0.0 + 0.0j)
-    I = context.get_constant_generic(builder, ty, 0.0 + 1.0j)
-
-    xx = np_complex_square_impl(context, builder, sig, args)
-    one_minus_xx = builtins.complex_sub_impl(context, builder, binary_sig,
-                                             [ONE, xx])
-    sqrt_res = np_complex_sqrt_impl(context, builder, sig, [one_minus_xx])
-    sqrt_res_j = builtins.complex_mul_impl(context, builder, binary_sig,
-                                           [I, sqrt_res])
-
-    log_in = builtins.complex_add_impl(context, builder, binary_sig,
-                                       [args[0], sqrt_res_j])
-    log_out = np_complex_log_impl(context, builder, sig, [log_in])
-    log_j = builtins.complex_mul_impl(context, builder, binary_sig,
-                                      [I, log_out])
-    return builtins.complex_sub_impl(context, builder, binary_sig,
-                                     [ZERO, log_j])
-
-
 ########################################################################
 # NumPy atan
 
@@ -1202,7 +1150,7 @@ def np_complex_atan_impl(context, builder, sig, args):
     abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
     any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
     binary_sig = typing.signature(*[ty]*3)
-    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+    with builder.if_else(any_gt_epsilon) as (then, otherwise):
         with then:
             # ... then use formula
             # 0.5j * log((j + x)/(j - x))
@@ -1437,7 +1385,7 @@ def np_complex_asinh_impl(context, builder, sig, args):
     abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
     any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
     binary_sig = typing.signature(*[ty]*3)
-    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+    with builder.if_else(any_gt_epsilon) as (then, otherwise):
         with then:
             # ... then use formula
             # log(sqrt(1+sqr(x)) + x)
@@ -1497,13 +1445,17 @@ def np_complex_acosh_impl(context, builder, sig, args):
     ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
     x = args[0]
 
-    x_plus_one = builtins.complex_add_impl(context, builder, csig2, [x, ONE])
-    x_minus_one = builtins.complex_sub_impl(context, builder, csig2, [x, ONE])
+    x_plus_one = builtins.complex_add_impl(context, builder, csig2, [x,
+                                                                     ONE])
+    x_minus_one = builtins.complex_sub_impl(context, builder, csig2, [x,
+                                                                      ONE])
     sqrt_x_plus_one = np_complex_sqrt_impl(context, builder, sig, [x_plus_one])
     sqrt_x_minus_one = np_complex_sqrt_impl(context, builder, sig, [x_minus_one])
     prod_sqrt = builtins.complex_mul_impl(context, builder, csig2,
-                                          [sqrt_x_plus_one, sqrt_x_minus_one])
-    log_arg = builtins.complex_add_impl(context, builder, csig2, [x, prod_sqrt])
+                                          [sqrt_x_plus_one,
+                                           sqrt_x_minus_one])
+    log_arg = builtins.complex_add_impl(context, builder, csig2, [x,
+                                                                  prod_sqrt])
 
     return np_complex_log_impl(context, builder, sig, [log_arg])
 
@@ -1542,7 +1494,7 @@ def np_complex_atanh_impl(context, builder, sig, args):
     abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
     any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
     binary_sig = typing.signature(*[ty]*3)
-    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+    with builder.if_else(any_gt_epsilon) as (then, otherwise):
         with then:
             # ... then use formula
             # 0.5 * log((1 + x)/(1 - x))

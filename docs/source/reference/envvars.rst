@@ -111,6 +111,13 @@ Compilation options
    codebase from an old Numba version (before 0.12), and want to avoid
    breaking everything at once.  Otherwise, please don't use this.
 
+.. envvar:: NUMBA_DISABLE_JIT
+
+   Disable JIT compilation entirely.  The :func:`~numba.jit` decorator acts
+   as if it performs no operation, and the invocation of decorated functions
+   calls the original Python function instead of a compiled version.  This
+   can be useful if you want to run the Python debugger over your code.
+
 
 GPU support
 -----------
@@ -123,3 +130,8 @@ GPU support
 
    If set, force the CUDA compute capability to the given version (a
    string of the type ``major.minor``), regardless of attached devices.
+
+.. envvar:: NUMBA_ENABLE_CUDASIM
+
+   If set, don't compile and execute code for the GPU, but use the CUDA
+   Simulator instead. For debugging purposes.

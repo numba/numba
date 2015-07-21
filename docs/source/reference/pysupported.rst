@@ -40,7 +40,7 @@ Function calls
 --------------
 
 Numba supports function calls using positional and named arguments, as well
-as arguments with default values.  Explicit ``*args`` and ``**kwargs`` are
+as arguments with default values and ``*args``.  Explicit ``**kwargs`` are
 not supported.
 
 Generators
@@ -83,13 +83,17 @@ The following attributes and methods are supported:
 tuple
 -----
 
-Tuple construction and unpacking is supported.
+Tuple construction and unpacking is supported, as well as the following
+operations:
+
+* comparison between tuples
+* iteration over homogenous tuples
 
 None
 ----
 
-The :const:`None` value is supported for identity testing (when using
-an :class:`~numba.optional` type).
+The None value is supported for identity testing (when using an
+:class:`~numba.optional` type).
 
 bytes, bytearray, memoryview
 ----------------------------
@@ -126,7 +130,8 @@ The following built-in functions are supported:
 * :func:`min`: only the multiple-argument form
 * :func:`max`: only the multiple-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
-* :class:`range`
+* :class:`range`: semantics are similar to those of Python 3 even in Python 2:
+  a range object is returned instead of an array of values.
 * :func:`round`
 * :func:`zip`
 

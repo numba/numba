@@ -10,14 +10,14 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-import numba
-from numba import types, utils, cgutils, typing, numpy_support
+from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     python_attr_impl,
                                     builtin_registry, impl_attribute,
-                                    struct_registry, type_registry)
+                                    type_registry,
+                                    impl_ret_borrowed)
 from . import arrayobj, builtins, iterators, rangeobj, optional
 from numba import datamodel
 
@@ -146,6 +146,15 @@ class BaseContext(object):
     implement_powi_as_math_call = False
     implement_pow_as_math_call = False
 
+    # Bound checking
+    enable_boundcheck = False
+
+    # NRT
+    enable_nrt = False
+
+    # PYCC
+    aot_mode = False
+
     def __init__(self, typing_context):
         _load_global_helpers()
         self.address_size = utils.MACHINE_BITS
@@ -154,6 +163,7 @@ class BaseContext(object):
         self.defns = defaultdict(Overloads)
         self.attrs = defaultdict(Overloads)
         self.generators = {}
+        self.special_ops = {}
 
         self.install_registry(builtin_registry)
 
@@ -176,6 +186,14 @@ class BaseContext(object):
     @property
     def target_data(self):
         raise NotImplementedError
+
+    def subtarget(self, **kws):
+        obj = copy.copy(self)  # shallow copy
+        for k, v in kws.items():
+            if not hasattr(obj, k):
+                raise NameError("unknown option {0!r}".format(k))
+            setattr(obj, k, v)
+        return obj
 
     def install_registry(self, registry):
         """
@@ -315,7 +333,13 @@ class BaseContext(object):
         Return a LLVM constant representing value *val* of Numba type *ty*.
         """
         if self.is_struct_type(ty):
-            return self.get_constant_struct(builder, ty, val)
+            struct = self.get_constant_struct(builder, ty, val)
+            if isinstance(ty, types.Record):
+                ptrty = self.data_model_manager[ty].get_data_type()
+                ptr = cgutils.alloca_once(builder, ptrty)
+                builder.store(struct, ptr)
+                return ptr
+            return struct
 
         elif isinstance(ty, types.ExternalFunctionPointer):
             ptrty = self.get_function_pointer_type(ty)
@@ -376,6 +400,9 @@ class BaseContext(object):
         elif ty in types.real_domain:
             return Constant.real(lty, val)
 
+        elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+            return Constant.real(lty, val.astype(numpy.int64))
+
         elif isinstance(ty, types.UniTuple):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
@@ -413,7 +440,7 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
-        if isinstance(fn, types.Function):
+        if isinstance(fn, (types.NumberClass, types.Function)):
             key = fn.template.key
 
             if isinstance(key, MethodType):
@@ -477,16 +504,19 @@ class BaseContext(object):
                         shape=cgutils.pack_array(builder, newshape),
                         strides=cgutils.pack_array(builder, newstrides),
                         itemsize=context.get_constant(types.intp, elemty.size),
-                        parent=ary.parent
+                        meminfo=None,
+                        parent=None,
                     )
-                    
-                    return ary._getvalue()
+
+                    res = ary._getvalue()
+                    return impl_ret_borrowed(context, builder, typ, res)
             else:
                 @impl_attribute(typ, attr, elemty)
                 def imp(context, builder, typ, val):
                     dptr = cgutils.get_record_member(builder, val, offset,
                                                      self.get_data_type(elemty))
-                    return self.unpack_value(builder, elemty, dptr)
+                    res = self.unpack_value(builder, elemty, dptr)
+                    return impl_ret_borrowed(context, builder, typ, res)
             return imp
 
         if isinstance(typ, types.Module):
@@ -494,20 +524,15 @@ class BaseContext(object):
             # We are treating them as constants.
             # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
-            if attrty is not None:
-                try:
-                    pyval = getattr(typ.pymod, attr)
-                    llval = self.get_constant(attrty, pyval)
-                except NotImplementedError:
-                    # Module attribute is not a simple constant
-                    # (e.g. it's a function), it will be handled later on.
-                    pass
-                else:
-                    @impl_attribute(typ, attr, attrty)
-                    def imp(context, builder, typ, val):
-                        return llval
-                    return imp
-            # No implementation
+            if attrty is not None and not isinstance(attrty, types.Dummy):
+                pyval = getattr(typ.pymod, attr)
+                llval = self.get_constant(attrty, pyval)
+                @impl_attribute(typ, attr, attrty)
+                def imp(context, builder, typ, val):
+                    return impl_ret_borrowed(context, builder, attrty, llval)
+                return imp
+            # No implementation required for dummies (functions, modules...),
+            # which are dealt with later
             return None
 
         # Lookup specific attribute implementation for this type
@@ -709,6 +734,9 @@ class BaseContext(object):
             assert toty.layout == 'A'
             return val
 
+        elif fromty in types.integer_domain and toty == types.voidptr:
+            return builder.inttoptr(val, self.get_value_type(toty))
+
         raise NotImplementedError("cast", val, fromty, toty)
 
     def make_optional(self, optionaltype):
@@ -775,7 +803,7 @@ class BaseContext(object):
         for obj in pyargs:
             api.decref(obj)
 
-        with cgutils.ifthen(builder, cgutils.is_null(builder, res)):
+        with builder.if_then(cgutils.is_null(builder, res)):
             self.call_conv.return_exc(builder)
 
         if retty == types.none:
@@ -795,7 +823,7 @@ class BaseContext(object):
         return builder.call(puts, [text])
 
     def debug_print(self, builder, text):
-        mod = cgutils.get_module(builder)
+        mod = builder.module
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
 
@@ -812,38 +840,62 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def compile_internal(self, builder, impl, sig, args, locals={}):
-        """Invoke compiler to implement a function for a nopython function
+    def compile_only_no_cache(self, builder, impl, sig, locals={}):
+        """Invoke the compiler to compile a function to be used inside a
+        nopython function, but without generating code to call that
+        function.
+        """
+        # Compile
+        from numba import compiler
+
+        codegen = self.jit_codegen()
+        library = codegen.create_library(impl.__name__)
+        flags = compiler.Flags()
+        flags.set('no_compile')
+        flags.set('no_cpython_wrapper')
+        cres = compiler.compile_internal(self.typing_context, self,
+                                         library,
+                                         impl, sig.args,
+                                         sig.return_type, flags,
+                                         locals=locals)
+
+        # Allow inlining the function inside callers.
+        codegen.add_linking_library(cres.library)
+        return cres
+
+    def compile_subroutine(self, builder, impl, sig, locals={}):
+        """
+        Compile the function *impl* for the given *sig* (in nopython mode).
+        Return a placeholder object that's callable from another Numba
+        function.
         """
         cache_key = (impl.__code__, sig)
         if impl.__closure__:
             # XXX This obviously won't work if a cell's value is
             # unhashable.
             cache_key += tuple(c.cell_contents for c in impl.__closure__)
-        fndesc = self.cached_internal_func.get(cache_key)
+        ty = self.cached_internal_func.get(cache_key)
+        if ty is None:
+            cres = self.compile_only_no_cache(builder, impl, sig,
+                                              locals=locals)
+            ty = types.NumbaFunction(cres.fndesc, sig)
+            self.cached_internal_func[cache_key] = ty
+        return ty
 
-        if fndesc is None:
-            # Compile
-            from numba import compiler
+    def compile_internal(self, builder, impl, sig, args, locals={}):
+        """
+        Like compile_subroutine(), but also call the function with the given
+        *args*.
+        """
+        ty = self.compile_subroutine(builder, impl, sig, locals)
+        return self.call_internal(builder, ty.fndesc, sig, args)
 
-            codegen = self.jit_codegen()
-            library = codegen.create_library(impl.__name__)
-            flags = compiler.Flags()
-            flags.set('no_compile')
-            flags.set('no_cpython_wrapper')
-            cres = compiler.compile_internal(self.typing_context, self,
-                                             library,
-                                             impl, sig.args,
-                                             sig.return_type, flags,
-                                             locals=locals)
-
-            # Allow inlining the function inside callers.
-            codegen.add_linking_library(cres.library)
-            fndesc = cres.fndesc
-            self.cached_internal_func[cache_key] = fndesc
-
+    def call_internal(self, builder, fndesc, sig, args):
+        """Given the function descriptor of an internally compiled function,
+        emit a call to that function with the given arguments.
+        """
         # Add call to the generated function
-        llvm_mod = cgutils.get_module(builder)
+        llvm_mod = builder.module
         fn = self.declare_function(llvm_mod, fndesc)
         status, res = self.call_conv.call_function(builder, fn, sig.return_type,
                                                    sig.args, args)
@@ -919,9 +971,19 @@ class BaseContext(object):
 
         # Create array structure
         cary = self.make_array(typ)(self, builder)
-        cary.data = builder.bitcast(data, cary.data.type)
-        cary.shape = cshape
-        cary.strides = cstrides
+
+        rt_addr = self.get_constant(types.uintp, id(ary)).inttoptr(
+            self.get_value_type(types.pyobject))
+
+        intp_itemsize = self.get_constant(types.intp, ary.dtype.itemsize)
+        self.populate_array(cary,
+                            data=builder.bitcast(data, cary.data.type),
+                            shape=cshape,
+                            strides=cstrides,
+                            itemsize=intp_itemsize,
+                            parent=rt_addr,
+                            meminfo=None)
+
         return cary._getvalue()
 
     def get_abi_sizeof(self, ty):
@@ -950,6 +1012,75 @@ class BaseContext(object):
         """
         return lc.Module.new(name)
 
+    def nrt_meminfo_alloc(self, builder, size):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+                                   [self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [size])
+
+    def nrt_meminfo_alloc_aligned(self, builder, size, align):
+        """
+        Allocate a new MemInfo of `size` bytes and and align the data pointer
+        to `align` bytes.  The `align` arg can be either a Python int or a LLVM
+        uint32 value.
+        """
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        intp = self.get_value_type(types.intp)
+        u32 = self.get_value_type(types.uint32)
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(), [intp, u32])
+        fn = mod.get_or_insert_function(fnty,
+                                        name="NRT_MemInfo_alloc_safe_aligned")
+        if isinstance(align, int):
+            align = self.get_constant(types.uint32, align)
+        else:
+            assert align.type == u32, "align must be a uint32"
+        return builder.call(fn, [size, align])
+
+    def nrt_meminfo_data(self, builder, meminfo):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        voidptr = llvmir.IntType(8).as_pointer()
+        fnty = llvmir.FunctionType(voidptr, [voidptr])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [meminfo])
+
+    def get_nrt_meminfo(self, builder, typ, value):
+        return self.data_model_manager[typ].get_nrt_meminfo(builder, value)
+
+    def _call_nrt_incref_decref(self, builder, typ, value, funcname):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+
+        members = self.data_model_manager[typ].traverse(builder, value)
+        for mt, mv in members:
+            self._call_nrt_incref_decref(builder, mt, mv, funcname)
+
+        meminfo = self.get_nrt_meminfo(builder, typ, value)
+        if meminfo:
+            mod = builder.module
+            fnty = llvmir.FunctionType(llvmir.VoidType(),
+                                       [llvmir.IntType(8).as_pointer()])
+            fn = mod.get_or_insert_function(fnty, name=funcname)
+            # XXX "nonnull" causes a crash in test_dyn_array: can this
+            # function be called with a NULL pointer?
+            fn.args[0].add_attribute("noalias")
+            fn.args[0].add_attribute("nocapture")
+            builder.call(fn, [meminfo])
+
+    def nrt_incref(self, builder, typ, value):
+        self._call_nrt_incref_decref(builder, typ, value, "NRT_incref")
+
+    def nrt_decref(self, builder, typ, value):
+        self._call_nrt_incref_decref(builder, typ, value, "NRT_decref")
+
 
 class _wrap_impl(object):
     def __init__(self, imp, context, sig):
@@ -965,4 +1096,3 @@ class _wrap_impl(object):
 
     def __repr__(self):
         return "<wrapped %s>" % self._imp
-

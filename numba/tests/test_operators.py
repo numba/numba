@@ -520,8 +520,8 @@ class TestOperators(TestCase):
     #
 
     def run_binop_ints(self, pyfunc, flags=force_pyobj_flags):
-        x_operands = [-2, 0, 1]
-        y_operands = [-1, 1, 3]
+        x_operands = [-5, 0, 1, 2]
+        y_operands = [-3, -1, 1, 3]
 
         types_list = [(types.int32, types.int32),
                       (types.int64, types.int64)]
@@ -651,13 +651,17 @@ class TestOperators(TestCase):
                           'floats_array': 'run_binop_array_floats',
                           })
 
-    def check_div_errors(self, usecase_name, msg, flags=force_pyobj_flags):
+    def check_div_errors(self, usecase_name, msg, flags=force_pyobj_flags,
+                         allow_complex=False):
         pyfunc = getattr(self.op, usecase_name)
         if pyfunc is NotImplemented:
             self.skipTest("%r not implemented" % (usecase_name,))
         # Signed and unsigned division can take different code paths,
         # test them both.
-        for tp in (types.int32, types.uint32, types.float64):
+        arg_types = [types.int32, types.uint32, types.float64]
+        if allow_complex:
+            arg_types.append(types.complex128)
+        for tp in arg_types:
             cr = compile_isolated(pyfunc, (tp, tp), flags=flags)
             cfunc = cr.entry_point
             with self.assertRaises(ZeroDivisionError) as cm:
@@ -667,7 +671,8 @@ class TestOperators(TestCase):
                 self.assertIn(msg, str(cm.exception))
 
     def test_truediv_errors(self, flags=force_pyobj_flags):
-        self.check_div_errors("truediv_usecase", "division by zero", flags=flags)
+        self.check_div_errors("truediv_usecase", "division by zero", flags=flags,
+                              allow_complex=True)
 
     def test_truediv_errors_npm(self):
         self.test_truediv_errors(flags=Noflags)

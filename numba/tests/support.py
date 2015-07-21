@@ -9,12 +9,11 @@ import sys
 
 import numpy as np
 
-from numba import config, typing, utils
+from numba import config, errors, typing, utils
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
-from numba.lowering import LoweringError
 from numba.targets import cpu
-from numba.typeinfer import TypingError
 import numba.unittest_support as unittest
+from numba.runtime import rtsys
 
 
 enable_pyobj_flags = Flags()
@@ -26,7 +25,8 @@ force_pyobj_flags.set("force_pyobject")
 no_pyobj_flags = Flags()
 
 
-skip_on_numpy_16 = unittest.skipIf(np.__version__.startswith("1.6."),
+is_on_numpy_16 = np.__version__.startswith("1.6.")
+skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
                                    "test requires Numpy 1.7 or later")
 
 
@@ -85,8 +85,9 @@ class TestCase(unittest.TestCase):
         A context manager that asserts the enclosed code block fails
         compiling in nopython mode.
         """
-        with self.assertRaises(
-            (LoweringError, TypingError, TypeError, NotImplementedError)) as cm:
+        _accepted_errors = (errors.LoweringError, errors.TypingError,
+                            TypeError, NotImplementedError)
+        with self.assertRaises(_accepted_errors) as cm:
             yield cm
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
@@ -101,6 +102,8 @@ class TestCase(unittest.TestCase):
         that the object in question belongs to.  Possible return values
         are: "exact", "complex", "approximate", "sequence", and "unknown"
         """
+        if isinstance(numeric_object, np.ndarray):
+            return "ndarray"
 
         for tp in self._sequence_typesets:
             if isinstance(numeric_object, tp):
@@ -119,6 +122,27 @@ class TestCase(unittest.TestCase):
                 return "approximate"
 
         return "unknown"
+
+    def _fix_dtype(self, dtype):
+        """
+        Fix the given *dtype* for comparison.
+        """
+        # Under 64-bit Windows, Numpy may return either int32 or int64
+        # arrays depending on the function.
+        if (sys.platform == 'win32' and sys.maxsize > 2**32 and
+            dtype == np.dtype('int32')):
+            return np.dtype('int64')
+        else:
+            return dtype
+
+    def _fix_strides(self, arr):
+        """
+        Return the strides of the given array, fixed for comparison.
+        Strides for 0- or 1-sized dimensions are ignored.
+        """
+        return [stride / arr.itemsize
+                for (stride, shape) in zip(arr.strides, arr.shape)
+                if shape > 1]
 
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                            msg=None):
@@ -178,6 +202,26 @@ class TestCase(unittest.TestCase):
         compare_family = first_family
 
         # For recognized sequences, recurse
+        if compare_family == "ndarray":
+            dtype = self._fix_dtype(first.dtype)
+            self.assertEqual(dtype, self._fix_dtype(second.dtype))
+            self.assertEqual(first.ndim, second.ndim,
+                             "different number of dimensions")
+            self.assertEqual(first.shape, second.shape,
+                             "different shapes")
+            self.assertEqual(first.flags.writeable, second.flags.writeable,
+                             "different mutability")
+            # itemsize is already checked by the dtype test above
+            self.assertEqual(self._fix_strides(first), self._fix_strides(second),
+                             "different strides")
+            if first.dtype != dtype:
+                first = first.astype(dtype)
+            if second.dtype != dtype:
+                second = second.astype(dtype)
+            for a, b in zip(first.flat, second.flat):
+                self._assertPreciseEqual(a, b, prec, ulps, msg)
+            return
+
         if compare_family == "sequence":
             self.assertEqual(len(first), len(second), msg=msg)
             for a, b in zip(first, second):
@@ -299,3 +343,31 @@ def captured_stderr():
        self.assertEqual(stderr.getvalue(), "hello\n")
     """
     return captured_output("stderr")
+
+
+class MemoryLeak(object):
+    def memory_leak_setup(self):
+        self.__init_stats = rtsys.get_allocation_stats()
+
+    def memory_leak_teardown(self):
+        old = self.__init_stats
+        new = rtsys.get_allocation_stats()
+        total_alloc = new.alloc - old.alloc
+        total_free = new.free - old.free
+        total_mi_alloc = new.mi_alloc - old.mi_alloc
+        total_mi_free = new.mi_free - old.mi_free
+        self.assertEqual(total_alloc, total_free)
+        self.assertEqual(total_mi_alloc, total_mi_free)
+
+
+
+
+class MemoryLeakMixin(MemoryLeak):
+
+    def setUp(self):
+        super(MemoryLeakMixin, self).setUp()
+        self.memory_leak_setup()
+
+    def tearDown(self):
+        super(MemoryLeakMixin, self).tearDown()
+        self.memory_leak_teardown()

@@ -49,11 +49,17 @@ class TargetOptions(object):
         if kws.pop('boundcheck', False):
             flags.set("boundcheck")
 
+        if kws.pop('_nrt', True):
+            flags.set("nrt")
+
         if kws.pop('debug', False):
             flags.set("boundcheck")
 
         if kws.pop('nogil', False):
             flags.set("release_gil")
+
+        if kws.pop('no_rewrites', False):
+            flags.set('no_rewrites')
 
         flags.set("enable_pyobject_looplift")
 

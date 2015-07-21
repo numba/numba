@@ -58,7 +58,7 @@ class DataModelTester(unittest.TestCase):
 
         # Ensure valid LLVM generation
         materialized = ll.parse_assembly(str(self.module))
-        print(materialized)
+        str(materialized)
 
     def test_as_return(self):
         """
@@ -84,7 +84,7 @@ class DataModelTester(unittest.TestCase):
 
         # Ensure valid LLVM generation
         materialized = ll.parse_assembly(str(self.module))
-        print(materialized)
+        str(materialized)
 
 
 class SupportAsDataMixin(object):
@@ -113,7 +113,7 @@ class SupportAsDataMixin(object):
 
         # Ensure valid LLVM generation
         materialized = ll.parse_assembly(str(self.module))
-        print(materialized)
+        str(materialized)
 
 
 class NotSupportAsDataMixin(object):

@@ -3,8 +3,10 @@ from llvmlite.llvmpy.core import Module, Type, Builder, InlineAsm
 from llvmlite import binding as ll
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import skip_on_cudasim
 
 
+@skip_on_cudasim('Inline PTX cannot be used in the simulator')
 class TestCudaInlineAsm(CUDATestCase):
     def test_inline_rsqrt(self):
         mod = Module.new(__name__)

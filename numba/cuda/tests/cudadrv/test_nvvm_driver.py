@@ -7,10 +7,12 @@ from numba.cuda.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
 from ctypes import c_size_t, c_uint64, sizeof
 from numba.cuda.testing import unittest
 from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError
+from numba.cuda.testing import skip_on_cudasim
 
 is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 
 
+@skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestNvvmDriver(unittest.TestCase):
     def get_ptx(self):
         nvvm = NVVM()
@@ -66,19 +68,22 @@ class TestNvvmDriver(unittest.TestCase):
         for arch in SUPPORTED_CC:
             self._test_nvvm_support(arch=arch)
 
+    @unittest.skipIf(True, "No new CC unknown to NVVM yet")
     def test_nvvm_future_support(self):
         """Test unsupported CC to help track the feature support
         """
+        # List known CC but unsupported by NVVM
         future_archs = [
-            (5, 2),
+            # (5, 2),  # for example
         ]
         for arch in future_archs:
             pat = r"-arch=compute_{0}{1}".format(*arch)
             with self.assertRaises(NvvmError) as raises:
                 self._test_nvvm_support(arch=arch)
-                self.assertIn(pat, raises.msg)
+            self.assertIn(pat, raises.msg)
 
 
+@skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
         self.assertEqual(get_arch_option(2, 0), 'compute_20')
@@ -94,6 +99,7 @@ class TestArchOption(unittest.TestCase):
                          'compute_%d%d' % SUPPORTED_CC[-1])
 
 
+@skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestLibDevice(unittest.TestCase):
     def _libdevice_load(self, arch, expect):
         libdevice = LibDevice(arch=arch)
@@ -108,6 +114,7 @@ class TestLibDevice(unittest.TestCase):
 
 
 gpu64 = '''
+target triple="nvptx64-"
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
 
 define i32 @ave(i32 %a, i32 %b) {
@@ -142,6 +149,7 @@ declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 '''
 
 gpu32 = '''
+target triple="nvptx-"
 target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
 
 define i32 @ave(i32 %a, i32 %b) {

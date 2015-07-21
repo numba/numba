@@ -1,6 +1,143 @@
-
-Version 0.18.0
+Version 0.20.0
 --------------
+
+This release updates Numba to use LLVM 3.6 and CUDA 7 for CUDA support.
+Following the platform deprecation in CUDA 7, Numba's CUDA feature is no
+longer supported on 32-bit platforms.  The oldest supported version of
+Windows is Windows 7.
+
+Improvements:
+
+* Issue #1203: Support indexing ndarray.flat
+* PR #1200: Migrate cgutils to llvmlite
+* PR #1190: Support more array methods: .transpose(), .T, .copy(), .reshape(), .view()
+* PR #1214: Simplify setup.py and avoid manual maintenance
+* PR #1217: Support datatime64 and timedelta64 constants
+* PR #1236: Reload environment variables when compiling
+* PR #1225: Various speed improvements in generated code
+* PR #1252: Support cmath module in CUDA
+* PR #1238: Use 32-byte aligned allocator to optimize for AVX
+* PR #1258: Support numpy.frombuffer()
+* PR #1274: Use TravisCI container infrastructure for lower wait time
+* PR #1279: Micro-optimize overload resolution in call dispatch
+* Issue #1248: Improve error message when return type unification fails
+
+Fixes:
+
+* Issue #1131: Handling of negative zeros in np.conjugate() and np.arccos()
+* Issue #1188: Fix slow array return
+* Issue #1164: Avoid warnings from CUDA context at shutdown
+* Issue #1229: Respect the writeable flag in arrays
+* Issue #1244: Fix bug in refcount pruning pass
+* Issue #1251: Fix partial left-indexing of Fortran contiguous array
+* Issue #1264: Fix compilation error in array expression
+* Issue #1254: Fix error when yielding array objects
+* Issue #1276: Fix nested generator use
+
+
+Version 0.19.2
+--------------
+
+This release fixes the source distribution on pypi.  The only change is in the
+setup.py file.  We do not plan to provide a conda package as this release is
+essentially the same as 0.19.1 for conda users.
+
+
+Version 0.19.1
+--------------
+
+* Issue #1196:
+
+  * fix double-free segfault due to redundant variable deletion in the
+    Numba IR (#1195)
+  * fix use-after-delete in array expression rewrite pass
+
+
+Version 0.19.0
+--------------
+
+This version introduces memory management in the Numba runtime, allowing to
+allocate new arrays inside Numba-compiled functions.  There is also a rework
+of the ufunc infrastructure, and an optimization pass to collapse cascading
+array operations into a single efficient loop.
+
+.. warning::
+   Support for Windows XP and Vista with all compiler targets and support
+   for 32-bit platforms (Win/Mac/Linux) with the CUDA compiler target are
+   deprecated.  In the next release of Numba, the oldest version of Windows
+   supported will be Windows 7.  CPU compilation will remain supported
+   on 32-bit Linux and Windows platforms.
+
+Known issues:
+
+* There are some performance regressions in very short running ``nopython``
+  functions due to the additional overhead incurred by memory management.
+  We will work to reduce this overhead in future releases.
+
+Features:
+
+* Issue #1181: Add a Frequently Asked Questions section to the documentation.
+* Issue #1162: Support the ``cumsum()`` and ``cumprod()`` methods on Numpy
+  arrays.
+* Issue #1152: Support the ``*args`` argument-passing style.
+* Issue #1147: Allow passing character sequences as arguments to
+  JIT-compiled functions.
+* Issue #1110: Shortcut deforestation and loop fusion for array expressions.
+* Issue #1136: Support various Numpy array constructors, for example
+  numpy.zeros() and numpy.zeros_like().
+* Issue #1127: Add a CUDA simulator running on the CPU, enabled with the
+  NUMBA_ENABLE_CUDASIM environment variable.
+* Issue #1086: Allow calling standard Numpy ufuncs without an explicit
+  output array from ``nopython`` functions.
+* Issue #1113: Support keyword arguments when calling numpy.empty()
+  and related functions.
+* Issue #1108: Support the ``ctypes.data`` attribute of Numpy arrays.
+* Issue #1077: Memory management for array allocations in ``nopython`` mode.
+* Issue #1105: Support calling a ctypes function that takes ctypes.py_object
+  parameters.
+* Issue #1084: Environment variable NUMBA_DISABLE_JIT disables compilation
+  of ``@jit`` functions, instead calling into the Python interpreter
+  when called.  This allows easier debugging of multiple jitted functions.
+* Issue #927: Allow gufuncs with no output array.
+* Issue #1097: Support comparisons between tuples.
+* Issue #1075: Numba-generated ufuncs can now be called from ``nopython``
+  functions.
+* Issue #1062: ``@vectorize`` now allows omitting the signatures, and will
+  compile the required specializations on the fly (like ``@jit`` does).
+* Issue #1027: Support numpy.round().
+* Issue #1085: Allow returning a character sequence (as fetched from a
+  structured array) from a JIT-compiled function.
+
+Fixes:
+
+* Issue #1170: Ensure ``ndindex()``, ``ndenumerate()`` and ``ndarray.flat``
+  work properly inside generators.
+* Issue #1151: Disallow unpacking of tuples with the wrong size.
+* Issue #1141: Specify install dependencies in setup.py.
+* Issue #1106: Loop-lifting would fail when the lifted loop does not
+  produce any output values for the function tail.
+* Issue #1103: Fix mishandling of some inputs when a JIT-compiled function
+  is called with multiple array layouts.
+* Issue #1089: Fix range() with large unsigned integers.
+* Issue #1088: Install entry-point scripts (numba, pycc) from the conda
+  build recipe.
+* Issue #1081: Constant structured scalars now work properly.
+* Issue #1080: Fix automatic promotion of booleans to integers.
+
+
+Version 0.18.2
+--------------
+
+Bug fixes:
+
+* Issue #1073: Fixes missing template file for HTML annotation
+* Issue #1074: Fixes CUDA support on Windows machine due to NVVM API mismatch
+
+
+Version 0.18.1
+--------------
+
+Version 0.18.0 is not officially released.
 
 This version removes the old deprecated and undocumented ``argtypes`` and
 ``restype`` arguments to the ``@jit`` decorator.  Function signatures
@@ -125,10 +262,10 @@ Fixes:
 Version 0.16.0
 --------------
 
-This release contains a major refactor to switch from llvmpy to `llvmlite <https://github.com/numba/llvmlite>`_ 
+This release contains a major refactor to switch from llvmpy to `llvmlite <https://github.com/numba/llvmlite>`_
 as our code generation backend.  The switch is necessary to reconcile
 different compiler requirements for LLVM 3.5 (needs C++11) and Python
-extensions (need specific compiler versions on Windows). As a bonus, we have 
+extensions (need specific compiler versions on Windows). As a bonus, we have
 found the use of llvmlite speeds up compilation by a factor of 2!
 
 Other Major Changes:
@@ -143,14 +280,14 @@ Known Issues:
 * AVX code generation is still disabled by default due to performance
   regressions when operating on misaligned NumPy arrays.  We hope to have a
   workaround in the future.
-* In *extremely* rare circumstances, a `known issue with LLVM 3.5 <http://llvm.org/bugs/show_bug.cgi?id=21423>`_ 
+* In *extremely* rare circumstances, a `known issue with LLVM 3.5 <http://llvm.org/bugs/show_bug.cgi?id=21423>`_
   code generation can cause an ELF relocation error on 64-bit Linux systems.
 
 
 Version 0.15.1
 --------------
 
-(This was a bug-fix release that superceded version 0.15 before it was 
+(This was a bug-fix release that superceded version 0.15 before it was
 announced.)
 
 Fixes:
@@ -193,8 +330,8 @@ Fixes:
   an exeception.
 * Allow function objects to be returned from a function compiled in object
   mode.
-* Fix a linking problem that caused slower platform math functions (such as 
-  ``exp()``) to be used on Windows, leading to performance regressions against 
+* Fix a linking problem that caused slower platform math functions (such as
+  ``exp()``) to be used on Windows, leading to performance regressions against
   NumPy.
 * ``min()`` and ``max()`` no longer accept scalars arguments in nopython mode.
 * Fix handling of ambigous type promotion among several compiled versions of a
@@ -205,7 +342,7 @@ Fixes:
 * Allow the shape of a 1D ``cuda.shared.array`` and ``cuda.local.array`` to be
   a one-element tuple.
 * More correct handling of signed zeros.
-* Add custom implementation of ``atan2()`` on Windows to handle special cases 
+* Add custom implementation of ``atan2()`` on Windows to handle special cases
   properly.
 * Eliminated race condition in the handling of the pagelocked staging area
   used when transferring CUDA arrays.
@@ -218,9 +355,9 @@ Version 0.14
 
 Features:
 
-* Support for nearly all the Numpy math functions (including comparison, 
+* Support for nearly all the Numpy math functions (including comparison,
   logical, bitwise and some previously missing float functions) in nopython mode.
-* The Numpy datetime64 and timedelta64 dtypes are supported in nopython mode 
+* The Numpy datetime64 and timedelta64 dtypes are supported in nopython mode
   with Numpy 1.7 and later.
 * Support for Numpy math functions on complex numbers in nopython mode.
 * ndarray.sum() is supported in nopython mode.
@@ -242,7 +379,7 @@ Features:
 Fixes:
 
 * Generation of AVX instructions has been disabled to avoid performance bugs
-  when calling external math functions that may use SSE instructions, 
+  when calling external math functions that may use SSE instructions,
   especially on OS X.
 * JIT functions can be removed by the garbage collector when they are no
   longer accessible.
@@ -254,9 +391,9 @@ Fixes:
 * Gracefully handle failure to enable faulthandler in the IPython Notebook.
 * Fix a bug that caused loop lifting to fail if the loop was inside an
   ``else`` block.
-* Fixed a problem with selecting CUDA devices in multithreaded programs on 
+* Fixed a problem with selecting CUDA devices in multithreaded programs on
   Linux.
-* The ``pow()`` function (and ``**`` operation) applied to two integers now 
+* The ``pow()`` function (and ``**`` operation) applied to two integers now
   returns an integer rather than a float.
 * Numpy arrays using the object dtype no longer cause an exception in the
   autojit.
@@ -277,7 +414,7 @@ Features:
   compiled code
 * Support for the start argument in enumerate()
 * Inplace arithmetic operations (+=, -=, etc.)
-* Direct iteration over a 1D numpy array (e.g. "for x in array: ...") 
+* Direct iteration over a 1D numpy array (e.g. "for x in array: ...")
   in nopython mode
 
 Fixes:
@@ -285,7 +422,7 @@ Fixes:
 * Support for NVIDIA compute capability 5.0 devices (such as the GTX 750)
 * Vectorize no longer crashes/gives an error when bool\_ is used as return type
 * Return the correct dictionary when globals() is used in JIT functions
-* Fix crash bug when creating dictionary literals in object 
+* Fix crash bug when creating dictionary literals in object
 * Report more informative error message on import if llvmpy is too old
 * Temporarily disable pycc --header, which generates incorrect function
   signatures.

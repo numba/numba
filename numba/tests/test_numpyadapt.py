@@ -10,6 +10,7 @@ from numba import _helperlib
 class ArrayStruct3D(Structure):
     # Mimick the structure defined in numba.targets.arrayobj's make_array()
     _fields_ = [
+        ("meminfo", c_void_p),
         ("parent", c_void_p),
         ("nitems", c_ssize_t),
         ("itemsize", c_ssize_t),
@@ -30,6 +31,7 @@ class TestArrayAdaptor(unittest.TestCase):
         status = adaptor(ary, byref(arystruct))
         self.assertEqual(status, 0)
         self.assertEqual(arystruct.data, ary.ctypes.data)
+        self.assertNotEqual(arystruct.meminfo, 0)
         self.assertEqual(arystruct.parent, id(ary))
         self.assertEqual(arystruct.nitems, 60)
         self.assertEqual(arystruct.itemsize, ary.itemsize)

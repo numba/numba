@@ -4,7 +4,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils, njit
+from numba import types, utils, njit, errors
 from numba.tests import usecases
 from .support import TestCase
 
@@ -87,6 +87,13 @@ def slicing_3d_usecase2(a, index0, stop1, index2):
         total += b[i] * (i + 1)
     return total
 
+def partial_1d_usecase(a, index):
+    b = a[index]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
 def integer_indexing_1d_usecase(a, i):
     return a[i]
 
@@ -111,6 +118,10 @@ def boolean_indexing_usecase(a, mask):
 def empty_tuple_usecase(a):
     return a[()]
 
+
+@njit
+def setitem_usecase(a, index, value):
+    a[index] = value
 
 def slicing_1d_usecase_set(a, b, start, stop, step):
     a[start:stop:step] = b
@@ -456,7 +467,7 @@ class TestIndexing(TestCase):
         arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(10, dtype='i4')
         self.assertEqual(pyfunc(a, 0), cfunc(a, 0))
         self.assertEqual(pyfunc(a, 9), cfunc(a, 9))
@@ -478,18 +489,25 @@ class TestIndexing(TestCase):
         self.test_1d_integer_indexing(flags=Noflags)
 
     def test_integer_indexing_1d_for_2d(self, flags=enable_pyobj_flags):
+        # Test partial (1d) indexing of a 2d array
         pyfunc = integer_indexing_1d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(100, dtype='i4').reshape(10, 10)
         self.assertTrue((pyfunc(a, 0) == cfunc(a, 0)).all())
         self.assertTrue((pyfunc(a, 9) == cfunc(a, 9)).all())
         self.assertTrue((pyfunc(a, -1) == cfunc(a, -1)).all())
 
+        arraytype = types.Array(types.int32, 2, 'A')
+        cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
+        cfunc = cr.entry_point
 
-    def test_integer_indexing_1d_for_2d(self):
+        a = np.arange(20, dtype='i4').reshape(5, 4)[::2]
+        self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
+
+    def test_integer_indexing_1d_for_2d_npm(self):
         with self.assertTypingError():
             self.test_integer_indexing_1d_for_2d(flags=Noflags)
 
@@ -552,13 +570,37 @@ class TestIndexing(TestCase):
         self.assertEqual(pyfunc(a, 9, 9), cfunc(a, 9, 9))
         self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
 
+    def test_partial_1d_indexing(self, flags=enable_pyobj_flags):
+        pyfunc = partial_1d_usecase
+
+        def check(arr, arraytype):
+            cr = compile_isolated(pyfunc, (arraytype, types.int32),
+                                  flags=flags)
+            cfunc = cr.entry_point
+            self.assertEqual(pyfunc(arr, 0), cfunc(arr, 0))
+            n = arr.shape[0] - 1
+            self.assertEqual(pyfunc(arr, n), cfunc(arr, n))
+            self.assertEqual(pyfunc(arr, -1), cfunc(arr, -1))
+
+        a = np.arange(12, dtype='i4').reshape((4, 3))
+        arraytype = types.Array(types.int32, 2, 'C')
+        check(a, arraytype)
+
+        a = np.arange(12, dtype='i4').reshape((3, 4)).T
+        arraytype = types.Array(types.int32, 2, 'F')
+        check(a, arraytype)
+
+        a = np.arange(12, dtype='i4').reshape((3, 4))[::2]
+        arraytype = types.Array(types.int32, 2, 'A')
+        check(a, arraytype)
+
     def test_ellipse(self, flags=enable_pyobj_flags):
         pyfunc = ellipse_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         # TODO should be enable to handle this in NoPython mode
         cr = compile_isolated(pyfunc, (arraytype,), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(100, dtype='i4').reshape(10, 10)
         self.assertTrue((pyfunc(a) == cfunc(a)).all())
 
@@ -572,7 +614,7 @@ class TestIndexing(TestCase):
         # TODO should be enable to handle this in NoPython mode
         cr = compile_isolated(pyfunc, (arraytype,), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(100, dtype='i4').reshape(10, 10)
         self.assertTrue((pyfunc(a) == cfunc(a)).all())
 
@@ -586,7 +628,7 @@ class TestIndexing(TestCase):
         indextype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype, indextype), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(100, dtype='i4').reshape(10, 10)
         index = np.array([], dtype='i4')
         self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
@@ -607,7 +649,7 @@ class TestIndexing(TestCase):
         masktype = types.Array(types.boolean, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype, masktype), flags=flags)
         cfunc = cr.entry_point
-        
+
         a = np.arange(100, dtype='i4').reshape(10, 10)
         mask = np.array([True, False, True])
         self.assertTrue((pyfunc(a, mask) == cfunc(a, mask)).all())
@@ -694,7 +736,19 @@ class TestIndexing(TestCase):
         with self.assertTypingError():
             self.test_2d_slicing_set(flags=Noflags)
 
+    def test_setitem(self):
+        arr = np.arange(5)
+        setitem_usecase(arr, 1, 42)
+        self.assertEqual(list(arr), [0, 42, 2, 3, 4])
+
+    def test_setitem_readonly(self):
+        arr = np.arange(5)
+        arr.flags.writeable = False
+        with self.assertRaises((TypeError, errors.TypingError)) as raises:
+            setitem_usecase(arr, 1, 42)
+        self.assertIn("Cannot modify value of type readonly array",
+                      str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
-

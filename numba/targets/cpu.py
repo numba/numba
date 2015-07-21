@@ -15,7 +15,8 @@ from numba.targets import (
     callconv, codegen, externals, intrinsics, cmathimpl, mathimpl,
     npyimpl, operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
-
+from numba.runtime.atomicops import install_atomic_refct
+from numba.runtime import rtsys
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -55,6 +56,9 @@ class CPUContext(BaseContext):
 
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
+        # Initialize NRT runtime
+        rtsys.initialize(self)
+
     @property
     def target_data(self):
         return self._internal_codegen.target_data
@@ -74,6 +78,10 @@ class CPUContext(BaseContext):
         From the pointer *clo* to a _dynfunc.Closure, get a pointer
         to the enclosed _dynfunc.Environment.
         """
+        with cgutils.if_unlikely(builder, cgutils.is_null(builder, clo)):
+            self.debug_print(builder, "Fatal error: missing _dynfunc.Closure")
+            builder.unreachable()
+
         clo_body_ptr = cgutils.pointer_add(
             builder, clo, _dynfunc._impl_info['offsetof_closure_body'])
         clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
@@ -100,22 +108,20 @@ class CPUContext(BaseContext):
     def post_lowering(self, func):
         mod = func.module
 
-        if (sys.platform.startswith('linux') or
-                sys.platform.startswith('win32')):
-            intrinsics.fix_powi_calls(mod)
-
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
             # calls to compiler-rt
             intrinsics.fix_divmod(mod)
 
-    def create_cpython_wrapper(self, library, fndesc, call_helper,
+        install_atomic_refct(mod)
+
+    def create_cpython_wrapper(self, library, fndesc, env, call_helper,
                                release_gil=False):
         wrapper_module = self.create_module("wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         wrapper_callee = wrapper_module.add_function(fnty, fndesc.llvm_func_name)
         builder = PyCallWrapper(self, wrapper_module, wrapper_callee,
-                                fndesc, call_helper=call_helper,
+                                fndesc, env, call_helper=call_helper,
                                 release_gil=release_gil)
         builder.build()
         library.add_ir_module(wrapper_module)
@@ -165,6 +171,8 @@ class CPUTargetOptions(TargetOptions):
         "looplift": bool,
         "wraparound": bool,
         "boundcheck": bool,
+        "_nrt": bool,
+        "no_rewrites": bool,
     }
 
 

@@ -9,10 +9,13 @@ import sys
 
 from numba import types
 from . import templates
+from .typeof import typeof_impl
 
 
 CTYPES_MAP = {
     None: types.none,
+    ctypes.c_bool: types.boolean,
+    
     ctypes.c_int8:  types.int8,
     ctypes.c_int16: types.int16,
     ctypes.c_int32: types.int32,
@@ -27,6 +30,7 @@ CTYPES_MAP = {
     ctypes.c_double: types.float64,
 
     ctypes.c_void_p: types.voidptr,
+    ctypes.py_object: types.ffi_forced_object,
 }
 
 
@@ -46,6 +50,12 @@ def is_ctypes_funcptr(obj):
     else:
         # Does it define argtypes and restype
         return hasattr(obj, 'argtypes') and hasattr(obj, 'restype')
+
+
+@typeof_impl.register(ctypes._CFuncPtr)
+def typeof_ctypes_function(val, c):
+    if is_ctypes_funcptr(val):
+        return make_function_type(val)
 
 
 def get_pointer(ctypes_func):

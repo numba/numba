@@ -210,3 +210,24 @@ compile in nopython mode:
         @jit
       3.0
 
+Disabling JIT compilation
+=========================
+
+In order to debug code, it is possible to disable JIT compilation, which makes
+the ``jit`` decorator (and the decorators ``njit`` and ``autojit``) act as if
+they perform no operation, and the invocation of decorated functions calls the
+original Python function instead of a compiled version. This can be toggled by
+setting the :envvar:`NUMBA_DISABLE_JIT` enviroment variable to ``1``.
+
+When this mode is enabled, the ``vectorize`` and ``guvectorize`` decorators will
+still result in compilation of a ufunc, as there is no straightforward pure
+Python implementation of these functions.
+
+Debugging CUDA Python code
+==========================
+
+CUDA Python code can be run in the Python interpreter using the CUDA Simulator,
+allowing it to be debugged with the Python debugger or with print statements. To
+enable the CUDA simulator, set the environment variable
+:envvar:`NUMBA_ENABLE_CUDASIM` to 1. For more information on the CUDA Simulator,
+see :ref:`the CUDA Simulator documentation <simulator>`.

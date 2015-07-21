@@ -29,7 +29,11 @@ SREG_SIGNATURE = typing.signature(types.int32)
 
 
 class threadIdx(Stub):
-    '''threadIdx.{x, y, z}
+    '''
+    The thread indices in the current thread block, accessed through the
+    attributes ``x``, ``y``, and ``z``. Each index is an integer spanning the
+    range from 0 inclusive to the corresponding value of the attribute in
+    :attr:`numba.cuda.blockDim` exclusive.
     '''
     _description_ = '<threadIdx.{x,y,z}>'
 
@@ -39,7 +43,11 @@ class threadIdx(Stub):
 
 
 class blockIdx(Stub):
-    '''blockIdx.{x, y, z}
+    '''
+    The block indices in the grid of thread blocks, accessed through the
+    attributes ``x``, ``y``, and ``z``. Each index is an integer spanning the
+    range from 0 inclusive to the corresponding value of the attribute in
+    :attr:`numba.cuda.gridDim` exclusive.
     '''
     _description_ = '<blockIdx.{x,y,z}>'
 
@@ -49,7 +57,10 @@ class blockIdx(Stub):
 
 
 class blockDim(Stub):
-    '''blockDim.{x, y, z}
+    '''
+    The shape of a block of threads, as declared when instantiating the
+    kernel.  This value is the same for all threads in a given kernel, even
+    if they belong to different blocks (i.e. each block is "full").
     '''
     x = macro.Macro('ntid.x', SREG_SIGNATURE)
     y = macro.Macro('ntid.y', SREG_SIGNATURE)
@@ -57,7 +68,9 @@ class blockDim(Stub):
 
 
 class gridDim(Stub):
-    '''gridDim.{x, y, z}
+    '''
+    The shape of the grid of blocks, accressed through the attributes ``x``,
+    ``y``, and ``z``.
     '''
     _description_ = '<gridDim.{x,y,z}>'
     x = macro.Macro('nctaid.x', SREG_SIGNATURE)
@@ -76,19 +89,18 @@ def _ptx_grid2d(): pass
 def grid_expand(ndim):
     """grid(ndim)
 
-    ndim: [int] 1, 2 or 3
+    Return the absolute position of the current thread in the entire
+    grid of blocks.  *ndim* should correspond to the number of dimensions
+    declared when instantiating the kernel.  If *ndim* is 1, a single integer
+    is returned.  If *ndim* is 2 or 3, a tuple of the given number of
+    integers is returned.
 
-        if ndim == 1:
-            return cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
-        elif ndim == 2:
-            x = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
-            y = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
-            return x, y
-        elif ndim == 3:
-            x = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
-            y = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
-            z = cuda.threadIdx.z + cuda.blockIdx.z * cuda.blockDim.z
-            return x, y, z
+    Computation of the first integer is as follows::
+
+        cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+
+    and is similar for the other two indices, but using the ``y`` and ``z``
+    attributes.
     """
     if ndim == 1:
         fname = "ptx.grid.1d"
@@ -105,28 +117,23 @@ def grid_expand(ndim):
     return ir.Intrinsic(fname, typing.signature(restype, types.intp),
                         args=[ndim])
 
-
 grid = macro.Macro('ptx.grid', grid_expand, callable=True)
 
 #-------------------------------------------------------------------------------
 # Gridsize Macro
 
 def gridsize_expand(ndim):
-    """gridsize(ndim)
+    """
+    Return the absolute size (or shape) in threads of the entire grid of
+    blocks. *ndim* should correspond to the number of dimensions declared when
+    instantiating the kernel. 
 
-    ndim: [int] 1, 2 or 3
+    Computation of the first integer is as follows::
 
-        if ndim == 1:
-            return cuda.blockDim.x * cuda.gridDim.x
-        elif ndim == 2:
-            x = cuda.blockDim.x * cuda.gridDim.x
-            y = cuda.blockDim.y * cuda.gridDim.y
-            return x, y
-        elif ndim == 3:
-            x = cuda.blockDim.x * cuda.gridDim.x
-            y = cuda.blockDim.y * cuda.gridDim.y
-            z = cuda.blockDim.z * cuda.gridDim.z
-            return x, y, z
+        cuda.blockDim.x * cuda.gridDim.x
+
+    and is similar for the other two indices, but using the ``y`` and ``z``
+    attributes.
     """
     if ndim == 1:
         fname = "ptx.gridsize.1d"
@@ -150,9 +157,11 @@ gridsize = macro.Macro('ptx.gridsize', gridsize_expand, callable=True)
 # synthreads
 
 class syncthreads(Stub):
-    '''syncthreads()
-
-    Synchronizes all threads in the thread block.
+    '''
+    Synchronize all threads in the same thread block.  This function implements
+    the same pattern as barriers in traditional multi-threaded programming: this
+    function waits until all threads in the block call it, at which point it
+    returns control to all its callers.
     '''
     _description_ = '<syncthread()>'
 
@@ -178,12 +187,22 @@ def shared_array(shape, dtype):
 
 
 class shared(Stub):
-    """shared namespace
+    """
+    Shared memory namespace.
     """
     _description_ = '<shared>'
 
     array = macro.Macro('shared.array', shared_array, callable=True,
                         argnames=['shape', 'dtype'])
+    '''
+    Allocate a shared array of the given *shape* and *type*. *shape* is either
+    an integer or a tuple of integers representing the array's dimensions.
+    *type* is a :ref:`Numba type <numba-types>` of the elements needing to be
+    stored in the array.
+
+    The returned array-like object can be read and written to like any normal
+    device array (e.g. through indexing).
+    '''
 
 
 #-------------------------------------------------------------------------------
@@ -200,12 +219,19 @@ def local_array(shape, dtype):
 
 
 class local(Stub):
-    '''shared namespace
+    '''
+    Local memory namespace.
     '''
     _description_ = '<local>'
 
     array = macro.Macro('local.array', local_array, callable=True,
                         argnames=['shape', 'dtype'])
+    '''
+    Allocate a local array of the given *shape* and *type*. The array is private
+    to the current thread, and resides in global memory. An array-like object is
+    returned which can be read and written to like any standard array (e.g.
+    through indexing).
+    '''
 
 #-------------------------------------------------------------------------------
 # const array
@@ -274,12 +300,17 @@ def const_array_like(ndarray):
 
 
 class const(Stub):
-    '''shared namespace
+    '''
+    Constant memory namespace.
     '''
     _description_ = '<const>'
 
     array_like = macro.Macro('const.array_like', const_array_like,
                              callable=True, argnames=['ary'])
+    '''
+    Create a const array from *ary*. The resulting const array will have the
+    same shape, type, and values as *ary*.
+    '''
 
 #-------------------------------------------------------------------------------
 # atomic

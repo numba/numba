@@ -1,6 +1,6 @@
 
 ========================
-Supported Numpy features
+Supported NumPy features
 ========================
 
 One objective of Numba is having a seamless integration with `NumPy`_.
@@ -65,38 +65,56 @@ Structured scalars support attribute getting and setting.
 Array types
 ===========
 
-Arrays of any of the scalar types above are supported, regardless of the shape
+`Numpy arrays <http://docs.scipy.org/doc/numpy/reference/arrays.ndarray.html>`_
+of any of the scalar types above are supported, regardless of the shape
 or layout.
 
 Operations
 ----------
 
-Arrays support iteration and full indexing (i.e. indexing that yields
-scalar values).  Partial indexing by a single integer is supported,
-but the resulting views can not be returned to Python.  Other kinds of
-partial indexing (for example indexing a 3-d array with a 2-tuple)
-isn't supported.
+Arrays support iteration and full indexing (i.e. indexing that yields scalar
+values).  Partial indexing by a single integer is supported, but other kinds of
+partial indexing (for example indexing a 3-d array with a 2-tuple) are not
+supported.
 
 Attributes
 ----------
 
 The following attributes of Numpy arrays are supported:
 
+* :attr:`~numpy.ndarray.dtype`
+* :attr:`~numpy.ndarray.flags`
 * :attr:`~numpy.ndarray.flat`
 * :attr:`~numpy.ndarray.itemsize`
 * :attr:`~numpy.ndarray.ndim`
 * :attr:`~numpy.ndarray.shape`
 * :attr:`~numpy.ndarray.size`
 * :attr:`~numpy.ndarray.strides`
+* :attr:`~numpy.ndarray.T`
 
-Methods
--------
+The ``flags`` object
+''''''''''''''''''''
+
+The object returned by the :attr:`~numpy.ndarray.flags` attribute supports
+the ``contiguous``, ``c_contiguous`` and ``f_contiguous`` attributes.
+
+The ``flat`` object
+'''''''''''''''''''
+
+The object returned by the :attr:`~numpy.ndarray.flat` attribute supports
+iteration and indexing, but be careful: indexing is very slow on
+non-C-contiguous arrays.
+
+Calculation
+-----------
 
 The following methods of Numpy arrays are supported in their basic form
 (without any optional arguments):
 
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
+* :meth:`~numpy.ndarray.cumprod`
+* :meth:`~numpy.ndarray.cumsum`
 * :meth:`~numpy.ndarray.max`
 * :meth:`~numpy.ndarray.mean`
 * :meth:`~numpy.ndarray.min`
@@ -108,17 +126,43 @@ The following methods of Numpy arrays are supported in their basic form
 The corresponding top-level Numpy functions (such as :func:`numpy.sum`)
 are similarly supported.
 
+Other methods
+-------------
+
+The following methods of Numpy arrays are supported:
+
+* :meth:`~numpy.ndarray.copy` (without arguments)
+* :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
+* :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
+* :meth:`~numpy.ndarray.view` (only the 1-argument form)
+
 
 Functions
 =========
 
 The following top-level functions are supported:
 
+* :func:`numpy.arange`
+* :func:`numpy.empty`
+* :func:`numpy.empty_like`
+* :func:`numpy.eye`
+* :func:`numpy.frombuffer` (only the 2 first arguments)
+* :func:`numpy.full`
+* :func:`numpy.full_like`
+* :func:`numpy.identity`
+* :func:`numpy.linspace` (only the 3-argument form)
+* :func:`numpy.median` (only the first argument)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
+* :func:`numpy.ones`
+* :func:`numpy.ones_like`
+* :func:`numpy.round_`
+* :func:`numpy.zeros`
+* :func:`numpy.zeros_like`
 
 The following constructors are supported, only with a numeric input:
 
+* :class:`numpy.bool_`
 * :class:`numpy.complex64`
 * :class:`numpy.complex128`
 * :class:`numpy.float32`
@@ -241,11 +285,6 @@ Limitations
 -----------
 
 Right now, only a selection of the standard ufuncs work in :term:`nopython mode`.
-
-Also, in its current implementation ufuncs working on arrays will only
-compile in :term:`nopython mode` if their output array is passed explicitly.
-This limitation does not apply when working with scalars.
-
 Following is a list of the different standard ufuncs that Numba is aware of,
 sorted in the same way as in the NumPy documentation.
 

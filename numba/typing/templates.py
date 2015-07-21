@@ -4,31 +4,35 @@ Define typing templates
 from __future__ import print_function, division, absolute_import
 
 import functools
-from .. import types
-from ..typeinfer import TypingError
 from functools import reduce
 import operator
 
+from .. import types, utils
+from ..errors import TypingError, UntypedAttributeError
+
 
 class Signature(object):
-    __slots__ = 'return_type', 'args', 'recvr'
+    # XXX Perhaps the signature should be a BoundArguments, instead
+    # of separate args and pysig...
+    __slots__ = 'return_type', 'args', 'recvr', 'pysig'
 
-    def __init__(self, return_type, args, recvr):
+    def __init__(self, return_type, args, recvr, pysig=None):
         self.return_type = return_type
         self.args = args
         self.recvr = recvr
+        self.pysig = pysig
 
     def __getstate__(self):
         """
         Needed because of __slots__.
         """
-        return self.return_type, self.args, self.recvr
+        return self.return_type, self.args, self.recvr, self.pysig
 
     def __setstate__(self, state):
         """
         Needed because of __slots__.
         """
-        self.return_type, self.args, self.recvr = state
+        self.return_type, self.args, self.recvr, self.pysig = state
 
     def __hash__(self):
         return hash((self.args, self.return_type))
@@ -37,7 +41,8 @@ class Signature(object):
         if isinstance(other, Signature):
             return (self.args == other.args and
                     self.return_type == other.return_type and
-                    self.recvr == other.recvr)
+                    self.recvr == other.recvr and
+                    self.pysig == other.pysig)
 
     def __ne__(self, other):
         return not (self == other)
@@ -62,6 +67,45 @@ def signature(return_type, *args, **kws):
     return Signature(return_type, args, recvr=recvr)
 
 
+def fold_arguments(pysig, args, kws, normal_handler, default_handler,
+                   stararg_handler):
+    """
+    Given the signature *pysig*, explicit *args* and *kws*, resolve
+    omitted arguments and keyword arguments. A tuple of positional
+    arguments is returned.
+    Various handlers allow to process arguments:
+    - normal_handler(index, param, value) is called for normal arguments
+    - default_handler(index, param, default) is called for omitted arguments
+    - stararg_handler(index, param, values) is called for a "*args" argument
+    """
+    ba = pysig.bind(*args, **kws)
+    defargs = []
+    for i, param in enumerate(pysig.parameters.values()):
+        name = param.name
+        default = param.default
+        if param.kind == param.VAR_POSITIONAL:
+            # stararg may be omitted, in which case its "default" value
+            # is simply the empty tuple
+            ba.arguments[name] = stararg_handler(i, param,
+                                                 ba.arguments.get(name, ()))
+        elif name in ba.arguments:
+            # Non-stararg, present
+            ba.arguments[name] = normal_handler(i, param, ba.arguments[name])
+        else:
+            # Non-stararg, omitted
+            assert default is not param.empty
+            ba.arguments[name] = default_handler(i, param, default)
+    if ba.kwargs:
+        # There's a remaining keyword argument, e.g. if omitting
+        # some argument with a default value before it.
+        raise NotImplementedError("unhandled keyword argument: %s"
+                                  % list(ba.kwargs))
+    # Collect args in the right order
+    args = tuple(ba.arguments[param.name]
+                 for param in pysig.parameters.values())
+    return args
+
+
 def _uses_downcast(dists):
     for d in dists:
         if d < 0:
@@ -77,113 +121,12 @@ def _sum_downcast(dists):
     return c
 
 
-class Rating(object):
-    __slots__ = 'promote', 'safe_convert', "unsafe_convert"
-
-    def __init__(self):
-        self.promote = 0
-        self.safe_convert = 0
-        self.unsafe_convert = 0
-
-    def astuple(self):
-        """Returns a tuple suitable for comparing with the worse situation
-        start first.
-        """
-        return (self.unsafe_convert, self.safe_convert, self.promote)
-
-    def __add__(self, other):
-        if type(self) is not type(other):
-            return NotImplemented
-        rsum = Rating()
-        rsum.promote = self.promote + other.promote
-        rsum.safe_convert = self.safe_convert + other.safe_convert
-        rsum.unsafe_convert = self.unsafe_convert + other.unsafe_convert
-        return rsum
-
-
-def _rate_arguments(context, actualargs, formalargs):
-    ratings = [Rating()]
-    for actual, formal in zip(actualargs, formalargs):
-        rate = Rating()
-        by = context.type_compatibility(actual, formal)
-        if by is None:
-            return None
-
-        if by == 'promote':
-            rate.promote += 1
-        elif by == 'safe':
-            rate.safe_convert += 1
-        elif by == 'unsafe':
-            rate.unsafe_convert += 1
-        elif by == 'exact':
-            pass
-        else:
-            raise Exception("unreachable", by)
-
-        ratings.append(rate)
-    return ratings
-
-
-def resolve_overload(context, key, cases, args, kws):
-    assert not kws, "Keyword arguments are not supported, yet"
-    # Rate each cases
-    candids = []
-    symm_ratings = []
-    for case in cases:
-        if len(args) == len(case.args):
-            ratings = _rate_arguments(context, args, case.args)
-            if ratings is not None:
-                combined = reduce(operator.add, ratings)
-                symm_ratings.append(combined.astuple())
-                candids.append(case)
-
-    # Find the best case
-    ordered = sorted(zip(symm_ratings, candids), key=lambda i: i[0])
-    if ordered:
-        if len(ordered) > 1:
-            (first, case1), (second, case2) = ordered[:2]
-            # Ambiguous overloading
-            # NOTE: we can have duplicate overloadings if e.g. some type
-            # aliases were used when declaring the supported signatures
-            # (typical example being "intp" and "int64" on a 64-bit build)
-            if first == second and case1 != case2:
-                ambiguous = []
-                for rate, case in ordered:
-                    if rate == first:
-                        ambiguous.append(case)
-
-                # Try to resolve promotion
-                # TODO: need to match this to the C overloading dispatcher
-                resolvable = resolve_ambiguous_resolution(context, ambiguous,
-                                                          args)
-                if resolvable:
-                    return resolvable
-
-                # Failed to resolve promotion
-                args = (key, args, '\n'.join(map(str, ambiguous)))
-                msg = "Ambiguous overloading for %s %s\n%s" % args
-                raise TypeError(msg)
-
-        return ordered[0][1]
-
-
-def resolve_ambiguous_resolution(context, cases, args):
-    """Uses asymmetric resolution to find the best version
-    """
-    ratings = []
-    for case in cases:
-        rates = _rate_arguments(context, args, case.args)
-        ratings.append((tuple(r.astuple() for r in rates), case))
-
-    return max(ratings, key=lambda x: x[0])[1]
-
-
 class FunctionTemplate(object):
     def __init__(self, context):
         self.context = context
 
     def _select(self, cases, args, kws):
-        selected = resolve_overload(self.context, self.key, cases, args, kws)
+        selected = self.context.resolve_overload(self.key, cases, args, kws)
         return selected
 
 
@@ -215,6 +158,55 @@ class AbstractTemplate(FunctionTemplate):
             return self._select(cases, args, kws)
 
 
+class CallableTemplate(FunctionTemplate):
+    """
+    Base class for a template defining a ``generic(self)`` method
+    returning a callable to be called with the actual ``*args`` and
+    ``**kwargs`` representing the call signature.  The callable has
+    to return a return type, a full signature, or None.  The signature
+    does not have to match the input types. It is compared against the
+    input types afterwards.
+    """
+
+    def apply(self, args, kws):
+        generic = getattr(self, "generic")
+        typer = generic()
+        pysig = utils.pysignature(typer)
+        sig = typer(*args, **kws)
+
+        # Unpack optional type if no matching signature
+        if sig is None:
+            if any(isinstance(x, types.Optional) for x in args):
+                def unpack_opt(x):
+                    if isinstance(x, types.Optional):
+                        return x.type
+                    else:
+                        return x
+
+                args = list(map(unpack_opt, args))
+                sig = typer(*args, **kws)
+            if sig is None:
+                return
+
+        # Fold any keyword arguments
+        bound = pysig.bind(*args, **kws)
+        if bound.kwargs:
+            raise TypingError("unsupported call signature")
+        if not isinstance(sig, Signature):
+            # If not a signature, `sig` is assumed to be the return type
+            assert isinstance(sig, types.Type)
+            sig = signature(sig, *bound.args)
+        # Hack any omitted parameters out of the typer's pysig,
+        # as lowering expects an exact match between formal signature
+        # and actual args.
+        if len(bound.args) < len(pysig.parameters):
+            parameters = list(pysig.parameters.values())[:len(bound.args)]
+            pysig = pysig.replace(parameters=parameters)
+        sig.pysig = pysig
+        cases = [sig]
+        return self._select(cases, bound.args, bound.kwargs)
+
+
 class ConcreteTemplate(FunctionTemplate):
     """
     Defines attributes "cases" as a list of signature to match against the
@@ -225,13 +217,6 @@ class ConcreteTemplate(FunctionTemplate):
         cases = getattr(self, 'cases')
         assert cases
         return self._select(cases, args, kws)
-
-
-class UntypedAttributeError(TypingError):
-    def __init__(self, value, attr):
-        msg = 'Unknown attribute "{attr}" of type {type}'.format(type=value,
-                                                              attr=attr)
-        super(UntypedAttributeError, self).__init__(msg)
 
 
 class AttributeTemplate(object):

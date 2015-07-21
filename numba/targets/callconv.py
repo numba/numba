@@ -62,7 +62,7 @@ class BaseCallConv(object):
             optval = optcls(self.context, builder, value=value)
 
             validbit = cgutils.as_bool_bit(builder, optval.valid)
-            with cgutils.ifthen(builder, validbit):
+            with builder.if_then(validbit):
                 self.return_value(builder, optval.data)
 
             self.return_native_none(builder)
@@ -123,8 +123,7 @@ class MinimalCallConv(BaseCallConv):
         return _MinimalCallHelper()
 
     def return_value(self, builder, retval):
-        fn = cgutils.get_function(builder)
-        retptr = fn.args[0]
+        retptr = builder.function.args[0]
         assert retval.type == retptr.type.pointee, \
             (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
@@ -179,7 +178,7 @@ class MinimalCallConv(BaseCallConv):
 
     def decorate_function(self, fn, args, fe_argtypes):
         """
-        Set names of function arguments.
+        Set names and attributes of function arguments.
         """
         arginfo = self.context.get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
@@ -265,8 +264,7 @@ class CPUCallConv(BaseCallConv):
         return None
 
     def return_value(self, builder, retval):
-        fn = cgutils.get_function(builder)
-        retptr = self._get_return_argument(fn)
+        retptr = self._get_return_argument(builder.function)
         assert retval.type == retptr.type.pointee, \
             (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
@@ -275,18 +273,18 @@ class CPUCallConv(BaseCallConv):
     def return_user_exc(self, builder, exc, exc_args=None):
         assert (exc is None or issubclass(exc, BaseException)), exc
         assert (exc_args is None or isinstance(exc_args, tuple)), exc_args
-        fn = cgutils.get_function(builder)
         pyapi = self.context.get_python_api(builder)
         # Build excinfo struct
         if exc_args is not None:
             exc = (exc, exc_args)
         struct_gv = pyapi.serialize_object(exc)
-        builder.store(struct_gv, self._get_excinfo_argument(fn))
+        excptr = self._get_excinfo_argument(builder.function)
+        builder.store(struct_gv, excptr)
         self._return_errcode_raw(builder, RETCODE_USEREXC)
 
     def return_status_propagate(self, builder, status):
-        fn = cgutils.get_function(builder)
-        builder.store(status.excinfoptr, self._get_excinfo_argument(fn))
+        excptr = self._get_excinfo_argument(builder.function)
+        builder.store(status.excinfoptr, excptr)
         self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):
@@ -331,14 +329,23 @@ class CPUCallConv(BaseCallConv):
 
     def decorate_function(self, fn, args, fe_argtypes):
         """
-        Set names of function arguments.
+        Set names of function arguments, and add useful attributes to them.
         """
         arginfo = self.context.get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
-        self._get_return_argument(fn).name = "retptr"
-        self._get_excinfo_argument(fn).name = "excinfo"
-        self.get_env_argument(fn).name = "env"
+        retarg = self._get_return_argument(fn)
+        retarg.name = "retptr"
+        retarg.add_attribute("nocapture")
+        retarg.add_attribute("noalias")
+        excarg = self._get_excinfo_argument(fn)
+        excarg.name = "excinfo"
+        excarg.add_attribute("nocapture")
+        excarg.add_attribute("noalias")
+        envarg = self.get_env_argument(fn)
+        envarg.name = "env"
+        envarg.add_attribute("nocapture")
+        envarg.add_attribute("noalias")
         return fn
 
     def get_arguments(self, func):

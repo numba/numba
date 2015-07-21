@@ -2,10 +2,9 @@ from __future__ import print_function
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import types, from_dtype, utils
+from numba import types, from_dtype
 import numba.unittest_support as unittest
-from numba.tests import usecases
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, MemoryLeakMixin
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -51,7 +50,8 @@ def bad_float_index(arr):
     # fails typing
     return arr[1, 2.0]
 
-class TestArrayManipulation(TestCase):
+
+class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_reshape_array(self, flags=enable_pyobj_flags):
         pyfunc = reshape_array

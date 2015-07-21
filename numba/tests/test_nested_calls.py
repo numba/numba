@@ -7,6 +7,7 @@ from __future__ import print_function, division, absolute_import
 
 from numba import njit
 from numba import unittest_support as unittest
+from .support import TestCase
 
 
 @njit
@@ -23,9 +24,26 @@ def g_inner(a, b=2, c=3):
 def g(x, y, z):
     return g_inner(x, b=y), g_inner(a=z, c=x)
 
+@njit
+def star_inner(a=5, *b):
+    return a, b
+
+def star(x, y, z):
+    return star_inner(a=x), star_inner(x, y, z)
+
+def star_call(x, y, z):
+    return star_inner(x, *y), star_inner(*z)
 
 
-class TestNestedCall(unittest.TestCase):
+class TestNestedCall(TestCase):
+
+    def compile_func(self, pyfunc):
+        def check(*args, **kwargs):
+            expected = pyfunc(*args, **kwargs)
+            result = f(*args, **kwargs)
+            self.assertPreciseEqual(result, expected)
+        f = njit(pyfunc)
+        return f, check
 
     def test_boolean_return(self):
         @njit
@@ -46,17 +64,31 @@ class TestNestedCall(unittest.TestCase):
         """
         Test a nested function call with named (keyword) arguments.
         """
-        cfunc = njit(f)
-        self.assertEqual(cfunc(1, 2, 3), f(1, 2, 3))
-        self.assertEqual(cfunc(1, y=2, z=3), f(1, 2, 3))
+        cfunc, check = self.compile_func(f)
+        check(1, 2, 3)
+        check(1, y=2, z=3)
 
     def test_default_args(self):
         """
         Test a nested function call using default argument values.
         """
-        cfunc = njit(g)
-        self.assertEqual(cfunc(1, 2, 3), g(1, 2, 3))
-        self.assertEqual(cfunc(1, y=2, z=3), g(1, 2, 3))
+        cfunc, check = self.compile_func(g)
+        check(1, 2, 3)
+        check(1, y=2, z=3)
+
+    def test_star_args(self):
+        """
+        Test a nested function call to a function with *args in its signature.
+        """
+        cfunc, check = self.compile_func(star)
+        check(1, 2, 3)
+
+    def test_star_call(self):
+        """
+        Test a function call with a *args.
+        """
+        cfunc, check = self.compile_func(star_call)
+        check(1, (2,), (3,))
 
 
 if __name__ == '__main__':

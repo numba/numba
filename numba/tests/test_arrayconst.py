@@ -1,8 +1,10 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
+
 import numpy as np
+
+import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba.typeinfer import TypingError
+from numba.errors import TypingError
 from numba import types
 
 myarray = np.arange(5)

@@ -115,8 +115,8 @@ common ones:
 * ``complex64`` and ``complex128`` are single- and double-precision complex
   numbers, respectively
 * array types can be specified by indexing any numeric type, e.g. ``float32[:]``
-  for a one-dimension single-precision array or ``int8[:,:]`` for a
-  two-dimension array of 8-bit integers.
+  for a one-dimensional single-precision array or ``int8[:,:]`` for a
+  two-dimensional array of 8-bit integers.
 
 
 Compilation options

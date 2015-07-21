@@ -1,13 +1,16 @@
+# -*- coding: utf8 -*-
+
 from __future__ import print_function, division, absolute_import
 
 import functools
 import inspect
 import sys
 
-from numba import _dispatcher, compiler, utils
+from numba import _dispatcher, compiler, utils, types
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, types, typing
-from numba.typing.templates import resolve_overload
+from numba.typing.templates import fold_arguments
+from numba.typing.typeof import typeof
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method, next
 
@@ -19,16 +22,13 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
     __numba__ = "py_func"
 
-    def __init__(self, arg_count, py_func):
+    def __init__(self, arg_count, py_func, pysig):
         self._tm = default_type_manager
-        #_dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(), arg_count)
 
         # A mapping of signatures to entry points
-        self.overloads = {}
+        self.overloads = utils.OrderedDict()
         # A mapping of signatures to compile results
-        self._compileinfos = {}
-        # A list of nopython signatures
-        self._npsigs = []
+        self._compileinfos = utils.OrderedDict()
 
         self.py_func = py_func
         # other parts of Numba assume the old Python 2 name for code object
@@ -36,12 +36,19 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
 
-        self._pysig = utils.pysignature(self.py_func)
+        self._pysig = pysig
         argnames = tuple(self._pysig.parameters)
         defargs = self.py_func.__defaults__ or ()
+        try:
+            lastarg = list(self._pysig.parameters.values())[-1]
+        except IndexError:
+            has_stararg = False
+        else:
+            has_stararg = lastarg.kind == lastarg.VAR_POSITIONAL
         _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(),
-                                        arg_count, self.fold_args,
-                                        argnames, defargs)
+                                        arg_count, self._fold_args,
+                                        argnames, defargs,
+                                        has_stararg)
 
         self.doc = py_func.__doc__
         self._compile_lock = utils.NonReentrantLock()
@@ -52,7 +59,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self._clear()
         self.overloads.clear()
         self._compileinfos.clear()
-        self._npsigs[:] = []
 
     def _make_finalizer(self):
         """
@@ -88,7 +94,8 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
     @property
     def nopython_signatures(self):
-        return self._npsigs
+        return [cres.signature for cres in self._compileinfos.values()
+                if not cres.objectmode and not cres.interpmode]
 
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
@@ -104,29 +111,22 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self.overloads[args] = cres.entry_point
         self._compileinfos[args] = cres
 
-        # Add native function for correct typing the code generation
-        if not cres.objectmode and not cres.interpmode:
-            self._npsigs.append(cres.signature)
-
     def get_call_template(self, args, kws):
         """
         Get a typing.ConcreteTemplate for this dispatcher and the given
         *args* and *kws* types.  This allows to resolve the return type.
         """
         # Fold keyword arguments and resolve default values
-        ba = self._pysig.bind(*args, **kws)
-        for param in self._pysig.parameters.values():
-            name = param.name
-            default = param.default
-            if (default is not param.empty and
-                name not in ba.arguments):
-                ba.arguments[name] = self.typeof_pyval(default)
-        if ba.kwargs:
-            # There's a remaining keyword argument, e.g. if omitting
-            # some argument with a default value before it.
-            raise NotImplementedError("unhandled keyword argument: %s"
-                                      % list(ba.kwargs))
-        args = ba.args
+        def normal_handler(index, param, value):
+            return value
+        def default_handler(index, param, default):
+            return self.typeof_pyval(default)
+        def stararg_handler(index, param, values):
+            return types.Tuple(values)
+        args = fold_arguments(self._pysig, args, kws,
+                              normal_handler,
+                              default_handler,
+                              stararg_handler)
         kws = {}
         # Ensure an overload is available, but avoid compiler re-entrance
         if self._can_compile and not self.is_compiling:
@@ -186,18 +186,43 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             print('=' * 80, file=file)
 
     def _explain_ambiguous(self, *args, **kws):
+        """
+        Callback for the C _Dispatcher object.
+        """
         assert not kws, "kwargs not handled"
         args = tuple([self.typeof_pyval(a) for a in args])
-        sigs = [cr.signature for cr in self._compileinfos.values()]
-        res = resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
-        print("res =", res)
+        # The order here must be deterministic for testing purposes, which
+        # is ensured by the OrderedDict.
+        sigs = self.nopython_signatures
+        # This will raise
+        self.typingctx.resolve_overload(self.py_func, sigs, args, kws,
+                                        allow_ambiguous=False)
 
     def _explain_matching_error(self, *args, **kws):
+        """
+        Callback for the C _Dispatcher object.
+        """
         assert not kws, "kwargs not handled"
         args = [self.typeof_pyval(a) for a in args]
         msg = ("No matching definition for argument type(s) %s"
                % ', '.join(map(str, args)))
         raise TypeError(msg)
+
+    def _search_new_conversions(self, *args, **kws):
+        """
+        Callback for the C _Dispatcher object.
+        Search for approximately matching signatures for the given arguments,
+        and ensure the corresponding conversions are registered in the C++
+        type manager.
+        """
+        assert not kws, "kwargs not handled"
+        args = [self.typeof_pyval(a) for a in args]
+        found = False
+        for sig in self.nopython_signatures:
+            conv = self.typingctx.install_possible_conversions(args, sig.args)
+            if conv:
+                found = True
+        return found
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
@@ -208,12 +233,9 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        if isinstance(val, utils.INT_TYPES):
-            # Ensure no autoscaling of integer type, to match the
-            # typecode() function in _dispatcher.c.
-            return types.int64
-
-        tp = self.typingctx.resolve_argument_type(val)
+        # Not going through the resolve_argument_type() indirection
+        # can shape a couple µs.
+        tp = typeof(val)
         if tp is None:
             tp = types.pyobject
         return tp
@@ -226,7 +248,7 @@ class Overloaded(_OverloadedBase):
     This is an abstract base class. Subclasses should define the targetdescr
     class attribute.
     """
-    fold_args = True
+    _fold_args = True
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         """
@@ -242,10 +264,10 @@ class Overloaded(_OverloadedBase):
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 
-        argspec = inspect.getargspec(py_func)
-        argct = len(argspec.args)
+        pysig = utils.pysignature(py_func)
+        arg_count = len(pysig.parameters)
 
-        _OverloadedBase.__init__(self, argct, py_func)
+        _OverloadedBase.__init__(self, arg_count, py_func, pysig)
 
         functools.update_wrapper(self, py_func)
 
@@ -333,16 +355,14 @@ class LiftedLoop(_OverloadedBase):
     Implementation of the hidden dispatcher objects used for lifted loop
     (a lifted loop is really compiled as a separate function).
     """
-    fold_args = False
+    _fold_args = False
 
     def __init__(self, bytecode, typingctx, targetctx, locals, flags):
         self.typingctx = typingctx
         self.targetctx = targetctx
 
-        argspec = bytecode.argspec
-        argct = len(argspec.args)
-
-        _OverloadedBase.__init__(self, argct, bytecode.func)
+        _OverloadedBase.__init__(self, bytecode.arg_count, bytecode.func,
+                                 bytecode.pysig)
 
         self.locals = locals
         self.flags = flags
@@ -384,5 +404,5 @@ class LiftedLoop(_OverloadedBase):
             return cres.entry_point
 
 
-# Initialize dispatcher
-_dispatcher.init_types(dict((str(t), t._code) for t in types.number_domain))
+# Initialize typeof machinery
+_dispatcher.typeof_init(dict((str(t), t._code) for t in types.number_domain))

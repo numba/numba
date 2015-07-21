@@ -80,7 +80,7 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
 
     def store(retval):
         is_error = cgutils.is_null(builder, retval)
-        with cgutils.ifelse(builder, is_error) as (if_error, if_ok):
+        with builder.if_else(is_error) as (if_error, if_ok):
             with if_error:
                 msg = context.insert_const_string(pyapi.module,
                                                   "object mode ufunc")
@@ -187,7 +187,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
 
     else:
 
-        with cgutils.ifelse(builder, unit_strided) as (is_unit_strided,
+        with builder.if_else(unit_strided) as (is_unit_strided,
                                                        is_strided):
 
             with is_unit_strided:
@@ -214,7 +214,6 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
     # Run optimizer
     library.add_ir_module(wrapper_module)
     wrapper = library.get_function(wrapper.name)
-    oldfunc.linkage = LINKAGE_INTERNAL
 
     return wrapper
 
@@ -226,30 +225,29 @@ class UArrayArg(object):
         self.fe_type = fe_type
         offset = self.context.get_constant(types.intp, i)
         offseted_args = self.builder.load(builder.gep(args, [offset]))
-        self.data_type = context.get_data_type(fe_type).as_pointer()
-        self.dataptr = self.builder.bitcast(offseted_args, self.data_type)
-        sizeof = self.context.get_abi_sizeof(self.data_type)
+        data_type = context.get_data_type(fe_type)
+        self.dataptr = self.builder.bitcast(offseted_args,
+                                            data_type.as_pointer())
+        sizeof = self.context.get_abi_sizeof(data_type)
         self.abisize = self.context.get_constant(types.intp, sizeof)
         offseted_step = self.builder.gep(steps, [offset])
         self.step = self.builder.load(offseted_step)
         self.is_unit_strided = builder.icmp(ICMP_EQ, self.abisize, self.step)
         self.builder = builder
 
-    def load(self, ind):
-        offset = self.builder.mul(self.step, ind)
-        return self.load_direct(offset)
-
     def load_direct(self, byteoffset):
+        """
+        Generic load from the given *byteoffset*.  load_aligned() is
+        preferred if possible.
+        """
         ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)
         return self.context.unpack_value(self.builder, self.fe_type, ptr)
 
     def load_aligned(self, ind):
-        byteoffset = self.builder.mul(self.step, ind)
-        return self.load_direct(byteoffset)
-
-    def store(self, value, ind):
-        offset = self.builder.mul(self.step, ind)
-        self.store_direct(value, offset)
+        # Using gep() instead of explicit pointer addition helps LLVM
+        # vectorize the loop.
+        ptr = self.builder.gep(self.dataptr, [ind])
+        return self.context.unpack_value(self.builder, self.fe_type, ptr)
 
     def store_direct(self, value, byteoffset):
         ptr = cgutils.pointer_add(self.builder, self.dataptr, byteoffset)
@@ -330,7 +328,7 @@ class _GufuncWrapper(object):
                 step_offset += ary.ndim
             arrays.append(ary)
 
-        bbreturn = cgutils.get_function(builder).append_basic_block('.return')
+        bbreturn = builder.append_basic_block('.return')
 
         # Prologue
         self.gen_prologue(builder)
@@ -406,10 +404,9 @@ def build_gufunc_wrapper(library, context, func, signature, sin, sout, fndesc,
 
 def _prepare_call_to_object_mode(context, builder, func, signature, args,
                                  env):
-    mod = cgutils.get_module(builder)
+    mod = builder.module
 
-    thisfunc = cgutils.get_function(builder)
-    bb_core_return = thisfunc.append_basic_block('ufunc.core.return')
+    bb_core_return = builder.append_basic_block('ufunc.core.return')
 
     pyapi = context.get_python_api(builder)
 
@@ -564,7 +561,8 @@ class GUArrayArg(object):
                                shape=shape,
                                strides=strides,
                                itemsize=context.get_constant(types.intp,
-                                                             itemsize))
+                                                             itemsize),
+                               meminfo=None)
 
         return array._getvalue()
 

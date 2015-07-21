@@ -1,8 +1,10 @@
 from __future__ import print_function
+
 from numba import jit
 import numba.unittest_support as unittest
 import numpy as np
 import copy
+from .support import MemoryLeakMixin
 
 
 try:
@@ -76,7 +78,7 @@ def unpack6(x, y):
     return a + c / 2, b / 2 + d
 
 
-class TestChainedAssign(unittest.TestCase):
+class TestChainedAssign(MemoryLeakMixin, unittest.TestCase):
     def test_chain1(self):
         args = [
             [np.arange(2)],
@@ -86,8 +88,8 @@ class TestChainedAssign(unittest.TestCase):
 
     def test_chain2(self):
         args = [
-            [3.0],
             [3],
+            [3.0],
         ]
         self._test_template(chain2, args)
 

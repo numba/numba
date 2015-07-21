@@ -123,6 +123,8 @@ def as_dtype(nbtype):
     if isinstance(nbtype, (types.CharSeq, types.UnicodeCharSeq)):
         letter = _as_dtype_letters[type(nbtype)]
         return numpy.dtype('%s%d' % (letter, nbtype.count))
+    if isinstance(nbtype, types.Record):
+        return nbtype.dtype
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))
 
@@ -230,7 +232,10 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     output_types = arg_types[ufunc.nin:]
     assert(len(input_types) == ufunc.nin)
 
-    np_input_types = [as_dtype(x) for x in input_types]
+    try:
+        np_input_types = [as_dtype(x) for x in input_types]
+    except NotImplementedError:
+        return None
 
     def choose_types(numba_types, ufunc_letters):
         """

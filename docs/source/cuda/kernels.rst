@@ -141,6 +141,7 @@ dimension, use the ``x``, ``y`` and ``z`` attributes of these objects,
 respectively.
 
 .. attribute:: numba.cuda.threadIdx
+   :noindex:
 
    The thread indices in the current thread block.  For 1D blocks, the index
    (given by the ``x`` attribute) is an integer spanning the range from 0
@@ -148,12 +149,14 @@ respectively.
    exists for each dimension when more than one dimension is used.
 
 .. attribute:: numba.cuda.blockDim
+   :noindex:
 
    The shape of the block of threads, as declared when instantiating the
    kernel.  This value is the same for all threads in a given kernel, even
    if they belong to different blocks (i.e. each block is "full").
 
 .. attribute:: numba.cuda.blockIdx
+   :noindex:
 
    The block indices in the grid of threads launched a kernel.  For a 1D grid,
    the index (given by the ``x`` attribute) is an integer spanning the range
@@ -161,6 +164,7 @@ respectively.
    exists for each dimension when more than one dimension is used.
 
 .. attribute:: numba.cuda.gridDim
+   :noindex:
 
    The shape of the grid of blocks, i.e. the total number of blocks launched
    by this kernel invocation, as declared when instantiating the kernel.
@@ -173,6 +177,7 @@ same way as shown in the example above.  Numba provides additional facilities
 to automate such calculations:
 
 .. function:: numba.cuda.grid(ndim)
+   :noindex:
 
    Return the absolute position of the current thread in the entire
    grid of blocks.  *ndim* should correspond to the number of dimensions
@@ -181,6 +186,7 @@ to automate such calculations:
    integers is returned.
 
 .. function:: numba.cuda.gridsize(ndim)
+   :noindex:
 
    Return the absolute size (or shape) in threads of the entire grid of
    blocks.  *ndim* has the same meaning as in :func:`.grid` above.

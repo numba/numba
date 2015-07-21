@@ -6,7 +6,7 @@ import sys
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit, typeof, lowering, types, utils
+from numba import jit, typeof, errors, types, utils
 from .support import TestCase
 
 enable_pyobj_flags = Flags()
@@ -438,7 +438,7 @@ class TestBuiltins(TestCase):
 
     def test_locals(self, flags=enable_pyobj_flags):
         pyfunc = locals_usecase
-        with self.assertRaises(lowering.ForbiddenConstruct):
+        with self.assertRaises(errors.ForbiddenConstruct):
             cr = compile_isolated(pyfunc, (types.int64,), flags=flags)
 
     def test_locals_forceobj(self):

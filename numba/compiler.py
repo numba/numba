@@ -6,10 +6,11 @@ from collections import namedtuple, defaultdict
 from pprint import pprint
 import sys
 import warnings
+import traceback
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
                    lowering, objmode, irpasses, utils, config,
-                   types, ir, assume, looplifting, macro, types)
+                   types, ir, looplifting, macro, types, rewrites)
 from numba.targets import cpu
 from numba.annotations import type_annotations
 
@@ -33,10 +34,13 @@ class Flags(utils.ConfigOptions):
         'boundcheck',
         'forceinline',
         'no_cpython_wrapper',
+        'nrt',
+        'no_rewrites',
     ])
 
 
 DEFAULT_FLAGS = Flags()
+DEFAULT_FLAGS.set('nrt')
 
 
 CR_FIELDS = ["typing_context",
@@ -178,6 +182,12 @@ class _PipelineManager(object):
         Patches the error to show the stage that it arose in.
         """
         newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
+
+        # For python2, attach the traceback of the previous exception.
+        if not utils.IS_PY3:
+            fmt = "Caused By:\n{tb}\n{newmsg}"
+            newmsg = fmt.format(tb=traceback.format_exc(), newmsg=newmsg)
+
         exc.args = (newmsg,)
         return exc
 
@@ -208,18 +218,24 @@ class _PipelineManager(object):
         raise CompilerError("All pipelines have failed")
 
 
-class CompilerError(Exception):
-    pass
-
-
 class Pipeline(object):
     """
     Stores and manages states for the compiler pipeline
     """
     def __init__(self, typingctx, targetctx, library, args, return_type, flags,
                  locals):
+        # Make sure the environment is reloaded
+        config.reload_config()
+
         self.typingctx = typingctx
-        self.targetctx = targetctx
+
+        subtargetoptions = {}
+        if flags.boundcheck:
+            subtargetoptions['enable_boundcheck'] = True
+        if flags.nrt:
+            subtargetoptions['enable_nrt'] = True
+
+        self.targetctx = targetctx.subtarget(**subtargetoptions)
         self.library = library
         self.args = args
         self.return_type = return_type
@@ -323,7 +339,7 @@ class Pipeline(object):
         Analyze bytecode and translating to Numba IR
         """
         self.interp = translate_stage(self.bc)
-        self.nargs = len(self.interp.argspec.args)
+        self.nargs = self.interp.arg_count
         if not self.args and self.flags.force_pyobject:
             # Allow an empty argument types specification when object mode
             # is explicitly requested.
@@ -401,6 +417,19 @@ class Pipeline(object):
                                    % (self.func_attr.name,)):
             legalize_return_type(self.return_type, self.interp,
                                  self.targetctx)
+
+    def stage_nopython_rewrites(self):
+        """
+        Perform any intermediate representation rewrites.
+        """
+        # Ensure we have an IR container (interp), and type information.
+        assert self.interp
+        assert isinstance(getattr(self, 'typemap', None), dict)
+        assert isinstance(getattr(self, 'calltypes', None), dict)
+        with self.fallback_context('Internal error in rewriting pass '
+                                   'encountered during compilation of '
+                                   'function "%s"' % (self.func_attr.name,)):
+            rewrites.rewrite_registry.apply(self, self.interp.blocks)
 
     def stage_annotate_type(self):
         """
@@ -533,6 +562,8 @@ class Pipeline(object):
             pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
+            if not self.flags.no_rewrites:
+                pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
 
         if self.status.can_fallback or self.flags.force_pyobject:
@@ -602,9 +633,7 @@ def legalize_return_type(return_type, interp, targetctx):
     Only accept array return type iff it is passed into the function.
     Reject function object return types if in nopython mode.
     """
-    assert assume.return_argument_array_only
-
-    if isinstance(return_type, types.Array):
+    if not targetctx.enable_nrt and isinstance(return_type, types.Array):
         # Walk IR to discover all arguments and all return statements
         retstmts = []
         caststmts = {}
@@ -621,12 +650,6 @@ def legalize_return_type(return_type, interp, targetctx):
                         argvars.add(inst.target.name)
 
         assert retstmts, "No return statements?"
-
-        # FIXME: In the future, we can return an array that is either a dynamically
-        #        allocated array or an array that is passed as argument.  This
-        #        must be statically resolvable.
-
-        # The return value must be the first modification of the value.
 
         for var in retstmts:
             cast = caststmts.get(var)
@@ -665,13 +688,13 @@ def translate_stage(bytecode):
 
 
 def type_inference_stage(typingctx, interp, args, return_type, locals={}):
-    if len(args) != len(interp.argspec.args):
+    if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
 
     infer = typeinfer.TypeInferer(typingctx, interp)
 
     # Seed argument types
-    for index, (name, ty) in enumerate(zip(interp.argspec.args, args)):
+    for index, (name, ty) in enumerate(zip(interp.bytecode.arg_names, args)):
         infer.seed_argument(name, index, ty)
 
     # Seed return type
@@ -710,14 +733,14 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
     del lower
 
     if flags.no_compile:
-        return _LowerResult(fndesc, call_helper, cfunc=None, env=None)
+        return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         # Insert native function for use by other jitted-functions.
         # We also register its library to allow for inlining.
         targetctx.insert_user_function(cfunc, fndesc, [library])
-        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=None)
+        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)
 
 
 def py_lowering_stage(targetctx, library, interp, flags):

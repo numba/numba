@@ -1,6 +1,8 @@
 #ifndef NUMBA_PY_MODULE_H_
 #define NUMBA_PY_MODULE_H_
 
+#define PY_SSIZE_T_CLEAN
+
 #include <Python.h>
 #include <structmember.h>
 
@@ -26,9 +28,27 @@
 #if PY_MAJOR_VERSION >= 3
     #define PyString_AsString PyUnicode_AsUTF8
     #define PyString_Check PyUnicode_Check
+    #define PyString_FromFormat PyUnicode_FromFormat
     #define PyString_FromString PyUnicode_FromString
     #define PyString_InternFromString PyUnicode_InternFromString
     #define PyInt_Type PyLong_Type
+    #define PyInt_Check PyLong_Check
+#else
+    #define Py_hash_t long
+    #define Py_uhash_t unsigned long
+#endif
+
+#if PY_MAJOR_VERSION < 3 || (PY_MAJOR_VERSION == 3 && Py_MINOR_VERSION < 4)
+    #define PyMem_RawMalloc malloc
+    #define PyMem_RawFree free
+#endif
+
+#ifndef Py_MIN
+#define Py_MIN(x, y) (((x) > (y)) ? (y) : (x))
+#endif
+
+#ifndef Py_MAX
+#define Py_MAX(x, y) (((x) < (y)) ? (y) : (x))
 #endif
 
 #endif /* NUMBA_PY_MODULE_H_ */

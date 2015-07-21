@@ -1,29 +1,23 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import namedtuple
 import sys
 
+from llvmlite.ir import Value
 from llvmlite.llvmpy.core import Constant, Type, Builder
-
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
+from .errors import LoweringError
 
-
-class LoweringError(Exception):
-    def __init__(self, msg, loc):
-        self.msg = msg
-        self.loc = loc
-        super(LoweringError, self).__init__("%s\n%s" % (msg, loc.strformat()))
-
-
-class ForbiddenConstruct(LoweringError):
-    pass
+_VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
 
 class BaseLower(object):
     """
     Lower IR to LLVM
     """
+
     def __init__(self, context, library, fndesc, interp):
         self.context = context
         self.library = library
@@ -53,10 +47,39 @@ class BaseLower(object):
     def init(self):
         pass
 
+    def init_pyapi(self):
+        """
+        Init the Python API and Environment Manager for the function being
+        lowered.
+        """
+        if self.pyapi is not None:
+            return
+        self.pyapi = self.context.get_python_api(self.builder)
+
+        # Store environment argument for later use
+        self.envarg = self.call_conv.get_env_argument(self.function)
+        # Sanity check
+        with cgutils.if_unlikely(self.builder,
+                                 cgutils.is_null(self.builder, self.envarg)):
+            self.pyapi.err_set_string(
+                "PyExc_SystemError",
+                "Numba internal error: object mode function called "
+                "without an environment")
+            self.call_conv.return_exc(self.builder)
+
+        self.env_body = self.context.get_env_body(self.builder, self.envarg)
+        self.pyapi.emit_environment_sentry(self.envarg)
+        self.env_manager = self.pyapi.get_env_manager(self.env, self.env_body,
+                                                      self.envarg)
+
     def pre_lower(self):
         """
         Called before lowering all blocks.
         """
+        # A given Lower object can be used for several LL functions
+        # (for generators) and it's important to use a new API and
+        # EnvironmentManager.
+        self.pyapi = None
 
     def post_lower(self):
         """
@@ -128,6 +151,8 @@ class BaseLower(object):
         # pre_lower() may have changed the current basic block
         entry_block_tail = self.builder.basic_block
 
+        self.debug_print("# function begin: {0}".format(
+            self.fndesc.unique_name))
         # Lower all blocks
         for offset, block in self.blocks.items():
             bb = self.blkmap[offset]
@@ -159,10 +184,10 @@ class BaseLower(object):
         if self.genlower:
             self.context.create_cpython_wrapper(self.library,
                                                 self.genlower.gendesc,
-                                                self.call_helper,
+                                                self.env, self.call_helper,
                                                 release_gil=release_gil)
         self.context.create_cpython_wrapper(self.library, self.fndesc,
-                                            self.call_helper,
+                                            self.env, self.call_helper,
                                             release_gil=release_gil)
 
     def setup_function(self, fndesc):
@@ -175,14 +200,16 @@ class BaseLower(object):
     def typeof(self, varname):
         return self.fndesc.typemap[varname]
 
+    def debug_print(self, msg):
+        if config.DEBUG_JIT:
+            self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
+
 
 class Lower(BaseLower):
-
     GeneratorLower = generators.GeneratorLower
 
     def lower_inst(self, inst):
-        if config.DEBUG_JIT:
-            self.context.debug_print(self.builder, str(inst))
+        self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
@@ -247,7 +274,14 @@ class Lower(BaseLower):
             return impl(self.builder, (target, index, value))
 
         elif isinstance(inst, ir.Del):
-            pass
+            try:
+                # XXX: incorrect Del injection?
+                val = self.loadvar(inst.value)
+            except KeyError:
+                pass
+            else:
+                self.decref(self.typeof(inst.value), val)
+                self._delete_variable(inst.value)
 
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
@@ -299,22 +333,22 @@ class Lower(BaseLower):
         # In nopython mode, closure vars are frozen like globals
         if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
             if isinstance(ty, types.ExternalFunctionPointer):
-                return self.context.get_constant_generic(self.builder, ty,
-                                                         value.value)
-
-            elif (isinstance(ty, types.Dummy) or
-                    isinstance(ty, types.Module) or
-                    isinstance(ty, types.Function) or
-                    isinstance(ty, types.Dispatcher)):
-                return self.context.get_dummy_value()
-
-            elif isinstance(ty, types.Array):
-                return self.context.make_constant_array(self.builder, ty,
+                res = self.context.get_constant_generic(self.builder, ty,
                                                         value.value)
 
+            elif isinstance(ty, types.Dummy):
+                res = self.context.get_dummy_value()
+
+            elif isinstance(ty, types.Array):
+                res = self.context.make_constant_array(self.builder, ty,
+                                                       value.value)
+
             else:
-                return self.context.get_constant_generic(self.builder, ty,
-                                                         value.value)
+                res = self.context.get_constant_generic(self.builder, ty,
+                                                        value.value)
+
+            self.incref(ty, res)
+            return res
 
         elif isinstance(value, ir.Expr):
             return self.lower_expr(ty, value)
@@ -322,16 +356,21 @@ class Lower(BaseLower):
         elif isinstance(value, ir.Var):
             val = self.loadvar(value.name)
             oty = self.typeof(value.name)
-            return self.context.cast(self.builder, val, oty, ty)
+            res = self.context.cast(self.builder, val, oty, ty)
+            self.incref(ty, res)
+            return res
 
         elif isinstance(value, ir.Arg):
-            return self.fnargs[value.index]
+            res = self.fnargs[value.index]
+            self.incref(ty, res)
+            return res
 
         elif isinstance(value, ir.Yield):
-            return self.lower_yield(ty, value)
+            res = self.lower_yield(ty, value)
+            self.incref(ty, res)
+            return res
 
-        else:
-            raise NotImplementedError(type(value), value)
+        raise NotImplementedError(type(value), value)
 
     def lower_yield(self, retty, inst):
         yp = self.generator_info.yield_points[inst.index]
@@ -363,8 +402,22 @@ class Lower(BaseLower):
         lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
         rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
         res = impl(self.builder, (lhs, rhs))
-        return self.context.cast(self.builder, res, signature.return_type,
-                                 resty)
+        return self.context.cast(self.builder, res,
+                                 signature.return_type, resty)
+
+    def _cast_var(self, var, ty):
+        """
+        Cast a Numba IR variable to the given Numba type, returning a
+        low-level value.
+        """
+        if isinstance(var, _VarArgItem):
+            varty = self.typeof(var.vararg.name)[var.index]
+            val = self.builder.extract_value(self.loadvar(var.vararg.name),
+                                             var.index)
+        else:
+            varty = self.typeof(var.name)
+            val = self.loadvar(var.name)
+        return self.context.cast(self.builder, val, varty, ty)
 
     def lower_call(self, resty, expr):
         signature = self.fndesc.calltypes[expr]
@@ -376,64 +429,107 @@ class Lower(BaseLower):
             argvals = expr.func.args
         else:
             fnty = self.typeof(expr.func.name)
+            pos_args = expr.args
+            if expr.vararg:
+                # Inject *args from function call
+                # The lowering will be done in _cast_var() above.
+                tp_vararg = self.typeof(expr.vararg.name)
+                assert isinstance(tp_vararg, types.BaseTuple)
+                pos_args = pos_args + [_VarArgItem(expr.vararg, i)
+                                       for i in range(len(tp_vararg))]
 
             # Fold keyword arguments and resolve default argument values
-            defargs = set()
-            try:
-                pysig = fnty.pysig
-            except AttributeError:
+            pysig = signature.pysig
+            if pysig is None:
                 if expr.kws:
                     raise NotImplementedError("unsupported keyword arguments "
                                               "when calling %s" % (fnty,))
-                args = expr.args
+                argvals = [self._cast_var(var, sigty)
+                           for var, sigty in zip(pos_args, signature.args)]
             else:
-                ba = pysig.bind(*expr.args, **dict(expr.kws))
-                for i, param in enumerate(pysig.parameters.values()):
-                    name = param.name
-                    default = param.default
-                    if (default is not param.empty and
-                        name not in ba.arguments):
-                        value = self.context.get_constant_generic(
-                            self.builder, signature.args[i], default)
-                        ba.arguments[name] = value
-                        defargs.add(i)
-                # This is ensured in Dispatcher.get_call_template()
-                assert not ba.kwargs
-                args = ba.args
+                def normal_handler(index, param, var):
+                    return self._cast_var(var, signature.args[index])
 
-            # Fetch and cast non-default arguments
-            argvals = list(args)
-            for i, a in enumerate(argvals):
-                if i not in defargs:
-                    ty = self.typeof(a.name)
-                    val = self.loadvar(a.name)
-                    a = self.context.cast(self.builder, val, ty,
-                                          signature.args[i])
-                    argvals[i] = a
+                def default_handler(index, param, default):
+                    return self.context.get_constant_generic(
+                        self.builder, signature.args[index], default)
+
+                def stararg_handler(index, param, vars):
+                    values = [self._cast_var(var, sigty)
+                              for var, sigty in
+                              zip(vars, signature.args[index])]
+                    return cgutils.make_anonymous_struct(self.builder, values)
+
+                argvals = typing.fold_arguments(pysig,
+                                                pos_args, dict(expr.kws),
+                                                normal_handler,
+                                                default_handler,
+                                                stararg_handler)
 
         if isinstance(fnty, types.ExternalFunction):
             # Handle a named external function
+            self.debug_print("# external function")
             fndesc = funcdesc.ExternalFunctionDescriptor(
                 fnty.symbol, fnty.sig.return_type, fnty.sig.args)
-            func = self.context.declare_external_function(
-                    cgutils.get_module(self.builder), fndesc)
+            func = self.context.declare_external_function(self.builder.module,
+                                                          fndesc)
             res = self.context.call_external_function(
                 self.builder, func, fndesc.argtypes, argvals)
 
+        elif isinstance(fnty, types.NumbaFunction):
+            # Handle a compiled Numba function
+            self.debug_print("# calling numba function")
+            res = self.context.call_internal(self.builder, fnty.fndesc,
+                                             fnty.sig, argvals)
+
         elif isinstance(fnty, types.Method):
+            self.debug_print("# calling method")
             # Method of objects are handled differently
             fnobj = self.loadvar(expr.func.name)
             res = self.context.call_class_method(self.builder, fnobj,
                                                  signature, argvals)
 
         elif isinstance(fnty, types.ExternalFunctionPointer):
+            self.debug_print("# calling external function pointer")
             # Handle a C function pointer
             pointer = self.loadvar(expr.func.name)
-            res = self.context.call_function_pointer(self.builder, pointer,
-                                                     argvals, fnty.cconv)
+            # If the external function pointer uses libpython
+            if fnty.requires_gil:
+                self.init_pyapi()
+                # Acquire the GIL
+                gil_state = self.pyapi.gil_ensure()
+                # Make PyObjects
+                newargvals = []
+                pyvals = []
+                for exptyp, gottyp, aval in zip(fnty.sig.args, signature.args,
+                                                argvals):
+                    # Adjust argument values to pyobjects
+                    if exptyp == types.ffi_forced_object:
+                        self.incref(gottyp, aval)
+                        obj = self.pyapi.from_native_value(aval, gottyp,
+                                                           self.env_manager)
+                        newargvals.append(obj)
+                        pyvals.append(obj)
+                    else:
+                        newargvals.append(aval)
+
+                # Call external function
+                res = self.context.call_function_pointer(self.builder, pointer,
+                                                         newargvals, fnty.cconv)
+                # Release PyObjects
+                for obj in pyvals:
+                    self.pyapi.decref(obj)
+
+                # Release the GIL
+                self.pyapi.gil_release(gil_state)
+            # If the external function pointer does NOT use libpython
+            else:
+                res = self.context.call_function_pointer(self.builder, pointer,
+                                                         argvals, fnty.cconv)
 
         else:
             # Normal function resolution (for Numba-compiled functions)
+            self.debug_print("# calling normal function: {0}".format(fnty))
             impl = self.context.get_function(fnty, signature)
             if signature.recvr:
                 # The "self" object is passed as the function object
@@ -443,9 +539,11 @@ class Lower(BaseLower):
                 argvals = [the_self] + argvals
 
             res = impl(self.builder, argvals)
+
             libs = getattr(impl, "libs", ())
             for lib in libs:
                 self.library.add_linking_library(lib)
+
         return self.context.cast(self.builder, res, signature.return_type,
                                  resty)
 
@@ -467,21 +565,27 @@ class Lower(BaseLower):
             # Convert argument to match
             val = self.context.cast(self.builder, val, typ, signature.args[0])
             res = impl(self.builder, [val])
-            return self.context.cast(self.builder, res, signature.return_type,
-                                     resty)
+            res = self.context.cast(self.builder, res,
+                                    signature.return_type, resty)
+            return res
 
         elif expr.op == 'call':
-            return self.lower_call(resty, expr)
+            res = self.lower_call(resty, expr)
+            return res
 
         elif expr.op == 'pair_first':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            return self.context.pair_first(self.builder, val, ty)
+            res = self.context.pair_first(self.builder, val, ty)
+            self.incref(resty, res)
+            return res
 
         elif expr.op == 'pair_second':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            return self.context.pair_second(self.builder, val, ty)
+            res = self.context.pair_second(self.builder, val, ty)
+            self.incref(resty, res)
+            return res
 
         elif expr.op in ('getiter', 'iternext'):
             val = self.loadvar(expr.value.name)
@@ -491,15 +595,16 @@ class Lower(BaseLower):
             [fty] = signature.args
             castval = self.context.cast(self.builder, val, ty, fty)
             res = impl(self.builder, (castval,))
-            return self.context.cast(self.builder, res, signature.return_type,
-                                     resty)
+            res = self.context.cast(self.builder, res, signature.return_type,
+                                    resty)
+            return res
 
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            # If we have a heterogenous tuple, we needn't do anything,
-            # and we can't iterate over it anyway.
-            if isinstance(ty, types.Tuple):
+            # If we have a tuple, we needn't do anything
+            # (and we can't iterate over the heterogenous ones).
+            if isinstance(ty, types.BaseTuple):
                 return val
 
             itemty = ty.iterator_type.yield_type
@@ -532,6 +637,7 @@ class Lower(BaseLower):
             with cgutils.if_unlikely(self.builder, is_valid):
                 self.return_exception(ValueError)
 
+            self.decref(ty.iterator_type, iterobj)
             return tup
 
         elif expr.op == "getattr":
@@ -542,12 +648,14 @@ class Lower(BaseLower):
                 # if we are getting out a method, assume we have typed this
                 # properly and just build a bound function object
                 res = self.context.get_bound_function(self.builder, val, ty)
+                self.incref(resty, res)
+                return res
             else:
                 impl = self.context.get_attribute(val, ty, expr.attr)
 
                 if impl is None:
                     # ignore the attribute
-                    res = self.context.get_dummy_value()
+                    return self.context.get_dummy_value()
                 else:
                     res = impl(self.context, self.builder, ty, val, expr.attr)
             return res
@@ -558,7 +666,9 @@ class Lower(BaseLower):
             if cgutils.is_struct(baseval.type):
                 # Statically extract the given element from the structure
                 # (structures aren't dynamically indexable).
-                return self.builder.extract_value(baseval, expr.index)
+                res = self.builder.extract_value(baseval, expr.index)
+                self.incref(resty, res)
+                return res
             else:
                 # Fall back on the generic getitem() implementation
                 # for this type.
@@ -568,8 +678,8 @@ class Lower(BaseLower):
                 impl = self.context.get_function("getitem", signature)
                 argvals = (baseval, indexval)
                 res = impl(self.builder, argvals)
-                return self.context.cast(self.builder, res, signature.return_type,
-                                         resty)
+                return self.context.cast(self.builder, res,
+                                         signature.return_type, resty)
 
         elif expr.op == "getitem":
             baseval = self.loadvar(expr.value.name)
@@ -583,7 +693,8 @@ class Lower(BaseLower):
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]
             res = impl(self.builder, castvals)
-            return self.context.cast(self.builder, res, signature.return_type,
+            return self.context.cast(self.builder, res,
+                                     signature.return_type,
                                      resty)
 
         elif expr.op == "build_tuple":
@@ -594,13 +705,20 @@ class Lower(BaseLower):
             tup = self.context.get_constant_undef(resty)
             for i in range(len(castvals)):
                 tup = self.builder.insert_value(tup, castvals[i], i)
+
+            self.incref(resty, tup)
             return tup
 
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             castval = self.context.cast(self.builder, val, ty, resty)
+            self.incref(resty, val)
             return castval
+
+        elif expr.op in self.context.special_ops:
+            res = self.context.special_ops[expr.op](self, expr)
+            return res
 
         raise NotImplementedError(expr)
 
@@ -612,11 +730,28 @@ class Lower(BaseLower):
         return self.builder.load(ptr)
 
     def storevar(self, value, name):
+        fetype = self.typeof(name)
+
+        # Define if not already
         if name not in self.varmap:
-            self.varmap[name] = self.alloca_lltype(name, value.type)
+            # If not already defined, allocate it
+            llty = self.context.get_value_type(fetype)
+            ptr = self.alloca_lltype(name, llty)
+            # Remember the pointer
+            self.varmap[name] = ptr
+
+        # Clean up existing value stored in the variable
+        old = self.loadvar(name)
+        self.decref(fetype, old)
+
+        # Store variable
         ptr = self.getvar(name)
-        assert value.type == ptr.type.pointee,\
-            "store %s to ptr of %s" % (value.type, ptr.type.pointee)
+        if value.type != ptr.type.pointee:
+            msg = ("Storing {value.type} to ptr of {ptr.type.pointee}. "
+                   "FE type {fetype}").format(value=value, ptr=ptr,
+                                              fetype=fetype)
+            raise AssertionError(msg)
+
         self.builder.store(value, ptr)
 
     def alloca(self, name, type):
@@ -624,4 +759,23 @@ class Lower(BaseLower):
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
-        return cgutils.alloca_once(self.builder, lltype, name=name)
+        return cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
+
+    def incref(self, typ, val):
+        if not self.context.enable_nrt:
+            return
+
+        self.context.nrt_incref(self.builder, typ, val)
+
+    def decref(self, typ, val):
+        if not self.context.enable_nrt:
+            return
+
+        self.context.nrt_decref(self.builder, typ, val)
+
+    def _delete_variable(self, varname):
+        """
+        Zero-fill variable to avoid crashing due to extra ir.Del
+        """
+        storage = self.getvar(varname)
+        self.builder.store(Constant.null(storage.type.pointee), storage)

@@ -15,16 +15,15 @@ class ArgPacker(object):
     setup from the Python side.  Functions are receiving simple primitive
     types and there are only a handful of these.
     """
+
     def __init__(self, dmm, fe_args):
         self._dmm = dmm
         self._fe_args = fe_args
         self._nargs = len(fe_args)
         self._dm_args = [self._dmm.lookup(ty) for ty in fe_args]
         argtys = [bt.get_argument_type() for bt in self._dm_args]
-        if len(argtys):
-            self._be_args, self._posmap = zip(*_flatten(argtys))
-        else:
-            self._be_args = self._posmap = ()
+        self._unflattener = _Unflattener(argtys)
+        self._be_args = list(_flatten(argtys))
 
     def as_arguments(self, builder, values):
         """Flatten all argument values
@@ -38,20 +37,14 @@ class ArgPacker(object):
         args = [dm.as_argument(builder, val)
                 for dm, val in zip(self._dm_args, values)]
 
-        args, _ = zip(*_flatten(args))
+        args = tuple(_flatten(args))
         return args
 
     def from_arguments(self, builder, args):
         """Unflatten all argument values
         """
 
-        if len(args) != len(self._posmap):
-            raise TypeError("invalid number of args")
-
-        if not args:
-            return ()
-
-        valtree = _unflatten(self._posmap, args)
+        valtree = self._unflattener.unflatten(args)
         values = [dm.from_argument(builder, val)
                   for dm, val in zip(self._dm_args, valtree)]
 
@@ -60,13 +53,8 @@ class ArgPacker(object):
     def assign_names(self, args, names):
         """Assign names for each flattened argument values.
         """
-        if len(args) != len(self._posmap):
-            raise TypeError("invalid number of args")
 
-        if not args:
-            return ()
-
-        valtree = _unflatten(self._posmap, args)
+        valtree = self._unflattener.unflatten(args)
         for aval, aname in zip(valtree, names):
             self._assign_names(aval, aname)
 
@@ -84,41 +72,80 @@ class ArgPacker(object):
         """Return a list of LLVM types that are results of flattening
         composite types.
         """
-        return tuple(self._be_args)
+        return tuple(ty for ty in self._be_args if ty != ())
 
 
-def _unflatten(posmap, flatiter):
-    """Rebuild a nested tuple structure
+def _flatten(iterable):
     """
-    poss = deque(posmap)
-    vals = deque(flatiter)
-
-    res = []
-    while poss:
-        assert len(poss) == len(vals)
-        cur = poss.popleft()
-        ptr = res
-        for loc in cur[:-1]:
-            if loc >= len(ptr):
-                ptr.append([])
-            ptr = ptr[loc]
-
-        assert len(ptr) == cur[-1]
-        ptr.append(vals.popleft())
-
-    return res
-
-
-def _flatten(iterable, indices=(0,)):
+    Flatten nested iterable of (tuple, list).
     """
-    Flatten nested iterable of (tuple, list) with position information
-    """
-    for i in iterable:
-        if isinstance(i, (tuple, list)):
-            inner = indices + (0,)
-            for j, k in _flatten(i, indices=inner):
-                yield j, k
-        else:
-            yield i, indices
-        indices = indices[:-1] + (indices[-1] + 1,)
+    def rec(iterable):
+        for i in iterable:
+            if isinstance(i, (tuple, list)):
+                for j in rec(i):
+                    yield j
+            else:
+                yield i
+    return rec(iterable)
 
+
+_PUSH_LIST = 1
+_APPEND_NEXT_VALUE = 2
+_APPEND_EMPTY_TUPLE = 3
+_POP = 4
+
+class _Unflattener(object):
+    """
+    An object used to unflatten nested sequences after a given pattern
+    (an arbitrarily nested sequence).
+    The pattern shows the nested sequence shape desired when unflattening;
+    the values it contains are irrelevant.
+    """
+
+    def __init__(self, pattern):
+        self._code = self._build_unflatten_code(pattern)
+
+    def _build_unflatten_code(self, iterable):
+        """Build the unflatten opcode sequence for the given *iterable* structure
+        (an iterable of nested sequences).
+        """
+        code = []
+        def rec(iterable):
+            for i in iterable:
+                if isinstance(i, (tuple, list)):
+                    if len(i) > 0:
+                        code.append(_PUSH_LIST)
+                        rec(i)
+                        code.append(_POP)
+                    else:
+                        code.append(_APPEND_EMPTY_TUPLE)
+                else:
+                    code.append(_APPEND_NEXT_VALUE)
+
+        rec(iterable)
+        return code
+
+    def unflatten(self, flatiter):
+        """Rebuild a nested tuple structure.
+        """
+        vals = deque(flatiter)
+
+        res = []
+        cur = res
+        stack = []
+        for op in self._code:
+            if op is _PUSH_LIST:
+                stack.append(cur)
+                cur.append([])
+                cur = cur[-1]
+            elif op is _APPEND_NEXT_VALUE:
+                cur.append(vals.popleft())
+            elif op is _APPEND_EMPTY_TUPLE:
+                cur.append(())
+            elif op is _POP:
+                cur = stack.pop()
+
+        assert not stack, stack
+        assert not vals, vals
+
+        return res

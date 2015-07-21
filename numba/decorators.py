@@ -3,8 +3,11 @@ Contains function decorators and target_registry
 """
 from __future__ import print_function, division, absolute_import
 import warnings
-from . import sigutils
+
+from . import config, sigutils
+from .errors import DeprecationError
 from .targets import registry
+from . import cuda
 
 # -----------------------------------------------------------------------------
 # Decorators
@@ -20,9 +23,12 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
-class DeprecationError(Exception):
-    pass
+class DisableJitWrapper(object):
+    def __init__(self, py_func):
+        self.py_func = py_func
 
+    def __call__(self, *args, **kwargs):
+        return self.py_func(*args, **kwargs)
 
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
@@ -140,6 +146,10 @@ def jit(signature_or_function=None, locals={}, target='cpu', **options):
     else:
         # A function is passed
         pyfunc = signature_or_function
+        if config.ENABLE_CUDASIM and target == 'cuda':
+            return cuda.jit(pyfunc)
+        if config.DISABLE_JIT and not target == 'npyufunc':
+            return DisableJitWrapper(pyfunc)
         dispatcher = registry.target_registry[target]
         dispatcher = dispatcher(py_func=pyfunc, locals=locals,
                                 targetoptions=options)
@@ -150,6 +160,8 @@ def _jit(sigs, locals, target, targetoptions):
     dispatcher = registry.target_registry[target]
 
     def wrapper(func):
+        if config.DISABLE_JIT and not target == 'npyufunc':
+            return DisableJitWrapper(func)
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions)
         for sig in sigs:

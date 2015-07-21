@@ -6,7 +6,6 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.ee as le
 import llvmlite.binding as ll
 from numba.targets.imputils import implement, Registry
-from numba.targets.npyimpl import register_casters
 from numba import cgutils
 from numba import types
 from .cudadrv import nvvm
@@ -15,7 +14,6 @@ from . import nvvmutils, stubs
 registry = Registry()
 register = registry.register
 
-register_casters(register)
 
 @register
 @implement('ptx.grid.1d', types.intp)
@@ -105,7 +103,7 @@ for sreg in nvvmutils.SREG_MAPPING.keys():
 @register
 @implement('ptx.cmem.arylike', types.Kind(types.Array))
 def ptx_cmem_arylike(context, builder, sig, args):
-    lmod = cgutils.get_module(builder)
+    lmod = builder.module
     [arr] = args
     flat = arr.flatten(order='A')
     aryty = sig.return_type
@@ -152,7 +150,8 @@ def ptx_cmem_arylike(context, builder, sig, args):
                            shape=cgutils.pack_array(builder, kshape),
                            strides=cgutils.pack_array(builder, kstrides),
                            itemsize=ary.itemsize,
-                           parent=ary.parent)
+                           parent=ary.parent,
+                           meminfo=None)
 
     return ary._getvalue()
 
@@ -215,7 +214,7 @@ def ptx_lmem_alloc_array(context, builder, sig, args):
 def ptx_syncthreads(context, builder, sig, args):
     assert not args
     fname = 'llvm.nvvm.barrier0'
-    lmod = cgutils.get_module(builder)
+    lmod = builder.module
     fnty = Type.function(Type.void(), ())
     sync = lmod.get_or_insert_function(fnty, name=fname)
     builder.call(sync, ())
@@ -238,10 +237,10 @@ def ptx_atomic_add_intp(context, builder, sig, args):
     ptr = cgutils.get_item_pointer(builder, aryty, lary, [ind])
 
     if aryty.dtype == types.float32:
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
     elif aryty.dtype == types.float64:
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_add_float64(lmod), (ptr, val))
     else:
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
@@ -272,10 +271,10 @@ def ptx_atomic_add_tuple(context, builder, sig, args):
     ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
 
     if aryty.dtype == types.float32:
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
     elif aryty.dtype == types.float64:
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_add_float64(lmod), (ptr, val))
     else:
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
@@ -297,7 +296,7 @@ def ptx_atomic_max_intp(context, builder, sig, args):
     ptr = cgutils.get_item_pointer(builder, aryty, lary, [ind])
 
     if dtype == types.float64:
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_max_float64(lmod), (ptr, val))
     else:
         raise TypeError('Unimplemented atomic max with %s array' % dtype)
@@ -328,7 +327,7 @@ def ptx_atomic_max_tuple(context, builder, sig, args):
     ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
 
     if aryty.dtype == types.float64:
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_max_float64(lmod), (ptr, val))
     else:
         raise TypeError('Unimplemented atomic max with %s array' % dtype)
@@ -354,7 +353,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         # available
         dataptr = builder.alloca(laryty, name=symbol_name)
     else:
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
 
         # Create global variable in the requested address-space
         gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
@@ -405,6 +404,7 @@ def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
     context.populate_array(ary,
                            data=builder.bitcast(dataptr, ary.data.type),
                            shape=cgutils.pack_array(builder, kshape),
-                           strides = cgutils.pack_array(builder, kstrides),
-                           itemsize=context.get_constant(types.intp, itemsize))
+                           strides=cgutils.pack_array(builder, kstrides),
+                           itemsize=context.get_constant(types.intp, itemsize),
+                           meminfo=None)
     return ary._getvalue()

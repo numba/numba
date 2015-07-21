@@ -65,6 +65,9 @@ class _ExternalMathFunctions(_Installer):
             _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
             _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
 
+        if is32bit:
+            _add_missing_symbol("__multi3", c_helpers["multi3"])
+
         # List available C-math
         for fname in intrinsics.INTR_MATH:
             # Force binding from CPython's C runtime library.

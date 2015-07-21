@@ -13,6 +13,7 @@ import numpy
 import numpy.distutils.misc_util as np_misc
 import versioneer
 
+versioneer.VCS = 'git'
 versioneer.versionfile_source = 'numba/_version.py'
 versioneer.versionfile_build = 'numba/_version.py'
 versioneer.tag_prefix = ''
@@ -37,6 +38,13 @@ if sys.platform == 'darwin' and sys.version_info[:2] == (2, 6):
 else:
     cpp_link_args = []
 
+
+install_name_tool_fixer = []
+
+if sys.platform == 'darwin':
+    install_name_tool_fixer += ['-headerpad_max_install_names']
+
+
 npymath_info = np_misc.get_info('npymath')
 
 ext_dynfunc = Extension(name='numba._dynfunc', sources=['numba/_dynfunc.c'],
@@ -54,16 +62,21 @@ ext_npymath_exports = Extension(name='numba._npymath_exports',
 ext_dispatcher = Extension(name="numba._dispatcher",
                            include_dirs=[numpy.get_include()],
                            sources=['numba/_dispatcher.c',
+                                    'numba/_typeof.c',
+                                    'numba/_hashtable.c',
                                     'numba/_dispatcherimpl.cpp',
                                     'numba/typeconv/typeconv.cpp'],
                            depends=["numba/_pymodule.h",
-                                    "numba/_dispatcher.h"],
+                                    "numba/_dispatcher.h",
+                                    "numba/_typeof.h",
+                                    "numba/_hashtable.h"],
                            extra_link_args=cpp_link_args)
 
 ext_helperlib = Extension(name="numba._helperlib",
                           include_dirs=[numpy.get_include()],
                           sources=["numba/_helperlib.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS,
+                          extra_link_args=install_name_tool_fixer,
                           depends=["numba/_pymodule.h",
                                    "numba/_math_c99.h",
                                    "numba/mathnames.inc"])
@@ -84,35 +97,41 @@ ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
 ext_mviewbuf = Extension(name='numba.mviewbuf',
                          sources=['numba/mviewbuf.c'])
 
+ext_nrt_python = Extension(name='numba.runtime._nrt_python',
+                           sources=['numba/runtime/_nrt_python.c',
+                                    'numba/runtime/nrt.c'],
+                           depends=['numba/runtime/nrt.h',
+                                    'numba/_pymodule.h'],
+                           include_dirs=["numba"] + npymath_info['include_dirs'])
 
 ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
-               ext_helperlib, ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf]
+               ext_helperlib, ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf,
+               ext_nrt_python]
 
 
-packages = [
-    "numba",
-    "numba.targets",
-    "numba.tests",
-    "numba.typing",
-    "numba.typeconv",
-    "numba.npyufunc",
-    "numba.pycc",
-    "numba.servicelib",
-    "numba.datamodel",
-    "numba.cuda",
-    "numba.cuda.cudadrv",
-    "numba.cuda.tests",
-    "numba.cuda.tests.cudadrv",
-    "numba.cuda.tests.cudadrv.data",
-    "numba.cuda.tests.cudapy",
-    "numba.annotations",
-    "numba.hsa",
-    "numba.hsa.hsadrv",
-    "numba.hsa.hlc",
-    "numba.hsa.tests",
-    "numba.hsa.tests.hsadrv",
-    "numba.hsa.tests.hsapy",
-]
+def find_packages(root_dir, root_name):
+    """
+    Recursively find packages in *root_dir*.
+    """
+    packages = []
+    def rec(path, pkg_name):
+        packages.append(pkg_name)
+        for fn in sorted(os.listdir(path)):
+            subpath = os.path.join(path, fn)
+            if os.path.exists(os.path.join(subpath, "__init__.py")):
+                subname = "%s.%s" % (pkg_name, fn)
+                rec(subpath, subname)
+    rec(root_dir, root_name)
+    return packages
+
+packages = find_packages("numba", "numba")
+
+
+install_requires = ['llvmlite', 'numpy']
+if sys.version_info < (3, 4):
+    install_requires.extend(['enum34', 'singledispatch'])
+if sys.version_info < (3, 3):
+    install_requires.append('funcsigs')
 
 setup(name='numba',
       description="compiling Python code using LLVM",
@@ -131,11 +150,8 @@ setup(name='numba',
         "Topic :: Software Development :: Compilers",
       ],
       package_data={
-        "numba": ["*.c", "*.h", "*.cpp", "*.inc"],
-        "numba.npyufunc": ["*.c", "*.h"],
-        "numba.typeconv": ["*.cpp", "*.hpp"],
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
-        "numba.hsa.tests.hsadrv": ["*.brig"],
+        "numba.annotations": ["*.html"],
       },
       scripts=["numba/pycc/pycc", "bin/numba"],
       author="Continuum Analytics, Inc.",
@@ -143,7 +159,7 @@ setup(name='numba',
       url="http://numba.github.com",
       ext_modules=ext_modules,
       packages=packages,
+      install_requires=install_requires,
       license="BSD",
       cmdclass=cmdclass,
       **setup_args)
-

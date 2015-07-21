@@ -25,13 +25,18 @@ def addsub_defaults(x, y=2, z=3):
     return x - y + z
 
 
+def star_defaults(x, y=2, *z):
+    return x, y, z
+
+
 class TestDispatcher(TestCase):
 
     def compile_func(self, pyfunc):
         def check(*args, **kwargs):
+            expected = pyfunc(*args, **kwargs)
             result = f(*args, **kwargs)
-            self.assertPreciseEqual(result, pyfunc(*args, **kwargs))
-        f = jit(pyfunc)
+            self.assertPreciseEqual(result, expected)
+        f = jit(nopython=True)(pyfunc)
         return f, check
 
     def test_numba_interface(self):
@@ -69,7 +74,6 @@ class TestDispatcher(TestCase):
     def test_ambiguous_new_version(self):
         """Test compiling new version in an ambiguous case
         """
-
         @jit
         def foo(a, b):
             return a + b
@@ -164,6 +168,29 @@ class TestDispatcher(TestCase):
             f(y=6, z=7)
         self.assertIn("missing argument 'x'", str(cm.exception))
 
+    def test_star_args(self):
+        """
+        Test a compiled function with starargs in the signature.
+        """
+        f, check = self.compile_func(star_defaults)
+        check(4)
+        check(4, 5)
+        check(4, 5, 6)
+        check(4, 5, 6, 7)
+        check(4, 5, 6, 7, 8)
+        check(x=4)
+        check(x=4, y=5)
+        check(4, y=5)
+        with self.assertRaises(TypeError) as cm:
+            f(4, 5, y=6)
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(4, 5, z=6)
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(4, x=6)
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
+
     def test_explicit_signatures(self):
         f = jit("(int64,int64)")(add)
         # Approximate match (unsafe conversion)
@@ -184,6 +211,22 @@ class TestDispatcher(TestCase):
         f = jit(["(float32,float32)", "(float64,float64)"])(add)
         self.assertPreciseEqual(f(np.float32(1), np.float32(2**-25)), 1.0)
         self.assertPreciseEqual(f(1, 2**-25), 1.0000000298023224)
+        # Fail to resolve ambiguity between the two best overloads
+        f = jit(["(float32,float64)",
+                 "(float64,float32)",
+                 "(int64,int64)"])(add)
+        with self.assertRaises(TypeError) as cm:
+            f(1.0, 2.0)
+        # The two best matches are output in the error message, as well
+        # as the actual argument types.
+        self.assertRegexpMatches(
+            str(cm.exception),
+            r"Ambiguous overloading for <function add [^>]*> \(float64, float64\):\n"
+            r"\(float32, float64\) -> float64\n"
+            r"\(float64, float32\) -> float64"
+            )
+        # The integer signature is not part of the best matches
+        self.assertNotIn("int64", str(cm.exception))
 
     def test_signature_mismatch(self):
         tmpl = "Signature mismatch: %d argument types given, but function takes 2 arguments"
@@ -299,6 +342,33 @@ class TestDispatcherMethods(TestCase):
         foo(1, 2)
         # Exercise the method
         foo.inspect_types(utils.StringIO())
+
+    def test_issue_with_array_layout_conflict(self):
+        """
+        This test an issue with the dispatcher when an array that is both
+        C and F contiguous is supplied as the first signature.
+        The dispatcher checks for F contiguous first but the compiler checks
+        for C contiguous first. This results in an C contiguous code inserted
+        as F contiguous function.
+        """
+        def pyfunc(A, i, j):
+            return A[i, j]
+
+        cfunc = jit(pyfunc)
+
+        ary_c_and_f = np.array([[1.]])
+        ary_c = np.array([[0., 1.], [2., 3.]], order='C')
+        ary_f = np.array([[0., 1.], [2., 3.]], order='F')
+
+        exp_c = pyfunc(ary_c, 1, 0)
+        exp_f = pyfunc(ary_f, 1, 0)
+
+        self.assertEqual(1., cfunc(ary_c_and_f, 0, 0))
+        got_c = cfunc(ary_c, 1, 0)
+        got_f = cfunc(ary_f, 1, 0)
+
+        self.assertEqual(exp_c, got_c)
+        self.assertEqual(exp_f, got_f)
 
 
 if __name__ == '__main__':

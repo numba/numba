@@ -12,6 +12,8 @@
 #include <numpy/ndarrayobject.h>
 #include <numpy/arrayscalars.h>
 
+#include "_arraystruct.h"
+
 /* For Numpy 1.6 */
 #ifndef NPY_ARRAY_BEHAVED
     #define NPY_ARRAY_BEHAVED NPY_BEHAVED
@@ -383,6 +385,56 @@ Numba_poisson_ptrs(rnd_state_t *state, double lam)
 /*
  * Other helpers.
  */
+
+/* provide 128-bit multiplilcation inplace for __multi3
+ * on 32-bit platform */
+
+typedef union i128 {
+    struct {
+        uint64_t low;
+        int64_t high;
+    } s;
+} i128;
+
+
+static
+i128 umul64(uint64_t a, uint64_t b) {
+    /* Adapted from __mulddi in compiler-rt */
+    i128 r;
+    uint64_t t;
+    const int bits_in_dword_2 = 32;
+    const uint64_t lower_mask = (uint64_t)~0 >> bits_in_dword_2;
+
+    r.s.low = (a & lower_mask) * (b & lower_mask);
+    t = r.s.low >> bits_in_dword_2;
+    r.s.low &= lower_mask;
+    t += (a >> bits_in_dword_2) * (b & lower_mask);
+    r.s.low += (t & lower_mask) << bits_in_dword_2;
+    r.s.high = t >> bits_in_dword_2;
+    t = r.s.low >> bits_in_dword_2;
+    r.s.low &= lower_mask;
+    t += (b >> bits_in_dword_2) * (a & lower_mask);
+    r.s.low += (t & lower_mask) << bits_in_dword_2;
+    r.s.high += t >> bits_in_dword_2;
+    r.s.high += (a >> bits_in_dword_2) * (b >> bits_in_dword_2);
+    return r;
+}
+
+static
+i128 mul128(i128 a, i128 b) {
+    /* Adapted from __multi3 in compiler-rt */
+    i128 r = umul64(a.s.low, b.s.low);
+    r.s.high += a.s.high * b.s.low + a.s.low * b.s.high;
+    return r;
+}
+
+
+static
+i128
+Numba_multi3(i128 x, i128 y) {
+	return mul128(x, y);
+}
+
 
 /* provide 64-bit division function to 32-bit platforms */
 static
@@ -1068,20 +1120,6 @@ CLEANUP:
     return record;
 }
 
-/*
- * Fill in the *arystruct* with information from the Numpy array *obj*.
- * *arystruct*'s layout is defined in numba.targets.arrayobj (look
- * for the ArrayTemplate class).
- */
-
-typedef struct {
-    PyObject *parent;
-    npy_intp nitems;
-    npy_intp itemsize;
-    void *data;
-    npy_intp shape_and_strides[];
-} arystruct_t;
-
 static
 int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     PyArrayObject *ndary;
@@ -1106,7 +1144,7 @@ int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     for (i = 0; i < ndim; i++, p++) {
         *p = PyArray_STRIDE(ndary, i);
     }
-
+    arystruct->meminfo = NULL;
     return 0;
 }
 
@@ -1135,6 +1173,7 @@ Numba_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
     for (i = 0; i < buf->ndim; i++, p++) {
         *p = buf->strides[i];
     }
+    arystruct->meminfo = NULL;
 }
 
 static void
@@ -1156,6 +1195,189 @@ PyObject* Numba_ndarray_new(int nd,
     ndary = PyArray_New((PyTypeObject*)&PyArray_Type, nd, dims, type_num,
                        strides, data, 0, flags, NULL);
     return ndary;
+}
+
+/*
+ * Straight from Numpy's _attempt_nocopy_reshape()
+ * (np/core/src/multiarray/shape.c).
+ * Attempt to reshape an array without copying data
+ *
+ * This function should correctly handle all reshapes, including
+ * axes of length 1. Zero strides should work but are untested.
+ *
+ * If a copy is needed, returns 0
+ * If no copy is needed, returns 1 and fills `npy_intp *newstrides`
+ *     with appropriate strides
+ */
+static int
+Numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *strides,
+                             npy_intp newnd, const npy_intp *newdims,
+                             npy_intp *newstrides, npy_intp itemsize,
+                             int is_f_order)
+{
+    int oldnd;
+    npy_intp olddims[NPY_MAXDIMS];
+    npy_intp oldstrides[NPY_MAXDIMS];
+    npy_intp np, op, last_stride;
+    int oi, oj, ok, ni, nj, nk;
+
+    oldnd = 0;
+    /*
+     * Remove axes with dimension 1 from the old array. They have no effect
+     * but would need special cases since their strides do not matter.
+     */
+    for (oi = 0; oi < nd; oi++) {
+        if (dims[oi]!= 1) {
+            olddims[oldnd] = dims[oi];
+            oldstrides[oldnd] = strides[oi];
+            oldnd++;
+        }
+    }
+
+    np = 1;
+    for (ni = 0; ni < newnd; ni++) {
+        np *= newdims[ni];
+    }
+    op = 1;
+    for (oi = 0; oi < oldnd; oi++) {
+        op *= olddims[oi];
+    }
+    if (np != op) {
+        /* different total sizes; no hope */
+        return 0;
+    }
+
+    if (np == 0) {
+        /* the current code does not handle 0-sized arrays, so give up */
+        return 0;
+    }
+
+    /* oi to oj and ni to nj give the axis ranges currently worked with */
+    oi = 0;
+    oj = 1;
+    ni = 0;
+    nj = 1;
+    while (ni < newnd && oi < oldnd) {
+        np = newdims[ni];
+        op = olddims[oi];
+
+        while (np != op) {
+            if (np < op) {
+                /* Misses trailing 1s, these are handled later */
+                np *= newdims[nj++];
+            } else {
+                op *= olddims[oj++];
+            }
+        }
+
+        /* Check whether the original axes can be combined */
+        for (ok = oi; ok < oj - 1; ok++) {
+            if (is_f_order) {
+                if (oldstrides[ok+1] != olddims[ok]*oldstrides[ok]) {
+                     /* not contiguous enough */
+                    return 0;
+                }
+            }
+            else {
+                /* C order */
+                if (oldstrides[ok] != olddims[ok+1]*oldstrides[ok+1]) {
+                    /* not contiguous enough */
+                    return 0;
+                }
+            }
+        }
+
+        /* Calculate new strides for all axes currently worked with */
+        if (is_f_order) {
+            newstrides[ni] = oldstrides[oi];
+            for (nk = ni + 1; nk < nj; nk++) {
+                newstrides[nk] = newstrides[nk - 1]*newdims[nk - 1];
+            }
+        }
+        else {
+            /* C order */
+            newstrides[nj - 1] = oldstrides[oj - 1];
+            for (nk = nj - 1; nk > ni; nk--) {
+                newstrides[nk - 1] = newstrides[nk]*newdims[nk];
+            }
+        }
+        ni = nj++;
+        oi = oj++;
+    }
+
+    /*
+     * Set strides corresponding to trailing 1s of the new shape.
+     */
+    if (ni >= 1) {
+        last_stride = newstrides[ni - 1];
+    }
+    else {
+        last_stride = itemsize;
+    }
+    if (is_f_order) {
+        last_stride *= newdims[ni - 1];
+    }
+    for (nk = ni; nk < newnd; nk++) {
+        newstrides[nk] = last_stride;
+    }
+
+    return 1;
+}
+
+/*
+ * See Numpy's array_descr_set()
+ * (np/core/src/multiarray/getset.c).
+ * Attempt to fix the array's shape and strides for a new dtype.
+ * 0 is returned on failure, 1 on success.
+ */
+static int
+Numba_change_dtype(npy_intp nd, npy_intp *dims, npy_intp *strides,
+                   npy_intp old_itemsize, npy_intp new_itemsize,
+                   char layout)
+{
+    npy_intp i, newdim, bytelength;
+
+    assert (layout == 'C' || layout == 'F' || layout == 'A');
+    if (old_itemsize != new_itemsize && (layout == 'A' || nd == 0)) {
+        return 0;
+    }
+    /* Determine the index of the dimension we have to fix up */
+    if (layout == 'C') {
+        i = nd - 1;
+    }
+    else {
+        i = 0;
+    }
+    if (new_itemsize < old_itemsize) {
+        /*
+         * if it is compatible increase the size of the
+         * dimension at end (or at the front if F-contiguous)
+         */
+        if (old_itemsize % new_itemsize != 0) {
+            return 0;
+        }
+        newdim = old_itemsize / new_itemsize;
+        dims[i] *= newdim;
+        strides[i] = new_itemsize;
+    }
+    else if (new_itemsize > old_itemsize) {
+        /*
+         * Determine if last (or first if F-contiguous) dimension
+         * is compatible
+         */
+        bytelength = dims[i] * old_itemsize;
+        if ((bytelength % new_itemsize) != 0) {
+            return 0;
+        }
+        dims[i] = bytelength / new_itemsize;
+        strides[i] = new_itemsize;
+    }
+    else {
+        /* Same item size: nothing to do (this also works for
+         * non-contiguous arrays).
+         */
+    }
+    return 1;
 }
 
 /* We use separate functions for datetime64 and timedelta64, to ensure
@@ -1321,22 +1543,30 @@ raise_error:
 static PyObject *
 Numba_unpickle(const char *data, Py_ssize_t n)
 {
-    PyObject *buf, *picklemod, *obj;
+    PyObject *buf, *obj;
+    static PyObject *loads;
+
+    /* Caching the pickle.loads function shaves a couple µs here. */
+    if (loads == NULL) {
+        PyObject *picklemod;
+#if PY_MAJOR_VERSION >= 3
+        picklemod = PyImport_ImportModule("pickle");
+#else
+        picklemod = PyImport_ImportModule("cPickle");
+#endif
+        if (picklemod == NULL)
+            return NULL;
+        loads = PyObject_GetAttrString(picklemod, "loads");
+        Py_DECREF(picklemod);
+        if (loads == NULL)
+            return NULL;
+    }
+
     buf = PyBytes_FromStringAndSize(data, n);
     if (buf == NULL)
         return NULL;
-#if PY_MAJOR_VERSION >= 3
-    picklemod = PyImport_ImportModule("pickle");
-#else
-    picklemod = PyImport_ImportModule("cPickle");
-#endif
-    if (picklemod == NULL) {
-        Py_DECREF(buf);
-        return NULL;
-    }
-    obj = PyObject_CallMethod(picklemod, "loads", "O", buf);
+    obj = PyObject_CallFunctionObjArgs(loads, buf, NULL);
     Py_DECREF(buf);
-    Py_DECREF(picklemod);
     return obj;
 }
 
@@ -1376,6 +1606,7 @@ build_c_helpers_dict(void)
 
 #define declpointer(ptr) _declpointer(#ptr, &ptr)
 
+    declmethod(multi3);
     declmethod(sdiv);
     declmethod(srem);
     declmethod(udiv);
@@ -1394,9 +1625,9 @@ build_c_helpers_dict(void)
     declmethod(lgamma);
     declmethod(lgammaf);
     declmethod(complex_adaptor);
-    declmethod(extract_record_data);
     declmethod(adapt_ndarray);
     declmethod(ndarray_new);
+    declmethod(extract_record_data);
     declmethod(get_buffer);
     declmethod(adapt_buffer);
     declmethod(release_buffer);
@@ -1414,6 +1645,8 @@ build_c_helpers_dict(void)
     declmethod(rnd_shuffle);
     declmethod(rnd_init);
     declmethod(poisson_ptrs);
+    declmethod(attempt_nocopy_reshape);
+    declmethod(change_dtype);
 
     declpointer(py_random_state);
     declpointer(np_random_state);

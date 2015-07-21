@@ -19,16 +19,7 @@ import itertools
 
 from numba import ir, types, utils, config, six
 from numba.utils import RANGE_ITER_OBJECTS
-
-
-class TypingError(Exception):
-    def __init__(self, msg, loc=None):
-        self.msg = msg
-        self.loc = loc
-        if loc:
-            super(TypingError, self).__init__("%s\n%s" % (msg, loc.strformat()))
-        else:
-            super(TypingError, self).__init__("%s" % (msg,))
+from .errors import TypingError
 
 
 class TypeVar(object):
@@ -53,7 +44,7 @@ class TypeVar(object):
             if set(types) != self.typeset:
                 [expect] = list(self.typeset)
                 for ty in types:
-                    if self.context.type_compatibility(ty, expect) is None:
+                    if self.context.can_convert(ty, expect) is None:
                         raise TypingError("No conversion from %s to %s for "
                                           "'%s'" % (ty, expect, self.var))
         else:
@@ -65,7 +56,7 @@ class TypeVar(object):
     def lock(self, typ):
         if self.locked:
             [expect] = list(self.typeset)
-            if self.context.type_compatibility(typ, expect) is None:
+            if self.context.can_convert(typ, expect) is None:
                 raise TypingError("No conversion from %s to %s for "
                                   "'%s'" % (typ, expect, self.var))
         else:
@@ -155,11 +146,12 @@ class ExhaustIterConstrain(object):
     def __call__(self, context, typevars):
         oset = typevars[self.target]
         for tp in typevars[self.iterator.name].get():
-            if isinstance(tp, types.IterableType):
+            if isinstance(tp, types.BaseTuple):
+                if len(tp) == self.count:
+                    oset.add_types(tp)
+            elif isinstance(tp, types.IterableType):
                 oset.add_types(types.UniTuple(dtype=tp.iterator_type.yield_type,
                                               count=self.count))
-            elif isinstance(tp, types.Tuple):
-                oset.add_types(tp)
 
 
 class PairFirstConstrain(object):
@@ -213,11 +205,12 @@ class CallConstrain(object):
     Perform case analysis foreach combinations of argument types.
     """
 
-    def __init__(self, target, func, args, kws, loc):
+    def __init__(self, target, func, args, kws, vararg, loc):
         self.target = target
         self.func = func
         self.args = args
-        self.kws = kws
+        self.kws = kws or {}
+        self.vararg = vararg
         self.loc = loc
 
     def __call__(self, context, typevars):
@@ -230,10 +223,19 @@ class CallConstrain(object):
         kwds = [kw for (kw, var) in self.kws]
         argtypes = [typevars[a.name].get() for a in self.args]
         argtypes += [typevars[var.name].get() for (kw, var) in self.kws]
+        if self.vararg is not None:
+            argtypes.append(typevars[self.vararg.name].get())
         restypes = []
         # Case analysis for each combination of argument types.
         for args in itertools.product(*argtypes):
             pos_args = args[:n_pos_args]
+            if self.vararg is not None:
+                if not isinstance(args[-1], types.BaseTuple):
+                    # Unsuitable for *args
+                    # (Python is more lenient and accepts all iterables)
+                    continue
+                pos_args += args[-1].types
+                args = args[:-1]
             kw_args = dict(zip(kwds, args[n_pos_args:]))
             sig = context.resolve_function_type(fnty, pos_args, kw_args)
             if sig is None:
@@ -408,8 +410,8 @@ class TypeInferer(object):
                 raise TypeError("Variable %s has no type" % var)
             else:
                 unified = self.context.unify_types(*tv.get())
-            if unified == types.pyobject:
-                raise TypingError("Var '%s' unified to object: %s" % (var, tv))
+            if unified is types.pyobject:
+                raise TypingError("Can't unify types of variable '%s': %s" % (var, tv))
             typdict[var] = unified
         retty = self.get_return_type(typdict)
         fntys = self.get_function_types(typdict)
@@ -427,9 +429,8 @@ class TypeInferer(object):
         if not yield_types:
             raise TypingError("Cannot type generator: it does not yield any value")
         yield_type = self.context.unify_types(*yield_types)
-        # No finalizer in nopython mode
         return types.Generator(self.py_func, yield_type, arg_types, state_types,
-                               has_finalizer=False)
+                               has_finalizer=True)
 
     def get_function_types(self, typemap):
         calltypes = utils.UniqueDict()
@@ -444,16 +445,20 @@ class TypeInferer(object):
             assert signature is not None, (fnty, args)
             calltypes[call] = signature
 
-        for call, args, kws in self.usercalls:
-            args = tuple(typemap[a.name] for a in args)
-            kws = dict((kw, typemap[var.name]) for (kw, var) in kws)
-
+        for call, args, kws, vararg in self.usercalls:
             if isinstance(call.func, ir.Intrinsic):
                 signature = call.func.type
             else:
                 fnty = typemap[call.func.name]
+
+                args = tuple(typemap[a.name] for a in args)
+                kws = dict((kw, typemap[var.name]) for (kw, var) in kws)
+                if vararg is not None:
+                    tp = typemap[vararg.name]
+                    assert isinstance(tp, types.BaseTuple)
+                    args = args + tp.types
                 signature = self.context.resolve_function_type(fnty, args, kws)
-                assert signature is not None, (fnty, args, kws)
+                assert signature is not None, (fnty, args, kws, vararg)
             calltypes[call] = signature
 
         for inst in self.setitemcalls:
@@ -479,16 +484,12 @@ class TypeInferer(object):
             if isinstance(term, ir.Return):
                 rettypes.add(typemap[term.value.name])
 
-        if types.none in rettypes:
-            # Special case None return
-            rettypes = rettypes - set([types.none])
-            if rettypes:
-                unified = self.context.unify_types(*rettypes)
-                return types.Optional(unified)
-            else:
-                return types.none
-        elif rettypes:
+        if rettypes:
             unified = self.context.unify_types(*rettypes)
+            if unified is types.pyobject:
+                raise TypingError("Can't unify return type from the "
+                                  "following types: %s"
+                                  % ", ".join(sorted(map(str, rettypes))))
             return unified
         else:
             return types.none
@@ -606,7 +607,7 @@ class TypeInferer(object):
             if isinstance(expr.func, ir.Intrinsic):
                 restype = expr.func.type.return_type
                 self.typevars[target.name].add_types(restype)
-                self.usercalls.append((inst.value, expr.args, expr.kws))
+                self.usercalls.append((inst.value, expr.args, expr.kws, None))
             else:
                 self.typeof_call(inst, target, expr)
         elif expr.op in ('getiter', 'iternext'):
@@ -659,12 +660,12 @@ class TypeInferer(object):
 
     def typeof_call(self, inst, target, call):
         constrain = CallConstrain(target.name, call.func.name, call.args,
-                                  call.kws, loc=inst.loc)
+                                  call.kws, call.vararg, loc=inst.loc)
         self.constrains.append(constrain)
-        self.usercalls.append((inst.value, call.args, call.kws))
+        self.usercalls.append((inst.value, call.args, call.kws, call.vararg))
 
     def typeof_intrinsic_call(self, inst, target, func, *args):
-        constrain = IntrinsicCallConstrain(target.name, func, args, (),
-                                           loc=inst.loc)
+        constrain = IntrinsicCallConstrain(target.name, func, args,
+                                           kws=(), vararg=None, loc=inst.loc)
         self.constrains.append(constrain)
         self.intrcalls.append((inst.value, args, ()))

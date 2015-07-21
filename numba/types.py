@@ -4,162 +4,25 @@ the targets to choose their representation.
 """
 from __future__ import print_function, division, absolute_import
 
-import itertools
 import struct
 import weakref
 
 import numpy
 
-from .six import add_metaclass
+# All abstract types are exposed through this module
+from .abstracttypes import *
 from . import npdatetime, utils
-
-
-# Types are added to a global registry (_typecache) in order to assign
-# them unique integer codes for fast matching in _dispatcher.c.
-# However, we also want types to be disposable, therefore we ensure
-# each type is interned as a weak reference, so that it lives only as
-# long as necessary to keep a stable type code.
-_typecodes = itertools.count()
-
-def _autoincr():
-    n = next(_typecodes)
-    # 4 billion types should be enough, right?
-    assert n < 2 ** 32, "Limited to 4 billion types"
-    return n
-
-_typecache = {}
-
-def _on_type_disposal(wr, _pop=_typecache.pop):
-    _pop(wr, None)
-
-
-class _TypeMetaclass(type):
-    """
-    A metaclass that will intern instances after they are created.
-    This is done by first creating a new instance (including calling
-    __init__, which sets up the required attributes for equality
-    and hashing), then looking it up in the _typecache registry.
-    """
-
-    def __call__(cls, *args, **kwargs):
-        """
-        Instantiate *cls* (a Type subclass, presumably) and intern it.
-        If an interned instance already exists, it is returned, otherwise
-        the new instance is returned.
-        """
-        inst = type.__call__(cls, *args, **kwargs)
-        # Try to intern the created instance
-        wr = weakref.ref(inst, _on_type_disposal)
-        orig = _typecache.get(wr)
-        orig = orig and orig()
-        if orig is not None:
-            return orig
-        else:
-            inst._code = _autoincr()
-            _typecache[wr] = wr
-            inst.post_init()
-            return inst
-
-
-@add_metaclass(_TypeMetaclass)
-class Type(object):
-    """
-    The default behavior is to provide equality through `name` attribute.
-    Two types are equal if there `name` are equal.
-    Subclass can refine this behavior.
-    """
-
-    mutable = False
-
-    def __init__(self, name, param=False):
-        self.name = name
-        self.is_parametric = param
-
-    def post_init(self):
-        """
-        A method called when the instance is fully initialized and has
-        a registered typecode in its _code attribute.  Does nothing by
-        default, but can be overriden.
-        """
-
-    @property
-    def key(self):
-        """
-        A property used for __eq__, __ne__ and __hash__.  Can be overriden
-        in subclasses.
-        """
-        return self.name
-
-    def __repr__(self):
-        return self.name
-
-    def __hash__(self):
-        return hash(self.key)
-
-    def __eq__(self, other):
-        return self.__class__ is other.__class__ and self.key == other.key
-
-    def __ne__(self, other):
-        return not (self == other)
-
-    def __call__(self, *args):
-        if len(args) == 1 and not isinstance(args[0], Type):
-            return self.cast_python_value(args[0])
-        return Prototype(args=args, return_type=self)
-
-    def __getitem__(self, args):
-        assert not isinstance(self, Array)
-        ndim, layout = self._determine_array_spec(args)
-        return Array(dtype=self, ndim=ndim, layout=layout)
-
-    def _determine_array_spec(self, args):
-        if isinstance(args, (tuple, list)):
-            ndim = len(args)
-            if args[0].step == 1:
-                layout = 'F'
-            elif args[-1].step == 1:
-                layout = 'C'
-            else:
-                layout = 'A'
-        elif isinstance(args, slice):
-            ndim = 1
-            if args.step == 1:
-                layout = 'C'
-            else:
-                layout = 'A'
-        else:
-            ndim = 1
-            layout = 'A'
-
-        return ndim, layout
-
-
-    __iter__ = NotImplemented
-    cast_python_value = NotImplemented
-
-    def coerce(self, typingctx, other):
-        """Override this method to implement specialized coercion logic
-        for extending unify_pairs().  Only use this if the coercion logic cannot
-        be expressed as simple casting rules.
-        """
-        return NotImplemented
-
-
-class OpaqueType(Type):
-    """
-    To deal with externally defined literal types
-    """
-
-    def __init__(self, name):
-        super(OpaqueType, self).__init__(name)
+from .typeconv import Conversion
 
 
 class Boolean(Type):
-    pass
+
+    def cast_python_value(self, value):
+        return bool(value)
 
 
 @utils.total_ordering
-class Integer(Type):
+class Integer(Number):
     def __init__(self, *args, **kws):
         super(Integer, self).__init__(*args, **kws)
         # Determine bitwidth
@@ -181,7 +44,7 @@ class Integer(Type):
 
 
 @utils.total_ordering
-class Float(Type):
+class Float(Number):
     def __init__(self, *args, **kws):
         super(Float, self).__init__(*args, **kws)
         # Determine bitwidth
@@ -199,7 +62,7 @@ class Float(Type):
 
 
 @utils.total_ordering
-class Complex(Type):
+class Complex(Number):
     def __init__(self, name, underlying_float, **kwargs):
         super(Complex, self).__init__(name, **kwargs)
         self.underlying_float = underlying_float
@@ -236,6 +99,13 @@ class _NPDatetimeBase(Type):
         # also greater...).
         return self.unit_code < other.unit_code
 
+    def cast_python_value(self, value):
+        cls = getattr(numpy, self.type_name)
+        if self.unit:
+            return cls(value, self.unit)
+        else:
+            return cls(value)
+
 
 @utils.total_ordering
 class NPTimedelta(_NPDatetimeBase):
@@ -246,35 +116,29 @@ class NPDatetime(_NPDatetimeBase):
     type_name = 'datetime64'
 
 
-class Prototype(Type):
-    def __init__(self, args, return_type):
-        self.args = args
-        self.return_type = return_type
-        name = "%s(%s)" % (return_type, ', '.join(str(a) for a in args))
-        super(Prototype, self).__init__(name=name)
-
-
-class Dummy(Type):
-    """
-    For type that does not really have a representation and is compatible
-    with a void*.
-    """
-    pass
-
-
 class Phantom(Dummy):
     """
     A type that cannot be materialized.  A Phantom cannot be used as
     argument or return type.
     """
-    pass
 
 
 class Opaque(Dummy):
     """
     A type that is a opaque pointer.
     """
-    pass
+
+
+class PyObject(Dummy):
+    """
+    A generic CPython object.
+    """
+
+
+class RawPointer(Dummy):
+    """
+    A raw pointer without any specific meaning.
+    """
 
 
 class Kind(Type):
@@ -303,7 +167,7 @@ class VarArg(Type):
         return self.dtype
 
 
-class Module(Type):
+class Module(Dummy):
     def __init__(self, pymod):
         self.pymod = pymod
         super(Module, self).__init__("Module(%s)" % pymod)
@@ -324,19 +188,61 @@ class Macro(Type):
         return self.template
 
 
-class Function(Type):
+class Function(Callable, Opaque):
     def __init__(self, template):
         self.template = template
         name = "%s(%s)" % (self.__class__.__name__, template.key)
-        # TODO template is mutable.  Should use different naming scheme
         super(Function, self).__init__(name)
 
     @property
     def key(self):
         return self.template
 
-    def extend(self, template):
-        self.template.cases.extend(template.cases)
+    def get_call_type(self, context, args, kws):
+        return self.template(context).apply(args, kws)
+
+
+class NumberClass(Callable, DTypeSpec, Opaque):
+    """
+    Type class for number classes (e.g. "np.float64").
+    """
+
+    def __init__(self, instance_type, template):
+        self.instance_type = instance_type
+        self.template = template
+        name = "type(%s)" % (instance_type,)
+        super(NumberClass, self).__init__(name)
+
+    def get_call_type(self, context, args, kws):
+        return self.template(context).apply(args, kws)
+
+    @property
+    def key(self):
+        return self.instance_type
+
+    @property
+    def dtype(self):
+        return self.instance_type
+
+
+class DType(DTypeSpec, Opaque):
+    """
+    Type class for Numpy dtypes.
+    """
+
+    def __init__(self, dtype):
+        assert isinstance(dtype, Type)
+        self._dtype = dtype
+        name = "dtype(%s)" % (dtype,)
+        super(DTypeSpec, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.dtype
+
+    @property
+    def dtype(self):
+        return self._dtype
 
 
 class WeakType(Type):
@@ -367,11 +273,17 @@ class WeakType(Type):
         return Type.__hash__(self)
 
 
-class Dispatcher(WeakType):
+class Dispatcher(WeakType, Callable, Dummy):
 
     def __init__(self, overloaded):
         self._store_object(overloaded)
         super(Dispatcher, self).__init__("Dispatcher(%s)" % overloaded)
+
+    def get_call_type(self, context, args, kws):
+        template, args, kws = self.overloaded.get_call_template(args, kws)
+        sig = template(context).apply(args, kws)
+        sig.pysig = self.pysig
+        return sig
 
     @property
     def overloaded(self):
@@ -394,13 +306,32 @@ class ExternalFunctionPointer(Function):
     *get_pointer* is a Python function taking an object
     and returning the raw pointer value as an int.
     """
-
     def __init__(self, sig, get_pointer, cconv=None):
-        from . import typing
+        from .typing.templates import (AbstractTemplate, make_concrete_template,
+                                       signature)
+        if sig.return_type == ffi_forced_object:
+            raise TypeError("Cannot return a pyobject from a external function")
         self.sig = sig
+        self.requires_gil = any(a == ffi_forced_object for a in self.sig.args)
         self.get_pointer = get_pointer
         self.cconv = cconv
-        template = typing.make_concrete_template("CFuncPtr", sig, [sig])
+        if self.requires_gil:
+            class GilRequiringDefn(AbstractTemplate):
+                key = self.sig
+
+                def generic(self, args, kws):
+                    if kws:
+                        raise TypeError("does not support keyword arguments")
+                    # Make ffi_forced_object a bottom type to allow any type to be
+                    # casted to it. This is the only place that support
+                    # ffi_forced_object.
+                    coerced = [actual if formal == ffi_forced_object else formal
+                               for actual, formal
+                               in zip(args, self.key.args)]
+                    return signature(self.key.return_type, *coerced)
+            template = GilRequiringDefn
+        else:
+            template = make_concrete_template("CFuncPtr", sig, [sig])
         super(ExternalFunctionPointer, self).__init__(template)
 
     @property
@@ -411,6 +342,7 @@ class ExternalFunctionPointer(Function):
 class ExternalFunction(Function):
     """
     A named native function (resolvable by LLVM).
+    For internal use only.
     """
 
     def __init__(self, symbol, sig):
@@ -420,29 +352,55 @@ class ExternalFunction(Function):
         template = typing.make_concrete_template(symbol, symbol, [sig])
         super(ExternalFunction, self).__init__(template)
 
+    @property
+    def key(self):
+        return self.symbol, self.sig
+
+
+class NumbaFunction(Function):
+    """
+    A named native function with the Numba calling convention
+    (resolvable by LLVM).
+    For internal use only.
+    """
+
+    def __init__(self, fndesc, sig):
+        from . import typing
+        self.fndesc = fndesc
+        self.sig = sig
+        template = typing.make_concrete_template(fndesc.qualname,
+                                                 fndesc.qualname, [sig])
+        super(NumbaFunction, self).__init__(template)
+
+    @property
+    def key(self):
+        return self.fndesc.unique_name, self.sig
+
 
 class BoundFunction(Function):
     def __init__(self, template, this):
         self.this = this
+        # Create a derived template with an attribute *this*
         newcls = type(template.__name__ + '.' + str(this), (template,),
                       dict(this=this))
         super(BoundFunction, self).__init__(newcls)
 
     @property
     def key(self):
-        return (self.template.__name__, self.this)
+        return self.template.key, self.this
 
 
 class Method(Function):
     def __init__(self, template, this):
         self.this = this
+        # Create a derived template with an attribute *this*
         newcls = type(template.__name__ + '.' + str(this), (template,),
                       dict(this=this))
         super(Method, self).__init__(newcls)
 
     @property
     def key(self):
-        return (self.template.__name__, self.this)
+        return self.template.key, self.this
 
 
 class Pair(Type):
@@ -461,36 +419,26 @@ class Pair(Type):
         return self.first_type, self.second_type
 
 
-class IterableType(Type):
-    """
-    Base class for iterable types.
-    Derived classes should implement the *iterator_type* attribute.
-    """
-
-
 class SimpleIterableType(IterableType):
 
     def __init__(self, name, iterator_type):
-        self.iterator_type = iterator_type
+        self._iterator_type = iterator_type
         super(SimpleIterableType, self).__init__(name, param=True)
 
-
-class IteratorType(IterableType):
-    """
-    Base class for all iterator types.
-    Derived classes should implement the *yield_type* attribute.
-    """
-
-    def __init__(self, name, **kwargs):
-        self.iterator_type = self
-        super(IteratorType, self).__init__(name, **kwargs)
+    @property
+    def iterator_type(self):
+        return self._iterator_type
 
 
 class SimpleIteratorType(IteratorType):
 
     def __init__(self, name, yield_type):
-        self.yield_type = yield_type
+        self._yield_type = yield_type
         super(SimpleIteratorType, self).__init__(name, param=True)
+
+    @property
+    def yield_type(self):
+        return self._yield_type
 
 
 class RangeType(SimpleIterableType):
@@ -501,7 +449,7 @@ class RangeIteratorType(SimpleIteratorType):
     pass
 
 
-class Generator(IteratorType):
+class Generator(SimpleIteratorType):
     """
     Type class for Numba-compiled generator objects.
     """
@@ -511,35 +459,34 @@ class Generator(IteratorType):
         self.gen_func = gen_func
         self.arg_types = tuple(arg_types)
         self.state_types = tuple(state_types)
-        self.yield_type = yield_type
         self.has_finalizer = has_finalizer
         name = "%s generator(func=%s, args=%s, has_finalizer=%s)" % (
-            self.yield_type, self.gen_func, self.arg_types,
+            yield_type, self.gen_func, self.arg_types,
             self.has_finalizer)
-        super(Generator, self).__init__(name, param=True)
+        super(Generator, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
 
 
-class NumpyFlatType(IteratorType):
+class NumpyFlatType(SimpleIteratorType):
     """
     Type class for `ndarray.flat()` objects.
     """
 
     def __init__(self, arrty):
         self.array_type = arrty
-        self.yield_type = arrty.dtype
+        yield_type = arrty.dtype
         name = "array.flat({arrayty})".format(arrayty=arrty)
-        super(NumpyFlatType, self).__init__(name, param=True)
+        super(NumpyFlatType, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.array_type
 
 
-class NumpyNdEnumerateType(IteratorType):
+class NumpyNdEnumerateType(SimpleIteratorType):
     """
     Type class for `np.ndenumerate()` objects.
     """
@@ -548,32 +495,32 @@ class NumpyNdEnumerateType(IteratorType):
         self.array_type = arrty
         # XXX making this a uintp has the side effect of forcing some
         # arithmetic operations to return a float result.
-        self.yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
+        yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
         name = "ndenumerate({arrayty})".format(arrayty=arrty)
-        super(NumpyNdEnumerateType, self).__init__(name, param=True)
+        super(NumpyNdEnumerateType, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.array_type
 
 
-class NumpyNdIndexType(IteratorType):
+class NumpyNdIndexType(SimpleIteratorType):
     """
     Type class for `np.ndindex()` objects.
     """
 
     def __init__(self, ndim):
         self.ndim = ndim
-        self.yield_type = UniTuple(intp, self.ndim)
+        yield_type = UniTuple(intp, self.ndim)
         name = "ndindex(dims={ndim})".format(ndim=ndim)
-        super(NumpyNdIndexType, self).__init__(name, param=True)
+        super(NumpyNdIndexType, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.ndim
 
 
-class EnumerateType(IteratorType):
+class EnumerateType(SimpleIteratorType):
     """
     Type class for `enumerate` objects.
     Type instances are parametered with the underlying source type.
@@ -581,16 +528,16 @@ class EnumerateType(IteratorType):
 
     def __init__(self, iterable_type):
         self.source_type = iterable_type.iterator_type
-        self.yield_type = Tuple([intp, self.source_type.yield_type])
+        yield_type = Tuple([intp, self.source_type.yield_type])
         name = 'enumerate(%s)' % (self.source_type)
-        super(EnumerateType, self).__init__(name, param=True)
+        super(EnumerateType, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.source_type
 
 
-class ZipType(IteratorType):
+class ZipType(SimpleIteratorType):
     """
     Type class for `zip` objects.
     Type instances are parametered with the underlying source types.
@@ -598,9 +545,9 @@ class ZipType(IteratorType):
 
     def __init__(self, iterable_types):
         self.source_types = tuple(tp.iterator_type for tp in iterable_types)
-        self.yield_type = Tuple(tp.yield_type for tp in self.source_types)
+        yield_type = Tuple(tp.yield_type for tp in self.source_types)
         name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)
-        super(ZipType, self).__init__(name, param=True)
+        super(ZipType, self).__init__(name, yield_type)
 
     @property
     def key(self):
@@ -634,20 +581,27 @@ class UnicodeCharSeq(Type):
 
 
 class Record(Type):
+    """
+    A Numpy structured scalar.  *descr* is the string representation
+    of the Numpy dtype; *fields* of mapping of field names to
+    (type, offset) tuples; *size* the bytesize of a record;
+    *aligned* whether the fields are aligned; *dtype* the Numpy dtype
+    instance.
+    """
     mutable = True
 
-    def __init__(self, id, fields, size, aligned, dtype):
-        self.id = id
+    def __init__(self, descr, fields, size, aligned, dtype):
+        self.descr = descr
         self.fields = fields.copy()
         self.size = size
         self.aligned = aligned
         self.dtype = dtype
-        name = 'Record(%s)' % id
+        name = 'Record(%s)' % descr
         super(Record, self).__init__(name)
 
     @property
     def key(self):
-        return (self.dtype, self.size, self.aligned)
+        return (self.size, self.aligned, self.dtype)
 
     def __len__(self):
         return len(self.fields)
@@ -663,7 +617,7 @@ class Record(Type):
         return [(f, t) for f, (t, _) in self.fields.items()]
 
 
-class ArrayIterator(IteratorType):
+class ArrayIterator(SimpleIteratorType):
     """
     Type class for iterators of array and buffer objects.
     """
@@ -673,10 +627,10 @@ class ArrayIterator(IteratorType):
         name = "iter(%s)" % (self.array_type,)
         nd = array_type.ndim
         if nd == 0 or nd == 1:
-            self.yield_type = array_type.dtype
+            yield_type = array_type.dtype
         else:
-            self.yield_type = array_type.copy(ndim=array_type.ndim - 1)
-        super(ArrayIterator, self).__init__(name, param=True)
+            yield_type = array_type.copy(ndim=array_type.ndim - 1)
+        super(ArrayIterator, self).__init__(name, yield_type)
 
 
 class Buffer(IterableType):
@@ -706,7 +660,11 @@ class Buffer(IterableType):
                 type_name = "readonly %s" % type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Buffer, self).__init__(name, param=True)
-        self.iterator_type = ArrayIterator(self)
+        self._iterator_type = ArrayIterator(self)
+
+    @property
+    def iterator_type(self):
+        return self._iterator_type
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
@@ -777,16 +735,6 @@ class Array(Buffer):
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Array, self).__init__(dtype, ndim, layout, name=name)
 
-    def post_init(self):
-        """
-        Install conversion from this layout (if non-'A') to 'A' layout.
-        """
-        if self.layout != 'A':
-            from numba.typeconv.rules import default_casting_rules as tcr
-            ary_any = self.copy(layout='A')
-            # XXX This will make the types immortal
-            tcr.safe(self, ary_any)
-
     def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
         if dtype is None:
             dtype = self.dtype
@@ -801,6 +749,60 @@ class Array(Buffer):
     @property
     def key(self):
         return self.dtype, self.ndim, self.layout, self.mutable
+
+    def unify(self, typingctx, other):
+        """
+        Unify this with the *other* Array.
+        """
+        if (isinstance(other, Array) and other.ndim == self.ndim
+            and other.dtype == self.dtype):
+            if self.layout == other.layout:
+                layout = self.layout
+            else:
+                layout = 'A'
+            readonly = not (self.mutable and other.mutable)
+            return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
+                         readonly=readonly)
+
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this Array to the *other*.
+        """
+        if (isinstance(other, Array) and other.ndim == self.ndim
+            and other.dtype == self.dtype):
+            if (other.layout in ('A', self.layout)
+                and (self.mutable or not other.mutable)):
+                return Conversion.safe
+
+
+class ArrayCTypes(Type):
+    """
+    This is the type for `numpy.ndarray.ctypes`.
+    """
+    def __init__(self, arytype):
+        # This depends on the ndim for the shape and strides attributes,
+        # even though they are not implemented, yet.
+        self.ndim = arytype.ndim
+        name = "ArrayCTypes(ndim={0})".format(self.ndim)
+        super(ArrayCTypes, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.ndim
+
+
+class ArrayFlags(Type):
+    """
+    This is the type for `numpy.ndarray.flags`.
+    """
+    def __init__(self, arytype):
+        self.array_type = arytype
+        name = "ArrayFlags({0})".format(self.array_type)
+        super(ArrayFlags, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.array_type
 
 
 class NestedArray(Array):
@@ -846,14 +848,25 @@ class NestedArray(Array):
     def key(self):
         return self.dtype, self.shape
 
-class UniTuple(IterableType):
+
+class BaseTuple(Type):
+    """
+    The base class for all tuple types (with a known size).
+    """
+
+
+class UniTuple(IterableType, BaseTuple):
 
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
         name = "(%s x %d)" % (dtype, count)
         super(UniTuple, self).__init__(name, param=True)
-        self.iterator_type = UniTupleIter(self)
+        self._iterator_type = UniTupleIter(self)
+
+    @property
+    def iterator_type(self):
+        return self._iterator_type
 
     def getitem(self, ind):
         return self.dtype, intp
@@ -878,31 +891,38 @@ class UniTuple(IterableType):
     def types(self):
         return (self.dtype,) * self.count
 
-    def coerce(self, typingctx, other):
+    def unify(self, typingctx, other):
         """
         Unify UniTuples with their dtype
         """
         if isinstance(other, UniTuple) and len(self) == len(other):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
-            return UniTuple(dtype=dtype, count=self.count)
+            if dtype != pyobject:
+                return UniTuple(dtype=dtype, count=self.count)
 
-        return NotImplemented
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this UniTuple to another one.
+        """
+        if isinstance(other, UniTuple) and len(self) == len(other):
+            return typingctx.can_convert(self.dtype, other.dtype)
 
 
-class UniTupleIter(IteratorType):
+class UniTupleIter(SimpleIteratorType):
 
     def __init__(self, unituple):
         self.unituple = unituple
-        self.yield_type = unituple.dtype
+        yield_type = unituple.dtype
         name = 'iter(%s)' % unituple
-        super(UniTupleIter, self).__init__(name, param=True)
+        super(UniTupleIter, self).__init__(name, yield_type)
 
     @property
     def key(self):
         return self.unituple
 
 
-class Tuple(Type):
+class Tuple(BaseTuple):
+
     def __init__(self, types):
         self.types = tuple(types)
         self.count = len(self.types)
@@ -926,21 +946,28 @@ class Tuple(Type):
     def __iter__(self):
         return iter(self.types)
 
-    def coerce(self, typingctx, other):
+    def unify(self, typingctx, other):
         """
         Unify elements of Tuples/UniTuples
         """
         # Other is UniTuple or Tuple
-        if isinstance(other, (UniTuple, Tuple)) and len(self) == len(other):
+        if isinstance(other, BaseTuple) and len(self) == len(other):
             unified = [typingctx.unify_pairs(ta, tb)
                        for ta, tb in zip(self, other)]
 
-            if any(t == pyobject for t in unified):
-                return NotImplemented
+            if all(t != pyobject for t in unified):
+                return Tuple(unified)
 
-            return Tuple(unified)
-
-        return NotImplemented
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this Tuple to another UniTuple or Tuple.
+        """
+        if isinstance(other, BaseTuple) and len(self) == len(other):
+            kinds = [typingctx.can_convert(ta, tb)
+                     for ta, tb in zip(self, other)]
+            if any(kind is None for kind in kinds):
+                return
+            return max(kinds)
 
 
 class CPointer(Type):
@@ -967,6 +994,23 @@ class EphemeralPointer(CPointer):
     """
 
 
+class EphemeralArray(Type):
+    """
+    Similar to EphemeralPointer, but pointing to an array of elements,
+    rather than a single one.  The array size must be known at compile-time.
+    """
+
+    def __init__(self, dtype, count):
+        self.dtype = dtype
+        self.count = count
+        name = "*%s[%d]" % (dtype, count)
+        super(EphemeralArray, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.dtype, self.count
+
+
 class Object(Type):
     mutable = True
 
@@ -983,39 +1027,48 @@ class Object(Type):
 class Optional(Type):
     def __init__(self, typ):
         assert typ != none
-        assert not isinstance(typ, Optional)
+        assert not isinstance(typ, (Optional, NoneType))
         self.type = typ
         name = "?%s" % typ
         super(Optional, self).__init__(name, param=True)
-
-    def post_init(self):
-        """
-        Install conversion from optional(T) to T
-        """
-        from numba.typeconv.rules import default_casting_rules as tcr
-        tcr.safe(self, self.type)
-        tcr.promote(self.type, self)
-        tcr.promote(none, self)
 
     @property
     def key(self):
         return self.type
 
-    def coerce(self, typingctx, other):
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, Optional):
+            return typingctx.can_convert(self.type, other.type)
+        else:
+            conv = typingctx.can_convert(self.type, other)
+            if conv is not None:
+                return max(conv, Conversion.safe)
+
+    def can_convert_from(self, typingctx, other):
+        if other is none:
+            return Conversion.promote
+        elif isinstance(other, Optional):
+            return typingctx.can_convert(other.type, self.type)
+        else:
+            conv = typingctx.can_convert(other, self.type)
+            if conv is not None:
+                return max(conv, Conversion.promote)
+
+    def unify(self, typingctx, other):
         if isinstance(other, Optional):
             unified = typingctx.unify_pairs(self.type, other.type)
-
         else:
             unified = typingctx.unify_pairs(self.type, other)
 
         if unified != pyobject:
-            return Optional(unified)
-
-        return NotImplemented
+            if isinstance(unified, Optional):
+                return unified
+            else:
+                return Optional(unified)
 
 
 class NoneType(Opaque):
-    def coerce(self, typingctx, other):
+    def unify(self, typingctx, other):
         """Turns anything to a Optional type
         """
         if isinstance(other, Optional):
@@ -1024,7 +1077,7 @@ class NoneType(Opaque):
         return Optional(other)
 
 
-class ExceptionType(Phantom):
+class ExceptionType(Callable, Phantom):
     """
     The type of exception classes (not instances).
     """
@@ -1034,6 +1087,11 @@ class ExceptionType(Phantom):
         name = "%s" % (exc_class.__name__)
         self.exc_class = exc_class
         super(ExceptionType, self).__init__(name, param=True)
+
+    def get_call_type(self, context, args, kws):
+        from . import typing
+        return_type = ExceptionInstance(self.exc_class)
+        return typing.signature(return_type)
 
     @property
     def key(self):
@@ -1074,15 +1132,18 @@ def is_int_tuple(x):
 
 # Short names
 
-
-pyobject = Opaque('pyobject')
+pyobject = PyObject('pyobject')
+ffi_forced_object = Opaque('ffi_forced_object')
 none = NoneType('none')
 Any = Phantom('any')
-string = Dummy('str')
+string = Opaque('str')
 
 # No operation is defined on voidptr
 # Can only pass it around
-voidptr = Opaque('void*')
+voidptr = RawPointer('void*')
+
+# For NRT GC
+meminfo_pointer = Opaque("MemInfo*")
 
 boolean = bool_ = Boolean('bool')
 
@@ -1117,8 +1178,11 @@ sign_type = Phantom('sign')
 
 range_iter32_type = RangeIteratorType('range_iter32', int32)
 range_iter64_type = RangeIteratorType('range_iter64', int64)
+unsigned_range_iter64_type = RangeIteratorType('unsigned_range_iter64', uint64)
 range_state32_type = RangeType('range_state32', range_iter32_type)
 range_state64_type = RangeType('range_state64', range_iter64_type)
+unsigned_range_state64_type = RangeType('unsigned_range_state64',
+                                        unsigned_range_iter64_type)
 
 # slice2_type = Type('slice2_type')
 slice3_type = Slice3Type('slice3_type')
@@ -1248,4 +1312,5 @@ f8
 c8
 c16
 optional
+ffi_forced_object
 '''.split()

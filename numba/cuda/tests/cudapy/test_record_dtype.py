@@ -5,8 +5,7 @@ import sys
 import numpy as np
 from numba import cuda, numpy_support, types
 from numba import unittest_support as unittest
-from numba.compiler import compile_isolated
-from numba.utils import IS_PY3
+from numba.cuda.testing import skip_on_cudasim
 
 
 def set_a(ary, i, v):
@@ -266,6 +265,7 @@ class TestRecordDtype(unittest.TestCase):
 
         np.testing.assert_equal(rec['j'], arr)
 
+@skip_on_cudasim('Attribute access of structured arrays not supported in simulator')
 class TestRecordDtypeWithStructArrays(TestRecordDtype):
     '''
     Same as TestRecordDtype, but using structured arrays instead of recarrays.

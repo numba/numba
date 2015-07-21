@@ -4,9 +4,9 @@ Implementation of the range object for fixed-size integers.
 
 import llvmlite.llvmpy.core as lc
 
-from numba import types, typing, cgutils
+from numba import types, cgutils
 from numba.targets.imputils import (builtin, implement, iterator_impl,
-                                    struct_factory)
+                                    struct_factory, impl_ret_untracked)
 
 
 @struct_factory(types.RangeIteratorType)
@@ -19,11 +19,7 @@ def make_range_iterator(typ):
 
 
 def make_range_impl(range_state_type, range_iter_type, int_type):
-
-    class RangeState(cgutils.Structure):
-        _fields = [('start', int_type),
-                   ('stop', int_type),
-                   ('step', int_type)]
+    RangeState = cgutils.create_struct_proxy(range_state_type)
 
     @builtin
     @implement(types.range_type, int_type)
@@ -36,7 +32,10 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
         state.start = context.get_constant(int_type, 0)
         state.stop = stop
         state.step = context.get_constant(int_type, 1)
-        return state._getvalue()
+        return impl_ret_untracked(context,
+                                  builder,
+                                  range_state_type,
+                                  state._getvalue())
 
     @builtin
     @implement(types.range_type, int_type, int_type)
@@ -49,7 +48,10 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
         state.start = start
         state.stop = stop
         state.step = context.get_constant(int_type, 1)
-        return state._getvalue()
+        return impl_ret_untracked(context,
+                                  builder,
+                                  range_state_type,
+                                  state._getvalue())
 
     @builtin
     @implement(types.range_type, int_type, int_type, int_type)
@@ -62,7 +64,10 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
         state.start = start
         state.stop = stop
         state.step = step
-        return state._getvalue()
+        return impl_ret_untracked(context,
+                                  builder,
+                                  range_state_type,
+                                  state._getvalue())
 
     @builtin
     @implement('getiter', range_state_type)
@@ -72,7 +77,8 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
         """
         (value,) = args
         state = RangeState(context, builder, value)
-        return RangeIter.from_range_state(context, builder, state)._getvalue()
+        res = RangeIter.from_range_state(context, builder, state)._getvalue()
+        return impl_ret_untracked(context, builder, range_iter_type, res)
 
     @iterator_impl(range_state_type, range_iter_type)
     class RangeIter(make_range_iterator(range_iter_type)):
@@ -110,7 +116,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
                 context.call_conv.return_user_exc(builder, ValueError,
                                                   ("range() arg 3 must not be zero",))
 
-            with cgutils.ifelse(builder, sign_differs) as (then, orelse):
+            with builder.if_else(sign_differs) as (then, orelse):
                 with then:
                     builder.store(zero, self.count)
 
@@ -131,14 +137,16 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
             is_valid = builder.icmp(lc.ICMP_SGT, count, zero)
             result.set_valid(is_valid)
 
-            with cgutils.ifthen(builder, is_valid):
+            with builder.if_then(is_valid):
                 value = builder.load(self.iter)
                 result.yield_(value)
                 one = context.get_constant(int_type, 1)
 
-                builder.store(builder.sub(count, one), countptr)
+                builder.store(builder.sub(count, one, flags=["nsw"]), countptr)
                 builder.store(builder.add(value, self.step), self.iter)
 
 
 make_range_impl(types.range_state32_type, types.range_iter32_type, types.int32)
 make_range_impl(types.range_state64_type, types.range_iter64_type, types.int64)
+make_range_impl(types.unsigned_range_state64_type, types.unsigned_range_iter64_type,
+                types.uint64)

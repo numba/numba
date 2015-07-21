@@ -77,6 +77,10 @@ class Range(ConcreteTemplate):
         signature(types.range_state64_type, types.int64, types.int64),
         signature(types.range_state64_type, types.int64, types.int64,
                   types.int64),
+        signature(types.unsigned_range_state64_type, types.uint64),
+        signature(types.unsigned_range_state64_type, types.uint64, types.uint64),
+        signature(types.unsigned_range_state64_type, types.uint64, types.uint64,
+                  types.uint64),
     ]
 
 
@@ -192,15 +196,16 @@ class BinOpFloorDiv(ConcreteTemplate):
 @builtin
 class BinOpPower(ConcreteTemplate):
     key = "**"
-    cases = [signature(types.intp, types.intp, types.intp)]
+    cases = [signature(op, op, op)
+             for op in (types.intp, types.int64)]
     cases += [signature(types.float64, types.float64, op)
-             for op in sorted(types.signed_domain)]
+              for op in sorted(types.signed_domain)]
     cases += [signature(types.float64, types.float64, op)
-             for op in sorted(types.unsigned_domain)]
+              for op in sorted(types.unsigned_domain)]
     cases += [signature(op, op, op)
-             for op in sorted(types.real_domain)]
+              for op in sorted(types.real_domain)]
     cases += [signature(op, op, op)
-             for op in sorted(types.complex_domain)]
+              for op in sorted(types.complex_domain)]
 
 
 class PowerBuiltin(BinOpPower):
@@ -308,30 +313,63 @@ class UnorderedCmpOp(ConcreteTemplate):
 class CmpOpLt(OrderedCmpOp):
     key = '<'
 
-
 @builtin
 class CmpOpLe(OrderedCmpOp):
     key = '<='
-
 
 @builtin
 class CmpOpGt(OrderedCmpOp):
     key = '>'
 
-
 @builtin
 class CmpOpGe(OrderedCmpOp):
     key = '>='
-
 
 @builtin
 class CmpOpEq(UnorderedCmpOp):
     key = '=='
 
-
 @builtin
 class CmpOpNe(UnorderedCmpOp):
     key = '!='
+
+
+class TupleCompare(AbstractTemplate):
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        tuple_types = (types.Tuple, types.UniTuple)
+        if isinstance(lhs, tuple_types) and isinstance(rhs, tuple_types):
+            for u, v in zip(lhs, rhs):
+                # Check element-wise comparability
+                res = self.context.resolve_function_type(self.key, (u, v), {})
+                if res is None:
+                    break
+            else:
+                return signature(types.boolean, lhs, rhs)
+
+@builtin
+class TupleEq(TupleCompare):
+    key = '=='
+
+@builtin
+class TupleNe(TupleCompare):
+    key = '!='
+
+@builtin
+class TupleGe(TupleCompare):
+    key = '>='
+
+@builtin
+class TupleGt(TupleCompare):
+    key = '>'
+
+@builtin
+class TupleLe(TupleCompare):
+    key = '<='
+
+@builtin
+class TupleLt(TupleCompare):
+    key = '<'
 
 
 class CmpOpIdentity(AbstractTemplate):
@@ -372,6 +410,8 @@ def normalize_index(index):
         return types.intp if index.signed else types.uintp
 
 
+# XXX Should there be a base Sequence type for plain 1d sequences?
+
 @builtin
 class GetItemUniTuple(AbstractTemplate):
     key = "getitem"
@@ -380,6 +420,17 @@ class GetItemUniTuple(AbstractTemplate):
         tup, idx = args
         if isinstance(tup, types.UniTuple):
             return signature(tup.dtype, tup, normalize_index(idx))
+
+
+@builtin
+class GetItemFlat(AbstractTemplate):
+    key = "getitem"
+
+    def generic(self, args, kws):
+        obj, idx = args
+        if (isinstance(obj, types.NumpyFlatType)
+            and isinstance(idx, types.Integer)):
+            return signature(obj.array_type.dtype, obj, normalize_index(idx))
 
 
 @builtin
@@ -415,7 +466,9 @@ class GetItemBuffer(AbstractTemplate):
             if ary.ndim == 1:
                 res = ary.dtype
             elif not ary.slice_is_copy and ary.ndim > 1:
-                res = ary.copy(ndim=ary.ndim - 1)
+                # Left-index into a F-contiguous array gives a non-contiguous view
+                layout = 'C' if ary.layout == 'C' else 'A'
+                res = ary.copy(ndim=ary.ndim - 1, layout=layout)
             else:
                 return
 
@@ -431,6 +484,17 @@ class GetItemBuffer(AbstractTemplate):
 
 
 @builtin
+class GetItemCPointer(AbstractTemplate):
+    key = "getitem"
+
+    def generic(self, args, kws):
+        assert not kws
+        ptr, idx = args
+        if isinstance(ptr, types.CPointer) and isinstance(idx, types.Integer):
+            return signature(ptr.dtype, ptr, normalize_index(idx))
+
+
+@builtin
 class SetItemBuffer(AbstractTemplate):
     key = "setitem"
 
@@ -439,8 +503,19 @@ class SetItemBuffer(AbstractTemplate):
         ary, idx, val = args
         if isinstance(ary, types.Buffer):
             if not ary.mutable:
-                raise TypeError("Immutable array")
+                raise TypeError("Cannot modify value of type %s" %(ary,))
             return signature(types.none, ary, normalize_index(idx), ary.dtype)
+
+
+@builtin
+class SetItemCPointer(AbstractTemplate):
+    key = "setitem"
+
+    def generic(self, args, kws):
+        assert not kws
+        ptr, idx, val = args
+        if isinstance(ptr, types.CPointer) and isinstance(idx, types.Integer):
+            return signature(types.none, ptr, normalize_index(idx), ptr.dtype)
 
 
 @builtin
@@ -456,9 +531,22 @@ class Len(AbstractTemplate):
 
 #-------------------------------------------------------------------------------
 
+def normalize_shape(shape):
+    if isinstance(shape, types.UniTuple):
+        if isinstance(shape.dtype, types.Integer):
+            dimtype = types.intp if shape.dtype.signed else types.uintp
+            return types.UniTuple(dimtype, len(shape))
+
+    elif isinstance(shape, types.Tuple) and shape.count == 0:
+        return shape
+
+
 @builtin_attr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
+
+    def resolve_dtype(self, ary):
+        return types.DType(ary.dtype)
 
     def resolve_itemsize(self, ary):
         return types.intp
@@ -478,7 +566,61 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_flat(self, ary):
         return types.NumpyFlatType(ary)
 
+    def resolve_ctypes(self, ary):
+        return types.ArrayCTypes(ary)
+
+    def resolve_flags(self, ary):
+        return types.ArrayFlags(ary)
+
+    def resolve_T(self, ary):
+        if ary.ndim <= 1:
+            retty = ary
+        else:
+            layout = {"C": "F", "F": "C"}.get(ary.layout, "A")
+            retty = ary.copy(layout=layout)
+        return retty
+
+    @bound_function("array.transpose")
+    def resolve_transpose(self, ary, args, kws):
+        assert not args
+        assert not kws
+        return signature(self.resolve_T(ary))
+
+    @bound_function("array.copy")
+    def resolve_copy(self, ary, args, kws):
+        assert not args
+        assert not kws
+        retty = ary.copy(layout="C")
+        return signature(retty)
+
+    @bound_function("array.reshape")
+    def resolve_reshape(self, ary, args, kws):
+        assert not kws
+        shape, = args
+        shape = normalize_shape(shape)
+        if shape is None:
+            return
+        if ary.layout == "C":
+            # Given order='C' (the only supported value), a C-contiguous
+            # array is always returned for a C-contiguous input.
+            layout = "C"
+        else:
+            layout = "A"
+        ndim = shape.count if isinstance(shape, types.BaseTuple) else 1
+        retty = ary.copy(ndim=ndim)
+        return signature(retty, shape)
+
+    @bound_function("array.view")
+    def resolve_view(self, ary, args, kws):
+        from .npydecl import _parse_dtype
+        assert not kws
+        dtype, = args
+        dtype = _parse_dtype(dtype)
+        retty = ary.copy(dtype=dtype)
+        return signature(retty, *args)
+
     def generic_resolve(self, ary, attr):
+        # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
                 return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,
@@ -486,9 +628,43 @@ class ArrayAttribute(AttributeTemplate):
 
 
 @builtin_attr
+class ArrayCTypesAttribute(AttributeTemplate):
+    key = types.ArrayCTypes
+
+    def resolve_data(self, ctinfo):
+        return types.uintp
+
+
+@builtin_attr
+class ArrayFlagsAttribute(AttributeTemplate):
+    key = types.ArrayFlags
+
+    def resolve_contiguous(self, ctflags):
+        return types.boolean
+
+    def resolve_c_contiguous(self, ctflags):
+        return types.boolean
+
+    def resolve_f_contiguous(self, ctflags):
+        return types.boolean
+
+
+@builtin_attr
 class NestedArrayAttribute(ArrayAttribute):
     key = types.NestedArray
 
+
+def _expand_integer(ty):
+    """
+    If *ty* is an integer, expand it to a machine int (like Numpy).
+    """
+    if isinstance(ty, types.Integer):
+        if ty.signed:
+            return max(types.intp, ty)
+        else:
+            return max(types.uintp, ty)
+    else:
+        return ty
 
 def generic_homog(self, args, kws):
     assert not args
@@ -496,13 +672,13 @@ def generic_homog(self, args, kws):
     return signature(self.this.dtype, recvr=self.this)
 
 def generic_expand(self, args, kws):
-    if isinstance(self.this.dtype, types.Integer):
-        # Expand to a machine int, not larger (like Numpy)
-        if self.this.dtype.signed:
-            return signature(max(types.intp, self.this.dtype), recvr=self.this)
-        else:
-            return signature(max(types.uintp, self.this.dtype), recvr=self.this)
-    return signature(self.this.dtype, recvr=self.this)
+    return signature(_expand_integer(self.this.dtype), recvr=self.this)
+
+def generic_expand_cumulative(self, args, kws):
+    assert isinstance(self.this, types.Array)
+    return_type = types.Array(dtype=_expand_integer(self.this.dtype),
+                              ndim=1, layout='C')
+    return signature(return_type, recvr=self.this)
 
 def generic_hetero_real(self, args, kws):
     assert not args
@@ -533,8 +709,12 @@ for fname in ["min", "max"]:
 for fname in ["sum", "prod"]:
     install_array_method(fname, generic_expand)
 
+# Functions that return a machine-width type, to avoid overflows
+for fname in ["cumsum", "cumprod"]:
+    install_array_method(fname, generic_expand_cumulative)
+
 # Functions that require integer arrays get promoted to float64 return
-for fName in ["mean", "var", "std"]:
+for fName in ["mean", "median", "var", "std"]:
     install_array_method(fName, generic_hetero_real)
 
 # Functions that return an index (intp)
@@ -618,116 +798,23 @@ for ty in types.number_domain:
 
 #-------------------------------------------------------------------------------
 
-@builtin_attr
-class NumbaTypesModuleAttribute(AttributeTemplate):
-    key = types.Module(types)
+def register_casters(register_global):
+    nb_types = set(types.number_domain)
+    nb_types.add(types.bool_)
 
-    def resolve_int8(self, mod):
-        return types.Function(ToInt8)
+    for restype in nb_types:
+        class Caster(AbstractTemplate):
+            key = restype
 
-    def resolve_int16(self, mod):
-        return types.Function(ToInt16)
+            def generic(self, args, kws):
+                assert not kws
+                [a] = args
+                if a in nb_types:
+                    return signature(self.key, a)
 
-    def resolve_int32(self, mod):
-        return types.Function(ToInt32)
+        register_global(restype, types.NumberClass(restype, Caster))
 
-    def resolve_int64(self, mod):
-        return types.Function(ToInt64)
-
-    def resolve_uint8(self, mod):
-        return types.Function(ToUint8)
-
-    def resolve_uint16(self, mod):
-        return types.Function(ToUint16)
-
-    def resolve_uint32(self, mod):
-        return types.Function(ToUint32)
-
-    def resolve_uint64(self, mod):
-        return types.Function(ToUint64)
-
-    def resolve_float32(self, mod):
-        return types.Function(ToFloat32)
-
-    def resolve_float64(self, mod):
-        return types.Function(ToFloat64)
-
-    def resolve_complex64(self, mod):
-        return types.Function(ToComplex64)
-
-    def resolve_complex128(self, mod):
-        return types.Function(ToComplex128)
-
-
-class Caster(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        [a] = args
-        if a in types.number_domain:
-            return signature(self.key, a)
-
-
-class ToInt8(Caster):
-    key = types.int8
-
-
-class ToInt16(Caster):
-    key = types.int16
-
-
-class ToInt32(Caster):
-    key = types.int32
-
-
-class ToInt64(Caster):
-    key = types.int64
-
-
-class ToUint8(Caster):
-    key = types.uint8
-
-
-class ToUint16(Caster):
-    key = types.uint16
-
-
-class ToUint32(Caster):
-    key = types.uint32
-
-
-class ToUint64(Caster):
-    key = types.uint64
-
-
-class ToFloat32(Caster):
-    key = types.float32
-
-
-class ToFloat64(Caster):
-    key = types.float64
-
-
-class ToComplex64(Caster):
-    key = types.complex64
-
-
-class ToComplex128(Caster):
-    key = types.complex128
-
-
-builtin_global(types, types.Module(types))
-builtin_global(types.int8, types.Function(ToInt8))
-builtin_global(types.int16, types.Function(ToInt16))
-builtin_global(types.int32, types.Function(ToInt32))
-builtin_global(types.int64, types.Function(ToInt64))
-builtin_global(types.uint8, types.Function(ToUint8))
-builtin_global(types.uint16, types.Function(ToUint16))
-builtin_global(types.uint32, types.Function(ToUint32))
-builtin_global(types.uint64, types.Function(ToUint64))
-builtin_global(types.float32, types.Function(ToFloat32))
-builtin_global(types.float64, types.Function(ToFloat64))
-builtin_global(types.complex64, types.Function(ToComplex64))
-builtin_global(types.complex128, types.Function(ToComplex128))
+register_casters(builtin_global)
 
 #------------------------------------------------------------------------------
 
@@ -746,7 +833,8 @@ class Max(AbstractTemplate):
                 return
 
         retty = self.context.unify_types(*args)
-        return signature(retty, *args)
+        if retty is not None:
+            return signature(retty, *args)
 
 
 class Min(AbstractTemplate):
@@ -763,7 +851,8 @@ class Min(AbstractTemplate):
                 return
 
         retty = self.context.unify_types(*args)
-        return signature(retty, *args)
+        if retty is not None:
+            return signature(retty, *args)
 
 
 class Round(ConcreteTemplate):
