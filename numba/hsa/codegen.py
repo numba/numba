@@ -5,7 +5,7 @@ from llvmlite.llvmpy import core as lc
 from llvmlite import ir as llvmir
 from numba import utils
 from numba.targets.codegen import BaseCPUCodegen, CodeLibrary
-from .hlc import DATALAYOUT, TRIPLE
+from .hlc import DATALAYOUT, TRIPLE, hlc
 
 
 class ModuleCollection(object):
@@ -67,6 +67,17 @@ class HSACodeLibrary(CodeLibrary):
         """
         self._optimize_functions(ll_module)
         self._final_module.link_in(ll_module)
+
+    def get_asm_str(self):
+        """
+        Get the human-readable assembly.
+        """
+
+        m = hlc.Module()
+        for dep in self._final_module._modules:
+            m.load_llvm(str(dep))
+        out = m.finalize()
+        return str(out.hsail)
 
 
 class JITHSACodegen(BaseCPUCodegen):
