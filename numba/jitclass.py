@@ -174,9 +174,6 @@ def register_class_type(cls, struct):
         @registry.register
         @imputils.implement((instance_type, attr), *([types.Any] * nargs))
         def imp(context, builder, sig, args):
-            print(sig)
-            print('\n'.join(map(str, args)))
-
             method = jitmethods[attr]
             method.compile(sig)
             cres = method._compileinfos[sig.args]
