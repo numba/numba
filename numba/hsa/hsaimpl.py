@@ -46,7 +46,7 @@ def _declare_function(context, builder, name, sig, cargs,
         function to use to mangle the symbol
 
     """
-    mod = cgutils.get_module(builder)
+    mod = builder.module
     llretty = context.get_value_type(sig.return_type)
     llargs = [context.get_value_type(t) for t in sig.args]
     fnty = Type.function(llretty, llargs)
@@ -181,7 +181,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
     laryty = Type.array(lldtype, elemcount)
 
     if addrspace == target.SPIR_LOCAL_ADDRSPACE:
-        lmod = cgutils.get_module(builder)
+        lmod = builder.module
 
         # Create global variable in the requested address-space
         gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
@@ -227,7 +227,8 @@ def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
                            data=builder.bitcast(dataptr, ary.data.type),
                            shape=cgutils.pack_array(builder, kshape),
                            strides=cgutils.pack_array(builder, kstrides),
-                           itemsize=context.get_constant(types.intp, itemsize))
+                           itemsize=context.get_constant(types.intp, itemsize),
+                           meminfo=None)
 
     return ary._getvalue()
 

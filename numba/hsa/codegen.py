@@ -61,6 +61,13 @@ class HSACodeLibrary(CodeLibrary):
     def _link_in(self, module):
         self._final_module.link_in(module._final_module)
 
+    def add_llvm_module(self, ll_module):
+        """
+        Override base class
+        """
+        self._optimize_functions(ll_module)
+        self._final_module.link_in(ll_module)
+
 
 class JITHSACodegen(BaseCPUCodegen):
     _library_class = HSACodeLibrary

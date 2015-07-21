@@ -21,6 +21,7 @@ def compile_hsa(pyfunc, return_type, args, debug):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
+    flags.unset('nrt')
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
                                   targetctx=targetctx,
@@ -306,10 +307,11 @@ def _unpack_argument(ty, val, kernelargs):
     if isinstance(ty, types.Array):
         c_intp = ctypes.c_ssize_t
 
-        parent = ctypes.c_void_p(0)
+        meminfo = parent = ctypes.c_void_p(0)
         nitems = c_intp(val.size)
         itemsize = c_intp(val.dtype.itemsize)
         data = ctypes.c_void_p(val.ctypes.data)
+        kernelargs.append(meminfo)
         kernelargs.append(parent)
         kernelargs.append(nitems)
         kernelargs.append(itemsize)
