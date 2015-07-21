@@ -60,6 +60,7 @@ def install_atomic_refct(module):
     """
     Implement both NRT_incref and NRT_decref in the module
     """
+    return
     incref = _define_atomic_inc_dec(module, "add", ordering='monotonic')
     decref = _define_atomic_inc_dec(module, "sub", ordering='monotonic')
 

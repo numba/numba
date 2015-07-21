@@ -127,6 +127,11 @@ MemInfo* NRT_MemInfo_alloc(size_t size);
 MemInfo* NRT_MemInfo_alloc_safe(size_t size);
 
 /*
+ * Similar to NRT_MemInfo_alloc_safe but with a custom dtor.
+ */
+MemInfo* NRT_MemInfo_alloc_dtor_safe(size_t size, dtor_function dtor);
+
+/*
  * Aligned versions of the NRT_MemInfo_alloc and NRT_MemInfo_alloc_safe.
  * These take an additional argument `align` for number of bytes to align to.
  */

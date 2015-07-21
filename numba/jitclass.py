@@ -6,6 +6,7 @@ from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils
+from llvmlite import ir as llvmir
 
 
 def jitclass(struct):
@@ -110,6 +111,33 @@ def register_class_type(cls, struct):
     # Add constructor
     ctor_nargs = len(jitmethods['__init__']._pysig.parameters) - 1
 
+    def imp_dtor(context, module):
+        dtor_ftype = llvmir.FunctionType(llvmir.VoidType(),
+                                         [context.get_value_type(types.voidptr),
+                                          context.get_value_type(
+                                              types.voidptr)])
+
+        fname = "_Dtor.{0}".format(instance_type.name)
+        dtor_fn = module.get_or_insert_function(dtor_ftype,
+                                                name=fname)
+        if dtor_fn.is_declaration:
+            # Define
+            builder = llvmir.IRBuilder(dtor_fn.append_basic_block())
+
+            alloc_fe_type = instance_type.get_data_type()
+            alloc_type = context.get_value_type(alloc_fe_type)
+
+            data_struct = cgutils.create_struct_proxy(alloc_fe_type)
+
+            ptr = builder.bitcast(dtor_fn.args[0], alloc_type.as_pointer())
+            data = data_struct(context, builder, ref=ptr)
+
+            context.nrt_decref(builder, alloc_fe_type, data._getvalue())
+
+            builder.ret_void()
+
+        return dtor_fn
+
     @registry.register
     @imputils.implement(class_type, *([types.Any] * ctor_nargs))
     def ctor_impl(context, builder, sig, args):
@@ -117,17 +145,23 @@ def register_class_type(cls, struct):
         inst_typ = sig.return_type
         alloc_type = context.get_value_type(inst_typ.get_data_type())
         alloc_size = context.get_abi_sizeof(alloc_type)
-        meminfo = context.nrt_meminfo_alloc(builder,
-                                            context.get_constant(types.uintp,
-                                                                 alloc_size))
 
+        meminfo = context.nrt_meminfo_alloc_dtor(
+            builder,
+            context.get_constant(types.uintp, alloc_size),
+            imp_dtor(context, builder.module),
+        )
         data_pointer = context.nrt_meminfo_data(builder, meminfo)
+        data_pointer = builder.bitcast(data_pointer, alloc_type.as_pointer())
+
+        # Nullify all data
+        builder.store(cgutils.get_null_value(alloc_type),
+                      data_pointer)
 
         inst_struct_typ = cgutils.create_struct_proxy(inst_typ)
         inst_struct = inst_struct_typ(context, builder)
         inst_struct.meminfo = meminfo
-        data_typ = inst_struct.data.type
-        inst_struct.data = builder.bitcast(data_pointer, data_typ)
+        inst_struct.data = data_pointer
 
         # Call the __init__
         # TODO: extract the following into a common util

@@ -51,6 +51,14 @@ typedef struct {
 } AlignHeader;
 
 
+typedef struct {
+    size_t allocated_size;
+    dtor_function dtor;
+} DtorInfo;
+
+
+
+
 static
 MemInfo *nrt_pop_meminfo_list(MemInfo * volatile *list) {
     MemInfo *old, *repl, *head;
@@ -257,6 +265,20 @@ void nrt_internal_dtor_safe(void *ptr, void *info) {
     NRT_Free(ptr);
 }
 
+static
+void nrt_internal_custom_dtor_safe(void *ptr, void *info) {
+    DtorInfo *dtor_info = (DtorInfo*)info;
+    NRT_Debug(nrt_debug_print("nrt_internal_custom_dtor_safe %p, %p\n",
+                              ptr, info));
+    if (dtor_info->dtor) {
+        dtor_info->dtor(ptr, NULL);
+    }
+
+    nrt_internal_dtor_safe(ptr, (void*)dtor_info->allocated_size);
+    free(info);
+}
+
+
 MemInfo* NRT_MemInfo_alloc(size_t size) {
     void *data = NRT_Allocate(size);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc %p\n", data));
@@ -270,6 +292,20 @@ MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
     memset(data, 0xCB, MIN(size, 256));
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p %llu\n", data, size));
     return NRT_MemInfo_new(data, size, nrt_internal_dtor_safe, (void*)size);
+}
+
+MemInfo* NRT_MemInfo_alloc_dtor_safe(size_t size, dtor_function dtor) {
+    void *data = NRT_Allocate(size);
+    DtorInfo *dtor_info = (DtorInfo*)malloc(sizeof(DtorInfo));
+    dtor_info->allocated_size = size;
+    dtor_info->dtor = dtor;
+    /* Only fill up a couple cachelines with debug markers, to minimize
+       overhead. */
+    memset(data, 0xCB, MIN(size, 256));
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_dtor_safe %p %llu\n",
+                              data, size));
+    return NRT_MemInfo_new(data, size, nrt_internal_custom_dtor_safe,
+                           dtor_info);
 }
 
 static
@@ -288,6 +324,7 @@ void nrt_internal_aligned_safe_dtor(void *ptr, void *info) {
     }
     NRT_Free(info);
 }
+
 
 MemInfo* NRT_MemInfo_alloc_aligned(size_t size, unsigned align) {
     void *data = NULL;

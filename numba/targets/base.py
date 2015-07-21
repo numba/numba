@@ -443,7 +443,17 @@ class BaseContext(object):
                 data_ptr = inst.data
                 data_struct = cgutils.create_struct_proxy(typ.get_data_type())
                 data = data_struct(context, builder, ref=data_ptr)
+
+                # Get old value
+                attr_type = typ.struct[attr]
+                oldvalue = getattr(data, attr)
+
+                # Store n
                 setattr(data, attr, val)
+                context.nrt_incref(builder, attr_type, val)
+
+                # Delete old value
+                context.nrt_decref(builder, attr_type, oldvalue)
 
             return _wrap_impl(imp, self, sig)
 
@@ -1033,6 +1043,19 @@ class BaseContext(object):
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
+
+    def nrt_meminfo_alloc_dtor(self, builder, size, dtor):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        ll_void_ptr = self.get_value_type(types.voidptr)
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+                                   [self.get_value_type(types.intp),
+                                    ll_void_ptr])
+        fn = mod.get_or_insert_function(fnty,
+                                        name="NRT_MemInfo_alloc_dtor_safe")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [size, builder.bitcast(dtor, ll_void_ptr)])
 
     def nrt_meminfo_alloc_aligned(self, builder, size, align):
         """
