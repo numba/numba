@@ -2,11 +2,11 @@ from __future__ import absolute_import, print_function
 
 from ctypes import (c_size_t, byref, c_char_p, c_void_p, Structure, CDLL,
                     POINTER, create_string_buffer)
-import re
 import os
 from collections import namedtuple
 
 from numba import utils, config
+from .utils import adapt_llvm_version
 
 
 class OpaqueModuleRef(Structure):
@@ -85,8 +85,6 @@ class HLC(object):
         hlc.HLC_ModuleDestroy(mod)
 
 
-re_regname = re.compile(r"%\"\.([^\"]+)\"")
-
 os.environ['HSAILBIN'] = os.environ.get('HSAILBIN', '/opt/amd/bin')
 
 BUILTIN_PATH = "{0}/builtins-hsail.opt.bc".format(os.environ['HSAILBIN'])
@@ -99,14 +97,7 @@ class Module(object):
         self._finalized = False
 
     def _preprocess(self, llvmir):
-        """
-        HLC does not like variable with '.' prefix.
-        """
-
-        def repl(mat):
-            return '%_dot_.{0}'.format(mat.group(1))
-
-        return re_regname.sub(repl, llvmir)
+        return adapt_llvm_version(llvmir)
 
     def load_llvm(self, llvmir):
         """

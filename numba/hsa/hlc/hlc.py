@@ -6,9 +6,9 @@ from subprocess import check_call
 import tempfile
 import os
 from collections import namedtuple
-import re
 
 from numba import config
+from .utils import adapt_llvm_version
 
 _real_check_call = check_call
 
@@ -84,9 +84,6 @@ class CmdLine(object):
         check_call(cmdline, shell=True)
 
 
-re_regname = re.compile(r"%\"\.([^\"]+)\"")
-
-
 class Module(object):
     def __init__(self):
         """
@@ -121,14 +118,7 @@ class Module(object):
         return path
 
     def _preprocess(self, llvmir):
-        """
-        HLC does not like variable with '.' prefix.
-        """
-
-        def repl(mat):
-            return '%_dot_.{0}'.format(mat.group(1))
-
-        return re_regname.sub(repl, llvmir)
+        return adapt_llvm_version(llvmir)
 
     def load_llvm(self, llvmir):
         """
