@@ -7,9 +7,11 @@
 #define MIN(a, b) ((a) < (b)) ? (a) : (b)
 #endif
 
+typedef size_t word_type;
 
-typedef int (*atomic_meminfo_cas_func)(MemInfo * volatile *ptr, MemInfo *cmp,
-                                       MemInfo *repl, MemInfo **oldptr);
+typedef int (*atomic_meminfo_cas_func)(volatile word_type *ptr, word_type cmp,
+                                       word_type repl,
+                                       volatile word_type *oldptr);
 
 
 union MemInfo{
@@ -26,11 +28,22 @@ union MemInfo{
 };
 
 
+typedef struct MemInfoList {
+    MemInfo * volatile list;
+    volatile word_type state;
+} MemInfoList;
+
+#define UNLOCK ((word_type)0)
+#define LOCK_PUSH ((word_type)1 << 31)
+#define LOCK_POP ((word_type)1 << 30)
+#define LOCK_COUNT_MASK ((word_type)0xFFFF)
+
+
 struct MemSys{
     /* Ununsed MemInfo are recycled here */
-    MemInfo * volatile mi_freelist;
+    MemInfoList mi_freelist;
     /* MemInfo with deferred dtor */
-    MemInfo * volatile mi_deferlist;
+    MemInfoList mi_deferlist;
     /* Atomic increment and decrement function */
     atomic_inc_dec_func atomic_inc, atomic_dec;
     /* Atomic CAS */
@@ -39,7 +52,6 @@ struct MemSys{
     int shutting;
     /* Stats */
     size_t stats_alloc, stats_free, stats_mi_alloc, stats_mi_free;
-
 };
 
 /* The Memory System object */
@@ -52,8 +64,77 @@ typedef struct {
 
 
 static
-MemInfo *nrt_pop_meminfo_list(MemInfo * volatile *list) {
+void list_lock(MemInfoList *listst, word_type mask) {
+    volatile word_type actual;
+    word_type old;
+    word_type newval;
+
+    /* First load */
+    actual = listst->state;
+
+    while (1) {
+        /* `actual` is loaded in the loop by atomic_cas */
+        old = actual;
+
+        /* If in unlocked state, set to init "mask" state */
+        if ( old == UNLOCK ) newval = mask;
+        /* If in mask state, increment */
+        else if ( (old & mask) == mask
+                  && (old & LOCK_COUNT_MASK) < LOCK_COUNT_MASK )
+            newval = old + 1;
+        /* If not in mask state, load and retry */
+        else {
+            actual = listst->state;
+            continue;
+        }
+
+        /* CAS with atomic load to actual */
+        if (TheMSys.atomic_cas(&listst->state, old, newval, &actual)) {
+            /* Succeed, quit */
+            return;
+        }
+    }
+}
+
+static
+void list_unlock(MemInfoList *listst, word_type mask) {
+    volatile word_type actual;
+    word_type old;
+    word_type newval;
+
+    /* First load */
+    actual = listst->state;
+
+    while (1) {
+        /* `actual` is loaded in the loop by atomic_cas */
+        old = actual;
+
+        /* If in init "mask" state, set to unlock state */
+        if ( old == mask ) newval = UNLOCK;
+        /* If in mask state, decrement */
+        else if ( (old & mask) == mask
+                   && (old & LOCK_COUNT_MASK) <= LOCK_COUNT_MASK)
+           newval = old - 1;
+        /* If non "mask" state, fatal error */
+        else {
+            puts("Corrupted list state");
+            exit(1);
+        }
+
+        /* CAS with atomic load to `actual` */
+        if (TheMSys.atomic_cas(&listst->state, old, newval, &actual)) {
+            /* Succeed, quit */
+            return;
+        }
+    }
+}
+
+static
+MemInfo *nrt_pop_meminfo_list(MemInfoList *listst) {
     MemInfo *old, *repl, *head;
+    MemInfo * volatile * volatile list = &listst->list;
+
+    list_lock(listst, LOCK_POP);
 
     head = *list;     /* get the current head */
     do {
@@ -68,13 +149,23 @@ MemInfo *nrt_pop_meminfo_list(MemInfo * volatile *list) {
         /* Try to replace list head with the next node.
            The function also perform:
                head <- atomicload(list) */
-    } while ( !TheMSys.atomic_cas(list, old, repl, &head));
+    } while ( !TheMSys.atomic_cas((word_type*)list,
+                                  (word_type)old,
+                                  (word_type)repl,
+                                  (word_type*)&head));
+
+
+    list_unlock(listst, LOCK_POP);
     return old;
 }
 
 static
-void nrt_push_meminfo_list(MemInfo * volatile *list, MemInfo *repl) {
+void nrt_push_meminfo_list(MemInfoList *listst, MemInfo *repl) {
     MemInfo *old, *head;
+    MemInfo * volatile * volatile list = &listst->list;
+
+    list_lock(listst, LOCK_PUSH);
+
     head = *list;   /* get the current head */
     do {
         old = head; /* old is what CAS compare against */
@@ -83,7 +174,12 @@ void nrt_push_meminfo_list(MemInfo * volatile *list, MemInfo *repl) {
         /* Try to replace the head with the new node.
            The function also perform:
                head <- atomicload(list) */
-    } while ( !TheMSys.atomic_cas(list, old, repl, &head) );
+    } while ( !TheMSys.atomic_cas((word_type*)list,
+                                  (word_type)old,
+                                  (word_type)repl,
+                                  (word_type*)&head));
+
+    list_unlock(listst, LOCK_PUSH);
 }
 
 static
