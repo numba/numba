@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function
 
+import sys
 from ctypes import (c_size_t, byref, c_char_p, c_void_p, Structure, CDLL,
                     POINTER, create_string_buffer)
 import os
@@ -15,7 +16,7 @@ class OpaqueModuleRef(Structure):
 
 moduleref_ptr = POINTER(OpaqueModuleRef)
 
-hlc = CDLL('/home/sklam/dev/libHLC/libHLC.so')
+hlc = CDLL(os.path.join(sys.prefix, 'lib', 'libHLC.so'))
 hlc.HLC_ParseModule.restype = moduleref_ptr
 hlc.HLC_ModuleEmitBRIG.restype = c_size_t
 hlc.HLC_Initialize()
