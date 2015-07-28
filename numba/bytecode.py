@@ -94,6 +94,7 @@ def _make_bytecode_table():
                     ('COMPARE_OP', 2),
                     ('DELETE_ATTR', 2),
                     ('DUP_TOP', 0),
+                    ('EXTENDED_ARG', 2),
                     ('FOR_ITER', 2),
                     ('GET_ITER', 0),
                     ('INPLACE_ADD', 0),
@@ -153,6 +154,7 @@ JREL_OPS = frozenset(dis.hasjrel)
 JABS_OPS = frozenset(dis.hasjabs)
 JUMP_OPS = JREL_OPS | JABS_OPS
 TERM_OPS = frozenset(_as_opcodes(['RETURN_VALUE', 'RAISE_VARARGS']))
+EXTENDED_ARG = dis.EXTENDED_ARG
 
 
 class ByteCodeInst(object):
@@ -225,7 +227,7 @@ class ByteCodeIter(object):
     def __iter__(self):
         return self
 
-    def next(self):
+    def _fetch_opcode(self):
         offset, opcode = next(self.iter)
         try:
             info = BYTECODE_TABLE[opcode]
@@ -237,6 +239,14 @@ class ByteCodeIter(object):
             arg = self.read_arg(info.argsize)
         else:
             arg = None
+        return offset, opcode, arg
+
+    def next(self):
+        offset, opcode, arg = self._fetch_opcode()
+        if opcode == EXTENDED_ARG:
+            hi_arg = arg
+            offset, opcode, lo_arg = self._fetch_opcode()
+            arg = (hi_arg << 16) + lo_arg
         return offset, ByteCodeInst(offset=offset, opcode=opcode, arg=arg)
 
     __next__ = next
