@@ -743,6 +743,23 @@ class PythonAPI(object):
         elif opstr == 'is not':
             bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
             return self.from_native_value(bitflag, types.boolean)
+        elif opstr == 'in':
+            fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+            fn = self._get_function(fnty, name="PySequence_Contains")
+            status = self.builder.call(fn, (rhs, lhs))
+            negone = self.context.get_constant(types.int32, -1)
+            is_good = self.builder.icmp(lc.ICMP_NE, status, negone)
+            # Stack allocate output and initialize to Null
+            outptr = cgutils.alloca_once_value(self.builder,
+                                               Constant.null(self.pyobj))
+            # If PySequence_Contains returns non-error value
+            with cgutils.if_likely(self.builder, is_good):
+                # Store the status as a boolean object
+                truncated = self.builder.trunc(status, Type.int(1))
+                self.builder.store(self.bool_from_bool(truncated),
+                                   outptr)
+
+            return self.builder.load(outptr)
         else:
             raise NotImplementedError("Unknown operator {op!r}".format(
                 op=opstr))
