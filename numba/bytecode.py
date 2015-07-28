@@ -55,6 +55,7 @@ def _make_bytecode_table():
             ('INPLACE_DIVIDE', 0),
             ('PRINT_ITEM', 0),
             ('PRINT_NEWLINE', 0),
+            ('ROT_FOUR', 0),
             ('SLICE+0', 0),
             ('SLICE+1', 0),
             ('SLICE+2', 0),
