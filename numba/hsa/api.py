@@ -11,6 +11,7 @@ from .stubs import (
     get_work_dim,
     get_num_groups,
     barrier,
+    mem_fence,
     shared,
 )
 

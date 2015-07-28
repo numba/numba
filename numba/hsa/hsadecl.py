@@ -5,11 +5,11 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     MacroTemplate, signature, Registry)
 from numba import hsa
 
-
 registry = Registry()
 intrinsic = registry.register
 intrinsic_attr = registry.register_attr
 intrinsic_global = registry.register_global
+
 
 # =============================== NOTE ===============================
 # Even though the following functions return size_t in the OpenCL standard,
@@ -66,6 +66,12 @@ class Hsa_barrier(ConcreteTemplate):
     cases = [signature(types.void, types.uint32)]
 
 
+@intrinsic
+class Hsa_mem_fence(ConcreteTemplate):
+    key = hsa.mem_fence
+    cases = [signature(types.void, types.uint32)]
+
+
 # hsa.shared submodule -------------------------------------------------------
 
 class Hsa_shared_array(MacroTemplate):
@@ -94,6 +100,7 @@ class Hsa_atomic_add(AbstractTemplate):
             return signature(ary.dtype, ary, types.intp, ary.dtype)
         elif ary.ndim > 1:
             return signature(ary.dtype, ary, idx, ary.dtype)
+
 
 @intrinsic_attr
 class HsaAtomicTemplate(AttributeTemplate):
@@ -133,6 +140,9 @@ class HsaModuleTemplate(AttributeTemplate):
     def resolve_barrier(self, mod):
         return types.Function(Hsa_barrier)
 
+    def resolve_mem_fence(self, mod):
+        return types.Function(Hsa_mem_fence)
+
     def resolve_shared(self, mod):
         return types.Module(hsa.shared)
 
@@ -140,6 +150,6 @@ class HsaModuleTemplate(AttributeTemplate):
         return types.Module(hsa.atomic)
 
 
-#intrinsic
+# intrinsic
 
 intrinsic_global(hsa, types.Module(hsa))

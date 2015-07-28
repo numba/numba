@@ -127,11 +127,20 @@ def get_local_size_impl(context, builder, sig, args):
 
 @register
 @implement(stubs.barrier, types.uint32)
-def get_local_size_impl(context, builder, sig, args):
+def barrier_impl(context, builder, sig, args):
     [flags] = args
     barrier = _declare_function(context, builder, 'barrier', sig,
                                 ['unsigned int'])
     return builder.call(barrier, [flags])
+
+
+@register
+@implement(stubs.mem_fence, types.uint32)
+def mem_fence_impl(context, builder, sig, args):
+    [flags] = args
+    mem_fence = _declare_function(context, builder, 'mem_fence', sig,
+                                ['unsigned int'])
+    return builder.call(mem_fence, [flags])
 
 
 @register

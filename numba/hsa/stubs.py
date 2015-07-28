@@ -58,6 +58,13 @@ def barrier(*args, **kargs):
     raise NotImplementedError("This is a stub.")
 
 
+def mem_fence(*args, **kargs):
+    """
+    OpenCL mem_fence()
+    """
+    raise NotImplementedError("This is a stub.")
+
+
 class Stub(object):
     """A stub object to represent special objects which is meaningless
     outside the context of HSA-python.
