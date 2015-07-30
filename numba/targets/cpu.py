@@ -15,7 +15,7 @@ from numba.targets import (
     callconv, codegen, externals, intrinsics, listobj, cmathimpl, mathimpl,
     npyimpl, operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
-from numba.runtime.atomicops import install_atomic_refct
+from numba.runtime.atomicops import install_fast_nrt_functions
 from numba.runtime import rtsys
 
 # Keep those structures in sync with _dynfunc.c.
@@ -119,7 +119,7 @@ class CPUContext(BaseContext):
             # calls to compiler-rt
             intrinsics.fix_divmod(mod)
 
-        install_atomic_refct(mod)
+        install_fast_nrt_functions(mod)
 
     def create_cpython_wrapper(self, library, fndesc, env, call_helper,
                                release_gil=False):

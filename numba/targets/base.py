@@ -1043,6 +1043,10 @@ class BaseContext(object):
         return builder.call(fn, [size, align])
 
     def nrt_meminfo_data(self, builder, meminfo):
+        """
+        Given a MemInfo pointer, return a pointer to the allocated data
+        managed by it.
+        """
         if not self.enable_nrt:
             raise Exception("Require NRT")
         mod = builder.module
@@ -1076,9 +1080,15 @@ class BaseContext(object):
             builder.call(fn, [meminfo])
 
     def nrt_incref(self, builder, typ, value):
+        """
+        Recursively incref the given *value* and its members.
+        """
         self._call_nrt_incref_decref(builder, typ, value, "NRT_incref")
 
     def nrt_decref(self, builder, typ, value):
+        """
+        Recursively decref the given *value* and its members.
+        """
         self._call_nrt_incref_decref(builder, typ, value, "NRT_decref")
 
 

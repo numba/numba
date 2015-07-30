@@ -9,6 +9,30 @@ from llvmlite import ir, binding as llvm
 
 
 _word_type = ir.IntType(MACHINE_BITS)
+_pointer_type = ir.PointerType(ir.IntType(8))
+
+_meminfo_struct_type = ir.LiteralStructType([
+    _word_type,     # size_t refct
+    _pointer_type,  # dtor_function dtor
+    _pointer_type,  # void *dtor_info
+    _pointer_type,  # void *data
+    _word_type,     # size_t size
+    ])
+
+
+def _define_nrt_meminfo_data(module):
+    """
+    Implement NRT_MemInfo_data in the module.
+    """
+    if "NRT_MemInfo_data" not in module.globals:
+        return
+    fn = module.get_global_variable_named("NRT_MemInfo_data")
+    fn.linkage = 'linkonce_odr'
+    builder = ir.IRBuilder(fn.append_basic_block())
+    [ptr] = fn.args
+    struct_ptr = builder.bitcast(ptr, _meminfo_struct_type.as_pointer())
+    data_ptr = builder.load(cgutils.gep(builder, struct_ptr, 0, 3))
+    builder.ret(data_ptr)
 
 
 def _define_incref(module, atomic_incr):
@@ -56,9 +80,9 @@ def _define_decref(module, atomic_decr):
     builder.ret_void()
 
 
-def install_atomic_refct(module):
+def install_fast_nrt_functions(module):
     """
-    Implement both NRT_incref and NRT_decref in the module
+    Implement NRT_incref, NRT_decref and NRT_MemInfo_data in the module.
     """
     incref = _define_atomic_inc_dec(module, "add", ordering='monotonic')
     decref = _define_atomic_inc_dec(module, "sub", ordering='monotonic')
@@ -68,6 +92,7 @@ def install_atomic_refct(module):
         fn.linkage = 'linkonce_odr'
     del fn
 
+    _define_nrt_meminfo_data(module)
     _define_incref(module, incref)
     _define_decref(module, decref)
 

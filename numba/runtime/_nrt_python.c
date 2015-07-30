@@ -594,7 +594,6 @@ declmethod(adapt_ndarray_to_python);
 declmethod(adapt_buffer_from_python);
 declmethod(incref);
 declmethod(decref);
-declmethod(MemInfo_data);
 declmethod(MemInfo_alloc);
 declmethod(MemInfo_alloc_safe);
 declmethod(MemInfo_alloc_aligned);
