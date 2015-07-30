@@ -7,10 +7,20 @@
 #define MIN(a, b) ((a) < (b)) ? (a) : (b)
 #endif
 
+#ifdef IS_FLAG_SET
+#  error "IS_FLAG_SET redefined"
+#else
+#  define IS_FLAG_SET(X, M) ( (X & M) == M )
+#endif
 
 typedef int (*atomic_meminfo_cas_func)(MemInfo * volatile *ptr, MemInfo *cmp,
                                        MemInfo *repl, MemInfo **oldptr);
 
+
+enum MEMINFO_FLAGS{
+    MEMINFO_FLAGS_NONE = 0,
+    MEMINFO_FLAGS_INLINED = 1
+};
 
 union MemInfo{
     struct {
@@ -19,6 +29,7 @@ union MemInfo{
         void          *dtor_info;
         void          *data;
         size_t         size;    /* only used for NRT allocated memory */
+        int            flags;
     } payload;
 
     /* Freelist or Deferred-dtor-list */
@@ -44,12 +55,6 @@ struct MemSys{
 
 /* The Memory System object */
 static MemSys TheMSys;
-
-
-typedef struct {
-    size_t total_size;
-} AlignHeader;
-
 
 static
 MemInfo *nrt_pop_meminfo_list(MemInfo * volatile *list) {
@@ -139,7 +144,6 @@ void NRT_MemSys_insert_meminfo(MemInfo *newnode) {
                               newnode));
     memset(newnode, 0, sizeof(MemInfo));  /* to catch bugs; not required */
     nrt_push_meminfo_list(&TheMSys.mi_freelist, newnode);
-    TheMSys.atomic_inc(&TheMSys.stats_mi_free);
 }
 
 MemInfo* NRT_MemSys_pop_meminfo(void) {
@@ -149,7 +153,6 @@ MemInfo* NRT_MemSys_pop_meminfo(void) {
     }
     memset(node, 0, sizeof(MemInfo));   /* to catch bugs; not required */
     NRT_Debug(nrt_debug_print("NRT_MemSys_pop_meminfo: return %p\n", node));
-    TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
     return node;
 }
 
@@ -198,7 +201,6 @@ size_t nrt_testing_atomic_dec(size_t *ptr){
     return out;
 }
 
-
 static
 int nrt_testing_atomic_cas(void* volatile *ptr, void *cmp, void *val,
                            void * *oldptr){
@@ -222,15 +224,24 @@ void NRT_MemSys_set_atomic_cas_stub(void) {
     NRT_MemSys_set_atomic_cas(nrt_testing_atomic_cas);
 }
 
-MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
-                         void *dtor_info)
+void NRT_MemInfo_init(MemInfo *mi,void *data, size_t size, dtor_function dtor,
+                      void *dtor_info, int flags)
 {
-    MemInfo * mi = NRT_MemSys_pop_meminfo();
     mi->payload.refct = 1;  /* starts with 1 refct */
     mi->payload.dtor = dtor;
     mi->payload.dtor_info = dtor_info;
     mi->payload.data = data;
     mi->payload.size = size;
+    mi->payload.flags = flags;
+    /* Update stats */
+    TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
+}
+
+MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
+                         void *dtor_info)
+{
+    MemInfo * mi = NRT_MemSys_pop_meminfo();
+    NRT_MemInfo_init(mi, data, size, dtor, dtor_info, MEMINFO_FLAGS_NONE);
     return mi;
 }
 
@@ -244,70 +255,88 @@ size_t NRT_MemInfo_refcount(MemInfo *mi) {
 }
 
 static
-void nrt_internal_dtor(void *ptr, void *info) {
-    NRT_Debug(nrt_debug_print("nrt_internal_dtor %p, %p\n", ptr, info));
-    NRT_Free(ptr);
-}
-
-static
 void nrt_internal_dtor_safe(void *ptr, void *info) {
     size_t size = (size_t) info;
     NRT_Debug(nrt_debug_print("nrt_internal_dtor_safe %p, %p\n", ptr, info));
     /* See NRT_MemInfo_alloc_safe() */
     memset(ptr, 0xDE, MIN(size, 256));
-    NRT_Free(ptr);
+}
+
+static
+void *nrt_allocate_meminfo_and_data(size_t size, MemInfo **mi_out) {
+    MemInfo *mi;
+    char *base = NRT_Allocate(sizeof(MemInfo) + size);
+    mi = (MemInfo*)base;
+    *mi_out = mi;
+    return base + sizeof(MemInfo);
 }
 
 MemInfo* NRT_MemInfo_alloc(size_t size) {
-    void *data = NRT_Allocate(size);
+    MemInfo *mi;
+    void *data = nrt_allocate_meminfo_and_data(size, &mi);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc %p\n", data));
-    return NRT_MemInfo_new(data, size, nrt_internal_dtor, NULL);
+    NRT_MemInfo_init(mi, data, size, NULL, NULL, MEMINFO_FLAGS_INLINED);
+    return mi;
 }
 
 MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
-    void *data = NRT_Allocate(size);
+    MemInfo *mi;
+    void *data = nrt_allocate_meminfo_and_data(size, &mi);
     /* Only fill up a couple cachelines with debug markers, to minimize
        overhead. */
     memset(data, 0xCB, MIN(size, 256));
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p %llu\n", data, size));
-    return NRT_MemInfo_new(data, size, nrt_internal_dtor_safe, (void*)size);
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p %zu\n", data, size));
+    NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe,
+                     (void*)size, MEMINFO_FLAGS_INLINED);
+    return mi;
 }
 
 static
-void nrt_internal_aligned_dtor(void *ptr, void *info) {
-    NRT_Debug(nrt_debug_print("nrt_internal_aligned_dtor %p, %p\n", ptr, info));
-    NRT_Free(info);
-}
-
-static
-void nrt_internal_aligned_safe_dtor(void *ptr, void *info) {
-    AlignHeader *header = info;
-    NRT_Debug(nrt_debug_print("nrt_internal_aligned_safe_dtor %p, %p\n", ptr,
-                              info));
-    if (header->total_size) {
-        memset(header, 0xDE, header->total_size);  /* for safety */
+void* nrt_allocate_meminfo_and_data_align(size_t size, unsigned align,
+                                         MemInfo **mi)
+{
+    size_t offset, intptr, remainder;
+    char *base = nrt_allocate_meminfo_and_data(size + align, mi);
+    intptr = (size_t) base;
+    /* See if we are aligned */
+    remainder = intptr % align;
+    if (remainder == 0){ /* Yes */
+        offset = 0;
+    } else { /* No, move forward `offset` bytes */
+        offset = align - remainder;
     }
-    NRT_Free(info);
+    return base + offset;
 }
 
 MemInfo* NRT_MemInfo_alloc_aligned(size_t size, unsigned align) {
-    void *data = NULL;
-    void *base = NRT_MemAlign(&data, size, align);
+    MemInfo *mi;
+    void *data = nrt_allocate_meminfo_and_data_align(size, align, &mi);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_aligned %p\n", data));
-    return NRT_MemInfo_new(data, size, nrt_internal_aligned_dtor, base);
+    NRT_MemInfo_init(mi, data, size, NULL, NULL, MEMINFO_FLAGS_INLINED);
+    return mi;
 }
 
 MemInfo* NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
-    void *data = NULL;
-    void *base = NRT_MemAlign(&data, size, align);
-    memset(data, 0xCB, size);
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe_aligned %p %llu\n",
+    MemInfo *mi;
+    void *data = nrt_allocate_meminfo_and_data_align(size, align, &mi);
+    /* Only fill up a couple cachelines with debug markers, to minimize
+       overhead. */
+    memset(data, 0xCB, MIN(size, 256));
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe_aligned %p %zu\n",
                               data, size));
-    return NRT_MemInfo_new(data, size, nrt_internal_aligned_safe_dtor, base);
+    NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe,
+                     (void*)size, MEMINFO_FLAGS_INLINED);
+    return mi;
 }
 
 void NRT_MemInfo_destroy(MemInfo *mi) {
-    NRT_MemSys_insert_meminfo(mi);
+    if (IS_FLAG_SET(mi->payload.flags, MEMINFO_FLAGS_INLINED)) {
+        NRT_Free(mi);
+    }
+    else {
+        NRT_MemSys_insert_meminfo(mi);
+    }
+    TheMSys.atomic_inc(&TheMSys.stats_mi_free);
 }
 
 void NRT_MemInfo_acquire(MemInfo *mi) {
@@ -366,35 +395,4 @@ void NRT_Free(void *ptr) {
     TheMSys.atomic_inc(&TheMSys.stats_free);
 }
 
-void* NRT_MemAlign(void **ptr, size_t size, unsigned align) {
-    AlignHeader *base;
-    size_t intptr;
-    unsigned offset;
-    unsigned remainder;
 
-    /* Allocate extra space for padding and book keeping */
-    size_t total_size = size + 2 * align + sizeof(AlignHeader);
-    base = (AlignHeader*) NRT_Allocate(total_size);
-
-    /* The AlignHeader goes first, so skip sizeof(AlignHeader) */
-    intptr = (size_t) (base + 1);
-
-    /* See if we are aligned */
-    remainder = intptr % align;
-    if (remainder == 0){
-        /* Yes */
-        offset = 0;
-    } else {
-        /* No, move forward `offset` bytes */
-        offset = align - remainder;
-    }
-
-    /* Store the aligned pointer to the output parameter */
-    *ptr = (void*) (intptr + offset);
-
-    /* Remember the total allocated size */
-    base->total_size = total_size;
-
-    /* Return the pointer for deallocation with NRT_Free() */
-    return base;
-}

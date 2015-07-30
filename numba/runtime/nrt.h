@@ -105,6 +105,9 @@ size_t NRT_MemSys_get_stats_mi_free();
 MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info);
 
+void NRT_MemInfo_init(MemInfo *mi, void *data, size_t size, dtor_function dtor,
+                      void *dtor_info, int flags);
+
 /*
  * Returns the refcount of a MemInfo or (size_t)-1 if error.
  */
@@ -190,11 +193,4 @@ void* NRT_Allocate(size_t size);
  * Deallocate memory pointed by `ptr`.
  */
 void NRT_Free(void *ptr);
-
-/*
- * Allocate memory of `size` bytes on the given `align` byte boundary
- * The allocated output is stored to `ptr`.
- * The return value is the base pointer to be passed to NRT_Free
- */
-void* NRT_MemAlign(void **ptr, size_t size, unsigned align);
 
