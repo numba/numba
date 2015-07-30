@@ -90,7 +90,8 @@ static
 void nrt_meminfo_call_dtor(MemInfo *mi) {
     NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
     /* call dtor */
-    mi->payload.dtor(mi->payload.data, mi->payload.dtor_info);
+    if (mi->payload.dtor)
+        mi->payload.dtor(mi->payload.data, mi->payload.dtor_info);
     /* Clear and release MemInfo */
     NRT_MemInfo_destroy(mi);
 }
@@ -318,12 +319,10 @@ void NRT_MemInfo_acquire(MemInfo *mi) {
 
 void NRT_MemInfo_call_dtor(MemInfo *mi, int defer) {
     /* We have a destructor */
-    if (mi->payload.dtor) {
-        if (defer) {
-            NRT_MemInfo_defer_dtor(mi);
-        } else {
-            nrt_meminfo_call_dtor(mi);
-        }
+    if (defer) {
+        NRT_MemInfo_defer_dtor(mi);
+    } else {
+        nrt_meminfo_call_dtor(mi);
     }
 }
 
