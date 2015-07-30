@@ -13,8 +13,8 @@
 #  define IS_FLAG_SET(X, M) ( (X & M) == M )
 #endif
 
-typedef int (*atomic_meminfo_cas_func)(MemInfo * volatile *ptr, MemInfo *cmp,
-                                       MemInfo *repl, MemInfo **oldptr);
+typedef int (*atomic_meminfo_cas_func)(void **ptr, void *cmp,
+                                       void *repl, void **oldptr);
 
 
 enum MEMINFO_FLAGS{
@@ -41,11 +41,20 @@ union MemInfo{
 };
 
 
+typedef struct MIList {
+    MemInfo * volatile head;
+    void              *lock;
+} MIList;
+
+#define MILIST_UNLOCKED ((void*)0)
+#define MILIST_LOCKED ((void*)1)
+
+
 struct MemSys{
     /* Ununsed MemInfo are recycled here */
-    MemInfo * volatile mi_freelist;
+    MIList mi_freelist;
     /* MemInfo with deferred dtor */
-    MemInfo * volatile mi_deferlist;
+    MIList  mi_deferlist;
     /* Atomic increment and decrement function */
     atomic_inc_dec_func atomic_inc, atomic_dec;
     /* Atomic CAS */
@@ -61,38 +70,52 @@ struct MemSys{
 static MemSys TheMSys;
 
 static
-MemInfo *nrt_pop_meminfo_list(MemInfo * volatile *list) {
-    MemInfo *old, *repl, *head;
-
-    head = *list;     /* get the current head */
-    do {
-        old = head;   /* old is what CAS compare against */
-        if ( head ) {
-            /* if head is not NULL, replace with the next item */
-            repl = head->list_next;
-        } else {
-            /* else, replace with NULL */
-            repl = NULL;
-        }
-        /* Try to replace list head with the next node.
-           The function also perform:
-               head <- atomicload(list) */
-    } while ( !TheMSys.atomic_cas(list, old, repl, &head));
-    return old;
+void milist_lock(MIList *list) {
+    void *dummy;
+    while(!TheMSys.atomic_cas(&list->lock, MILIST_UNLOCKED, MILIST_LOCKED,
+                              &dummy));
 }
 
 static
-void nrt_push_meminfo_list(MemInfo * volatile *list, MemInfo *repl) {
+void milist_unlock(MIList *list) {
+    void *dummy;
+    while(!TheMSys.atomic_cas(&list->lock, MILIST_LOCKED, MILIST_UNLOCKED,
+                              &dummy));
+}
+
+static
+MemInfo *nrt_pop_meminfo_list(MIList *list) {
+    MemInfo *repl, *head;
+
+    milist_lock(list);
+
+    head = list->head;     /* get the current head */
+    if ( head ) {
+        /* if head is not NULL, replace with the next item */
+        repl = head->list_next;
+    } else {
+        /* else, replace with NULL */
+        repl = NULL;
+    }
+    list->head = repl;
+
+    milist_unlock(list);
+    return head;
+}
+
+static
+void nrt_push_meminfo_list(MIList *list, MemInfo *repl) {
     MemInfo *old, *head;
-    head = *list;   /* get the current head */
-    do {
-        old = head; /* old is what CAS compare against */
-        /* Set the next item to be the current head */
-        repl->list_next = head;
-        /* Try to replace the head with the new node.
-           The function also perform:
-               head <- atomicload(list) */
-    } while ( !TheMSys.atomic_cas(list, old, repl, &head) );
+
+    milist_lock(list);
+
+    head = list->head;   /* get the current head */
+    /* Set the next item to be the current head */
+    repl->list_next = head;
+    /* Set new head */
+    list->head = repl;
+
+    milist_unlock(list);
 }
 
 static
