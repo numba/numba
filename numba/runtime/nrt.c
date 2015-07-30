@@ -19,6 +19,10 @@ typedef int (*atomic_meminfo_cas_func)(MemInfo * volatile *ptr, MemInfo *cmp,
 
 enum MEMINFO_FLAGS{
     MEMINFO_FLAGS_NONE = 0,
+    /*
+     *  If set, the MemInfo and the data buffer are in the same allocated
+     *  region.  Freeing the MemInfo pointer will free the data.
+     */
     MEMINFO_FLAGS_INLINED = 1
 };
 
@@ -29,7 +33,7 @@ union MemInfo{
         void          *dtor_info;
         void          *data;
         size_t         size;    /* only used for NRT allocated memory */
-        int            flags;
+        int            flags;   /* See enum MEMINFO_FLAGS */
     } payload;
 
     /* Freelist or Deferred-dtor-list */
