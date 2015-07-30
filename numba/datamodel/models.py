@@ -558,6 +558,31 @@ class PairModel(StructModel):
         super(PairModel, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.List)
+class ListModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('meminfo', types.meminfo_pointer),
+            ('size', types.EphemeralPointer(types.intp)),
+            ('allocated', types.EphemeralPointer(types.intp)),
+            ('data', types.EphemeralPointer(types.CPointer(fe_type.dtype))),
+        ]
+        super(ListModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.ListIter)
+class ListIterModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('index', types.EphemeralPointer(types.intp)),
+            # XXX this creates a new slot while we would like to share the
+            # pointer with the list...
+            ('size', types.EphemeralPointer(types.intp)),
+            ('data', types.EphemeralPointer(types.CPointer(fe_type.list.dtype))),
+            ]
+        super(ListIterModel, self).__init__(dmm, fe_type, members)
+
+
 @register_default(types.Array)
 @register_default(types.Buffer)
 @register_default(types.ByteArray)

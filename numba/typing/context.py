@@ -15,8 +15,8 @@ from .typeof import typeof, Purpose
 
 # Initialize declarations
 from . import (
-    builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl,
-    randomdecl)
+    builtins, cmathdecl, listdecl, mathdecl, npdatetime, npydecl,
+    operatordecl, randomdecl)
 from numba import numpy_support, utils
 from . import ctypes_utils, cffi_utils, bufproto
 
@@ -400,6 +400,7 @@ class BaseContext(object):
 class Context(BaseContext):
     def init(self):
         self.install(cmathdecl.registry)
+        self.install(listdecl.registry)
         self.install(mathdecl.registry)
         self.install(npydecl.registry)
         self.install(operatordecl.registry)

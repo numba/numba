@@ -709,6 +709,13 @@ class Lower(BaseLower):
             self.incref(resty, tup)
             return tup
 
+        elif expr.op == "build_list":
+            itemvals = [self.loadvar(i.name) for i in expr.items]
+            itemtys = [self.typeof(i.name) for i in expr.items]
+            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
+                        for val, fromty in zip(itemvals, itemtys)]
+            return self.context.build_list(self.builder, resty, castvals)
+
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)

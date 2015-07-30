@@ -12,7 +12,7 @@ from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
 from numba.targets import (
-    callconv, codegen, externals, intrinsics, cmathimpl, mathimpl,
+    callconv, codegen, externals, intrinsics, listobj, cmathimpl, mathimpl,
     npyimpl, operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
 from numba.runtime.atomicops import install_atomic_refct
@@ -104,6 +104,12 @@ class CPUContext(BaseContext):
         return cgutils.pointer_add(
             builder, genptr, _dynfunc._impl_info['offsetof_generator_state'],
             return_type=return_type)
+
+    def build_list(self, builder, list_type, items):
+        """
+        Build a list from the Numba *list_type* and its initial *items*.
+        """
+        return listobj.build_list(self, builder, list_type, items)
 
     def post_lowering(self, func):
         mod = func.module

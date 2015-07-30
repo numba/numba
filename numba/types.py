@@ -970,6 +970,32 @@ class Tuple(BaseTuple):
             return max(kinds)
 
 
+class List(IterableType):
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        name = "[%s]" % (self.dtype,)
+        super(List, self).__init__(name=name, param=True)
+        self._iterator_type = ListIter(self)
+
+    @property
+    def iterator_type(self):
+        return self._iterator_type
+
+
+class ListIter(SimpleIteratorType):
+
+    def __init__(self, list):
+        self.list = list
+        yield_type = list.dtype
+        name = 'iter(%s)' % list
+        super(ListIter, self).__init__(name, yield_type)
+
+    @property
+    def key(self):
+        return self.list
+
+
 class CPointer(Type):
     """
     Type class for pointers to other types.

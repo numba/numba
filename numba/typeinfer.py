@@ -136,6 +136,22 @@ class BuildTupleConstrain(object):
             oset.add_types(tup)
 
 
+class BuildListConstrain(object):
+    def __init__(self, target, items, loc):
+        self.target = target
+        self.items = items
+        self.loc = loc
+
+    def __call__(self, context, typevars):
+        if not len(self.items):
+            assert 0
+        tsets = [typevars[i.name].get() for i in self.items]
+        oset = typevars[self.target]
+        for typs in itertools.product(*tsets):
+            unified = context.unify_types(*typs)
+            oset.add_types(types.List(unified))
+
+
 class ExhaustIterConstrain(object):
     def __init__(self, target, count, iterator, loc):
         self.target = target
@@ -650,6 +666,10 @@ class TypeInferer(object):
         elif expr.op == 'build_tuple':
             constrain = BuildTupleConstrain(target.name, items=expr.items,
                                             loc=inst.loc)
+            self.constrains.append(constrain)
+        elif expr.op == 'build_list':
+            constrain = BuildListConstrain(target.name, items=expr.items,
+                                           loc=inst.loc)
             self.constrains.append(constrain)
         elif expr.op == 'cast':
             self.constrains.append(Propagate(dst=target.name,
