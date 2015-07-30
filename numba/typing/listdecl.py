@@ -6,7 +6,7 @@ import numpy as np
 
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
-                        Registry, signature)
+                        Registry, signature, bound_function)
 
 
 registry = Registry()
@@ -16,7 +16,7 @@ builtin_attr = registry.register_attr
 
 
 @builtin
-class Len(AbstractTemplate):
+class ListLen(AbstractTemplate):
     key = types.len_type
 
     def generic(self, args, kws):
@@ -24,3 +24,14 @@ class Len(AbstractTemplate):
         (val,) = args
         if isinstance(val, (types.List)):
             return signature(types.intp, val)
+
+
+@builtin_attr
+class ListAttribute(AttributeTemplate):
+    key = types.List
+
+    @bound_function("list.pop")
+    def resolve_pop(self, list, args, kws):
+        assert not args
+        assert not kws
+        return signature(list.dtype)

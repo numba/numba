@@ -88,7 +88,9 @@ class StructProxy(object):
 
         if ref is not None:
             assert value is None
-            assert ref.type.pointee == self._be_type
+            if ref.type.pointee != self._be_type:
+                raise AssertionError("bad ref type: expected %s, got %s"
+                                     % (self._be_type.as_pointer(), ref.type))
             self._value = ref
         else:
             self._value = alloca_once(self._builder, self._be_type, zfill=True)

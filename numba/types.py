@@ -970,6 +970,18 @@ class Tuple(BaseTuple):
             return max(kinds)
 
 
+class ListPayload(Type):
+    
+    def __init__(self, list):
+        self.list = list
+        name = 'payload(%s)' % list
+        super(ListPayload, self).__init__(name, param=True)
+    
+    @property
+    def key(self):
+        return self.list
+
+
 class List(IterableType):
 
     def __init__(self, dtype):

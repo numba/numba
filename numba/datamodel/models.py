@@ -505,7 +505,11 @@ class StructModel(CompositeModel):
                                     name="inserted." + self._fields[pos])
 
     def get_field_position(self, field):
-        return self._fields.index(field)
+        try:
+            return self._fields.index(field)
+        except ValueError:
+            raise KeyError("%s does not have a field named %r"
+                           % (self.__class__.__name__, field))
 
     @property
     def field_count(self):
@@ -558,14 +562,27 @@ class PairModel(StructModel):
         super(PairModel, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.ListPayload)
+class ListPayloadModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        # The fields are mutable but the payload is always manipulated
+        # by reference.  This scheme allows mutations of an array to
+        # be seen by its iterators.
+        members = [
+            ('size', types.intp),
+            ('data', fe_type.list.dtype),
+        ]
+        super(ListPayloadModel, self).__init__(dmm, fe_type, members)
+
+
 @register_default(types.List)
 class ListModel(StructModel):
     def __init__(self, dmm, fe_type):
+        payload_type = types.ListPayload(fe_type)
         members = [
+            # The meminfo data points to a ListPayload
             ('meminfo', types.meminfo_pointer),
-            ('size', types.EphemeralPointer(types.intp)),
             ('allocated', types.EphemeralPointer(types.intp)),
-            ('data', types.EphemeralPointer(types.CPointer(fe_type.dtype))),
         ]
         super(ListModel, self).__init__(dmm, fe_type, members)
 
@@ -574,11 +591,10 @@ class ListModel(StructModel):
 class ListIterModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [
+            # The meminfo data points to a ListPayload (shared with the
+            # original list object)
+            ('meminfo', types.meminfo_pointer),
             ('index', types.EphemeralPointer(types.intp)),
-            # XXX this creates a new slot while we would like to share the
-            # pointer with the list...
-            ('size', types.EphemeralPointer(types.intp)),
-            ('data', types.EphemeralPointer(types.CPointer(fe_type.list.dtype))),
             ]
         super(ListIterModel, self).__init__(dmm, fe_type, members)
 
