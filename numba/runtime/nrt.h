@@ -82,11 +82,6 @@ void NRT_MemSys_set_atomic_inc_dec_stub(void);
 void NRT_MemSys_set_atomic_cas_stub(void);
 
 /*
- * Process all pending deferred dtors
- */
-void NRT_MemSys_process_defer_dtor(void);
-
-/*
  * The following functions get internal statistics of the memory subsystem.
  */
 size_t NRT_MemSys_get_stats_alloc();
@@ -150,15 +145,13 @@ void NRT_MemInfo_acquire(MemInfo* mi);
 /*
  * Release a reference to a MemInfo
  */
-void NRT_MemInfo_release(MemInfo* mi, int defer);
+void NRT_MemInfo_release(MemInfo* mi);
 
 /*
  * Internal/Compiler API.
  * Invoke the registered destructor of a MemInfo.
- * if `defer` is true, the MemInfo is added to the deferred dtor list.
- * Calls NRT_MemInfo_defer_dtor.
  */
-void NRT_MemInfo_call_dtor(MemInfo *mi, int defer);
+void NRT_MemInfo_call_dtor(MemInfo *mi);
 
 /*
  * Returns the data pointer
@@ -169,12 +162,6 @@ void* NRT_MemInfo_data(MemInfo* mi);
  * Returns the allocated size
  */
 size_t NRT_MemInfo_size(MemInfo* mi);
-
-/*
- * Internal API.
- * Append the MemInfo to the deferred dtor list.
- */
-void NRT_MemInfo_defer_dtor(MemInfo* mi);
 
 
 /*

@@ -16,16 +16,6 @@
 typedef int (*atomic_meminfo_cas_func)(void **ptr, void *cmp,
                                        void *repl, void **oldptr);
 
-
-enum MEMINFO_FLAGS{
-    MEMINFO_FLAGS_NONE = 0,
-    /*
-     *  If set, the MemInfo and the data buffer are in the same allocated
-     *  region.  Freeing the MemInfo pointer will free the data.
-     */
-    MEMINFO_FLAGS_INLINED = 1
-};
-
 union MemInfo{
     struct {
         size_t         refct;
@@ -33,7 +23,6 @@ union MemInfo{
         void          *dtor_info;
         void          *data;
         size_t         size;    /* only used for NRT allocated memory */
-        int            flags;   /* See enum MEMINFO_FLAGS */
     } payload;
 
     /* Freelist or Deferred-dtor-list */
@@ -41,20 +30,7 @@ union MemInfo{
 };
 
 
-typedef struct MIList {
-    MemInfo * volatile head;
-    void              *lock;
-} MIList;
-
-#define MILIST_UNLOCKED ((void*)0)
-#define MILIST_LOCKED ((void*)1)
-
-
 struct MemSys{
-    /* Ununsed MemInfo are recycled here */
-    MIList mi_freelist;
-    /* MemInfo with deferred dtor */
-    MIList  mi_deferlist;
     /* Atomic increment and decrement function */
     atomic_inc_dec_func atomic_inc, atomic_dec;
     /* Atomic CAS */
@@ -70,55 +46,6 @@ struct MemSys{
 static MemSys TheMSys;
 
 static
-void milist_lock(MIList *list) {
-    void *dummy;
-    while(!TheMSys.atomic_cas(&list->lock, MILIST_UNLOCKED, MILIST_LOCKED,
-                              &dummy));
-}
-
-static
-void milist_unlock(MIList *list) {
-    void *dummy;
-    while(!TheMSys.atomic_cas(&list->lock, MILIST_LOCKED, MILIST_UNLOCKED,
-                              &dummy));
-}
-
-static
-MemInfo *nrt_pop_meminfo_list(MIList *list) {
-    MemInfo *repl, *head;
-
-    milist_lock(list);
-
-    head = list->head;     /* get the current head */
-    if ( head ) {
-        /* if head is not NULL, replace with the next item */
-        repl = head->list_next;
-    } else {
-        /* else, replace with NULL */
-        repl = NULL;
-    }
-    list->head = repl;
-
-    milist_unlock(list);
-    return head;
-}
-
-static
-void nrt_push_meminfo_list(MIList *list, MemInfo *repl) {
-    MemInfo *old, *head;
-
-    milist_lock(list);
-
-    head = list->head;   /* get the current head */
-    /* Set the next item to be the current head */
-    repl->list_next = head;
-    /* Set new head */
-    list->head = repl;
-
-    milist_unlock(list);
-}
-
-static
 void nrt_meminfo_call_dtor(MemInfo *mi) {
     NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
     /* call dtor */
@@ -126,13 +53,6 @@ void nrt_meminfo_call_dtor(MemInfo *mi) {
         mi->payload.dtor(mi->payload.data, mi->payload.dtor_info);
     /* Clear and release MemInfo */
     NRT_MemInfo_destroy(mi);
-}
-
-static
-MemInfo* meminfo_malloc(void) {
-    void *p = malloc(sizeof(MemInfo));;
-    NRT_Debug(nrt_debug_print("meminfo_malloc %p\n", p));
-    return p;
 }
 
 void NRT_MemSys_init(void) {
@@ -147,40 +67,6 @@ void NRT_MemSys_shutdown(void) {
        it cannot be running multiple threads anymore. */
     NRT_MemSys_set_atomic_inc_dec_stub();
     NRT_MemSys_set_atomic_cas_stub();
-}
-
-void NRT_MemSys_process_defer_dtor(void) {
-    MemInfo *mi;
-    while ((mi = nrt_pop_meminfo_list(&TheMSys.mi_deferlist))) {
-        NRT_Debug(nrt_debug_print("Defer dtor %p\n", mi));
-        nrt_meminfo_call_dtor(mi);
-    }
-}
-
-void NRT_MemSys_insert_meminfo(MemInfo *newnode) {
-    assert(newnode && "`newnode` cannot be NULL");
-    /*
-    if (NULL == newnode) {
-        newnode = meminfo_malloc();
-    } else {
-        assert(newnode->payload.refct == 0 && "RefCt must be 0");
-    }
-    */
-    assert(newnode->payload.refct == 0 && "RefCt must be 0");
-    NRT_Debug(nrt_debug_print("NRT_MemSys_insert_meminfo newnode=%p\n",
-                              newnode));
-    memset(newnode, 0, sizeof(MemInfo));  /* to catch bugs; not required */
-    nrt_push_meminfo_list(&TheMSys.mi_freelist, newnode);
-}
-
-MemInfo* NRT_MemSys_pop_meminfo(void) {
-    MemInfo *node = nrt_pop_meminfo_list(&TheMSys.mi_freelist);
-    if (NULL == node) {
-        node = meminfo_malloc();
-    }
-    memset(node, 0, sizeof(MemInfo));   /* to catch bugs; not required */
-    NRT_Debug(nrt_debug_print("NRT_MemSys_pop_meminfo: return %p\n", node));
-    return node;
 }
 
 void NRT_MemSys_set_atomic_inc_dec(atomic_inc_dec_func inc,
@@ -259,7 +145,6 @@ void NRT_MemInfo_init(MemInfo *mi,void *data, size_t size, dtor_function dtor,
     mi->payload.dtor_info = dtor_info;
     mi->payload.data = data;
     mi->payload.size = size;
-    mi->payload.flags = flags;
     /* Update stats */
     TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
 }
@@ -267,8 +152,8 @@ void NRT_MemInfo_init(MemInfo *mi,void *data, size_t size, dtor_function dtor,
 MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info)
 {
-    MemInfo * mi = NRT_MemSys_pop_meminfo();
-    NRT_MemInfo_init(mi, data, size, dtor, dtor_info, MEMINFO_FLAGS_NONE);
+    MemInfo * mi = NRT_Allocate(sizeof(MemInfo));
+    NRT_MemInfo_init(mi, data, size, dtor, dtor_info, 0);
     return mi;
 }
 
@@ -302,7 +187,7 @@ MemInfo* NRT_MemInfo_alloc(size_t size) {
     MemInfo *mi;
     void *data = nrt_allocate_meminfo_and_data(size, &mi);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc %p\n", data));
-    NRT_MemInfo_init(mi, data, size, NULL, NULL, MEMINFO_FLAGS_INLINED);
+    NRT_MemInfo_init(mi, data, size, NULL, NULL, 0);
     return mi;
 }
 
@@ -314,7 +199,7 @@ MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
     memset(data, 0xCB, MIN(size, 256));
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p %zu\n", data, size));
     NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe,
-                     (void*)size, MEMINFO_FLAGS_INLINED);
+                     (void*)size, 0);
     return mi;
 }
 
@@ -339,7 +224,7 @@ MemInfo* NRT_MemInfo_alloc_aligned(size_t size, unsigned align) {
     MemInfo *mi;
     void *data = nrt_allocate_meminfo_and_data_align(size, align, &mi);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_aligned %p\n", data));
-    NRT_MemInfo_init(mi, data, size, NULL, NULL, MEMINFO_FLAGS_INLINED);
+    NRT_MemInfo_init(mi, data, size, NULL, NULL, 0);
     return mi;
 }
 
@@ -352,17 +237,12 @@ MemInfo* NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe_aligned %p %zu\n",
                               data, size));
     NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe,
-                     (void*)size, MEMINFO_FLAGS_INLINED);
+                     (void*)size, 0);
     return mi;
 }
 
 void NRT_MemInfo_destroy(MemInfo *mi) {
-    if (IS_FLAG_SET(mi->payload.flags, MEMINFO_FLAGS_INLINED)) {
-        NRT_Free(mi);
-    }
-    else {
-        NRT_MemSys_insert_meminfo(mi);
-    }
+    NRT_Free(mi);
     TheMSys.atomic_inc(&TheMSys.stats_mi_free);
 }
 
@@ -373,22 +253,18 @@ void NRT_MemInfo_acquire(MemInfo *mi) {
     TheMSys.atomic_inc(&mi->payload.refct);
 }
 
-void NRT_MemInfo_call_dtor(MemInfo *mi, int defer) {
+void NRT_MemInfo_call_dtor(MemInfo *mi) {
     /* We have a destructor */
-    if (defer) {
-        NRT_MemInfo_defer_dtor(mi);
-    } else {
-        nrt_meminfo_call_dtor(mi);
-    }
+    nrt_meminfo_call_dtor(mi);
 }
 
-void NRT_MemInfo_release(MemInfo *mi, int defer) {
+void NRT_MemInfo_release(MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_release %p refct=%zu\n", mi,
                                                             mi->payload.refct));
     assert (mi->payload.refct > 0 && "RefCt cannot be 0");
     /* RefCt drop to zero */
     if (TheMSys.atomic_dec(&mi->payload.refct) == 0) {
-        NRT_MemInfo_call_dtor(mi, defer);
+        NRT_MemInfo_call_dtor(mi);
     }
 }
 
@@ -400,10 +276,6 @@ size_t NRT_MemInfo_size(MemInfo* mi) {
     return mi->payload.size;
 }
 
-void NRT_MemInfo_defer_dtor(MemInfo *mi) {
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_defer_dtor\n"));
-    nrt_push_meminfo_list(&TheMSys.mi_deferlist, mi);
-}
 
 void NRT_MemInfo_dump(MemInfo *mi, FILE *out) {
     fprintf(out, "MemInfo %p refcount %zu\n", mi, mi->payload.refct);

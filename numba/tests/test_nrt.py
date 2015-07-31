@@ -62,26 +62,6 @@ class TestNrtMemInfo(unittest.TestCase):
         del mi
         self.assertEqual(Dummy.alive, 0)
 
-    def test_defer_dtor(self):
-        d = Dummy()
-        self.assertEqual(Dummy.alive, 1)
-        addr = 0xdeadcafe  # some made up location
-
-        mi = rtsys.meminfo_new(addr, d)
-        self.assertEqual(mi.refcount, 1)
-        # Set defer flag
-        mi.defer = True
-        del d
-        self.assertEqual(Dummy.alive, 1)
-        mi.acquire()
-        self.assertEqual(Dummy.alive, 1)
-        mi.release()
-        del mi
-        # mi refct is zero but not yet removed due to deferring
-        self.assertEqual(Dummy.alive, 1)
-        rtsys.process_defer_dtor()
-        self.assertEqual(Dummy.alive, 0)
-
     @unittest.skipIf(PYVERSION <= (2, 7), "memoryview not supported")
     def test_fake_memoryview(self):
         d = Dummy()
