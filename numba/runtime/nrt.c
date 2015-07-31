@@ -16,17 +16,12 @@
 typedef int (*atomic_meminfo_cas_func)(void **ptr, void *cmp,
                                        void *repl, void **oldptr);
 
-union MemInfo{
-    struct {
-        size_t         refct;
-        dtor_function  dtor;
-        void          *dtor_info;
-        void          *data;
-        size_t         size;    /* only used for NRT allocated memory */
-    } payload;
-
-    /* Freelist or Deferred-dtor-list */
-    MemInfo *list_next;
+struct MemInfo{
+    size_t         refct;
+    dtor_function  dtor;
+    void          *dtor_info;
+    void          *data;
+    size_t         size;    /* only used for NRT allocated memory */
 };
 
 
@@ -49,8 +44,8 @@ static
 void nrt_meminfo_call_dtor(MemInfo *mi) {
     NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
     /* call dtor */
-    if (mi->payload.dtor)
-        mi->payload.dtor(mi->payload.data, mi->payload.dtor_info);
+    if (mi->dtor)
+        mi->dtor(mi->data, mi->dtor_info);
     /* Clear and release MemInfo */
     NRT_MemInfo_destroy(mi);
 }
@@ -140,11 +135,11 @@ void NRT_MemSys_set_atomic_cas_stub(void) {
 void NRT_MemInfo_init(MemInfo *mi,void *data, size_t size, dtor_function dtor,
                       void *dtor_info, int flags)
 {
-    mi->payload.refct = 1;  /* starts with 1 refct */
-    mi->payload.dtor = dtor;
-    mi->payload.dtor_info = dtor_info;
-    mi->payload.data = data;
-    mi->payload.size = size;
+    mi->refct = 1;  /* starts with 1 refct */
+    mi->dtor = dtor;
+    mi->dtor_info = dtor_info;
+    mi->data = data;
+    mi->size = size;
     /* Update stats */
     TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
 }
@@ -159,8 +154,8 @@ MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
 
 size_t NRT_MemInfo_refcount(MemInfo *mi) {
     /* Should never returns 0 for a valid MemInfo */
-    if (mi && mi->payload.data)
-        return mi->payload.refct;
+    if (mi && mi->data)
+        return mi->refct;
     else{
         return (size_t)-1;
     }
@@ -248,9 +243,9 @@ void NRT_MemInfo_destroy(MemInfo *mi) {
 
 void NRT_MemInfo_acquire(MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_acquire %p refct=%zu\n", mi,
-                                                            mi->payload.refct));
-    assert(mi->payload.refct > 0 && "RefCt cannot be zero");
-    TheMSys.atomic_inc(&mi->payload.refct);
+                                                            mi->refct));
+    assert(mi->refct > 0 && "RefCt cannot be zero");
+    TheMSys.atomic_inc(&mi->refct);
 }
 
 void NRT_MemInfo_call_dtor(MemInfo *mi) {
@@ -260,25 +255,25 @@ void NRT_MemInfo_call_dtor(MemInfo *mi) {
 
 void NRT_MemInfo_release(MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_release %p refct=%zu\n", mi,
-                                                            mi->payload.refct));
-    assert (mi->payload.refct > 0 && "RefCt cannot be 0");
+                                                            mi->refct));
+    assert (mi->refct > 0 && "RefCt cannot be 0");
     /* RefCt drop to zero */
-    if (TheMSys.atomic_dec(&mi->payload.refct) == 0) {
+    if (TheMSys.atomic_dec(&mi->refct) == 0) {
         NRT_MemInfo_call_dtor(mi);
     }
 }
 
 void* NRT_MemInfo_data(MemInfo* mi) {
-    return mi->payload.data;
+    return mi->data;
 }
 
 size_t NRT_MemInfo_size(MemInfo* mi) {
-    return mi->payload.size;
+    return mi->size;
 }
 
 
 void NRT_MemInfo_dump(MemInfo *mi, FILE *out) {
-    fprintf(out, "MemInfo %p refcount %zu\n", mi, mi->payload.refct);
+    fprintf(out, "MemInfo %p refcount %zu\n", mi, mi->refct);
 }
 
 void* NRT_Allocate(size_t size) {

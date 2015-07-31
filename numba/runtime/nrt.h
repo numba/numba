@@ -34,7 +34,7 @@ typedef size_t (*atomic_inc_dec_func)(size_t *ptr);
 typedef int (*atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
                                void **oldptr);
 
-typedef union MemInfo MemInfo;
+typedef struct MemInfo MemInfo;
 typedef struct MemSys MemSys;
 
 /* Memory System API */
