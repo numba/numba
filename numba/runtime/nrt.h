@@ -87,7 +87,7 @@ MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info);
 
 void NRT_MemInfo_init(MemInfo *mi, void *data, size_t size, dtor_function dtor,
-                      void *dtor_info, int flags);
+                      void *dtor_info);
 
 /*
  * Returns the refcount of a MemInfo or (size_t)-1 if error.

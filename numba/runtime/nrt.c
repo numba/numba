@@ -7,11 +7,6 @@
 #define MIN(a, b) ((a) < (b)) ? (a) : (b)
 #endif
 
-#ifdef IS_FLAG_SET
-#  error "IS_FLAG_SET redefined"
-#else
-#  define IS_FLAG_SET(X, M) ( (X & M) == M )
-#endif
 
 typedef int (*atomic_meminfo_cas_func)(void **ptr, void *cmp,
                                        void *repl, void **oldptr);
@@ -133,7 +128,7 @@ void NRT_MemSys_set_atomic_cas_stub(void) {
 }
 
 void NRT_MemInfo_init(MemInfo *mi,void *data, size_t size, dtor_function dtor,
-                      void *dtor_info, int flags)
+                      void *dtor_info)
 {
     mi->refct = 1;  /* starts with 1 refct */
     mi->dtor = dtor;
@@ -148,7 +143,7 @@ MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info)
 {
     MemInfo * mi = NRT_Allocate(sizeof(MemInfo));
-    NRT_MemInfo_init(mi, data, size, dtor, dtor_info, 0);
+    NRT_MemInfo_init(mi, data, size, dtor, dtor_info);
     return mi;
 }
 
@@ -182,7 +177,7 @@ MemInfo* NRT_MemInfo_alloc(size_t size) {
     MemInfo *mi;
     void *data = nrt_allocate_meminfo_and_data(size, &mi);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc %p\n", data));
-    NRT_MemInfo_init(mi, data, size, NULL, NULL, 0);
+    NRT_MemInfo_init(mi, data, size, NULL, NULL);
     return mi;
 }
 
@@ -193,8 +188,7 @@ MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
        overhead. */
     memset(data, 0xCB, MIN(size, 256));
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p %zu\n", data, size));
-    NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe,
-                     (void*)size, 0);
+    NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe, (void*)size);
     return mi;
 }
 
@@ -219,7 +213,7 @@ MemInfo* NRT_MemInfo_alloc_aligned(size_t size, unsigned align) {
     MemInfo *mi;
     void *data = nrt_allocate_meminfo_and_data_align(size, align, &mi);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_aligned %p\n", data));
-    NRT_MemInfo_init(mi, data, size, NULL, NULL, 0);
+    NRT_MemInfo_init(mi, data, size, NULL, NULL);
     return mi;
 }
 
@@ -231,8 +225,7 @@ MemInfo* NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
     memset(data, 0xCB, MIN(size, 256));
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe_aligned %p %zu\n",
                               data, size));
-    NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe,
-                     (void*)size, 0);
+    NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe, (void*)size);
     return mi;
 }
 
