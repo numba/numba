@@ -46,20 +46,6 @@ void NRT_MemSys_init(void);
 void NRT_MemSys_shutdown(void);
 
 /*
- * Internal API
- * Add a new MemInfo to the freelist (available MemInfo for use).
- * If `newnode` is NULL, a new MemInfo is created.
- */
-void NRT_MemSys_insert_meminfo(MemInfo *newnode);
-
-
-/*
- * Internal API
- * Pop a MemInfo from the freelist.
- */
-MemInfo* NRT_MemSys_pop_meminfo(void);
-
-/*
  * Register the atomic increment and decrement functions
  */
 void NRT_MemSys_set_atomic_inc_dec(atomic_inc_dec_func inc,
