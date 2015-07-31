@@ -197,7 +197,7 @@ void* nrt_allocate_meminfo_and_data_align(size_t size, unsigned align,
                                          MemInfo **mi)
 {
     size_t offset, intptr, remainder;
-    char *base = nrt_allocate_meminfo_and_data(size + align, mi);
+    char *base = nrt_allocate_meminfo_and_data(size + 2 * align, mi);
     intptr = (size_t) base;
     /* See if we are aligned */
     remainder = intptr % align;
