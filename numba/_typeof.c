@@ -713,21 +713,20 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
 
 #if PY_MAJOR_VERSION >= 3
     static
-    void* wrap_import_array() {
+    void* wrap_import_array(void) {
         import_array(); /* import array returns NULL on failure */
         return (void*)1;
     }
 #else
     static
-    void wrap_import_array() {
+    void wrap_import_array(void) {
         import_array();
     }
 #endif
 
 
 static
-int
-init_numpy() {
+int init_numpy(void) {
     #if PY_MAJOR_VERSION >= 3
         return wrap_import_array() != NULL;
     #else
