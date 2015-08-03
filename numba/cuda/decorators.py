@@ -55,7 +55,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
                                           debug=debug)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, bind=bind, debug=True,
+                    return jit(func, device=device, bind=bind, debug=debug,
                                **kws)
 
             return autojitwrapper
@@ -65,7 +65,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
                 return FakeCUDAKernel(func_or_sig, device=device, fastmath=fastmath,
                                        debug=debug)
             elif device:
-                return jitdevice(func_or_sig, debug=True, **kws)
+                return jitdevice(func_or_sig, debug=debug, **kws)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
