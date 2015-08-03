@@ -13,7 +13,6 @@ All functions described here are threadsafe.
 #   define NRT_Debug(X)
 #endif
 
-
 /*
  * Debugging printf function used internally
  */
@@ -70,10 +69,10 @@ void NRT_MemSys_set_atomic_cas_stub(void);
 /*
  * The following functions get internal statistics of the memory subsystem.
  */
-size_t NRT_MemSys_get_stats_alloc();
-size_t NRT_MemSys_get_stats_free();
-size_t NRT_MemSys_get_stats_mi_alloc();
-size_t NRT_MemSys_get_stats_mi_free();
+size_t NRT_MemSys_get_stats_alloc(void);
+size_t NRT_MemSys_get_stats_free(void);
+size_t NRT_MemSys_get_stats_mi_alloc(void);
+size_t NRT_MemSys_get_stats_mi_free(void);
 
 /* Memory Info API */
 
