@@ -34,7 +34,7 @@ typedef size_t (*atomic_inc_dec_func)(size_t *ptr);
 typedef int (*atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
                                void **oldptr);
 
-typedef union MemInfo MemInfo;
+typedef struct MemInfo MemInfo;
 typedef struct MemSys MemSys;
 
 /* Memory System API */
@@ -44,20 +44,6 @@ void NRT_MemSys_init(void);
 
 /* Shutdown the memory system */
 void NRT_MemSys_shutdown(void);
-
-/*
- * Internal API
- * Add a new MemInfo to the freelist (available MemInfo for use).
- * If `newnode` is NULL, a new MemInfo is created.
- */
-void NRT_MemSys_insert_meminfo(MemInfo *newnode);
-
-
-/*
- * Internal API
- * Pop a MemInfo from the freelist.
- */
-MemInfo* NRT_MemSys_pop_meminfo(void);
 
 /*
  * Register the atomic increment and decrement functions
@@ -82,11 +68,6 @@ void NRT_MemSys_set_atomic_inc_dec_stub(void);
 void NRT_MemSys_set_atomic_cas_stub(void);
 
 /*
- * Process all pending deferred dtors
- */
-void NRT_MemSys_process_defer_dtor(void);
-
-/*
  * The following functions get internal statistics of the memory subsystem.
  */
 size_t NRT_MemSys_get_stats_alloc();
@@ -104,6 +85,9 @@ size_t NRT_MemSys_get_stats_mi_free();
  */
 MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info);
+
+void NRT_MemInfo_init(MemInfo *mi, void *data, size_t size, dtor_function dtor,
+                      void *dtor_info);
 
 /*
  * Returns the refcount of a MemInfo or (size_t)-1 if error.
@@ -147,15 +131,13 @@ void NRT_MemInfo_acquire(MemInfo* mi);
 /*
  * Release a reference to a MemInfo
  */
-void NRT_MemInfo_release(MemInfo* mi, int defer);
+void NRT_MemInfo_release(MemInfo* mi);
 
 /*
  * Internal/Compiler API.
  * Invoke the registered destructor of a MemInfo.
- * if `defer` is true, the MemInfo is added to the deferred dtor list.
- * Calls NRT_MemInfo_defer_dtor.
  */
-void NRT_MemInfo_call_dtor(MemInfo *mi, int defer);
+void NRT_MemInfo_call_dtor(MemInfo *mi);
 
 /*
  * Returns the data pointer
@@ -166,12 +148,6 @@ void* NRT_MemInfo_data(MemInfo* mi);
  * Returns the allocated size
  */
 size_t NRT_MemInfo_size(MemInfo* mi);
-
-/*
- * Internal API.
- * Append the MemInfo to the deferred dtor list.
- */
-void NRT_MemInfo_defer_dtor(MemInfo* mi);
 
 
 /*
@@ -190,11 +166,4 @@ void* NRT_Allocate(size_t size);
  * Deallocate memory pointed by `ptr`.
  */
 void NRT_Free(void *ptr);
-
-/*
- * Allocate memory of `size` bytes on the given `align` byte boundary
- * The allocated output is stored to `ptr`.
- * The return value is the base pointer to be passed to NRT_Free
- */
-void* NRT_MemAlign(void **ptr, size_t size, unsigned align);
 

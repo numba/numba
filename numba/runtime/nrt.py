@@ -73,11 +73,6 @@ class _Runtime(object):
             mi = _nrt.meminfo_alloc(size)
         return MemInfo(mi)
 
-    def process_defer_dtor(self):
-        """Process all deferred dtors.
-        """
-        _nrt.memsys_process_defer_dtor()
-
     def get_allocation_stats(self):
         """
         Returns a namedtuple of (alloc, free, mi_alloc, mi_free) for count of

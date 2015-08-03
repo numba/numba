@@ -61,7 +61,7 @@ def _define_decref(module, atomic_decr):
     fn_decref = module.get_global_variable_named("NRT_decref")
     fn_decref.linkage = 'linkonce_odr'
     calldtor = module.add_function(ir.FunctionType(ir.VoidType(),
-        [ir.IntType(8).as_pointer(), ir.IntType(32)]),
+        [ir.IntType(8).as_pointer()]),
         name="NRT_MemInfo_call_dtor")
 
     builder = ir.IRBuilder(fn_decref.append_basic_block())
@@ -75,8 +75,7 @@ def _define_decref(module, atomic_decr):
     refct_eq_0 = builder.icmp_unsigned("==", newrefct,
                                        ir.Constant(newrefct.type, 0))
     with cgutils.if_unlikely(builder, refct_eq_0):
-        do_defer = ir.Constant(ir.IntType(32), 0)
-        builder.call(calldtor, [ptr, do_defer])
+        builder.call(calldtor, [ptr])
     builder.ret_void()
 
 
