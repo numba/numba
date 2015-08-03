@@ -1,10 +1,10 @@
 from __future__ import absolute_import, print_function
 
-import sys
-from ctypes import (c_size_t, byref, c_char_p, c_void_p, Structure, CDLL,
-                    POINTER, create_string_buffer)
 import os
+import sys
 from collections import namedtuple
+from ctypes import (c_size_t, byref, c_char_p, c_void_p, Structure, CDLL,
+                    POINTER, create_string_buffer, c_int, addressof)
 
 from numba import utils, config
 from .utils import adapt_llvm_version
@@ -22,6 +22,25 @@ hlc.HLC_ParseModule.restype = moduleref_ptr
 hlc.HLC_ModuleEmitBRIG.restype = c_size_t
 hlc.HLC_Initialize()
 utils.finalize(hlc, lambda: hlc.HLC_Finalize())
+
+hlc.HLC_SetCommandLineOption.argtypes = [
+    c_int,
+    c_void_p,
+]
+
+
+def set_option(*opt):
+    """
+    Use this for setting debug flags to libHLC using the same options
+    available to LLVM.
+    E.g -debug-pass=Structure
+    """
+    inp = [create_string_buffer(x.encode('ascii')) for x in (('libhlc',) + opt)]
+    argc = len(inp)
+    argv = (c_char_p * argc)()
+    for i in range(argc):
+        argv[i] = addressof(inp[i])
+    hlc.HLC_SetCommandLineOption(argc, byref(argv))
 
 
 class Error(Exception):
