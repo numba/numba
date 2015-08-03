@@ -267,9 +267,9 @@ def bound_function(template_key):
                 key = template_key
                 def generic(_, args, kws):
                     sig = method_resolver(self, ty, args, kws)
-                    if sig is not None:
+                    if sig is not None and sig.recvr is None:
                         sig.recvr = ty
-                        return sig
+                    return sig
 
             return types.BoundFunction(MethodTemplate, ty)
         return attribute_resolver

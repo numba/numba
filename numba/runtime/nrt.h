@@ -77,7 +77,7 @@ size_t NRT_MemSys_get_stats_mi_free();
 
 /* Memory Info API */
 
-/* Create a new MemInfo
+/* Create a new MemInfo for external memory
  *
  * data: data pointer being tracked
  * dtor: destructor to execute
@@ -99,7 +99,6 @@ size_t NRT_MemInfo_refcount(MemInfo *mi);
  * that describes the allocation
  */
 MemInfo* NRT_MemInfo_alloc(size_t size);
-
 
 /*
  * The "safe" NRT_MemInfo_alloc performs additional steps to help debug
@@ -151,11 +150,20 @@ size_t NRT_MemInfo_size(MemInfo* mi);
 
 
 /*
+ * NRT API for resizable buffers.
+ */
+
+MemInfo *NRT_MemInfo_varsize_alloc(size_t size);
+void *NRT_MemInfo_varsize_realloc(MemInfo *mi, size_t size);
+
+
+/*
  * Print debug info to FILE
  */
 void NRT_MemInfo_dump(MemInfo *mi, FILE *out);
 
-/* General allocator */
+
+/* Low-level allocation wrappers. */
 
 /*
  * Allocate memory of `size` bytes.
@@ -166,4 +174,9 @@ void* NRT_Allocate(size_t size);
  * Deallocate memory pointed by `ptr`.
  */
 void NRT_Free(void *ptr);
+
+/*
+ * Reallocate memory at `ptr`.
+ */
+void *NRT_Reallocate(void *ptr, size_t size);
 

@@ -22,7 +22,8 @@ _meminfo_struct_type = ir.LiteralStructType([
 
 def _define_nrt_meminfo_data(module):
     """
-    Implement NRT_MemInfo_data in the module.
+    Implement NRT_MemInfo_data in the module.  This allows inlined lookup
+    of the data pointer.
     """
     if "NRT_MemInfo_data" not in module.globals:
         return
@@ -96,6 +97,11 @@ def install_fast_nrt_functions(module):
     _define_decref(module, decref)
 
 
+# Set this to True to measure the overhead of atomic refcounts compared
+# to non-atomic.
+_disable_atomicity = 0
+
+
 def _define_atomic_inc_dec(module, op, ordering):
     """Define a llvm function for atomic increment/decrement to the given module
     Argument ``op`` is the operation "add"/"sub".  Argument ``ordering`` is
@@ -108,11 +114,20 @@ def _define_atomic_inc_dec(module, op, ordering):
     bb = fn_atomic.append_basic_block()
     builder = ir.IRBuilder(bb)
     ONE = ir.Constant(_word_type, 1)
-    oldval = builder.atomic_rmw(op, ptr, ONE, ordering=ordering)
-    # Perform the operation on the old value so that we can pretend returning
-    # the "new" value.
-    res = getattr(builder, op)(oldval, ONE)
-    builder.ret(res)
+    if not _disable_atomicity:
+        oldval = builder.atomic_rmw(op, ptr, ONE, ordering=ordering)
+        # Perform the operation on the old value so that we can pretend returning
+        # the "new" value.
+        res = getattr(builder, op)(oldval, ONE)
+        builder.ret(res)
+    else:
+        oldval = builder.load(ptr)
+        if op == "add":
+            newval = builder.add(oldval, ONE)
+        else:
+            newval = builder.sub(oldval, ONE)
+        builder.store(newval, ptr)
+        builder.ret(oldval)
 
     return fn_atomic
 

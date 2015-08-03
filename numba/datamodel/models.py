@@ -570,6 +570,7 @@ class ListPayloadModel(StructModel):
         # be seen by its iterators.
         members = [
             ('size', types.intp),
+            ('allocated', types.intp),
             ('data', fe_type.list.dtype),
         ]
         super(ListPayloadModel, self).__init__(dmm, fe_type, members)
@@ -582,7 +583,6 @@ class ListModel(StructModel):
         members = [
             # The meminfo data points to a ListPayload
             ('meminfo', types.meminfo_pointer),
-            ('allocated', types.EphemeralPointer(types.intp)),
         ]
         super(ListModel, self).__init__(dmm, fe_type, members)
 

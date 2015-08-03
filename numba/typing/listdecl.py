@@ -35,3 +35,11 @@ class ListAttribute(AttributeTemplate):
         assert not args
         assert not kws
         return signature(list.dtype)
+
+    @bound_function("list.append")
+    def resolve_append(self, list, args, kws):
+        item, = args
+        assert not kws
+        sig = signature(types.none, item)
+        # XXX sig.recvr
+        return sig

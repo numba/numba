@@ -168,7 +168,7 @@ static
 void *nrt_allocate_meminfo_and_data(size_t size, MemInfo **mi_out) {
     MemInfo *mi;
     char *base = NRT_Allocate(sizeof(MemInfo) + size);
-    mi = (MemInfo*)base;
+    mi = (MemInfo *) base;
     *mi_out = mi;
     return base + sizeof(MemInfo);
 }
@@ -269,11 +269,62 @@ void NRT_MemInfo_dump(MemInfo *mi, FILE *out) {
     fprintf(out, "MemInfo %p refcount %zu\n", mi, mi->refct);
 }
 
+/*
+ * Resizable buffer API.
+ */
+
+static void
+nrt_varsize_dtor(void *ptr, void *info) {
+    NRT_Debug(nrt_debug_print("nrt_buffer_dtor %p\n", ptr));
+    NRT_Free(ptr);
+}
+
+MemInfo *NRT_MemInfo_varsize_alloc(size_t size)
+{
+    MemInfo *mi;
+    void *data = NRT_Allocate(size);
+    if (data == NULL)
+        return NULL;
+
+    mi = NRT_MemInfo_new(data, size, nrt_varsize_dtor, NULL);
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_buffer size=%llu "
+                              "-> meminfo=%p, data=%p\n", size, mi, data));
+    return mi;
+}
+
+void *NRT_MemInfo_varsize_realloc(MemInfo *mi, size_t size)
+{
+    if (mi->dtor != nrt_varsize_dtor) {
+        /* XXX do we need a fatal error API? */
+        nrt_debug_print("ERROR: NRT_MemInfo_varsize_realloc called "
+                        "with a non varsize-allocated meminfo");
+        return NULL;
+    }
+    mi->data = NRT_Reallocate(mi->data, size);
+    if (mi->data == NULL)
+        return NULL;
+    mi->size = size;
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_realloc_buffer %p size=%llu "
+                              "-> data=%p\n", mi, size, mi->data));
+    return mi->data;
+}
+
+/*
+ * Low-level allocation wrappers.
+ */
+
 void* NRT_Allocate(size_t size) {
     void *ptr = malloc(size);
     NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%llu ptr=%p\n", size, ptr));
     TheMSys.atomic_inc(&TheMSys.stats_alloc);
     return ptr;
+}
+
+void *NRT_Reallocate(void *ptr, size_t size) {
+    void *new_ptr = realloc(ptr, size);
+    NRT_Debug(nrt_debug_print("NRT_Reallocate bytes=%llu ptr=%p -> %p\n",
+                              size, ptr, new_ptr));
+    return new_ptr;
 }
 
 void NRT_Free(void *ptr) {

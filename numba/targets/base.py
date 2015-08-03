@@ -29,6 +29,7 @@ except NotImplementedError:
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
+void_ptr = GENERIC_POINTER
 
 LTYPEMAP = {
     types.pyobject: PYOBJECT,
@@ -1016,7 +1017,7 @@ class BaseContext(object):
         if not self.enable_nrt:
             raise Exception("Require NRT")
         mod = builder.module
-        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+        fnty = llvmir.FunctionType(void_ptr,
                                    [self.get_value_type(types.intp)])
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         fn.return_value.add_attribute("noalias")
@@ -1033,14 +1034,44 @@ class BaseContext(object):
         mod = builder.module
         intp = self.get_value_type(types.intp)
         u32 = self.get_value_type(types.uint32)
-        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(), [intp, u32])
+        fnty = llvmir.FunctionType(void_ptr, [intp, u32])
         fn = mod.get_or_insert_function(fnty,
                                         name="NRT_MemInfo_alloc_safe_aligned")
+        # XXX noalias on return value?
         if isinstance(align, int):
             align = self.get_constant(types.uint32, align)
         else:
             assert align.type == u32, "align must be a uint32"
         return builder.call(fn, [size, align])
+
+    def nrt_meminfo_varsize_alloc(self, builder, size):
+        """
+        Allocate a MemInfo pointing to a variable-sized data area.  The area
+        is separately allocated (i.e. two allocations are made) so that
+        re-allocating it doesn't change the MemInfo's address.
+        """
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_alloc")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [size])
+
+    def nrt_meminfo_varsize_realloc(self, builder, meminfo, size):
+        """
+        Reallocate a data area allocated by nrt_meminfo_varsize_alloc().
+        The new data pointer is returned, for convenience.
+        """
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [void_ptr, self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_realloc")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [meminfo, size])
 
     def nrt_meminfo_data(self, builder, meminfo):
         """
@@ -1050,10 +1081,8 @@ class BaseContext(object):
         if not self.enable_nrt:
             raise Exception("Require NRT")
         mod = builder.module
-        voidptr = llvmir.IntType(8).as_pointer()
-        fnty = llvmir.FunctionType(voidptr, [voidptr])
+        fnty = llvmir.FunctionType(void_ptr, [void_ptr])
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
-        fn.return_value.add_attribute("noalias")
         return builder.call(fn, [meminfo])
 
     def get_nrt_meminfo(self, builder, typ, value):
@@ -1071,7 +1100,7 @@ class BaseContext(object):
         if meminfo:
             mod = builder.module
             fnty = llvmir.FunctionType(llvmir.VoidType(),
-                                       [llvmir.IntType(8).as_pointer()])
+                                       [void_ptr])
             fn = mod.get_or_insert_function(fnty, name=funcname)
             # XXX "nonnull" causes a crash in test_dyn_array: can this
             # function be called with a NULL pointer?
