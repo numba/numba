@@ -9,9 +9,7 @@ from collections import namedtuple
 
 from numba import config
 from .utils import adapt_llvm_version
-
-print("Warning: using HLC as commandline")
-
+from .config import BUILTIN_PATH
 
 _real_check_call = check_call
 
@@ -54,7 +52,7 @@ class CmdLine(object):
                          "-S "
                          "-o {fout} "
                          "{fin} "
-                         "$HSAILBIN/builtins-hsail.opt.bc")
+                         "{lib}")
 
     CMD_LINK_LIBS = ("$HSAILBIN/llvm-link "
                      # "-prelink-opt "
@@ -75,8 +73,9 @@ class CmdLine(object):
         check_call(self.CMD_GEN_BRIG.format(fout=opath, fin=ipath), shell=True)
 
     def link_builtins(self, ipath, opath):
-        check_call(self.CMD_LINK_BUILTINS.format(fout=opath, fin=ipath),
-                   shell=True)
+        cmd = self.CMD_LINK_BUILTINS.format(fout=opath, fin=ipath,
+                                            lib=BUILTIN_PATH)
+        check_call(cmd, shell=True)
 
     def link_libs(self, ipath, libpaths, opath):
         cmdline = self.CMD_LINK_LIBS.format(fout=opath, fin=ipath)
