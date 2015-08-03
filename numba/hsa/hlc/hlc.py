@@ -21,10 +21,6 @@ def check_call(*args, **kwargs):
     return _real_check_call(*args, **kwargs)
 
 
-os.environ['HSAILBIN'] = os.environ.get('HSAILBIN', '/opt/amd/bin')
-
-
-
 class CmdLine(object):
     CMD_OPT = ("$HSAILBIN/opt "
                "-O3 "
