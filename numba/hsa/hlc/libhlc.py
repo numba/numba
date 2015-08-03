@@ -77,8 +77,7 @@ class HLC(object):
 
     def to_string(self, mod):
         buf = c_char_p(0)
-        if not hlc.HLC_ModulePrint(mod, byref(buf)):
-            raise Error("Failed to print module")
+        hlc.HLC_ModulePrint(mod, byref(buf))
         ret = buf.value.decode("latin1")
         hlc.HLC_DisposeString(buf)
         return ret
