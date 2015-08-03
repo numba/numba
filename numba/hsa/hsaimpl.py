@@ -18,6 +18,7 @@ from . import hlc
 registry = Registry()
 register = registry.register
 
+_void_value = lc.Constant.null(lc.Type.pointer(lc.Type.int(8)))
 
 # -----------------------------------------------------------------------------
 
@@ -47,7 +48,10 @@ def _declare_function(context, builder, name, sig, cargs,
 
     """
     mod = builder.module
-    llretty = context.get_value_type(sig.return_type)
+    if sig.return_type == types.void:
+        llretty = lc.Type.void()
+    else:
+        llretty = context.get_value_type(sig.return_type)
     llargs = [context.get_value_type(t) for t in sig.args]
     fnty = Type.function(llretty, llargs)
     mangled = mangler(name, cargs)
@@ -131,7 +135,8 @@ def barrier_impl(context, builder, sig, args):
     [flags] = args
     barrier = _declare_function(context, builder, 'barrier', sig,
                                 ['unsigned int'])
-    return builder.call(barrier, [flags])
+    builder.call(barrier, [flags])
+    return _void_value
 
 
 @register
@@ -140,7 +145,8 @@ def mem_fence_impl(context, builder, sig, args):
     [flags] = args
     mem_fence = _declare_function(context, builder, 'mem_fence', sig,
                                 ['unsigned int'])
-    return builder.call(mem_fence, [flags])
+    builder.call(mem_fence, [flags])
+    return _void_value
 
 
 @register
