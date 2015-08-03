@@ -40,7 +40,8 @@ register table instead of a stack.  Function of high complexity may fail to
 compile due to insufficient registers.
 
 For details please consult the
-`CUDA Programming Guide <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#programming-model>_`.
+`CUDA Programming Guide
+<http://docs.nvidia.com/cuda/cuda-c-programming-guide/#programming-model>`_.
 
 Constructs
 ----------
