@@ -13,11 +13,17 @@ Execution Model
 ---------------
 
 CUDA Python maps directly to the *single-instruction multiple-thread*
-execution (SIMT) model of CUDA.  Therefore, CUDA Python inherits all limitation
-of CUDA.  For instance, dynamic memory allocation is limited due to the
+execution (SIMT) model of CUDA.  Each instruction is implicitly
+executed by multiple threads in parallel.  With this execution model, array
+expression is less useful because we don't want multiple threads to perform
+the same task.  Instead, we want threads to perform a task in a cooperative
+fashion.
+
+The CUDA execution model also has some limitations.
+For instance, dynamic memory allocation is limited due to the
 requirement of knowing and configuring the maximum size of the heap.  The
 allocated memory is located in the slower global memory.  To minimize the
-overhead, CUDA Python does not use dynamic allocation.
+overhead, CUDA Python avoids features that requires dynamic allocation.
 
 Another important semantic different is that there is
 no *global interpreter lock* (GIL) in CUDA Python.  Race conditions are possible
@@ -26,12 +32,15 @@ or shared memory.
 
 There are several less apparent limitation on code complexity and
 size.  The high compute throughput of CUDA depends on threads operating on
-the same instruction; thus SIMT.  When threads are diverged, hardware
+the same instruction due to SIMT.  When threads are diverged, hardware
 utilization decreases.  Thread divergence are usually caused by conditional
 branches, which can exist as if-else and, less obvious, as for-loops.
 Another hardware limition is the number of registers, CUDA employs a large
 register table instead of a stack.  Function of high complexity may fail to
 compile due to insufficient registers.
+
+For details please consult the
+`CUDA Programming Guide <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#programming-model>_`.
 
 Constructs
 ----------
