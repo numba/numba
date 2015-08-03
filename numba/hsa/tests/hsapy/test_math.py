@@ -163,7 +163,8 @@ class TestMath(unittest.TestCase):
         for fn in funcs:
             self._generic_test_unary(fn, np.vectorize(fn))
 
-    @unittest.skipIf(True, "gamma() freezing computer")
+    @unittest.skipIf(True, "gamma() freezing computer on Carrizo (Kaveri may "
+                           "crash the process but no harm to system)")
     def test_gamma(self):
         funcs = [math.gamma, math.lgamma]
         for fn in funcs:
