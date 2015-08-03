@@ -182,7 +182,7 @@ def make_listiter_cls(iterator_type):
 
 @builtin
 @implement('getiter', types.Kind(types.List))
-def getiter_array(context, builder, sig, args):
+def getiter_list(context, builder, sig, args):
     (list_type,) = sig.args
     (list_val,) = args
 
@@ -200,7 +200,7 @@ def getiter_array(context, builder, sig, args):
 @builtin
 @implement('iternext', types.Kind(types.ListIter))
 @iternext_impl
-def iternext_array(context, builder, sig, args, result):
+def iternext_listiter(context, builder, sig, args, result):
     (iter_type,) = sig.args
     (iter_val,) = args
     list_type = iter_type.list
@@ -218,6 +218,40 @@ def iternext_array(context, builder, sig, args, result):
         nindex = builder.add(index, context.get_constant(types.intp, 1))
         builder.store(nindex, iterobj.index)
 
+
+@builtin
+@implement('getitem', types.Kind(types.List), types.Kind(types.Integer))
+def getitem_list(context, builder, sig, args):
+    list_type = sig.args[0]
+    index = args[1]
+
+    list_obj = make_list_cls(list_type)(context, builder, args[0])
+    payload = get_list_payload(context, builder, list_type, list_obj)
+
+    is_negative = builder.icmp_signed('<', index, ir.Constant(index.type, 0))
+    wrapped_index = builder.add(index, payload.size)
+    index = builder.select(is_negative, wrapped_index, index)
+
+    result = _payload_getitem(context, builder, payload, index)
+
+    return impl_ret_borrowed(context, builder, sig.return_type, result)
+
+@builtin
+@implement('setitem', types.Kind(types.List), types.Kind(types.Integer), types.Any)
+def getitem_list(context, builder, sig, args):
+    list_type = sig.args[0]
+    index = args[1]
+    value = args[2]
+
+    list_obj = make_list_cls(list_type)(context, builder, args[0])
+    payload = get_list_payload(context, builder, list_type, list_obj)
+
+    is_negative = builder.icmp_signed('<', index, ir.Constant(index.type, 0))
+    wrapped_index = builder.add(index, payload.size)
+    index = builder.select(is_negative, wrapped_index, index)
+
+    _payload_setitem(context, builder, payload, index, value)
+    return context.get_dummy_value()
 
 
 #-------------------------------------------------------------------------------

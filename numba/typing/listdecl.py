@@ -7,6 +7,7 @@ import numpy as np
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         Registry, signature, bound_function)
+from .builtins import normalize_index
 
 
 registry = Registry()
@@ -43,3 +44,25 @@ class ListAttribute(AttributeTemplate):
         sig = signature(types.none, item)
         # XXX sig.recvr
         return sig
+
+
+# XXX Should there be a base Sequence type for plain 1d sequences?
+
+@builtin
+class GetItemList(AbstractTemplate):
+    key = "getitem"
+
+    def generic(self, args, kws):
+        list, idx = args
+        if isinstance(list, types.List):
+            return signature(list.dtype, list, normalize_index(idx))
+
+
+@builtin
+class GetItemList(AbstractTemplate):
+    key = "setitem"
+
+    def generic(self, args, kws):
+        list, idx, value = args
+        if isinstance(list, types.List):
+            return signature(types.none, list, normalize_index(idx), list.dtype)
