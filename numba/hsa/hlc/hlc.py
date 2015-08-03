@@ -10,6 +10,9 @@ from collections import namedtuple
 from numba import config
 from .utils import adapt_llvm_version
 
+print("Warning: using HLC as commandline")
+
+
 _real_check_call = check_call
 
 
@@ -19,6 +22,7 @@ def check_call(*args, **kwargs):
 
 
 os.environ['HSAILBIN'] = os.environ.get('HSAILBIN', '/opt/amd/bin')
+
 
 
 class CmdLine(object):
