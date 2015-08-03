@@ -46,6 +46,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
 
+    fastmath = kws.get('fastmath', False)
     if argtypes is None and not sigutils.is_signature(func_or_sig):
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
@@ -54,7 +55,8 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
                                           debug=debug)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, bind=bind, **kws)
+                    return jit(func, device=device, bind=bind, debug=debug,
+                               **kws)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -63,14 +65,13 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
                 return FakeCUDAKernel(func_or_sig, device=device, fastmath=fastmath,
                                        debug=debug)
             elif device:
-                return jitdevice(func_or_sig, **kws)
+                return jitdevice(func_or_sig, debug=debug, **kws)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
                 return AutoJitCUDAKernel(func_or_sig, bind=bind, targetoptions=targetoptions)
 
     else:
-        fastmath = kws.get('fastmath', False)
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
                 return FakeCUDAKernel(func, device=device, fastmath=fastmath,
