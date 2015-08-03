@@ -88,7 +88,10 @@ class HLC(object):
 
 os.environ['HSAILBIN'] = os.environ.get('HSAILBIN', '/opt/amd/bin')
 
-BUILTIN_PATH = "{0}/builtins-hsail.opt.bc".format(os.environ['HSAILBIN'])
+DEFAULT_BUILTIN_PATH = "{0}/builtins-hsail.opt.bc".format(
+    os.environ['HSAILBIN'])
+
+BUILTIN_PATH = os.environ.get("NUMBA_HSAIL_BUILTINS_BC", DEFAULT_BUILTIN_PATH)
 
 
 class Module(object):
