@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import
 import re
 from llvmlite.llvmpy import core as lc
 from llvmlite import ir as llvmir
+from llvmlite import binding as ll
 from numba import typing, types, utils, cgutils
 from numba.utils import cached_property
 from numba import datamodel
@@ -13,6 +14,7 @@ from .hlc import DATALAYOUT
 CC_SPIR_KERNEL = "spir_kernel"
 CC_SPIR_FUNC = "spir_func"
 
+
 # -----------------------------------------------------------------------------
 # Typing
 
@@ -23,6 +25,7 @@ class HSATypingContext(typing.BaseContext):
 
         self.install(hsadecl.registry)
         self.install(mathdecl.registry)
+
 
 # -----------------------------------------------------------------------------
 # Implementation
@@ -54,7 +57,6 @@ def _init_data_model_manager():
 
 
 hsa_data_model_manager = _init_data_model_manager()
-
 
 
 class HSATargetContext(BaseContext):
@@ -89,11 +91,10 @@ class HSATargetContext(BaseContext):
 
     def prepare_hsa_kernel(self, func, argtypes):
         module = func.module
-        func.linkage = 'internal'
+        func.linkage = 'linkonce_odr'
 
         module.data_layout = DATALAYOUT[self.address_size]
         wrapper = self.generate_kernel_wrapper(func, argtypes)
-        set_hsa_kernel(wrapper)
 
         return wrapper
 
@@ -116,9 +117,20 @@ class HSATargetContext(BaseContext):
 
         llargtys, changed = zip(*map(sub_gen_with_global,
                                      arginfo.argument_types))
-        fnty = lc.Type.function(lc.Type.void(), llargtys)
+        wrapperfnty = lc.Type.function(lc.Type.void(), llargtys)
+
+        wrapper_module = self.create_module("hsa.kernel.wrapper")
         wrappername = 'hsaPy_{name}'.format(name=func.name)
-        wrapper = module.add_function(fnty, name=wrappername)
+
+        argtys = list(arginfo.argument_types)
+        fnty = lc.Type.function(lc.Type.int(),
+                                [self.call_conv.get_return_type(
+                                    types.pyobject)] + argtys)
+
+        func = wrapper_module.add_function(fnty, name=func.name)
+        func.calling_convention = CC_SPIR_FUNC
+
+        wrapper = wrapper_module.add_function(wrapperfnty, name=wrappername)
 
         builder = lc.Builder.new(wrapper.append_basic_block(''))
 
@@ -137,6 +149,16 @@ class HSATargetContext(BaseContext):
         status, _ = self.call_conv.call_function(builder, func, types.void,
                                                  argtypes, callargs)
         builder.ret_void()
+
+        set_hsa_kernel(wrapper)
+
+        # Link
+        module.link_in(ll.parse_assembly(str(wrapper_module)))
+        # To enable inlining which is essential because addrspacecast 1->0 is
+        # illegal.  Inlining will optimize the addrspacecast out.
+        func.linkage = 'internal'
+        wrapper = module.get_function(wrapper.name)
+        module.get_function(func.name).linkage = 'internal'
         return wrapper
 
     def declare_function(self, module, fndesc):
@@ -198,17 +220,17 @@ def set_hsa_kernel(fn):
     if not ocl_version.operands:
         ocl_version.add(lc.MetaData.get(mod, spir_version_constant))
 
-    ## The following metadata does not seem to be necessary
-    # Other metadata
-    # empty_md = lc.MetaData.get(mod, ())
-    # others = ["opencl.used.extensions",
-    #           "opencl.used.optional.core.features",
-    #           "opencl.compiler.options"]cat
-    #
-    # for name in others:
-    #     nmd = mod.get_or_insert_named_metadata(name)
-    #     if not nmd.operands:
-    #         nmd.add(empty_md)
+        ## The following metadata does not seem to be necessary
+        # Other metadata
+        # empty_md = lc.MetaData.get(mod, ())
+        # others = ["opencl.used.extensions",
+        #           "opencl.used.optional.core.features",
+        #           "opencl.compiler.options"]cat
+        #
+        # for name in others:
+        #     nmd = mod.get_or_insert_named_metadata(name)
+        #     if not nmd.operands:
+        #         nmd.add(empty_md)
 
 
 def gen_arg_addrspace_md(fn):
@@ -274,7 +296,6 @@ def gen_arg_base_type(fn):
 
 
 class HSACallConv(MinimalCallConv):
-
     def call_function(self, builder, callee, resty, argtys, args, env=None):
         """
         Call the Numba-compiled *callee*.

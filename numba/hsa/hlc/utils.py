@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import
 
 import re
 
-re_regname = re.compile(r"%\"\.([^\"]+)\"")
+re_regname = re.compile(r"%\.([0-9a-z_]+)", re.I)
 re_metadata_def = re.compile(r"\!\d+\s*=")
 re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"]")
 re_metadata_ref = re.compile(r"\!\d+")
@@ -35,7 +35,6 @@ def rename_register(llvmir):
     """
     HLC does not like variable with '.' prefix.
     """
-
     def repl(mat):
         return '%_dot_.{0}'.format(mat.group(1))
 

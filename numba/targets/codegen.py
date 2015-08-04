@@ -38,8 +38,8 @@ class CodeLibrary(object):
         self._codegen = codegen
         self._name = name
         self._linking_libraries = set()
-        self._final_module = self._codegen._materialize_module(
-            self._codegen._create_empty_module(self._name))
+        self._final_module = ll.parse_assembly(
+            str(self._codegen._create_empty_module(self._name)))
         self._shared_module = None
 
     @property
@@ -125,7 +125,7 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
-        ll_module = self.codegen._materialize_module(ir_module)
+        ll_module = ll.parse_assembly(str(ir_module))
         ll_module.verify()
         self.add_llvm_module(ll_module)
 
@@ -148,9 +148,11 @@ class CodeLibrary(object):
 
         # Link libraries for shared code
         for library in self._linking_libraries:
-            self._link_in(library)
+            self._final_module.link_in(
+                library._get_module_for_linking(), preserve=True)
         for library in self._codegen._libraries:
-            self._link_in(library)
+            self._final_module.link_in(
+                library._get_module_for_linking(), preserve=True)
 
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.
@@ -179,11 +181,6 @@ class CodeLibrary(object):
 
     def get_function(self, name):
         return self._final_module.get_function(name)
-
-    def _link_in(self, lib):
-        return self._final_module.link_in(lib._get_module_for_linking(),
-                                          preserve=True)
-
 
     def get_llvm_str(self):
         """
@@ -245,12 +242,9 @@ class BaseCPUCodegen(object):
     def __init__(self, module_name):
         self._libraries = set()
         self._data_layout = None
-        self._llvm_module = self._materialize_module(
-            self._create_empty_module(module_name))
+        self._llvm_module = ll.parse_assembly(
+            str(self._create_empty_module(module_name)))
         self._init(self._llvm_module)
-
-    def _materialize_module(self, ir_module):
-        return ll.parse_assembly(str(ir_module))
 
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"

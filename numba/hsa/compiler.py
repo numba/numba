@@ -43,7 +43,7 @@ def compile_kernel(pyfunc, args, debug=False):
     cres = compile_hsa(pyfunc, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_hsa_kernel(func, cres.signature.args)
-    hsakern = HSAKernel(llvm_module=cres.library._final_module,
+    hsakern = HSAKernel(llvm_module=kernel.module,
                         name=kernel.name,
                         argtypes=cres.signature.args)
     return hsakern
@@ -250,8 +250,7 @@ class HSAKernel(HSAKernelBase):
 
     def _finalize(self):
         hlcmod = hlc.Module()
-        for m in self._llvm_module._modules:
-            hlcmod.load_llvm(str(m))
+        hlcmod.load_llvm(str(self._llvm_module))
         return hlcmod.finalize()
 
     def bind(self):
