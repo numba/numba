@@ -42,7 +42,6 @@ class ListAttribute(AttributeTemplate):
         item, = args
         assert not kws
         unified = self.context.unify_pairs(list.dtype, item)
-        #print("item: (%s, %s) -> %s" % (list.dtype, item, unified))
         sig = signature(types.none, unified)
         sig.recvr = types.List(unified)
         return sig

@@ -529,6 +529,8 @@ def list_unify_usecase1(n):
 
     for i in range(len(x)):
         res += i * x[i]
+    for val in x:
+        res += int(val) & len(x)
     while len(x) > 0:
         res += x.pop()
     return res

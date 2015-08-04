@@ -371,6 +371,7 @@ def captured_stderr():
 
 
 class MemoryLeak(object):
+
     def memory_leak_setup(self):
         self.__init_stats = rtsys.get_allocation_stats()
 
@@ -383,8 +384,6 @@ class MemoryLeak(object):
         total_mi_free = new.mi_free - old.mi_free
         self.assertEqual(total_alloc, total_free)
         self.assertEqual(total_mi_alloc, total_mi_free)
-
-
 
 
 class MemoryLeakMixin(MemoryLeak):

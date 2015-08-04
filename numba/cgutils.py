@@ -350,7 +350,9 @@ class IfBranchObj(object):
 
 
 @contextmanager
-def for_range(builder, count, intp):
+def for_range(builder, count, intp=None):
+    if intp is None:
+        intp = count.type
     start = Constant.int(intp, 0)
     stop = count
 

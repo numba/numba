@@ -7,6 +7,8 @@ from llvmlite import ir
 from .. import cgutils, numpy_support, types
 from ..pythonapi import box, unbox, NativeValue
 
+from . import listobj
+
 
 #
 # Scalar types
@@ -375,6 +377,27 @@ def unbox_tuple(c, typ, obj):
     else:
         value = cgutils.make_anonymous_struct(c.builder, values)
     return NativeValue(value, is_error=is_error, cleanup=cleanup)
+
+
+@box(types.List)
+def box_list(c, typ, val):
+    """
+    Convert native list *val* to a list object.
+    """
+    list = listobj.ListInstance(c.context, c.builder, typ, val)
+
+    nitems = list.size
+    obj = c.pyapi.list_new(nitems)
+
+    with c.builder.if_then(cgutils.is_not_null(c.builder, obj),
+                           likely=True):
+        with cgutils.for_range(c.builder, nitems) as index:
+            item = list.getitem(index)
+            itemobj = c.box(typ.dtype, item)
+            c.pyapi.list_setitem(obj, index, itemobj)
+
+    # BUG: the list buffer is leaked!
+    return obj
 
 
 #

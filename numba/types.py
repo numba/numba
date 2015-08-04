@@ -420,6 +420,7 @@ class Pair(Type):
     """
     A heterogenous pair.
     """
+    # XXX fold this into Tuple?
 
     def __init__(self, first_type, second_type):
         self.first_type = first_type
@@ -430,6 +431,13 @@ class Pair(Type):
     @property
     def key(self):
         return self.first_type, self.second_type
+
+    def unify(self, typingctx, other):
+        if isinstance(other, Pair):
+            first = typingctx.unify_pairs(self.first_type, other.first_type)
+            second = typingctx.unify_pairs(self.second_type, other.second_type)
+            if first != pyobject and second != pyobject:
+                return Pair(first, second)
 
 
 class SimpleIterableType(IterableType):
@@ -1017,10 +1025,18 @@ class List(IterableType):
 class ListIter(SimpleIteratorType):
 
     def __init__(self, list):
+        # XXX list_type?
         self.list = list
         yield_type = list.dtype
         name = 'iter(%s)' % list
         super(ListIter, self).__init__(name, yield_type)
+
+    # XXX should it be generalized for all iterator types?
+    def unify(self, typingctx, other):
+        if isinstance(other, ListIter):
+            list = typingctx.unify_pairs(self.list, other.list)
+            if list != pyobject:
+                return ListIter(list)
 
     @property
     def key(self):
