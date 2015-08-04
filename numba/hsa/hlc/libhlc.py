@@ -105,7 +105,6 @@ class HLC(object):
         hlc.HLC_ModuleDestroy(mod)
 
 
-
 class Module(object):
     def __init__(self):
         self._llvm_modules = []

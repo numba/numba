@@ -43,5 +43,8 @@ def rename_register(llvmir):
 
 
 def adapt_llvm_version(llvmir):
+    """
+    Adapt the LLVM IR to match the syntax required by HLC.
+    """
     llvmir = rename_register(llvmir)
     return add_metadata_type(llvmir)
