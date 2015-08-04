@@ -535,6 +535,16 @@ def list_unify_usecase1(n):
         res += x.pop()
     return res
 
+def list_unify_usecase2(n):
+    res = []
+    for i in range(n):
+        if i & 1:
+            res.append((i, 1.0))
+        else:
+            res.append((2.0, i))
+    res.append((123j, 42))
+    return res
+
 
 class TestMiscIssues(TestCase):
 
@@ -562,8 +572,16 @@ class TestMiscIssues(TestCase):
         pyfunc = list_unify_usecase1
         cfunc = jit(nopython=True)(pyfunc)
         for n in [5, 100]:
-            res = list_unify_usecase1(n)
+            res = cfunc(n)
             self.assertPreciseEqual(res, pyfunc(n))
+
+    def test_list_unify2(self):
+        pyfunc = list_unify_usecase2
+        cfunc = jit(nopython=True)(pyfunc)
+        res = cfunc(3)
+        # NOTE: the types will differ (Numba returns a homogenous list with
+        # converted values).
+        self.assertEqual(res, pyfunc(3))
 
 
 if __name__ == '__main__':

@@ -280,6 +280,8 @@ def box_array(c, typ, val):
         np_dtype = numpy_support.as_dtype(typ.dtype)
         dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
         newary = c.pyapi.nrt_adapt_ndarray_to_python(typ, val, dtypeptr)
+        # We are keeping a reference to the underlying data, so incref
+        c.context.nrt_incref(c.builder, typ, val)
         return newary
     else:
         parent = nativeary.parent
@@ -396,7 +398,6 @@ def box_list(c, typ, val):
             itemobj = c.box(typ.dtype, item)
             c.pyapi.list_setitem(obj, index, itemobj)
 
-    # BUG: the list buffer is leaked!
     return obj
 
 
