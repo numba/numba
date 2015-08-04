@@ -11,7 +11,7 @@ from numba.typing.templates import AbstractTemplate
 
 
 def compile_hsa(pyfunc, return_type, args, debug):
-    # First compilation will trigger the initialization of the CUDA backend.
+    # First compilation will trigger the initialization of the HSA backend.
     from .descriptor import HSATargetDesc
 
     typingctx = HSATargetDesc.typingctx
