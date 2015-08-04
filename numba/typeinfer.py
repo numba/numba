@@ -26,57 +26,66 @@ class TypeVar(object):
     def __init__(self, context, var):
         self.context = context
         self.var = var
-        self.typeset = set()
+        # XXX start with types.undefined?
+        self.type = None
         self.locked = False
 
-    def add_types(self, *types):
-        if not types:
-            return
-
-        # Sentry for None
-        for ty in types:
-            if ty is None:
-                raise TypeError("Using None as variable type")
+    def add_type(self, tp):
+        assert isinstance(tp, types.Type), type(tp)
 
         if self.locked:
-            if set(types) != self.typeset:
-                [expect] = list(self.typeset)
-                for ty in types:
-                    if self.context.can_convert(ty, expect) is None:
-                        raise TypingError("No conversion from %s to %s for "
-                                          "'%s'" % (ty, expect, self.var))
+            if tp != self.type:
+                if self.context.can_convert(tp, self.type) is None:
+                    raise TypingError("No conversion from %s to %s for "
+                                      "'%s'" % (tp, self.type, self.var))
         else:
-            self.typeset |= set(types)
+            if self.type is not None:
+                unified = self.context.unify_pairs(self.type, tp)
+                if unified is types.pyobject:
+                    raise TypingError("cannot unify %s and %s for '%s'"
+                                    % (self.type, tp, self.var))
+            else:
+                unified = tp
+            self.type = unified
 
-        unified = self.context.unify_types(*self.typeset)
-        #print("unified typeset: %s -> %s" % (self.typeset, unified))
-        self.typeset = set([unified])
+        return self.type
 
-    def lock(self, typ):
-        if self.locked:
-            [expect] = list(self.typeset)
-            if self.context.can_convert(typ, expect) is None:
-                raise TypingError("No conversion from %s to %s for "
-                                  "'%s'" % (typ, expect, self.var))
-        else:
-            self.typeset = set([typ])
-            self.locked = True
+    def lock(self, tp):
+        assert isinstance(tp, types.Type)
+        assert not self.locked
+
+        # If there is already a type, ensure we can convert it to the
+        # locked type.
+        if (self.type is not None and
+            self.context.can_convert(self.type, tp) is None):
+            raise TypingError("No conversion from %s to %s for "
+                                "'%s'" % (tp, self.type, self.var))
+
+        self.type = tp
+        self.locked = True
 
     def union(self, other):
-        self.add_types(*other.typeset)
+        if other.type is not None:
+            self.add_type(other.type)
+
+        return self.type
 
     def __repr__(self):
-        return '%s := {%s}' % (self.var, ', '.join(map(str, self.typeset)))
+        return '%s := %s' % (self.var, self.type)
+
+    @property
+    def defined(self):
+        return self.type is not None
 
     def get(self):
-        return tuple(self.typeset)
+        return (self.type,) if self.type is not None else ()
 
     def getone(self):
-        assert len(self) == 1, self.typeset
-        return tuple(self.typeset)[0]
+        assert self.type is not None
+        return self.type
 
     def __len__(self):
-        return len(self.typeset)
+        return 1 if self.type is not None else 0
 
 
 class ConstrainNetwork(object):
@@ -92,15 +101,23 @@ class ConstrainNetwork(object):
         self.constrains.append(constrain)
 
     def propagate(self, typeinfer):
+        """
+        Execute all constraints.  Errors are caught and returned as a list.
+        This allows progressing even though some constraints may fail
+        due to lack of information (e.g. imprecise types such as List(undefined)).
+        """
+        errors = []
         for constrain in self.constrains:
             try:
                 constrain(typeinfer)
-            except TypingError:
-                raise
+            except TypingError as e:
+                errors.append(e)
             except Exception as e:
                 msg = "Internal error at {con}:\n{err}"
-                raise TypingError(msg.format(con=constrain, err=e),
-                                  loc=constrain.loc)
+                e = TypingError(msg.format(con=constrain, err=e),
+                                loc=constrain.loc)
+                errors.append(e)
+        return errors
 
 
 class Propagate(object):
@@ -115,11 +132,12 @@ class Propagate(object):
 
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
-        typevars[self.dst].union(typevars[self.src])
+        typeinfer.copy_type(self.src, self.dst)
         typeinfer.refine_map[self.dst] = self
 
     def refine(self, typeinfer, target_type):
-        typeinfer.typevars[self.src].add_types(target_type)
+        # Do not back-propagate to locked variables (e.g. constants)
+        typeinfer.add_type(self.src, target_type, unless_locked=True)
 
 
 class BuildTupleConstrain(object):
@@ -130,6 +148,8 @@ class BuildTupleConstrain(object):
 
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
+        # TODO: rewrite all __call__ methods for a single type per argument
+        # instead of itertools.product()
         tsets = [typevars[i.name].get() for i in self.items]
         oset = typevars[self.target]
         for vals in itertools.product(*tsets):
@@ -138,7 +158,7 @@ class BuildTupleConstrain(object):
             else:
                 # empty tuples fall here as well
                 tup = types.Tuple(vals)
-            oset.add_types(tup)
+            typeinfer.add_type(self.target, tup)
 
 
 class BuildListConstrain(object):
@@ -152,11 +172,11 @@ class BuildListConstrain(object):
         oset = typevars[self.target]
         tsets = [typevars[i.name].get() for i in self.items]
         if not tsets:
-            oset.add_types(types.List(types.undefined))
+            typeinfer.add_type(self.target, types.List(types.undefined))
         else:
             for typs in itertools.product(*tsets):
                 unified = typeinfer.context.unify_types(*typs)
-                oset.add_types(types.List(unified))
+                typeinfer.add_type(self.target, types.List(unified))
 
 
 class ExhaustIterConstrain(object):
@@ -172,10 +192,15 @@ class ExhaustIterConstrain(object):
         for tp in typevars[self.iterator.name].get():
             if isinstance(tp, types.BaseTuple):
                 if len(tp) == self.count:
-                    oset.add_types(tp)
+                    typeinfer.add_type(self.target, tp)
+                else:
+                    raise ValueError("wrong tuple length for %r: "
+                                     "expected %d, got %d"
+                                     % (self.iterator.name, self.count, len(tp)))
             elif isinstance(tp, types.IterableType):
-                oset.add_types(types.UniTuple(dtype=tp.iterator_type.yield_type,
-                                              count=self.count))
+                tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
+                                     count=self.count)
+                typeinfer.add_type(self.target, tup)
 
 
 class PairFirstConstrain(object):
@@ -191,7 +216,7 @@ class PairFirstConstrain(object):
             if not isinstance(tp, types.Pair):
                 # XXX is this an error?
                 continue
-            oset.add_types(tp.first_type)
+            typeinfer.add_type(self.target, tp.first_type)
 
 
 class PairSecondConstrain(object):
@@ -207,7 +232,7 @@ class PairSecondConstrain(object):
             if not isinstance(tp, types.Pair):
                 # XXX is this an error?
                 continue
-            oset.add_types(tp.second_type)
+            typeinfer.add_type(self.target, tp.second_type)
 
 
 class StaticGetItemConstrain(object):
@@ -221,10 +246,8 @@ class StaticGetItemConstrain(object):
         typevars = typeinfer.typevars
         oset = typevars[self.target]
         for tp in typevars[self.value.name].get():
-            if isinstance(tp, types.UniTuple):
-                oset.add_types(tp.dtype)
-            elif isinstance(tp, types.Tuple):
-                oset.add_types(tp.types[self.index])
+            if isinstance(tp, types.BaseTuple):
+                typeinfer.add_type(self.target, tp.types[self.index])
 
 
 class CallConstrain(object):
@@ -269,13 +292,10 @@ class CallConstrain(object):
             if sig is None:
                 msg = "Undeclared %s%s" % (fnty, args)
                 raise TypingError(msg, loc=self.loc)
-            # XXX factor this out in a function calling both add_types()
-            # and refine()?
-            source_constraint = typeinfer.refine_map.get(self.func)
-            if source_constraint is not None:
-                source_constraint.refine(typeinfer, sig)
-            restypes.append(sig.return_type)
-        typevars[self.target].add_types(*restypes)
+            typeinfer.add_type(self.target, sig.return_type)
+            # Knowing the function's type can help back-propagate some
+            # assumptions (e.g. list.append's type can refine the list type).
+            typeinfer.propagate_refined_type(self.func, sig)
 
 
 class IntrinsicCallConstrain(CallConstrain):
@@ -303,16 +323,13 @@ class GetAttrConstrain(object):
                 msg = "Unknown attribute '%s' for %s %s %s" % args
                 raise TypingError(msg, loc=self.inst.loc)
             else:
-                #print("attrty =", attrty)
-                restypes.append(attrty)
-        typevars[self.target].add_types(*restypes)
+                typeinfer.add_type(self.target, attrty)
         typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, target_type):
         recvr = getattr(target_type, "recvr", None)
         if recvr is not None:
-            #print("refining %r with %s" % (self.value, recvr))
-            typeinfer.typevars[self.value.name].add_types(recvr)
+            typeinfer.add_type(self.value.name, recvr)
             source_constraint = typeinfer.refine_map.get(self.value.name)
             if source_constraint is not None:
                 source_constraint.refine(typeinfer, recvr)
@@ -448,23 +465,42 @@ class TypeInferer(object):
             if config.DEBUG:
                 print("propagate".center(80, '-'))
             oldtoken = newtoken
-            self.constrains.propagate(self)
+            # Errors can appear when the type set is incomplete; only
+            # raise them when there is no progress anymore.
+            errors = self.constrains.propagate(self)
             newtoken = self.get_state_token()
             if config.DEBUG:
                 self.dump()
+        if errors:
+            raise errors[0]
+
+    def add_type(self, var, tp, unless_locked=False):
+        assert isinstance(var, str), type(var)
+        tv = self.typevars[var]
+        if unless_locked and tv.locked:
+            return
+        unified = tv.add_type(tp)
+        self.propagate_refined_type(var, unified)
+
+    def copy_type(self, src_var, dest_var):
+        unified = self.typevars[dest_var].union(self.typevars[src_var])
+        if unified is not None:
+            self.propagate_refined_type(src_var, unified)
+
+    def propagate_refined_type(self, updated_var, updated_type):
+        source_constraint = self.refine_map.get(updated_var)
+        if source_constraint is not None:
+            source_constraint.refine(self, updated_type)
 
     def unify(self):
         typdict = utils.UniqueDict()
         for var, tv in self.typevars.items():
-            if len(tv) == 1:
-                unified = tv.getone()
-            elif len(tv) == 0:
-                raise TypeError("Variable %s has no type" % var)
-            else:
-                unified = self.context.unify_types(*tv.get())
-            if unified is types.pyobject:
-                raise TypingError("Can't unify types of variable '%s': %s" % (var, tv))
-            typdict[var] = unified
+            if not tv.defined:
+                raise TypingError("Undefined variable '%s'" % (var,))
+            tp = tv.getone()
+            if tp is types.pyobject:
+                raise TypingError("Can't infer type of variable '%s'" % (var,))
+            typdict[var] = tp
         retty = self.get_return_type(typdict)
         fntys = self.get_function_types(typdict)
         if self.generator_info:
@@ -547,10 +583,10 @@ class TypeInferer(object):
             return types.none
 
     def get_state_token(self):
-        """The algorithm is monotonic.  It can only grow or "refine" the typesets.
+        """The algorithm is monotonic.  It can only grow or "refine" the
+        typevar map.
         """
-        #return sum(len(tv) for tv in utils.itervalues(self.typevars))
-        return [tv.get() for name, tv in sorted(self.typevars.items())]
+        return [tv.type for name, tv in sorted(self.typevars.items())]
 
     def constrain_statement(self, inst):
         if isinstance(inst, ir.Assign):
@@ -619,7 +655,7 @@ class TypeInferer(object):
 
     def typeof_yield(self, inst, target, yield_):
         # Sending values into generators isn't supported.
-        self.typevars[target.name].add_types(types.none)
+        self.add_type(target.name, types.none)
 
     def sentry_modified_builtin(self, inst, gvar):
         """Ensure that builtins are modified.
@@ -657,7 +693,7 @@ class TypeInferer(object):
         if expr.op == 'call':
             if isinstance(expr.func, ir.Intrinsic):
                 restype = expr.func.type.return_type
-                self.typevars[target.name].add_types(restype)
+                self.add_type(target.name, restype)
                 self.usercalls.append((inst.value, expr.args, expr.kws, None))
             else:
                 self.typeof_call(inst, target, expr)
