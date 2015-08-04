@@ -122,10 +122,7 @@ def _define_atomic_inc_dec(module, op, ordering):
         builder.ret(res)
     else:
         oldval = builder.load(ptr)
-        if op == "add":
-            newval = builder.add(oldval, ONE)
-        else:
-            newval = builder.sub(oldval, ONE)
+        newval = getattr(builder, op)(oldval, ONE)
         builder.store(newval, ptr)
         builder.ret(oldval)
 

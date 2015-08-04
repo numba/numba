@@ -287,7 +287,7 @@ MemInfo *NRT_MemInfo_varsize_alloc(size_t size)
         return NULL;
 
     mi = NRT_MemInfo_new(data, size, nrt_varsize_dtor, NULL);
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_buffer size=%llu "
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_alloc size=%llu "
                               "-> meminfo=%p, data=%p\n", size, mi, data));
     return mi;
 }
@@ -304,7 +304,7 @@ void *NRT_MemInfo_varsize_realloc(MemInfo *mi, size_t size)
     if (mi->data == NULL)
         return NULL;
     mi->size = size;
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_realloc_buffer %p size=%llu "
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_realloc %p size=%llu "
                               "-> data=%p\n", mi, size, mi->data));
     return mi->data;
 }
