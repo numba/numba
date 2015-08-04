@@ -10,6 +10,7 @@ from numba.compiler import compile_isolated
 from numba import types, typeinfer, typing, jit, errors
 from numba.typeconv import Conversion
 
+from .support import TestCase
 from .test_typeconv import CompatibilityTestMixin
 
 
@@ -516,7 +517,24 @@ def issue_1080(a, b):
     return b
 
 
-class TestMiscIssues(unittest.TestCase):
+def list_unify_usecase1(n):
+    res = 0
+    x = []
+    if n < 10:
+        x.append(np.int32(n))
+    else:
+        for i in range(n):
+            x.append(np.int64(i))
+    x.append(5.0)
+
+    for i in range(len(x)):
+        res += i * x[i]
+    while len(x) > 0:
+        res += x.pop()
+    return res
+
+
+class TestMiscIssues(TestCase):
 
     def test_issue_797(self):
         """https://github.com/numba/numba/issues/797#issuecomment-58592401
@@ -534,6 +552,16 @@ class TestMiscIssues(unittest.TestCase):
         """
         foo = jit(nopython=True)(issue_1080)
         foo(True, False)
+
+    def test_list_unify1(self):
+        """
+        Exercise back-propagation of refined list type.
+        """
+        pyfunc = list_unify_usecase1
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [5, 100]:
+            res = list_unify_usecase1(n)
+            self.assertPreciseEqual(res, pyfunc(n))
 
 
 if __name__ == '__main__':
