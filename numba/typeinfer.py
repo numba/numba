@@ -38,8 +38,6 @@ class TypeVar(object):
             if ty is None:
                 raise TypeError("Using None as variable type")
 
-        nbefore = len(self.typeset)
-
         if self.locked:
             if set(types) != self.typeset:
                 [expect] = list(self.typeset)
@@ -50,8 +48,9 @@ class TypeVar(object):
         else:
             self.typeset |= set(types)
 
-        nafter = len(self.typeset)
-        assert nbefore <= nafter, "Must grow monotonically"
+        unified = self.context.unify_types(*self.typeset)
+        #print("unified typeset: %s -> %s" % (self.typeset, unified))
+        self.typeset = set([unified])
 
     def lock(self, typ):
         if self.locked:
@@ -92,10 +91,10 @@ class ConstrainNetwork(object):
     def append(self, constrain):
         self.constrains.append(constrain)
 
-    def propagate(self, context, typevars):
+    def propagate(self, typeinfer):
         for constrain in self.constrains:
             try:
-                constrain(context, typevars)
+                constrain(typeinfer)
             except TypingError:
                 raise
             except Exception as e:
@@ -114,8 +113,13 @@ class Propagate(object):
         self.src = src
         self.loc = loc
 
-    def __call__(self, context, typevars):
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         typevars[self.dst].union(typevars[self.src])
+        typeinfer.refine_map[self.dst] = self
+
+    def refine(self, typeinfer, target_type):
+        typeinfer.typevars[self.src].add_types(target_type)
 
 
 class BuildTupleConstrain(object):
@@ -124,7 +128,8 @@ class BuildTupleConstrain(object):
         self.items = items
         self.loc = loc
 
-    def __call__(self, context, typevars):
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         tsets = [typevars[i.name].get() for i in self.items]
         oset = typevars[self.target]
         for vals in itertools.product(*tsets):
@@ -142,14 +147,16 @@ class BuildListConstrain(object):
         self.items = items
         self.loc = loc
 
-    def __call__(self, context, typevars):
-        if not len(self.items):
-            assert 0
-        tsets = [typevars[i.name].get() for i in self.items]
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         oset = typevars[self.target]
-        for typs in itertools.product(*tsets):
-            unified = context.unify_types(*typs)
-            oset.add_types(types.List(unified))
+        tsets = [typevars[i.name].get() for i in self.items]
+        if not tsets:
+            oset.add_types(types.List(types.undefined))
+        else:
+            for typs in itertools.product(*tsets):
+                unified = typeinfer.context.unify_types(*typs)
+                oset.add_types(types.List(unified))
 
 
 class ExhaustIterConstrain(object):
@@ -159,7 +166,8 @@ class ExhaustIterConstrain(object):
         self.iterator = iterator
         self.loc = loc
 
-    def __call__(self, context, typevars):
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         oset = typevars[self.target]
         for tp in typevars[self.iterator.name].get():
             if isinstance(tp, types.BaseTuple):
@@ -176,7 +184,8 @@ class PairFirstConstrain(object):
         self.pair = pair
         self.loc = loc
 
-    def __call__(self, context, typevars):
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         oset = typevars[self.target]
         for tp in typevars[self.pair.name].get():
             if not isinstance(tp, types.Pair):
@@ -191,7 +200,8 @@ class PairSecondConstrain(object):
         self.pair = pair
         self.loc = loc
 
-    def __call__(self, context, typevars):
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         oset = typevars[self.target]
         for tp in typevars[self.pair.name].get():
             if not isinstance(tp, types.Pair):
@@ -207,7 +217,8 @@ class StaticGetItemConstrain(object):
         self.index = index
         self.loc = loc
 
-    def __call__(self, context, typevars):
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         oset = typevars[self.target]
         for tp in typevars[self.value.name].get():
             if isinstance(tp, types.UniTuple):
@@ -229,11 +240,12 @@ class CallConstrain(object):
         self.vararg = vararg
         self.loc = loc
 
-    def __call__(self, context, typevars):
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         fnty = typevars[self.func].getone()
-        self.resolve(context, typevars, fnty)
+        self.resolve(typeinfer, typevars, fnty)
 
-    def resolve(self, context, typevars, fnty):
+    def resolve(self, typeinfer, typevars, fnty):
         assert fnty
         n_pos_args = len(self.args)
         kwds = [kw for (kw, var) in self.kws]
@@ -253,17 +265,22 @@ class CallConstrain(object):
                 pos_args += args[-1].types
                 args = args[:-1]
             kw_args = dict(zip(kwds, args[n_pos_args:]))
-            sig = context.resolve_function_type(fnty, pos_args, kw_args)
+            sig = typeinfer.context.resolve_function_type(fnty, pos_args, kw_args)
             if sig is None:
                 msg = "Undeclared %s%s" % (fnty, args)
                 raise TypingError(msg, loc=self.loc)
+            # XXX factor this out in a function calling both add_types()
+            # and refine()?
+            source_constraint = typeinfer.refine_map.get(self.func)
+            if source_constraint is not None:
+                source_constraint.refine(typeinfer, sig)
             restypes.append(sig.return_type)
         typevars[self.target].add_types(*restypes)
 
 
 class IntrinsicCallConstrain(CallConstrain):
-    def __call__(self, context, typevars):
-        self.resolve(context, typevars, fnty=self.func)
+    def __call__(self, typeinfer):
+        self.resolve(typeinfer, typeinfer.typevars, fnty=self.func)
 
 
 class GetAttrConstrain(object):
@@ -274,19 +291,31 @@ class GetAttrConstrain(object):
         self.loc = loc
         self.inst = inst
 
-    def __call__(self, context, typevars):
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         valtys = typevars[self.value.name].get()
         restypes = []
         for ty in valtys:
             try:
-                attrty = context.resolve_getattr(value=ty, attr=self.attr)
+                attrty = typeinfer.context.resolve_getattr(value=ty, attr=self.attr)
             except KeyError:
                 args = (self.attr, ty, self.value.name, self.inst)
                 msg = "Unknown attribute '%s' for %s %s %s" % args
                 raise TypingError(msg, loc=self.inst.loc)
             else:
+                #print("attrty =", attrty)
                 restypes.append(attrty)
         typevars[self.target].add_types(*restypes)
+        typeinfer.refine_map[self.target] = self
+
+    def refine(self, typeinfer, target_type):
+        recvr = getattr(target_type, "recvr", None)
+        if recvr is not None:
+            #print("refining %r with %s" % (self.value, recvr))
+            typeinfer.typevars[self.value.name].add_types(recvr)
+            source_constraint = typeinfer.refine_map.get(self.value.name)
+            if source_constraint is not None:
+                source_constraint.refine(typeinfer, recvr)
 
     def __repr__(self):
         return 'resolving type of attribute "{attr}" of "{value}"'.format(
@@ -300,13 +329,15 @@ class SetItemConstrain(object):
         self.value = value
         self.loc = loc
 
-    def __call__(self, context, typevars):
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         targettys = typevars[self.target.name].get()
         idxtys = typevars[self.index.name].get()
         valtys = typevars[self.value.name].get()
 
         for ty, it, vt in itertools.product(targettys, idxtys, valtys):
-            if not context.resolve_setitem(target=ty, index=it, value=vt):
+            if not typeinfer.context.resolve_setitem(target=ty,
+                                                     index=it, value=vt):
                 raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
                                   (ty, it, vt), loc=self.loc)
 
@@ -318,13 +349,15 @@ class SetAttrConstrain(object):
         self.value = value
         self.loc = loc
 
-    def __call__(self, context, typevars):
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
         targettys = typevars[self.target.name].get()
         valtys = typevars[self.value.name].get()
 
         for ty, vt in itertools.product(targettys, valtys):
-            if not context.resolve_setattr(target=ty, attr=self.attr,
-                                           value=vt):
+            if not typeinfer.context.resolve_setattr(target=ty,
+                                                     attr=self.attr,
+                                                     value=vt):
                 raise TypingError("Cannot resolve setattr: (%s).%s = %s" %
                                   (ty, self.attr, vt), loc=self.loc)
 
@@ -359,6 +392,7 @@ class TypeInferer(object):
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constrains = ConstrainNetwork()
+
         # { index: mangled name }
         self.arg_names = {}
         self.return_type = None
@@ -369,6 +403,8 @@ class TypeInferer(object):
         self.intrcalls = []
         self.setitemcalls = []
         self.setattrcalls = []
+        # Target var -> constraint with refine hook
+        self.refine_map = {}
 
     def dump(self):
         print('---- type variables ----')
@@ -412,7 +448,7 @@ class TypeInferer(object):
             if config.DEBUG:
                 print("propagate".center(80, '-'))
             oldtoken = newtoken
-            self.constrains.propagate(self.context, self.typevars)
+            self.constrains.propagate(self)
             newtoken = self.get_state_token()
             if config.DEBUG:
                 self.dump()
@@ -511,11 +547,10 @@ class TypeInferer(object):
             return types.none
 
     def get_state_token(self):
-        """The algorithm is monotonic.  It can only grow the typesets.
-        The sum of all lengths of type sets is a cheap and accurate
-        description of our progress.
+        """The algorithm is monotonic.  It can only grow or "refine" the typesets.
         """
-        return sum(len(tv) for tv in utils.itervalues(self.typevars))
+        #return sum(len(tv) for tv in utils.itervalues(self.typevars))
+        return [tv.get() for name, tv in sorted(self.typevars.items())]
 
     def constrain_statement(self, inst):
         if isinstance(inst, ir.Assign):

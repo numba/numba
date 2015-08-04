@@ -123,6 +123,11 @@ class Phantom(Dummy):
     """
 
 
+class Undefined(Dummy):
+    """
+    """
+
+
 class Opaque(Dummy):
     """
     A type that is a opaque pointer.
@@ -384,6 +389,14 @@ class BoundFunction(Function):
         newcls = type(template.__name__ + '.' + str(this), (template,),
                       dict(this=this))
         super(BoundFunction, self).__init__(newcls)
+
+    def unify(self, typingctx, other):
+        if (isinstance(other, BoundFunction) and
+            self.template.key == other.template.key):
+            this = typingctx.unify_pairs(self.this, other.this)
+            if this != pyobject:
+                # XXX is it right that both template instances are distinct?
+                return BoundFunction(self.template, this)
 
     @property
     def key(self):
@@ -990,6 +1003,12 @@ class List(IterableType):
         super(List, self).__init__(name=name, param=True)
         self._iterator_type = ListIter(self)
 
+    def unify(self, typingctx, other):
+        if isinstance(other, List):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            if dtype != pyobject:
+                return List(dtype=dtype)
+
     @property
     def iterator_type(self):
         return self._iterator_type
@@ -1174,6 +1193,7 @@ pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
 none = NoneType('none')
 Any = Phantom('any')
+undefined = Undefined('undefined')
 string = Opaque('str')
 
 # No operation is defined on voidptr

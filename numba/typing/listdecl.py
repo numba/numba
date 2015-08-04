@@ -41,8 +41,10 @@ class ListAttribute(AttributeTemplate):
     def resolve_append(self, list, args, kws):
         item, = args
         assert not kws
-        sig = signature(types.none, item)
-        # XXX sig.recvr
+        unified = self.context.unify_pairs(list.dtype, item)
+        #print("item: (%s, %s) -> %s" % (list.dtype, item, unified))
+        sig = signature(types.none, unified)
+        sig.recvr = types.List(unified)
         return sig
 
 

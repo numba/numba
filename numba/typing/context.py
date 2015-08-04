@@ -379,6 +379,11 @@ class BaseContext(object):
         """
         if first == second:
             return first
+        
+        if first is types.undefined:
+            return second
+        elif second is types.undefined:
+            return first
 
         # Types with special unification rules
         unified = first.unify(self, second)
