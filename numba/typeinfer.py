@@ -270,6 +270,8 @@ class CallConstrain(object):
 
     def resolve(self, typeinfer, typevars, fnty):
         assert fnty
+        context = typeinfer.context
+
         n_pos_args = len(self.args)
         kwds = [kw for (kw, var) in self.kws]
         argtypes = [typevars[a.name].get() for a in self.args]
@@ -288,14 +290,21 @@ class CallConstrain(object):
                 pos_args += args[-1].types
                 args = args[:-1]
             kw_args = dict(zip(kwds, args[n_pos_args:]))
-            sig = typeinfer.context.resolve_function_type(fnty, pos_args, kw_args)
+            sig = context.resolve_function_type(fnty, pos_args, kw_args)
             if sig is None:
                 msg = "Undeclared %s%s" % (fnty, args)
                 raise TypingError(msg, loc=self.loc)
             typeinfer.add_type(self.target, sig.return_type)
-            # Knowing the function's type can help back-propagate some
-            # assumptions (e.g. list.append's type can refine the list type).
-            typeinfer.propagate_refined_type(self.func, sig)
+            # If the function is a bound function and its receiver type
+            # was refined, propagate it.
+            if (isinstance(fnty, types.BoundFunction)
+                and sig.recvr is not None
+                and sig.recvr != fnty.this):
+                refined_this = context.unify_pairs(sig.recvr, fnty.this)
+                if refined_this != types.pyobject:
+                    refined_fnty = types.BoundFunction(fnty.template,
+                                                       this=refined_this)
+                    typeinfer.propagate_refined_type(self.func, refined_fnty)
 
 
 class IntrinsicCallConstrain(CallConstrain):
@@ -327,8 +336,8 @@ class GetAttrConstrain(object):
         typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, target_type):
-        recvr = getattr(target_type, "recvr", None)
-        if recvr is not None:
+        if isinstance(target_type, types.BoundFunction):
+            recvr = target_type.this
             typeinfer.add_type(self.value.name, recvr)
             source_constraint = typeinfer.refine_map.get(self.value.name)
             if source_constraint is not None:
