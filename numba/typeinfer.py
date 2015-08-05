@@ -18,7 +18,6 @@ from pprint import pprint
 import itertools
 
 from numba import ir, types, utils, config, six
-from numba.utils import RANGE_ITER_OBJECTS
 from .errors import TypingError
 
 
@@ -239,7 +238,10 @@ class CallConstrain(object):
             kw_args = dict(zip(kwds, args[n_pos_args:]))
             sig = context.resolve_function_type(fnty, pos_args, kw_args)
             if sig is None:
-                msg = "Undeclared %s%s" % (fnty, args)
+                desc = context.explain_function_type(fnty)
+                headtemp = "Invalid usage of {0} with parameters ({1})"
+                head = headtemp.format(fnty, '\n'.join(map(str, args)))
+                msg = '\n'.join([head, desc])
                 raise TypingError(msg, loc=self.loc)
             restypes.append(sig.return_type)
         typevars[self.target].add_types(*restypes)

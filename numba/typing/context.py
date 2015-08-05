@@ -1,12 +1,8 @@
 from __future__ import print_function, absolute_import
 
 from collections import defaultdict
-import functools
 import types as pytypes
-import sys
 import weakref
-
-import numpy
 
 from numba import types
 from numba.typeconv import Conversion, rules
@@ -17,7 +13,7 @@ from .typeof import typeof, Purpose
 from . import (
     builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl,
     randomdecl)
-from numba import numpy_support, utils
+from numba import utils
 from . import ctypes_utils, cffi_utils, bufproto
 
 
@@ -76,6 +72,37 @@ class BaseContext(object):
             return types.float64
         else:
             raise NotImplementedError(type(num), num)
+
+    def explain_function_type(self, func):
+        """
+        Returns a string description of the type of a function
+        """
+        desc = []
+        defns = []
+        param = False
+        if isinstance(func, types.Callable):
+            sigs, param = func.get_call_signatures()
+            defns.extend(sigs)
+
+        elif func in self.functions:
+            for tpl in self.functions[func]:
+                param = param or hasattr(tpl, 'generic')
+                defns.extend(getattr(tpl, 'cases', []))
+
+        else:
+            msg = "No type info available for {func} as a callable."
+            desc.append(msg.format(func=func))
+            return desc
+
+        if defns:
+            desc = ['Known signatures:']
+            for sig in defns:
+                desc.append(' * {0}'.format(sig))
+
+        if param:
+            desc.append(' * parameterized')
+
+        return '\n'.join(desc)
 
     def resolve_function_type(self, func, args, kws):
         """

@@ -202,6 +202,12 @@ class Callable(Type):
         """
         pass
 
+    @abstractmethod
+    def get_call_signatures(self):
+        """
+        Returns a tuple of (signatures, parameterized)
+        """
+        pass
 
 class DTypeSpec(Type):
     """
