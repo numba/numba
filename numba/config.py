@@ -159,10 +159,6 @@ class _EnvReloader(object):
         # Disable HSA support
         DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
 
-        # Enable Profiler
-        ENABLE_HSA_PROFILER = _readenv("NUMBA_HSA_PROFILER", int, 0)
-
-
         # Inject the configuration values into the module globals
         for name, value in locals().items():
             if name.isupper():

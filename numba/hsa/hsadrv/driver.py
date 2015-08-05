@@ -10,12 +10,8 @@ import os
 import ctypes
 import struct
 import weakref
-import logging
 from functools import partialmethod
 from collections import Sequence
-
-from numba.hsa.profiler import profiler as _prof
-logger = logging.getLogger(__name__)
 from numba.utils import total_ordering
 from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
@@ -200,7 +196,6 @@ class Driver(object):
 
         self.is_initialized = True
         try:
-            logger.info("HSA INIT")
             self.hsa_init()
         except HsaApiError as e:
             self.initialization_error = e
@@ -210,7 +205,6 @@ class Driver(object):
 
             @atexit.register
             def shutdown():
-                logger.info("HSA SHUTDOWN")
                 for agent in self.agents:
                     agent.release()
                 self._recycler.drain()
@@ -319,7 +313,6 @@ class Driver(object):
 
         def driver_wrapper(fn):
             def wrapped(*args, **kwargs):
-                logger.info(fname)
                 return fn(*args, **kwargs)
 
             return wrapped
@@ -404,18 +397,18 @@ class Agent(HsaWrapper):
         'vendor_name': (enums.HSA_AGENT_INFO_VENDOR_NAME, ctypes.c_char * 64),
         'feature': (enums.HSA_AGENT_INFO_FEATURE, drvapi.hsa_agent_feature_t),
         'wavefront_size': (
-        enums.HSA_AGENT_INFO_WAVEFRONT_SIZE, ctypes.c_uint32),
+            enums.HSA_AGENT_INFO_WAVEFRONT_SIZE, ctypes.c_uint32),
         'workgroup_max_dim': (
-        enums.HSA_AGENT_INFO_WORKGROUP_MAX_DIM, ctypes.c_uint16 * 3),
+            enums.HSA_AGENT_INFO_WORKGROUP_MAX_DIM, ctypes.c_uint16 * 3),
         'grid_max_dim': (enums.HSA_AGENT_INFO_GRID_MAX_DIM, drvapi.hsa_dim3_t),
         'grid_max_size': (enums.HSA_AGENT_INFO_GRID_MAX_SIZE, ctypes.c_uint32),
         'fbarrier_max_size': (
-        enums.HSA_AGENT_INFO_FBARRIER_MAX_SIZE, ctypes.c_uint32),
+            enums.HSA_AGENT_INFO_FBARRIER_MAX_SIZE, ctypes.c_uint32),
         'queues_max': (enums.HSA_AGENT_INFO_QUEUES_MAX, ctypes.c_uint32),
         'queue_max_size': (
-        enums.HSA_AGENT_INFO_QUEUE_MAX_SIZE, ctypes.c_uint32),
+            enums.HSA_AGENT_INFO_QUEUE_MAX_SIZE, ctypes.c_uint32),
         'queue_type': (
-        enums.HSA_AGENT_INFO_QUEUE_TYPE, drvapi.hsa_queue_type_t),
+            enums.HSA_AGENT_INFO_QUEUE_TYPE, drvapi.hsa_queue_type_t),
         'node': (enums.HSA_AGENT_INFO_NODE, ctypes.c_uint32),
         '_device': (enums.HSA_AGENT_INFO_DEVICE, drvapi.hsa_device_type_t),
         'cache_size': (enums.HSA_AGENT_INFO_CACHE_SIZE, ctypes.c_uint32 * 4),
@@ -435,7 +428,6 @@ class Agent(HsaWrapper):
     def device(self):
         return _device_type_to_string(self._device)
 
-
     @property
     def is_component(self):
         return (self.feature & enums.HSA_AGENT_FEATURE_KERNEL_DISPATCH) != 0
@@ -454,7 +446,7 @@ class Agent(HsaWrapper):
         callback = drvapi.HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC(on_region)
         hsa.hsa_agent_iterate_regions(self._id, callback, None)
         self._regions = _RegionList([MemRegion.instance_for(self, region_id)
-                                   for region_id in region_ids])
+                                     for region_id in region_ids])
 
     def _create_queue(self, size, callback=None, data=None,
                       private_segment_size=None, group_segment_size=None,
@@ -644,7 +636,6 @@ class Queue(object):
     def __getattr__(self, fname):
         return getattr(self._id.contents, fname)
 
-    @_prof.mark("hsa.queue.dispatch")
     def dispatch(self, symbol, kernargs,
                  workgroup_size=None,
                  grid_size=None,
@@ -777,7 +768,6 @@ class Signal(object):
         self._recycler.free(self)
 
 
-
 class BrigModule(object):
     def __init__(self, brig_buffer):
         """
@@ -801,6 +791,7 @@ class BrigModule(object):
     def __repr__(self):
         return "<BrigModule id={0} size={1}bytes>".format(hex(id(self)),
                                                           len(self))
+
 
 class Program(object):
     def __init__(self, model=enums.HSA_MACHINE_MODEL_LARGE,
@@ -920,7 +911,6 @@ class Context(object):
         self._defaultqueue = defq.owned()
 
     def _callback(self, status, queue):
-        logger.error("queue error %s %r", status, queue)
         drvapi._check_error(status, queue)
         sys.exit(1)
 
