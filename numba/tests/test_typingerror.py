@@ -56,7 +56,7 @@ class TestTypingError(unittest.TestCase):
         try:
             compile_isolated(issue_868, (types.Array(types.int32, 1, 'C'),))
         except TypingError as e:
-            self.assertTrue(e.msg.startswith('Undeclared'))
+            self.assertTrue(e.msg.startswith('Invalid usage of * '))
         else:
             self.fail('Should raise error')
 
