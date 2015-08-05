@@ -26,20 +26,6 @@ def create_list(x, y, z):
 def create_nested_list(x, y, z, a, b, c):
     return [[x, y, z], [a, b, c]]
 
-def get_list_item(l, i):
-    return l[i]
-
-def get_list_slice(l, start, stop, step):
-    return l[start:stop:step]
-
-def set_list_item(l, i, x):
-    l[i] = x
-    return l
-
-def set_list_slice(l, start, stop, step, x):
-    l[start:stop:step] = x
-    return l
-
 def list_comprehension1():
     return sum([x**2 for x in range(10)])
 
@@ -87,32 +73,25 @@ def list_len(n):
     l = list(range(n))
     return len(l)
 
+def list_getitem(n):
+    l = list(range(n))
+    res = 0
+    # Positive indices
+    for i in range(len(l)):
+        res += i * l[i]
+    # Negative indices
+    for i in range(-len(l), 0):
+        res -= i * l[i]
+    return res
 
-def list_extend(l1, l2):
-    l1.extend(l2)
-    return l1
-
-def list_insert(l, i, x):
-    l.insert(i, x)
-    return l
-
-def list_remove(l, x):
-    l.remove(x)
-    return l
-
-def list_index(l, x):
-    return l.index(x)
-
-def list_count(l, x):
-    return l.count(x)
-
-def list_sort(l):
-    l.sort()
-    return l
-
-def list_reverse(l):
-    l.reverse()
-    return l
+def list_setitem(n):
+    l = list(range(n))
+    res = 0
+    for i in range(len(l)):
+        l[i] = i * l[i]
+    for i in range(len(l)):
+        res += l[i]
+    return res
 
 
 class TestLists(MemoryLeakMixin, TestCase):
@@ -157,7 +136,7 @@ class TestLists(MemoryLeakMixin, TestCase):
     def check_unary_with_size(self, pyfunc, precise=True):
         cfunc = jit(nopython=True)(pyfunc)
         # Exercises various sizes, for the allocation
-        for n in [0, 2, 5, 16, 70, 400]:
+        for n in [0, 3, 16, 70, 400]:
             eq = self.assertPreciseEqual if precise else self.assertEqual
             eq(cfunc(n), pyfunc(n))
 
@@ -175,6 +154,12 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_len(self):
         self.check_unary_with_size(list_len)
+
+    def test_getitem(self):
+        self.check_unary_with_size(list_getitem)
+
+    def test_setitem(self):
+        self.check_unary_with_size(list_setitem)
 
 
 if __name__ == '__main__':
