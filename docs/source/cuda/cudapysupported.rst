@@ -15,7 +15,7 @@ Execution Model
 CUDA Python maps directly to the *single-instruction multiple-thread*
 execution (SIMT) model of CUDA.  Each instruction is implicitly
 executed by multiple threads in parallel.  With this execution model, array
-expression is less useful because we don't want multiple threads to perform
+expressions are less useful because we don't want multiple threads to perform
 the same task.  Instead, we want threads to perform a task in a cooperative
 fashion.
 
