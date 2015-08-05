@@ -231,8 +231,7 @@ def list_constructor(context, builder, sig, args):
 
     def list_impl(iterable):
         res = []
-        for v in iterable:
-            res.append(v)
+        res.extend(iterable)
         return res
 
     return context.compile_internal(builder, list_impl, sig, args)
@@ -362,6 +361,18 @@ def list_count(context, builder, sig, args):
         return res
 
     return context.compile_internal(builder, list_count_impl, sig, args)
+
+@builtin
+@implement("list.extend", types.Kind(types.List), types.Kind(types.IterableType))
+def list_extend(context, builder, sig, args):
+
+    def list_extend(lst, iterable):
+        # Speed hack to avoid NRT refcount operations inside the loop
+        meth = lst.append
+        for v in iterable:
+            meth(v)
+
+    return context.compile_internal(builder, list_extend, sig, args)
 
 @builtin
 @implement("list.index", types.Kind(types.List), types.Any)

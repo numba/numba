@@ -61,6 +61,20 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         return signature(types.intp, list.dtype)
 
+    @bound_function("list.extend")
+    def resolve_extend(self, list, args, kws):
+        iterable, = args
+        assert not kws
+        if not isinstance(iterable, types.IterableType):
+            return
+
+        dtype = iterable.iterator_type.yield_type
+        unified = self.context.unify_pairs(list.dtype, dtype)
+      
+        sig = signature(types.none, iterable)
+        sig.recvr = types.List(unified)
+        return sig
+
     @bound_function("list.index")
     def resolve_index(self, list, args, kws):
         # XXX handle optional start, stop

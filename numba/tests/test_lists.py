@@ -62,6 +62,12 @@ def list_append_heterogenous(n):
         l.append(i)
     return l
 
+def list_extend(n):
+    l = []
+    l.extend((5, 42))
+    l.extend(range(n))
+    return l
+
 def list_pop(n):
     l = list(range(n))
     res = 0
@@ -185,6 +191,9 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_append_heterogenous(self):
         self.check_unary_with_size(list_append_heterogenous, precise=False)
+
+    def test_extend(self):
+        self.check_unary_with_size(list_extend)
 
     def test_pop(self):
         self.check_unary_with_size(list_pop)
