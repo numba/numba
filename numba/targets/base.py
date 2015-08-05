@@ -1003,10 +1003,9 @@ class BaseContext(object):
         assert isinstance(ty, llvmir.Type), "Expected LLVM type"
         return ty.get_abi_alignment(self.target_data)
 
-    def post_lowering(self, func):
+    def post_lowering(self, mod, library):
         """Run target specific post-lowering transformation here.
         """
-        pass
 
     def create_module(self, name):
         """Create a LLVM module
@@ -1080,9 +1079,10 @@ class BaseContext(object):
         """
         if not self.enable_nrt:
             raise Exception("Require NRT")
+        from numba.runtime.atomicops import meminfo_data_ty
+
         mod = builder.module
-        fnty = llvmir.FunctionType(void_ptr, [void_ptr])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
+        fn = mod.get_or_insert_function(meminfo_data_ty, name="NRT_MemInfo_data")
         return builder.call(fn, [meminfo])
 
     def get_nrt_meminfo(self, builder, typ, value):
@@ -1091,6 +1091,8 @@ class BaseContext(object):
     def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):
         if not self.enable_nrt:
             raise Exception("Require NRT")
+        from numba.runtime.atomicops import incref_decref_ty
+
         data_model = self.data_model_manager[typ]
 
         members = data_model.traverse(builder, value)
@@ -1103,9 +1105,7 @@ class BaseContext(object):
             raise NotImplementedError("%s: %s" % (root_type, str(e)))
         if meminfo:
             mod = builder.module
-            fnty = llvmir.FunctionType(llvmir.VoidType(),
-                                       [void_ptr])
-            fn = mod.get_or_insert_function(fnty, name=funcname)
+            fn = mod.get_or_insert_function(incref_decref_ty, name=funcname)
             # XXX "nonnull" causes a crash in test_dyn_array: can this
             # function be called with a NULL pointer?
             fn.args[0].add_attribute("noalias")

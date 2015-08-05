@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 import re
-from collections import defaultdict, deque
+from collections import defaultdict, deque, namedtuple
 
 from numba.config import MACHINE_BITS
 from numba import cgutils
@@ -20,15 +20,17 @@ _meminfo_struct_type = ir.LiteralStructType([
     ])
 
 
+incref_decref_ty = ir.FunctionType(ir.VoidType(), [_pointer_type])
+meminfo_data_ty = ir.FunctionType(_pointer_type, [_pointer_type])
+
+
 def _define_nrt_meminfo_data(module):
     """
     Implement NRT_MemInfo_data in the module.  This allows inlined lookup
     of the data pointer.
     """
-    if "NRT_MemInfo_data" not in module.globals:
-        return
-    fn = module.get_global_variable_named("NRT_MemInfo_data")
-    fn.linkage = 'linkonce_odr'
+    fn = module.get_or_insert_function(meminfo_data_ty,
+                                       name="NRT_MemInfo_data")
     builder = ir.IRBuilder(fn.append_basic_block())
     [ptr] = fn.args
     struct_ptr = builder.bitcast(ptr, _meminfo_struct_type.as_pointer())
@@ -36,14 +38,12 @@ def _define_nrt_meminfo_data(module):
     builder.ret(data_ptr)
 
 
-def _define_incref(module, atomic_incr):
+def _define_nrt_incref(module, atomic_incr):
     """
     Implement NRT_incref in the module
     """
-    if "NRT_incref" not in module.globals:
-        return
-    fn_incref = module.get_global_variable_named("NRT_incref")
-    fn_incref.linkage = 'linkonce_odr'
+    fn_incref = module.get_or_insert_function(incref_decref_ty,
+                                              name="NRT_incref")
     builder = ir.IRBuilder(fn_incref.append_basic_block())
     [ptr] = fn_incref.args
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
@@ -53,17 +53,14 @@ def _define_incref(module, atomic_incr):
     builder.ret_void()
 
 
-def _define_decref(module, atomic_decr):
+def _define_nrt_decref(module, atomic_decr):
     """
     Implement NRT_decref in the module
     """
-    if "NRT_decref" not in module.globals:
-        return
-    fn_decref = module.get_global_variable_named("NRT_decref")
-    fn_decref.linkage = 'linkonce_odr'
-    calldtor = module.add_function(ir.FunctionType(ir.VoidType(),
-        [ir.IntType(8).as_pointer()]),
-        name="NRT_MemInfo_call_dtor")
+    fn_decref = module.get_or_insert_function(incref_decref_ty,
+                                              name="NRT_decref")
+    calldtor = module.add_function(ir.FunctionType(ir.VoidType(), [_pointer_type]),
+                                   name="NRT_MemInfo_call_dtor")
 
     builder = ir.IRBuilder(fn_decref.append_basic_block())
     [ptr] = fn_decref.args
@@ -78,23 +75,6 @@ def _define_decref(module, atomic_decr):
     with cgutils.if_unlikely(builder, refct_eq_0):
         builder.call(calldtor, [ptr])
     builder.ret_void()
-
-
-def install_fast_nrt_functions(module):
-    """
-    Implement NRT_incref, NRT_decref and NRT_MemInfo_data in the module.
-    """
-    incref = _define_atomic_inc_dec(module, "add", ordering='monotonic')
-    decref = _define_atomic_inc_dec(module, "sub", ordering='monotonic')
-
-    # Set LinkOnce ODR linkage
-    for fn in [incref, decref]:
-        fn.linkage = 'linkonce_odr'
-    del fn
-
-    _define_nrt_meminfo_data(module)
-    _define_incref(module, incref)
-    _define_decref(module, decref)
 
 
 # Set this to True to measure the overhead of atomic refcounts compared
@@ -153,28 +133,39 @@ def _define_atomic_cmpxchg(module, ordering):
     builder.store(old, oldptr)
     builder.ret(builder.zext(ok, ftype.return_type))
 
+    return fn_cas
 
-def define_atomic_ops(module):
+
+def _define_atomic_ops(module):
     _define_atomic_inc_dec(module, "add", ordering='monotonic')
     _define_atomic_inc_dec(module, "sub", ordering='monotonic')
     _define_atomic_cmpxchg(module, ordering='monotonic')
     return module
 
 
-def compile_atomic_ops(ctx):
+def compile_nrt_functions(ctx):
+    """
+    Compile all LLVM NRT functions and return a library containing them.
+    The library is created using the given target context.
+    """
     codegen = ctx.jit_codegen()
     library = codegen.create_library("nrt")
 
     # Implement LLVM module with atomic ops
-    ir_mod = define_atomic_ops(library.create_ir_module("atomicops"))
+    ir_mod = library.create_ir_module("nrt_module")
+
+    atomic_inc = _define_atomic_inc_dec(ir_mod, "add", ordering='monotonic')
+    atomic_dec = _define_atomic_inc_dec(ir_mod, "sub", ordering='monotonic')
+    _define_atomic_cmpxchg(ir_mod, ordering='monotonic')
+
+    _define_nrt_meminfo_data(ir_mod)
+    _define_nrt_incref(ir_mod, atomic_inc)
+    _define_nrt_decref(ir_mod, atomic_dec)
+
     library.add_ir_module(ir_mod)
     library.finalize()
 
-    atomic_inc = library.get_pointer_to_function("nrt_atomic_add")
-    atomic_dec = library.get_pointer_to_function("nrt_atomic_sub")
-    atomic_cas = library.get_pointer_to_function("nrt_atomic_cas")
-
-    return library, atomic_inc, atomic_dec, atomic_cas
+    return library
 
 
 _regex_incref = re.compile(r'call void @NRT_incref\((.*)\)')
@@ -253,4 +244,3 @@ def remove_redundant_nrt_refct(ll_module):
 
     # Regenerate the LLVM module
     return llvm.parse_assembly(newll)
-

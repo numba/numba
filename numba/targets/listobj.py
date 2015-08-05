@@ -50,21 +50,6 @@ def get_itemsize(context, list_type):
     return context.get_abi_sizeof(llty)
 
 
-def build_list(context, builder, list_type, items):
-    """
-    Build a list of the given type, containing the given items.
-    """
-    nitems = len(items)
-    inst = ListInstance.allocate(context, builder, list_type, nitems)
-    # Populate list
-    inst.size = context.get_constant(types.intp, nitems)
-    for i, val in enumerate(items):
-        inst.setitem(context.get_constant(types.intp, i), val)
-
-    return impl_ret_new_ref(context, builder, list_type, inst.value)
-
-
-
 class _ListPayloadMixin(object):
 
     @property
@@ -221,6 +206,36 @@ class ListIterInstance(_ListPayloadMixin):
     @index.setter
     def index(self, value):
         self._builder.store(value, self._iter.index)
+
+
+#-------------------------------------------------------------------------------
+# Constructors
+
+def build_list(context, builder, list_type, items):
+    """
+    Build a list of the given type, containing the given items.
+    """
+    nitems = len(items)
+    inst = ListInstance.allocate(context, builder, list_type, nitems)
+    # Populate list
+    inst.size = context.get_constant(types.intp, nitems)
+    for i, val in enumerate(items):
+        inst.setitem(context.get_constant(types.intp, i), val)
+
+    return impl_ret_new_ref(context, builder, list_type, inst.value)
+
+
+@builtin
+@implement(list, types.Kind(types.IterableType))
+def list_constructor(context, builder, sig, args):
+    
+    def list_impl(iterable):
+        res = []
+        for v in iterable:
+            res.append(v)
+        return res
+
+    return context.compile_internal(builder, list_impl, sig, args)
 
 
 #-------------------------------------------------------------------------------

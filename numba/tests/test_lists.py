@@ -4,7 +4,7 @@ from __future__ import print_function
 import math
 
 from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba import jit, types
 import numba.unittest_support as unittest
 from numba import testing
 from .support import TestCase, MemoryLeakMixin
@@ -40,9 +40,6 @@ def set_list_slice(l, start, stop, step, x):
     l[start:stop:step] = x
     return l
 
-def get_list_len(l):
-    return len(l)
-
 def list_comprehension1():
     return sum([x**2 for x in range(10)])
 
@@ -61,9 +58,35 @@ def list_comprehension5():
 def list_comprehension6():
     return [[x for x in range(y)] for y in range(3)]
 
-def list_append(l, x):
-    l.append(x)
+
+def list_constructor(n):
+    return list(range(n))
+
+def list_append(n):
+    l = []
+    l.append(42)
+    for i in range(n):
+        l.append(i)
     return l
+
+def list_append_heterogenous(n):
+    l = []
+    l.append(42.0)
+    for i in range(n):
+        l.append(i)
+    return l
+
+def list_pop(n):
+    l = list(range(n))
+    res = 0
+    while len(l) > 0:
+        res += len(l) * l.pop()
+    return res
+
+def list_len(n):
+    l = list(range(n))
+    return len(l)
+
 
 def list_extend(l1, l2):
     l1.extend(l2)
@@ -75,10 +98,6 @@ def list_insert(l, i, x):
 
 def list_remove(l, x):
     l.remove(x)
-    return l
-
-def list_pop(l):
-    l.pop()
     return l
 
 def list_index(l, x):
@@ -120,49 +139,6 @@ class TestLists(MemoryLeakMixin, TestCase):
             cfunc = cr.entry_point
             self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
 
-    def test_get_list_item(self):
-        pyfunc = get_list_item
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32))
-            cfunc = cr.entry_point
-            self.assertEqual(cfunc(1,2,3), pyfunc(1,2,3))
-
-    def test_get_list_slice(self):
-        pyfunc = get_list_slice
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),
-                types.int32, types.int32, types.int32))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l, 0, 10, 2), pyfunc(l, 0, 10, 2))
-
-    def test_set_list_item(self):
-        pyfunc = set_list_item
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),
-                types.int32, types.int32))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l, 0, 999), pyfunc(l, 0, 999))
-
-    def test_set_list_slice(self):
-        pyfunc = set_list_slice
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),
-                types.int32, types.int32, types.int32, types.int32))
-            cfunc = cr.entry_point
-            l = range(10)
-            x = [999, 999, 999, 999, 999]
-            self.assertEqual(cfunc(l, 0, 10, 2, x), pyfunc(l, 0, 10, 2, x))
-
-    def test_get_list_len(self):
-        pyfunc = get_list_len
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l), pyfunc(l))
-
     @testing.allow_interpreter_mode
     def test_list_comprehension(self):
         list_tests = [list_comprehension1,
@@ -178,80 +154,27 @@ class TestLists(MemoryLeakMixin, TestCase):
             cfunc = cr.entry_point
             self.assertEqual(cfunc(), pyfunc())
 
-    def test_list_append(self):
-        pyfunc = list_append
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l, 10), pyfunc(l, 10))
+    def check_unary_with_size(self, pyfunc, precise=True):
+        cfunc = jit(nopython=True)(pyfunc)
+        # Exercises various sizes, for the allocation
+        for n in [0, 2, 5, 16, 70, 400]:
+            eq = self.assertPreciseEqual if precise else self.assertEqual
+            eq(cfunc(n), pyfunc(n))
 
-    def test_list_extend(self):
-        pyfunc = list_extend
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),
-                types.Dummy('list')))
-            cfunc = cr.entry_point
-            l1 = range(10)
-            l2 = range(10)
-            self.assertEqual(cfunc(l1, l2), pyfunc(l1, l2))
+    def test_constructor(self):
+        self.check_unary_with_size(list_constructor)
 
-    def test_list_insert(self):
-        pyfunc = list_insert
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),
-                types.int32, types.int32))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l, 0, 999), pyfunc(l, 0, 999))
+    def test_append(self):
+        self.check_unary_with_size(list_append)
 
-    def test_list_remove(self):
-        pyfunc = list_remove
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l, 1), pyfunc(l, 1))
+    def test_append_heterogenous(self):
+        self.check_unary_with_size(list_append_heterogenous, precise=False)
 
-    def test_list_pop(self):
-        pyfunc = list_pop
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l), pyfunc(l))
+    def test_pop(self):
+        self.check_unary_with_size(list_pop)
 
-    def test_list_index(self):
-        pyfunc = list_index
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l, 1), pyfunc(l, 1))
-
-    def test_list_count(self):
-        pyfunc = list_count
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
-            cfunc = cr.entry_point
-            l = [1,1,2,1]
-            self.assertEqual(cfunc(l, 1), pyfunc(l, 1))
-
-    def test_list_sort(self):
-        pyfunc = list_sort
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-            cfunc = cr.entry_point
-            l = self.random.randint(10, size=10)
-            self.assertEqual(cfunc(l), pyfunc(l))
-
-    def test_list_reverse(self):
-        pyfunc = list_reverse
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l), pyfunc(l))
+    def test_len(self):
+        self.check_unary_with_size(list_len)
 
 
 if __name__ == '__main__':

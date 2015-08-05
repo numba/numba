@@ -16,6 +16,20 @@ builtin_global = registry.register_global
 builtin_attr = registry.register_attr
 
 
+class ListBuiltin(AbstractTemplate):
+    key = list
+
+    def generic(self, args, kws):
+        assert not kws
+        if args:
+            iterable, = args
+            if isinstance(iterable, types.IterableType):
+                dtype = iterable.iterator_type.yield_type
+                return signature(types.List(dtype), iterable)
+
+builtin_global(list, types.Function(ListBuiltin))
+
+
 @builtin
 class ListLen(AbstractTemplate):
     key = types.len_type

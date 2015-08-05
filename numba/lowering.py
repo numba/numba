@@ -112,6 +112,9 @@ class BaseLower(object):
             print(self.module)
             print('=' * 80)
 
+        # Run target specific post lowering transformation
+        self.context.post_lowering(self.module, self.library)
+
         # Materialize LLVM Module
         self.library.add_ir_module(self.module)
 
@@ -134,9 +137,6 @@ class BaseLower(object):
         # Close tail of entry block
         self.builder.position_at_end(entry_block_tail)
         self.builder.branch(self.blkmap[self.firstblk])
-
-        # Run target specific post lowering transformation
-        self.context.post_lowering(self.function)
 
     def lower_function_body(self):
         """

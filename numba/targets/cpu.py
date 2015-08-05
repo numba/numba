@@ -15,7 +15,6 @@ from numba.targets import (
     callconv, codegen, externals, intrinsics, listobj, cmathimpl, mathimpl,
     npyimpl, operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
-from numba.runtime.atomicops import install_fast_nrt_functions
 from numba.runtime import rtsys
 
 # Keep those structures in sync with _dynfunc.c.
@@ -111,15 +110,13 @@ class CPUContext(BaseContext):
         """
         return listobj.build_list(self, builder, list_type, items)
 
-    def post_lowering(self, func):
-        mod = func.module
-
+    def post_lowering(self, mod, library):
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
             # calls to compiler-rt
             intrinsics.fix_divmod(mod)
 
-        install_fast_nrt_functions(mod)
+        library.add_linking_library(rtsys.library)
 
     def create_cpython_wrapper(self, library, fndesc, env, call_helper,
                                release_gil=False):
