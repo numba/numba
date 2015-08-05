@@ -993,14 +993,14 @@ class Tuple(BaseTuple):
 
 class ListPayload(Type):
     
-    def __init__(self, list):
-        self.list = list
-        name = 'payload(%s)' % list
+    def __init__(self, list_type):
+        self.list_type = list_type
+        name = 'payload(%s)' % list_type
         super(ListPayload, self).__init__(name, param=True)
     
     @property
     def key(self):
-        return self.list
+        return self.list_type
 
 
 class List(IterableType):
@@ -1024,23 +1024,22 @@ class List(IterableType):
 
 class ListIter(SimpleIteratorType):
 
-    def __init__(self, list):
-        # XXX list_type?
-        self.list = list
-        yield_type = list.dtype
-        name = 'iter(%s)' % list
+    def __init__(self, list_type):
+        self.list_type = list_type
+        yield_type = list_type.dtype
+        name = 'iter(%s)' % list_type
         super(ListIter, self).__init__(name, yield_type)
 
-    # XXX should it be generalized for all iterator types?
+    # XXX This is a common pattern.  Should it factored out somewhere?
     def unify(self, typingctx, other):
         if isinstance(other, ListIter):
-            list = typingctx.unify_pairs(self.list, other.list)
-            if list != pyobject:
-                return ListIter(list)
+            list_type = typingctx.unify_pairs(self.list_type, other.list_type)
+            if list_type != pyobject:
+                return ListIter(list_type)
 
     @property
     def key(self):
-        return self.list
+        return self.list_type
 
 
 class CPointer(Type):

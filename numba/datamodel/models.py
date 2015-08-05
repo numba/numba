@@ -571,7 +571,8 @@ class ListPayloadModel(StructModel):
         members = [
             ('size', types.intp),
             ('allocated', types.intp),
-            ('data', fe_type.list.dtype),
+            # Actually an inlined var-sized array
+            ('data', fe_type.list_type.dtype),
         ]
         super(ListPayloadModel, self).__init__(dmm, fe_type, members)
 
