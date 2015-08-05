@@ -1,7 +1,7 @@
-
 from __future__ import print_function
 
 import math
+import sys
 
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
@@ -93,6 +93,28 @@ def list_setitem(n):
         res += l[i]
     return res
 
+def list_clear(n):
+    l = list(range(n))
+    l.clear()
+    return l
+
+def list_copy(n):
+    l = list(range(n))
+    ll = l.copy()
+    l.append(42)
+    return l, ll
+
+def list_iteration(n):
+    l = list(range(n))
+    res = 0
+    for i, v in enumerate(l):
+        res += i * v
+    return res
+
+def list_contains(n):
+    l = list(range(n))
+    return (0 in l, 1 in l, n - 1 in l, n in l)
+
 
 class TestLists(MemoryLeakMixin, TestCase):
 
@@ -135,7 +157,7 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def check_unary_with_size(self, pyfunc, precise=True):
         cfunc = jit(nopython=True)(pyfunc)
-        # Exercises various sizes, for the allocation
+        # Use various sizes, to stress the allocation algorithm
         for n in [0, 3, 16, 70, 400]:
             eq = self.assertPreciseEqual if precise else self.assertEqual
             eq(cfunc(n), pyfunc(n))
@@ -161,7 +183,22 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_setitem(self):
         self.check_unary_with_size(list_setitem)
 
+    def test_iteration(self):
+        self.check_unary_with_size(list_iteration)
+
+    def test_contains(self):
+        self.check_unary_with_size(list_contains)
+
+    @unittest.skipUnless(sys.version_info >= (3, 3),
+                         "list.clear() needs Python 3.3+")
+    def test_clear(self):
+        self.check_unary_with_size(list_clear)
+
+    @unittest.skipUnless(sys.version_info >= (3, 3),
+                         "list.copy() needs Python 3.3+")
+    def test_copy(self):
+        self.check_unary_with_size(list_copy)
+
 
 if __name__ == '__main__':
     unittest.main()
-

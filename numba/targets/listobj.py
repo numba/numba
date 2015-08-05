@@ -228,7 +228,7 @@ def build_list(context, builder, list_type, items):
 @builtin
 @implement(list, types.Kind(types.IterableType))
 def list_constructor(context, builder, sig, args):
-    
+
     def list_impl(iterable):
         res = []
         for v in iterable:
@@ -306,23 +306,20 @@ def setitem_list(context, builder, sig, args):
     inst.setitem(index, value)
     return context.get_dummy_value()
 
+@builtin
+@implement("in", types.Any, types.Kind(types.List))
+def in_list(context, builder, sig, args):
+    def list_contains_impl(value, lst):
+        for elem in lst:
+            if elem == value:
+                return True
+        return False
+
+    return context.compile_internal(builder, list_contains_impl, sig, args)
+
 
 #-------------------------------------------------------------------------------
 # Methods
-
-@builtin
-@implement("list.pop", types.Kind(types.List))
-def list_pop(context, builder, sig, args):
-    inst = ListInstance(context, builder, sig.args[0], args[0])
-
-    n = inst.size
-    cgutils.guard_zero(context, builder, n,
-                       (IndexError, "list index out of range"))
-    n = builder.sub(n, ir.Constant(n.type, 1))
-    res = inst.getitem(n)
-    inst.resize(n)
-    return res
-
 
 @builtin
 @implement("list.append", types.Kind(types.List), types.Any)
@@ -336,3 +333,32 @@ def list_append(context, builder, sig, args):
     inst.setitem(n, item)
 
     return context.get_dummy_value()
+
+@builtin
+@implement("list.clear", types.Kind(types.List))
+def list_clear(context, builder, sig, args):
+    inst = ListInstance(context, builder, sig.args[0], args[0])
+    inst.resize(context.get_constant(types.intp, 0))
+
+    return context.get_dummy_value()
+
+@builtin
+@implement("list.copy", types.Kind(types.List))
+def list_copy(context, builder, sig, args):
+    def list_copy_impl(lst):
+        return list(lst)
+
+    return context.compile_internal(builder, list_copy_impl, sig, args)
+
+@builtin
+@implement("list.pop", types.Kind(types.List))
+def list_pop(context, builder, sig, args):
+    inst = ListInstance(context, builder, sig.args[0], args[0])
+
+    n = inst.size
+    cgutils.guard_zero(context, builder, n,
+                       (IndexError, "list index out of range"))
+    n = builder.sub(n, ir.Constant(n.type, 1))
+    res = inst.getitem(n)
+    inst.resize(n)
+    return res
