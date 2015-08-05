@@ -383,7 +383,7 @@ def for_range(builder, count, intp=None):
 
 
 @contextmanager
-def for_range_slice(builder, start, stop, step, intp, inc=True):
+def for_range_slice(builder, start, stop, step, intp=None, inc=True):
     """
     Generate LLVM IR for a for-loop based on a slice
 
@@ -406,6 +406,8 @@ def for_range_slice(builder, start, stop, step, intp, inc=True):
     -----------
         None
     """
+    if intp is None:
+        intp = start.type
 
     bbcond = builder.append_basic_block("for.cond")
     bbbody = builder.append_basic_block("for.body")

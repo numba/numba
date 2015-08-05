@@ -55,12 +55,31 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         return signature(list)
 
+    @bound_function("list.count")
+    def resolve_count(self, list, args, kws):
+        item, = args
+        assert not kws
+        return signature(types.intp, list.dtype)
+
+    @bound_function("list.index")
+    def resolve_index(self, list, args, kws):
+        # XXX handle optional start, stop
+        item, = args
+        assert not kws
+        return signature(types.intp, list.dtype)
+
     @bound_function("list.pop")
     def resolve_pop(self, list, args, kws):
-        # XXX two-argument form
+        # XXX handle optional index
         assert not args
         assert not kws
         return signature(list.dtype)
+
+    @bound_function("list.reverse")
+    def resolve_reverse(self, list, args, kws):
+        assert not args
+        assert not kws
+        return signature(types.none)
 
 
 # XXX Should there be a base Sequence type for plain 1d sequences?

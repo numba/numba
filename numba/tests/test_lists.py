@@ -115,6 +115,21 @@ def list_contains(n):
     l = list(range(n))
     return (0 in l, 1 in l, n - 1 in l, n in l)
 
+def list_index(n, v):
+    l = list(range(n, 0, -1))
+    return l.index(v)
+
+def list_count(n, v):
+    l = []
+    for x in range(n):
+        l.append(x & 3)
+    return l.count(v)
+
+def list_reverse(n):
+    l = list(range(n))
+    l.reverse()
+    return l
+
 
 class TestLists(MemoryLeakMixin, TestCase):
 
@@ -186,8 +201,27 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_iteration(self):
         self.check_unary_with_size(list_iteration)
 
+    def test_reverse(self):
+        self.check_unary_with_size(list_reverse)
+
     def test_contains(self):
         self.check_unary_with_size(list_contains)
+
+    def test_index(self):
+        # XXX References are leaked when IndexError is raised
+        self.disable_leak_check()
+        pyfunc = list_index
+        cfunc = jit(nopython=True)(pyfunc)
+        for v in (1, 5, 10):
+            self.assertPreciseEqual(cfunc(16, v), pyfunc(16, v))
+        with self.assertRaises(IndexError):
+            cfunc(16, 42)
+
+    def test_count(self):
+        pyfunc = list_count
+        cfunc = jit(nopython=True)(pyfunc)
+        for v in range(5):
+            self.assertPreciseEqual(cfunc(18, v), pyfunc(18, v))
 
     @unittest.skipUnless(sys.version_info >= (3, 3),
                          "list.clear() needs Python 3.3+")

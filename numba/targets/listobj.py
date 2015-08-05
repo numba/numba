@@ -351,6 +351,32 @@ def list_copy(context, builder, sig, args):
     return context.compile_internal(builder, list_copy_impl, sig, args)
 
 @builtin
+@implement("list.count", types.Kind(types.List), types.Any)
+def list_count(context, builder, sig, args):
+
+    def list_count_impl(lst, value):
+        res = 0
+        for elem in lst:
+            if elem == value:
+                res += 1
+        return res
+
+    return context.compile_internal(builder, list_count_impl, sig, args)
+
+@builtin
+@implement("list.index", types.Kind(types.List), types.Any)
+def list_index(context, builder, sig, args):
+
+    def list_index_impl(lst, value):
+        for i in range(len(lst)):
+            if lst[i] == value:
+                return i
+        # XXX references are leaked when raising
+        raise IndexError("value not in list")
+
+    return context.compile_internal(builder, list_index_impl, sig, args)
+
+@builtin
 @implement("list.pop", types.Kind(types.List))
 def list_pop(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
@@ -362,3 +388,14 @@ def list_pop(context, builder, sig, args):
     res = inst.getitem(n)
     inst.resize(n)
     return res
+
+@builtin
+@implement("list.reverse", types.Kind(types.List))
+def list_reverse(context, builder, sig, args):
+
+    def list_reverse_impl(lst):
+        for a in range(0, len(lst) // 2):
+            b = -a - 1
+            lst[a], lst[b] = lst[b], lst[a]
+
+    return context.compile_internal(builder, list_reverse_impl, sig, args)
