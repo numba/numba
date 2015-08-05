@@ -240,7 +240,7 @@ class CallConstrain(object):
             if sig is None:
                 desc = context.explain_function_type(fnty)
                 headtemp = "Invalid usage of {0} with parameters ({1})"
-                head = headtemp.format(fnty, '\n'.join(map(str, args)))
+                head = headtemp.format(fnty, ', '.join(map(str, args)))
                 msg = '\n'.join([head, desc])
                 raise TypingError(msg, loc=self.loc)
             restypes.append(sig.return_type)
