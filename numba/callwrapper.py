@@ -158,8 +158,6 @@ class PyCallWrapper(object):
 
             retty = self._simplified_return_type()
             obj = api.from_native_return(retval, retty, env_manager)
-            if self.context.enable_nrt:
-                self.context.nrt_decref(builder, retty, retval)
             builder.ret(obj)
 
         with builder.if_then(builder.not_(status.is_python_exc)):

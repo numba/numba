@@ -1,11 +1,14 @@
 
 from __future__ import print_function
+
+import math
+
 from numba.compiler import compile_isolated, Flags
 from numba import types
-from numba.tests.support import TestCase
 import numba.unittest_support as unittest
 from numba import testing
-import math
+from .support import TestCase, MemoryLeakMixin
+
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -93,7 +96,7 @@ def list_reverse(l):
     return l
 
 
-class TestLists(TestCase):
+class TestLists(MemoryLeakMixin, TestCase):
 
     def test_identity_func(self):
         pyfunc = identity_func
@@ -105,10 +108,9 @@ class TestLists(TestCase):
 
     def test_create_list(self):
         pyfunc = create_list
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32))
-            cfunc = cr.entry_point
-            self.assertEqual(cfunc(1, 2, 3), pyfunc(1, 2, 3))
+        cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32))
+        cfunc = cr.entry_point
+        self.assertEqual(cfunc(1, 2, 3), pyfunc(1, 2, 3))
 
     def test_create_nested_list(self):
         pyfunc = create_nested_list

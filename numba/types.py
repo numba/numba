@@ -1007,7 +1007,7 @@ class List(IterableType):
 
     def __init__(self, dtype):
         self.dtype = dtype
-        name = "[%s]" % (self.dtype,)
+        name = "list(%s)" % (self.dtype,)
         super(List, self).__init__(name=name, param=True)
         self._iterator_type = ListIter(self)
 
@@ -1030,7 +1030,7 @@ class ListIter(SimpleIteratorType):
         name = 'iter(%s)' % list_type
         super(ListIter, self).__init__(name, yield_type)
 
-    # XXX This is a common pattern.  Should it factored out somewhere?
+    # XXX This is a common pattern.  Should it be factored out somewhere?
     def unify(self, typingctx, other):
         if isinstance(other, ListIter):
             list_type = typingctx.unify_pairs(self.list_type, other.list_type)
@@ -1064,6 +1064,21 @@ class EphemeralPointer(CPointer):
     stack-allocated slots.  The data model serializes such pointers
     by copying the data pointed to.
     """
+
+
+class MemInfoPointer(Type):
+    """
+    """
+    mutable = True
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        name = "memory-managed *%s" % dtype
+        super(MemInfoPointer, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.dtype
 
 
 class EphemeralArray(Type):
@@ -1214,9 +1229,6 @@ string = Opaque('str')
 # No operation is defined on voidptr
 # Can only pass it around
 voidptr = RawPointer('void*')
-
-# For NRT GC
-meminfo_pointer = Opaque("MemInfo*")
 
 boolean = bool_ = Boolean('bool')
 

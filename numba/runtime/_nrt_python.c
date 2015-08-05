@@ -389,9 +389,10 @@ RETURN_ARRAY_COPY:
     return NULL;
 }
 
-static
-PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
-                                      int writeable, PyArray_Descr *descr) {
+static PyObject *
+NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
+                            int writeable, PyArray_Descr *descr)
+{
     PyArrayObject *array;
     MemInfoObject *miobj = NULL;
     PyObject *args;
@@ -407,7 +408,7 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
 
     if (arystruct->parent) {
         PyObject *obj = try_to_return_parent(arystruct, ndim, descr);
-        if (obj){
+        if (obj) {
             /* Release NRT reference to the numpy array */
             NRT_MemInfo_release(arystruct->meminfo);
             return obj;

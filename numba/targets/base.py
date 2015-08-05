@@ -1088,15 +1088,19 @@ class BaseContext(object):
     def get_nrt_meminfo(self, builder, typ, value):
         return self.data_model_manager[typ].get_nrt_meminfo(builder, value)
 
-    def _call_nrt_incref_decref(self, builder, typ, value, funcname):
+    def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):
         if not self.enable_nrt:
             raise Exception("Require NRT")
+        data_model = self.data_model_manager[typ]
 
-        members = self.data_model_manager[typ].traverse(builder, value)
+        members = data_model.traverse(builder, value)
         for mt, mv in members:
-            self._call_nrt_incref_decref(builder, mt, mv, funcname)
+            self._call_nrt_incref_decref(builder, root_type, mt, mv, funcname)
 
-        meminfo = self.get_nrt_meminfo(builder, typ, value)
+        try:
+            meminfo = self.get_nrt_meminfo(builder, typ, value)
+        except NotImplementedError as e:
+            raise NotImplementedError("%s: %s" % (root_type, str(e)))
         if meminfo:
             mod = builder.module
             fnty = llvmir.FunctionType(llvmir.VoidType(),
@@ -1112,13 +1116,13 @@ class BaseContext(object):
         """
         Recursively incref the given *value* and its members.
         """
-        self._call_nrt_incref_decref(builder, typ, value, "NRT_incref")
+        self._call_nrt_incref_decref(builder, typ, typ, value, "NRT_incref")
 
     def nrt_decref(self, builder, typ, value):
         """
         Recursively decref the given *value* and its members.
         """
-        self._call_nrt_incref_decref(builder, typ, value, "NRT_decref")
+        self._call_nrt_incref_decref(builder, typ, typ, value, "NRT_decref")
 
 
 class _wrap_impl(object):

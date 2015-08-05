@@ -272,6 +272,8 @@ def unbox_optional(c, typ, obj):
 # Collections
 #
 
+# NOTE: those functions are supposed to steal any NRT references.
+
 @box(types.Array)
 def box_array(c, typ, val):
     nativearycls = c.context.make_array(typ)
@@ -279,9 +281,8 @@ def box_array(c, typ, val):
     if c.context.enable_nrt:
         np_dtype = numpy_support.as_dtype(typ.dtype)
         dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
+        # Steals NRT reference
         newary = c.pyapi.nrt_adapt_ndarray_to_python(typ, val, dtypeptr)
-        # We are keeping a reference to the underlying data, so incref
-        c.context.nrt_incref(c.builder, typ, val)
         return newary
     else:
         parent = nativeary.parent
@@ -335,6 +336,7 @@ def unbox_array(c, typ, obj):
         errcode = c.pyapi.numba_array_adaptor(obj, ptr)
     failed = cgutils.is_not_null(c.builder, errcode)
     return NativeValue(c.builder.load(aryptr), is_error=failed)
+
 
 @box(types.BaseTuple)
 def box_tuple(c, typ, val):
@@ -397,6 +399,9 @@ def box_list(c, typ, val):
             item = list.getitem(index)
             itemobj = c.box(typ.dtype, item)
             c.pyapi.list_setitem(obj, index, itemobj)
+
+    # Steal NRT ref
+    c.context.nrt_decref(c.builder, typ, val)
 
     return obj
 
