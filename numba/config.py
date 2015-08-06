@@ -154,6 +154,11 @@ class _EnvReloader(object):
         # Enable CUDA simulator
         ENABLE_CUDASIM = _readenv("NUMBA_ENABLE_CUDASIM", int, 0)
 
+        # HSA Configs
+
+        # Disable HSA support
+        DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
+
         # Inject the configuration values into the module globals
         for name, value in locals().items():
             if name.isupper():
