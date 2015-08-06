@@ -12,6 +12,7 @@ import struct
 import weakref
 from collections import Sequence
 from numba.utils import total_ordering
+from numba import utils
 from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
 from . import enums, drvapi
@@ -134,7 +135,7 @@ class Recycler(object):
     def _cleanup(self):
         for obj in self._garbage:
             obj._finalizer(obj)
-        self._garbage = []
+        del self._garbage[:]
 
     def service(self):
         if self.enabled:
@@ -201,7 +202,13 @@ class Driver(object):
             raise HsaDriverError("Error at driver init: \n%s:" % e)
         else:
             hsa_shut_down = self.hsa_shut_down
-            atexit.register(hsa_shut_down)
+
+            @atexit.register
+            def shutdown():
+                for agent in self.agents:
+                    agent.release()
+                self._recycler.drain()
+                hsa_shut_down()
 
     def _initialize_agents(self):
         if self._agent_map is not None:
@@ -714,13 +721,6 @@ class ManagedQueueProxy(object):
     def __init__(self, queue):
         self._queue = weakref.ref(queue)
 
-    def __del__(self):
-        q = self._queue()
-        if q is not None:
-            # Since atexit functions occurs before all the objects are
-            # cleaned-up, the queue could already be free.
-            q.release_queue()
-
     def __getattr__(self, item):
         return getattr(self._queue(), item)
 
@@ -733,8 +733,7 @@ class Signal(object):
     def __init__(self, signal_id):
         self._id = signal_id
         self._as_parameter_ = self._id
-        self._recycler = hsa._recycler
-        self._finalizer = hsa.hsa_signal_destroy
+        utils.finalize(self, hsa.hsa_signal_destroy, self._id)
 
     def load_relaxed(self):
         return hsa.hsa_signal_load_relaxed(self._id)
@@ -758,9 +757,6 @@ class Signal(object):
                                     one, expire,
                                     enums.HSA_WAIT_STATE_BLOCKED)
         return self.load_relaxed() != one
-
-    def __del__(self):
-        self._recycler.free(self)
 
 
 class BrigModule(object):
@@ -794,15 +790,11 @@ class Program(object):
                  rounding_mode=enums.HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT,
                  options=None):
         self._id = drvapi.hsa_ext_program_t()
-        self._finalizer = hsa.hsa_ext_program_destroy
         assert options is None
         hsa.hsa_ext_program_create(model, profile, rounding_mode,
                                    options, ctypes.byref(self._id))
         self._as_parameter_ = self._id
-        self._recycler = hsa._recycler
-
-    def __del__(self):
-        self._recycler.free(self)
+        utils.finalize(self, hsa.hsa_ext_program_destroy, self._id)
 
     def add_module(self, module):
         hsa.hsa_ext_program_add_module(self._id, module._id)
@@ -829,11 +821,7 @@ class CodeObject(object):
     def __init__(self, code_object):
         self._id = code_object
         self._as_parameter_ = self._id
-        self._finalizer = hsa.hsa_code_object_destroy
-        self._recycler = hsa._recycler
-
-    def __del__(self):
-        self._recycler.free(self)
+        utils.finalize(self, hsa.hsa_code_object_destroy, self._id)
 
 
 class Executable(object):
@@ -845,11 +833,7 @@ class Executable(object):
                                   ctypes.byref(ex))
         self._id = ex
         self._as_parameter_ = self._id
-        self._finalizer = hsa.hsa_executable_destroy
-        self._recycler = hsa._recycler
-
-    def __del__(self):
-        self._recycler.free(self)
+        utils.finalize(self, hsa.hsa_executable_destroy, self._id)
 
     def load(self, agent, code_object):
         hsa.hsa_executable_load_code_object(self._id, agent._id,

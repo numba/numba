@@ -22,7 +22,7 @@ hlc = CDLL(os.path.join(sys.prefix, 'lib', 'libHLC.so'))
 hlc.HLC_ParseModule.restype = moduleref_ptr
 hlc.HLC_ModuleEmitBRIG.restype = c_size_t
 hlc.HLC_Initialize()
-utils.finalize(hlc, lambda: hlc.HLC_Finalize())
+utils.finalize(hlc, hlc.HLC_Finalize)
 
 hlc.HLC_SetCommandLineOption.argtypes = [
     c_int,
