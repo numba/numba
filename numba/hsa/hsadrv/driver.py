@@ -10,7 +10,6 @@ import os
 import ctypes
 import struct
 import weakref
-from functools import partialmethod
 from collections import Sequence
 from numba.utils import total_ordering
 from numba import config
@@ -225,7 +224,7 @@ class Driver(object):
         callback = drvapi.HSA_ITER_AGENT_CALLBACK_FUNC(on_agent)
         self.hsa_iterate_agents(callback, None)
 
-        agent_map = {agent_id: Agent(agent_id) for agent_id in agent_ids}
+        agent_map = dict((agent_id, Agent(agent_id)) for agent_id in agent_ids)
         self._agent_map = agent_map
 
     @property
@@ -470,11 +469,13 @@ class Agent(HsaWrapper):
         self._queues.add(q)
         return weakref.proxy(q)
 
-    create_queue_single = partialmethod(_create_queue,
-                                        queue_type=enums.HSA_QUEUE_TYPE_SINGLE)
+    def create_queue_single(self, *args, **kwargs):
+        kwargs['queue_type'] = enums.HSA_QUEUE_TYPE_SINGLE
+        return self._create_queue(*args, **kwargs)
 
-    create_queue_multi = partialmethod(_create_queue,
-                                       queue_type=enums.HSA_QUEUE_TYPE_MULTI)
+    def create_queue_multi(self, *args, **kwargs):
+        kwargs['queue_type'] = enums.HSA_QUEUE_TYPE_MULTI
+        return self._create_queue(*args, **kwargs)
 
     def release(self):
         """
