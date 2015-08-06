@@ -69,12 +69,17 @@ def list_extend(n):
     l.extend(range(n))
     return l
 
-def list_pop(n):
+def list_pop0(n):
     l = list(range(n))
     res = 0
     while len(l) > 0:
         res += len(l) * l.pop()
     return res
+
+def list_pop1(n, i):
+    l = list(range(n))
+    x = l.pop(i)
+    return x, l
 
 def list_len(n):
     l = list(range(n))
@@ -111,6 +116,26 @@ def list_getslice2(n, start, stop):
 def list_getslice3(n, start, stop, step):
     l = list(range(n))
     return l[start:stop:step]
+
+def list_setslice2(n, n_source, start, stop):
+    # Generic setslice with size change
+    l = list(range(n))
+    v = list(range(100, 100 + n_source))
+    l[start:stop] = v
+    return l
+
+def list_setslice3(n, start, stop, step):
+    l = list(range(n))
+    v = l[start:stop:step]
+    for i in range(len(v)):
+        v[i] += 100
+    l[start:stop:step] = v
+    return l
+
+def list_setslice3_arbitrary(n, n_src, start, stop, step):
+    l = list(range(n))
+    l[start:stop:step] = list(range(100, 100 + n_src))
+    return l
 
 def list_clear(n):
     l = list(range(n))
@@ -208,8 +233,27 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_extend(self):
         self.check_unary_with_size(list_extend)
 
-    def test_pop(self):
-        self.check_unary_with_size(list_pop)
+    def test_pop0(self):
+        self.check_unary_with_size(list_pop0)
+
+    def test_pop1(self):
+        pyfunc = list_pop1
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [5, 40]:
+            for i in [0, 1, n - 2, n - 1, -1, -2, -n + 3, -n + 1]:
+                expected = pyfunc(n, i)
+                self.assertPreciseEqual(cfunc(n, i), expected)
+
+    def test_pop_errors(self):
+        # XXX References are leaked when an exception is raised
+        self.disable_leak_check()
+        cfunc = jit(nopython=True)(list_pop1)
+        with self.assertRaises(IndexError) as cm:
+            cfunc(0, 5)
+        self.assertEqual(str(cm.exception), "pop from empty list")
+        with self.assertRaises(IndexError) as cm:
+            cfunc(1, 5)
+        self.assertEqual(str(cm.exception), "pop index out of range")
 
     def test_len(self):
         self.check_unary_with_size(list_len)
@@ -220,14 +264,25 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_setitem(self):
         self.check_unary_with_size(list_setitem)
 
-    def test_getslice(self):
+    def test_getslice2(self):
         pyfunc = list_getslice2
         cfunc = jit(nopython=True)(pyfunc)
-        for n in [0, 5, 40]:
+        sizes = [5, 40]
+        for n in sizes:
             indices = [0, 1, n - 2, -1, -2, -n + 3, -n - 1, -n]
             for start, stop in itertools.product(indices, indices):
                 expected = pyfunc(n, start, stop)
                 self.assertPreciseEqual(cfunc(n, start, stop), expected)
+
+    def test_setslice2(self):
+        pyfunc = list_setslice2
+        cfunc = jit(nopython=True)(pyfunc)
+        sizes = [5, 40]
+        for n, n_src in itertools.product(sizes, sizes):
+            indices = [0, 1, n - 2, -1, -2, -n + 3, -n - 1, -n]
+            for start, stop in itertools.product(indices, indices):
+                expected = pyfunc(n, n_src, start, stop)
+                self.assertPreciseEqual(cfunc(n, n_src, start, stop), expected)
 
     def test_getslice3(self):
         pyfunc = list_getslice3
@@ -238,6 +293,28 @@ class TestLists(MemoryLeakMixin, TestCase):
             for start, stop, step in itertools.product(indices, indices, steps):
                 expected = pyfunc(n, start, stop, step)
                 self.assertPreciseEqual(cfunc(n, start, stop, step), expected)
+
+    def test_setslice3(self):
+        pyfunc = list_setslice3
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [10]:
+            indices = [0, 1, n - 2, -1, -2, -n + 3, -n - 1, -n]
+            steps = [4, 1, -1, 2, -3]
+            for start, stop, step in itertools.product(indices, indices, steps):
+                expected = pyfunc(n, start, stop, step)
+                self.assertPreciseEqual(cfunc(n, start, stop, step), expected)
+
+    def test_setslice3_resize(self):
+        # XXX References are leaked when an exception is raised
+        self.disable_leak_check()
+        pyfunc = list_setslice3_arbitrary
+        cfunc = jit(nopython=True)(pyfunc)
+        # step == 1 => can resize
+        cfunc(5, 10, 0, 2, 1)
+        # step != 1 => cannot resize
+        with self.assertRaises(ValueError) as cm:
+            cfunc(5, 100, 0, 3, 2)
+        self.assertIn("cannot resize", str(cm.exception))
 
     def test_invalid_slice(self):
         # XXX References are leaked when an exception is raised

@@ -84,10 +84,13 @@ class ListAttribute(AttributeTemplate):
 
     @bound_function("list.pop")
     def resolve_pop(self, list, args, kws):
-        # XXX handle optional index
-        assert not args
         assert not kws
-        return signature(list.dtype)
+        if not args:
+            return signature(list.dtype)
+        else:
+            idx, = args
+            if isinstance(idx, types.Integer):
+                return signature(list.dtype, types.intp)
 
     @bound_function("list.reverse")
     def resolve_reverse(self, list, args, kws):
@@ -121,7 +124,6 @@ class GetItemList(AbstractTemplate):
             elif isinstance(idx, types.Integer):
                 return signature(list.dtype, list, idx)
 
-
 @builtin
 class SetItemList(AbstractTemplate):
     key = "setitem"
@@ -129,8 +131,11 @@ class SetItemList(AbstractTemplate):
     def generic(self, args, kws):
         list, idx, value = args
         if isinstance(list, types.List):
-            return signature(types.none, list, normalize_index(idx), list.dtype)
-
+            idx = normalize_index(idx)
+            if idx == types.slice3_type:
+                return signature(types.none, list, idx, list)
+            elif isinstance(idx, types.Integer):
+                return signature(types.none, list, idx, list.dtype)
 
 @builtin
 class InList(AbstractTemplate):

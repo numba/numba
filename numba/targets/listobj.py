@@ -82,7 +82,7 @@ class _ListPayloadMixin(object):
     def inititem(self, idx, val):
         ptr = self._gep(idx)
         self._builder.store(val, ptr)
-
+    
     def fix_index(self, idx):
         """
         Fix negative indices by adding the size to them.  Positive
@@ -92,6 +92,23 @@ class _ListPayloadMixin(object):
                                                 ir.Constant(idx.type, 0))
         wrapped_index = self._builder.add(idx, self.size)
         return self._builder.select(is_negative, wrapped_index, idx)
+
+    def is_out_of_bounds(self, idx):
+        """
+        Return whether the index is out of bounds.
+        """
+        underflow = self._builder.icmp_signed('<', idx,
+                                              ir.Constant(idx.type, 0))
+        overflow = self._builder.icmp_signed('>=', idx, self.size)
+        return self._builder.or_(underflow, overflow)
+
+    def guard_index(self, idx, msg):
+        """
+        Raise an error if the index is out of bounds.
+        """
+        with self._builder.if_then(self.is_out_of_bounds(idx), likely=False):
+            self._context.call_conv.return_user_exc(self._builder,
+                                                    IndexError, (msg,))
 
     def fix_slice(self, slice):
         """
@@ -138,6 +155,7 @@ class ListInstance(_ListPayloadMixin):
         self._builder = builder
         self._ty = list_type
         self._list = make_list_cls(list_type)(context, builder, list_val)
+        self._itemsize = get_itemsize(context, list_type)
 
     @property
     def _payload(self):
@@ -223,6 +241,15 @@ class ListInstance(_ListPayloadMixin):
             _payload_realloc(new_allocated)
 
         self._payload.size = new_size
+
+    def move(self, dest_idx, src_idx, count):
+        """
+        Move `count` elements from `src_idx` to `dest_idx`.
+        """
+        dest_ptr = self._gep(dest_idx)
+        src_ptr = self._gep(src_idx)
+        cgutils.memmove(self._builder, dest_ptr, src_ptr,
+                        count, itemsize=self._itemsize)
 
 
 class ListIterInstance(_ListPayloadMixin):
@@ -379,6 +406,67 @@ def getslice_list(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
 
+@builtin
+@implement('setitem', types.Kind(types.List), types.slice3_type, types.Any)
+def setitem_list(context, builder, sig, args):
+    from .builtins import Slice
+
+    dest = ListInstance(context, builder, sig.args[0], args[0])
+    slice = Slice(context, builder, value=args[1])
+    src = ListInstance(context, builder, sig.args[2], args[2])
+
+    cgutils.guard_invalid_slice(context, builder, slice)
+    dest.fix_slice(slice)
+
+    src_size = src.size
+    avail_size = cgutils.get_slice_length(builder, slice)
+    size_delta = builder.sub(src.size, avail_size)
+
+    zero = ir.Constant(size_delta.type, 0)
+    one = ir.Constant(size_delta.type, 1)
+
+    with builder.if_else(builder.icmp_signed('==', slice.step, one)) as (then, otherwise):
+        with then:
+            # Slice step == 1 => we can resize
+
+            # Compute the real stop, e.g. for dest[2:0] = [...]
+            real_stop = builder.add(slice.start, avail_size)
+            tail_size = builder.sub(dest.size, real_stop)
+
+            with builder.if_then(builder.icmp_signed('>', size_delta, zero)):
+                # Grow list then move list tail
+                dest.resize(builder.add(dest.size, size_delta))
+                dest.move(builder.add(real_stop, size_delta), real_stop,
+                          tail_size)
+
+            with builder.if_then(builder.icmp_signed('<', size_delta, zero)):
+                # Move list tail then shrink list
+                dest.move(builder.add(real_stop, size_delta), real_stop,
+                          tail_size)
+                dest.resize(builder.add(dest.size, size_delta))
+
+            dest_offset = slice.start
+
+            with cgutils.for_range(builder, src_size) as src_index:
+                value = src.getitem(src_index)
+                dest.setitem(builder.add(src_index, dest_offset), value)
+        
+        with otherwise:
+            with builder.if_then(builder.icmp_signed('!=', size_delta, zero)):
+                msg = "cannot resize extended list slice with step != 1"
+                context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+            with cgutils.for_range_slice_generic(
+                builder, slice.start, slice.stop, slice.step) as (pos_range, neg_range):
+                with pos_range as (index, count):
+                    value = src.getitem(count)
+                    dest.setitem(index, value)
+                with neg_range as (index, count):
+                    value = src.getitem(count)
+                    dest.setitem(index, value)
+
+    return context.get_dummy_value()
+
 
 @builtin
 @implement("in", types.Any, types.Kind(types.List))
@@ -469,9 +557,28 @@ def list_pop(context, builder, sig, args):
 
     n = inst.size
     cgutils.guard_zero(context, builder, n,
-                       (IndexError, "list index out of range"))
+                       (IndexError, "pop from empty list"))
     n = builder.sub(n, ir.Constant(n.type, 1))
     res = inst.getitem(n)
+    inst.resize(n)
+    return res
+
+@builtin
+@implement("list.pop", types.Kind(types.List), types.Kind(types.Integer))
+def list_pop(context, builder, sig, args):
+    inst = ListInstance(context, builder, sig.args[0], args[0])
+    idx = inst.fix_index(args[1])
+
+    n = inst.size
+    cgutils.guard_zero(context, builder, n,
+                       (IndexError, "pop from empty list"))
+    inst.guard_index(idx, "pop index out of range")
+
+    res = inst.getitem(idx)
+
+    one = ir.Constant(n.type, 1)
+    n = builder.sub(n, ir.Constant(n.type, 1))
+    inst.move(idx, builder.add(idx, one), builder.sub(n, idx))
     inst.resize(n)
     return res
 

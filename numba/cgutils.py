@@ -888,3 +888,22 @@ def memcpy(builder, dst, src, count):
         out_ptr = builder.gep(dst, [idx])
         in_ptr = builder.gep(src, [idx])
         builder.store(builder.load(in_ptr), out_ptr)
+
+
+def memmove(builder, dst, src, count, itemsize, align=1):
+    """
+    Emit a memmove intrinsic for `count` items of size `itemsize`
+    from `src` to `dest`.
+    """
+    ptr_t = ir.IntType(8).as_pointer()
+    size_t = count.type
+
+    memmove = builder.module.declare_intrinsic('llvm.memmove',
+                                               [ptr_t, ptr_t, size_t])
+    align = ir.Constant(ir.IntType(32), align)
+    is_volatile = false_bit
+    builder.call(memmove, [builder.bitcast(dst, ptr_t),
+                           builder.bitcast(src, ptr_t),
+                           builder.mul(count, ir.Constant(size_t, itemsize)),
+                           align,
+                           is_volatile])
