@@ -1,6 +1,5 @@
 from __future__ import print_function, absolute_import
 import copy
-import ctypes
 from collections import namedtuple
 
 from numba.typing.templates import ConcreteTemplate
@@ -8,7 +7,7 @@ from numba import types, compiler
 from .hlc import hlc
 from .hsadrv import devices, driver
 from numba.typing.templates import AbstractTemplate
-
+from numba import ctypes_support as ctypes
 
 def compile_hsa(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the HSA backend.
