@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import itertools
 import math
 import sys
 
@@ -93,11 +94,23 @@ def list_getitem(n):
 def list_setitem(n):
     l = list(range(n))
     res = 0
+    # Positive indices
     for i in range(len(l)):
+        l[i] = i * l[i]
+    # Negative indices
+    for i in range(-len(l), 0):
         l[i] = i * l[i]
     for i in range(len(l)):
         res += l[i]
     return res
+
+def list_getslice2(n, start, stop):
+    l = list(range(n))
+    return l[start:stop]
+
+def list_getslice3(n, start, stop, step):
+    l = list(range(n))
+    return l[start:stop:step]
 
 def list_clear(n):
     l = list(range(n))
@@ -206,6 +219,25 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_setitem(self):
         self.check_unary_with_size(list_setitem)
+
+    def test_getslice(self):
+        pyfunc = list_getslice2
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [0, 5, 40]:
+            indices = [0, 1, n - 2, -1, -2, -n + 3, -n - 1, -n]
+            for start, stop in itertools.product(indices, indices):
+                expected = pyfunc(n, start, stop)
+                self.assertPreciseEqual(cfunc(n, start, stop), expected)
+
+    def test_getslice3(self):
+        pyfunc = list_getslice3
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [10]:
+            indices = [0, 1, n - 2, -1, -2, -n + 3, -n - 1, -n]
+            steps = [4, 1, -1, 2, -3]
+            for start, stop, step in itertools.product(indices, indices, steps):
+                expected = pyfunc(n, start, stop, step)
+                self.assertPreciseEqual(cfunc(n, start, stop, step), expected)
 
     def test_iteration(self):
         self.check_unary_with_size(list_iteration)

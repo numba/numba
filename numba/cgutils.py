@@ -385,7 +385,9 @@ def for_range(builder, count, intp=None):
 @contextmanager
 def for_range_slice(builder, start, stop, step, intp=None, inc=True):
     """
-    Generate LLVM IR for a for-loop based on a slice
+    Generate LLVM IR for a for-loop based on a slice.  Yields a
+    (index, count) tuple where `index` is the slice index's value
+    inside the loop, and `count` the iteration count.
 
     Parameters
     -------------
@@ -399,8 +401,8 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
         The step value of the slice
     intp :
         The data type
-    inc : boolean, optional
-        A flag to handle the step < 0 case, in which case we decrement the loop
+    inc : None or boolean, optional
+        If boolean, signals the step is positive (True) or negative (False).
 
     Returns
     -----------
@@ -417,6 +419,7 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
 
     with builder.goto_block(bbcond):
         index = builder.phi(intp, name="loop.index")
+        count = builder.phi(intp, name="loop.count")
         if (inc):
             pred = builder.icmp(lc.ICMP_SLT, index, stop)
         else:
@@ -424,14 +427,47 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
         builder.cbranch(pred, bbbody, bbend)
 
     with builder.goto_block(bbbody):
-        yield index
+        yield index, count
         bbbody = builder.basic_block
         incr = builder.add(index, step)
+        next_count = builder.add(count, ir.Constant(intp, 1))
         terminate(builder, bbcond)
 
     index.add_incoming(start, bbstart)
     index.add_incoming(incr, bbbody)
+    count.add_incoming(ir.Constant(intp, 0), bbstart)
+    count.add_incoming(next_count, bbbody)
     builder.position_at_end(bbend)
+
+
+@contextmanager
+def for_range_slice_generic(builder, start, stop, step):
+    """
+    A helper wrapper for for_range_slice().  This is a context manager which
+    yields two for_range_slice()-alike context managers, the first for
+    the positive step case, the second for the negative step case.
+    
+    Use:
+        with for_range_slice_generic(...) as pos_range, neg_range:
+            with pos_range as idx:
+                ...
+            with neg_range as idx:
+                ...
+    """
+    intp = start.type
+    is_pos_step = builder.icmp_signed('>=', step, ir.Constant(intp, 0))
+    
+    pos_for_range = for_range_slice(builder, start, stop, step, intp, inc=True)
+    neg_for_range = for_range_slice(builder, start, stop, step, intp, inc=False)
+
+    @contextmanager
+    def cm_cond(cond, inner_cm):
+        with cond:
+            with inner_cm as value:
+                yield value
+
+    with builder.if_else(is_pos_step, likely=True) as (then, otherwise):
+        yield cm_cond(then, pos_for_range), cm_cond(otherwise, neg_for_range)
 
 
 @contextmanager
@@ -543,12 +579,48 @@ def normalize_slice(builder, slice, length):
     slice.stop = builder.select(doclip, length, stop)
 
 
-def get_range_from_slice(builder, slicestruct):
-    diff = builder.sub(slicestruct.stop, slicestruct.start)
-    length = builder.sdiv(diff, slicestruct.step)
-    is_neg = is_neg_int(builder, length)
-    length = builder.select(is_neg, get_null_value(length.type), length)
-    return length
+def get_slice_length(builder, slicestruct):
+    """
+    Given a slice, compute the number of indices it spans, i.e. the
+    number of iterations that for_range_slice() will execute.
+    
+    Pseudo-code:
+        assert step != 0
+        if step > 0:
+            if stop <= start:
+                return 0
+            else:
+                return (stop - start - 1) // step + 1
+        else:
+            if stop >= start:
+                return 0
+            else:
+                return (stop - start + 1) // step + 1
+    
+    (see PySlice_GetIndicesEx() in CPython)
+    """
+    start = slicestruct.start
+    stop = slicestruct.stop
+    step = slicestruct.step
+    one = ir.Constant(start.type, 1)
+    zero = ir.Constant(start.type, 0)
+
+    is_step_negative = is_neg_int(builder, step)
+    delta = builder.sub(stop, start)
+
+    # Nominal case
+    pos_dividend = builder.sub(delta, one)
+    neg_dividend = builder.add(delta, one)
+    dividend  = builder.select(is_step_negative, neg_dividend, pos_dividend)
+    nominal_length = builder.add(one, builder.sdiv(dividend, step))
+
+    # Catch zero length
+    is_zero_length = builder.select(is_step_negative,
+                                    builder.icmp_signed('>=', delta, zero),
+                                    builder.icmp_signed('<=', delta, zero))
+
+    # Clamp to 0 if is_zero_length
+    return builder.select(is_zero_length, zero, nominal_length)
 
 
 def get_strides_from_slice(builder, ndim, strides, slice, ax):
@@ -621,6 +693,13 @@ def guard_null(context, builder, value, exc_tuple):
         exc = exc_tuple[0]
         exc_args = exc_tuple[1:] or None
         context.call_conv.return_user_exc(builder, exc, exc_args)
+
+def guard_invalid_slice(context, builder, slicestruct):
+    """
+    Guard against *slicestruct* having a zero slice.
+    """
+    guard_null(context, builder, slicestruct.step,
+               (ValueError, "slice step cannot be zero"))
 
 
 guard_zero = guard_null

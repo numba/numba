@@ -115,7 +115,11 @@ class GetItemList(AbstractTemplate):
     def generic(self, args, kws):
         list, idx = args
         if isinstance(list, types.List):
-            return signature(list.dtype, list, normalize_index(idx))
+            idx = normalize_index(idx)
+            if idx == types.slice3_type:
+                return signature(list, list, idx)
+            elif isinstance(idx, types.Integer):
+                return signature(list.dtype, list, idx)
 
 
 @builtin

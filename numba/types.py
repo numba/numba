@@ -148,6 +148,8 @@ class RawPointer(Dummy):
 
 class Kind(Type):
     def __init__(self, of):
+        if not isinstance(of, type) or not issubclass(of, Type):
+            raise TypeError("expected a Type subclass, got %r" % (of,))
         self.of = of
         super(Kind, self).__init__("kind(%s)" % of)
 

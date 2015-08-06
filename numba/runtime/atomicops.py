@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 import re
-from collections import defaultdict, deque, namedtuple
+from collections import defaultdict, deque
 
 from numba.config import MACHINE_BITS
 from numba import cgutils
@@ -134,13 +134,6 @@ def _define_atomic_cmpxchg(module, ordering):
     builder.ret(builder.zext(ok, ftype.return_type))
 
     return fn_cas
-
-
-def _define_atomic_ops(module):
-    _define_atomic_inc_dec(module, "add", ordering='monotonic')
-    _define_atomic_inc_dec(module, "sub", ordering='monotonic')
-    _define_atomic_cmpxchg(module, ordering='monotonic')
-    return module
 
 
 def compile_nrt_functions(ctx):

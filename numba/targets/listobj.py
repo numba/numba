@@ -83,6 +83,53 @@ class _ListPayloadMixin(object):
         ptr = self._gep(idx)
         self._builder.store(val, ptr)
 
+    def fix_index(self, idx):
+        """
+        Fix negative indices by adding the size to them.  Positive
+        indices are left untouched.
+        """
+        is_negative = self._builder.icmp_signed('<', idx,
+                                                ir.Constant(idx.type, 0))
+        wrapped_index = self._builder.add(idx, self.size)
+        return self._builder.select(is_negative, wrapped_index, idx)
+
+    def fix_slice(self, slice):
+        """
+        Fix slice start and stop to be valid (inclusive and exclusive, resp)
+        indexing bounds.
+        """
+        # See PySlice_GetIndicesEx()
+        builder = self._builder
+        size = self.size
+        zero = ir.Constant(size.type, 0)
+        minus_one = ir.Constant(size.type, -1)
+
+        def fix_bound(bound_name, lower_repl, upper_repl):
+            bound = getattr(slice, bound_name)
+            bound = self.fix_index(bound)
+            # Store value
+            setattr(slice, bound_name, bound)
+            # Still negative? => clamp to lower_repl
+            underflow = builder.icmp_signed('<', bound, zero)
+            with builder.if_then(underflow, likely=False):
+                setattr(slice, bound_name, lower_repl)
+            # Greater than size? => clamp to upper_repl
+            overflow = builder.icmp_signed('>', bound, size)
+            with builder.if_then(overflow, likely=False):
+                setattr(slice, bound_name, upper_repl)
+        
+        with builder.if_else(cgutils.is_neg_int(builder, slice.step)) as (if_neg_step, if_pos_step):
+            with if_pos_step:
+                # < 0 => 0; >= size => size
+                fix_bound('start', zero, size)
+                fix_bound('stop', zero, size)
+            with if_neg_step:
+                # < 0 => -1; >= size => size - 1
+                lower = minus_one
+                upper = builder.add(size, minus_one)
+                fix_bound('start', lower, upper)
+                fix_bound('stop', lower, upper)
+
 
 class ListInstance(_ListPayloadMixin):
     
@@ -109,19 +156,25 @@ class ListInstance(_ListPayloadMixin):
     def allocate(cls, context, builder, list_type, nitems):
         intp_t = context.get_value_type(types.intp)
 
+        if isinstance(nitems, int):
+            nitems = ir.Constant(intp_t, nitems)
+
         payload_type = context.get_data_type(types.ListPayload(list_type))
         payload_size = context.get_abi_sizeof(payload_type)
 
         itemsize = get_itemsize(context, list_type)
         
-        allocsize = ir.Constant(intp_t, payload_size + nitems * itemsize)
+        # Total allocation size = <payload header size> + nitems * itemsize
+        allocsize = builder.mul(nitems, ir.Constant(intp_t, itemsize))
+        allocsize = builder.add(allocsize, ir.Constant(intp_t, payload_size))
+
         meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
         # XXX handle allocation failure
 
         self = cls(context, builder, list_type, None)
-        size = ir.Constant(intp_t, nitems)
         self._list.meminfo = meminfo
-        self._payload.allocated = size
+        self._payload.allocated = nitems
+        self._payload.size = ir.Constant(intp_t, 0)  # for safety
         return self
 
     def resize(self, new_size):
@@ -283,10 +336,7 @@ def getitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
 
-    is_negative = builder.icmp_signed('<', index, ir.Constant(index.type, 0))
-    wrapped_index = builder.add(index, inst.size)
-    index = builder.select(is_negative, wrapped_index, index)
-
+    index = inst.fix_index(index)
     result = inst.getitem(index)
 
     return impl_ret_borrowed(context, builder, sig.return_type, result)
@@ -298,12 +348,36 @@ def setitem_list(context, builder, sig, args):
     index = args[1]
     value = args[2]
 
-    is_negative = builder.icmp_signed('<', index, ir.Constant(index.type, 0))
-    wrapped_index = builder.add(index, inst.size)
-    index = builder.select(is_negative, wrapped_index, index)
-
+    index = inst.fix_index(index)
     inst.setitem(index, value)
     return context.get_dummy_value()
+
+
+@builtin
+@implement('getitem', types.Kind(types.List), types.slice3_type)
+def getslice_list(context, builder, sig, args):
+    from .builtins import Slice
+
+    inst = ListInstance(context, builder, sig.args[0], args[0])
+    slice = Slice(context, builder, value=args[1])
+    inst.fix_slice(slice)
+
+    # Allocate result and populate it
+    result_size = cgutils.get_slice_length(builder, slice)
+    result = ListInstance.allocate(context, builder, sig.return_type,
+                                   result_size)
+    result.size = result_size
+    with cgutils.for_range_slice_generic(builder, slice.start, slice.stop,
+                                         slice.step) as (pos_range, neg_range):
+        with pos_range as (idx, count):
+            value = inst.getitem(idx)
+            result.inititem(count, value)
+        with neg_range as (idx, count):
+            value = inst.getitem(idx)
+            result.inititem(count, value)
+
+    return impl_ret_new_ref(context, builder, sig.return_type, result.value)
+
 
 @builtin
 @implement("in", types.Any, types.Kind(types.List))
