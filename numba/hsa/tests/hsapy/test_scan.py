@@ -144,7 +144,6 @@ def device_scan(tid, data, temp, inclusive):
     return warp_scan_res, prefixsum
 
 
-@unittest.skipIf(True, "ConstExpr causing LLVM assertion?")
 class TestScan(unittest.TestCase):
     def test_single_block(self):
 
