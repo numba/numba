@@ -32,7 +32,7 @@ class DataModelManager(object):
 
     def copy(self):
         """
-        Made a copy of the manager.
+        Make a copy of the manager.
         Use this to inherit from the default data model and specialize it
         for custom target.
         """
