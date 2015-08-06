@@ -239,6 +239,15 @@ class TestLists(MemoryLeakMixin, TestCase):
                 expected = pyfunc(n, start, stop, step)
                 self.assertPreciseEqual(cfunc(n, start, stop, step), expected)
 
+    def test_invalid_slice(self):
+        # XXX References are leaked when an exception is raised
+        self.disable_leak_check()
+        pyfunc = list_getslice3
+        cfunc = jit(nopython=True)(pyfunc)
+        with self.assertRaises(ValueError) as cm:
+            cfunc(10, 1, 2, 0)
+        self.assertEqual(str(cm.exception), "slice step cannot be zero")
+
     def test_iteration(self):
         self.check_unary_with_size(list_iteration)
 
@@ -249,7 +258,7 @@ class TestLists(MemoryLeakMixin, TestCase):
         self.check_unary_with_size(list_contains)
 
     def test_index(self):
-        # XXX References are leaked when IndexError is raised
+        # XXX References are leaked when an exception is raised
         self.disable_leak_check()
         pyfunc = list_index
         cfunc = jit(nopython=True)(pyfunc)

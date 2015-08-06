@@ -360,6 +360,7 @@ def getslice_list(context, builder, sig, args):
 
     inst = ListInstance(context, builder, sig.args[0], args[0])
     slice = Slice(context, builder, value=args[1])
+    cgutils.guard_invalid_slice(context, builder, slice)
     inst.fix_slice(slice)
 
     # Allocate result and populate it
