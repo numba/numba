@@ -201,13 +201,7 @@ class Driver(object):
             raise HsaDriverError("Error at driver init: \n%s:" % e)
         else:
             hsa_shut_down = self.hsa_shut_down
-
-            @atexit.register
-            def shutdown():
-                for agent in self.agents:
-                    agent.release()
-                self._recycler.drain()
-                hsa_shut_down()
+            atexit.register(hsa_shut_down)
 
     def _initialize_agents(self):
         if self._agent_map is not None:
