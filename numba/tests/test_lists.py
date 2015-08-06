@@ -168,6 +168,11 @@ def list_index(n, v):
     l = list(range(n, 0, -1))
     return l.index(v)
 
+def list_insert(n, pos, v):
+    l = list(range(0, n))
+    l.insert(pos, v)
+    return l
+
 def list_count(n, v):
     l = []
     for x in range(n):
@@ -259,6 +264,15 @@ class TestLists(MemoryLeakMixin, TestCase):
         with self.assertRaises(IndexError) as cm:
             cfunc(1, 5)
         self.assertEqual(str(cm.exception), "pop index out of range")
+
+    def test_insert(self):
+        pyfunc = list_insert
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [5, 40]:
+            indices = [0, 1, n - 2, n - 1, n + 1, -1, -2, -n + 3, -n - 1] 
+            for i in indices:
+                expected = pyfunc(n, i, 42)
+                self.assertPreciseEqual(cfunc(n, i, 42), expected)
 
     def test_len(self):
         self.check_unary_with_size(list_len)

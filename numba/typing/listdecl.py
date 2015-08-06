@@ -82,6 +82,15 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         return signature(types.intp, list.dtype)
 
+    @bound_function("list.insert")
+    def resolve_insert(self, list, args, kws):
+        idx, item = args
+        assert not kws
+        unified = self.context.unify_pairs(list.dtype, item)
+        sig = signature(types.none, types.intp, unified)
+        sig.recvr = types.List(unified)
+        return sig
+
     @bound_function("list.pop")
     def resolve_pop(self, list, args, kws):
         assert not kws

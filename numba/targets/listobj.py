@@ -102,6 +102,25 @@ class _ListPayloadMixin(object):
         overflow = self._builder.icmp_signed('>=', idx, self.size)
         return self._builder.or_(underflow, overflow)
 
+    def clamp_index(self, idx):
+        """
+        Clamp the index in [0, size].
+        """
+        builder = self._builder
+        idxptr = cgutils.alloca_once_value(builder, idx)
+
+        zero = ir.Constant(idx.type, 0)
+        size = self.size
+
+        underflow = self._builder.icmp_signed('<', idx, zero)
+        with builder.if_then(underflow, likely=False):
+            builder.store(zero, idxptr)
+        overflow = self._builder.icmp_signed('>=', idx, size)
+        with builder.if_then(overflow, likely=False):
+            builder.store(size, idxptr)
+            
+        return builder.load(idxptr)
+
     def guard_index(self, idx, msg):
         """
         Raise an error if the index is out of bounds.
@@ -581,6 +600,24 @@ def list_index(context, builder, sig, args):
         raise ValueError("value not in list")
 
     return context.compile_internal(builder, list_index_impl, sig, args)
+
+@builtin
+@implement("list.insert", types.Kind(types.List), types.Kind(types.Integer),
+           types.Any)
+def list_insert(context, builder, sig, args):
+    inst = ListInstance(context, builder, sig.args[0], args[0])
+    index = inst.fix_index(args[1])
+    index = inst.clamp_index(index)
+    value = args[2]
+
+    n = inst.size
+    one = ir.Constant(n.type, 1)
+    new_size = builder.add(n, one)
+    inst.resize(new_size)
+    inst.move(builder.add(index, one), index, builder.sub(n, index))
+    inst.setitem(index, value)
+
+    return context.get_dummy_value()
 
 @builtin
 @implement("list.pop", types.Kind(types.List))
