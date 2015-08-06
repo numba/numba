@@ -36,7 +36,7 @@ class TestMath(unittest.TestCase):
 
         for dtype in types:
             if cases is None:
-                src = np.linspace(span[0], span[1], count, dtype=dtype)
+                src = np.linspace(span[0], span[1], count).astype(dtype)
             else:
                 src = np.array(cases, dtype=dtype)
 
@@ -61,8 +61,8 @@ class TestMath(unittest.TestCase):
 
         for dtype in types:
             if cases is None:
-                src1 = np.linspace(span[0], span[1], count, dtype=dtype)
-                src2 = np.linspace(span[2], span[3], count, dtype=dtype)
+                src1 = np.linspace(span[0], span[1], count).astype(dtype)
+                src2 = np.linspace(span[2], span[3], count).astype(dtype)
             else:
                 src1 = np.array(cases[0], dtype=dtype)
                 src2 = np.array(cases[1], dtype=dtype)
