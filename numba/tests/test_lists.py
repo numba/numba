@@ -344,15 +344,22 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_contains(self):
         self.check_unary_with_size(list_contains)
 
+    def check_index_result(self, pyfunc, cfunc, args):
+        try:
+            expected = pyfunc(*args)
+        except ValueError:
+            with self.assertRaises(ValueError):
+                cfunc(*args)
+        else:
+            self.assertPreciseEqual(cfunc(*args), expected)
+
     def test_index(self):
         # XXX References are leaked when an exception is raised
         self.disable_leak_check()
         pyfunc = list_index
         cfunc = jit(nopython=True)(pyfunc)
-        for v in (1, 5, 10):
-            self.assertPreciseEqual(cfunc(16, v), pyfunc(16, v))
-        with self.assertRaises(IndexError):
-            cfunc(16, 42)
+        for v in (1, 5, 10, 99999999):
+            self.check_index_result(pyfunc, cfunc, (16, v))
 
     def test_count(self):
         pyfunc = list_count

@@ -578,7 +578,7 @@ def list_index(context, builder, sig, args):
             if lst[i] == value:
                 return i
         # XXX references are leaked when raising
-        raise IndexError("value not in list")
+        raise ValueError("value not in list")
 
     return context.compile_internal(builder, list_index_impl, sig, args)
 
