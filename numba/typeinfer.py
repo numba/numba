@@ -368,6 +368,23 @@ class SetItemConstrain(object):
                                   (ty, it, vt), loc=self.loc)
 
 
+class DelItemConstrain(object):
+    def __init__(self, target, index, loc):
+        self.target = target
+        self.index = index
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
+        targettys = typevars[self.target.name].get()
+        idxtys = typevars[self.index.name].get()
+
+        for ty, it in itertools.product(targettys, idxtys):
+            if not typeinfer.context.resolve_delitem(target=ty, index=it):
+                raise TypingError("Cannot resolve delitem: %s[%s]" %
+                                  (ty, it), loc=self.loc)
+
+
 class SetAttrConstrain(object):
     def __init__(self, target, attr, value, loc):
         self.target = target
@@ -427,6 +444,7 @@ class TypeInferer(object):
         # Track all calls
         self.usercalls = []
         self.intrcalls = []
+        self.delitemcalls = []
         self.setitemcalls = []
         self.setattrcalls = []
         # Target var -> constraint with refine hook
@@ -530,6 +548,10 @@ class TypeInferer(object):
                                has_finalizer=True)
 
     def get_function_types(self, typemap):
+        """
+        Fill and return a calltypes map using the inferred `typemap`.
+        """
+        # XXX why can't this be done on the fly?
         calltypes = utils.UniqueDict()
         for call, args, kws in self.intrcalls:
             if call.op in ('inplace_binop', 'binop', 'unary'):
@@ -557,6 +579,12 @@ class TypeInferer(object):
                 signature = self.context.resolve_function_type(fnty, args, kws)
                 assert signature is not None, (fnty, args, kws, vararg)
             calltypes[call] = signature
+
+        for inst in self.delitemcalls:
+            target = typemap[inst.target.name]
+            index = typemap[inst.index.name]
+            signature = self.context.resolve_delitem(target, index)
+            calltypes[inst] = signature
 
         for inst in self.setitemcalls:
             target = typemap[inst.target.name]
@@ -602,6 +630,8 @@ class TypeInferer(object):
             self.typeof_assign(inst)
         elif isinstance(inst, ir.SetItem):
             self.typeof_setitem(inst)
+        elif isinstance(inst, ir.DelItem):
+            self.typeof_delitem(inst)
         elif isinstance(inst, ir.SetAttr):
             self.typeof_setattr(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
@@ -616,6 +646,12 @@ class TypeInferer(object):
                                      value=inst.value, loc=inst.loc)
         self.constrains.append(constrain)
         self.setitemcalls.append(inst)
+
+    def typeof_delitem(self, inst):
+        constrain = DelItemConstrain(target=inst.target, index=inst.index,
+                                     loc=inst.loc)
+        self.constrains.append(constrain)
+        self.delitemcalls.append(inst)
 
     def typeof_setattr(self, inst):
         constrain = SetAttrConstrain(target=inst.target, attr=inst.attr,

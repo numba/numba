@@ -273,6 +273,23 @@ class Lower(BaseLower):
 
             return impl(self.builder, (target, index, value))
 
+        elif isinstance(inst, ir.DelItem):
+            target = self.loadvar(inst.target.name)
+            index = self.loadvar(inst.index.name)
+
+            targetty = self.typeof(inst.target.name)
+            indexty = self.typeof(inst.index.name)
+
+            signature = self.fndesc.calltypes[inst]
+            assert signature is not None
+            impl = self.context.get_function('delitem', signature)
+
+            assert targetty == signature.args[0]
+            index = self.context.cast(self.builder, index, indexty,
+                                      signature.args[1])
+
+            return impl(self.builder, (target, index))
+
         elif isinstance(inst, ir.Del):
             try:
                 # XXX: incorrect Del injection?

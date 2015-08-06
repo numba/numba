@@ -431,6 +431,7 @@ def setitem_list(context, builder, sig, args):
 
             # Compute the real stop, e.g. for dest[2:0] = [...]
             real_stop = builder.add(slice.start, avail_size)
+            # Size of the list tail, after the end of slice
             tail_size = builder.sub(dest.size, real_stop)
 
             with builder.if_then(builder.icmp_signed('>', size_delta, zero)):
@@ -464,6 +465,37 @@ def setitem_list(context, builder, sig, args):
                 with neg_range as (index, count):
                     value = src.getitem(count)
                     dest.setitem(index, value)
+
+    return context.get_dummy_value()
+
+
+@builtin
+@implement('delitem', types.Kind(types.List), types.slice3_type)
+def setitem_list(context, builder, sig, args):
+    from .builtins import Slice
+
+    inst = ListInstance(context, builder, sig.args[0], args[0])
+    slice = Slice(context, builder, value=args[1])
+
+    cgutils.guard_invalid_slice(context, builder, slice)
+    inst.fix_slice(slice)
+
+    slice_len = cgutils.get_slice_length(builder, slice)
+
+    zero = ir.Constant(slice_len.type, 0)
+    one = ir.Constant(slice_len.type, 1)
+    
+    with builder.if_then(builder.icmp_signed('!=', slice.step, one), likely=False):
+        msg = "unsupported del list[start:stop:step] with step != 1"
+        context.call_conv.return_user_exc(builder, NotImplementedError, (msg,))
+
+    # Compute the real stop, e.g. for dest[2:0]
+    start = slice.start
+    real_stop = builder.add(start, slice_len)
+    # Size of the list tail, after the end of slice
+    tail_size = builder.sub(inst.size, real_stop)
+    inst.move(start, real_stop, tail_size)
+    inst.resize(builder.sub(inst.size, slice_len))
 
     return context.get_dummy_value()
 

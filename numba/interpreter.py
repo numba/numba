@@ -859,6 +859,12 @@ class Interpreter(object):
                           loc=self.loc)
         self.current_block.append(stmt)
 
+    def op_DELETE_SUBSCR(self, inst, target, index):
+        index = self.get(index)
+        target = self.get(target)
+        stmt = ir.DelItem(target=target, index=index, loc=self.loc)
+        self.current_block.append(stmt)
+
     def op_BUILD_TUPLE(self, inst, items, res):
         expr = ir.Expr.build_tuple(items=[self.get(x) for x in items],
                                    loc=self.loc)

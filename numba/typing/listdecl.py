@@ -138,6 +138,16 @@ class SetItemList(AbstractTemplate):
                 return signature(types.none, list, idx, list.dtype)
 
 @builtin
+class DelItemList(AbstractTemplate):
+    key = "delitem"
+
+    def generic(self, args, kws):
+        list, idx = args
+        if isinstance(list, types.List):
+            idx = normalize_index(idx)
+            return signature(types.none, list, idx)
+
+@builtin
 class InList(AbstractTemplate):
     key = "in"
 

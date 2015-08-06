@@ -240,6 +240,11 @@ class DataFlowAnalysis(object):
         value = info.pop()
         info.append(inst, target=target, index=index, value=value)
 
+    def op_DELETE_SUBSCR(self, info, inst):
+        index = info.pop()
+        target = info.pop()
+        info.append(inst, target=target, index=index)
+
     def op_GET_ITER(self, info, inst):
         value = info.pop()
         res = info.make_temp()

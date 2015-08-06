@@ -137,6 +137,11 @@ def list_setslice3_arbitrary(n, n_src, start, stop, step):
     l[start:stop:step] = list(range(100, 100 + n_src))
     return l
 
+def list_delslice2(n, start, stop):
+    l = list(range(n))
+    del l[start:stop]
+    return l
+
 def list_clear(n):
     l = list(range(n))
     l.clear()
@@ -264,8 +269,7 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_setitem(self):
         self.check_unary_with_size(list_setitem)
 
-    def test_getslice2(self):
-        pyfunc = list_getslice2
+    def check_slicing2(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         sizes = [5, 40]
         for n in sizes:
@@ -273,6 +277,9 @@ class TestLists(MemoryLeakMixin, TestCase):
             for start, stop in itertools.product(indices, indices):
                 expected = pyfunc(n, start, stop)
                 self.assertPreciseEqual(cfunc(n, start, stop), expected)
+
+    def test_getslice2(self):
+        self.check_slicing2(list_getslice2)
 
     def test_setslice2(self):
         pyfunc = list_setslice2
@@ -315,6 +322,9 @@ class TestLists(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as cm:
             cfunc(5, 100, 0, 3, 2)
         self.assertIn("cannot resize", str(cm.exception))
+
+    def test_delslice2(self):
+        self.check_slicing2(list_delslice2)
 
     def test_invalid_slice(self):
         # XXX References are leaked when an exception is raised

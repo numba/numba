@@ -94,6 +94,7 @@ def _make_bytecode_table():
                     ('CALL_FUNCTION_VAR', 2),
                     ('COMPARE_OP', 2),
                     ('DELETE_ATTR', 2),
+                    ('DELETE_SUBSCR', 0),
                     ('DUP_TOP', 0),
                     ('EXTENDED_ARG', 2),
                     ('FOR_ITER', 2),
