@@ -4,7 +4,8 @@ import os
 import sys
 from collections import namedtuple
 from ctypes import (c_size_t, byref, c_char_p, c_void_p, Structure, CDLL,
-                    POINTER, create_string_buffer, c_int, addressof)
+                    POINTER, create_string_buffer, c_int, addressof,
+                    c_byte)
 
 from numba import utils, config
 from .utils import adapt_llvm_version
@@ -21,7 +22,7 @@ hlc = CDLL(os.path.join(sys.prefix, 'lib', 'libHLC.so'))
 hlc.HLC_ParseModule.restype = moduleref_ptr
 hlc.HLC_ModuleEmitBRIG.restype = c_size_t
 hlc.HLC_Initialize()
-utils.finalize(hlc, lambda: hlc.HLC_Finalize())
+utils.finalize(hlc, hlc.HLC_Finalize)
 
 hlc.HLC_SetCommandLineOption.argtypes = [
     c_int,
@@ -89,8 +90,13 @@ class HLC(object):
         size = hlc.HLC_ModuleEmitBRIG(mod, int(opt), byref(bufptr))
         if not size:
             raise Error("Failed to emit BRIG")
-        buf = (c_char_p * size).from_address(bufptr.value)
-        ret = bytes(buf)
+        buf = (c_byte * size).from_address(bufptr.value)
+        try:
+            buffer
+        except NameError:
+            ret = bytes(buf)
+        else:
+            ret = bytes(buffer(buf))
         hlc.HLC_DisposeString(buf)
         return ret
 
