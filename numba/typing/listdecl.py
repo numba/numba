@@ -104,6 +104,12 @@ class ListAttribute(AttributeTemplate):
             if isinstance(idx, types.Integer):
                 return signature(list.dtype, types.intp)
 
+    @bound_function("list.remove")
+    def resolve_remove(self, list, args, kws):
+        assert not kws
+        if len(args) == 1:
+            return signature(types.none, list.dtype)
+
     @bound_function("list.reverse")
     def resolve_reverse(self, list, args, kws):
         assert not args

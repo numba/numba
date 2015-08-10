@@ -176,6 +176,11 @@ def list_index3(n, v, start, stop):
     l = list(range(n, 0, -1))
     return l.index(v, start, stop)
 
+def list_remove(n, v):
+    l = list(range(n - 1, -1, -1))
+    l.remove(v)
+    return l
+
 def list_insert(n, pos, v):
     l = list(range(0, n))
     l.insert(pos, v)
@@ -400,6 +405,22 @@ class TestLists(MemoryLeakMixin, TestCase):
             indices = [0, 1, n - 2, n - 1, n + 1, -1, -2, -n + 3, -n - 1]
             for start, stop in itertools.product(indices, indices):
                 self.check_index_result(pyfunc, cfunc, (16, v, start, stop))
+
+    def test_remove(self):
+        pyfunc = list_remove
+        cfunc = jit(nopython=True)(pyfunc)
+        n = 16
+        for v in (0, 1, 5, 15):
+            expected = pyfunc(n, v)
+            self.assertPreciseEqual(cfunc(n, v), expected)
+
+    def test_remove_error(self):
+        self.disable_leak_check()
+        pyfunc = list_remove
+        cfunc = jit(nopython=True)(pyfunc)
+        with self.assertRaises(ValueError) as cm:
+            cfunc(10, 42)
+        self.assertEqual(str(cm.exception), "list.remove(x): x not in list")
 
     def test_count(self):
         pyfunc = list_count

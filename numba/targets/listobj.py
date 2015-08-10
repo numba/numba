@@ -694,6 +694,20 @@ def list_pop(context, builder, sig, args):
     return res
 
 @builtin
+@implement("list.remove", types.Kind(types.List), types.Any)
+def list_remove(context, builder, sig, args):
+
+    def list_remove_impl(lst, value):
+        for i in range(len(lst)):
+            if lst[i] == value:
+                lst.pop(i)
+                return
+        # XXX references are leaked when raising
+        raise ValueError("list.remove(x): x not in list")
+
+    return context.compile_internal(builder, list_remove_impl, sig, args)
+
+@builtin
 @implement("list.reverse", types.Kind(types.List))
 def list_reverse(context, builder, sig, args):
 
