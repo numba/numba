@@ -330,11 +330,7 @@ def _lower_array_expr(lowerer, expr):
             inner_sig_args.append(argty)
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
-    _locals = dict((name, value)
-                   for name, value in namespace.items()
-                   if name.startswith("__ufunc_or_dufunc_"))
-    cres = context.compile_only_no_cache(builder, impl, inner_sig,
-                                         locals=_locals)
+    cres = context.compile_only_no_cache(builder, impl, inner_sig)
 
     class ExprKernel(npyimpl._Kernel):
         def generate(self, *args):

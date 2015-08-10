@@ -50,7 +50,7 @@ class TypeVar(object):
         return self.type
 
     def lock(self, tp):
-        assert isinstance(tp, types.Type)
+        assert isinstance(tp, types.Type), type(tp)
         assert not self.locked
 
         # If there is already a type, ensure we can convert it to the

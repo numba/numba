@@ -183,10 +183,11 @@ class AddList(AbstractTemplate):
     key = "+"
 
     def generic(self, args, kws):
-        a, b = args
-        if isinstance(a, types.List) and isinstance(b, types.List):
-            unified = self.context.unify_pairs(a, b)
-            return signature(unified, a, b)
+        if len(args) == 2:
+            a, b = args
+            if isinstance(a, types.List) and isinstance(b, types.List):
+                unified = self.context.unify_pairs(a, b)
+                return signature(unified, a, b)
 
 @builtin
 class AddList(AbstractTemplate):
