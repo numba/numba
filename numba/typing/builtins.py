@@ -388,7 +388,22 @@ class CmpOpIsNot(CmpOpIdentity):
     key = 'is not'
 
 
-def normalize_index(index):
+def normalize_1d_index(index):
+    """
+    Normalize the *index* type (an integer or slice) for indexing a 1D
+    sequence.
+    """
+    if index == types.slice3_type:
+        return types.slice3_type
+
+    elif isinstance(index, types.Integer):
+        return types.intp if index.signed else types.uintp
+
+def normalize_nd_index(index):
+    """
+    Normalize the *index* type (an integer, slice or tuple thereof) for
+    indexing a N-D sequence.
+    """
     if isinstance(index, types.UniTuple):
         if index.dtype in types.integer_domain:
             idxtype = types.intp if index.dtype.signed else types.uintp
@@ -403,34 +418,7 @@ def normalize_index(index):
                                  % (ty, index))
         return index
 
-    elif index == types.slice3_type:
-        return types.slice3_type
-
-    elif isinstance(index, types.Integer):
-        return types.intp if index.signed else types.uintp
-
-
-# XXX Should there be a base Sequence type for plain 1d sequences?
-
-@builtin
-class GetItemUniTuple(AbstractTemplate):
-    key = "getitem"
-
-    def generic(self, args, kws):
-        tup, idx = args
-        if isinstance(tup, types.UniTuple):
-            return signature(tup.dtype, tup, normalize_index(idx))
-
-
-@builtin
-class GetItemFlat(AbstractTemplate):
-    key = "getitem"
-
-    def generic(self, args, kws):
-        obj, idx = args
-        if (isinstance(obj, types.NumpyFlatType)
-            and isinstance(idx, types.Integer)):
-            return signature(obj.array_type.dtype, obj, normalize_index(idx))
+    return normalize_1d_index(index)
 
 
 @builtin
@@ -443,11 +431,11 @@ class GetItemBuffer(AbstractTemplate):
         if not isinstance(ary, types.Buffer):
             return
 
-        idx = normalize_index(idx)
+        idx = normalize_nd_index(idx)
         if idx is None:
             return
 
-        if idx == types.slice3_type: #(types.slice2_type, types.slice3_type):
+        if idx == types.slice3_type:
             res = ary.copy(layout='A')
         elif isinstance(idx, (types.UniTuple, types.Tuple)):
             if ary.ndim > len(idx):
@@ -491,7 +479,7 @@ class GetItemCPointer(AbstractTemplate):
         assert not kws
         ptr, idx = args
         if isinstance(ptr, types.CPointer) and isinstance(idx, types.Integer):
-            return signature(ptr.dtype, ptr, normalize_index(idx))
+            return signature(ptr.dtype, ptr, normalize_1d_index(idx))
 
 
 @builtin
@@ -504,7 +492,7 @@ class SetItemBuffer(AbstractTemplate):
         if isinstance(ary, types.Buffer):
             if not ary.mutable:
                 raise TypeError("Cannot modify value of type %s" %(ary,))
-            return signature(types.none, ary, normalize_index(idx), ary.dtype)
+            return signature(types.none, ary, normalize_nd_index(idx), ary.dtype)
 
 
 @builtin
@@ -515,7 +503,7 @@ class SetItemCPointer(AbstractTemplate):
         assert not kws
         ptr, idx, val = args
         if isinstance(ptr, types.CPointer) and isinstance(idx, types.Integer):
-            return signature(types.none, ptr, normalize_index(idx), ptr.dtype)
+            return signature(types.none, ptr, normalize_1d_index(idx), ptr.dtype)
 
 
 @builtin
@@ -525,7 +513,7 @@ class Len(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         (val,) = args
-        if isinstance(val, (types.Buffer, types.Tuple, types.UniTuple)):
+        if isinstance(val, (types.Buffer, types.Tuple)):
             return signature(types.intp, val)
 
 

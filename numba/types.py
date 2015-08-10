@@ -513,7 +513,7 @@ class Generator(SimpleIteratorType):
         return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
 
 
-class NumpyFlatType(SimpleIteratorType):
+class NumpyFlatType(SimpleIteratorType, Sequence):
     """
     Type class for `ndarray.flat()` objects.
     """
@@ -521,6 +521,7 @@ class NumpyFlatType(SimpleIteratorType):
     def __init__(self, arrty):
         self.array_type = arrty
         yield_type = arrty.dtype
+        self.dtype = yield_type
         name = "array.flat({arrayty})".format(arrayty=arrty)
         super(NumpyFlatType, self).__init__(name, yield_type)
 
@@ -898,7 +899,7 @@ class BaseTuple(Type):
     """
 
 
-class UniTuple(IterableType, BaseTuple):
+class UniTuple(Sequence, BaseTuple):
 
     def __init__(self, dtype, count):
         self.dtype = dtype
@@ -1013,7 +1014,7 @@ class Tuple(BaseTuple):
             return max(kinds)
 
 
-class List(IterableType):
+class List(MutableSequence):
     """
     Type class for arbitrary-sized homogenous lists.
     """

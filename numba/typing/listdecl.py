@@ -7,7 +7,8 @@ import numpy as np
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         Registry, signature, bound_function)
-from .builtins import normalize_index
+# Ensure list is typed as a collection as well
+from . import collections
 
 
 registry = Registry()
@@ -33,6 +34,8 @@ builtin_global(list, types.Function(ListBuiltin))
 @builtin_attr
 class ListAttribute(AttributeTemplate):
     key = types.List
+
+    # NOTE: some of these should be Sequence / MutableSequence methods
 
     @bound_function("list.append")
     def resolve_append(self, list, args, kws):
@@ -120,63 +123,6 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         return signature(types.none)
 
-
-# XXX Should there be a base Sequence type for plain 1d sequences?
-
-@builtin
-class ListLen(AbstractTemplate):
-    key = types.len_type
-
-    def generic(self, args, kws):
-        assert not kws
-        (val,) = args
-        if isinstance(val, (types.List)):
-            return signature(types.intp, val)
-
-@builtin
-class GetItemList(AbstractTemplate):
-    key = "getitem"
-
-    def generic(self, args, kws):
-        list, idx = args
-        if isinstance(list, types.List):
-            idx = normalize_index(idx)
-            if idx == types.slice3_type:
-                return signature(list, list, idx)
-            elif isinstance(idx, types.Integer):
-                return signature(list.dtype, list, idx)
-
-@builtin
-class SetItemList(AbstractTemplate):
-    key = "setitem"
-
-    def generic(self, args, kws):
-        list, idx, value = args
-        if isinstance(list, types.List):
-            idx = normalize_index(idx)
-            if idx == types.slice3_type:
-                return signature(types.none, list, idx, list)
-            elif isinstance(idx, types.Integer):
-                return signature(types.none, list, idx, list.dtype)
-
-@builtin
-class DelItemList(AbstractTemplate):
-    key = "delitem"
-
-    def generic(self, args, kws):
-        list, idx = args
-        if isinstance(list, types.List):
-            idx = normalize_index(idx)
-            return signature(types.none, list, idx)
-
-@builtin
-class InList(AbstractTemplate):
-    key = "in"
-
-    def generic(self, args, kws):
-        item, list = args
-        if isinstance(list, types.List):
-            return signature(types.boolean, list.dtype, list)
 
 @builtin
 class AddList(AbstractTemplate):

@@ -261,3 +261,16 @@ class IteratorType(IterableType):
     def iterator_type(self):
         return self._iterator_type
 
+
+class Sequence(IterableType):
+    """
+    Base class for 1d sequence types.  Instances should have the *dtype*
+    attribute.
+    """
+
+
+class MutableSequence(Sequence):
+    """
+    Base class for 1d mutable sequence types.  Instances should have the
+    *dtype* attribute.
+    """
