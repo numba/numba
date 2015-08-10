@@ -1,0 +1,5 @@
+binstar_upload: true
+channels:
+- http://repo.continuum.io/pkgs/free
+- http://repo.continuum.io/pkgs/pro
+- https://conda.binstar.org/numba

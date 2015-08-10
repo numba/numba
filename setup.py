@@ -152,6 +152,7 @@ setup(name='numba',
       package_data={
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
         "numba.annotations": ["*.html"],
+        "numba.hsa.tests.hsadrv": ["*.brig"],
       },
       scripts=["numba/pycc/pycc", "bin/numba"],
       author="Continuum Analytics, Inc.",

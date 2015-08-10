@@ -208,6 +208,10 @@ class Function(Callable, Opaque):
     def get_call_type(self, context, args, kws):
         return self.template(context).apply(args, kws)
 
+    def get_call_signatures(self):
+        sigs = getattr(self.template, 'cases')
+        return sigs, hasattr(self.template, 'generic')
+
 
 class NumberClass(Callable, DTypeSpec, Opaque):
     """
@@ -222,6 +226,10 @@ class NumberClass(Callable, DTypeSpec, Opaque):
 
     def get_call_type(self, context, args, kws):
         return self.template(context).apply(args, kws)
+
+    def get_call_signatures(self):
+        sigs = getattr(self.template, 'cases')
+        return sigs, hasattr(self.template, 'generic')
 
     @property
     def key(self):
@@ -291,6 +299,10 @@ class Dispatcher(WeakType, Callable, Dummy):
         sig = template(context).apply(args, kws)
         sig.pysig = self.pysig
         return sig
+
+    def get_call_signatures(self):
+        sigs = self.overloaded.nopython_signatures
+        return sigs, True
 
     @property
     def overloaded(self):
@@ -1178,9 +1190,12 @@ class ExceptionType(Callable, Phantom):
         super(ExceptionType, self).__init__(name, param=True)
 
     def get_call_type(self, context, args, kws):
+        return self.get_call_signatures()[0][0]
+
+    def get_call_signatures(self):
         from . import typing
         return_type = ExceptionInstance(self.exc_class)
-        return typing.signature(return_type)
+        return [typing.signature(return_type)], False
 
     @property
     def key(self):

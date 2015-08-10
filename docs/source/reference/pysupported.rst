@@ -54,6 +54,7 @@ Coroutine features of generators are not supported (i.e. the
 :meth:`generator.send`, :meth:`generator.throw`, :meth:`generator.close`
 methods).
 
+.. _pysupported-builtin-types:
 
 Built-in types
 ==============
