@@ -19,6 +19,8 @@ false_bit = Constant.int(Type.int(1), 0)
 true_byte = Constant.int(Type.int(8), 1)
 false_byte = Constant.int(Type.int(8), 0)
 
+intp_t = Type.int(utils.MACHINE_BITS)
+
 
 def as_bool_byte(builder, value):
     return builder.zext(value, Type.int(8))
@@ -793,10 +795,9 @@ def pointer_add(builder, ptr, offset, return_type=None):
     Note the computation is done in bytes, and ignores the width of
     the pointed item type.
     """
-    intptr_t = Type.int(utils.MACHINE_BITS)
-    intptr = builder.ptrtoint(ptr, intptr_t)
+    intptr = builder.ptrtoint(ptr, intp_t)
     if isinstance(offset, int):
-        offset = Constant.int(intptr_t, offset)
+        offset = Constant.int(intp_t, offset)
     intptr = builder.add(intptr, offset)
     return builder.inttoptr(intptr, return_type or ptr.type)
 
@@ -930,3 +931,17 @@ def memmove(builder, dst, src, count, itemsize, align=1):
                            builder.mul(count, ir.Constant(size_t, itemsize)),
                            align,
                            is_volatile])
+
+
+def muladd_with_overflow(builder, a, b, c):
+    """
+    Compute (a * b + c) and return a (result, overflow bit) pair.
+    The operands must be signed integers.
+    """
+    p = builder.smul_with_overflow(a, b)
+    prod = builder.extract_value(p, 0)
+    prod_ovf = builder.extract_value(p, 1)
+    s = builder.sadd_with_overflow(prod, c)
+    res = builder.extract_value(s, 0)
+    ovf = builder.or_(prod_ovf, builder.extract_value(s, 1))
+    return res, ovf

@@ -203,13 +203,16 @@ class ListInstance(_ListPayloadMixin):
         itemsize = get_itemsize(context, list_type)
         
         # Total allocation size = <payload header size> + nitems * itemsize
-        # XXX overflow check
-        allocsize = builder.mul(nitems, ir.Constant(intp_t, itemsize))
-        allocsize = builder.add(allocsize, ir.Constant(intp_t, payload_size))
+        allocsize, ovf = cgutils.muladd_with_overflow(builder, nitems,
+                                                      ir.Constant(intp_t, itemsize),
+                                                      ir.Constant(intp_t, payload_size))
+        with builder.if_then(ovf, likely=False):
+            context.call_conv.return_user_exc(builder, MemoryError,
+                                              ("cannot allocate list",))
 
         meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
         cgutils.guard_memory_error(context, builder, meminfo,
-                                   "failed to allocate memory for list")
+                                   "cannot allocate list")
 
         self = cls(context, builder, list_type, None)
         self._list.meminfo = meminfo
@@ -226,25 +229,30 @@ class ListInstance(_ListPayloadMixin):
             payload_size = context.get_abi_sizeof(payload_type)
 
             # XXX overflow check
-            allocsize = builder.mul(ir.Constant(new_allocated.type, itemsize),
-                                    new_allocated)
-            allocsize = builder.add(ir.Constant(new_allocated.type, payload_size),
-                                    allocsize)
+            allocsize, ovf = cgutils.muladd_with_overflow(
+                builder, new_allocated,
+                ir.Constant(intp_t, itemsize),
+                ir.Constant(intp_t, payload_size))
+            with builder.if_then(ovf, likely=False):
+                context.call_conv.return_user_exc(builder, MemoryError,
+                                                  ("cannot resize list",))
+
             ptr = context.nrt_meminfo_varsize_realloc(builder, self._list.meminfo,
                                                       size=allocsize)
             cgutils.guard_memory_error(context, builder, ptr,
-                                       "failed to reallocate memory for list")
+                                       "cannot resize list")
             self._payload.allocated = new_allocated
 
         context = self._context
         builder = self._builder
+        intp_t = new_size.type
 
         itemsize = get_itemsize(context, self._ty)
         allocated = self._payload.allocated
 
-        one = ir.Constant(new_size.type, 1)
-        two = ir.Constant(new_size.type, 2)
-        eight = ir.Constant(new_size.type, 8)
+        one = ir.Constant(intp_t, 1)
+        two = ir.Constant(intp_t, 2)
+        eight = ir.Constant(intp_t, 8)
 
         # allocated < new_size
         is_too_small = builder.icmp_signed('<', allocated, new_size)

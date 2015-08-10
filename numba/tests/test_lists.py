@@ -488,8 +488,12 @@ class TestLists(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
         pyfunc = list_mul
         cfunc = jit(nopython=True)(pyfunc)
+        # Fail in malloc()
         with self.assertRaises(MemoryError):
             cfunc(1, 2**58)
+        # Overflow size computation when multiplying by item size
+        with self.assertRaises(MemoryError):
+            cfunc(1, 2**62)
 
 
 if __name__ == '__main__':
