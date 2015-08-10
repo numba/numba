@@ -712,14 +712,14 @@ def guard_null(context, builder, value, exc_tuple):
 
 def guard_invalid_slice(context, builder, slicestruct):
     """
-    Guard against *slicestruct* having a zero slice and raise otherwise.
+    Guard against *slicestruct* having a zero step (and raise ValueError).
     """
     guard_null(context, builder, slicestruct.step,
                (ValueError, "slice step cannot be zero"))
 
 def guard_memory_error(context, builder, pointer, msg=None):
     """
-    Guard against *pointer* being NULL and raise a MemoryError otherwise.
+    Guard against *pointer* being NULL (and raise a MemoryError).
     """
     assert isinstance(pointer.type, ir.PointerType), pointer.type
     exc_args = (msg,) if msg else ()

@@ -300,7 +300,7 @@ MemInfo *NRT_MemInfo_varsize_alloc(size_t size)
         return NULL;
 
     mi = NRT_MemInfo_new(data, size, nrt_varsize_dtor, NULL);
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_alloc size=%llu "
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_alloc size=%zu "
                               "-> meminfo=%p, data=%p\n", size, mi, data));
     return mi;
 }
@@ -316,7 +316,7 @@ void *NRT_MemInfo_varsize_realloc(MemInfo *mi, size_t size)
     if (mi->data == NULL)
         return NULL;
     mi->size = size;
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_realloc %p size=%llu "
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_realloc %p size=%zu "
                               "-> data=%p\n", mi, size, mi->data));
     return mi->data;
 }
@@ -327,14 +327,14 @@ void *NRT_MemInfo_varsize_realloc(MemInfo *mi, size_t size)
 
 void* NRT_Allocate(size_t size) {
     void *ptr = malloc(size);
-    NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%llu ptr=%p\n", size, ptr));
+    NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%zu ptr=%p\n", size, ptr));
     TheMSys.atomic_inc(&TheMSys.stats_alloc);
     return ptr;
 }
 
 void *NRT_Reallocate(void *ptr, size_t size) {
     void *new_ptr = realloc(ptr, size);
-    NRT_Debug(nrt_debug_print("NRT_Reallocate bytes=%llu ptr=%p -> %p\n",
+    NRT_Debug(nrt_debug_print("NRT_Reallocate bytes=%zu ptr=%p -> %p\n",
                               size, ptr, new_ptr));
     return new_ptr;
 }

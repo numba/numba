@@ -228,7 +228,6 @@ class ListInstance(_ListPayloadMixin):
             payload_type = context.get_data_type(types.ListPayload(self._ty))
             payload_size = context.get_abi_sizeof(payload_type)
 
-            # XXX overflow check
             allocsize, ovf = cgutils.muladd_with_overflow(
                 builder, new_allocated,
                 ir.Constant(intp_t, itemsize),
