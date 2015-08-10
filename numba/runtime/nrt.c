@@ -20,6 +20,10 @@ struct MemInfo{
 };
 
 
+/*
+ * Global resources.
+ */
+
 struct MemSys{
     /* Atomic increment and decrement function */
     atomic_inc_dec_func atomic_inc, atomic_dec;
@@ -29,21 +33,10 @@ struct MemSys{
     int shutting;
     /* Stats */
     size_t stats_alloc, stats_free, stats_mi_alloc, stats_mi_free;
-
 };
 
 /* The Memory System object */
 static MemSys TheMSys;
-
-static
-void nrt_meminfo_call_dtor(MemInfo *mi) {
-    NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
-    /* call dtor */
-    if (mi->dtor)
-        mi->dtor(mi->data, mi->dtor_info);
-    /* Clear and release MemInfo */
-    NRT_MemInfo_destroy(mi);
-}
 
 void NRT_MemSys_init(void) {
     memset(&TheMSys, 0, sizeof(MemSys));
@@ -126,6 +119,22 @@ void NRT_MemSys_set_atomic_inc_dec_stub(void){
 void NRT_MemSys_set_atomic_cas_stub(void) {
     NRT_MemSys_set_atomic_cas(nrt_testing_atomic_cas);
 }
+
+static void nrt_fatal_error(const char *msg)
+{
+    fprintf(stderr, "Fatal Numba error: %s\n", msg);
+    fflush(stderr); /* it helps in Windows debug build */
+
+#if defined(MS_WINDOWS) && defined(_DEBUG)
+    DebugBreak();
+#endif
+    abort();
+}
+
+
+/*
+ * The MemInfo structure.
+ */
 
 void NRT_MemInfo_init(MemInfo *mi,void *data, size_t size, dtor_function dtor,
                       void *dtor_info)
@@ -242,8 +251,12 @@ void NRT_MemInfo_acquire(MemInfo *mi) {
 }
 
 void NRT_MemInfo_call_dtor(MemInfo *mi) {
-    /* We have a destructor */
-    nrt_meminfo_call_dtor(mi);
+    NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
+    if (mi->dtor)
+        /* We have a destructor */
+        mi->dtor(mi->data, mi->dtor_info);
+    /* Clear and release MemInfo */
+    NRT_MemInfo_destroy(mi);
 }
 
 void NRT_MemInfo_release(MemInfo *mi) {
@@ -295,10 +308,9 @@ MemInfo *NRT_MemInfo_varsize_alloc(size_t size)
 void *NRT_MemInfo_varsize_realloc(MemInfo *mi, size_t size)
 {
     if (mi->dtor != nrt_varsize_dtor) {
-        /* XXX do we need a fatal error API? */
-        nrt_debug_print("ERROR: NRT_MemInfo_varsize_realloc called "
+        nrt_fatal_error("ERROR: NRT_MemInfo_varsize_realloc called "
                         "with a non varsize-allocated meminfo");
-        return NULL;
+        return NULL;  /* unreachable */
     }
     mi->data = NRT_Reallocate(mi->data, size);
     if (mi->data == NULL)
@@ -332,5 +344,3 @@ void NRT_Free(void *ptr) {
     free(ptr);
     TheMSys.atomic_inc(&TheMSys.stats_free);
 }
-
-

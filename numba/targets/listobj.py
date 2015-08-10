@@ -1,4 +1,5 @@
 """
+Support for native homogenous lists.
 """
 
 from __future__ import print_function, absolute_import, division
@@ -621,6 +622,8 @@ def list_count(context, builder, sig, args):
 @builtin
 @implement("list.extend", types.Kind(types.List), types.Kind(types.IterableType))
 def list_extend(context, builder, sig, args):
+    # NOTE: this could be made faster by specializing for list operands
+    # (i.e. resize to the exact desired size)
 
     def list_extend(lst, iterable):
         # Speed hack to avoid NRT refcount operations inside the loop

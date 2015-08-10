@@ -1013,6 +1013,11 @@ class BaseContext(object):
         return lc.Module.new(name)
 
     def nrt_meminfo_alloc(self, builder, size):
+        """
+        Allocate a new MemInfo with a data payload of `size` bytes.
+
+        A pointer to the MemInfo is returned.
+        """
         if not self.enable_nrt:
             raise Exception("Require NRT")
         mod = builder.module
@@ -1024,9 +1029,11 @@ class BaseContext(object):
 
     def nrt_meminfo_alloc_aligned(self, builder, size, align):
         """
-        Allocate a new MemInfo of `size` bytes and and align the data pointer
-        to `align` bytes.  The `align` arg can be either a Python int or a LLVM
-        uint32 value.
+        Allocate a new MemInfo with an aligned data payload of `size` bytes.
+        The data pointer is aligned to `align` bytes.  `align` can be either
+        a Python int or a LLVM uint32 value.
+
+        A pointer to the MemInfo is returned.
         """
         if not self.enable_nrt:
             raise Exception("Require NRT")
@@ -1036,7 +1043,7 @@ class BaseContext(object):
         fnty = llvmir.FunctionType(void_ptr, [intp, u32])
         fn = mod.get_or_insert_function(fnty,
                                         name="NRT_MemInfo_alloc_safe_aligned")
-        # XXX noalias on return value?
+        fn.return_value.add_attribute("noalias")
         if isinstance(align, int):
             align = self.get_constant(types.uint32, align)
         else:
@@ -1048,6 +1055,8 @@ class BaseContext(object):
         Allocate a MemInfo pointing to a variable-sized data area.  The area
         is separately allocated (i.e. two allocations are made) so that
         re-allocating it doesn't change the MemInfo's address.
+
+        A pointer to the MemInfo is returned.
         """
         if not self.enable_nrt:
             raise Exception("Require NRT")
@@ -1075,7 +1084,8 @@ class BaseContext(object):
     def nrt_meminfo_data(self, builder, meminfo):
         """
         Given a MemInfo pointer, return a pointer to the allocated data
-        managed by it.
+        managed by it.  This works for MemInfos allocated with all the
+        above methods.
         """
         if not self.enable_nrt:
             raise Exception("Require NRT")
@@ -1084,9 +1094,6 @@ class BaseContext(object):
         mod = builder.module
         fn = mod.get_or_insert_function(meminfo_data_ty, name="NRT_MemInfo_data")
         return builder.call(fn, [meminfo])
-
-    def get_nrt_meminfo(self, builder, typ, value):
-        return self.data_model_manager[typ].get_nrt_meminfo(builder, value)
 
     def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):
         if not self.enable_nrt:
@@ -1100,7 +1107,7 @@ class BaseContext(object):
             self._call_nrt_incref_decref(builder, root_type, mt, mv, funcname)
 
         try:
-            meminfo = self.get_nrt_meminfo(builder, typ, value)
+            meminfo = data_model.get_nrt_meminfo(builder, value)
         except NotImplementedError as e:
             raise NotImplementedError("%s: %s" % (root_type, str(e)))
         if meminfo:

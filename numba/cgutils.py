@@ -415,8 +415,8 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
         The step value of the slice
     intp :
         The data type
-    inc : None or boolean, optional
-        If boolean, signals the step is positive (True) or negative (False).
+    inc : boolean, optional
+        Signals whether the step is positive (True) or negative (False).
 
     Returns
     -----------

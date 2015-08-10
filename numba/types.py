@@ -1013,19 +1013,10 @@ class Tuple(BaseTuple):
             return max(kinds)
 
 
-class ListPayload(Type):
-    
-    def __init__(self, list_type):
-        self.list_type = list_type
-        name = 'payload(%s)' % list_type
-        super(ListPayload, self).__init__(name, param=True)
-    
-    @property
-    def key(self):
-        return self.list_type
-
-
 class List(IterableType):
+    """
+    Type class for arbitrary-sized homogenous lists.
+    """
     mutable = True
 
     def __init__(self, dtype):
@@ -1049,6 +1040,9 @@ class List(IterableType):
 
 
 class ListIter(SimpleIteratorType):
+    """
+    Type class for list iterators.
+    """
 
     def __init__(self, list_type):
         self.list_type = list_type
@@ -1066,6 +1060,38 @@ class ListIter(SimpleIteratorType):
     @property
     def key(self):
         return self.list_type
+
+
+class ListPayload(Type):
+    """
+    Internal type class for the dynamically-allocated payload of a list.
+    """
+
+    def __init__(self, list_type):
+        self.list_type = list_type
+        name = 'payload(%s)' % list_type
+        super(ListPayload, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.list_type
+
+
+class MemInfoPointer(Type):
+    """
+    Pointer to a Numba "meminfo" (i.e. the information for a managed
+    piece of memory).
+    """
+    mutable = True
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        name = "memory-managed *%s" % dtype
+        super(MemInfoPointer, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.dtype
 
 
 class CPointer(Type):
@@ -1090,21 +1116,6 @@ class EphemeralPointer(CPointer):
     stack-allocated slots.  The data model serializes such pointers
     by copying the data pointed to.
     """
-
-
-class MemInfoPointer(Type):
-    """
-    """
-    mutable = True
-
-    def __init__(self, dtype):
-        self.dtype = dtype
-        name = "memory-managed *%s" % dtype
-        super(MemInfoPointer, self).__init__(name, param=True)
-
-    @property
-    def key(self):
-        return self.dtype
 
 
 class EphemeralArray(Type):

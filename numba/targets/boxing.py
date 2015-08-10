@@ -272,7 +272,8 @@ def unbox_optional(c, typ, obj):
 # Collections
 #
 
-# NOTE: those functions are supposed to steal any NRT references.
+# NOTE: those functions are supposed to steal any NRT references in
+# the given native value.
 
 @box(types.Array)
 def box_array(c, typ, val):
@@ -281,7 +282,7 @@ def box_array(c, typ, val):
     if c.context.enable_nrt:
         np_dtype = numpy_support.as_dtype(typ.dtype)
         dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
-        # Steals NRT reference
+        # Steals NRT ref
         newary = c.pyapi.nrt_adapt_ndarray_to_python(typ, val, dtypeptr)
         return newary
     else:

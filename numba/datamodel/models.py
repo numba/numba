@@ -92,9 +92,15 @@ class DataModel(object):
         return []
 
     def traverse_types(self):
+        """
+        Recursively list all frontend types involved in this model.
+        """
         return [self._fe_type] + self.inner_types()
 
     def inner_types(self):
+        """
+        List all *inner* frontend types.
+        """
         return []
 
     def get_nrt_meminfo(self, builder, value):
