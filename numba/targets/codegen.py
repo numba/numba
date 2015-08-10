@@ -230,8 +230,7 @@ class JITCodeLibrary(CodeLibrary):
         This function implicitly calls .finalize().
         """
         self._ensure_finalized()
-        func = self.get_function(name)
-        return self._codegen._engine.get_pointer_to_function(func)
+        return self._codegen._engine.get_function_address(name)
 
     def _finalize_specific(self):
         self._codegen._engine.finalize_object()
