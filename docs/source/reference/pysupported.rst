@@ -88,7 +88,23 @@ Tuple construction and unpacking is supported, as well as the following
 operations:
 
 * comparison between tuples
-* iteration over homogenous tuples
+* iteration and indexing over homogenous tuples
+
+list
+----
+
+Creating and returning lists from JIT-compiled functions is supported,
+as well as most methods and operations on lists.  Unsupported operations
+are:
+
+* the ``.sort()`` method
+* in-place operators (``+=`` and ``*=``)
+
+.. note::
+   Passing lists from Python into JIT-compiled functions is unsupported,
+   as mutations done by Numba code would not be visible from the Python
+   interpreter.
+
 
 None
 ----
