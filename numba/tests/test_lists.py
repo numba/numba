@@ -482,6 +482,15 @@ class TestLists(MemoryLeakMixin, TestCase):
                 expected = pyfunc(n, v)
                 self.assertPreciseEqual(cfunc(n, v), expected)
 
+    @unittest.skipUnless(sys.maxsize >= 2**32,
+                         "need a 64-bit system to test for MemoryError")
+    def test_mul_error(self):
+        self.disable_leak_check()
+        pyfunc = list_mul
+        cfunc = jit(nopython=True)(pyfunc)
+        with self.assertRaises(MemoryError):
+            cfunc(1, 2**58)
+
 
 if __name__ == '__main__':
     unittest.main()

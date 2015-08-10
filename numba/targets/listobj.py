@@ -203,11 +203,13 @@ class ListInstance(_ListPayloadMixin):
         itemsize = get_itemsize(context, list_type)
         
         # Total allocation size = <payload header size> + nitems * itemsize
+        # XXX overflow check
         allocsize = builder.mul(nitems, ir.Constant(intp_t, itemsize))
         allocsize = builder.add(allocsize, ir.Constant(intp_t, payload_size))
 
         meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
-        # XXX handle allocation failure
+        cgutils.guard_memory_error(context, builder, meminfo,
+                                   "failed to allocate memory for list")
 
         self = cls(context, builder, list_type, None)
         self._list.meminfo = meminfo
@@ -223,13 +225,15 @@ class ListInstance(_ListPayloadMixin):
             payload_type = context.get_data_type(types.ListPayload(self._ty))
             payload_size = context.get_abi_sizeof(payload_type)
 
+            # XXX overflow check
             allocsize = builder.mul(ir.Constant(new_allocated.type, itemsize),
                                     new_allocated)
             allocsize = builder.add(ir.Constant(new_allocated.type, payload_size),
                                     allocsize)
             ptr = context.nrt_meminfo_varsize_realloc(builder, self._list.meminfo,
                                                       size=allocsize)
-            # XXX handle allocation failure
+            cgutils.guard_memory_error(context, builder, ptr,
+                                       "failed to reallocate memory for list")
             self._payload.allocated = new_allocated
 
         context = self._context
