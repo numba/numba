@@ -602,6 +602,48 @@ def list_index(context, builder, sig, args):
     return context.compile_internal(builder, list_index_impl, sig, args)
 
 @builtin
+@implement("list.index", types.Kind(types.List), types.Any,
+           types.Kind(types.Integer))
+def list_index(context, builder, sig, args):
+
+    def list_index_impl(lst, value, start):
+        n = len(lst)
+        if start < 0:
+            start += n
+            if start < 0:
+                start = 0
+        for i in range(start, len(lst)):
+            if lst[i] == value:
+                return i
+        # XXX references are leaked when raising
+        raise ValueError("value not in list")
+
+    return context.compile_internal(builder, list_index_impl, sig, args)
+
+@builtin
+@implement("list.index", types.Kind(types.List), types.Any,
+           types.Kind(types.Integer), types.Kind(types.Integer))
+def list_index(context, builder, sig, args):
+
+    def list_index_impl(lst, value, start, stop):
+        n = len(lst)
+        if start < 0:
+            start += n
+            if start < 0:
+                start = 0
+        if stop < 0:
+            stop += n
+        if stop > n:
+            stop = n
+        for i in range(start, stop):
+            if lst[i] == value:
+                return i
+        # XXX references are leaked when raising
+        raise ValueError("value not in list")
+
+    return context.compile_internal(builder, list_index_impl, sig, args)
+
+@builtin
 @implement("list.insert", types.Kind(types.List), types.Kind(types.Integer),
            types.Any)
 def list_insert(context, builder, sig, args):

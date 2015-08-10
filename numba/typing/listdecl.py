@@ -77,10 +77,13 @@ class ListAttribute(AttributeTemplate):
 
     @bound_function("list.index")
     def resolve_index(self, list, args, kws):
-        # XXX handle optional start, stop
-        item, = args
         assert not kws
-        return signature(types.intp, list.dtype)
+        if len(args) == 1:
+            return signature(types.intp, list.dtype)
+        elif len(args) == 2:
+            return signature(types.intp, list.dtype, types.intp)
+        elif len(args) == 3:
+            return signature(types.intp, list.dtype, types.intp, types.intp)
 
     @bound_function("list.insert")
     def resolve_insert(self, list, args, kws):

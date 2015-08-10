@@ -164,9 +164,17 @@ def list_contains(n):
     l = list(range(n))
     return (0 in l, 1 in l, n - 1 in l, n in l)
 
-def list_index(n, v):
+def list_index1(n, v):
     l = list(range(n, 0, -1))
     return l.index(v)
+
+def list_index2(n, v, start):
+    l = list(range(n, 0, -1))
+    return l.index(v, start)
+
+def list_index3(n, v, start, stop):
+    l = list(range(n, 0, -1))
+    return l.index(v, start, stop)
 
 def list_insert(n, pos, v):
     l = list(range(0, n))
@@ -341,7 +349,6 @@ class TestLists(MemoryLeakMixin, TestCase):
         self.check_slicing2(list_delslice2)
 
     def test_invalid_slice(self):
-        # XXX References are leaked when an exception is raised
         self.disable_leak_check()
         pyfunc = list_getslice3
         cfunc = jit(nopython=True)(pyfunc)
@@ -367,13 +374,32 @@ class TestLists(MemoryLeakMixin, TestCase):
         else:
             self.assertPreciseEqual(cfunc(*args), expected)
 
-    def test_index(self):
-        # XXX References are leaked when an exception is raised
+    def test_index1(self):
         self.disable_leak_check()
-        pyfunc = list_index
+        pyfunc = list_index1
         cfunc = jit(nopython=True)(pyfunc)
-        for v in (1, 5, 10, 99999999):
+        for v in (0, 1, 5, 10, 99999999):
             self.check_index_result(pyfunc, cfunc, (16, v))
+
+    def test_index2(self):
+        self.disable_leak_check()
+        pyfunc = list_index2
+        cfunc = jit(nopython=True)(pyfunc)
+        n = 16
+        for v in (0, 1, 5, 10, 99999999):
+            indices = [0, 1, n - 2, n - 1, n + 1, -1, -2, -n + 3, -n - 1]
+            for start in indices:
+                self.check_index_result(pyfunc, cfunc, (16, v, start))
+
+    def test_index3(self):
+        self.disable_leak_check()
+        pyfunc = list_index3
+        cfunc = jit(nopython=True)(pyfunc)
+        n = 16
+        for v in (0, 1, 5, 10, 99999999):
+            indices = [0, 1, n - 2, n - 1, n + 1, -1, -2, -n + 3, -n - 1]
+            for start, stop in itertools.product(indices, indices):
+                self.check_index_result(pyfunc, cfunc, (16, v, start, stop))
 
     def test_count(self):
         pyfunc = list_count
