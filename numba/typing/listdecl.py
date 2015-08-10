@@ -81,18 +81,22 @@ class ListAttribute(AttributeTemplate):
         if len(args) == 1:
             return signature(types.intp, list.dtype)
         elif len(args) == 2:
-            return signature(types.intp, list.dtype, types.intp)
+            if isinstance(args[1], types.Integer):
+                return signature(types.intp, list.dtype, types.intp)
         elif len(args) == 3:
-            return signature(types.intp, list.dtype, types.intp, types.intp)
+            if (isinstance(args[1], types.Integer)
+                and isinstance(args[2], types.Integer)):
+                return signature(types.intp, list.dtype, types.intp, types.intp)
 
     @bound_function("list.insert")
     def resolve_insert(self, list, args, kws):
         idx, item = args
         assert not kws
-        unified = self.context.unify_pairs(list.dtype, item)
-        sig = signature(types.none, types.intp, unified)
-        sig.recvr = types.List(unified)
-        return sig
+        if isinstance(idx, types.Integer):
+            unified = self.context.unify_pairs(list.dtype, item)
+            sig = signature(types.none, types.intp, unified)
+            sig.recvr = types.List(unified)
+            return sig
 
     @bound_function("list.pop")
     def resolve_pop(self, list, args, kws):
@@ -173,3 +177,22 @@ class InList(AbstractTemplate):
         item, list = args
         if isinstance(list, types.List):
             return signature(types.boolean, list.dtype, list)
+
+@builtin
+class AddList(AbstractTemplate):
+    key = "+"
+
+    def generic(self, args, kws):
+        a, b = args
+        if isinstance(a, types.List) and isinstance(b, types.List):
+            unified = self.context.unify_pairs(a, b)
+            return signature(unified, a, b)
+
+@builtin
+class AddList(AbstractTemplate):
+    key = "*"
+
+    def generic(self, args, kws):
+        a, b = args
+        if isinstance(a, types.List) and isinstance(b, types.Integer):
+            return signature(a, a, types.intp)

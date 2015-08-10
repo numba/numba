@@ -530,6 +530,48 @@ def in_list(context, builder, sig, args):
 
     return context.compile_internal(builder, list_contains_impl, sig, args)
 
+@builtin
+@implement("+", types.Kind(types.List), types.Kind(types.List))
+def list_add(context, builder, sig, args):
+    a = ListInstance(context, builder, sig.args[0], args[0])
+    b = ListInstance(context, builder, sig.args[1], args[1])
+
+    a_size = a.size
+    b_size = b.size
+    nitems = builder.add(a_size, b_size)
+    dest = ListInstance.allocate(context, builder, sig.return_type, nitems)
+    dest.size = nitems
+
+    with cgutils.for_range(builder, a_size) as src_index:
+        value = a.getitem(src_index)
+        dest.setitem(src_index, value)
+    with cgutils.for_range(builder, b_size) as src_index:
+        value = b.getitem(src_index)
+        dest.setitem(builder.add(src_index, a_size), value)
+
+    return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
+
+@builtin
+@implement("*", types.Kind(types.List), types.Kind(types.Integer))
+def list_add(context, builder, sig, args):
+    src = ListInstance(context, builder, sig.args[0], args[0])
+    src_size = src.size
+
+    mult = args[1]
+    zero = ir.Constant(mult.type, 0)
+    mult = builder.select(cgutils.is_neg_int(builder, mult), zero, mult)
+    nitems = builder.mul(mult, src_size)
+
+    dest = ListInstance.allocate(context, builder, sig.return_type, nitems)
+    dest.size = nitems
+
+    with cgutils.for_range_slice(builder, zero, nitems, src_size, inc=True) as (dest_offset, _):
+        with cgutils.for_range(builder, src_size) as src_index:
+            value = src.getitem(src_index)
+            dest.setitem(builder.add(src_index, dest_offset), value)
+
+    return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
+
 
 #-------------------------------------------------------------------------------
 # Methods

@@ -197,6 +197,17 @@ def list_reverse(n):
     l.reverse()
     return l
 
+def list_add(m, n):
+    a = list(range(0, m))
+    b = list(range(100, 100 + n))
+    res = a + b
+    res.append(42)   # check result is a copy
+    return a, b, res
+
+def list_mul(n, v):
+    a = list(range(n))
+    return a * v
+
 
 class TestLists(MemoryLeakMixin, TestCase):
 
@@ -437,6 +448,22 @@ class TestLists(MemoryLeakMixin, TestCase):
                          "list.copy() needs Python 3.3+")
     def test_copy(self):
         self.check_unary_with_size(list_copy)
+
+    def test_add(self):
+        pyfunc = list_add
+        cfunc = jit(nopython=True)(pyfunc)
+        sizes = [0, 3, 50, 300]
+        for m, n in itertools.product(sizes, sizes):
+            expected = pyfunc(m, n)
+            self.assertPreciseEqual(cfunc(m, n), expected)
+
+    def test_mul(self):
+        pyfunc = list_mul
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [0, 3, 50, 300]:
+            for v in [1, 2, 3, 0, -1, -42]:
+                expected = pyfunc(n, v)
+                self.assertPreciseEqual(cfunc(n, v), expected)
 
 
 if __name__ == '__main__':
