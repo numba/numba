@@ -1018,6 +1018,7 @@ class ListPayload(Type):
 
 
 class List(IterableType):
+    mutable = True
 
     def __init__(self, dtype):
         self.dtype = dtype
