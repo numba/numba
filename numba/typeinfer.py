@@ -42,7 +42,7 @@ class TypeVar(object):
                 unified = self.context.unify_pairs(self.type, tp)
                 if unified is types.pyobject:
                     raise TypingError("cannot unify %s and %s for '%s'"
-                                    % (self.type, tp, self.var))
+                                      % (self.type, tp, self.var))
             else:
                 unified = tp
             self.type = unified
@@ -303,7 +303,7 @@ class CallConstrain(object):
                 and sig.recvr is not None
                 and sig.recvr != fnty.this):
                 refined_this = context.unify_pairs(sig.recvr, fnty.this)
-                if refined_this != types.pyobject:
+                if refined_this.is_precise():
                     refined_fnty = types.BoundFunction(fnty.template,
                                                        this=refined_this)
                     typeinfer.propagate_refined_type(self.func, refined_fnty)
@@ -522,14 +522,30 @@ class TypeInferer(object):
             source_constraint.refine(self, updated_type)
 
     def unify(self):
+        """
+        Run the final unification pass over all inferred types, and
+        catch imprecise types.
+        """
         typdict = utils.UniqueDict()
-        for var, tv in self.typevars.items():
+
+        def check_var(name):
+            tv = self.typevars[name]
             if not tv.defined:
                 raise TypingError("Undefined variable '%s'" % (var,))
             tp = tv.getone()
-            if tp is types.pyobject:
-                raise TypingError("Can't infer type of variable '%s'" % (var,))
+            if not tp.is_precise():
+                raise TypingError("Can't infer type of variable '%s': %s" % (var, tp))
             typdict[var] = tp
+
+        # For better error display, check first user-visible vars, then
+        # temporaries
+        temps = set(k for k in self.typevars if not k[0].isalpha())
+        others = set(self.typevars) - temps
+        for var in sorted(others):
+            check_var(var)
+        for var in sorted(temps):
+            check_var(var)
+
         retty = self.get_return_type(typdict)
         fntys = self.get_function_types(typdict)
         if self.generator_info:
@@ -613,7 +629,7 @@ class TypeInferer(object):
 
         if rettypes:
             unified = self.context.unify_types(*rettypes)
-            if unified is types.pyobject:
+            if not unified.is_precise():
                 raise TypingError("Can't unify return type from the "
                                   "following types: %s"
                                   % ", ".join(sorted(map(str, rettypes))))

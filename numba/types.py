@@ -125,7 +125,12 @@ class Phantom(Dummy):
 
 class Undefined(Dummy):
     """
+    A type that is left imprecise.  This is used as a temporaray placeholder
+    during type inference in the hope that the type can be later refined.
     """
+
+    def is_precise(self):
+        return False
 
 
 class Opaque(Dummy):
@@ -138,6 +143,9 @@ class PyObject(Dummy):
     """
     A generic CPython object.
     """
+
+    def is_precise(self):
+        return False
 
 
 class RawPointer(Dummy):
@@ -1035,6 +1043,9 @@ class List(IterableType):
     @property
     def iterator_type(self):
         return self._iterator_type
+
+    def is_precise(self):
+        return self.dtype.is_precise()
 
 
 class ListIter(SimpleIteratorType):
