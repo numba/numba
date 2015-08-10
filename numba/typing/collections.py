@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-
 from .. import types
 from .templates import (AttributeTemplate, ConcreteTemplate,
                         AbstractTemplate, builtin_global, builtin,

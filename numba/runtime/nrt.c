@@ -11,7 +11,9 @@
 typedef int (*atomic_meminfo_cas_func)(void **ptr, void *cmp,
                                        void *repl, void **oldptr);
 
-struct MemInfo{
+
+/* NOTE: if changing the layout, please update numba.runtime.atomicops */
+struct MemInfo {
     size_t         refct;
     dtor_function  dtor;
     void          *dtor_info;

@@ -464,10 +464,10 @@ def for_range_slice_generic(builder, start, stop, step):
     the positive step case, the second for the negative step case.
     
     Use:
-        with for_range_slice_generic(...) as pos_range, neg_range:
-            with pos_range as idx:
+        with for_range_slice_generic(...) as (pos_range, neg_range):
+            with pos_range as (idx, count):
                 ...
-            with neg_range as idx:
+            with neg_range as (idx, count):
                 ...
     """
     intp = start.type
@@ -916,7 +916,7 @@ def memcpy(builder, dst, src, count):
 
 def memmove(builder, dst, src, count, itemsize, align=1):
     """
-    Emit a memmove intrinsic for `count` items of size `itemsize`
+    Emit a memmove() call for `count` items of size `itemsize`
     from `src` to `dest`.
     """
     ptr_t = ir.IntType(8).as_pointer()
