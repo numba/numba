@@ -630,11 +630,28 @@ def list_count(context, builder, sig, args):
 
     return context.compile_internal(builder, list_count_impl, sig, args)
 
+def _list_extend_list(context, builder, sig, args):
+    src = ListInstance(context, builder, sig.args[1], args[1])
+    dest = ListInstance(context, builder, sig.args[0], args[0])
+
+    src_size = src.size
+    dest_size = dest.size
+    nitems = builder.add(src_size, dest_size)
+    dest.resize(nitems)
+    dest.size = nitems
+
+    with cgutils.for_range(builder, src_size) as src_index:
+        value = src.getitem(src_index)
+        dest.setitem(builder.add(src_index, dest_size), value)
+
+    return context.get_dummy_value()
+
 @builtin
 @implement("list.extend", types.Kind(types.List), types.Kind(types.IterableType))
 def list_extend(context, builder, sig, args):
-    # NOTE: this could be made faster by specializing for list operands
-    # (i.e. resize to the exact desired size)
+    if isinstance(sig.args[1], types.List) and sig.args[0].dtype == sig.args[1].dtype:
+        # Specialize for same-type list operands, for speed
+        return _list_extend_list(context, builder, sig, args)
 
     def list_extend(lst, iterable):
         # Speed hack to avoid NRT refcount operations inside the loop

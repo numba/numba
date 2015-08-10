@@ -65,8 +65,19 @@ def list_append_heterogenous(n):
 
 def list_extend(n):
     l = []
-    l.extend((5, 42))
+    # A non-list iterable and a list
     l.extend(range(n))
+    l.extend(l[:-1])
+    l.extend(range(n, 0, -1))
+    return l
+
+def list_extend_heterogenous(n):
+    l = []
+    # Extend with various iterables, including lists, with different types
+    l.extend(range(n))
+    l.extend(l[:-1])
+    l.extend((5, 42))
+    l.extend([123.0])
     return l
 
 def list_pop0(n):
@@ -277,6 +288,9 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_extend(self):
         self.check_unary_with_size(list_extend)
+
+    def test_extend_heterogenous(self):
+        self.check_unary_with_size(list_extend_heterogenous, precise=False)
 
     def test_pop0(self):
         self.check_unary_with_size(list_pop0)
