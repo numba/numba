@@ -453,6 +453,53 @@ class DataFlowAnalysis(object):
         info.append(inst, base=tos2, start=tos1, stop=tos, value=value,
                     slicevar=slicevar, indexvar=indexvar)
 
+    def op_DELETE_SLICE_0(self, info, inst):
+        """
+        del TOS[:]
+        """
+        tos = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+
+    def op_DELETE_SLICE_1(self, info, inst):
+        """
+        del TOS1[TOS:]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, start=tos, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+
+    def op_DELETE_SLICE_2(self, info, inst):
+        """
+        del TOS1[:TOS]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, stop=tos, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+
+    def op_DELETE_SLICE_3(self, info, inst):
+        """
+        del TOS2[TOS1:TOS]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        tos2 = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        info.append(inst, base=tos2, start=tos1, stop=tos,
+                    slicevar=slicevar, indexvar=indexvar)
+
     def op_BUILD_SLICE(self, info, inst):
         """
         slice(TOS1, TOS) or slice(TOS2, TOS1, TOS)

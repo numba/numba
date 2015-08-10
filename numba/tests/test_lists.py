@@ -137,6 +137,17 @@ def list_setslice3_arbitrary(n, n_src, start, stop, step):
     l[start:stop:step] = list(range(100, 100 + n_src))
     return l
 
+def list_delslice0(n):
+    l = list(range(n))
+    del l[:]
+    return l
+
+def list_delslice1(n, start, stop):
+    l = list(range(n))
+    del l[start:]
+    del l[:stop]
+    return l
+
 def list_delslice2(n, start, stop):
     l = list(range(n))
     del l[start:stop]
@@ -360,6 +371,12 @@ class TestLists(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as cm:
             cfunc(5, 100, 0, 3, 2)
         self.assertIn("cannot resize", str(cm.exception))
+
+    def test_delslice0(self):
+        self.check_unary_with_size(list_delslice0)
+
+    def test_delslice1(self):
+        self.check_slicing2(list_delslice1)
 
     def test_delslice2(self):
         self.check_slicing2(list_delslice2)

@@ -51,6 +51,10 @@ def _make_bytecode_table():
     if sys.version_info[0] == 2:
         version_specific += [
             ('BINARY_DIVIDE', 0),
+            ('DELETE_SLICE+0', 0),
+            ('DELETE_SLICE+1', 0),
+            ('DELETE_SLICE+2', 0),
+            ('DELETE_SLICE+3', 0),
             ('DUP_TOPX', 2),
             ('INPLACE_DIVIDE', 0),
             ('PRINT_ITEM', 0),
