@@ -25,7 +25,6 @@ class TypeVar(object):
     def __init__(self, context, var):
         self.context = context
         self.var = var
-        # XXX start with types.undefined?
         self.type = None
         self.locked = False
 
@@ -147,8 +146,6 @@ class BuildTupleConstrain(object):
 
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
-        # TODO: rewrite all __call__ methods for a single type per argument
-        # instead of itertools.product()
         tsets = [typevars[i.name].get() for i in self.items]
         oset = typevars[self.target]
         for vals in itertools.product(*tsets):
