@@ -762,6 +762,10 @@ class Interpreter(object):
         sa = ir.DelAttr(target=self.get(target), attr=attr, loc=self.loc)
         self.current_block.append(sa)
 
+    def op_DELETE_FAST(self, inst):
+        var_name = self.code_locals[inst.arg]
+        ir.Del(var_name, loc=self.loc)
+
     def op_LOAD_ATTR(self, inst, item, res):
         item = self.get(item)
         attr = self.code_names[inst.arg]
@@ -882,6 +886,16 @@ class Interpreter(object):
         stmt = ir.StoreMap(dct=self.get(dct), key=self.get(key),
                            value=self.get(value), loc=self.loc)
         self.current_block.append(stmt)
+
+    def op_LIST_APPEND(self, inst, target, value, appendvar, res):
+        target = self.get(target)
+        value = self.get(value)
+
+        appendattr = ir.Expr.getattr(target, 'append', loc=self.loc)
+        self.store(value=appendattr, name=appendvar)
+        appendinst = ir.Expr.call(self.get(appendvar), (value,), (),
+                                  loc=self.loc)
+        self.store(value=appendinst, name=res)
 
     def op_UNARY_NEGATIVE(self, inst, value, res):
         value = self.get(value)

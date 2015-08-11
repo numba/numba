@@ -598,7 +598,11 @@ class ControlFlowAnalysis(object):
         self._blockstack.pop()
 
     def op_FOR_ITER(self, inst):
-        self.jump(inst.get_jump_target())
+        # Technically this really isn't two pops, *but* the dataflow
+        # analysis unconditionally pushes the next iterator value.
+        # Thus for the iterator exhaustion case the iterator value
+        # *and* the iterator itself need to be popped.
+        self.jump(inst.get_jump_target(), pops=2)
         self.jump(inst.next)
         self._force_new_block = True
 

@@ -70,6 +70,16 @@ def _make_bytecode_table():
             ('DUP_TOP_TWO', 0)
         ]
 
+    # 'LIST_APPEND' has an opcode argument in 2.7+.
+    if sys.version_info[:2] == (2, 6):
+        version_specific += [
+            ('LIST_APPEND', 0)
+        ]
+    else:
+        version_specific += [
+            ('LIST_APPEND', 2)
+        ]
+
     bytecodes = [
                     # opname, operandlen
                     ('BINARY_ADD', 0),
@@ -94,6 +104,7 @@ def _make_bytecode_table():
                     ('CALL_FUNCTION_VAR', 2),
                     ('COMPARE_OP', 2),
                     ('DELETE_ATTR', 2),
+                    ('DELETE_FAST', 2),
                     ('DUP_TOP', 0),
                     ('EXTENDED_ARG', 2),
                     ('FOR_ITER', 2),

@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import collections
 from pprint import pprint
 import warnings
+import sys
 
 from numba import utils
 
@@ -190,6 +191,9 @@ class DataFlowAnalysis(object):
         target = info.pop()
         info.append(inst, target=target)
 
+    def op_DELETE_FAST(self, info, inst):
+        info.append(inst)
+
     def op_STORE_FAST(self, info, inst):
         value = info.pop()
         info.append(inst, value=value)
@@ -199,6 +203,19 @@ class DataFlowAnalysis(object):
         value = info.pop()
         dct = info.tos
         info.append(inst, dct=dct, key=key, value=value)
+
+    def op_LIST_APPEND(self, info, inst):
+       value = info.pop()
+       # Python 2.7+ added an argument to LIST_APPEND.
+       if sys.version_info[:2] == (2, 6):
+          target = info.pop()
+       else:
+          index = inst.arg - 1
+          target = info.peek(index)
+       appendvar = info.make_temp()
+       res = info.make_temp()
+       info.append(inst, target=target, value=value, appendvar=appendvar,
+                   res=res)
 
     def op_LOAD_FAST(self, info, inst):
         name = self.bytecode.co_varnames[inst.arg]
@@ -599,6 +616,18 @@ class BlockInfo(object):
             self.stack_effect -= 1
             return self.stack.pop()
 
+    def peek(self, k):
+        """
+        Return the k'th element back from the top of the stack.
+        peek(0) is the top of the stack.
+        """
+        num_pops = k + 1
+        top_k = [self.pop() for _ in range(num_pops)]
+        r = top_k[-1]
+        for i in range(num_pops - 1, -1, -1):
+           self.push(top_k[i])
+        return r
+
     def make_incoming(self):
         """
         Create an incoming variable (due to not enough values being
@@ -631,9 +660,7 @@ class BlockInfo(object):
 
     @property
     def tos(self):
-        r = self.pop()
-        self.push(r)
-        return r
+        return self.peek(0)
 
     def append(self, inst, **kws):
         self.insts.append((inst.offset, kws))
