@@ -442,7 +442,6 @@ class Pair(Type):
     """
     A heterogenous pair.
     """
-    # XXX fold this into Tuple?
 
     def __init__(self, first_type, second_type):
         self.first_type = first_type
@@ -1031,6 +1030,10 @@ class List(MutableSequence):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
             if dtype != pyobject:
                 return List(dtype=dtype)
+
+    @property
+    def key(self):
+        return self.dtype
 
     @property
     def iterator_type(self):

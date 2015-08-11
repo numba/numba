@@ -275,6 +275,21 @@ class TestUnify(unittest.TestCase):
         bty = types.Array(u32, 2, "C")
         self.assert_unify_failure(aty, bty)
 
+    def test_list(self):
+        aty = types.List(types.undefined)
+        bty = types.List(i32)
+        self.assert_unify(aty, bty, bty)
+        aty = types.List(i16)
+        bty = types.List(i32)
+        self.assert_unify(aty, bty, bty)
+        aty = types.List(types.Tuple([i32, i16]))
+        bty = types.List(types.Tuple([i16, i64]))
+        cty = types.List(types.Tuple([i32, i64]))
+        self.assert_unify(aty, bty, cty)
+        aty = types.List(i16)
+        bty = types.List(types.Tuple([i16]))
+        self.assert_unify_failure(aty, bty)
+
 
 class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
     """
