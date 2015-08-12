@@ -287,6 +287,10 @@ class TestPickling(TestCase):
         ty2 = types.Tuple((types.int32, ty1))
         self.check_pickling(ty2)
 
+    def test_lists(self):
+        ty = types.List(types.int32)
+        self.check_pickling(ty)
+
     def test_generator(self):
         cfunc = jit("(int32,)", nopython=True)(gen)
         sigs = list(cfunc.nopython_signatures)

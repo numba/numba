@@ -1015,7 +1015,6 @@ class List(MutableSequence):
         self.dtype = dtype
         name = "list(%s)" % (self.dtype,)
         super(List, self).__init__(name=name, param=True)
-        self._iterator_type = ListIter(self)
 
     def unify(self, typingctx, other):
         if isinstance(other, List):
@@ -1029,7 +1028,7 @@ class List(MutableSequence):
 
     @property
     def iterator_type(self):
-        return self._iterator_type
+        return ListIter(self)
 
     def is_precise(self):
         return self.dtype.is_precise()
