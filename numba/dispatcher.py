@@ -11,6 +11,7 @@ import os
 from .six.moves import cPickle as pickle
 import struct
 import sys
+import warnings
 
 import numba
 from numba import _dispatcher, compiler, utils, types
@@ -20,6 +21,7 @@ from numba.typing.templates import fold_arguments
 from numba.typing.typeof import typeof
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method, next
+from .config import NumbaWarning
 
 
 class _OverloadedBase(_dispatcher.Dispatcher):
@@ -474,8 +476,10 @@ class FunctionCache(object):
         # Keep the last dotted component, since the package name is already
         # encoded in the directory.
         modname = py_func.__module__.split('.')[-1]
+        self._funcname = qualname.split('.')[-1]
         self._fullname = "%s.%s" % (modname, qualname)
         self._source_path = inspect.getfile(py_func)
+        self._lineno = py_func.__code__.co_firstlineno
         self._cache_path = os.path.join(os.path.dirname(self._source_path),
                                         '__pycache__')
         abiflags = getattr(sys, 'abiflags', '')
@@ -521,6 +525,13 @@ class FunctionCache(object):
 
     def save_overload(self, sig, cres):
         if not self._enabled:
+            return
+        # Check cachability
+        if cres.lifted:
+            msg = ('Cannot cache compiled function "%s" as it uses lifted loops'
+                   % self._funcname)
+            warnings.warn_explicit(msg, NumbaWarning,
+                                   self._source_path, self._lineno)
             return
         try:
             os.mkdir(self._cache_path)

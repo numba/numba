@@ -8,11 +8,13 @@ import subprocess
 import sys
 import tempfile
 import threading
+import warnings
 
 import numpy as np
 
 from numba import unittest_support as unittest
 from numba import utils, vectorize, jit
+from numba.config import NumbaWarning
 from .support import TestCase
 
 
@@ -532,6 +534,22 @@ class TestCache(TestCase):
         f = mod.add_nocache_usecase
         self.assertPreciseEqual(f(2, 3), 6)
         self.check_cache(0)
+
+    def test_looplifted(self):
+        # Loop-lifted functions can't be cached and raise a warning
+        mod = self.import_module()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.looplifted
+            self.assertPreciseEqual(f(4), 6)
+            self.check_cache(0)
+
+        self.assertEqual(len(w), 1)
+        self.assertEqual(str(w[0].message),
+                         'Cannot cache compiled function "looplifted" '
+                         'as it uses lifted loops')
 
     def test_cache_reuse(self):
         mod = self.import_module()

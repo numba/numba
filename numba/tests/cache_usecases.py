@@ -36,6 +36,15 @@ def outer(x, y):
     return inner(-y, x)
 
 
+@jit(cache=True, forceobj=True)
+def looplifted(n):
+    object()
+    res = 0
+    for i in range(n):
+        res = res + i
+    return res
+
+
 Z = 1
 
 # Exercise returning a record instance.  This used to hardcode the dtype
