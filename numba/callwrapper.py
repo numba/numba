@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from llvmlite.llvmpy.core import Type, Builder, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils
+from numba import types, cgutils, config
 
 
 class _ArgManager(object):
@@ -35,9 +35,8 @@ class _ArgManager(object):
             self.builder.branch(self.nextblk)
 
         # Write the cleanup block for this argument
-        cleanupblk = cgutils.append_basic_block(self.builder,
-                                                "arg%d.err" % self.arg_count)
-        with cgutils.goto_block(self.builder, cleanupblk):
+        cleanupblk = self.builder.append_basic_block("arg%d.err" % self.arg_count)
+        with self.builder.goto_block(cleanupblk):
             # NRT cleanup
 
             if self.context.enable_nrt:
@@ -117,19 +116,17 @@ class PyCallWrapper(object):
 
     def build_wrapper(self, api, builder, closure, args, kws):
         nargs = len(self.fndesc.args)
-        keywords = self.make_keywords(self.fndesc.args)
-        fmt = self.make_const_string("O" * nargs)
 
         objs = [api.alloca_obj() for _ in range(nargs)]
-        parseok = api.parse_tuple_and_keywords(args, kws, fmt, keywords, *objs)
+        parseok = api.unpack_tuple(args, self.fndesc.qualname, nargs, nargs, *objs)
 
         pred = builder.icmp(lc.ICMP_EQ, parseok, Constant.null(parseok.type))
         with cgutils.if_unlikely(builder, pred):
             builder.ret(api.get_null_object())
 
         # Block that returns after erroneous argument unboxing/cleanup
-        endblk = cgutils.append_basic_block(builder, "arg.end")
-        with cgutils.goto_block(builder, endblk):
+        endblk = builder.append_basic_block("arg.end")
+        with builder.goto_block(endblk):
             builder.ret(api.get_null_object())
 
         cleanup_manager = _ArgManager(self.context, builder, api, endblk, nargs)
@@ -143,32 +140,44 @@ class PyCallWrapper(object):
             cleanup_manager = _GilManager(builder, api, cleanup_manager)
 
         # Extract the Environment object from the Closure
-        envptr = self.context.get_env_from_closure(builder, closure)
-        env_body = self.context.get_env_body(builder, envptr)
-        env_manager = api.get_env_manager(self.env, env_body)
+        envptr, env_manager = self.get_env(api, builder, closure)
 
-        status, res = self.context.call_conv.call_function(
+        status, retval = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
             innerargs, envptr)
         # Do clean up
+        self.debug_print(builder, "# callwrapper: emit_cleanup")
         cleanup_manager.emit_cleanup()
+        self.debug_print(builder, "# callwrapper: emit_cleanup end")
 
         # Determine return status
         with cgutils.if_likely(builder, status.is_ok):
             # Ok => return boxed Python value
-            with cgutils.ifthen(builder, status.is_none):
+            with builder.if_then(status.is_none):
                 api.return_none()
 
-            retval = api.from_native_return(res, self._simplified_return_type(),
-                                            env_manager)
-            builder.ret(retval)
+            retty = self._simplified_return_type()
+            obj = api.from_native_return(retval, retty, env_manager)
+            builder.ret(obj)
 
-        with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
+        with builder.if_then(builder.not_(status.is_python_exc)):
             # User exception raised
             self.make_exception_switch(api, builder, status)
 
         # Error out
         builder.ret(api.get_null_object())
+
+    def get_env(self, api, builder, closure):
+        if self.context.aot_mode:
+            # TODO: need to fix this properly for AOT compilation.
+            envptr = None
+            env_manager = None
+        else:
+            envptr = self.context.get_env_from_closure(builder, closure)
+            env_body = self.context.get_env_body(builder, envptr)
+            api.emit_environment_sentry(envptr, return_pyobject=True)
+            env_manager = api.get_env_manager(self.env, env_body, envptr)
+        return envptr, env_manager
 
     def make_exception_switch(self, api, builder, status):
         """
@@ -176,14 +185,14 @@ class PyCallWrapper(object):
         """
         code = status.code
         # Handle user exceptions
-        with cgutils.ifthen(builder, status.is_user_exc):
+        with builder.if_then(status.is_user_exc):
             exc = api.unserialize(status.excinfoptr)
             with cgutils.if_likely(builder,
                                    cgutils.is_not_null(builder, exc)):
                 api.raise_object(exc)  # steals ref
             builder.ret(api.get_null_object())
 
-        with cgutils.ifthen(builder, status.is_stop_iteration):
+        with builder.if_then(status.is_stop_iteration):
             api.err_set_none("PyExc_StopIteration")
             builder.ret(api.get_null_object())
 
@@ -192,17 +201,6 @@ class PyCallWrapper(object):
 
     def make_const_string(self, string):
         return self.context.insert_const_string(self.module, string)
-
-    def make_keywords(self, kws):
-        strings = []
-        stringtype = Type.pointer(Type.int(8))
-        for k in kws:
-            strings.append(self.make_const_string(k))
-
-        strings.append(Constant.null(stringtype))
-        kwlist = Constant.array(stringtype, strings)
-        kwlist = cgutils.global_constant(self.module, ".kwlist", kwlist)
-        return Constant.bitcast(kwlist, Type.pointer(stringtype))
 
     def _simplified_return_type(self):
         """
@@ -215,3 +213,7 @@ class PyCallWrapper(object):
             return restype.type
         else:
             return restype
+
+    def debug_print(self, builder, msg):
+        if config.DEBUG_JIT:
+            self.context.debug_print(builder, "DEBUGJIT: {0}".format(msg))

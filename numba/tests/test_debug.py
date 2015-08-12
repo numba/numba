@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import
 
+import os
 import platform
 import textwrap
 
@@ -20,18 +21,18 @@ def simple_gen(x, y):
 
 class DebugTestBase(TestCase):
 
+    all_dumps = set(['bytecode', 'cfg', 'ir', 'llvm', 'func_opt_llvm',
+                     'optimized_llvm', 'assembly'])
+
     def assert_fails(self, *args, **kwargs):
         self.assertRaises(AssertionError, *args, **kwargs)
 
-    def check_debug_output(self, out, enabled_dumps):
-        all_dumps = dict.fromkeys(['bytecode', 'cfg', 'ir', 'llvm',
-                                   'func_opt_llvm', 'optimized_llvm',
-                                   'assembly'],
-                                  False)
-        for name in enabled_dumps:
-            assert name in all_dumps
-            all_dumps[name] = True
-        for name, enabled in sorted(all_dumps.items()):
+    def check_debug_output(self, out, dump_names):
+        enabled_dumps = dict.fromkeys(self.all_dumps, False)
+        for name in dump_names:
+            assert name in enabled_dumps
+            enabled_dumps[name] = True
+        for name, enabled in sorted(enabled_dumps.items()):
             check_meth = getattr(self, '_check_dump_%s' % name)
             if enabled:
                 check_meth(out)
@@ -54,11 +55,11 @@ class DebugTestBase(TestCase):
     def _check_dump_func_opt_llvm(self, out):
         self.assertIn('--FUNCTION OPTIMIZED DUMP %s' % self.func_name, out)
         # allocas have been optimized away
-        self.assertIn('add i64 %arg.somearg, 1', out)
+        self.assertIn('add nsw i64 %arg.somearg, 1', out)
 
     def _check_dump_optimized_llvm(self, out):
         self.assertIn('--OPTIMIZED DUMP %s' % self.func_name, out)
-        self.assertIn('add i64 %arg.somearg, 1', out)
+        self.assertIn('add nsw i64 %arg.somearg, 1', out)
 
     def _check_dump_assembly(self, out):
         self.assertIn('--ASSEMBLY %s' % self.func_name, out)
@@ -66,7 +67,7 @@ class DebugTestBase(TestCase):
             self.assertIn('xorl', out)
 
 
-class TestFunctionDebugOutput(DebugTestBase):
+class FunctionDebugTestBase(DebugTestBase):
 
     func_name = 'simple_nopython'
 
@@ -76,6 +77,9 @@ class TestFunctionDebugOutput(DebugTestBase):
             # Sanity check compiled function
             self.assertPreciseEqual(cres.entry_point(2), 3)
         return out.getvalue()
+
+
+class TestFunctionDebugOutput(FunctionDebugTestBase):
 
     def test_dump_bytecode(self):
         with override_config('DUMP_BYTECODE', True):
@@ -135,6 +139,27 @@ class TestGeneratorDebugOutput(DebugTestBase):
             yield point #2: live variables = [], weak live variables = ['y']
             """)
         self.assertIn(expected_gen_info, out)
+
+
+class TestEnvironmentOverride(FunctionDebugTestBase):
+    """
+    Test that environment variables are reloaded by Numba when modified.
+    """
+
+    def test_debug(self):
+        out = self.compile_simple_nopython()
+        self.assertFalse(out)
+        os.environ['NUMBA_DEBUG'] = '1'
+        try:
+            out = self.compile_simple_nopython()
+            # Note that all variables dependent on NUMBA_DEBUG are
+            # updated too.
+            self.check_debug_output(out, ['ir', 'llvm', 'func_opt_llvm',
+                                          'optimized_llvm', 'assembly'])
+        finally:
+            del os.environ['NUMBA_DEBUG']
+        out = self.compile_simple_nopython()
+        self.assertFalse(out)
 
 
 if __name__ == '__main__':

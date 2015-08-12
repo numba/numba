@@ -25,6 +25,7 @@ from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
 import contextlib
 import numpy as np
 from collections import namedtuple
+
 from numba import utils, servicelib, mviewbuf
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
@@ -448,23 +449,30 @@ class Context(object):
     def __init__(self, device, handle, finalizer=None):
         self.device = device
         self.handle = handle
-        self.finalizer = finalizer
+        self.external_finalizer = finalizer
         self.trashing = TrashService("cuda.device%d.context%x.trash" %
                                      (self.device.id, self.handle.value))
-        self.is_managed = finalizer is not None
         self.allocations = utils.UniqueDict()
         self.modules = utils.UniqueDict()
+        self.finalizer = utils.finalize(self, self._make_finalizer())
         # For storing context specific data
         self.extras = {}
 
-    def __del__(self):
-        try:
-            self.reset()
-            # Free itself
-            if self.is_managed:
-                self.finalizer()
-        except:
-            traceback.print_exc()
+    def _make_finalizer(self):
+        """
+        Make a finalizer function that doesn't keep a reference to this object.
+        """
+        allocations = self.allocations
+        modules = self.modules
+        trashing = self.trashing
+        external_finalizer = self.external_finalizer
+        def finalize():
+            allocations.clear()
+            modules.clear()
+            trashing.clear()
+            if external_finalizer is not None:
+                external_finalizer()
+        return finalize
 
     def reset(self):
         """

@@ -81,7 +81,6 @@ class TestDispatcher(TestCase):
     def test_ambiguous_new_version(self):
         """Test compiling new version in an ambiguous case
         """
-
         @jit
         def foo(a, b):
             return a + b
@@ -219,6 +218,22 @@ class TestDispatcher(TestCase):
         f = jit(["(float32,float32)", "(float64,float64)"])(add)
         self.assertPreciseEqual(f(np.float32(1), np.float32(2**-25)), 1.0)
         self.assertPreciseEqual(f(1, 2**-25), 1.0000000298023224)
+        # Fail to resolve ambiguity between the two best overloads
+        f = jit(["(float32,float64)",
+                 "(float64,float32)",
+                 "(int64,int64)"])(add)
+        with self.assertRaises(TypeError) as cm:
+            f(1.0, 2.0)
+        # The two best matches are output in the error message, as well
+        # as the actual argument types.
+        self.assertRegexpMatches(
+            str(cm.exception),
+            r"Ambiguous overloading for <function add [^>]*> \(float64, float64\):\n"
+            r"\(float32, float64\) -> float64\n"
+            r"\(float64, float32\) -> float64"
+            )
+        # The integer signature is not part of the best matches
+        self.assertNotIn("int64", str(cm.exception))
 
     def test_signature_mismatch(self):
         tmpl = "Signature mismatch: %d argument types given, but function takes 2 arguments"

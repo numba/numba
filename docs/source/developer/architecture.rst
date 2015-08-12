@@ -296,7 +296,77 @@ fall back to object mode.  Type inference can fail when unsupported Python
 types, language features, or functions are used in the function body.
 
 
-Stage 5a: Generate No-Python LLVM IR
+.. _`rewrite-typed-ir`:
+
+Stage 5: Rewrite Typed IR
+-------------------------
+
+Numba implements a user-extensible rewriting pass that reads and
+possibly rewrites Numba IR.  This pass's purpose is to perform any
+high-level optimizations that still require, or could at least benefit
+from, Numba IR type information.
+
+One example of a problem domain that isn't as easily optimized once
+lowered is the domain of multidimensional array operations.  When
+Numba lowers an array operation, Numba treats the operation like a
+full ufunc kernel.  During lowering a single array operation, Numba
+generates an inline broadcasting loop that creates a new result array.
+Then Numba generates an application loop that applies the operator
+over the array inputs.  Recognizing and rewriting these loops once
+they are lowered into LLVM is hard, if not impossible.
+
+An example pair of optimizations in the domain of array operators is
+loop fusion and shortcut deforestation.  When the optimizer
+recognizes that the output of one array operator is being fed into
+another array operator, and only to that array operator, it can fuse
+the two loops into a single loop.  The optimizer can further eliminate
+the temporary array allocated for the initial operation by directly
+feeding the result of the first operation into the second, skipping
+the store and load to the intermediate array.  This elimination is
+known as shortcut deforestation.  Numba currently uses the rewrite
+pass to implement these array optimizations.  For more information,
+please consult the ":ref:`case-study-array-expressions`" subsection,
+later in this document.
+
+One can see the result of rewriting by setting the
+:envvar:`NUMBA_DUMP_IR` environment variable to a non-zero value (such
+as 1).  The following example shows the output of the rewrite pass as
+it recognizes an array expression consisting of a multiply and add,
+and outputs a fused kernel as a special operator, :func:`arrayexpr`::
+
+  ______________________________________________________________________
+  REWRITING:
+  a0 = arg(0, name=a0)                     ['a0']
+  a1 = arg(1, name=a1)                     ['a1']
+  a2 = arg(2, name=a2)                     ['a2']
+  $0.3 = a0 * a1                           ['$0.3', 'a0', 'a1']
+  del a1                                   []
+  del a0                                   []
+  $0.5 = $0.3 + a2                         ['$0.3', '$0.5', 'a2']
+  del a2                                   []
+  del $0.3                                 []
+  $0.6 = cast(value=$0.5)                  ['$0.5', '$0.6']
+  del $0.5                                 []
+  return $0.6                              ['$0.6']
+  ____________________________________________________________
+  a0 = arg(0, name=a0)                     ['a0']
+  a1 = arg(1, name=a1)                     ['a1']
+  a2 = arg(2, name=a2)                     ['a2']
+  $0.5 = arrayexpr(ty=array(float64, 1d, C), expr=('+', [('*', [Var(a0, test.py (14)), Var(a1, test.py (14))]), Var(a2, test.py (14))])) ['$0.5', 'a0', 'a1', 'a2']
+  del a0                                   []
+  del a1                                   []
+  del a2                                   []
+  $0.6 = cast(value=$0.5)                  ['$0.5', '$0.6']
+  del $0.5                                 []
+  return $0.6                              ['$0.6']
+  ______________________________________________________________________
+
+Following this rewrite, Numba lowers the array expression into a new
+ufunc-like function that is inlined into a single loop that only
+allocates a single result array.
+
+
+Stage 6a: Generate No-Python LLVM IR
 ------------------------------------
 
 If type inference succeeds in finding a Numba type for every intermediate
@@ -358,7 +428,7 @@ generated above quite significantly:
         ret i32 0
    }
 
-Stage 5b: Generate Object Mode LLVM IR
+Stage 6b: Generate Object Mode LLVM IR
 --------------------------------------
 
 If type inference fails to find Numba types for all values inside a function,
@@ -446,7 +516,7 @@ function.  Loop-lifting helps improve the performance of functions that
 need to access uncompilable code (such as I/O or plotting code) but still
 contain a time-intensive section of compilable code.
 
-Stage 6: Compile LLVM IR to Machine Code
+Stage 7: Compile LLVM IR to Machine Code
 ----------------------------------------
 
 In both "object mode" and "nopython mode", the generated LLVM IR is compiled

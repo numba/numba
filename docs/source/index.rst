@@ -12,12 +12,14 @@ with Numba, we suggest you start with the :doc:`User manual <user/index>`.
 
 .. toctree::
    :numbered:
-   :maxdepth: 3
+   :maxdepth: 2
 
    user/index.rst
    reference/index.rst
    cuda/index.rst
    cuda-reference/index.rst
+   hsa/index.rst
    developer/index.rst
+   proposals/index.rst
    glossary.rst
    release-notes.rst

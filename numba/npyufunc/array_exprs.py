@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 import ast
+from collections import defaultdict
 
 from numpy import ufunc
 
@@ -59,10 +60,13 @@ class RewriteArrayExprs(rewrites.Rewrite):
                     elif ((expr_op == 'call') and (expr.func.name in typemap)):
                         # Could be a match for a ufunc or DUFunc call.
                         func_type = typemap[expr.func.name]
-                        func_key = getattr(func_type.template, 'key', None)
-                        if isinstance(func_key, (ufunc, DUFunc)):
-                            # If so, match it as a potential subexpression.
-                            array_assigns[target_name] = instr
+                        # Note: func_type can be a types.Dispatcher, which
+                        #       doesn't have the `.template` attribute.
+                        if hasattr(func_type, 'template'):
+                            func_key = getattr(func_type.template, 'key', None)
+                            if isinstance(func_key, (ufunc, DUFunc)):
+                                # If so, match it as a potential subexpression.
+                                array_assigns[target_name] = instr
                     # Now check to see if we matched anything of
                     # interest; if so, check to see if one of the
                     # expression's dependencies isn't also a matching
@@ -122,7 +126,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
         '''
         replace_map = {}
         dead_vars = set()
-        used_vars = set()
+        used_vars = defaultdict(int)
         for match in self.matches:
             instr = self.array_assigns[match]
             expr = instr.value
@@ -141,8 +145,8 @@ class RewriteArrayExprs(rewrites.Rewrite):
                     child_assign = self.array_assigns[operand_name]
                     child_expr = child_assign.value
                     child_operands = child_expr.list_vars()
-                    used_vars.update(operand.name
-                                     for operand in child_operands)
+                    for operand in child_operands:
+                        used_vars[operand.name] += 1
                     arr_inps.append(self._translate_expr(child_expr))
                     if child_assign.target.is_temp:
                         dead_vars.add(child_assign.target.name)
@@ -150,7 +154,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
                 elif operand_name in self.const_assigns:
                     arr_inps.append(self.const_assigns[operand_name])
                 else:
-                    used_vars.add(operand.name)
+                    used_vars[operand.name] += 1
                     arr_inps.append(operand)
         return replace_map, dead_vars, used_vars
 
@@ -177,7 +181,6 @@ class RewriteArrayExprs(rewrites.Rewrite):
         delete_map = {}
         for instr in self.crnt_block.body:
             if isinstance(instr, ir.Assign):
-                target_name = instr.target.name
                 if instr in replace_map:
                     replacement = self._get_final_replacement(
                         replace_map, instr)
@@ -187,14 +190,15 @@ class RewriteArrayExprs(rewrites.Rewrite):
                             var_name = var.name
                             if var_name in delete_map:
                                 result.append(delete_map.pop(var_name))
-                            if var_name in used_vars:
-                                used_vars.remove(var_name)
+                            if used_vars[var_name] > 0:
+                                used_vars[var_name] -= 1
+
                 else:
                     result.append(instr)
             elif isinstance(instr, ir.Del):
                 instr_value = instr.value
-                if instr_value in used_vars:
-                    used_vars.remove(instr_value)
+                if used_vars[instr_value] > 0:
+                    used_vars[instr_value] -= 1
                     delete_map[instr_value] = instr
                 elif instr_value not in dead_vars:
                     result.append(instr)
@@ -281,32 +285,43 @@ def _lower_array_expr(lowerer, expr):
     '''Lower an array expression built by RewriteArrayExprs.
     '''
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
-    expr_args = sorted(set(expr.list_vars()), key=lambda x: x.name)
-    expr_arg_names = [arg.name for arg in expr_args]
+    expr_var_list = expr.list_vars()
+    expr_var_map = {}
+    for expr_var in expr_var_list:
+        expr_var_name = expr_var.name
+        expr_var_new_name = expr_var_name.replace("$", "_").replace(".", "_")
+        expr_var_map[expr_var_new_name] = expr_var_name, expr_var
+        expr_var.name = expr_var_new_name
+    expr_filename = expr_var_list[0].loc.filename
+    # Parameters are the names internal to the new closure.
+    expr_params = sorted(expr_var_map.keys())
+    # Arguments are the names external to the new closure (except in
+    # Python abstract syntax, apparently...)
+    expr_args = [expr_var_map[key][0] for key in expr_params]
     if hasattr(ast, "arg"):
         # Should be Python 3.x
-        ast_args = [ast.arg(arg_name, None)
-                    for arg_name in expr_arg_names]
+        ast_args = [ast.arg(param_name, None)
+                    for param_name in expr_params]
     else:
         # Should be Python 2.x
-        ast_args = [ast.Name(arg_name, ast.Param())
-                    for arg_name in expr_arg_names]
+        ast_args = [ast.Name(param_name, ast.Param())
+                    for param_name in expr_params]
     # Parse a stub function to ensure the AST is populated with
     # reasonable defaults for the Python version.
     ast_module = ast.parse('def {0}(): return'.format(expr_name),
-                           expr_args[0].loc.filename, 'exec')
+                           expr_filename, 'exec')
     assert hasattr(ast_module, 'body') and len(ast_module.body) == 1
     ast_fn = ast_module.body[0]
     ast_fn.args.args = ast_args
     ast_fn.body[0].value, namespace = _arr_expr_to_ast(expr.expr)
     ast.fix_missing_locations(ast_module)
-    code_obj = compile(ast_module, expr_args[0].loc.filename, 'exec')
+    code_obj = compile(ast_module, expr_filename, 'exec')
     six.exec_(code_obj, namespace)
     impl = namespace[expr_name]
 
     context = lowerer.context
     builder = lowerer.builder
-    outer_sig = expr.ty(*(lowerer.typeof(name) for name in expr_arg_names))
+    outer_sig = expr.ty(*(lowerer.typeof(name) for name in expr_args))
     inner_sig_args = []
     for argty in outer_sig.args:
         if isinstance(argty, types.Array):
@@ -315,11 +330,7 @@ def _lower_array_expr(lowerer, expr):
             inner_sig_args.append(argty)
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
-    _locals = dict((name, value)
-                   for name, value in namespace.items()
-                   if name.startswith("__ufunc_or_dufunc_"))
-    cres = context.compile_only_no_cache(builder, impl, inner_sig,
-                                         locals=_locals)
+    cres = context.compile_only_no_cache(builder, impl, inner_sig)
 
     class ExprKernel(npyimpl._Kernel):
         def generate(self, *args):
@@ -331,6 +342,6 @@ def _lower_array_expr(lowerer, expr):
             return self.cast(result, inner_sig.return_type,
                              self.outer_sig.return_type)
 
-    args = [lowerer.loadvar(name) for name in expr_arg_names]
+    args = [lowerer.loadvar(name) for name in expr_args]
     return npyimpl.numpy_ufunc_kernel(
         context, builder, outer_sig, args, ExprKernel, explicit_output=False)

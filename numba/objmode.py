@@ -10,7 +10,8 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from . import cgutils, generators, ir, types, utils
-from .lowering import BaseLower, ForbiddenConstruct
+from .errors import ForbiddenConstruct
+from .lowering import BaseLower
 from .utils import builtins, intern
 
 
@@ -47,19 +48,8 @@ class PyLower(BaseLower):
         self._live_vars = set()
 
     def pre_lower(self):
-        self.pyapi = self.context.get_python_api(self.builder)
-
-        # Store environment argument for later use
-        self.envarg = self.call_conv.get_env_argument(self.function)
-        with cgutils.if_unlikely(self.builder, self.is_null(self.envarg)):
-            self.pyapi.err_set_string(
-                "PyExc_SystemError",
-                "Numba internal error: object mode function called "
-                "without an environment")
-            self.return_exception_raised()
-
-        self.env_body = self.context.get_env_body(self.builder, self.envarg)
-        self.env_manager = self.pyapi.get_env_manager(self.env, self.env_body)
+        super(PyLower, self).pre_lower()
+        self.init_pyapi()
 
     def post_lower(self):
         pass
@@ -278,7 +268,7 @@ class PyLower(BaseLower):
             item = self.pyapi.iter_next(iterobj)
             is_valid = cgutils.is_not_null(self.builder, item)
             pair = self.pyapi.tuple_new(2)
-            with cgutils.ifelse(self.builder, is_valid) as (then, otherwise):
+            with self.builder.if_else(is_valid) as (then, otherwise):
                 with then:
                     self.pyapi.tuple_setitem(pair, 0, item)
                 with otherwise:
@@ -379,7 +369,7 @@ class PyLower(BaseLower):
             obj_is_null = self.is_null(obj)
             bbelse = self.builder.basic_block
 
-            with cgutils.ifthen(self.builder, obj_is_null):
+            with self.builder.if_then(obj_is_null):
                 mod = self.pyapi.dict_getitem(moddict,
                                           self._freeze_string("__builtins__"))
                 builtin = self.builtin_lookup(mod, name)
@@ -549,7 +539,7 @@ class PyLower(BaseLower):
         """
         if ltype is None:
             ltype = self.context.get_value_type(types.pyobject)
-        with cgutils.goto_block(self.builder, self.entry_block):
+        with self.builder.goto_block(self.entry_block):
             ptr = self.builder.alloca(ltype, name=name)
             self.builder.store(cgutils.get_null_value(ltype), ptr)
         return ptr

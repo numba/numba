@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 from ctypes import *
 import sys
 
+
 is_windows = sys.platform.startswith('win32')
 
 if is_windows:
@@ -75,3 +76,18 @@ def use_func_pointer(fa, fb, x):
         return fa(x)
     else:
         return fb(x)
+
+
+mydct = {'what': 1232121}
+
+def call_me_maybe(arr):
+    return mydct[arr[0].decode('ascii')]
+
+# Create a callback into the python interpreter
+py_call_back = CFUNCTYPE(c_int, py_object)(call_me_maybe)
+
+
+def take_array_ptr(ptr):
+    return ptr
+
+c_take_array_ptr = CFUNCTYPE(c_void_p, c_void_p)(take_array_ptr)

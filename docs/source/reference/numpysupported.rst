@@ -65,7 +65,8 @@ Structured scalars support attribute getting and setting.
 Array types
 ===========
 
-Arrays of any of the scalar types above are supported, regardless of the shape
+`Numpy arrays <http://docs.scipy.org/doc/numpy/reference/arrays.ndarray.html>`_
+of any of the scalar types above are supported, regardless of the shape
 or layout.
 
 Operations
@@ -81,21 +82,39 @@ Attributes
 
 The following attributes of Numpy arrays are supported:
 
+* :attr:`~numpy.ndarray.dtype`
+* :attr:`~numpy.ndarray.flags`
 * :attr:`~numpy.ndarray.flat`
 * :attr:`~numpy.ndarray.itemsize`
 * :attr:`~numpy.ndarray.ndim`
 * :attr:`~numpy.ndarray.shape`
 * :attr:`~numpy.ndarray.size`
 * :attr:`~numpy.ndarray.strides`
+* :attr:`~numpy.ndarray.T`
 
-Methods
--------
+The ``flags`` object
+''''''''''''''''''''
+
+The object returned by the :attr:`~numpy.ndarray.flags` attribute supports
+the ``contiguous``, ``c_contiguous`` and ``f_contiguous`` attributes.
+
+The ``flat`` object
+'''''''''''''''''''
+
+The object returned by the :attr:`~numpy.ndarray.flat` attribute supports
+iteration and indexing, but be careful: indexing is very slow on
+non-C-contiguous arrays.
+
+Calculation
+-----------
 
 The following methods of Numpy arrays are supported in their basic form
 (without any optional arguments):
 
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
+* :meth:`~numpy.ndarray.cumprod`
+* :meth:`~numpy.ndarray.cumsum`
 * :meth:`~numpy.ndarray.max`
 * :meth:`~numpy.ndarray.mean`
 * :meth:`~numpy.ndarray.min`
@@ -107,6 +126,16 @@ The following methods of Numpy arrays are supported in their basic form
 The corresponding top-level Numpy functions (such as :func:`numpy.sum`)
 are similarly supported.
 
+Other methods
+-------------
+
+The following methods of Numpy arrays are supported:
+
+* :meth:`~numpy.ndarray.copy` (without arguments)
+* :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
+* :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
+* :meth:`~numpy.ndarray.view` (only the 1-argument form)
+
 
 Functions
 =========
@@ -117,10 +146,12 @@ The following top-level functions are supported:
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.eye`
+* :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full`
 * :func:`numpy.full_like`
 * :func:`numpy.identity`
 * :func:`numpy.linspace` (only the 3-argument form)
+* :func:`numpy.median` (only the first argument)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :func:`numpy.ones`

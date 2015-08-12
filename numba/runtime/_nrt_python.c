@@ -16,9 +16,6 @@
 static
 PyObject*
 memsys_shutdown(PyObject *self, PyObject *args) {
-    if (!PyArg_ParseTuple(args, "")) {
-        return NULL;
-    }
     NRT_MemSys_shutdown();
     Py_RETURN_NONE;
 }
@@ -55,14 +52,27 @@ memsys_set_atomic_cas(PyObject *self, PyObject *args) {
 
 static
 PyObject*
-memsys_process_defer_dtor(PyObject *self, PyObject *args) {
-    if (!PyArg_ParseTuple(args, "")) {
-        return NULL;
-    }
-    NRT_MemSys_process_defer_dtor();
-    Py_RETURN_NONE;
+memsys_get_stats_alloc(PyObject *self, PyObject *args) {
+    return PyLong_FromSize_t(NRT_MemSys_get_stats_alloc());
 }
 
+static
+PyObject*
+memsys_get_stats_free(PyObject *self, PyObject *args) {
+    return PyLong_FromSize_t(NRT_MemSys_get_stats_free());
+}
+
+static
+PyObject*
+memsys_get_stats_mi_alloc(PyObject *self, PyObject *args) {
+    return PyLong_FromSize_t(NRT_MemSys_get_stats_mi_alloc());
+}
+
+static
+PyObject*
+memsys_get_stats_mi_free(PyObject *self, PyObject *args) {
+    return PyLong_FromSize_t(NRT_MemSys_get_stats_mi_free());
+}
 
 static
 void pyobject_dtor(void *ptr, void* info) {
@@ -136,7 +146,6 @@ meminfo_alloc_safe(PyObject *self, PyObject *args) {
 typedef struct {
     PyObject_HEAD
     MemInfo *meminfo;
-    int      defer;
 } MemInfoObject;
 
 static
@@ -150,8 +159,7 @@ int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
     raw_ptr = PyLong_AsVoidPtr(raw_ptr_obj);
     if(PyErr_Occurred()) return -1;
     self->meminfo = (MemInfo*)raw_ptr;
-    self->defer = 0;
-    NRT_MemInfo_acquire(self->meminfo);
+    assert (NRT_MemInfo_refcount(self->meminfo) > 0 && "0 refcount");
     return 0;
 }
 
@@ -209,32 +217,9 @@ MemInfo_acquire(MemInfoObject *self) {
 static
 PyObject*
 MemInfo_release(MemInfoObject *self) {
-    NRT_MemInfo_release(self->meminfo, self->defer);
+    NRT_MemInfo_release(self->meminfo);
     Py_RETURN_NONE;
 }
-
-static
-int
-MemInfo_set_defer(MemInfoObject *self, PyObject *value, void *closure) {
-    int defer = PyObject_IsTrue(value);
-    if (defer == -1) {
-        return -1;
-    }
-    self->defer = defer;
-    return 0;
-}
-
-
-static
-PyObject*
-MemInfo_get_defer(MemInfoObject *self, void *closure) {
-    if (self->defer) {
-        Py_RETURN_TRUE;
-    } else {
-        Py_RETURN_FALSE;
-    }
-}
-
 
 static
 PyObject*
@@ -242,10 +227,21 @@ MemInfo_get_data(MemInfoObject *self, void *closure) {
     return PyLong_FromVoidPtr(NRT_MemInfo_data(self->meminfo));
 }
 
+static
+PyObject*
+MemInfo_get_refcount(MemInfoObject *self, void *closure) {
+    size_t refct = NRT_MemInfo_refcount(self->meminfo);
+    if ( refct == (size_t)-1 ) {
+        PyErr_SetString(PyExc_ValueError, "invalid MemInfo");
+        return NULL;
+    }
+    return PyLong_FromSize_t(refct);
+}
+
 static void
 MemInfo_dealloc(MemInfoObject *self)
 {
-    NRT_MemInfo_release(self->meminfo, self->defer);
+    NRT_MemInfo_release(self->meminfo);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -261,13 +257,13 @@ static PyMethodDef MemInfo_methods[] = {
 
 
 static PyGetSetDef MemInfo_getsets[] = {
-    {"defer",
-     (getter)MemInfo_get_defer, (setter)MemInfo_set_defer,
-     "Boolean flag for the defer attribute",
-     NULL},
     {"data",
      (getter)MemInfo_get_data, NULL,
      "Get the data pointer as an integer",
+     NULL},
+    {"refcount",
+     (getter)MemInfo_get_refcount, NULL,
+     "Get the refcount",
      NULL},
     {NULL}  /* Sentinel */
 };
@@ -353,27 +349,28 @@ int NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
 
     NRT_Debug(nrt_debug_print("NRT_adapt_ndarray_from_python %p\n",
                               arystruct->meminfo));
-
-    NRT_MemInfo_acquire(arystruct->meminfo);
     return 0;
 }
 
 static
-PyObject* try_to_return_parent(arystruct_t *arystruct, int ndim, int typenum)
+PyObject* try_to_return_parent(arystruct_t *arystruct, int ndim,
+                               PyArray_Descr *descr)
 {
     int i;
     PyArrayObject *array = (PyArrayObject *)arystruct->parent;
 
-    if (PyArray_DATA(array) != arystruct->data)
+    if (!PyArray_Check(arystruct->parent))
+        /* Parent is a generic buffer-providing object */
         goto RETURN_ARRAY_COPY;
 
-    if (PyArray_TYPE(array) != typenum)
+    if (PyArray_DATA(array) != arystruct->data)
         goto RETURN_ARRAY_COPY;
 
     if (PyArray_NDIM(array) != ndim)
         goto RETURN_ARRAY_COPY;
 
-    if (PyArray_ITEMSIZE(array) != arystruct->itemsize)
+    if (PyObject_RichCompareBool((PyObject *) PyArray_DESCR(array),
+                                 (PyObject *) descr, Py_EQ) <= 0)
         goto RETURN_ARRAY_COPY;
 
     for(i = 0; i < ndim; ++i) {
@@ -390,21 +387,32 @@ PyObject* try_to_return_parent(arystruct_t *arystruct, int ndim, int typenum)
 
 RETURN_ARRAY_COPY:
     return NULL;
-
 }
 
-static
-PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
-                                      int type_num) {
-    PyObject *array;
+static PyObject *
+NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
+                            int writeable, PyArray_Descr *descr)
+{
+    PyArrayObject *array;
     MemInfoObject *miobj = NULL;
     PyObject *args;
     npy_intp *shape, *strides;
-    int flags=0;
+    int flags = 0;
+
+    if (!PyArray_DescrCheck(descr)) {
+        PyErr_Format(PyExc_TypeError,
+                     "expected dtype object, got '%.200s'",
+                     Py_TYPE(descr)->tp_name);
+        return NULL;
+    }
 
     if (arystruct->parent) {
-        array = try_to_return_parent(arystruct, ndim, type_num);
-        if (array) return array;
+        PyObject *obj = try_to_return_parent(arystruct, ndim, descr);
+        if (obj) {
+            /* Release NRT reference to the numpy array */
+            NRT_MemInfo_release(arystruct->meminfo);
+            return obj;
+        }
     }
 
     if (arystruct->meminfo) {
@@ -413,37 +421,58 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
         args = PyTuple_New(1);
         /* SETITEM steals reference */
         PyTuple_SET_ITEM(args, 0, PyLong_FromVoidPtr(arystruct->meminfo));
-        if(MemInfo_init(miobj, args, NULL)) {
+        /*  Note: MemInfo_init() does not incref.  This function steals the
+         *        NRT reference.
+         */
+        if (MemInfo_init(miobj, args, NULL)) {
             return NULL;
         }
         Py_DECREF(args);
-        /* Set writable */
-#if NPY_API_VERSION >= 0x00000007
-        flags |= NPY_ARRAY_WRITEABLE;
-#endif
     }
 
     shape = arystruct->shape_and_strides;
     strides = shape + ndim;
-    array = PyArray_New(&PyArray_Type, ndim, shape, type_num,
-                        strides, arystruct->data,
-                        arystruct->itemsize, flags, (PyObject*)miobj);
+    Py_INCREF((PyObject *) descr);
+    array = (PyArrayObject *) PyArray_NewFromDescr(&PyArray_Type, descr, ndim,
+                                                   shape, strides, arystruct->data,
+                                                   flags, (PyObject *) miobj);
+
+    if (array == NULL)
+        return NULL;
+
+    /* Set writable */
+#if NPY_API_VERSION >= 0x00000007
+    if (writeable) {
+        PyArray_ENABLEFLAGS(array, NPY_ARRAY_WRITEABLE);
+    }
+    else {
+        PyArray_CLEARFLAGS(array, NPY_ARRAY_WRITEABLE);
+    }
+#else
+    if (writeable) {
+        array->flags |= NPY_WRITEABLE;
+    }
+    else {
+        array->flags &= ~NPY_WRITEABLE;
+    }
+#endif
 
     if (miobj) {
         /* Set the MemInfoObject as the base object */
 #if NPY_API_VERSION >= 0x00000007
-        if (-1 == PyArray_SetBaseObject((PyArrayObject*)array,
-                                        (PyObject *)miobj))
+        if (-1 == PyArray_SetBaseObject(array,
+                                        (PyObject *) miobj))
         {
             Py_DECREF(array);
+            Py_DECREF(miobj);
             return NULL;
         }
 #else
-        PyArray_BASE((PyArrayObject*)array) = (PyObject*) miobj;
+        PyArray_BASE(array) = (PyObject *) miobj;
 #endif
 
     }
-    return array;
+    return (PyObject *) array;
 }
 
 static void
@@ -455,7 +484,6 @@ NRT_adapt_buffer_from_python(Py_buffer *buf, arystruct_t *arystruct)
     if (buf->obj) {
         /* Allocate new MemInfo only if the buffer has a parent */
         arystruct->meminfo = meminfo_new_from_pyobject((void*)buf->buf, buf->obj);
-        NRT_MemInfo_acquire(arystruct->meminfo);
     }
     arystruct->data = buf->buf;
     arystruct->itemsize = buf->itemsize;
@@ -483,16 +511,20 @@ NRT_incref(MemInfo* mi) {
 static void
 NRT_decref(MemInfo* mi) {
     if (mi) {
-        NRT_MemInfo_release(mi, 0);
+        NRT_MemInfo_release(mi);
     }
 }
 
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
-    declmethod(memsys_shutdown),
+#define declmethod_noargs(func) { #func , ( PyCFunction )func , METH_NOARGS, NULL }
+    declmethod_noargs(memsys_shutdown),
     declmethod(memsys_set_atomic_inc_dec),
     declmethod(memsys_set_atomic_cas),
-    declmethod(memsys_process_defer_dtor),
+    declmethod_noargs(memsys_get_stats_alloc),
+    declmethod_noargs(memsys_get_stats_free),
+    declmethod_noargs(memsys_get_stats_mi_alloc),
+    declmethod_noargs(memsys_get_stats_mi_free),
     declmethod(meminfo_new),
     declmethod(meminfo_alloc),
     declmethod(meminfo_alloc_safe),
@@ -526,10 +558,13 @@ declmethod(adapt_ndarray_to_python);
 declmethod(adapt_buffer_from_python);
 declmethod(incref);
 declmethod(decref);
-declmethod(MemInfo_data);
 declmethod(MemInfo_alloc);
 declmethod(MemInfo_alloc_safe);
+declmethod(MemInfo_alloc_aligned);
+declmethod(MemInfo_alloc_safe_aligned);
 declmethod(MemInfo_call_dtor);
+declmethod(MemInfo_varsize_alloc);
+declmethod(MemInfo_varsize_realloc);
 
 
 #undef declmethod

@@ -4,6 +4,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.runtime import rtsys
 from numba.config import PYVERSION
+from .support import MemoryLeakMixin
 
 
 class Dummy(object):
@@ -31,11 +32,14 @@ class TestNrtMemInfo(unittest.TestCase):
         addr = 0xdeadcafe  # some made up location
 
         mi = rtsys.meminfo_new(addr, d)
+        self.assertEqual(mi.refcount, 1)
         del d
         self.assertEqual(Dummy.alive, 1)
         mi.acquire()
+        self.assertEqual(mi.refcount, 2)
         self.assertEqual(Dummy.alive, 1)
         mi.release()
+        self.assertEqual(mi.refcount, 1)
         del mi
         self.assertEqual(Dummy.alive, 0)
 
@@ -45,33 +49,17 @@ class TestNrtMemInfo(unittest.TestCase):
         addr = 0xdeadcafe  # some made up location
 
         mi = rtsys.meminfo_new(addr, d)
+        self.assertEqual(mi.refcount, 1)
         del d
         self.assertEqual(Dummy.alive, 1)
-        for _ in range(100):
+        for ct in range(100):
             mi.acquire()
+        self.assertEqual(mi.refcount, 1 + 100)
         self.assertEqual(Dummy.alive, 1)
         for _ in range(100):
             mi.release()
+        self.assertEqual(mi.refcount, 1)
         del mi
-        self.assertEqual(Dummy.alive, 0)
-
-    def test_defer_dtor(self):
-        d = Dummy()
-        self.assertEqual(Dummy.alive, 1)
-        addr = 0xdeadcafe  # some made up location
-
-        mi = rtsys.meminfo_new(addr, d)
-        # Set defer flag
-        mi.defer = True
-        del d
-        self.assertEqual(Dummy.alive, 1)
-        mi.acquire()
-        self.assertEqual(Dummy.alive, 1)
-        mi.release()
-        del mi
-        # mi refct is zero but not yet removed due to deferring
-        self.assertEqual(Dummy.alive, 1)
-        rtsys.process_defer_dtor()
         self.assertEqual(Dummy.alive, 0)
 
     @unittest.skipIf(PYVERSION <= (2, 7), "memoryview not supported")
@@ -81,7 +69,9 @@ class TestNrtMemInfo(unittest.TestCase):
         addr = 0xdeadcafe  # some made up location
 
         mi = rtsys.meminfo_new(addr, d)
+        self.assertEqual(mi.refcount, 1)
         mview = memoryview(mi)
+        self.assertEqual(mi.refcount, 1)
         self.assertEqual(addr, mi.data)
         self.assertFalse(mview.readonly)
         self.assertIs(mi, mview.obj)
@@ -143,6 +133,7 @@ class TestNrtMemInfo(unittest.TestCase):
         dtype = np.dtype(np.uint32)
         bytesize = dtype.itemsize * 10
         mi = rtsys.meminfo_alloc(bytesize, safe=True)
+        self.assertEqual(mi.refcount, 1)
         addr = mi.data
         c_arr = cast(c_void_p(addr), POINTER(c_uint32 * 10))
         # Check 0xCB-filling
@@ -155,6 +146,7 @@ class TestNrtMemInfo(unittest.TestCase):
 
         arr = np.ndarray(dtype=dtype, shape=bytesize // dtype.itemsize,
                          buffer=mi)
+        self.assertEqual(mi.refcount, 1)
         del mi
         # Modify array with NumPy
         np.testing.assert_equal(np.arange(arr.size) + 1, arr)
@@ -172,7 +164,54 @@ class TestNrtMemInfo(unittest.TestCase):
         # consumed by another thread.
 
 
+class TestNRTIssue(MemoryLeakMixin, unittest.TestCase):
+    def test_issue_with_refct_op_pruning(self):
+        """
+        GitHub Issue #1244 https://github.com/numba/numba/issues/1244
+        """
+        from numba import njit
+        import numpy as np
+        import math
+
+        @njit
+        def calculate_2D_vector_mag(vector):
+            x, y = vector
+
+            return math.sqrt(x ** 2 + y ** 2)
+
+        @njit
+        def normalize_2D_vector(vector):
+            normalized_vector = np.empty(2, dtype=np.float64)
+
+            mag = calculate_2D_vector_mag(vector)
+            x, y = vector
+
+            normalized_vector[0] = x / mag
+            normalized_vector[1] = y / mag
+
+            return normalized_vector
+
+        @njit
+        def normalize_vectors(num_vectors, vectors):
+            normalized_vectors = np.empty((num_vectors, 2), dtype=np.float64)
+
+            for i in range(num_vectors):
+                vector = vectors[i]
+
+                normalized_vector = normalize_2D_vector(vector)
+
+                normalized_vectors[i, 0] = normalized_vector[0]
+                normalized_vectors[i, 1] = normalized_vector[1]
+
+            return normalized_vectors
+
+        num_vectors = 10
+        test_vectors = np.random.random((num_vectors, 2))
+        got = normalize_vectors(num_vectors, test_vectors)
+        expected = normalize_vectors.py_func(num_vectors, test_vectors)
+
+        np.testing.assert_almost_equal(expected, got)
+
+
 if __name__ == '__main__':
     unittest.main()
-
-

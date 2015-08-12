@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import, division
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                     shared, local, const, grid, gridsize, atomic)
 from .cudadrv.error import CudaSupportError
+from .cudadrv import nvvm
 from . import initialize
 from .errors import KernelRuntimeError
 
@@ -17,7 +18,7 @@ def is_available():
 
     This will initialize the driver if it hasn't been initialized.
     """
-    return driver.driver.is_available
+    return driver.driver.is_available and nvvm.is_available()
 
 
 def cuda_error():

@@ -146,7 +146,7 @@ class _Compiler(object):
         self.exported_function_types = {}
 
         typing_ctx = CPUTarget.typing_context
-        target_ctx = CPUTarget.target_context
+        target_ctx = CPUTarget.target_context.subtarget(aot_mode=True)
 
         codegen = target_ctx.aot_codegen(self.module_name)
         library = codegen.create_library(self.module_name)
@@ -445,7 +445,7 @@ class CompilerPy3(_Compiler):
         # Test if module has been created correctly.
         # (XXX for some reason comparing with the NULL constant fails llvm
         #  with an assertion in pydebug mode)
-        with cgutils.ifthen(builder, cgutils.is_null(builder, mod)):
+        with builder.if_then(cgutils.is_null(builder, mod)):
             builder.ret(NULL.bitcast(mod_init_fn.type.pointee.return_type))
 
         builder.ret(mod)

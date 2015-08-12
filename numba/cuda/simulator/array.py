@@ -44,7 +44,11 @@ class FakeCUDAArray(object):
     def copy_to_host(self, ary=None, stream=0):
         if ary is None:
             ary = np.empty_like(self._ary)
-        np.copyto(ary, self._ary)
+        # NOTE: np.copyto() introduced in Numpy 1.7
+        try:
+            np.copyto(ary, self._ary)
+        except AttributeError:
+            ary[:] = self._ary
         return ary
 
     def copy_to_device(self, ary, stream=0):
@@ -53,10 +57,12 @@ class FakeCUDAArray(object):
 
         This may be less forgiving than the CUDA Python implementation, which
         will copy data up to the length of the smallest of the two arrays,
-        whereas this uses np.copyto, which expects the size of the arrays to be
-        equal.
+        whereas this expects the size of the arrays to be equal.
         '''
-        np.copyto(self._ary, ary)
+        try:
+            np.copyto(self._ary, ary)
+        except AttributeError:
+            self._ary[:] = ary
 
     def to_host(self):
         warn('to_host() is deprecated and will be removed')

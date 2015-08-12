@@ -8,6 +8,7 @@ from numba import unittest_support as unittest
 from numba import compiler, typing, typeof, ir
 from numba.compiler import Pipeline, _PipelineManager, Flags
 from numba.targets import cpu
+from .support import MemoryLeakMixin
 
 
 class Namespace(dict):
@@ -43,6 +44,18 @@ def call_stuff(a0, a1):
 def are_roots_imaginary(As, Bs, Cs):
     return (Bs ** 2 - 4 * As * Cs) < 0
 
+# From issue #1264
+def distance_matrix(vectors):
+    n_vectors = vectors.shape[0]
+    result = np.empty((n_vectors, n_vectors), dtype=np.float64)
+
+    for i in range(n_vectors):
+        for j in range(i, n_vectors):
+            result[i,j] = result[j,i] = np.sum(
+                (vectors[i] - vectors[j]) ** 2) ** 0.5
+
+    return result
+
 
 class RewritesTester(Pipeline):
     @classmethod
@@ -67,7 +80,7 @@ class RewritesTester(Pipeline):
         return cls.mk_pipeline(args, return_type, flags, locals, library, **kws)
 
 
-class TestArrayExpressions(unittest.TestCase):
+class TestArrayExpressions(MemoryLeakMixin, unittest.TestCase):
 
     def test_simple_expr(self):
         '''
@@ -246,6 +259,34 @@ class TestArrayExpressions(unittest.TestCase):
         ns = self._test_root_function(are_roots_imaginary)
         self._assert_total_rewrite(ns.control_pipeline.interp.blocks,
                                    ns.test_pipeline.interp.blocks)
+
+
+class TestRewriteIssues(MemoryLeakMixin, unittest.TestCase):
+    def test_issue_1184(self):
+        from numba import jit
+        import numpy as np
+
+        @jit(nopython=True)
+        def foo(arr):
+            return arr
+
+        @jit(nopython=True)
+        def bar(arr):
+            c = foo(arr)
+            d = foo(arr)   # two calls to trigger rewrite
+            return c, d
+
+        arr = np.arange(10)
+        out_c, out_d = bar(arr)
+        self.assertIs(out_c, out_d)
+        self.assertIs(out_c, arr)
+
+    def test_issue_1264(self):
+        n = 100
+        x = np.random.uniform(size=n*3).reshape((n,3))
+        expected = distance_matrix(x)
+        actual = njit(distance_matrix)(x)
+        np.testing.assert_array_almost_equal(expected, actual)
 
 
 if __name__ == "__main__":

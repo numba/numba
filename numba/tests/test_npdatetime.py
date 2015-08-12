@@ -13,8 +13,8 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.typeinfer import TypingError
 from numba import config, jit, npdatetime, types, vectorize
+from numba.errors import TypingError
 from .support import TestCase, skip_on_numpy_16
 
 
@@ -65,6 +65,12 @@ def neg_usecase(x):
 
 def abs_usecase(x):
     return abs(x)
+
+
+def make_add_constant(const):
+    def add_constant(x):
+        return x + const
+    return add_constant
 
 
 @skip_on_numpy_16
@@ -209,6 +215,27 @@ class TestMiscCompiling(TestCase):
         sig = "NPTimedelta('s')(NPTimedelta('s'), int64)"
         _check_explicit_signature(sig)
 
+    def test_constant_datetime(self):
+        def check(const):
+            pyfunc = make_add_constant(const)
+            f = jit(nopython=True)(pyfunc)
+            x = TD(4, 'D')
+            expected = pyfunc(x)
+            self.assertPreciseEqual(f(x), expected)
+        check(DT('2001-01-01'))
+        check(DT('NaT', 'D'))
+
+    def test_constant_timedelta(self):
+        def check(const):
+            pyfunc = make_add_constant(const)
+            f = jit(nopython=True)(pyfunc)
+            x = TD(4, 'D')
+            expected = pyfunc(x)
+            self.assertPreciseEqual(f(x), expected)
+        check(TD(4, 'D'))
+        check(TD(-4, 'D'))
+        check(TD('NaT', 'D'))
+
 
 @skip_on_numpy_16
 class TestTimedeltaArithmetic(TestCase):
@@ -266,6 +293,8 @@ class TestTimedeltaArithmetic(TestCase):
             self.assertPreciseEqual(f(a, b), expected)
             self.assertPreciseEqual(f(b, a), expected)
 
+        # non-int64 int * timedelta64
+        check(TD(3), np.uint32(2), TD(6))
         # int * timedelta64
         check(TD(3), 2, TD(6))
         check(TD(3, 'ps'), 2, TD(6, 'ps'))
@@ -287,6 +316,8 @@ class TestTimedeltaArithmetic(TestCase):
             self.assertPreciseEqual(div(a, b), expected)
             self.assertPreciseEqual(floordiv(a, b), expected)
 
+        # timedelta64 / non-int64 int
+        check(TD(-3, 'ps'), np.uint32(2), TD(-1, 'ps'))
         # timedelta64 / int
         check(TD(3), 2, TD(1))
         check(TD(-3, 'ps'), 2, TD(-1, 'ps'))

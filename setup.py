@@ -62,10 +62,14 @@ ext_npymath_exports = Extension(name='numba._npymath_exports',
 ext_dispatcher = Extension(name="numba._dispatcher",
                            include_dirs=[numpy.get_include()],
                            sources=['numba/_dispatcher.c',
+                                    'numba/_typeof.c',
+                                    'numba/_hashtable.c',
                                     'numba/_dispatcherimpl.cpp',
                                     'numba/typeconv/typeconv.cpp'],
                            depends=["numba/_pymodule.h",
-                                    "numba/_dispatcher.h"],
+                                    "numba/_dispatcher.h",
+                                    "numba/_typeof.h",
+                                    "numba/_hashtable.h"],
                            extra_link_args=cpp_link_args)
 
 ext_helperlib = Extension(name="numba._helperlib",
@@ -105,32 +109,27 @@ ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
                ext_nrt_python]
 
 
-packages = [
-    "numba",
-    "numba.targets",
-    "numba.tests",
-    "numba.typing",
-    "numba.typeconv",
-    "numba.npyufunc",
-    "numba.pycc",
-    "numba.servicelib",
-    "numba.datamodel",
-    "numba.cuda",
-    "numba.cuda.cudadrv",
-    "numba.cuda.simulator",
-    "numba.cuda.simulator.cudadrv",
-    "numba.cuda.tests",
-    "numba.cuda.tests.cudadrv",
-    "numba.cuda.tests.cudadrv.data",
-    "numba.cuda.tests.cudapy",
-    "numba.cuda.tests.nocuda",
-    "numba.annotations",
-    "numba.runtime",
-]
+def find_packages(root_dir, root_name):
+    """
+    Recursively find packages in *root_dir*.
+    """
+    packages = []
+    def rec(path, pkg_name):
+        packages.append(pkg_name)
+        for fn in sorted(os.listdir(path)):
+            subpath = os.path.join(path, fn)
+            if os.path.exists(os.path.join(subpath, "__init__.py")):
+                subname = "%s.%s" % (pkg_name, fn)
+                rec(subpath, subname)
+    rec(root_dir, root_name)
+    return packages
+
+packages = find_packages("numba", "numba")
+
 
 install_requires = ['llvmlite', 'numpy']
 if sys.version_info < (3, 4):
-    install_requires.append('enum34')
+    install_requires.extend(['enum34', 'singledispatch'])
 if sys.version_info < (3, 3):
     install_requires.append('funcsigs')
 
@@ -151,11 +150,9 @@ setup(name='numba',
         "Topic :: Software Development :: Compilers",
       ],
       package_data={
-        "numba": ["*.c", "*.h", "*.cpp", "*.inc"],
-        "numba.npyufunc": ["*.c", "*.h"],
-        "numba.typeconv": ["*.cpp", "*.hpp"],
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
         "numba.annotations": ["*.html"],
+        "numba.hsa.tests.hsadrv": ["*.brig"],
       },
       scripts=["numba/pycc/pycc", "bin/numba"],
       author="Continuum Analytics, Inc.",

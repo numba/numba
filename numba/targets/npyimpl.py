@@ -13,7 +13,7 @@ from collections import namedtuple
 from llvmlite.llvmpy import core as lc
 
 from . import builtins, ufunc_db, arrayobj
-from .imputils import implement, Registry
+from .imputils import implement, Registry, impl_ret_new_ref
 from .. import typing, types, cgutils, numpy_support
 from ..config import PYVERSION
 from ..numpy_support import ufunc_find_matching_loop
@@ -22,30 +22,6 @@ from ..typing import npydecl
 registry = Registry()
 register = registry.register
 
-
-def caster(restype, constructor):
-    """
-    Implement explicit calls to Numpy type *constructor* (e.g. np.int16).
-    """
-    @implement(constructor, types.Any)
-    def _cast(context, builder, sig, args):
-        [val] = args
-        [valty] = sig.args
-        return context.cast(builder, val, valty, restype)
-
-    return _cast
-
-def register_casters(register_function):
-    for tp in types.number_domain:
-        register_function(caster(tp, getattr(numpy, str(tp))))
-
-    register_function(caster(types.bool_, numpy.bool_))
-    register_function(caster(types.intc, numpy.intc))
-    register_function(caster(types.uintc, numpy.uintc))
-    register_function(caster(types.intp, numpy.intp))
-    register_function(caster(types.uintp, numpy.uintp))
-
-register_casters(register)
 
 ########################################################################
 
@@ -121,7 +97,7 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
         indices = loop_indices[len(loop_indices) - len(self.indices):]
         for src, dst, dim in zip(indices, self.indices, self.array.shape):
             cond = bld.icmp(lc.ICMP_UGT, dim, ONE)
-            with cgutils.ifthen(bld, cond):
+            with bld.if_then(cond):
                 bld.store(src, dst)
 
     def as_values(self):
@@ -168,10 +144,8 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
     def store_data(self, indices, value):
         ctx = self.context
         bld = self.builder
-
         store_value = ctx.get_value_as_data(bld, self.base_type, value)
         assert ctx.get_data_type(self.base_type) == store_value.type
-
         bld.store(store_value, self._load_effective_address(indices))
 
 
@@ -251,8 +225,8 @@ def _build_array(context, builder, array_ty, arg_arrays):
     dest_ndim = make_intp_const(array_ty.ndim)
     dest_shape = cgutils.alloca_once(builder, intp_ty, array_ty.ndim,
                                      "dest_shape")
-    dest_shape_addrs = tuple(builder.gep(dest_shape, [make_intp_const(index)])
-                           for index in range(array_ty.ndim))
+    dest_shape_addrs = tuple(cgutils.gep_inbounds(builder, dest_shape, index)
+                             for index in range(array_ty.ndim))
 
     # Initialize the destination shape with all ones.
     for dest_shape_addr in dest_shape_addrs:
@@ -267,7 +241,7 @@ def _build_array(context, builder, array_ty, arg_arrays):
         arg_ndim = make_intp_const(arg.ndim)
         for index in range(arg.ndim):
             builder.store(builder.extract_value(arg.ary.shape, index),
-                          builder.gep(src_shape, [make_intp_const(index)]))
+                          cgutils.gep_inbounds(builder, src_shape, index))
         arg_result = context.compile_internal(
             builder, _broadcast_onto, _broadcast_onto_sig,
             [arg_ndim, src_shape, dest_ndim, dest_shape])
@@ -310,6 +284,9 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
                 context, builder,
                 lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
         arguments.append(output)
+    elif context.enable_nrt:
+        # Incref the output
+        context.nrt_incref(builder, sig.return_type, args[-1])
 
     inputs = arguments[0:-1]
     output = arguments[-1]
@@ -332,7 +309,8 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
 
         val_out = kernel.generate(*vals_in)
         output.store_data(loop_indices, val_out)
-    return arguments[-1].return_val
+    out = arguments[-1].return_val
+    return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
 # Kernels are the code to be executed inside the multidimensional loop.

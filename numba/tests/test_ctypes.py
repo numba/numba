@@ -8,25 +8,11 @@ import numpy
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import jit, types
+from .support import MemoryLeakMixin
 from .ctypes_usecases import *
 
 
-mydct = {'what': 1232121}
-
-def call_me_maybe(arr):
-    return mydct[arr[0].decode('ascii')]
-
-# Create a callback into the python interpreter
-py_call_back = CFUNCTYPE(c_int, py_object)(call_me_maybe)
-
-
-def take_array_ptr(ptr):
-    return ptr
-
-c_take_array_ptr = CFUNCTYPE(c_void_p, c_void_p)(take_array_ptr)
-
-
-class TestCTypes(unittest.TestCase):
+class TestCTypes(MemoryLeakMixin, unittest.TestCase):
 
     def test_c_sin(self):
         pyfunc = use_c_sin

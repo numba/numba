@@ -19,8 +19,24 @@ Using :func:`~numba.vectorize`, you write your function as operating over
 input scalars, rather than arrays.  Numba will generate the surrounding
 loop (or *kernel*) allowing efficient iteration over the actual inputs.
 
-The :func:`~numba.vectorize` decorator needs you to pass a list of signatures
-you want to support.  In the basic case, only one signature will be passed::
+The :func:`~numba.vectorize` decorator has two modes of operation:
+
+* Eager, or decoration-time, compilation: If you pass one or more type
+  signatures to the decorator, you will be building a Numpy universal
+  function (ufunc).  The rest of this subsection describes building
+  ufuncs using decoration-time compilation.
+
+* Lazy, or call-time, compilation: When not given any signatures, the
+  decorator will give you a Numba dynamic universal function
+  (:class:`~numba.DUFunc`) that dynamically compiles a new kernel when
+  called with a previously unsupported input type.  A later
+  subsection, ":ref:`dynamic-universal-functions`", describes this mode in
+  more depth.
+
+As described above, if you pass a list of signatures to the
+:func:`~numba.vectorize` decorator, your function will be compiled
+into a Numpy ufunc.  In the basic case, only one signature will be
+passed::
 
    from numba import vectorize, float64
 
@@ -96,7 +112,7 @@ differing dimensions.  The typical example is a running median or a
 convolution filter.
 
 Contrary to :func:`~numba.vectorize` functions, :func:`~numba.guvectorize`
-functions don't return their result value: their take it as an array
+functions don't return their result value: they take it as an array
 argument, which must be filled in by the function.  This is because the
 array is actually allocated by NumPy's dispatch mechanism, which calls into
 the Numba-generated code.
@@ -154,3 +170,98 @@ complicated inputs, depending on their shapes::
    passing ``nopython=True`` :ref:`as in the @jit decorator <jit-nopython>`.
    Use it to ensure the generated code does not fallback to
    :term:`object mode`.
+
+.. _dynamic-universal-functions:
+
+Dynamic universal functions
+===========================
+
+As described above, if you do not pass any signatures to the
+:func:`~numba.vectorize` decorator, your Python function will be used
+to build a dynamic universal function, or :class:`~numba.DUFunc`.  For
+example::
+
+   from numba import vectorize
+
+   @vectorize
+   def f(x, y):
+       return x * y
+
+The resulting :func:`f` is a :class:`~numba.DUFunc` instance that
+starts with no supported input types.  As you make calls to :func:`f`,
+Numba generates new kernels whenever you pass a previously unsupported
+input type.  Given the example above, the following set of interpreter
+interactions illustrate how dynamic compilation works::
+
+   >>> f
+   <numba._DUFunc 'f'>
+   >>> f.ufunc
+   <ufunc 'f'>
+   >>> f.ufunc.types
+   []
+
+The example above shows that :class:`~numba.DUFunc` instances are not
+ufuncs.  Rather than subclass ufunc's, :class:`~numba.DUFunc`
+instances work by keeping a :attr:`~numba.DUFunc.ufunc` member, and
+then delegating ufunc property reads and method calls to this member
+(also known as type aggregation).  When we look at the initial types
+supported by the ufunc, we can verify there are none.
+
+Let's try to make a call to :func:`f`::
+
+   >>> f(3,4)
+   12
+   >>> f.types   # shorthand for f.ufunc.types
+   ['ll->l']
+
+If this was a normal Numpy ufunc, we would have seen an exception
+complaining that the ufunc couldn't handle the input types.  When we
+call :func:`f` with integer arguments, not only do we receive an
+answer, but we can verify that Numba created a loop supporting C
+:code:`long` integers.
+
+We can add additional loops by calling :func:`f` with different inputs::
+
+   >>> f(1.,2.)
+   2.0
+   >>> f.types
+   ['ll->l', 'dd->d']
+
+We can now verify that Numba added a second loop for dealing with
+floating-point inputs, :code:`"dd->d"`.
+
+If we mix input types to :func:`f`, we can verify that `Numpy ufunc
+casting rules`_ are still in effect::
+
+   >>> f(1,2.)
+   2.0
+   >>> f.types
+   ['ll->l', 'dd->d']
+
+.. _`Numpy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
+
+This example demonstrates that calling :func:`f` with mixed types
+caused Numpy to select the floating-point loop, and cast the integer
+argument to a floating-point value.  Thus, Numba did not create a
+special :code:`"dl->d"` kernel.
+
+This :class:`~numba.DUFunc` behavior leads us to a point similar to
+the warning given above in "`The @vectorize decorator`_" subsection,
+but instead of signature declaration order in the decorator, call
+order matters.  If we had passed in floating-point arguments first,
+any calls with integer arguments would be cast to double-precision
+floating-point values.  For example::
+
+   >>> @vectorize
+   ... def g(a, b): return a / b
+   ...
+   >>> g(2.,3.)
+   0.66666666666666663
+   >>> g(2,3)
+   0.66666666666666663
+   >>> g.types
+   ['dd->d']
+
+If you require precise support for various type signatures, you should
+specify them in the :func:`~numba.vectorize` decorator, and not rely
+on dynamic compilation.

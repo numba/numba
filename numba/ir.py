@@ -4,24 +4,7 @@ import os
 import pprint
 from collections import defaultdict
 
-
-class RedefinedError(NameError):
-    pass
-
-
-class NotDefinedError(NameError):
-    def __init__(self, name, loc=None):
-        self.name = name
-        self.loc = loc
-
-    def __str__(self):
-        loc = "?" if self.loc is None else self.loc
-        return "{name!r} is not defined in {loc}".format(name=self.name,
-                                                         loc=self.loc)
-
-
-class VerificationError(Exception):
-    pass
+from .errors import NotDefinedError, RedefinedError, VerificationError
 
 
 class Loc(object):
@@ -259,6 +242,10 @@ class Expr(Inst):
 
 
 class SetItem(Stmt):
+    """
+    target[index] = value
+    """
+    
     def __init__(self, target, index, value, loc):
         self.target = target
         self.index = index
@@ -267,6 +254,20 @@ class SetItem(Stmt):
 
     def __repr__(self):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
+
+
+class DelItem(Stmt):
+    """
+    del target[index]
+    """
+
+    def __init__(self, target, index, loc):
+        self.target = target
+        self.index = index
+        self.loc = loc
+
+    def __repr__(self):
+        return 'del %s[%s]' % (self.target, self.index)
 
 
 class SetAttr(Stmt):

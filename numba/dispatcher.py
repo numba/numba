@@ -1,3 +1,5 @@
+# -*- coding: utf8 -*-
+
 from __future__ import print_function, division, absolute_import
 
 import contextlib
@@ -14,7 +16,8 @@ import numba
 from numba import _dispatcher, compiler, utils, types
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, types, typing
-from numba.typing.templates import resolve_overload, fold_arguments
+from numba.typing.templates import fold_arguments
+from numba.typing.typeof import typeof
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method, next
 
@@ -30,11 +33,9 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self._tm = default_type_manager
 
         # A mapping of signatures to entry points
-        self.overloads = {}
+        self.overloads = utils.OrderedDict()
         # A mapping of signatures to compile results
-        self._compileinfos = {}
-        # A list of nopython signatures
-        self._npsigs = []
+        self._compileinfos = utils.OrderedDict()
 
         self.py_func = py_func
         # other parts of Numba assume the old Python 2 name for code object
@@ -65,7 +66,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self._clear()
         self.overloads.clear()
         self._compileinfos.clear()
-        self._npsigs[:] = []
 
     def _make_finalizer(self):
         """
@@ -101,7 +101,8 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
     @property
     def nopython_signatures(self):
-        return self._npsigs
+        return [cres.signature for cres in self._compileinfos.values()
+                if not cres.objectmode and not cres.interpmode]
 
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
@@ -116,10 +117,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self._insert(sig, cres.entry_point, cres.objectmode, cres.interpmode)
         self.overloads[args] = cres.entry_point
         self._compileinfos[args] = cres
-
-        # Add native function for correct typing the code generation
-        if not cres.objectmode and not cres.interpmode:
-            self._npsigs.append(cres.signature)
 
     def get_call_template(self, args, kws):
         """
@@ -196,18 +193,43 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             print('=' * 80, file=file)
 
     def _explain_ambiguous(self, *args, **kws):
+        """
+        Callback for the C _Dispatcher object.
+        """
         assert not kws, "kwargs not handled"
         args = tuple([self.typeof_pyval(a) for a in args])
-        sigs = [cr.signature for cr in self._compileinfos.values()]
-        res = resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
-        print("res =", res)
+        # The order here must be deterministic for testing purposes, which
+        # is ensured by the OrderedDict.
+        sigs = self.nopython_signatures
+        # This will raise
+        self.typingctx.resolve_overload(self.py_func, sigs, args, kws,
+                                        allow_ambiguous=False)
 
     def _explain_matching_error(self, *args, **kws):
+        """
+        Callback for the C _Dispatcher object.
+        """
         assert not kws, "kwargs not handled"
         args = [self.typeof_pyval(a) for a in args]
         msg = ("No matching definition for argument type(s) %s"
                % ', '.join(map(str, args)))
         raise TypeError(msg)
+
+    def _search_new_conversions(self, *args, **kws):
+        """
+        Callback for the C _Dispatcher object.
+        Search for approximately matching signatures for the given arguments,
+        and ensure the corresponding conversions are registered in the C++
+        type manager.
+        """
+        assert not kws, "kwargs not handled"
+        args = [self.typeof_pyval(a) for a in args]
+        found = False
+        for sig in self.nopython_signatures:
+            conv = self.typingctx.install_possible_conversions(args, sig.args)
+            if conv:
+                found = True
+        return found
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
@@ -218,7 +240,9 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        tp = self.typingctx.resolve_argument_type(val)
+        # Not going through the resolve_argument_type() indirection
+        # can shape a couple µs.
+        tp = typeof(val)
         if tp is None:
             tp = types.pyobject
         return tp
@@ -405,8 +429,8 @@ class LiftedLoop(_OverloadedBase):
             return cres.entry_point
 
 
-# Initialize dispatcher
-_dispatcher.init_types(dict((str(t), t._code) for t in types.number_domain))
+# Initialize typeof machinery
+_dispatcher.typeof_init(dict((str(t), t._code) for t in types.number_domain))
 
 
 class NullCache(object):

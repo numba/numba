@@ -19,6 +19,8 @@ false_bit = Constant.int(Type.int(1), 0)
 true_byte = Constant.int(Type.int(8), 1)
 false_byte = Constant.int(Type.int(8), 0)
 
+intp_t = Type.int(utils.MACHINE_BITS)
+
 
 def as_bool_byte(builder, value):
     return builder.zext(value, Type.int(8))
@@ -88,7 +90,9 @@ class StructProxy(object):
 
         if ref is not None:
             assert value is None
-            assert ref.type.pointee == self._be_type
+            if ref.type.pointee != self._be_type:
+                raise AssertionError("bad ref type: expected %s, got %s"
+                                     % (self._be_type.as_pointer(), ref.type))
             self._value = ref
         else:
             self._value = alloca_once(self._builder, self._be_type, zfill=True)
@@ -96,10 +100,7 @@ class StructProxy(object):
                 self._builder.store(value, self._value)
 
     def _get_ptr_by_index(self, index):
-        geped = self._builder.gep(self._value,
-                                  [Constant.int(Type.int(), 0),
-                                   Constant.int(Type.int(), index)])
-        return geped
+        return gep_inbounds(self._builder, self._value, 0, index)
 
     def _get_ptr_by_name(self, attrname):
         index = self._datamodel.get_field_position(attrname)
@@ -134,6 +135,20 @@ class StructProxy(object):
         Store the LLVM *value* into the field at *index*.
         """
         ptr = self._get_ptr_by_index(index)
+        if value.type != ptr.type.pointee:
+            if (is_pointer(value.type) and is_pointer(ptr.type.pointee)
+                and  value.type.pointee == ptr.type.pointee.pointee):
+                # Differ by address-space only
+                # Auto coerce it
+                value = self._context.addrspacecast(self._builder,
+                                                    value,
+                                                    ptr.type.pointee.addrspace)
+            else:
+                raise TypeError("Invalid store {value.type} {"
+                                "ptr.type.pointee} in "
+                                "{self._datamodel}".format(value=value,
+                                                           ptr=ptr,
+                                                           self=self))
         self._builder.store(value, ptr)
 
     def __len__(self):
@@ -200,7 +215,7 @@ class Structure(object):
             self._typemap.append(tp)
 
     def _get_ptr_by_index(self, index):
-        ptr = self._builder.gep(self._value, self._fdmap[index])
+        ptr = self._builder.gep(self._value, self._fdmap[index], inbounds=True)
         return ptr
 
     def _get_ptr_by_name(self, attrname):
@@ -269,41 +284,6 @@ class Structure(object):
     # __iter__ is derived by Python from __len__ and __getitem__
 
 
-def get_function(builder):
-    return builder.basic_block.function
-
-
-def get_module(builder):
-    return builder.basic_block.function.module
-
-
-def append_basic_block(builder, name=''):
-    return get_function(builder).append_basic_block(name)
-
-
-@contextmanager
-def goto_block(builder, bb):
-    """
-    A context manager which temporarily positions *builder* at the end
-    of basic block *bb* (but before any terminator).
-    """
-    bbold = builder.basic_block
-    term = bb.terminator
-    if term is not None:
-        builder.position_before(term)
-    else:
-        builder.position_at_end(bb)
-    yield
-    builder.position_at_end(bbold)
-
-
-@contextmanager
-def goto_entry_block(builder):
-    fn = get_function(builder)
-    with goto_block(builder, fn.entry_basic_block):
-        yield
-
-
 def alloca_once(builder, ty, size=None, name='', zfill=False):
     """Allocate stack memory at the entry block of the current function
     pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
@@ -311,7 +291,7 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     ``name`` arg set the symbol name inside the llvm IR for debugging.
     If ``zfill`` is set, also filling zeros to the memory.
     """
-    with goto_entry_block(builder):
+    with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
         if zfill:
             builder.store(Constant.null(ty), ptr)
@@ -327,6 +307,17 @@ def alloca_once_value(builder, value, name=''):
     storage = alloca_once(builder, value.type)
     builder.store(value, storage)
     return storage
+
+
+def insert_pure_function(module, fnty, name):
+    """
+    Insert a pure function (in the functional programming sense) in the
+    given module.
+    """
+    fn = module.get_or_insert_function(fnty, name=name)
+    fn.attributes.add("readonly")
+    fn.attributes.add("nounwind")
+    return fn
 
 
 def terminate(builder, bbend):
@@ -349,72 +340,16 @@ def is_not_null(builder, val):
     return builder.icmp(lc.ICMP_NE, null, val)
 
 
-def set_branch_weight(builder, brinst, trueweight, falseweight):
-    module = get_module(builder)
-    mdid = lc.MetaDataString.get(module, "branch_weights")
-    trueweight = lc.Constant.int(Type.int(), trueweight)
-    falseweight = lc.Constant.int(Type.int(), falseweight)
-    md = lc.MetaData.get(module, [mdid, trueweight, falseweight])
-    brinst.set_metadata("prof", md)
-
-
-@contextmanager
 def if_unlikely(builder, pred):
-    bb = builder.basic_block
-    with ifthen(builder, pred):
-        yield
-    brinst = bb.instructions[-1]
-    set_branch_weight(builder, brinst, trueweight=1, falseweight=99)
+    return builder.if_then(pred, likely=False)
 
 
-@contextmanager
 def if_likely(builder, pred):
-    bb = builder.basic_block
-    with ifthen(builder, pred):
-        yield
-    brinst = bb.instructions[-1]
-    set_branch_weight(builder, brinst, trueweight=99, falseweight=1)
+    return builder.if_then(pred, likely=True)
 
 
-@contextmanager
-def ifthen(builder, pred):
-    bb = builder.basic_block
-    bbif = append_basic_block(builder, add_postfix(bb.name, '.if'))
-    bbend = append_basic_block(builder, add_postfix(bb.name, '.endif'))
-    builder.cbranch(pred, bbif, bbend)
-
-    with goto_block(builder, bbif):
-        yield bbend
-        terminate(builder, bbend)
-
-    builder.position_at_end(bbend)
-
-
-@contextmanager
 def ifnot(builder, pred):
-    with ifthen(builder, builder.not_(pred)):
-        yield
-
-
-@contextmanager
-def ifelse(builder, pred, expect=None):
-    bbtrue = append_basic_block(builder, 'if.true')
-    bbfalse = append_basic_block(builder, 'if.false')
-    bbendif = append_basic_block(builder, 'endif')
-
-    br = builder.cbranch(pred, bbtrue, bbfalse)
-    if expect is not None:
-        if expect:
-            set_branch_weight(builder, br, trueweight=99, falseweight=1)
-        else:
-            set_branch_weight(builder, br, trueweight=1, falseweight=99)
-
-    then = IfBranchObj(builder, bbtrue, bbendif)
-    otherwise = IfBranchObj(builder, bbfalse, bbendif)
-
-    yield then, otherwise
-
-    builder.position_at_end(bbendif)
+    return builder.if_then(builder.not_(pred))
 
 
 class IfBranchObj(object):
@@ -431,25 +366,27 @@ class IfBranchObj(object):
 
 
 @contextmanager
-def for_range(builder, count, intp):
+def for_range(builder, count, intp=None):
+    if intp is None:
+        intp = count.type
     start = Constant.int(intp, 0)
     stop = count
 
-    bbcond = append_basic_block(builder, "for.cond")
-    bbbody = append_basic_block(builder, "for.body")
-    bbend = append_basic_block(builder, "for.end")
+    bbcond = builder.append_basic_block("for.cond")
+    bbbody = builder.append_basic_block("for.body")
+    bbend = builder.append_basic_block("for.end")
 
     bbstart = builder.basic_block
     builder.branch(bbcond)
 
     ONE = Constant.int(intp, 1)
 
-    with goto_block(builder, bbcond):
+    with builder.goto_block(bbcond):
         index = builder.phi(intp, name="loop.index")
         pred = builder.icmp(lc.ICMP_SLT, index, stop)
         builder.cbranch(pred, bbbody, bbend)
 
-    with goto_block(builder, bbbody):
+    with builder.goto_block(bbbody):
         yield index
         bbbody = builder.basic_block
         incr = builder.add(index, ONE)
@@ -462,9 +399,11 @@ def for_range(builder, count, intp):
 
 
 @contextmanager
-def for_range_slice(builder, start, stop, step, intp, inc=True):
+def for_range_slice(builder, start, stop, step, intp=None, inc=True):
     """
-    Generate LLVM IR for a for-loop based on a slice
+    Generate LLVM IR for a for-loop based on a slice.  Yields a
+    (index, count) tuple where `index` is the slice index's value
+    inside the loop, and `count` the iteration count.
 
     Parameters
     -------------
@@ -479,36 +418,72 @@ def for_range_slice(builder, start, stop, step, intp, inc=True):
     intp :
         The data type
     inc : boolean, optional
-        A flag to handle the step < 0 case, in which case we decrement the loop
+        Signals whether the step is positive (True) or negative (False).
 
     Returns
     -----------
         None
     """
+    if intp is None:
+        intp = start.type
 
-    bbcond = append_basic_block(builder, "for.cond")
-    bbbody = append_basic_block(builder, "for.body")
-    bbend = append_basic_block(builder, "for.end")
+    bbcond = builder.append_basic_block("for.cond")
+    bbbody = builder.append_basic_block("for.body")
+    bbend = builder.append_basic_block("for.end")
     bbstart = builder.basic_block
     builder.branch(bbcond)
 
-    with goto_block(builder, bbcond):
+    with builder.goto_block(bbcond):
         index = builder.phi(intp, name="loop.index")
+        count = builder.phi(intp, name="loop.count")
         if (inc):
             pred = builder.icmp(lc.ICMP_SLT, index, stop)
         else:
             pred = builder.icmp(lc.ICMP_SGT, index, stop)
         builder.cbranch(pred, bbbody, bbend)
 
-    with goto_block(builder, bbbody):
-        yield index
+    with builder.goto_block(bbbody):
+        yield index, count
         bbbody = builder.basic_block
         incr = builder.add(index, step)
+        next_count = builder.add(count, ir.Constant(intp, 1))
         terminate(builder, bbcond)
 
     index.add_incoming(start, bbstart)
     index.add_incoming(incr, bbbody)
+    count.add_incoming(ir.Constant(intp, 0), bbstart)
+    count.add_incoming(next_count, bbbody)
     builder.position_at_end(bbend)
+
+
+@contextmanager
+def for_range_slice_generic(builder, start, stop, step):
+    """
+    A helper wrapper for for_range_slice().  This is a context manager which
+    yields two for_range_slice()-alike context managers, the first for
+    the positive step case, the second for the negative step case.
+    
+    Use:
+        with for_range_slice_generic(...) as (pos_range, neg_range):
+            with pos_range as (idx, count):
+                ...
+            with neg_range as (idx, count):
+                ...
+    """
+    intp = start.type
+    is_pos_step = builder.icmp_signed('>=', step, ir.Constant(intp, 0))
+    
+    pos_for_range = for_range_slice(builder, start, stop, step, intp, inc=True)
+    neg_for_range = for_range_slice(builder, start, stop, step, intp, inc=False)
+
+    @contextmanager
+    def cm_cond(cond, inner_cm):
+        with cond:
+            with inner_cm as value:
+                yield value
+
+    with builder.if_else(is_pos_step, likely=True) as (then, otherwise):
+        yield cm_cond(then, pos_for_range), cm_cond(otherwise, neg_for_range)
 
 
 @contextmanager
@@ -528,16 +503,24 @@ def _loop_nest(builder, shape, intp):
             yield (ind,)
 
 
-def pack_array(builder, values):
+def pack_array(builder, values, ty=None):
+    """
+    Pack an array of values.  *ty* should be given if the array may be empty,
+    in which case the type can't be inferred from the values.
+    """
     n = len(values)
-    ty = values[0].type
+    if ty is None:
+        ty = values[0].type
     ary = Constant.undef(Type.array(ty, n))
     for i, v in enumerate(values):
         ary = builder.insert_value(ary, v, i)
     return ary
 
 
-def unpack_tuple(builder, tup, count):
+def unpack_tuple(builder, tup, count=None):
+    if count is None:
+        # Assuming *tup* is an aggregate
+        count = len(tup.type.elements)
     vals = [builder.extract_value(tup, i)
             for i in range(count)]
     return vals
@@ -612,12 +595,48 @@ def normalize_slice(builder, slice, length):
     slice.stop = builder.select(doclip, length, stop)
 
 
-def get_range_from_slice(builder, slicestruct):
-    diff = builder.sub(slicestruct.stop, slicestruct.start)
-    length = builder.sdiv(diff, slicestruct.step)
-    is_neg = is_neg_int(builder, length)
-    length = builder.select(is_neg, get_null_value(length.type), length)
-    return length
+def get_slice_length(builder, slicestruct):
+    """
+    Given a slice, compute the number of indices it spans, i.e. the
+    number of iterations that for_range_slice() will execute.
+    
+    Pseudo-code:
+        assert step != 0
+        if step > 0:
+            if stop <= start:
+                return 0
+            else:
+                return (stop - start - 1) // step + 1
+        else:
+            if stop >= start:
+                return 0
+            else:
+                return (stop - start + 1) // step + 1
+    
+    (see PySlice_GetIndicesEx() in CPython)
+    """
+    start = slicestruct.start
+    stop = slicestruct.stop
+    step = slicestruct.step
+    one = ir.Constant(start.type, 1)
+    zero = ir.Constant(start.type, 0)
+
+    is_step_negative = is_neg_int(builder, step)
+    delta = builder.sub(stop, start)
+
+    # Nominal case
+    pos_dividend = builder.sub(delta, one)
+    neg_dividend = builder.add(delta, one)
+    dividend  = builder.select(is_step_negative, neg_dividend, pos_dividend)
+    nominal_length = builder.add(one, builder.sdiv(dividend, step))
+
+    # Catch zero length
+    is_zero_length = builder.select(is_step_negative,
+                                    builder.icmp_signed('>=', delta, zero),
+                                    builder.icmp_signed('<=', delta, zero))
+
+    # Clamp to 0 if is_zero_length
+    return builder.select(is_zero_length, zero, nominal_length)
 
 
 def get_strides_from_slice(builder, ndim, strides, slice, ax):
@@ -686,10 +705,26 @@ def guard_null(context, builder, value, exc_tuple):
     Guard against *value* being null or zero.
     *exc_tuple* should be a (exception type, arguments...) tuple.
     """
-    with if_unlikely(builder, is_scalar_zero(builder, value)):
+    with builder.if_then(is_scalar_zero(builder, value), likely=False):
         exc = exc_tuple[0]
         exc_args = exc_tuple[1:] or None
         context.call_conv.return_user_exc(builder, exc, exc_args)
+
+def guard_invalid_slice(context, builder, slicestruct):
+    """
+    Guard against *slicestruct* having a zero step (and raise ValueError).
+    """
+    guard_null(context, builder, slicestruct.step,
+               (ValueError, "slice step cannot be zero"))
+
+def guard_memory_error(context, builder, pointer, msg=None):
+    """
+    Guard against *pointer* being NULL (and raise a MemoryError).
+    """
+    assert isinstance(pointer.type, ir.PointerType), pointer.type
+    exc_args = (msg,) if msg else ()
+    with builder.if_then(is_null(builder, pointer), likely=False):
+        context.call_conv.return_user_exc(builder, MemoryError, exc_args)
 
 
 guard_zero = guard_null
@@ -717,7 +752,7 @@ def is_struct_ptr(ltyp):
 
 
 def get_record_member(builder, record, offset, typ):
-    pval = inbound_gep(builder, record, 0, offset)
+    pval = gep_inbounds(builder, record, 0, offset)
     assert not is_pointer(pval.type.pointee)
     return builder.bitcast(pval, Type.pointer(typ))
 
@@ -726,19 +761,21 @@ def is_neg_int(builder, val):
     return builder.icmp(lc.ICMP_SLT, val, get_null_value(val.type))
 
 
-def inbound_gep(builder, ptr, *inds):
-    idx = []
-    for i in inds:
-        if isinstance(i, int):
-            ind = Constant.int(Type.int(32), i)
-        else:
-            ind = i
-        idx.append(ind)
-    return builder.gep(ptr, idx, inbounds=True)
+def gep_inbounds(builder, ptr, *inds, **kws):
+    """
+    Same as *gep*, but add the `inbounds` keyword.
+    """
+    return gep(builder, ptr, *inds, inbounds=True, **kws)
 
 
 def gep(builder, ptr, *inds, **kws):
+    """
+    Emit a getelementptr instruction for the given pointer and indices.
+    The indices can be LLVM values or Python int constants.
+    """
     name = kws.pop('name', '')
+    inbounds = kws.pop('inbounds', False)
+    assert not kws
     idx = []
     for i in inds:
         if isinstance(i, int):
@@ -747,7 +784,7 @@ def gep(builder, ptr, *inds, **kws):
         else:
             ind = i
         idx.append(ind)
-    return builder.gep(ptr, idx, name=name)
+    return builder.gep(ptr, idx, name=name, inbounds=inbounds)
 
 
 def pointer_add(builder, ptr, offset, return_type=None):
@@ -758,10 +795,9 @@ def pointer_add(builder, ptr, offset, return_type=None):
     Note the computation is done in bytes, and ignores the width of
     the pointed item type.
     """
-    intptr_t = Type.int(utils.MACHINE_BITS)
-    intptr = builder.ptrtoint(ptr, intptr_t)
+    intptr = builder.ptrtoint(ptr, intp_t)
     if isinstance(offset, int):
-        offset = Constant.int(intptr_t, offset)
+        offset = Constant.int(intp_t, offset)
     intptr = builder.add(intptr, offset)
     return builder.inttoptr(intptr, return_type or ptr.type)
 
@@ -772,16 +808,12 @@ def memset(builder, ptr, size, value):
     """
     sizety = size.type
     memset = "llvm.memset.p0i8.i%d" % (sizety.width)
-    module = get_module(builder)
     i32 = lc.Type.int(32)
     i8 = lc.Type.int(8)
+    i8_star = i8.as_pointer()
     i1 = lc.Type.int(1)
-    # void @llvm.memset.p0i8.iXY(i8* <dest>, i8 <val>,
-    #                            iXY <len>, i32 <align>, i1 <isvolatile>)
-    ptr = builder.bitcast(ptr, lc.Type.pointer(i8))
-    fnty = lc.Type.function(lc.Type.void(),
-                            [ptr.type, i8, sizety, i32, i1])
-    fn = module.get_or_insert_function(fnty, name=memset)
+    fn = builder.module.declare_intrinsic('llvm.memset', (i8_star, size.type))
+    ptr = builder.bitcast(ptr, i8_star)
     if isinstance(value, int):
         value = Constant.int(i8, value)
     builder.call(fn, [ptr, value, size,
@@ -795,7 +827,7 @@ def global_constant(builder_or_module, name, value, linkage=lc.LINKAGE_INTERNAL)
     if isinstance(builder_or_module, lc.Module):
         module = builder_or_module
     else:
-        module = get_module(builder_or_module)
+        module = builder_or_module.module
     data = module.add_global_variable(value.type, name=name)
     data.linkage = linkage
     data.global_constant = True
@@ -816,7 +848,7 @@ def divmod_by_constant(builder, val, divisor):
 
     quot = alloca_once(builder, val.type)
 
-    with ifelse(builder, is_neg_int(builder, val)) as (if_neg, if_pos):
+    with builder.if_else(is_neg_int(builder, val)) as (if_neg, if_pos):
         with if_pos:
             # quot = val / divisor
             quot_val = builder.sdiv(val, divisor)
@@ -834,56 +866,6 @@ def divmod_by_constant(builder, val, divisor):
     return quot_val, rem_val
 
 
-# ------------------------------------------------------------------------------
-# Debug
-
-class VerboseProxy(object):
-    """
-    Use to wrap llvm.core.Builder to track where segfault happens
-    """
-
-    def __init__(self, obj):
-        self.__obj = obj
-
-    def __getattr__(self, key):
-        fn = getattr(self.__obj, key)
-        if callable(fn):
-            def wrapped(*args, **kws):
-                import traceback
-
-                traceback.print_stack()
-                print(key, args, kws)
-                try:
-                    return fn(*args, **kws)
-                finally:
-                    print("ok")
-
-            return wrapped
-        return fn
-
-
-def printf(builder, format_string, *values):
-    str_const = Constant.stringz(format_string)
-    global_str_const = get_module(builder).add_global_variable(str_const.type,
-                                                               '')
-    global_str_const.initializer = str_const
-
-    idx = [Constant.int(Type.int(32), 0), Constant.int(Type.int(32), 0)]
-    str_addr = global_str_const.gep(idx)
-
-    args = []
-    for v in values:
-        if isinstance(v, int):
-            args.append(Constant.int(Type.int(), v))
-        elif isinstance(v, float):
-            args.append(Constant.real(Type.double(), v))
-        else:
-            args.append(v)
-    functype = Type.function(Type.int(32), [Type.pointer(Type.int(8))], True)
-    fn = get_module(builder).get_or_insert_function(functype, 'printf')
-    builder.call(fn, [str_addr] + args)
-
-
 def cbranch_or_continue(builder, cond, bbtrue):
     """
     Branch conditionally or continue.
@@ -891,8 +873,7 @@ def cbranch_or_continue(builder, cond, bbtrue):
     Note: a new block is created and builder is moved to the end of the new
           block.
     """
-    fn = get_function(builder)
-    bbcont = fn.append_basic_block('.continue')
+    bbcont = builder.append_basic_block('.continue')
     builder.cbranch(cond, bbtrue, bbcont)
     builder.position_at_end(bbcont)
     return bbcont
@@ -931,3 +912,36 @@ def memcpy(builder, dst, src, count):
         out_ptr = builder.gep(dst, [idx])
         in_ptr = builder.gep(src, [idx])
         builder.store(builder.load(in_ptr), out_ptr)
+
+
+def memmove(builder, dst, src, count, itemsize, align=1):
+    """
+    Emit a memmove() call for `count` items of size `itemsize`
+    from `src` to `dest`.
+    """
+    ptr_t = ir.IntType(8).as_pointer()
+    size_t = count.type
+
+    memmove = builder.module.declare_intrinsic('llvm.memmove',
+                                               [ptr_t, ptr_t, size_t])
+    align = ir.Constant(ir.IntType(32), align)
+    is_volatile = false_bit
+    builder.call(memmove, [builder.bitcast(dst, ptr_t),
+                           builder.bitcast(src, ptr_t),
+                           builder.mul(count, ir.Constant(size_t, itemsize)),
+                           align,
+                           is_volatile])
+
+
+def muladd_with_overflow(builder, a, b, c):
+    """
+    Compute (a * b + c) and return a (result, overflow bit) pair.
+    The operands must be signed integers.
+    """
+    p = builder.smul_with_overflow(a, b)
+    prod = builder.extract_value(p, 0)
+    prod_ovf = builder.extract_value(p, 1)
+    s = builder.sadd_with_overflow(prod, c)
+    res = builder.extract_value(s, 0)
+    ovf = builder.or_(prod_ovf, builder.extract_value(s, 1))
+    return res, ovf

@@ -89,7 +89,19 @@ class DataModel(object):
         Traverse contained values
         Returns a iterable of contained (types, values)
         """
-        return ()
+        return []
+
+    def traverse_types(self):
+        """
+        Recursively list all frontend types involved in this model.
+        """
+        return [self._fe_type] + self.inner_types()
+
+    def inner_types(self):
+        """
+        List all *inner* frontend types.
+        """
+        return []
 
     def get_nrt_meminfo(self, builder, value):
         """
@@ -98,6 +110,8 @@ class DataModel(object):
         """
         return None
 
+    def has_nrt_meminfo(self):
+        return False
 
     def _compared_fields(self):
         return (type(self), self._fe_type)
@@ -180,6 +194,8 @@ class PrimitiveModel(DataModel):
 
 
 @register_default(types.Opaque)
+@register_default(types.PyObject)
+@register_default(types.RawPointer)
 @register_default(types.NoneType)
 @register_default(types.Function)
 @register_default(types.Type)
@@ -191,7 +207,11 @@ class PrimitiveModel(DataModel):
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
 @register_default(types.ExternalFunction)
+@register_default(types.NumbaFunction)
 @register_default(types.Macro)
+@register_default(types.NumberClass)
+@register_default(types.DType)
+@register_default(types.ArrayFlags)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
@@ -201,9 +221,23 @@ class OpaqueModel(PrimitiveModel):
         be_type = ir.IntType(8).as_pointer()
         super(OpaqueModel, self).__init__(dmm, fe_type, be_type)
 
+
+@register_default(types.MemInfoPointer)
+class MemInfoModel(OpaqueModel):
+
+    def inner_types(self):
+        return self._dmm.lookup(self._fe_type.dtype).traverse_types()
+
+    def has_nrt_meminfo(self):
+        return True
+
     def get_nrt_meminfo(self, builder, value):
-        if self._fe_type == types.meminfo_pointer:
-            return value
+        for tp in self.inner_types():
+            if self._dmm.lookup(tp).has_nrt_meminfo():
+                raise NotImplementedError(
+                    "unsupported nested memory-managed object")
+        return value
+
 
 @register_default(types.Integer)
 class IntegerModel(PrimitiveModel):
@@ -242,6 +276,24 @@ class EphemeralPointerModel(PointerModel):
     def as_data(self, builder, value):
         value = builder.load(value)
         return self._pointee_model.as_data(builder, value)
+
+    def from_data(self, builder, value):
+        raise NotImplementedError("use load_from_data_pointer() instead")
+
+    def load_from_data_pointer(self, builder, ptr):
+        return builder.bitcast(ptr, self.get_value_type())
+
+
+@register_default(types.EphemeralArray)
+class EphemeralArrayModel(PointerModel):
+
+    def get_data_type(self):
+        return ir.ArrayType(self._pointee_be_type, self._fe_type.count)
+
+    def as_data(self, builder, value):
+        values = [builder.load(cgutils.gep_inbounds(builder, value, i))
+                  for i in range(self._fe_type.count)]
+        return cgutils.pack_array(builder, values)
 
     def from_data(self, builder, value):
         raise NotImplementedError("use load_from_data_pointer() instead")
@@ -323,6 +375,9 @@ class UniTupleModel(DataModel):
     def traverse(self, builder, value):
         values = cgutils.unpack_tuple(builder, value, count=self._count)
         return zip([self._fe_type.dtype] * len(values), values)
+    
+    def inner_types(self):
+        return self._elem_model.traverse_types()
 
 
 class CompositeModel(DataModel):
@@ -407,7 +462,7 @@ class StructModel(CompositeModel):
     def load_from_data_pointer(self, builder, ptr):
         values = []
         for i, model in enumerate(self._models):
-            elem_ptr = cgutils.gep(builder, ptr, 0, i)
+            elem_ptr = cgutils.gep_inbounds(builder, ptr, 0, i)
             val = model.load_from_data_pointer(builder, elem_ptr)
             values.append(val)
 
@@ -479,7 +534,11 @@ class StructModel(CompositeModel):
                                     name="inserted." + self._fields[pos])
 
     def get_field_position(self, field):
-        return self._fields.index(field)
+        try:
+            return self._fields.index(field)
+        except ValueError:
+            raise KeyError("%s does not have a field named %r"
+                           % (self.__class__.__name__, field))
 
     @property
     def field_count(self):
@@ -503,6 +562,12 @@ class StructModel(CompositeModel):
         out = [(self.get_type(k), self.get(builder, value, k))
                 for k in self._fields]
         return out
+
+    def inner_types(self):
+        types = []
+        for dm in self._models:
+            types += dm.traverse_types()
+        return types
 
 
 @register_default(types.Complex)
@@ -532,6 +597,45 @@ class PairModel(StructModel):
         super(PairModel, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.ListPayload)
+class ListPayloadModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        # The fields are mutable but the payload is always manipulated
+        # by reference.  This scheme allows mutations of an array to
+        # be seen by its iterators.
+        members = [
+            ('size', types.intp),
+            ('allocated', types.intp),
+            # Actually an inlined var-sized array
+            ('data', fe_type.list_type.dtype),
+        ]
+        super(ListPayloadModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.List)
+class ListModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        payload_type = types.ListPayload(fe_type)
+        members = [
+            # The meminfo data points to a ListPayload
+            ('meminfo', types.MemInfoPointer(payload_type)),
+        ]
+        super(ListModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.ListIter)
+class ListIterModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        payload_type = types.ListPayload(fe_type.list_type)
+        members = [
+            # The meminfo data points to a ListPayload (shared with the
+            # original list object)
+            ('meminfo', types.MemInfoPointer(payload_type)),
+            ('index', types.EphemeralPointer(types.intp)),
+            ]
+        super(ListIterModel, self).__init__(dmm, fe_type, members)
+
+
 @register_default(types.Array)
 @register_default(types.Buffer)
 @register_default(types.ByteArray)
@@ -542,7 +646,7 @@ class ArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
         members = [
-            ('meminfo', types.meminfo_pointer),
+            ('meminfo', types.MemInfoPointer(fe_type.dtype)),
             ('parent', types.pyobject),
             ('nitems', types.intp),
             ('itemsize', types.intp),
@@ -682,39 +786,32 @@ class CharSeq(DataModel):
 
 
 class CContiguousFlatIter(StructModel):
-    def __init__(self, dmm, fe_type):
+    def __init__(self, dmm, fe_type, need_indices):
         assert fe_type.array_type.layout == 'C'
         array_type = fe_type.array_type
         dtype = array_type.dtype
-        members = [('array', types.CPointer(array_type)),
+        ndim = array_type.ndim
+        members = [('array', types.EphemeralPointer(array_type)),
                    ('stride', types.intp),
-                   ('pointer', types.EphemeralPointer(types.CPointer(dtype))),
                    ('index', types.EphemeralPointer(types.intp)),
-                   # NOTE: indices is an array
-                   ('indices', types.EphemeralPointer(types.intp)),
-        ]
+                   ]
+        if need_indices:
+            # For ndenumerate()
+            members.append(('indices', types.EphemeralArray(types.intp, ndim)))
         super(CContiguousFlatIter, self).__init__(dmm, fe_type, members)
-
-    def get_data_type(self):
-        # FIXME: must flatten indices array
-        raise NotImplementedError("cannot serialize flat() iterator")
 
 
 class FlatIter(StructModel):
     def __init__(self, dmm, fe_type):
         array_type = fe_type.array_type
         dtype = array_type.dtype
-        members = [('array', types.CPointer(array_type)),
-                   # NOTE: pointers and indices are arrays
-                   ('pointers', types.EphemeralPointer(types.CPointer(dtype))),
-                   ('indices', types.EphemeralPointer(types.intp)),
+        ndim = array_type.ndim
+        members = [('array', types.EphemeralPointer(array_type)),
+                   ('pointers', types.EphemeralArray(types.CPointer(dtype), ndim)),
+                   ('indices', types.EphemeralArray(types.intp, ndim)),
                    ('exhausted', types.EphemeralPointer(types.boolean)),
         ]
         super(FlatIter, self).__init__(dmm, fe_type, members)
-
-    def get_data_type(self):
-        # FIXME: must flatten indices and pointers
-        raise NotImplementedError("cannot serialize flat() iterator")
 
 
 @register_default(types.UniTupleIter)
@@ -822,6 +919,14 @@ class GeneratorModel(CompositeModel):
     def from_return(self, builder, value):
         return value
 
+    def as_data(self, builder, value):
+        return builder.load(value)
+
+    def from_data(self, builder, value):
+        stack = cgutils.alloca_once(builder, value.type)
+        builder.store(value, stack)
+        return stack
+
 
 @register_default(types.ArrayCTypes)
 class ArrayCTypesModel(StructModel):
@@ -848,17 +953,23 @@ class NdIndexType(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
         members = [('shape', types.UniTuple(types.intp, ndim)),
-                   ('indices', types.CPointer(types.intp)),
-                   ('exhausted', types.CPointer(types.boolean)),
+                   ('indices', types.EphemeralArray(types.intp, ndim)),
+                   ('exhausted', types.EphemeralPointer(types.boolean)),
                    ]
         super(NdIndexType, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.NumpyFlatType)
-@register_default(types.NumpyNdEnumerateType)
 def handle_numpy_flat_type(dmm, ty):
     if ty.array_type.layout == 'C':
-        return CContiguousFlatIter(dmm, ty)
+        return CContiguousFlatIter(dmm, ty, need_indices=False)
+    else:
+        return FlatIter(dmm, ty)
+
+@register_default(types.NumpyNdEnumerateType)
+def handle_numpy_ndenumerate_type(dmm, ty):
+    if ty.array_type.layout == 'C':
+        return CContiguousFlatIter(dmm, ty, need_indices=True)
     else:
         return FlatIter(dmm, ty)
 

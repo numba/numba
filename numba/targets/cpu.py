@@ -12,10 +12,9 @@ from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
 from numba.targets import (
-    callconv, codegen, externals, intrinsics, cmathimpl, mathimpl,
+    callconv, codegen, externals, intrinsics, listobj, cmathimpl, mathimpl,
     npyimpl, operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
-from numba.runtime.atomicops import install_atomic_refct
 from numba.runtime import rtsys
 
 # Keep those structures in sync with _dynfunc.c.
@@ -78,6 +77,10 @@ class CPUContext(BaseContext):
         From the pointer *clo* to a _dynfunc.Closure, get a pointer
         to the enclosed _dynfunc.Environment.
         """
+        with cgutils.if_unlikely(builder, cgutils.is_null(builder, clo)):
+            self.debug_print(builder, "Fatal error: missing _dynfunc.Closure")
+            builder.unreachable()
+
         clo_body_ptr = cgutils.pointer_add(
             builder, clo, _dynfunc._impl_info['offsetof_closure_body'])
         clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
@@ -101,19 +104,19 @@ class CPUContext(BaseContext):
             builder, genptr, _dynfunc._impl_info['offsetof_generator_state'],
             return_type=return_type)
 
-    def post_lowering(self, func):
-        mod = func.module
+    def build_list(self, builder, list_type, items):
+        """
+        Build a list from the Numba *list_type* and its initial *items*.
+        """
+        return listobj.build_list(self, builder, list_type, items)
 
-        if (sys.platform.startswith('linux') or
-                sys.platform.startswith('win32')):
-            intrinsics.fix_powi_calls(mod)
-
+    def post_lowering(self, mod, library):
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
             # calls to compiler-rt
             intrinsics.fix_divmod(mod)
 
-        install_atomic_refct(mod)
+        library.add_linking_library(rtsys.library)
 
     def create_cpython_wrapper(self, library, fndesc, env, call_helper,
                                release_gil=False):

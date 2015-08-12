@@ -4,7 +4,7 @@ import numpy
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba import errors, types
 from .support import TestCase
 
 enable_pyobj_flags = Flags()
@@ -159,9 +159,9 @@ class TestUnpack(TestCase):
 
     def test_unpack_tuple_too_small_npm(self):
         self.check_unpack_error(unpack_tuple_too_small, no_pyobj_flags,
-                                TypeError)
+                                errors.TypingError)
         self.check_unpack_error(unpack_heterogenous_tuple_too_small,
-                                no_pyobj_flags, TypeError)
+                                no_pyobj_flags, errors.TypingError)
 
     def test_unpack_tuple_too_large(self):
         self.check_unpack_error(unpack_tuple_too_large)
@@ -169,9 +169,9 @@ class TestUnpack(TestCase):
 
     def test_unpack_tuple_too_large_npm(self):
         self.check_unpack_error(unpack_tuple_too_large, no_pyobj_flags,
-                                TypeError)
+                                errors.TypingError)
         self.check_unpack_error(unpack_heterogenous_tuple_too_large,
-                                no_pyobj_flags, TypeError)
+                                no_pyobj_flags, errors.TypingError)
 
     def test_unpack_range_too_small(self):
         self.check_unpack_error(unpack_range_too_small)

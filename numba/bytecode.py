@@ -9,7 +9,7 @@ import sys
 import inspect
 from collections import namedtuple
 
-from numba import utils
+from numba import errors, utils
 from numba.config import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
@@ -51,10 +51,15 @@ def _make_bytecode_table():
     if sys.version_info[0] == 2:
         version_specific += [
             ('BINARY_DIVIDE', 0),
+            ('DELETE_SLICE+0', 0),
+            ('DELETE_SLICE+1', 0),
+            ('DELETE_SLICE+2', 0),
+            ('DELETE_SLICE+3', 0),
             ('DUP_TOPX', 2),
             ('INPLACE_DIVIDE', 0),
             ('PRINT_ITEM', 0),
             ('PRINT_NEWLINE', 0),
+            ('ROT_FOUR', 0),
             ('SLICE+0', 0),
             ('SLICE+1', 0),
             ('SLICE+2', 0),
@@ -93,7 +98,9 @@ def _make_bytecode_table():
                     ('CALL_FUNCTION_VAR', 2),
                     ('COMPARE_OP', 2),
                     ('DELETE_ATTR', 2),
+                    ('DELETE_SUBSCR', 0),
                     ('DUP_TOP', 0),
+                    ('EXTENDED_ARG', 2),
                     ('FOR_ITER', 2),
                     ('GET_ITER', 0),
                     ('INPLACE_ADD', 0),
@@ -153,6 +160,7 @@ JREL_OPS = frozenset(dis.hasjrel)
 JABS_OPS = frozenset(dis.hasjabs)
 JUMP_OPS = JREL_OPS | JABS_OPS
 TERM_OPS = frozenset(_as_opcodes(['RETURN_VALUE', 'RAISE_VARARGS']))
+EXTENDED_ARG = dis.EXTENDED_ARG
 
 
 class ByteCodeInst(object):
@@ -225,7 +233,7 @@ class ByteCodeIter(object):
     def __iter__(self):
         return self
 
-    def next(self):
+    def _fetch_opcode(self):
         offset, opcode = next(self.iter)
         try:
             info = BYTECODE_TABLE[opcode]
@@ -237,6 +245,14 @@ class ByteCodeIter(object):
             arg = self.read_arg(info.argsize)
         else:
             arg = None
+        return offset, opcode, arg
+
+    def next(self):
+        offset, opcode, arg = self._fetch_opcode()
+        if opcode == EXTENDED_ARG:
+            hi_arg = arg
+            offset, opcode, lo_arg = self._fetch_opcode()
+            arg = (hi_arg << 16) + lo_arg
         return offset, ByteCodeInst(offset=offset, opcode=opcode, arg=arg)
 
     __next__ = next
@@ -253,10 +269,6 @@ class ByteCodeOperation(object):
     def __init__(self, inst, args):
         self.inst = inst
         self.args = args
-
-
-class ByteCodeSupportError(Exception):
-    pass
 
 
 class ByteCodeBase(object):
@@ -325,10 +337,10 @@ class ByteCode(ByteCodeBase):
         code = get_code_object(func)
         pysig = utils.pysignature(func)
         if not code:
-            raise ByteCodeSupportError("%s does not provide its bytecode" %
-                                       func)
+            raise errors.ByteCodeSupportError(
+                "%s does not provide its bytecode" % func)
         if code.co_cellvars:
-            raise ByteCodeSupportError("does not support cellvars")
+            raise NotImplementedError("cell vars are not supported")
 
         table = utils.SortedMap(ByteCodeIter(code))
         labels = set(dis.findlabels(code.co_code))

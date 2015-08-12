@@ -4,14 +4,9 @@ Macro handling passes
 Macros are expanded on block-by-block
 """
 from __future__ import absolute_import, print_function, division
-from numba import ir
 
-
-class MacroError(Exception):
-    '''
-    An exception thrown during macro expansion
-    '''
-    pass
+from . import ir
+from .errors import MacroError
 
 
 def expand_macros(blocks):

@@ -256,16 +256,15 @@ class _PipelineManager(object):
         raise CompilerError("All pipelines have failed")
 
 
-class CompilerError(Exception):
-    pass
-
-
 class Pipeline(object):
     """
     Stores and manages states for the compiler pipeline
     """
     def __init__(self, typingctx, targetctx, library, args, return_type, flags,
                  locals):
+        # Make sure the environment is reloaded
+        config.reload_config()
+
         self.typingctx = typingctx
 
         subtargetoptions = {}

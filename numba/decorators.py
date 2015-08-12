@@ -3,7 +3,9 @@ Contains function decorators and target_registry
 """
 from __future__ import print_function, division, absolute_import
 import warnings
+
 from . import config, sigutils
+from .errors import DeprecationError
 from .targets import registry
 from . import cuda
 
@@ -20,9 +22,6 @@ def autojit(*args, **kws):
                   "the same functionality", DeprecationWarning)
     return jit(*args, **kws)
 
-
-class DeprecationError(Exception):
-    pass
 
 class DisableJitWrapper(object):
     def __init__(self, py_func):

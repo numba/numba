@@ -130,5 +130,37 @@ class TestFuncLifetime(TestCase):
         self.check_inner_function_lifetime(nopython=True)
 
 
+class TestLifeTimeIssue(TestCase):
+    def test_double_free(self):
+        from numba import njit
+        import numpy as np
+
+        # This is the function that causes the crash
+
+        @njit
+        def is_point_in_polygons(point, polygons):
+            num_polygons = polygons.shape[0]
+            if num_polygons != 0:
+                # An extra decref is inserted in this block
+                intentionally_unused_variable = polygons[0]
+            return 0
+
+        # This function creates some NRT objects for the previous function
+        # to corrupt.
+
+        @njit
+        def dummy():
+            return np.empty(10, dtype=np.int64)
+
+        polygons = np.array([[[0, 1]]])
+        points = np.array([[-1.5, 0.5]])
+        a = dummy()
+        is_point_in_polygons(points[0], polygons)
+        b = dummy()
+        # Crash happens at second call
+        is_point_in_polygons(points[0], polygons)
+        c = dummy()
+
+
 if __name__ == '__main__':
     unittest.main()

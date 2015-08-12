@@ -5,11 +5,12 @@ import numpy as np
 
 from numba import njit
 from numba.npyufunc import dufunc
+from .support import MemoryLeakMixin
 
 def pyuadd(a0, a1):
     return a0 + a1
 
-class TestDUFunc(unittest.TestCase):
+class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
 
     def test_frozen(self):
         duadd = dufunc.DUFunc(pyuadd, nopython=True)

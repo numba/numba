@@ -10,7 +10,7 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              from_dtype)
 from ..numpy_support import version as numpy_version
 
-from ..typeinfer import TypingError
+from ..errors import TypingError
 
 registry = Registry()
 builtin = registry.register
@@ -306,62 +306,35 @@ del _aliases, _numpy_ufunc
 
 
 # -----------------------------------------------------------------------------
-# Install global reduction functions
+# Install global helpers for array methods.
 
-# Functions where input domain and output domain are the same
-class Numpy_homogenous_reduction(AbstractTemplate):
+class Numpy_method_redirection(AbstractTemplate):
+    """
+    A template redirecting a Numpy global function (e.g. np.sum) to an
+    array method of the same name (e.g. ndarray.sum).
+    """
+
     def generic(self, args, kws):
         assert not kws
         [arr] = args
-        return signature(arr.dtype, arr)
+        # This will return a BoundFunction
+        meth_ty = self.context.resolve_getattr(arr, self.method_name)
+        # Resolve arguments on the bound function
+        meth_sig = self.context.resolve_function_type(meth_ty, args[1:], kws)
+        if meth_sig is not None:
+            return signature(meth_sig.return_type, meth_sig.recvr, *meth_sig.args)
 
-# Functions where domain and range are possibly different formats
-class Numpy_expanded_reduction(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        [arr] = args
-        if isinstance(arr.dtype, types.Integer):
-            # Expand to a machine int, not larger (like Numpy)
-            if arr.dtype.signed:
-                return signature(max(arr.dtype, types.intp), arr)
-            else:
-                return signature(max(arr.dtype, types.uintp), arr)
-        else:
-            return signature(arr.dtype, arr)
-
-class Numpy_heterogenous_reduction_real(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        [arr] = args
-        if arr.dtype in types.integer_domain:
-            return signature(types.float64, arr)
-        else:
-            return signature(arr.dtype, arr)
-
-class Numpy_index_reduction(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        [arr] = args
-        return signature(types.int64, arr)
 
 # Function to glue attributes onto the numpy-esque object
-def _numpy_reduction(fname, rClass):
-    npyfn = getattr(numpy, fname)
-    cls = type("Numpy_reduce_{0}".format(npyfn), (rClass,), dict(key=npyfn))
-    semiBound = lambda self, mod: types.Function(cls)
-    setattr(NumpyModuleAttribute, "resolve_{0}".format(fname), semiBound)
+def _numpy_redirect(fname):
+    numpy_function = getattr(numpy, fname)
+    cls = type("Numpy_reduce_{0}".format(fname), (Numpy_method_redirection,),
+               dict(key=numpy_function, method_name=fname))
+    builtin_global(numpy_function, types.Function(cls))
 
-for func in ['min', 'max']:
-    _numpy_reduction(func, Numpy_homogenous_reduction)
-
-for func in ['sum', 'prod']:
-    _numpy_reduction(func, Numpy_expanded_reduction)
-
-for func in ['mean', 'var', 'std']:
-    _numpy_reduction(func, Numpy_heterogenous_reduction_real)
-
-for func in ['argmin', 'argmax']:
-    _numpy_reduction(func, Numpy_index_reduction)
+for func in ['min', 'max', 'sum', 'prod', 'mean', 'median', 'var', 'std',
+             'cumsum', 'cumprod', 'argmin', 'argmax']:
+    _numpy_redirect(func)
 
 
 # -----------------------------------------------------------------------------
@@ -391,7 +364,7 @@ def register_casters(register_global):
                 if a in types.number_domain:
                     return signature(self.restype, a)
 
-        register_global(np_type, types.Function(Caster))
+        register_global(np_type, types.NumberClass(nb_type, Caster))
 
 register_casters(builtin_global)
 
@@ -409,10 +382,8 @@ def _parse_shape(shape):
     return ndim
 
 def _parse_dtype(dtype):
-    # numpy APIs allow dtype constructor to be used as `dtype`
-    # arguments.  Since, npy_dtype.template.key dtype or dtype
-    # ctor, we use numpy.dtype to force it into a dtype object.
-    return from_dtype(numpy.dtype(dtype.template.key))
+    if isinstance(dtype, types.DTypeSpec):
+        return dtype.dtype
 
 
 class NdConstructor(CallableTemplate):
@@ -428,7 +399,7 @@ class NdConstructor(CallableTemplate):
                 nb_dtype = _parse_dtype(dtype)
 
             ndim = _parse_shape(shape)
-            if ndim is not None:
+            if nb_dtype is not None and ndim is not None:
                 return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
         return typer
@@ -445,7 +416,8 @@ class NdConstructorLike(CallableTemplate):
                 nb_dtype = arr.dtype
             else:
                 nb_dtype = _parse_dtype(dtype)
-            return arr.copy(dtype=nb_dtype)
+            if nb_dtype is not None:
+                return arr.copy(dtype=nb_dtype)
 
         return typer
 
@@ -461,6 +433,7 @@ class NdZeros(NdConstructor):
 @builtin
 class NdOnes(NdConstructor):
     key = numpy.ones
+    return_new_reference = True
 
 @builtin
 class NdEmptyLike(NdConstructorLike):
@@ -490,6 +463,8 @@ if numpy_version >= (1, 8):
     @builtin
     class NdFull(CallableTemplate):
         key = numpy.full
+        return_new_reference = True
+
 
         def generic(self):
             def typer(shape, fill_value, dtype=None):
@@ -499,7 +474,7 @@ if numpy_version >= (1, 8):
                     nb_dtype = _parse_dtype(dtype)
 
                 ndim = _parse_shape(shape)
-                if ndim is not None:
+                if nb_dtype is not None and ndim is not None:
                     return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
             return typer
@@ -507,6 +482,7 @@ if numpy_version >= (1, 8):
     @builtin
     class NdFullLike(CallableTemplate):
         key = numpy.full_like
+        return_new_reference = True
 
         def generic(self):
             def typer(arr, fill_value, dtype=None):
@@ -514,7 +490,8 @@ if numpy_version >= (1, 8):
                     nb_dtype = arr.dtype
                 else:
                     nb_dtype = _parse_dtype(dtype)
-                return arr.copy(dtype=nb_dtype)
+                if nb_dtype is not None:
+                    return arr.copy(dtype=nb_dtype)
 
             return typer
 
@@ -525,6 +502,7 @@ if numpy_version >= (1, 8):
 @builtin
 class NdIdentity(AbstractTemplate):
     key = numpy.identity
+    return_new_reference = True
 
     def generic(self, args, kws):
         assert not kws
@@ -532,12 +510,13 @@ class NdIdentity(AbstractTemplate):
         if not isinstance(n, types.Integer):
             return
         if len(args) >= 2:
-            dtype = _parse_dtype(args[1])
+            nb_dtype = _parse_dtype(args[1])
         else:
-            dtype = types.float64
+            nb_dtype = types.float64
 
-        return_type = types.Array(ndim=2, dtype=dtype, layout='C')
-        return signature(return_type, *args)
+        if nb_dtype is not None:
+            return_type = types.Array(ndim=2, dtype=nb_dtype, layout='C')
+            return signature(return_type, *args)
 
 builtin_global(numpy.identity, types.Function(NdIdentity))
 
@@ -549,6 +528,7 @@ def _infer_dtype_from_inputs(inputs):
 @builtin
 class NdEye(CallableTemplate):
     key = numpy.eye
+    return_new_reference = True
 
     def generic(self):
         def typer(N, M=None, k=None, dtype=None):
@@ -556,7 +536,8 @@ class NdEye(CallableTemplate):
                 nb_dtype = types.float64
             else:
                 nb_dtype = _parse_dtype(dtype)
-            return types.Array(ndim=2, dtype=nb_dtype, layout='C')
+            if nb_dtype is not None:
+                return types.Array(ndim=2, dtype=nb_dtype, layout='C')
 
         return typer
 
@@ -566,6 +547,7 @@ builtin_global(numpy.eye, types.Function(NdEye))
 @builtin
 class NdArange(AbstractTemplate):
     key = numpy.arange
+    return_new_reference = True
 
     def generic(self, args, kws):
         assert not kws
@@ -591,6 +573,7 @@ builtin_global(numpy.arange, types.Function(NdArange))
 @builtin
 class NdLinspace(AbstractTemplate):
     key = numpy.linspace
+    return_new_reference = True
 
     def generic(self, args, kws):
         assert not kws
@@ -613,6 +596,28 @@ class NdLinspace(AbstractTemplate):
         return signature(return_type, *args)
 
 builtin_global(numpy.linspace, types.Function(NdLinspace))
+
+
+@builtin
+class NdFromBuffer(CallableTemplate):
+    key = numpy.frombuffer
+
+    def generic(self):
+        def typer(buffer, dtype=None):
+            if not isinstance(buffer, types.Buffer) or buffer.layout != 'C':
+                return
+            if dtype is None:
+                nb_dtype = types.float64
+            else:
+                nb_dtype = _parse_dtype(dtype)
+
+            if nb_dtype is not None:
+                return types.Array(dtype=nb_dtype, ndim=1, layout='C',
+                                   readonly=not buffer.mutable)
+
+        return typer
+
+builtin_global(numpy.frombuffer, types.Function(NdFromBuffer))
 
 
 # -----------------------------------------------------------------------------
@@ -640,12 +645,16 @@ class NdIndex(AbstractTemplate):
         assert not kws
 
         # Either ndindex(shape) or ndindex(*shape)
-        if len(args) == 1 and isinstance(args[0], types.UniTuple):
-            shape = list(args[0])
+        if len(args) == 1 and isinstance(args[0], types.BaseTuple):
+            tup = args[0]
+            if tup.count > 0 and not isinstance(tup, types.UniTuple):
+                # Heterogenous tuple
+                return
+            shape = list(tup)
         else:
             shape = args
 
-        if shape and all(isinstance(x, types.Integer) for x in shape):
+        if all(isinstance(x, types.Integer) for x in shape):
             iterator_type = types.NumpyNdIndexType(len(shape))
             return signature(iterator_type, *args)
 

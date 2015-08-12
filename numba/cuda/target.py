@@ -9,6 +9,8 @@ from numba import typing, types, cgutils
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
+from numba.targets import cmathimpl, operatorimpl
+from numba.typing import cmathdecl, operatordecl
 from numba.funcdesc import transform_arg_name
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
@@ -24,6 +26,8 @@ class CUDATypingContext(typing.BaseContext):
 
         self.install(cudadecl.registry)
         self.install(cudamath.registry)
+        self.install(cmathdecl.registry)
+        self.install(operatordecl.registry)
 
 # -----------------------------------------------------------------------------
 # Implementation
@@ -46,6 +50,8 @@ class CUDATargetContext(BaseContext):
 
         self.install_registry(cudaimpl.registry)
         self.install_registry(libdevice.registry)
+        self.install_registry(cmathimpl.registry)
+        self.install_registry(operatorimpl.registry)
         self._target_data = ll.create_target_data(nvvm.default_data_layout)
 
     def jit_codegen(self):
@@ -59,14 +65,21 @@ class CUDATargetContext(BaseContext):
     def call_conv(self):
         return CUDACallConv(self)
 
-    def mangler(self, name, argtypes):
+    @classmethod
+    def mangle_name(cls, name):
+        """
+        Mangle the given string
+        """
         def repl(m):
             ch = m.group(0)
             return "_%X_" % ord(ch)
 
-        qualified = name + '.' + '.'.join(transform_arg_name(a) for a in argtypes)
-        mangled = VALID_CHARS.sub(repl, qualified)
-        return mangled
+        return VALID_CHARS.sub(repl, name)
+
+    def mangler(self, name, argtypes):
+        qualified = name + '.' + '.'.join(transform_arg_name(a)
+                                          for a in argtypes)
+        return self.mangle_name(qualified)
 
     def prepare_cuda_kernel(self, func, argtypes):
         # Adapt to CUDA LLVM
@@ -111,7 +124,7 @@ class CUDATargetContext(BaseContext):
         with cgutils.if_likely(builder, status.is_ok):
             builder.ret_void()
 
-        with cgutils.ifthen(builder, builder.not_(status.is_python_exc)):
+        with builder.if_then(builder.not_(status.is_python_exc)):
             # User exception raised
             old = Constant.null(gv_exc.type.pointee)
 
@@ -128,7 +141,7 @@ class CUDATargetContext(BaseContext):
 
             # If the xchange is successful, save the thread ID.
             sreg = nvvmutils.SRegBuilder(builder)
-            with cgutils.ifthen(builder, changed):
+            with builder.if_then(changed):
                 for dim, ptr, in zip("xyz", gv_tid):
                     val = sreg.tid(dim)
                     builder.store(val, ptr)
@@ -157,6 +170,28 @@ class CUDATargetContext(BaseContext):
         a = self.make_array(typ)(self, builder)
         return a._getvalue()
 
+    def insert_const_string(self, mod, string):
+        """
+        Unlike the parent version.  This returns a a pointer in the constant
+        addrspace.
+        """
+        text = Constant.stringz(string)
+        name = '.'.join(["__conststring__", self.mangle_name(string)])
+        # Try to reuse existing global
+        gv = mod.globals.get(name)
+        if gv is None:
+            # Not defined yet
+            gv = mod.add_global_variable(text.type, name=name,
+                                         addrspace=nvvm.ADDRSPACE_CONSTANT)
+            gv.linkage = LINKAGE_INTERNAL
+            gv.global_constant = True
+            gv.initializer = text
+
+        # Cast to a i8* pointer
+        charty = gv.type.pointee.element
+        return Constant.bitcast(gv,
+                                charty.as_pointer(nvvm.ADDRSPACE_CONSTANT))
+
     def insert_string_const_addrspace(self, builder, string):
         """
         Insert a constant string in the constant addresspace and return a
@@ -164,27 +199,19 @@ class CUDATargetContext(BaseContext):
 
         This function attempts to deduplicate.
         """
-        lmod = builder.basic_block.function.module
-        text = Constant.stringz(string)
-        name = "__conststring__.%s" % string
-        charty = Type.int(8)
+        lmod = builder.module
+        gv = self.insert_const_string(lmod, string)
+        return self.insert_addrspace_conv(builder, gv,
+                                          nvvm.ADDRSPACE_CONSTANT)
 
-        for gv in lmod.global_values:
-            if gv.name == name and gv.type.pointee == text.type:
-                break
-        else:
-            gv = lmod.add_global_variable(text.type, name=name,
-                                          addrspace=nvvm.ADDRSPACE_CONSTANT)
-            gv.linkage = LINKAGE_INTERNAL
-            gv.global_constant = True
-            gv.initializer = text
-
-        constcharptrty = Type.pointer(charty, nvvm.ADDRSPACE_CONSTANT)
-        charptr = builder.bitcast(gv, constcharptrty)
-
-        conv = nvvmutils.insert_addrspace_conv(lmod, charty,
-                                               nvvm.ADDRSPACE_CONSTANT)
-        return builder.call(conv, [charptr])
+    def insert_addrspace_conv(self, builder, ptr, addrspace):
+        """
+        Perform addrspace conversion according to the NVVM spec
+        """
+        lmod = builder.module
+        base_type = ptr.type.pointee
+        conv = nvvmutils.insert_addrspace_conv(lmod, base_type, addrspace)
+        return builder.call(conv, [ptr])
 
     def optimize_function(self, func):
         """Run O1 function passes

@@ -3,6 +3,7 @@ import numpy
 from numba.compiler import compile_isolated
 from numba import typeof
 from numba import unittest_support as unittest
+from .support import MemoryLeakMixin
 
 
 def array_return(a, i):
@@ -16,7 +17,7 @@ def array_return_start_with_loop(a):
     return a
 
 
-class TestArrayReturn(unittest.TestCase):
+class TestArrayReturn(MemoryLeakMixin, unittest.TestCase):
     def test_array_return(self):
         a = numpy.arange(10)
         i = 2

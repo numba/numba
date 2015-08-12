@@ -6,7 +6,6 @@ from __future__ import absolute_import
 from contextlib import contextmanager
 from .cudadrv.devices import require_context, reset, gpus
 from .kernel import FakeCUDAKernel
-from numba.types import Prototype
 from numba.typing import Signature
 from warnings import warn
 
@@ -75,7 +74,7 @@ def jit(fn_or_sig=None, device=False, debug=False, argtypes=None, inline=False, 
         raise NotImplementedError('Cannot link PTX in the simulator')
     # Check for first argument specifying types - in that case the
     # decorator is not being passed a function
-    if fn_or_sig is None or isinstance(fn_or_sig, (str, tuple, Signature, Prototype)):
+    if fn_or_sig is None or isinstance(fn_or_sig, (str, tuple, Signature)):
         def jitwrapper(fn):
             return FakeCUDAKernel(fn,
                                   device=device,

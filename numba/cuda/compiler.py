@@ -344,7 +344,7 @@ class CUDAKernel(CUDAKernelBase):
         '''
         Returns the PTX code for this kernel.
         '''
-        return str(self._func.ptx.get())
+        return self._func.ptx.get().decode('ascii')
 
     def inspect_types(self, file=None):
         '''

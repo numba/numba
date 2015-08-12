@@ -4,6 +4,8 @@ from numba import unittest_support as unittest
 from numba import jit, cffi_support, types
 from numba.compiler import compile_isolated, Flags
 from .support import TestCase
+from .cffi_usecases import *
+
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -11,36 +13,11 @@ enable_pyobj_flags.set("enable_pyobject")
 no_pyobj_flags = Flags()
 
 
-if cffi_support.SUPPORTED:
-    from cffi import FFI
-    ffi = FFI()
-    ffi.cdef("""
-    double sin(double x);
-    double cos(double x);
-    """)
-    C = ffi.dlopen(None)                     # loads the entire C namespace
-    c_sin = C.sin
-    c_cos = C.cos
-
-
-def use_cffi_sin(x):
-    return c_sin(x) * 2
-
-def use_two_funcs(x):
-    return c_sin(x) - c_cos(x)
-
-def use_func_pointer(fa, fb, x):
-    if x > 0:
-        return fa(x)
-    else:
-        return fb(x)
-
-
 @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
 class TestCFFI(TestCase):
 
     def test_sin_function(self, flags=enable_pyobj_flags):
-        signature = cffi_support.map_type(ffi.typeof(c_sin))
+        signature = cffi_support.map_type(ffi.typeof(cffi_sin))
         self.assertEqual(len(signature.args), 1)
         self.assertEqual(signature.args[0], types.double)
 
@@ -66,10 +43,10 @@ class TestCFFI(TestCase):
         pyfunc = use_func_pointer
         cfunc = jit(nopython=True)(pyfunc)
         for (fa, fb, x) in [
-            (c_sin, c_cos, 1.0),
-            (c_sin, c_cos, -1.0),
-            (c_cos, c_sin, 1.0),
-            (c_cos, c_sin, -1.0)]:
+            (cffi_sin, cffi_cos, 1.0),
+            (cffi_sin, cffi_cos, -1.0),
+            (cffi_cos, cffi_sin, 1.0),
+            (cffi_cos, cffi_sin, -1.0)]:
             expected = pyfunc(fa, fb, x)
             got = cfunc(fa, fb, x)
             self.assertEqual(got, expected)

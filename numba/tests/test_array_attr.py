@@ -1,9 +1,22 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
+
+import sys
+
 import numpy as np
-from numba.compiler import compile_isolated, Flags
+
+import numba.unittest_support as unittest
+from numba.compiler import compile_isolated
 from numba.numpy_support import from_dtype
-from numba import types, njit
+from numba import types, njit, typeof
+from .support import TestCase, CompilationCache, MemoryLeakMixin
+
+
+def array_dtype(a):
+    return a.dtype
+
+
+def use_dtype(a, b):
+    return a.view(b.dtype)
 
 
 def array_itemsize(a):
@@ -24,6 +37,16 @@ def array_ndim(a):
 
 def array_size(a):
     return a.size
+
+
+def array_flags_contiguous(a):
+    return a.flags.contiguous
+
+def array_flags_c_contiguous(a):
+    return a.flags.c_contiguous
+
+def array_flags_f_contiguous(a):
+    return a.flags.f_contiguous
 
 
 def nested_array_itemsize(a):
@@ -56,12 +79,32 @@ def array_ctypes_data(arr):
     return arr.ctypes.data
 
 
-class TestArrayAttr(unittest.TestCase):
+class TestArrayAttr(MemoryLeakMixin, TestCase):
+
     def setUp(self):
-        self.a = np.arange(10).reshape(2, 5)
+        super(TestArrayAttr, self).setUp()
+        self.ccache = CompilationCache()
+        self.a = np.arange(10, dtype=np.int32).reshape(2, 5)
+
+    def check_unary(self, pyfunc, arr):
+        cfunc = self.get_cfunc(pyfunc, (typeof(arr),))
+        expected = pyfunc(arr)
+        self.assertPreciseEqual(cfunc(arr), expected)
+
+    def check_unary_with_arrays(self, pyfunc):
+        self.check_unary(pyfunc, self.a)
+        self.check_unary(pyfunc, self.a.T)
+        self.check_unary(pyfunc, self.a[::2])
+        # 0-d array
+        arr = np.array([42]).reshape(())
+        self.check_unary(pyfunc, arr)
+        # array with an empty dimension
+        arr = np.zeros(0)
+        self.check_unary(pyfunc, arr)
+        self.check_unary(pyfunc, arr.reshape((1, 0, 2)))
 
     def get_cfunc(self, pyfunc, argspec):
-        cres = compile_isolated(pyfunc, argspec)
+        cres = self.ccache.compile(pyfunc, argspec)
         return cres.entry_point
 
     def test_shape(self):
@@ -79,26 +122,42 @@ class TestArrayAttr(unittest.TestCase):
             self.assertEqual(pyfunc(self.a, i), cfunc(self.a, i))
 
     def test_ndim(self):
-        pyfunc = array_ndim
-        cfunc = self.get_cfunc(pyfunc, (types.int32[:,:],))
-
-        self.assertEqual(pyfunc(self.a), cfunc(self.a))
+        self.check_unary_with_arrays(array_ndim)
 
     def test_size(self):
-        pyfunc = array_size
-        cfunc = self.get_cfunc(pyfunc, (types.int32[:,:],))
-
-        self.assertEqual(pyfunc(self.a), cfunc(self.a))
+        self.check_unary_with_arrays(array_size)
 
     def test_itemsize(self):
-        pyfunc = array_itemsize
-        cfunc = self.get_cfunc(pyfunc, (types.int32[:,:],))
+        self.check_unary_with_arrays(array_itemsize)
 
-        self.assertEqual(pyfunc(self.a), cfunc(self.a))
+    def test_dtype(self):
+        pyfunc = array_dtype
+        self.check_unary(pyfunc, self.a)
+        dtype = np.dtype([('x', np.int8), ('y', np.int8)])
+        arr = np.zeros(4, dtype=dtype)
+        self.check_unary(pyfunc, arr)
+
+    def test_use_dtype(self):
+        # Test using the dtype attribute inside the Numba function itself
+        b = np.empty(1, dtype=np.int16)
+        pyfunc = use_dtype
+        cfunc = self.get_cfunc(pyfunc, (typeof(self.a), typeof(b)))
+        expected = pyfunc(self.a, b)
+        self.assertPreciseEqual(cfunc(self.a, b), expected)
+
+    def test_flags_contiguous(self):
+        self.check_unary_with_arrays(array_flags_contiguous)
+
+    def test_flags_c_contiguous(self):
+        self.check_unary_with_arrays(array_flags_c_contiguous)
+
+    def test_flags_f_contiguous(self):
+        self.check_unary_with_arrays(array_flags_f_contiguous)
 
 
-class TestNestedArrayAttr(unittest.TestCase):
+class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):
     def setUp(self):
+        super(TestNestedArrayAttr, self).setUp()
         dtype = np.dtype([('a', np.int32), ('f', np.int32, (2, 5))])
         self.a = np.recarray(1, dtype)[0]
         self.nbrecord = from_dtype(self.a.dtype)
@@ -138,7 +197,7 @@ class TestNestedArrayAttr(unittest.TestCase):
         self.assertEqual(pyfunc(self.a), cfunc(self.a))
 
 
-class TestSlicedArrayAttr(unittest.TestCase):
+class TestSlicedArrayAttr(MemoryLeakMixin, unittest.TestCase):
     def test_size_after_slicing(self):
         pyfunc = size_after_slicing_usecase
         cfunc = njit(pyfunc)
@@ -150,7 +209,7 @@ class TestSlicedArrayAttr(unittest.TestCase):
             self.assertEqual(pyfunc(arr, i), cfunc(arr, i))
 
 
-class TestArrayCTypes(unittest.TestCase):
+class TestArrayCTypes(MemoryLeakMixin, unittest.TestCase):
     def test_array_ctypes_data(self):
         pyfunc = array_ctypes_data
         cfunc = njit(pyfunc)

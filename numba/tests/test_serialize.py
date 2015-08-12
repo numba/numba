@@ -5,8 +5,8 @@ import subprocess
 import sys
 
 from numba import unittest_support as unittest
+from numba.errors import TypingError
 from numba.targets import registry
-from numba.typeinfer import TypingError
 from .support import TestCase
 from .serialize_usecases import *
 
@@ -51,7 +51,7 @@ class TestDispatcherPickling(TestCase):
     def test_call_nopython(self):
         self.run_with_protocols(self.check_call, add_nopython, 5.5, (1.2, 4.3))
         # Object mode is disabled
-        self.run_with_protocols(self.check_call, add_nopython, TypeError, ("a", "bc"))
+        self.run_with_protocols(self.check_call, add_nopython, TypingError, ("a", "bc"))
 
     def test_call_nopython_fail(self):
         # Compilation fails

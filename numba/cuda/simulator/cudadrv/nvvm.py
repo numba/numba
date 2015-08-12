@@ -19,3 +19,5 @@ SUPPORTED_CC = None
 LibDevice = None
 NvvmError = None
 
+def is_available():
+    return False

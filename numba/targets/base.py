@@ -10,13 +10,13 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-import numba
-from numba import types, utils, cgutils, typing, numpy_support
+from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     builtin_registry, impl_attribute,
-                                    struct_registry, type_registry)
+                                    type_registry,
+                                    impl_ret_borrowed)
 from . import arrayobj, builtins, iterators, rangeobj, optional
 from numba import datamodel
 
@@ -28,6 +28,7 @@ except NotImplementedError:
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
+void_ptr = GENERIC_POINTER
 
 LTYPEMAP = {
     types.pyobject: PYOBJECT,
@@ -150,6 +151,9 @@ class BaseContext(object):
 
     # NRT
     enable_nrt = False
+
+    # PYCC
+    aot_mode = False
 
     def __init__(self, typing_context):
         _load_global_helpers()
@@ -390,6 +394,9 @@ class BaseContext(object):
         elif ty in types.real_domain:
             return Constant.real(lty, val)
 
+        elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+            return Constant.real(lty, val.astype(numpy.int64))
+
         elif isinstance(ty, types.UniTuple):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
@@ -427,7 +434,7 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
-        if isinstance(fn, types.Function):
+        if isinstance(fn, (types.NumberClass, types.Function)):
             key = fn.template.key
 
             if isinstance(key, MethodType):
@@ -495,13 +502,15 @@ class BaseContext(object):
                         parent=None,
                     )
 
-                    return ary._getvalue()
+                    res = ary._getvalue()
+                    return impl_ret_borrowed(context, builder, typ, res)
             else:
                 @impl_attribute(typ, attr, elemty)
                 def imp(context, builder, typ, val):
                     dptr = cgutils.get_record_member(builder, val, offset,
                                                      self.get_data_type(elemty))
-                    return self.unpack_value(builder, elemty, dptr)
+                    res = self.unpack_value(builder, elemty, dptr)
+                    return impl_ret_borrowed(context, builder, typ, res)
             return imp
 
         if isinstance(typ, types.Module):
@@ -509,17 +518,15 @@ class BaseContext(object):
             # We are treating them as constants.
             # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
-            if attrty is not None and not isinstance(attrty, (types.Dispatcher,
-                                                              types.Function,
-                                                              types.Module)):
+            if attrty is not None and not isinstance(attrty, types.Dummy):
                 pyval = getattr(typ.pymod, attr)
                 llval = self.get_constant(attrty, pyval)
                 @impl_attribute(typ, attr, attrty)
                 def imp(context, builder, typ, val):
-                    return llval
+                    return impl_ret_borrowed(context, builder, attrty, llval)
                 return imp
-            # No implementation required for functions/modules, which are
-            # dealt with later
+            # No implementation required for dummies (functions, modules...),
+            # which are dealt with later
             return None
 
         # Lookup specific attribute implementation for this type
@@ -786,7 +793,7 @@ class BaseContext(object):
         return builder.call(puts, [text])
 
     def debug_print(self, builder, text):
-        mod = cgutils.get_module(builder)
+        mod = builder.module
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
 
@@ -826,30 +833,39 @@ class BaseContext(object):
         codegen.add_linking_library(cres.library)
         return cres
 
-    def compile_internal(self, builder, impl, sig, args, locals={}):
-        """Invoke compiler to implement a function for a nopython function
+    def compile_subroutine(self, builder, impl, sig, locals={}):
+        """
+        Compile the function *impl* for the given *sig* (in nopython mode).
+        Return a placeholder object that's callable from another Numba
+        function.
         """
         cache_key = (impl.__code__, sig)
         if impl.__closure__:
             # XXX This obviously won't work if a cell's value is
             # unhashable.
             cache_key += tuple(c.cell_contents for c in impl.__closure__)
-        fndesc = self.cached_internal_func.get(cache_key)
-
-        if fndesc is None:
+        ty = self.cached_internal_func.get(cache_key)
+        if ty is None:
             cres = self.compile_only_no_cache(builder, impl, sig,
                                               locals=locals)
-            fndesc = cres.fndesc
-            self.cached_internal_func[cache_key] = fndesc
+            ty = types.NumbaFunction(cres.fndesc, sig)
+            self.cached_internal_func[cache_key] = ty
+        return ty
 
-        return self.call_internal(builder, fndesc, sig, args)
+    def compile_internal(self, builder, impl, sig, args, locals={}):
+        """
+        Like compile_subroutine(), but also call the function with the given
+        *args*.
+        """
+        ty = self.compile_subroutine(builder, impl, sig, locals)
+        return self.call_internal(builder, ty.fndesc, sig, args)
 
     def call_internal(self, builder, fndesc, sig, args):
         """Given the function descriptor of an internally compiled function,
         emit a call to that function with the given arguments.
         """
         # Add call to the generated function
-        llvm_mod = cgutils.get_module(builder)
+        llvm_mod = builder.module
         fn = self.declare_function(llvm_mod, fndesc)
         status, res = self.call_conv.call_function(builder, fn, sig.return_type,
                                                    sig.args, args)
@@ -956,10 +972,9 @@ class BaseContext(object):
         assert isinstance(ty, llvmir.Type), "Expected LLVM type"
         return ty.get_abi_alignment(self.target_data)
 
-    def post_lowering(self, func):
+    def post_lowering(self, mod, library):
         """Run target specific post-lowering transformation here.
         """
-        pass
 
     def create_module(self, name):
         """Create a LLVM module
@@ -967,58 +982,123 @@ class BaseContext(object):
         return lc.Module.new(name)
 
     def nrt_meminfo_alloc(self, builder, size):
+        """
+        Allocate a new MemInfo with a data payload of `size` bytes.
+
+        A pointer to the MemInfo is returned.
+        """
         if not self.enable_nrt:
             raise Exception("Require NRT")
-        mod = cgutils.get_module(builder)
-        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
-            [self.get_value_type(types.intp)])
+        mod = builder.module
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [self.get_value_type(types.intp)])
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
+        fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
-    def nrt_meminfo_data(self, builder, meminfo):
+    def nrt_meminfo_alloc_aligned(self, builder, size, align):
+        """
+        Allocate a new MemInfo with an aligned data payload of `size` bytes.
+        The data pointer is aligned to `align` bytes.  `align` can be either
+        a Python int or a LLVM uint32 value.
+
+        A pointer to the MemInfo is returned.
+        """
         if not self.enable_nrt:
             raise Exception("Require NRT")
-        mod = cgutils.get_module(builder)
-        voidptr = llvmir.IntType(8).as_pointer()
-        fnty = llvmir.FunctionType(voidptr, [voidptr])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
+        mod = builder.module
+        intp = self.get_value_type(types.intp)
+        u32 = self.get_value_type(types.uint32)
+        fnty = llvmir.FunctionType(void_ptr, [intp, u32])
+        fn = mod.get_or_insert_function(fnty,
+                                        name="NRT_MemInfo_alloc_safe_aligned")
+        fn.return_value.add_attribute("noalias")
+        if isinstance(align, int):
+            align = self.get_constant(types.uint32, align)
+        else:
+            assert align.type == u32, "align must be a uint32"
+        return builder.call(fn, [size, align])
+
+    def nrt_meminfo_varsize_alloc(self, builder, size):
+        """
+        Allocate a MemInfo pointing to a variable-sized data area.  The area
+        is separately allocated (i.e. two allocations are made) so that
+        re-allocating it doesn't change the MemInfo's address.
+
+        A pointer to the MemInfo is returned.
+        """
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_alloc")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [size])
+
+    def nrt_meminfo_varsize_realloc(self, builder, meminfo, size):
+        """
+        Reallocate a data area allocated by nrt_meminfo_varsize_alloc().
+        The new data pointer is returned, for convenience.
+        """
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [void_ptr, self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_realloc")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [meminfo, size])
+
+    def nrt_meminfo_data(self, builder, meminfo):
+        """
+        Given a MemInfo pointer, return a pointer to the allocated data
+        managed by it.  This works for MemInfos allocated with all the
+        above methods.
+        """
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        from numba.runtime.atomicops import meminfo_data_ty
+
+        mod = builder.module
+        fn = mod.get_or_insert_function(meminfo_data_ty, name="NRT_MemInfo_data")
         return builder.call(fn, [meminfo])
 
-    def get_nrt_meminfo(self, builder, typ, value):
-        return self.data_model_manager[typ].get_nrt_meminfo(builder, value)
+    def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        from numba.runtime.atomicops import incref_decref_ty
+
+        data_model = self.data_model_manager[typ]
+
+        members = data_model.traverse(builder, value)
+        for mt, mv in members:
+            self._call_nrt_incref_decref(builder, root_type, mt, mv, funcname)
+
+        try:
+            meminfo = data_model.get_nrt_meminfo(builder, value)
+        except NotImplementedError as e:
+            raise NotImplementedError("%s: %s" % (root_type, str(e)))
+        if meminfo:
+            mod = builder.module
+            fn = mod.get_or_insert_function(incref_decref_ty, name=funcname)
+            # XXX "nonnull" causes a crash in test_dyn_array: can this
+            # function be called with a NULL pointer?
+            fn.args[0].add_attribute("noalias")
+            fn.args[0].add_attribute("nocapture")
+            builder.call(fn, [meminfo])
 
     def nrt_incref(self, builder, typ, value):
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
-
-        members = self.data_model_manager[typ].traverse(builder, value)
-        for mt, mv in members:
-            self.nrt_incref(builder, mt, mv)
-
-        meminfo = self.get_nrt_meminfo(builder, typ, value)
-        if meminfo:
-            mod = cgutils.get_module(builder)
-            fnty = llvmir.FunctionType(llvmir.VoidType(),
-                [llvmir.IntType(8).as_pointer()])
-            fn = mod.get_or_insert_function(fnty, name="NRT_incref")
-
-            builder.call(fn, [meminfo])
+        """
+        Recursively incref the given *value* and its members.
+        """
+        self._call_nrt_incref_decref(builder, typ, typ, value, "NRT_incref")
 
     def nrt_decref(self, builder, typ, value):
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
-
-        members = self.data_model_manager[typ].traverse(builder, value)
-        for mt, mv in members:
-            self.nrt_decref(builder, mt, mv)
-
-        meminfo = self.get_nrt_meminfo(builder, typ, value)
-        if meminfo:
-            mod = cgutils.get_module(builder)
-            fnty = llvmir.FunctionType(llvmir.VoidType(),
-                [llvmir.IntType(8).as_pointer()])
-            fn = mod.get_or_insert_function(fnty, name="NRT_decref")
-            builder.call(fn, [meminfo])
+        """
+        Recursively decref the given *value* and its members.
+        """
+        self._call_nrt_incref_decref(builder, typ, typ, value, "NRT_decref")
 
 
 class _wrap_impl(object):
@@ -1035,4 +1115,3 @@ class _wrap_impl(object):
 
     def __repr__(self):
         return "<wrapped %s>" % self._imp
-

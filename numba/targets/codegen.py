@@ -250,8 +250,7 @@ class JITCodeLibrary(CodeLibrary):
         This function implicitly calls .finalize().
         """
         self._ensure_finalized()
-        func = self.get_function(name)
-        return self._codegen._engine.get_pointer_to_function(func)
+        return self._codegen._engine.get_function_address(name)
 
     def _finalize_specific(self):
         self._codegen._engine.finalize_object()
@@ -273,13 +272,7 @@ class BaseCPUCodegen(object):
         tm_options = dict(cpu='', features='', opt=config.OPT)
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
-
-        # MCJIT is still defective under Windows
-        if sys.platform.startswith('win32'):
-            engine = ll.create_jit_compiler_with_tm(llvm_module, tm)
-        else:
-            engine = ll.create_mcjit_compiler(llvm_module, tm)
-
+        engine = ll.create_mcjit_compiler(llvm_module, tm)
         tli = ll.create_target_library_info(llvm_module.triple)
 
         self._tli = tli
