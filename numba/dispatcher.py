@@ -458,12 +458,15 @@ class FunctionCache(object):
     A per-function compilation cache.  The cache saves data in separate
     data files and maintains information in an index file.
 
-    There is one data file ("function_name.<number>.nbc") per function
-    signature and target architecture.
+    There is one data file ("function_name.pyXY.<number>.nbc") per function
+    signature, target architecture and Python version.
 
-    The index file ("function_name.nbi") contains a mapping of signatures
+    The index file ("function_name.pyXY.nbi") contains a mapping of signatures
     and architectures to data files.  It is prefixed by a versioning key
     and a timestamp of the Python source file containing the function.
+
+    Separate index and data files per Python version avoid pickle
+    compatibility problems.
     """
 
     _source_stamp = None
@@ -480,6 +483,9 @@ class FunctionCache(object):
         self._fullname = "%s.%s" % (modname, qualname)
         self._source_path = inspect.getfile(py_func)
         self._lineno = py_func.__code__.co_firstlineno
+        # NOTE: this assumes the __pycache__ directory is writable, which
+        # is false for system installs, but true for conda environments
+        # and local work directories.
         self._cache_path = os.path.join(os.path.dirname(self._source_path),
                                         '__pycache__')
         abiflags = getattr(sys, 'abiflags', '')
@@ -558,6 +564,7 @@ class FunctionCache(object):
     def _index_key(self, sig, codegen):
         """
         Compute index key for the given signature and codegen.
+        It includes a description of the OS and target architecture.
         """
         return (sig, codegen.magic_tuple())
 
