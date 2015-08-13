@@ -516,6 +516,10 @@ class FunctionCache(object):
         self._save_index({})
 
     def load_overload(self, sig, target_context):
+        """
+        Load and recreate the cached CompileResult for the given signature,
+        using the *target_context*.
+        """
         if not self._enabled:
             return
         overloads = self._load_index()
@@ -529,24 +533,10 @@ class FunctionCache(object):
             # File could have been removed while the index still refers it.
             return
 
-    def _check_cachable(self, cres):
-        """
-        Check cachability of the given compile result.
-        """
-        cannot_cache = None
-        if cres.lifted:
-            cannot_cache = "as it uses lifted loops"
-        elif cres.has_dynamic_globals:
-            cannot_cache = "as it uses dynamic globals (such as ctypes pointers)"
-        if cannot_cache:
-            msg = ('Cannot cache compiled function "%s" %s'
-                   % (self._funcname, cannot_cache))
-            warnings.warn_explicit(msg, NumbaWarning,
-                                   self._source_path, self._lineno)
-            return False
-        return True
-
     def save_overload(self, sig, cres):
+        """
+        Save the CompileResult for the given signature in the cache.
+        """
         if not self._enabled:
             return
         if not self._check_cachable(cres):
@@ -572,6 +562,23 @@ class FunctionCache(object):
             self._save_index(overloads)
 
         self._save_data(data_name, cres)
+
+    def _check_cachable(self, cres):
+        """
+        Check cachability of the given compile result.
+        """
+        cannot_cache = None
+        if cres.lifted:
+            cannot_cache = "as it uses lifted loops"
+        elif cres.has_dynamic_globals:
+            cannot_cache = "as it uses dynamic globals (such as ctypes pointers)"
+        if cannot_cache:
+            msg = ('Cannot cache compiled function "%s" %s'
+                   % (self._funcname, cannot_cache))
+            warnings.warn_explicit(msg, NumbaWarning,
+                                   self._source_path, self._lineno)
+            return False
+        return True
 
     def _index_key(self, sig, codegen):
         """

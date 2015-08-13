@@ -4,8 +4,6 @@ Lowering implementation for object mode.
 
 from __future__ import print_function, division, absolute_import
 
-import sys
-
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 

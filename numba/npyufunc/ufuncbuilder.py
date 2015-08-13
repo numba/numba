@@ -107,29 +107,6 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     '''Build a wrapper for the ufunc loop entry point given by the
     compilation result object, using the element-wise signature.
     '''
-    #ctx = cres.target_context
-    #library = cres.library
-    #llvm_func = library.get_function(cres.fndesc.llvm_func_name)
-
-    #env = None
-    #if cres.objectmode:
-        ## Get env
-        #env = cres.environment
-        #assert env is not None
-        #ll_intp = cres.target_context.get_value_type(types.intp)
-        #ll_pyobj = cres.target_context.get_value_type(types.pyobject)
-        #envptr = lc.Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
-    #else:
-        #envptr = None
-
-    #wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature,
-                                  #cres.objectmode, envptr, env)
-    #ptr = library.get_pointer_to_function(wrapper.name)
-
-    ## Get dtypes
-    #dtypenums = [as_dtype(a).num for a in signature.args]
-    #dtypenums.append(as_dtype(signature.return_type).num)
-    #return dtypenums, ptr, env
     ctx = cres.target_context
     library = cres.library
     llvm_func = library.get_function(cres.fndesc.llvm_func_name)

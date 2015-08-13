@@ -1,3 +1,7 @@
+"""
+Tests for numba.targets.codegen.
+"""
+
 from __future__ import print_function
 
 import base64
@@ -25,6 +29,9 @@ ctypes_sum_ty = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_int)
 
 
 class JITCPUCodegenTestCase(TestCase):
+    """
+    Test the JIT code generation.
+    """
 
     def setUp(self):
         self.codegen = JITCPUCodegen('test_codegen')

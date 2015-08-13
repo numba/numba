@@ -9,7 +9,6 @@ try:
     import cPickle as pickle
 except ImportError:
     import pickle
-import pickletools
 import weakref
 
 import numpy as np

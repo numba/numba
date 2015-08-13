@@ -12,8 +12,6 @@ import numpy
 # All abstract types are exposed through this module
 from .abstracttypes import *
 from . import npdatetime, utils
-
-
 from .typeconv import Conversion
 
 
