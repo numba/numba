@@ -274,7 +274,6 @@ class CallConstrain(object):
         argtypes += [typevars[var.name].get() for (kw, var) in self.kws]
         if self.vararg is not None:
             argtypes.append(typevars[self.vararg.name].get())
-        restypes = []
         # Case analysis for each combination of argument types.
         for args in itertools.product(*argtypes):
             pos_args = args[:n_pos_args]
@@ -322,7 +321,6 @@ class GetAttrConstrain(object):
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
         valtys = typevars[self.value.name].get()
-        restypes = []
         for ty in valtys:
             try:
                 attrty = typeinfer.context.resolve_getattr(value=ty, attr=self.attr)
