@@ -324,6 +324,12 @@ class Overloaded(_OverloadedBase):
 
     def compile(self, sig):
         with self._compile_lock:
+            args, return_type = sigutils.normalize_signature(sig)
+            # Don't recompile if signature already exists
+            existing = self.overloads.get(tuple(args))
+            if existing is not None:
+                return existing
+
             cres = self._cache.load_overload(sig, self.targetctx)
             if cres is not None:
                 # XXX fold this in add_overload()? (also see compiler.py)
@@ -332,13 +338,6 @@ class Overloaded(_OverloadedBase):
                                                    cres.fndesc, [cres.library])
                 self.add_overload(cres)
                 return cres.entry_point
-
-            args, return_type = sigutils.normalize_signature(sig)
-            # Don't recompile if signature already exists
-            # (e.g. if another thread compiled it before we got the lock)
-            existing = self.overloads.get(tuple(args))
-            if existing is not None:
-                return existing
 
             flags = compiler.Flags()
             self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
