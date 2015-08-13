@@ -38,8 +38,9 @@
     #define Py_uhash_t unsigned long
 #endif
 
-#if PY_MAJOR_VERSION < 3 || (PY_MAJOR_VERSION == 3 && Py_MINOR_VERSION < 4)
+#if PY_MAJOR_VERSION < 3 || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION < 4)
     #define PyMem_RawMalloc malloc
+    #define PyMem_RawRealloc realloc
     #define PyMem_RawFree free
 #endif
 

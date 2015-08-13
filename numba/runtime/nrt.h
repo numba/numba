@@ -36,6 +36,11 @@ typedef int (*atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
 typedef struct MemInfo MemInfo;
 typedef struct MemSys MemSys;
 
+typedef void *(*NRT_malloc_func)(size_t size);
+typedef void *(*NRT_realloc_func)(void *ptr, size_t new_size);
+typedef void (*NRT_free_func)(void *ptr);
+
+
 /* Memory System API */
 
 /* Initialize the memory system */
@@ -43,6 +48,11 @@ void NRT_MemSys_init(void);
 
 /* Shutdown the memory system */
 void NRT_MemSys_shutdown(void);
+
+/*
+ * Register the system allocation functions
+ */
+void NRT_MemSys_set_allocator(NRT_malloc_func, NRT_realloc_func, NRT_free_func);
 
 /*
  * Register the atomic increment and decrement functions

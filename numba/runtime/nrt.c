@@ -23,6 +23,21 @@ struct MemInfo {
 
 
 /*
+ * Misc helpers.
+ */
+
+static void nrt_fatal_error(const char *msg)
+{
+    fprintf(stderr, "Fatal Numba error: %s\n", msg);
+    fflush(stderr); /* it helps in Windows debug build */
+
+#if defined(MS_WINDOWS) && defined(_DEBUG)
+    DebugBreak();
+#endif
+    abort();
+}
+
+/*
  * Global resources.
  */
 
@@ -35,6 +50,12 @@ struct MemSys{
     int shutting;
     /* Stats */
     size_t stats_alloc, stats_free, stats_mi_alloc, stats_mi_free;
+    /* System allocation functions */
+    struct {
+        NRT_malloc_func malloc;
+        NRT_realloc_func realloc;
+        NRT_free_func free;
+    } allocator;
 };
 
 /* The Memory System object */
@@ -42,6 +63,10 @@ static MemSys TheMSys;
 
 void NRT_MemSys_init(void) {
     memset(&TheMSys, 0, sizeof(MemSys));
+    /* Bind to libc allocator */
+    TheMSys.allocator.malloc = malloc;
+    TheMSys.allocator.realloc = realloc;
+    TheMSys.allocator.free = free;
 }
 
 void NRT_MemSys_shutdown(void) {
@@ -52,6 +77,22 @@ void NRT_MemSys_shutdown(void) {
        it cannot be running multiple threads anymore. */
     NRT_MemSys_set_atomic_inc_dec_stub();
     NRT_MemSys_set_atomic_cas_stub();
+}
+
+void NRT_MemSys_set_allocator(NRT_malloc_func malloc_func,
+                              NRT_realloc_func realloc_func,
+                              NRT_free_func free_func)
+{
+    if ((malloc_func != TheMSys.allocator.malloc ||
+         realloc_func != TheMSys.allocator.realloc ||
+         free_func != TheMSys.allocator.free) &&
+         (TheMSys.stats_alloc != TheMSys.stats_free ||
+          TheMSys.stats_mi_alloc != TheMSys.stats_mi_free)) {
+        nrt_fatal_error("cannot change allocator while blocks are allocated");
+    }
+    TheMSys.allocator.malloc = malloc_func;
+    TheMSys.allocator.realloc = realloc_func;
+    TheMSys.allocator.free = free_func;
 }
 
 void NRT_MemSys_set_atomic_inc_dec(atomic_inc_dec_func inc,
@@ -120,17 +161,6 @@ void NRT_MemSys_set_atomic_inc_dec_stub(void){
 
 void NRT_MemSys_set_atomic_cas_stub(void) {
     NRT_MemSys_set_atomic_cas(nrt_testing_atomic_cas);
-}
-
-static void nrt_fatal_error(const char *msg)
-{
-    fprintf(stderr, "Fatal Numba error: %s\n", msg);
-    fflush(stderr); /* it helps in Windows debug build */
-
-#if defined(MS_WINDOWS) && defined(_DEBUG)
-    DebugBreak();
-#endif
-    abort();
 }
 
 
@@ -328,14 +358,14 @@ void *NRT_MemInfo_varsize_realloc(MemInfo *mi, size_t size)
  */
 
 void* NRT_Allocate(size_t size) {
-    void *ptr = malloc(size);
+    void *ptr = TheMSys.allocator.malloc(size);
     NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%zu ptr=%p\n", size, ptr));
     TheMSys.atomic_inc(&TheMSys.stats_alloc);
     return ptr;
 }
 
 void *NRT_Reallocate(void *ptr, size_t size) {
-    void *new_ptr = realloc(ptr, size);
+    void *new_ptr = TheMSys.allocator.realloc(ptr, size);
     NRT_Debug(nrt_debug_print("NRT_Reallocate bytes=%zu ptr=%p -> %p\n",
                               size, ptr, new_ptr));
     return new_ptr;
@@ -343,6 +373,6 @@ void *NRT_Reallocate(void *ptr, size_t size) {
 
 void NRT_Free(void *ptr) {
     NRT_Debug(nrt_debug_print("NRT_Free %p\n", ptr));
-    free(ptr);
+    TheMSys.allocator.free(ptr);
     TheMSys.atomic_inc(&TheMSys.stats_free);
 }

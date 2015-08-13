@@ -98,7 +98,8 @@ class _Runtime(object):
 # Alias to _nrt_python._MemInfo
 MemInfo = _nrt._MemInfo
 
-# Create uninitialized runtime
+# Create runtime
+_nrt.memsys_use_cpython_allocator()
 rtsys = _Runtime()
 
 # Install finalizer
