@@ -242,6 +242,10 @@ class Expr(Inst):
 
 
 class SetItem(Stmt):
+    """
+    target[index] = value
+    """
+    
     def __init__(self, target, index, value, loc):
         self.target = target
         self.index = index
@@ -250,6 +254,20 @@ class SetItem(Stmt):
 
     def __repr__(self):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
+
+
+class DelItem(Stmt):
+    """
+    del target[index]
+    """
+
+    def __init__(self, target, index, loc):
+        self.target = target
+        self.index = index
+        self.loc = loc
+
+    def __repr__(self):
+        return 'del %s[%s]' % (self.target, self.index)
 
 
 class SetAttr(Stmt):

@@ -89,7 +89,19 @@ class DataModel(object):
         Traverse contained values
         Returns a iterable of contained (types, values)
         """
-        return ()
+        return []
+
+    def traverse_types(self):
+        """
+        Recursively list all frontend types involved in this model.
+        """
+        return [self._fe_type] + self.inner_types()
+
+    def inner_types(self):
+        """
+        List all *inner* frontend types.
+        """
+        return []
 
     def get_nrt_meminfo(self, builder, value):
         """
@@ -98,6 +110,8 @@ class DataModel(object):
         """
         return None
 
+    def has_nrt_meminfo(self):
+        return False
 
     def _compared_fields(self):
         return (type(self), self._fe_type)
@@ -208,9 +222,22 @@ class OpaqueModel(PrimitiveModel):
         be_type = ir.IntType(8).as_pointer()
         super(OpaqueModel, self).__init__(dmm, fe_type, be_type)
 
+
+@register_default(types.MemInfoPointer)
+class MemInfoModel(OpaqueModel):
+
+    def inner_types(self):
+        return self._dmm.lookup(self._fe_type.dtype).traverse_types()
+
+    def has_nrt_meminfo(self):
+        return True
+
     def get_nrt_meminfo(self, builder, value):
-        if self._fe_type == types.meminfo_pointer:
-            return value
+        for tp in self.inner_types():
+            if self._dmm.lookup(tp).has_nrt_meminfo():
+                raise NotImplementedError(
+                    "unsupported nested memory-managed object")
+        return value
 
 
 @register_default(types.Integer)
@@ -349,6 +376,9 @@ class UniTupleModel(DataModel):
     def traverse(self, builder, value):
         values = cgutils.unpack_tuple(builder, value, count=self._count)
         return zip([self._fe_type.dtype] * len(values), values)
+    
+    def inner_types(self):
+        return self._elem_model.traverse_types()
 
 
 class CompositeModel(DataModel):
@@ -505,7 +535,11 @@ class StructModel(CompositeModel):
                                     name="inserted." + self._fields[pos])
 
     def get_field_position(self, field):
-        return self._fields.index(field)
+        try:
+            return self._fields.index(field)
+        except ValueError:
+            raise KeyError("%s does not have a field named %r"
+                           % (self.__class__.__name__, field))
 
     @property
     def field_count(self):
@@ -529,6 +563,12 @@ class StructModel(CompositeModel):
         out = [(self.get_type(k), self.get(builder, value, k))
                 for k in self._fields]
         return out
+
+    def inner_types(self):
+        types = []
+        for dm in self._models:
+            types += dm.traverse_types()
+        return types
 
 
 @register_default(types.Complex)
@@ -558,6 +598,45 @@ class PairModel(StructModel):
         super(PairModel, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.ListPayload)
+class ListPayloadModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        # The fields are mutable but the payload is always manipulated
+        # by reference.  This scheme allows mutations of an array to
+        # be seen by its iterators.
+        members = [
+            ('size', types.intp),
+            ('allocated', types.intp),
+            # Actually an inlined var-sized array
+            ('data', fe_type.list_type.dtype),
+        ]
+        super(ListPayloadModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.List)
+class ListModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        payload_type = types.ListPayload(fe_type)
+        members = [
+            # The meminfo data points to a ListPayload
+            ('meminfo', types.MemInfoPointer(payload_type)),
+        ]
+        super(ListModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.ListIter)
+class ListIterModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        payload_type = types.ListPayload(fe_type.list_type)
+        members = [
+            # The meminfo data points to a ListPayload (shared with the
+            # original list object)
+            ('meminfo', types.MemInfoPointer(payload_type)),
+            ('index', types.EphemeralPointer(types.intp)),
+            ]
+        super(ListIterModel, self).__init__(dmm, fe_type, members)
+
+
 @register_default(types.Array)
 @register_default(types.Buffer)
 @register_default(types.ByteArray)
@@ -568,7 +647,7 @@ class ArrayModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
         members = [
-            ('meminfo', types.meminfo_pointer),
+            ('meminfo', types.MemInfoPointer(fe_type.dtype)),
             ('parent', types.pyobject),
             ('nitems', types.intp),
             ('itemsize', types.intp),

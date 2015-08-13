@@ -123,6 +123,16 @@ class Phantom(Dummy):
     """
 
 
+class Undefined(Dummy):
+    """
+    A type that is left imprecise.  This is used as a temporaray placeholder
+    during type inference in the hope that the type can be later refined.
+    """
+
+    def is_precise(self):
+        return False
+
+
 class Opaque(Dummy):
     """
     A type that is a opaque pointer.
@@ -134,6 +144,9 @@ class PyObject(Dummy):
     A generic CPython object.
     """
 
+    def is_precise(self):
+        return False
+
 
 class RawPointer(Dummy):
     """
@@ -143,6 +156,8 @@ class RawPointer(Dummy):
 
 class Kind(Type):
     def __init__(self, of):
+        if not isinstance(of, type) or not issubclass(of, Type):
+            raise TypeError("expected a Type subclass, got %r" % (of,))
         self.of = of
         super(Kind, self).__init__("kind(%s)" % of)
 
@@ -397,6 +412,14 @@ class BoundFunction(Function):
                       dict(this=this))
         super(BoundFunction, self).__init__(newcls)
 
+    def unify(self, typingctx, other):
+        if (isinstance(other, BoundFunction) and
+            self.template.key == other.template.key):
+            this = typingctx.unify_pairs(self.this, other.this)
+            if this != pyobject:
+                # XXX is it right that both template instances are distinct?
+                return BoundFunction(self.template, this)
+
     @property
     def key(self):
         return self.template.key, self.this
@@ -429,6 +452,13 @@ class Pair(Type):
     @property
     def key(self):
         return self.first_type, self.second_type
+
+    def unify(self, typingctx, other):
+        if isinstance(other, Pair):
+            first = typingctx.unify_pairs(self.first_type, other.first_type)
+            second = typingctx.unify_pairs(self.second_type, other.second_type)
+            if first != pyobject and second != pyobject:
+                return Pair(first, second)
 
 
 class SimpleIterableType(IterableType):
@@ -482,7 +512,7 @@ class Generator(SimpleIteratorType):
         return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
 
 
-class NumpyFlatType(SimpleIteratorType):
+class NumpyFlatType(SimpleIteratorType, Sequence):
     """
     Type class for `ndarray.flat()` objects.
     """
@@ -490,6 +520,7 @@ class NumpyFlatType(SimpleIteratorType):
     def __init__(self, arrty):
         self.array_type = arrty
         yield_type = arrty.dtype
+        self.dtype = yield_type
         name = "array.flat({arrayty})".format(arrayty=arrty)
         super(NumpyFlatType, self).__init__(name, yield_type)
 
@@ -867,7 +898,7 @@ class BaseTuple(Type):
     """
 
 
-class UniTuple(IterableType, BaseTuple):
+class UniTuple(Sequence, BaseTuple):
 
     def __init__(self, dtype, count):
         self.dtype = dtype
@@ -980,6 +1011,91 @@ class Tuple(BaseTuple):
             if any(kind is None for kind in kinds):
                 return
             return max(kinds)
+
+
+class List(MutableSequence):
+    """
+    Type class for arbitrary-sized homogenous lists.
+    """
+    mutable = True
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        name = "list(%s)" % (self.dtype,)
+        super(List, self).__init__(name=name, param=True)
+        self._iterator_type = ListIter(self)
+
+    def unify(self, typingctx, other):
+        if isinstance(other, List):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            if dtype != pyobject:
+                return List(dtype=dtype)
+
+    @property
+    def key(self):
+        return self.dtype
+
+    @property
+    def iterator_type(self):
+        return self._iterator_type
+
+    def is_precise(self):
+        return self.dtype.is_precise()
+
+
+class ListIter(SimpleIteratorType):
+    """
+    Type class for list iterators.
+    """
+
+    def __init__(self, list_type):
+        self.list_type = list_type
+        yield_type = list_type.dtype
+        name = 'iter(%s)' % list_type
+        super(ListIter, self).__init__(name, yield_type)
+
+    # XXX This is a common pattern.  Should it be factored out somewhere?
+    def unify(self, typingctx, other):
+        if isinstance(other, ListIter):
+            list_type = typingctx.unify_pairs(self.list_type, other.list_type)
+            if list_type != pyobject:
+                return ListIter(list_type)
+
+    @property
+    def key(self):
+        return self.list_type
+
+
+class ListPayload(Type):
+    """
+    Internal type class for the dynamically-allocated payload of a list.
+    """
+
+    def __init__(self, list_type):
+        self.list_type = list_type
+        name = 'payload(%s)' % list_type
+        super(ListPayload, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.list_type
+
+
+class MemInfoPointer(Type):
+    """
+    Pointer to a Numba "meminfo" (i.e. the information for a managed
+    piece of memory).
+    """
+    mutable = True
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        name = "memory-managed *%s" % dtype
+        super(MemInfoPointer, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.dtype
 
 
 class CPointer(Type):
@@ -1151,14 +1267,12 @@ pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
 none = NoneType('none')
 Any = Phantom('any')
+undefined = Undefined('undefined')
 string = Opaque('str')
 
 # No operation is defined on voidptr
 # Can only pass it around
 voidptr = RawPointer('void*')
-
-# For NRT GC
-meminfo_pointer = Opaque("MemInfo*")
 
 boolean = bool_ = Boolean('bool')
 

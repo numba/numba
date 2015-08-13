@@ -10,7 +10,7 @@ from numba.config import NumbaWarning
 class TestBuiltins(unittest.TestCase):
     def test_type_infer_warning(self):
         def add(x, y):
-            a = []
+            a = {}
             return x + y
 
         with warnings.catch_warnings(record=True) as w:
@@ -81,7 +81,7 @@ class TestBuiltins(unittest.TestCase):
 
     def test_loop_lift_warn(self):
         def do_loop(x):
-            a = []
+            a = {}
             for i in range(x.shape[0]):
                 x[i] *= 2
 

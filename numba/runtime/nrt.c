@@ -11,7 +11,9 @@
 typedef int (*atomic_meminfo_cas_func)(void **ptr, void *cmp,
                                        void *repl, void **oldptr);
 
-struct MemInfo{
+
+/* NOTE: if changing the layout, please update numba.runtime.atomicops */
+struct MemInfo {
     size_t         refct;
     dtor_function  dtor;
     void          *dtor_info;
@@ -19,6 +21,10 @@ struct MemInfo{
     size_t         size;    /* only used for NRT allocated memory */
 };
 
+
+/*
+ * Global resources.
+ */
 
 struct MemSys{
     /* Atomic increment and decrement function */
@@ -29,21 +35,10 @@ struct MemSys{
     int shutting;
     /* Stats */
     size_t stats_alloc, stats_free, stats_mi_alloc, stats_mi_free;
-
 };
 
 /* The Memory System object */
 static MemSys TheMSys;
-
-static
-void nrt_meminfo_call_dtor(MemInfo *mi) {
-    NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
-    /* call dtor */
-    if (mi->dtor)
-        mi->dtor(mi->data, mi->dtor_info);
-    /* Clear and release MemInfo */
-    NRT_MemInfo_destroy(mi);
-}
 
 void NRT_MemSys_init(void) {
     memset(&TheMSys, 0, sizeof(MemSys));
@@ -127,6 +122,22 @@ void NRT_MemSys_set_atomic_cas_stub(void) {
     NRT_MemSys_set_atomic_cas(nrt_testing_atomic_cas);
 }
 
+static void nrt_fatal_error(const char *msg)
+{
+    fprintf(stderr, "Fatal Numba error: %s\n", msg);
+    fflush(stderr); /* it helps in Windows debug build */
+
+#if defined(MS_WINDOWS) && defined(_DEBUG)
+    DebugBreak();
+#endif
+    abort();
+}
+
+
+/*
+ * The MemInfo structure.
+ */
+
 void NRT_MemInfo_init(MemInfo *mi,void *data, size_t size, dtor_function dtor,
                       void *dtor_info)
 {
@@ -168,7 +179,7 @@ static
 void *nrt_allocate_meminfo_and_data(size_t size, MemInfo **mi_out) {
     MemInfo *mi;
     char *base = NRT_Allocate(sizeof(MemInfo) + size);
-    mi = (MemInfo*)base;
+    mi = (MemInfo *) base;
     *mi_out = mi;
     return base + sizeof(MemInfo);
 }
@@ -242,8 +253,12 @@ void NRT_MemInfo_acquire(MemInfo *mi) {
 }
 
 void NRT_MemInfo_call_dtor(MemInfo *mi) {
-    /* We have a destructor */
-    nrt_meminfo_call_dtor(mi);
+    NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
+    if (mi->dtor)
+        /* We have a destructor */
+        mi->dtor(mi->data, mi->dtor_info);
+    /* Clear and release MemInfo */
+    NRT_MemInfo_destroy(mi);
 }
 
 void NRT_MemInfo_release(MemInfo *mi) {
@@ -269,11 +284,61 @@ void NRT_MemInfo_dump(MemInfo *mi, FILE *out) {
     fprintf(out, "MemInfo %p refcount %zu\n", mi, mi->refct);
 }
 
+/*
+ * Resizable buffer API.
+ */
+
+static void
+nrt_varsize_dtor(void *ptr, void *info) {
+    NRT_Debug(nrt_debug_print("nrt_buffer_dtor %p\n", ptr));
+    NRT_Free(ptr);
+}
+
+MemInfo *NRT_MemInfo_varsize_alloc(size_t size)
+{
+    MemInfo *mi;
+    void *data = NRT_Allocate(size);
+    if (data == NULL)
+        return NULL;
+
+    mi = NRT_MemInfo_new(data, size, nrt_varsize_dtor, NULL);
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_alloc size=%zu "
+                              "-> meminfo=%p, data=%p\n", size, mi, data));
+    return mi;
+}
+
+void *NRT_MemInfo_varsize_realloc(MemInfo *mi, size_t size)
+{
+    if (mi->dtor != nrt_varsize_dtor) {
+        nrt_fatal_error("ERROR: NRT_MemInfo_varsize_realloc called "
+                        "with a non varsize-allocated meminfo");
+        return NULL;  /* unreachable */
+    }
+    mi->data = NRT_Reallocate(mi->data, size);
+    if (mi->data == NULL)
+        return NULL;
+    mi->size = size;
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_realloc %p size=%zu "
+                              "-> data=%p\n", mi, size, mi->data));
+    return mi->data;
+}
+
+/*
+ * Low-level allocation wrappers.
+ */
+
 void* NRT_Allocate(size_t size) {
     void *ptr = malloc(size);
-    NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%llu ptr=%p\n", size, ptr));
+    NRT_Debug(nrt_debug_print("NRT_Allocate bytes=%zu ptr=%p\n", size, ptr));
     TheMSys.atomic_inc(&TheMSys.stats_alloc);
     return ptr;
+}
+
+void *NRT_Reallocate(void *ptr, size_t size) {
+    void *new_ptr = realloc(ptr, size);
+    NRT_Debug(nrt_debug_print("NRT_Reallocate bytes=%zu ptr=%p -> %p\n",
+                              size, ptr, new_ptr));
+    return new_ptr;
 }
 
 void NRT_Free(void *ptr) {
@@ -281,5 +346,3 @@ void NRT_Free(void *ptr) {
     free(ptr);
     TheMSys.atomic_inc(&TheMSys.stats_free);
 }
-
-

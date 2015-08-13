@@ -29,6 +29,7 @@ except NotImplementedError:
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
+void_ptr = GENERIC_POINTER
 
 LTYPEMAP = {
     types.pyobject: PYOBJECT,
@@ -1002,10 +1003,9 @@ class BaseContext(object):
         assert isinstance(ty, llvmir.Type), "Expected LLVM type"
         return ty.get_abi_alignment(self.target_data)
 
-    def post_lowering(self, func):
+    def post_lowering(self, mod, library):
         """Run target specific post-lowering transformation here.
         """
-        pass
 
     def create_module(self, name):
         """Create a LLVM module
@@ -1013,10 +1013,15 @@ class BaseContext(object):
         return lc.Module.new(name)
 
     def nrt_meminfo_alloc(self, builder, size):
+        """
+        Allocate a new MemInfo with a data payload of `size` bytes.
+
+        A pointer to the MemInfo is returned.
+        """
         if not self.enable_nrt:
             raise Exception("Require NRT")
         mod = builder.module
-        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+        fnty = llvmir.FunctionType(void_ptr,
                                    [self.get_value_type(types.intp)])
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         fn.return_value.add_attribute("noalias")
@@ -1024,51 +1029,90 @@ class BaseContext(object):
 
     def nrt_meminfo_alloc_aligned(self, builder, size, align):
         """
-        Allocate a new MemInfo of `size` bytes and and align the data pointer
-        to `align` bytes.  The `align` arg can be either a Python int or a LLVM
-        uint32 value.
+        Allocate a new MemInfo with an aligned data payload of `size` bytes.
+        The data pointer is aligned to `align` bytes.  `align` can be either
+        a Python int or a LLVM uint32 value.
+
+        A pointer to the MemInfo is returned.
         """
         if not self.enable_nrt:
             raise Exception("Require NRT")
         mod = builder.module
         intp = self.get_value_type(types.intp)
         u32 = self.get_value_type(types.uint32)
-        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(), [intp, u32])
+        fnty = llvmir.FunctionType(void_ptr, [intp, u32])
         fn = mod.get_or_insert_function(fnty,
                                         name="NRT_MemInfo_alloc_safe_aligned")
+        fn.return_value.add_attribute("noalias")
         if isinstance(align, int):
             align = self.get_constant(types.uint32, align)
         else:
             assert align.type == u32, "align must be a uint32"
         return builder.call(fn, [size, align])
 
-    def nrt_meminfo_data(self, builder, meminfo):
+    def nrt_meminfo_varsize_alloc(self, builder, size):
+        """
+        Allocate a MemInfo pointing to a variable-sized data area.  The area
+        is separately allocated (i.e. two allocations are made) so that
+        re-allocating it doesn't change the MemInfo's address.
+
+        A pointer to the MemInfo is returned.
+        """
         if not self.enable_nrt:
             raise Exception("Require NRT")
         mod = builder.module
-        voidptr = llvmir.IntType(8).as_pointer()
-        fnty = llvmir.FunctionType(voidptr, [voidptr])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_alloc")
         fn.return_value.add_attribute("noalias")
-        return builder.call(fn, [meminfo])
+        return builder.call(fn, [size])
 
-    def get_nrt_meminfo(self, builder, typ, value):
-        return self.data_model_manager[typ].get_nrt_meminfo(builder, value)
-
-    def _call_nrt_incref_decref(self, builder, typ, value, funcname):
+    def nrt_meminfo_varsize_realloc(self, builder, meminfo, size):
+        """
+        Reallocate a data area allocated by nrt_meminfo_varsize_alloc().
+        The new data pointer is returned, for convenience.
+        """
         if not self.enable_nrt:
             raise Exception("Require NRT")
+        mod = builder.module
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [void_ptr, self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_realloc")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [meminfo, size])
 
-        members = self.data_model_manager[typ].traverse(builder, value)
+    def nrt_meminfo_data(self, builder, meminfo):
+        """
+        Given a MemInfo pointer, return a pointer to the allocated data
+        managed by it.  This works for MemInfos allocated with all the
+        above methods.
+        """
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        from numba.runtime.atomicops import meminfo_data_ty
+
+        mod = builder.module
+        fn = mod.get_or_insert_function(meminfo_data_ty, name="NRT_MemInfo_data")
+        return builder.call(fn, [meminfo])
+
+    def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        from numba.runtime.atomicops import incref_decref_ty
+
+        data_model = self.data_model_manager[typ]
+
+        members = data_model.traverse(builder, value)
         for mt, mv in members:
-            self._call_nrt_incref_decref(builder, mt, mv, funcname)
+            self._call_nrt_incref_decref(builder, root_type, mt, mv, funcname)
 
-        meminfo = self.get_nrt_meminfo(builder, typ, value)
+        try:
+            meminfo = data_model.get_nrt_meminfo(builder, value)
+        except NotImplementedError as e:
+            raise NotImplementedError("%s: %s" % (root_type, str(e)))
         if meminfo:
             mod = builder.module
-            fnty = llvmir.FunctionType(llvmir.VoidType(),
-                                       [llvmir.IntType(8).as_pointer()])
-            fn = mod.get_or_insert_function(fnty, name=funcname)
+            fn = mod.get_or_insert_function(incref_decref_ty, name=funcname)
             # XXX "nonnull" causes a crash in test_dyn_array: can this
             # function be called with a NULL pointer?
             fn.args[0].add_attribute("noalias")
@@ -1076,10 +1120,16 @@ class BaseContext(object):
             builder.call(fn, [meminfo])
 
     def nrt_incref(self, builder, typ, value):
-        self._call_nrt_incref_decref(builder, typ, value, "NRT_incref")
+        """
+        Recursively incref the given *value* and its members.
+        """
+        self._call_nrt_incref_decref(builder, typ, typ, value, "NRT_incref")
 
     def nrt_decref(self, builder, typ, value):
-        self._call_nrt_incref_decref(builder, typ, value, "NRT_decref")
+        """
+        Recursively decref the given *value* and its members.
+        """
+        self._call_nrt_incref_decref(builder, typ, typ, value, "NRT_decref")
 
 
 class _wrap_impl(object):

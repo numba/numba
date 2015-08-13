@@ -291,7 +291,7 @@ def getitem_array1d_slice(context, builder, sig, args):
     retstty = make_array(sig.return_type)
     retary = retstty(context, builder)
 
-    shape = cgutils.get_range_from_slice(builder, slicestruct)
+    shape = cgutils.get_slice_length(builder, slicestruct)
     stride = cgutils.get_strides_from_slice(builder, aryty.ndim, ary.strides,
                                             slicestruct, 0)
 
@@ -331,7 +331,7 @@ def getitem_array_unituple(context, builder, sig, args):
         # Build array
         retstty = make_array(sig.return_type)
         retary = retstty(context, builder)
-        shapes = [cgutils.get_range_from_slice(builder, sl)
+        shapes = [cgutils.get_slice_length(builder, sl)
                   for sl in slices]
         strides = [cgutils.get_strides_from_slice(builder, ndim, ary.strides,
                                                   sl, i)
@@ -382,7 +382,7 @@ def getitem_array_tuple(context, builder, sig, args):
                 slice = Slice(context, builder, value=indexval)
                 cgutils.normalize_slice(builder, slice, oshapes[ax])
                 start.append(slice.start)
-                shapes.append(cgutils.get_range_from_slice(builder, slice))
+                shapes.append(cgutils.get_slice_length(builder, slice))
                 strides.append(cgutils.get_strides_from_slice(builder, ndim,
                                                               ary.strides,
                                                               slice, ax))
@@ -533,20 +533,19 @@ def setitem_array1d_slice(context, builder, sig, args):
         cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
         builder.store(cond, stop)
 
-    b_step_gt_zero = builder.icmp(lc.ICMP_SGT, slicestruct.step, ZERO)
-    with builder.if_else(b_step_gt_zero) as (then0, otherwise0):
-        with then0:
-            with cgutils.for_range_slice(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type) as loop_idx1:
-                ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                   [loop_idx1],
-                                   wraparound=True)
-                context.pack_value(builder, aryty.dtype, val, ptr)
-        with otherwise0:
-            with cgutils.for_range_slice(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type, inc=False) as loop_idx2:
-                ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                       [loop_idx2],
-                                       wraparound=True)
-                context.pack_value(builder, aryty.dtype, val, ptr)
+    with cgutils.for_range_slice_generic(builder, builder.load(start),
+                                         builder.load(stop),
+                                         slicestruct.step) as (pos_range, neg_range):
+        with pos_range as (loop_idx1, _):
+            ptr = cgutils.get_item_pointer(builder, aryty, ary,
+                                [loop_idx1],
+                                wraparound=True)
+            context.pack_value(builder, aryty.dtype, val, ptr)
+        with neg_range as (loop_idx2, _):
+            ptr = cgutils.get_item_pointer(builder, aryty, ary,
+                                [loop_idx2],
+                                wraparound=True)
+            context.pack_value(builder, aryty.dtype, val, ptr)
 
 
 @builtin

@@ -116,6 +116,13 @@ class Type(object):
         """
         return None
 
+    def is_precise(self):
+        """
+        Whether this type is precise, i.e. can be part of a successful
+        type inference.  Default implementation returns True.
+        """
+        return True
+
     # User-facing helpers.  These are not part of the core Type API but
     # are provided so that users can write e.g. `numba.boolean(1.5)`
     # (returns True) or `types.int32(types.int32[:])` (returns something
@@ -254,3 +261,16 @@ class IteratorType(IterableType):
     def iterator_type(self):
         return self._iterator_type
 
+
+class Sequence(IterableType):
+    """
+    Base class for 1d sequence types.  Instances should have the *dtype*
+    attribute.
+    """
+
+
+class MutableSequence(Sequence):
+    """
+    Base class for 1d mutable sequence types.  Instances should have the
+    *dtype* attribute.
+    """

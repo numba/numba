@@ -12,10 +12,9 @@ from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
 from numba.targets import (
-    callconv, codegen, externals, intrinsics, cmathimpl, mathimpl,
+    callconv, codegen, externals, intrinsics, listobj, cmathimpl, mathimpl,
     npyimpl, operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
-from numba.runtime.atomicops import install_atomic_refct
 from numba.runtime import rtsys
 
 # Keep those structures in sync with _dynfunc.c.
@@ -105,15 +104,19 @@ class CPUContext(BaseContext):
             builder, genptr, _dynfunc._impl_info['offsetof_generator_state'],
             return_type=return_type)
 
-    def post_lowering(self, func):
-        mod = func.module
+    def build_list(self, builder, list_type, items):
+        """
+        Build a list from the Numba *list_type* and its initial *items*.
+        """
+        return listobj.build_list(self, builder, list_type, items)
 
+    def post_lowering(self, mod, library):
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid
             # calls to compiler-rt
             intrinsics.fix_divmod(mod)
 
-        install_atomic_refct(mod)
+        library.add_linking_library(rtsys.library)
 
     def create_cpython_wrapper(self, library, fndesc, env, call_helper,
                                release_gil=False):

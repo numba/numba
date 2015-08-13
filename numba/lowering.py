@@ -112,6 +112,9 @@ class BaseLower(object):
             print(self.module)
             print('=' * 80)
 
+        # Run target specific post lowering transformation
+        self.context.post_lowering(self.module, self.library)
+
         # Materialize LLVM Module
         self.library.add_ir_module(self.module)
 
@@ -134,9 +137,6 @@ class BaseLower(object):
         # Close tail of entry block
         self.builder.position_at_end(entry_block_tail)
         self.builder.branch(self.blkmap[self.firstblk])
-
-        # Run target specific post lowering transformation
-        self.context.post_lowering(self.function)
 
     def lower_function_body(self):
         """
@@ -272,6 +272,23 @@ class Lower(BaseLower):
                                       signature.args[2])
 
             return impl(self.builder, (target, index, value))
+
+        elif isinstance(inst, ir.DelItem):
+            target = self.loadvar(inst.target.name)
+            index = self.loadvar(inst.index.name)
+
+            targetty = self.typeof(inst.target.name)
+            indexty = self.typeof(inst.index.name)
+
+            signature = self.fndesc.calltypes[inst]
+            assert signature is not None
+            impl = self.context.get_function('delitem', signature)
+
+            assert targetty == signature.args[0]
+            index = self.context.cast(self.builder, index, indexty,
+                                      signature.args[1])
+
+            return impl(self.builder, (target, index))
 
         elif isinstance(inst, ir.Del):
             try:
@@ -708,6 +725,13 @@ class Lower(BaseLower):
 
             self.incref(resty, tup)
             return tup
+
+        elif expr.op == "build_list":
+            itemvals = [self.loadvar(i.name) for i in expr.items]
+            itemtys = [self.typeof(i.name) for i in expr.items]
+            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
+                        for val, fromty in zip(itemvals, itemtys)]
+            return self.context.build_list(self.builder, resty, castvals)
 
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)

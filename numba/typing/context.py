@@ -11,8 +11,8 @@ from .typeof import typeof, Purpose
 
 # Initialize declarations
 from . import (
-    builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl,
-    randomdecl)
+    builtins, cmathdecl, listdecl, mathdecl, npdatetime, npydecl,
+    operatordecl, randomdecl)
 from numba import utils
 from . import ctypes_utils, cffi_utils, bufproto
 
@@ -142,16 +142,21 @@ class BaseContext(object):
             raise KeyError(attr)
         return ret
 
-    def resolve_setitem(self, target, index, value):
-        args = target, index, value
-        kws = ()
-        return self.resolve_function_type("setitem", args, kws)
-
     def resolve_setattr(self, target, attr, value):
         if isinstance(target, types.Record):
             expectedty = target.typeof(attr)
             if self.can_convert(value, expectedty) is not None:
                 return templates.signature(types.void, target, value)
+
+    def resolve_setitem(self, target, index, value):
+        args = target, index, value
+        kws = ()
+        return self.resolve_function_type("setitem", args, kws)
+
+    def resolve_delitem(self, target, index):
+        args = target, index
+        kws = ()
+        return self.resolve_function_type("delitem", args, kws)
 
     def resolve_module_constants(self, typ, attr):
         """Resolve module-level global constants
@@ -406,6 +411,11 @@ class BaseContext(object):
         """
         if first == second:
             return first
+        
+        if first is types.undefined:
+            return second
+        elif second is types.undefined:
+            return first
 
         # Types with special unification rules
         unified = first.unify(self, second)
@@ -427,6 +437,7 @@ class BaseContext(object):
 class Context(BaseContext):
     def init(self):
         self.install(cmathdecl.registry)
+        self.install(listdecl.registry)
         self.install(mathdecl.registry)
         self.install(npydecl.registry)
         self.install(operatordecl.registry)

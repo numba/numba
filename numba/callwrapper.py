@@ -142,7 +142,7 @@ class PyCallWrapper(object):
         # Extract the Environment object from the Closure
         envptr, env_manager = self.get_env(api, builder, closure)
 
-        status, res = self.context.call_conv.call_function(
+        status, retval = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
             innerargs, envptr)
         # Do clean up
@@ -156,9 +156,9 @@ class PyCallWrapper(object):
             with builder.if_then(status.is_none):
                 api.return_none()
 
-            retval = api.from_native_return(res, self._simplified_return_type(),
-                                            env_manager)
-            builder.ret(retval)
+            retty = self._simplified_return_type()
+            obj = api.from_native_return(retval, retty, env_manager)
+            builder.ret(obj)
 
         with builder.if_then(builder.not_(status.is_python_exc)):
             # User exception raised

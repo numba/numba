@@ -165,9 +165,6 @@ class BaseGeneratorLower(object):
         builder.position_at_end(entry_block_tail)
         builder.branch(prologue)
 
-        # Run target specific post lowering transformation
-        self.context.post_lowering(function)
-
     def lower_finalize_func(self, lower):
         """
         Lower the generator's finalizer.

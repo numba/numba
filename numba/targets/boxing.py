@@ -7,6 +7,8 @@ from llvmlite import ir
 from .. import cgutils, numpy_support, types
 from ..pythonapi import box, unbox, NativeValue
 
+from . import listobj
+
 
 #
 # Scalar types
@@ -270,6 +272,9 @@ def unbox_optional(c, typ, obj):
 # Collections
 #
 
+# NOTE: those functions are supposed to steal any NRT references in
+# the given native value.
+
 @box(types.Array)
 def box_array(c, typ, val):
     nativearycls = c.context.make_array(typ)
@@ -277,6 +282,7 @@ def box_array(c, typ, val):
     if c.context.enable_nrt:
         np_dtype = numpy_support.as_dtype(typ.dtype)
         dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
+        # Steals NRT ref
         newary = c.pyapi.nrt_adapt_ndarray_to_python(typ, val, dtypeptr)
         return newary
     else:
@@ -332,6 +338,7 @@ def unbox_array(c, typ, obj):
     failed = cgutils.is_not_null(c.builder, errcode)
     return NativeValue(c.builder.load(aryptr), is_error=failed)
 
+
 @box(types.BaseTuple)
 def box_tuple(c, typ, val):
     """
@@ -375,6 +382,29 @@ def unbox_tuple(c, typ, obj):
     else:
         value = cgutils.make_anonymous_struct(c.builder, values)
     return NativeValue(value, is_error=is_error, cleanup=cleanup)
+
+
+@box(types.List)
+def box_list(c, typ, val):
+    """
+    Convert native list *val* to a list object.
+    """
+    list = listobj.ListInstance(c.context, c.builder, typ, val)
+
+    nitems = list.size
+    obj = c.pyapi.list_new(nitems)
+
+    with c.builder.if_then(cgutils.is_not_null(c.builder, obj),
+                           likely=True):
+        with cgutils.for_range(c.builder, nitems) as index:
+            item = list.getitem(index)
+            itemobj = c.box(typ.dtype, item)
+            c.pyapi.list_setitem(obj, index, itemobj)
+
+    # Steal NRT ref
+    c.context.nrt_decref(c.builder, typ, val)
+
+    return obj
 
 
 #
