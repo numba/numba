@@ -40,7 +40,8 @@ Function calls
 --------------
 
 Numba supports function calls using positional and named arguments, as well
-as arguments with default values and ``*args``.  Explicit ``**kwargs`` are
+as arguments with default values and ``*args`` (note the argument for
+``*args`` can only be a tuple, not a list).  Explicit ``**kwargs`` are
 not supported.
 
 Generators
