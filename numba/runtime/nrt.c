@@ -83,11 +83,11 @@ void NRT_MemSys_set_allocator(NRT_malloc_func malloc_func,
                               NRT_realloc_func realloc_func,
                               NRT_free_func free_func)
 {
-    if (malloc_func != TheMSys.allocator.malloc &&
-        realloc_func != TheMSys.allocator.realloc &&
-        free_func != TheMSys.allocator.free &&
-        TheMSys.stats_alloc != TheMSys.stats_free &&
-        TheMSys.stats_mi_alloc != TheMSys.stats_mi_free) {
+    if ((malloc_func != TheMSys.allocator.malloc ||
+         realloc_func != TheMSys.allocator.realloc ||
+         free_func != TheMSys.allocator.free) &&
+         (TheMSys.stats_alloc != TheMSys.stats_free ||
+          TheMSys.stats_mi_alloc != TheMSys.stats_mi_free)) {
         nrt_fatal_error("cannot change allocator while blocks are allocated");
     }
     TheMSys.allocator.malloc = malloc_func;
