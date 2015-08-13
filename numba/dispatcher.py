@@ -529,15 +529,27 @@ class FunctionCache(object):
             # File could have been removed while the index still refers it.
             return
 
+    def _check_cachable(self, cres):
+        """
+        Check cachability of the given compile result.
+        """
+        cannot_cache = None
+        if cres.lifted:
+            cannot_cache = "as it uses lifted loops"
+        elif cres.has_dynamic_globals:
+            cannot_cache = "as it uses dynamic globals (such as ctypes pointers)"
+        if cannot_cache:
+            msg = ('Cannot cache compiled function "%s" %s'
+                   % (self._funcname, cannot_cache))
+            warnings.warn_explicit(msg, NumbaWarning,
+                                   self._source_path, self._lineno)
+            return False
+        return True
+
     def save_overload(self, sig, cres):
         if not self._enabled:
             return
-        # Check cachability
-        if cres.lifted:
-            msg = ('Cannot cache compiled function "%s" as it uses lifted loops'
-                   % self._funcname)
-            warnings.warn_explicit(msg, NumbaWarning,
-                                   self._source_path, self._lineno)
+        if not self._check_cachable(cres):
             return
         try:
             os.mkdir(self._cache_path)

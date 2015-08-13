@@ -10,6 +10,8 @@ import numpy as np
 
 from numba import jit
 
+from numba.tests.ctypes_usecases import c_sin
+
 
 @jit(cache=True, nopython=True)
 def add_usecase(x, y):
@@ -43,6 +45,11 @@ def looplifted(n):
     for i in range(n):
         res = res + i
     return res
+
+
+@jit(cache=True, nopython=True)
+def use_c_sin(x):
+    return c_sin(x)
 
 
 Z = 1

@@ -39,6 +39,9 @@ class BaseLower(object):
     Lower IR to LLVM
     """
 
+    # If true, then can't cache LLVM module accross process calls
+    has_dynamic_globals = False
+
     def __init__(self, context, library, fndesc, interp):
         self.context = context
         self.library = library
@@ -372,6 +375,7 @@ class Lower(BaseLower):
             if isinstance(ty, types.ExternalFunctionPointer):
                 res = self.context.get_constant_generic(self.builder, ty,
                                                         value.value)
+                self.has_dynamic_globals = True
 
             elif isinstance(ty, types.Dummy):
                 res = self.context.get_dummy_value()

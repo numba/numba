@@ -551,6 +551,22 @@ class TestCache(TestCase):
                          'Cannot cache compiled function "looplifted" '
                          'as it uses lifted loops')
 
+    def test_ctypes(self):
+        # Functions using a ctypes pointer can't be cached and raise
+        # a warning.
+        mod = self.import_module()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.use_c_sin
+            self.assertPreciseEqual(f(0.0), 0.0)
+            self.check_cache(0)
+
+        self.assertEqual(len(w), 1)
+        self.assertIn('Cannot cache compiled function "use_c_sin"',
+                      str(w[0].message))
+
     def test_cache_reuse(self):
         mod = self.import_module()
         mod.add_usecase(2, 3)
