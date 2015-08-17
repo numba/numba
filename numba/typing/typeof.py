@@ -78,11 +78,11 @@ def _typeof_bool(val, c):
 def _typeof_int(val, c):
     if c.purpose is Purpose.argument:
         # As in _typeof.c
-        return types.int64
+        return types.intp
     else:
         nbits = utils.bit_length(val)
         if nbits < 32:
-            typ = types.int32
+            typ = types.intp
         elif nbits < 64:
             typ = types.int64
         elif nbits == 64 and val >= 0:

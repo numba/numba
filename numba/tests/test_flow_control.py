@@ -180,7 +180,7 @@ class TestFlowControl(TestCase):
 
     def run_test(self, pyfunc, x_operands, y_operands,
                  flags=enable_pyobj_flags):
-        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
+        cr = compile_isolated(pyfunc, (types.intp, types.intp), flags=flags)
         cfunc = cr.entry_point
         for x, y in itertools.product(x_operands, y_operands):
             pyerr = None

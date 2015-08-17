@@ -137,7 +137,11 @@ class LiteralOperatorImpl(object):
         return x
 
     @staticmethod
-    def bitwise_not_usecase(x, y):
+    def bitwise_not_usecase_binary(x, _unused):
+        return ~x
+
+    @staticmethod
+    def bitwise_not_usecase(x):
         return ~x
 
     @staticmethod
@@ -288,7 +292,11 @@ class FunctionalOperatorImpl(object):
         return operator.ixor(x, y)
 
     @staticmethod
-    def bitwise_not_usecase(x, y):
+    def bitwise_not_usecase_binary(x, _unused):
+        return operator.invert(x)
+
+    @staticmethod
+    def bitwise_not_usecase(x):
         return operator.invert(x)
 
     @staticmethod
@@ -347,11 +355,11 @@ class TestOperators(TestCase):
                 got = cfunc(x_got, y)
                 expected = pyfunc(x_expected, y)
                 self.assertTrue(np.all(got == expected),
-                                "mismatch for (%r, %r): %r != %r"
-                                % (x, y, got, expected))
+                                "mismatch for (%r, %r) with types %s: %r != %r"
+                                % (x, y, arg_types, got, expected))
                 self.assertTrue(np.all(x_got == x_expected),
-                                "mismatch for (%r, %r): %r != %r"
-                                % (x, y, x_got, x_expected))
+                                "mismatch for (%r, %r) with types %s: %r != %r"
+                                % (x, y, arg_types, x_got, x_expected))
 
     def run_test_floats(self, pyfunc, x_operands, y_operands, types_list,
                         flags=force_pyobj_flags):
@@ -1023,7 +1031,7 @@ class TestOperators(TestCase):
 
     def test_bitwise_not(self, flags=force_pyobj_flags):
 
-        pyfunc = self.op.bitwise_not_usecase
+        pyfunc = self.op.bitwise_not_usecase_binary
 
         x_operands = list(range(0, 8)) + [2**32 - 1]
         x_operands = [np.uint32(x) for x in x_operands]
@@ -1185,6 +1193,141 @@ class TestOperatorModule(TestOperators):
     op = FunctionalOperatorImpl
 
 
+class TestMixedInts(TestCase):
+
+    op = LiteralOperatorImpl
+
+    int_samples = [0, 1, 3, 10, 42, 127, 10000, -1, -3, -10, -42, -127, -10000]
+
+    def get_typed_int(self, ty, val):
+        cls = getattr(np, ty.name)
+        return cls(val)
+
+    def run_binary(self, pyfunc, allow_zero=True, allow_second_negative=True,
+                   expected_type=int):
+        if pyfunc is NotImplemented:
+            self.skipTest("test irrelevant on this version of Python")
+        typs = [types.int8, types.uint8, types.int64, types.uint64]
+
+        x_operands = self.int_samples
+        x_types = typs
+        if not allow_zero:
+            x_operands = [x for x in x_operands if x != 0]
+
+        y_operands = x_operands
+        y_types = typs
+        if not allow_second_negative:
+            y_operands = [y for y in y_operands if y >= 0]
+
+        for xt, yt in itertools.product(x_types, y_types):
+            cr = compile_isolated(pyfunc, (xt, yt), flags=Noflags)
+            cfunc = cr.entry_point
+            for x, y in itertools.product(x_operands, y_operands):
+                # Get Numpy typed scalars for the given types and values
+                x = self.get_typed_int(xt, x)
+                y = self.get_typed_int(yt, y)
+                # Check it works and returns the expected type
+                got = cfunc(x, y)
+                self.assertIsInstance(got, expected_type, type(got))
+                # Compare with Numpy's result
+                try:
+                    expected = pyfunc(x, y)
+                except TypeError:
+                    # Numpy doesn't accept the input types, which can
+                    # happen due to the ufunc dispatching logic
+                    if (xt.signed == yt.signed or
+                        (xt not in (types.int64, types.uint64) and
+                         yt not in (types.int64, types.uint64))):
+                        raise
+                else:
+                    if isinstance(expected, expected_type):
+                        # Can only compare with Numpy's result if Numpy didn't
+                        # convert to a float...
+                        self.assertTrue(np.all(got == expected),
+                                        "mismatch for (%r, %r) with types %s: %r != %r"
+                                        % (x, y, (xt, yt), got, expected))
+
+    def run_unary(self, pyfunc, expected_type=int):
+        if pyfunc is NotImplemented:
+            self.skipTest("test irrelevant on this version of Python")
+
+        x_operands = self.int_samples
+        x_types = [types.int8, types.uint8, types.int64, types.uint64]
+
+        for xt in x_types:
+            cr = compile_isolated(pyfunc, (xt,), flags=Noflags)
+            cfunc = cr.entry_point
+            for x in x_operands:
+                # Get Numpy typed scalar for the given type and value
+                x = self.get_typed_int(xt, x)
+                # Check it works and returns the expected type
+                got = cfunc(x)
+                self.assertIsInstance(got, expected_type, type(got))
+                # Compare with Numpy's result
+                expected = pyfunc(x)
+                if isinstance(expected, expected_type):
+                    # Can only compare with Numpy's result if Numpy didn't
+                    # convert to a float...
+                    self.assertTrue(np.all(got == expected),
+                                    "mismatch for (%r, %r) with types %s: %r != %r"
+                                    % (x, y, (xt, yt), got, expected))
+
+    def test_add(self):
+        self.run_binary(self.op.add_usecase)
+
+    def test_sub(self):
+        self.run_binary(self.op.sub_usecase)
+
+    def test_mul(self):
+        self.run_binary(self.op.mul_usecase)
+
+    def test_floordiv(self):
+        self.run_binary(self.op.floordiv_usecase, allow_zero=False)
+
+    def test_truediv(self):
+        self.run_binary(self.op.truediv_usecase, allow_zero=False,
+                        expected_type=float)
+
+    def test_mod(self):
+        self.run_binary(self.op.mod_usecase, allow_zero=False)
+
+    def test_pow(self):
+        self.run_binary(self.op.pow_usecase, allow_zero=False)
+
+    def test_bitshift_left(self):
+        self.run_binary(self.op.bitshift_left_usecase,
+                        allow_second_negative=False)
+
+    def test_bitshift_right(self):
+        self.run_binary(self.op.bitshift_right_usecase,
+                        allow_second_negative=False)
+
+    def test_bitwise_and(self):
+        self.run_binary(self.op.bitwise_and_usecase,
+                        allow_second_negative=False)
+
+    def test_bitwise_or(self):
+        self.run_binary(self.op.bitwise_or_usecase,
+                        allow_second_negative=False)
+
+    def test_bitwise_xor(self):
+        self.run_binary(self.op.bitwise_xor_usecase,
+                        allow_second_negative=False)
+
+    def test_unary_positive(self):
+        self.run_unary(self.op.unary_positive_usecase)
+
+    def test_unary_negative(self):
+        self.run_unary(self.op.negate_usecase)
+
+    def test_bitwise_not(self):
+        self.run_unary(self.op.bitwise_not_usecase)
+
+
+class TestMixedIntsOperatorModule(TestMixedInts):
+
+    op = FunctionalOperatorImpl
+
+
 if __name__ == '__main__':
     unittest.main()
-
