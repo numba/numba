@@ -35,38 +35,7 @@ class MappedInplaceOperator(AbstractTemplate):
 # Redirect all functions in the operator module to the corresponding
 # built-in operators.
 
-mapped_operators = [
-    # Binary
-    ('add', 'iadd', '+'),
-    ('sub', 'isub', '-'),
-    ('mul', 'imul', '*'),
-    ('div', 'idiv', '/?'),
-    ('floordiv', 'ifloordiv', '//'),
-    ('truediv', 'itruediv', '/'),
-    ('mod', 'imod', '%'),
-    ('pow', 'ipow', '**'),
-    ('and_', 'iand', '&'),
-    ('or_', 'ior', '|'),
-    ('xor', 'ixor', '^'),
-    ('lshift', 'ilshift', '<<'),
-    ('rshift', 'irshift', '>>'),
-    ('eq', '', '=='),
-    ('ne', '', '!='),
-    ('lt', '', '<'),
-    ('le', '', '<='),
-    ('gt', '', '>'),
-    ('ge', '', '>='),
-    # Unary
-    ('pos', '', '+'),
-    ('neg', '', '-'),
-    ('invert', '', '~'),
-    ('not_', '', 'not'),
-    ]
-
-for name, inplace_name, op in mapped_operators:
-    if op == '/?' and utils.IS_PY3:
-        continue
-
+for name, inplace_name, op in utils.operator_map:
     op_func = getattr(operator, name)
     op_type = type('Operator_' + name, (MappedOperator,),
                    {'key': op_func, 'op': op})
