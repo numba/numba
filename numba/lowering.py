@@ -405,7 +405,7 @@ class Lower(BaseLower):
         # None is returned by the yield expression
         return self.context.get_constant_generic(self.builder, retty, None)
 
-    def lower_binop(self, resty, expr):
+    def lower_binop(self, resty, expr, op):
         lhs = expr.lhs
         rhs = expr.rhs
         lty = self.typeof(lhs.name)
@@ -414,7 +414,7 @@ class Lower(BaseLower):
         rhs = self.loadvar(rhs.name)
         # Get function
         signature = self.fndesc.calltypes[expr]
-        impl = self.context.get_function(expr.fn, signature)
+        impl = self.context.get_function(op, signature)
         # Convert argument to match
         lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
         rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
@@ -566,13 +566,15 @@ class Lower(BaseLower):
 
     def lower_expr(self, resty, expr):
         if expr.op == 'binop':
-            return self.lower_binop(resty, expr)
+            return self.lower_binop(resty, expr, expr.fn)
         elif expr.op == 'inplace_binop':
             lty = self.typeof(expr.lhs.name)
-            if not lty.mutable:
+            if lty.mutable:
+                return self.lower_binop(resty, expr, expr.fn)
+            else:
                 # inplace operators on non-mutable types reuse the same
                 # definition as the corresponding copying operators.
-                return self.lower_binop(resty, expr)
+                return self.lower_binop(resty, expr, expr.immutable_fn)
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)
             typ = self.typeof(expr.value.name)
