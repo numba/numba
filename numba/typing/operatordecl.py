@@ -47,7 +47,7 @@ mapped_operators = [
     ('pow', 'ipow', '**'),
     ('and_', 'iand', '&'),
     ('or_', 'ior', '|'),
-    ('xor', 'ixor', '|'),
+    ('xor', 'ixor', '^'),
     ('lshift', 'ilshift', '<<'),
     ('rshift', 'irshift', '>>'),
     ('eq', '', '=='),
