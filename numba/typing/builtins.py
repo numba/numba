@@ -265,16 +265,12 @@ class BitwiseXor(BitwiseLogicOperation):
     key = "^"
 
 
-# Explicit integer rules for unary operators; smaller ints will be
-# automatically upcast.
-integer_unary_cases = tuple(signature(choose_result_int(op), op)
-                            for op in machine_ints)
+# Bitwise invert and negate are special: we must not upcast the operand
+# for unsigned numbers, as that would change the result.
+# (i.e. ~np.int8(0) == 255 but ~np.int32(0) == 4294967295).
 
 @builtin
 class BitwiseInvert(ConcreteTemplate):
-    # Bitwise invert is special: we must not upcast the operand
-    # for unsigned numbers, as that would change the result.
-    # (i.e. ~np.int8(0) == 255 but ~np.int32(0) == 4294967295).
     key = "~"
 
     cases = [signature(types.int8, types.boolean)]
@@ -283,7 +279,8 @@ class BitwiseInvert(ConcreteTemplate):
 
 
 class UnaryOp(ConcreteTemplate):
-    cases = list(integer_unary_cases)
+    cases = [signature(choose_result_int(op), op) for op in types.unsigned_domain]
+    cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
     cases += [signature(op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op) for op in sorted(types.complex_domain)]
 

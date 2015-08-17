@@ -1204,7 +1204,7 @@ class TestMixedInts(TestCase):
         return cls(val)
 
     def run_binary(self, pyfunc, allow_zero=True, allow_second_negative=True,
-                   expected_type=int):
+                   expected_type=(int, np.integer)):
         if pyfunc is NotImplemented:
             self.skipTest("test irrelevant on this version of Python")
         typs = [types.int8, types.uint8, types.int64, types.uint64]
@@ -1228,7 +1228,7 @@ class TestMixedInts(TestCase):
                 y = self.get_typed_int(yt, y)
                 # Check it works and returns the expected type
                 got = cfunc(x, y)
-                self.assertIsInstance(got, expected_type, type(got))
+                self.assertIsInstance(got, expected_type)
                 # Compare with Numpy's result
                 try:
                     expected = pyfunc(x, y)
@@ -1247,7 +1247,7 @@ class TestMixedInts(TestCase):
                                         "mismatch for (%r, %r) with types %s: %r != %r"
                                         % (x, y, (xt, yt), got, expected))
 
-    def run_unary(self, pyfunc, expected_type=int):
+    def run_unary(self, pyfunc, expected_type=(int, np.integer)):
         if pyfunc is NotImplemented:
             self.skipTest("test irrelevant on this version of Python")
 
@@ -1262,15 +1262,12 @@ class TestMixedInts(TestCase):
                 x = self.get_typed_int(xt, x)
                 # Check it works and returns the expected type
                 got = cfunc(x)
-                self.assertIsInstance(got, expected_type, type(got))
+                self.assertIsInstance(got, expected_type)
                 # Compare with Numpy's result
                 expected = pyfunc(x)
-                if isinstance(expected, expected_type):
-                    # Can only compare with Numpy's result if Numpy didn't
-                    # convert to a float...
-                    self.assertTrue(np.all(got == expected),
-                                    "mismatch for (%r, %r) with types %s: %r != %r"
-                                    % (x, y, (xt, yt), got, expected))
+                self.assertTrue(np.all(got == expected),
+                                "mismatch for %r with type %s: %r != %r"
+                                % (x, xt, got, expected))
 
     def test_add(self):
         self.run_binary(self.op.add_usecase)

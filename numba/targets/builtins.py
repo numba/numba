@@ -312,11 +312,9 @@ def int_xor_impl(context, builder, sig, args):
 def int_negate_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
-    val = context.cast(builder, val, typ, sig.return_type)
-    if sig.return_type in types.real_domain:
-        res = builder.fsub(context.get_constant(sig.return_type, 0), val)
-    else:
-        res = builder.neg(val)
+    # Negate before upcasting, for unsigned numbers
+    res = builder.neg(val)
+    res = context.cast(builder, res, typ, sig.return_type)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -330,7 +328,7 @@ def int_positive_impl(context, builder, sig, args):
 def int_invert_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
-    # We must invert first and then upcast, for unsigned numbers
+    # Invert before upcasting, for unsigned numbers
     res = builder.xor(val, Constant.all_ones(val.type))
     res = context.cast(builder, res, typ, sig.return_type)
     return impl_ret_untracked(context, builder, sig.return_type, res)
