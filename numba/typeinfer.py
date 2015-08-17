@@ -131,6 +131,7 @@ class Propagate(object):
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
         typeinfer.copy_type(self.src, self.dst)
+        # If `dst` is refined, notify us
         typeinfer.refine_map[self.dst] = self
 
     def refine(self, typeinfer, target_type):
@@ -449,7 +450,7 @@ class TypeInferer(object):
 
     def dump(self):
         print('---- type variables ----')
-        pprint(list(six.itervalues(self.typevars)))
+        pprint([v for k, v in sorted(self.typevars.items())])
 
     def _mangle_arg_name(self, name):
         # Disambiguise argument name
@@ -508,8 +509,6 @@ class TypeInferer(object):
 
     def copy_type(self, src_var, dest_var):
         unified = self.typevars[dest_var].union(self.typevars[src_var])
-        if unified is not None:
-            self.propagate_refined_type(src_var, unified)
 
     def propagate_refined_type(self, updated_var, updated_type):
         source_constraint = self.refine_map.get(updated_var)
