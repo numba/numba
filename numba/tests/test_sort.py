@@ -177,6 +177,35 @@ class TestTimsortPurePython(TestCase):
         l = self.dupsorted_list(n, offset=100)
         check_sorted_list(l)
 
+    def test_gallop_right(self):
+        n = 20
+        f = timsort.gallop_right
+
+        def check(l, key, start, stop, hint):
+            k = f(key, l, start, stop, hint)
+            # Fully check invariants
+            self.assertGreaterEqual(k, start)
+            self.assertLessEqual(k, stop)
+            if k > start:
+                self.assertLessEqual(l[k - 1], key)
+            if k < stop:
+                self.assertGreater(l[k], key)
+
+        def check_all_hints(l, key, start, stop):
+            for hint in range(start, stop):
+                check(l, key, start, stop, hint)
+
+        def check_sorted_list(l):
+            for key in (l[5], l[15], l[0], -1000, l[-1], 1000):
+                check_all_hints(l, key, 0, n)
+                check_all_hints(l, key, 1, n - 1)
+                check_all_hints(l, key, 8, n - 8)
+
+        l = self.sorted_list(n, offset=100)
+        check_sorted_list(l)
+        l = self.dupsorted_list(n, offset=100)
+        check_sorted_list(l)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,8 +1,17 @@
+"""
+Timsort implementation.  Mostly adapted from CPython's listobject.c.
+
+For more information, see listsort.txt in CPython's source tree.
+"""
 
 from __future__ import print_function, absolute_import, division
 
 
 def LT(a, b):
+    """
+    Trivial comparison function between two keys.  This is factored out to
+    make it clear where comparison occurs.
+    """
     return a < b
 
 
@@ -170,4 +179,79 @@ def gallop_left(key, a, start, stop, hint):
             # key <= a[m]
             ofs = m
     # Now lastofs == ofs, so a[ofs - 1] < key <= a[ofs]
+    return ofs
+
+
+def gallop_right(key, a, start, stop, hint):
+    """
+    Exactly like gallop_left(), except that if key already exists in a[start:stop],
+    finds the position immediately to the right of the rightmost equal value.
+
+    The return value is the int k in start..stop such that
+
+        a[k-1] <= key < a[k]
+
+    The code duplication is massive, but this is enough different given that
+    we're sticking to "<" comparisons that it's much harder to follow if
+    written as one routine with yet another "left or right?" flag.
+    """
+    assert stop > start, "gallop_right(): stop <= start"
+    assert hint >= start and hint < stop, "gallop_right(): hint not in [start, stop)"
+    n = stop - start
+
+    # First, gallop from the hint to find a "good" subinterval for bisecting
+    lastofs = 0
+    ofs = 1
+    if LT(key, a[hint]):
+        # key < a[hint] => gallop left, until
+        #                  a[hint - ofs] <= key < a[hint - lastofs]
+        maxofs = hint - start + 1
+        while ofs < maxofs:
+            if LT(key, a[hint - ofs]):
+                lastofs = ofs
+                ofs = (ofs << 1) + 1
+                if ofs <= 0:
+                    # Int overflow
+                    ofs = maxofs
+            else:
+                # a[hint - ofs] <= key
+                break
+        if ofs > maxofs:
+            ofs = maxofs
+        # Translate back to positive offsets relative to a[0]
+        lastofs, ofs = hint - ofs, hint - lastofs
+    else:
+        # a[hint] <= key -- gallop right, until
+        # a[hint + lastofs] <= key < a[hint + ofs]
+        maxofs = stop - hint
+        while ofs < maxofs:
+            if LT(key, a[hint + ofs]):
+                break
+            else:
+                # a[hint + ofs] <= key
+                lastofs = ofs
+                ofs = (ofs << 1) + 1
+                if ofs <= 0:
+                    # Int overflow
+                    ofs = maxofs
+        if ofs > maxofs:
+            ofs = maxofs
+        # Translate back to offsets relative to a[0]
+        lastofs += hint
+        ofs += hint
+
+    assert start - 1 <= lastofs and lastofs < ofs and ofs <= stop
+    # Now a[lastofs] <= key < a[ofs], so key belongs somewhere to the
+    # right of lastofs but no farther right than ofs.  Do a binary
+    # search, with invariant a[lastofs-1] <= key < a[ofs].
+    lastofs += 1
+    while lastofs < ofs:
+        m = lastofs + ((ofs - lastofs) >> 1)
+        if LT(key, a[m]):
+            # key < a[m]
+            ofs = m
+        else:
+            # a[m] <= key
+            lastofs = m + 1
+    # Now lastofs == ofs, so a[ofs - 1] <= key < a[ofs]
     return ofs
