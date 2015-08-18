@@ -40,6 +40,12 @@ class TestTimsortPurePython(TestCase):
         random.shuffle(l)
         return l
 
+    def dupsorted_list(self, n, factor=4, offset=10):
+        l = (list(range(offset, offset + n // factor)) * (factor + 1))[:n]
+        assert len(l) == n
+        l.sort()
+        return l
+
     def assertSorted(self, orig, result):
         self.assertEqual(len(result), len(orig))
         self.assertEqual(result, sorted(orig))
@@ -141,6 +147,35 @@ class TestTimsortPurePython(TestCase):
         l = self.duprandom_list(n, offset=100)
         for i in range(len(l) - 1):
             check(l, i, n)
+
+    def test_gallop_left(self):
+        n = 20
+        f = timsort.gallop_left
+
+        def check(l, key, start, stop, hint):
+            k = f(key, l, start, stop, hint)
+            # Fully check invariants
+            self.assertGreaterEqual(k, start)
+            self.assertLessEqual(k, stop)
+            if k > start:
+                self.assertLess(l[k - 1], key)
+            if k < stop:
+                self.assertGreaterEqual(l[k], key)
+
+        def check_all_hints(l, key, start, stop):
+            for hint in range(start, stop):
+                check(l, key, start, stop, hint)
+
+        def check_sorted_list(l):
+            for key in (l[5], l[15], l[0], -1000, l[-1], 1000):
+                check_all_hints(l, key, 0, n)
+                check_all_hints(l, key, 1, n - 1)
+                check_all_hints(l, key, 8, n - 8)
+
+        l = self.sorted_list(n, offset=100)
+        check_sorted_list(l)
+        l = self.dupsorted_list(n, offset=100)
+        check_sorted_list(l)
 
 
 if __name__ == '__main__':

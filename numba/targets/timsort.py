@@ -87,3 +87,87 @@ def count_run(keys, lo, hi):
                 return k - lo, False
         return hi - lo, False
 
+
+def gallop_left(key, a, start, stop, hint):
+    """
+    Locate the proper position of key in a sorted vector; if the vector contains
+    an element equal to key, return the position immediately to the left of
+    the leftmost equal element.  [gallop_right() does the same except returns
+    the position to the right of the rightmost equal element (if any).]
+
+    "a" is a sorted vector with stop elements, starting at a[start].
+    stop must be > start.
+
+    "hint" is an index at which to begin the search, start <= hint < stop.
+    The closer hint is to the final result, the faster this runs.
+
+    The return value is the int k in start..stop such that
+
+        a[k-1] < key <= a[k]
+
+    pretending that a[start-1] is minus infinity and a[stop] is plus infinity.
+    IOW, key belongs at index k; or, IOW, the first k elements of a should
+    precede key, and the last stop-start-k should follow key.
+
+    See listsort.txt for info on the method.
+    """
+    assert stop > start, "gallop_left(): stop <= start"
+    assert hint >= start and hint < stop, "gallop_left(): hint not in [start, stop)"
+    n = stop - start
+
+    # First, gallop from the hint to find a "good" subinterval for bisecting
+    lastofs = 0
+    ofs = 1
+    if LT(a[hint], key):
+        # a[hint] < key => gallop right, until
+        #                  a[hint + lastofs] < key <= a[hint + ofs]
+        maxofs = stop - hint
+        while ofs < maxofs:
+            if LT(a[hint + ofs], key):
+                lastofs = ofs
+                ofs = (ofs << 1) + 1
+                if ofs <= 0:
+                    # Int overflow
+                    ofs = maxofs
+            else:
+                # key <= a[hint + ofs]
+                break
+        if ofs > maxofs:
+            ofs = maxofs
+        # Translate back to offsets relative to a[0]
+        lastofs += hint
+        ofs += hint
+    else:
+        # key <= a[hint] => gallop left, until
+        #                   a[hint - ofs] < key <= a[hint - lastofs]
+        maxofs = hint - start + 1
+        while ofs < maxofs:
+            if LT(a[hint - ofs], key):
+                break
+            else:
+                # key <= a[hint - ofs]
+                lastofs = ofs
+                ofs = (ofs << 1) + 1
+                if ofs <= 0:
+                    # Int overflow
+                    ofs = maxofs
+        if ofs > maxofs:
+            ofs = maxofs
+        # Translate back to positive offsets relative to a[0]
+        lastofs, ofs = hint - ofs, hint - lastofs
+
+    assert start - 1 <= lastofs and lastofs < ofs and ofs <= stop
+    # Now a[lastofs] < key <= a[ofs], so key belongs somewhere to the
+    # right of lastofs but no farther right than ofs.  Do a binary
+    # search, with invariant a[lastofs-1] < key <= a[ofs].
+    lastofs += 1
+    while lastofs < ofs:
+        m = lastofs + ((ofs - lastofs) >> 1)
+        if LT(a[m], key):
+            # a[m] < key
+            lastofs = m + 1
+        else:
+            # key <= a[m]
+            ofs = m
+    # Now lastofs == ofs, so a[ofs - 1] < key <= a[ofs]
+    return ofs
