@@ -195,8 +195,11 @@ class BaseContext(object):
         if isinstance(val, (types.ExternalFunction, types.NumbaFunction)):
             return val
 
-        if isinstance(val, type) and issubclass(val, BaseException):
-            return types.ExceptionType(val)
+        if isinstance(val, type):
+            if issubclass(val, BaseException):
+                return types.ExceptionType(val)
+            if issubclass(val, tuple) and hasattr(val, "_asdict"):
+                return types.NamedTupleClass(val)
 
         try:
             # Try to look up target specific typing information

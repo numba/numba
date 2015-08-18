@@ -404,7 +404,7 @@ class BaseContext(object):
         elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
             return Constant.real(lty, val.astype(numpy.int64))
 
-        elif isinstance(ty, types.UniTuple):
+        elif isinstance(ty, (types.UniTuple, types.NamedUniTuple)):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
 
@@ -453,6 +453,12 @@ class BaseContext(object):
                 overloads = self.defns[key]
             else:
                 overloads = self.defns[key]
+
+        elif isinstance(fn, types.NamedTupleClass):
+            ty = sig.return_type
+            def impl(builder, args):
+                return self.make_tuple(builder, ty, args)
+            return impl
 
         elif isinstance(fn, types.Dispatcher):
             key = fn.overloaded.get_overload(sig.args)
@@ -942,6 +948,15 @@ class BaseContext(object):
         Create a heterogenous pair class parametered for the given types.
         """
         return builtins.make_pair(first_type, second_type)
+
+    def make_tuple(self, builder, typ, values):
+        """
+        Create a tuple of the given *typ* containing the *values*.
+        """
+        tup = self.get_constant_undef(typ)
+        for i, val in enumerate(values):
+            tup = builder.insert_value(tup, val, i)
+        return tup
 
     def make_constant_array(self, builder, typ, ary):
         assert typ.layout == 'C'                # assumed in typeinfer.py

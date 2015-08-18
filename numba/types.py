@@ -221,6 +221,46 @@ class Function(Callable, Opaque):
         return sigs, hasattr(self.template, 'generic')
 
 
+class NamedTupleClass(Callable, Opaque):
+    """
+    Type class for namedtuple classes.
+    """
+
+    def __init__(self, instance_class):
+        self.instance_class = instance_class
+        name = "%s" % (instance_class)
+        super(NamedTupleClass, self).__init__(name, param=True)
+
+    # XXX should get_call_type() be rewritten as an intrinsic "call"?
+    # that may ease typing...
+
+    def get_call_type(self, context, args, kws):
+        from numba import typing
+        assert not kws
+        tys = args
+        # In sync with typing.typeof
+        homogenous = False
+        if tys:
+            first = tys[0]
+            for ty in tys[1:]:
+                if ty != first:
+                    break
+            else:
+                homogenous = True
+        if homogenous:
+            return_type = NamedUniTuple(first, len(tys), self.instance_class)
+        else:
+            return_type = NamedTuple(tys, self.instance_class)
+        return typing.signature(return_type, *args)
+
+    def get_call_signatures(self):
+        return (), True
+
+    @property
+    def key(self):
+        return self.instance_class
+
+
 class NumberClass(Callable, DTypeSpec, Opaque):
     """
     Type class for number classes (e.g. "np.float64").
@@ -1029,13 +1069,14 @@ class NamedUniTuple(_HomogenousTuple, BaseNamedTuple):
         self.dtype = dtype
         self.count = count
         self.fields = tuple(cls._fields)
+        self.instance_class = cls
         name = "%s(%s x %d)" % (cls.__name__, dtype, count)
         super(NamedUniTuple, self).__init__(name, param=True)
         self._iterator_type = UniTupleIter(self)
 
     @property
     def key(self):
-        return self.fields, self.dtype, self.count
+        return self.instance_class, self.dtype, self.count
 
 
 class NamedTuple(_HeterogenousTuple, BaseNamedTuple):
@@ -1044,12 +1085,13 @@ class NamedTuple(_HeterogenousTuple, BaseNamedTuple):
         self.types = tuple(types)
         self.count = len(self.types)
         self.fields = tuple(cls._fields)
+        self.instance_class = cls
         name = "%s(%s)" % (cls.__name__, ', '.join(str(i) for i in self.types))
         super(NamedTuple, self).__init__(name, param=True)
 
     @property
     def key(self):
-        return self.fields, self.types
+        return self.instance_class, self.types
 
 
 class List(MutableSequence):

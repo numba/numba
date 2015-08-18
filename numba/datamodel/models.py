@@ -211,6 +211,7 @@ class PrimitiveModel(DataModel):
 @register_default(types.Method)
 @register_default(types.Macro)
 @register_default(types.NumberClass)
+@register_default(types.NamedTupleClass)
 @register_default(types.DType)
 @register_default(types.ArrayFlags)
 class OpaqueModel(PrimitiveModel):

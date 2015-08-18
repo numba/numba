@@ -134,7 +134,6 @@ def _typeof_tuple(val, c):
     else:
         return types.Tuple(tys)
 
-
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):
     tp = numpy_support.from_dtype(val)
