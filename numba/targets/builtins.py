@@ -121,23 +121,17 @@ def int_floordiv_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_struediv_impl(context, builder, sig, args):
-    x, y = args
-    fx = builder.sitofp(x, Type.double())
-    fy = builder.sitofp(y, Type.double())
-    cgutils.guard_zero(context, builder, y,
+@builtin
+@implement('/', types.Kind(types.Integer), types.Kind(types.Integer))
+def int_truediv_impl(context, builder, sig, args):
+    [va, vb] = args
+    [ta, tb] = sig.args
+    print("sig:", sig)
+    a = context.cast(builder, va, ta, sig.return_type)
+    b = context.cast(builder, vb, tb, sig.return_type)
+    cgutils.guard_zero(context, builder, b,
                        (ZeroDivisionError, "division by zero"))
-    res = builder.fdiv(fx, fy)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-def int_utruediv_impl(context, builder, sig, args):
-    x, y = args
-    fx = builder.uitofp(x, Type.double())
-    fy = builder.uitofp(y, Type.double())
-    cgutils.guard_zero(context, builder, y,
-                       (ZeroDivisionError, "division by zero"))
-    res = builder.fdiv(fx, fy)
+    res = builder.fdiv(a, b)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -258,8 +252,6 @@ def uint_abs_impl(context, builder, sig, args):
 def int_shl_impl(context, builder, sig, args):
     [valty, amtty] = sig.args
     [val, amt] = args
-    val = context.cast(builder, val, valty, sig.return_type)
-    amt = context.cast(builder, amt, amtty, sig.return_type)
     res = builder.shl(val, amt)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -414,7 +406,6 @@ def _implement_integer_operators():
     builtin(implement(pow, ty, ty)(int_power_impl))
 
     for ty in types.unsigned_domain:
-        builtin(implement('/', ty, ty)(int_utruediv_impl))
         builtin(implement('<', ty, ty)(int_ult_impl))
         builtin(implement('<=', ty, ty)(int_ule_impl))
         builtin(implement('>', ty, ty)(int_ugt_impl))
@@ -426,7 +417,6 @@ def _implement_integer_operators():
         builtin(implement(types.abs_type, ty)(uint_abs_impl))
 
     for ty in types.signed_domain:
-        builtin(implement('/', ty, ty)(int_struediv_impl))
         builtin(implement('<', ty, ty)(int_slt_impl))
         builtin(implement('<=', ty, ty)(int_sle_impl))
         builtin(implement('>', ty, ty)(int_sgt_impl))

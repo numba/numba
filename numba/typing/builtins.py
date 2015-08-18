@@ -193,11 +193,9 @@ class BinOpMod(ConcreteTemplate):
 @builtin
 class BinOpTrueDiv(ConcreteTemplate):
     key = "/"
-    cases = [signature(types.float64, op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(types.float64, op, op)
-              for op in sorted(types.unsigned_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+    cases = [signature(types.float64, op1, op2)
+             for op1, op2 in itertools.product(machine_ints, machine_ints)]
+    cases = [signature(op, op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 

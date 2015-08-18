@@ -1194,131 +1194,187 @@ class TestOperatorModule(TestOperators):
 
 
 class TestMixedInts(TestCase):
+    """
+    Tests for operator calls with mixed integer types.
+    """
 
     op = LiteralOperatorImpl
 
     int_samples = [0, 1, 3, 10, 42, 127, 10000, -1, -3, -10, -42, -127, -10000]
 
-    def get_typed_int(self, ty, val):
-        cls = getattr(np, ty.name)
-        return cls(val)
+    int_types = [types.int8, types.uint8, types.int64, types.uint64]
+    signed_types = [tp for tp in int_types if tp.signed]
+    unsigned_types = [tp for tp in int_types if not tp.signed]
+    type_pairs = list(itertools.product(int_types, int_types))
+    signed_pairs = [(u, v) for u, v in type_pairs
+                    if u.signed or v.signed]
+    unsigned_pairs = [(u, v) for u, v in type_pairs
+                      if not (u.signed or v.signed)]
 
-    def run_binary(self, pyfunc, allow_zero=True, allow_second_negative=True,
-                   expected_type=(int, np.integer)):
+    def get_typed_int(self, typ, val):
+        return getattr(np, typ.name)(val)
+
+    def get_control_signed(self, opname):
+        op = getattr(operator, opname)
+        def control_signed(a, b):
+            return op(np.intp(a), np.intp(b))
+        return control_signed
+
+    def get_control_unsigned(self, opname):
+        op = getattr(operator, opname)
+        def control_unsigned(a, b):
+            return op(np.uintp(a), np.uintp(b))
+        return control_unsigned
+
+    def run_binary(self, pyfunc, control_func, operands, types,
+                   expected_type=int):
         if pyfunc is NotImplemented:
             self.skipTest("test irrelevant on this version of Python")
-        typs = [types.int8, types.uint8, types.int64, types.uint64]
 
-        x_operands = self.int_samples
-        x_types = typs
-        if not allow_zero:
-            x_operands = [x for x in x_operands if x != 0]
-
-        y_operands = x_operands
-        y_types = typs
-        if not allow_second_negative:
-            y_operands = [y for y in y_operands if y >= 0]
-
-        for xt, yt in itertools.product(x_types, y_types):
+        for xt, yt in types:
             cr = compile_isolated(pyfunc, (xt, yt), flags=Noflags)
             cfunc = cr.entry_point
-            for x, y in itertools.product(x_operands, y_operands):
+            for x, y in itertools.product(operands, operands):
                 # Get Numpy typed scalars for the given types and values
                 x = self.get_typed_int(xt, x)
                 y = self.get_typed_int(yt, y)
-                # Check it works and returns the expected type
+                expected = control_func(x, y)
                 got = cfunc(x, y)
                 self.assertIsInstance(got, expected_type)
-                # Compare with Numpy's result
-                try:
-                    expected = pyfunc(x, y)
-                except TypeError:
-                    # Numpy doesn't accept the input types, which can
-                    # happen due to the ufunc dispatching logic
-                    if (xt.signed == yt.signed or
-                        (xt not in (types.int64, types.uint64) and
-                         yt not in (types.int64, types.uint64))):
-                        raise
-                else:
-                    if isinstance(expected, expected_type):
-                        # Can only compare with Numpy's result if Numpy didn't
-                        # convert to a float...
-                        self.assertTrue(np.all(got == expected),
-                                        "mismatch for (%r, %r) with types %s: %r != %r"
-                                        % (x, y, (xt, yt), got, expected))
+                self.assertTrue(np.all(got == expected),
+                                "mismatch for (%r, %r) with types %s: %r != %r"
+                                % (x, y, (xt, yt), got, expected))
 
-    def run_unary(self, pyfunc, expected_type=(int, np.integer)):
+    def run_unary(self, pyfunc, control_func, operands, types,
+                  expected_type=int):
         if pyfunc is NotImplemented:
             self.skipTest("test irrelevant on this version of Python")
 
-        x_operands = self.int_samples
-        x_types = [types.int8, types.uint8, types.int64, types.uint64]
-
-        for xt in x_types:
+        for xt in types:
             cr = compile_isolated(pyfunc, (xt,), flags=Noflags)
             cfunc = cr.entry_point
-            for x in x_operands:
-                # Get Numpy typed scalar for the given type and value
+            for x in operands:
                 x = self.get_typed_int(xt, x)
-                # Check it works and returns the expected type
+                expected = control_func(x)
                 got = cfunc(x)
                 self.assertIsInstance(got, expected_type)
-                # Compare with Numpy's result
-                expected = pyfunc(x)
                 self.assertTrue(np.all(got == expected),
                                 "mismatch for %r with type %s: %r != %r"
                                 % (x, xt, got, expected))
 
+    def run_arith_binop(self, pyfunc, opname, samples, expected_type=int):
+        self.run_binary(pyfunc, self.get_control_signed(opname),
+                        samples, self.signed_pairs, expected_type)
+        self.run_binary(pyfunc, self.get_control_unsigned(opname),
+                        samples, self.unsigned_pairs, expected_type)
+
     def test_add(self):
-        self.run_binary(self.op.add_usecase)
+        self.run_arith_binop(self.op.add_usecase, 'add', self.int_samples)
 
     def test_sub(self):
-        self.run_binary(self.op.sub_usecase)
+        self.run_arith_binop(self.op.sub_usecase, 'sub', self.int_samples)
 
     def test_mul(self):
-        self.run_binary(self.op.mul_usecase)
+        self.run_arith_binop(self.op.mul_usecase, 'mul', self.int_samples)
 
     def test_floordiv(self):
-        self.run_binary(self.op.floordiv_usecase, allow_zero=False)
-
-    def test_truediv(self):
-        self.run_binary(self.op.truediv_usecase, allow_zero=False,
-                        expected_type=float)
+        samples = [x for x in self.int_samples if x != 0]
+        self.run_arith_binop(self.op.floordiv_usecase, 'floordiv', samples)
 
     def test_mod(self):
-        self.run_binary(self.op.mod_usecase, allow_zero=False)
+        samples = [x for x in self.int_samples if x != 0]
+        self.run_arith_binop(self.op.mod_usecase, 'mod', samples)
 
     def test_pow(self):
-        self.run_binary(self.op.pow_usecase, allow_zero=False)
+        pyfunc = self.op.pow_usecase
+        # Only test with positive values, as otherwise trying to write the
+        # control function in terms of Python or Numpy power turns out insane.
+        samples = [x for x in self.int_samples if x >= 0]
+        self.run_arith_binop(pyfunc, 'pow', samples)
 
-    def test_bitshift_left(self):
-        self.run_binary(self.op.bitshift_left_usecase,
-                        allow_second_negative=False)
+        # Now test all non-zero values, but only with signed types
+        def control_signed(a, b):
+            if b >= 0:
+                return np.intp(a) ** np.intp(b)
+            else:
+                inv = np.intp(a) ** np.intp(-b)
+                if inv == 0:
+                    # Overflow
+                    return 0
+                return np.intp(1.0 / inv)
+        samples = [x for x in self.int_samples if x != 0]
+        signed_pairs = [(u, v) for u, v in self.type_pairs
+                        if u.signed and v.signed]
+        self.run_binary(pyfunc, control_signed,
+                        samples, signed_pairs)
 
-    def test_bitshift_right(self):
-        self.run_binary(self.op.bitshift_right_usecase,
-                        allow_second_negative=False)
+    def test_truediv(self):
+        def control(a, b):
+            return truediv_usecase(float(a), float(b))
+        samples = [x for x in self.int_samples if x != 0]
+        pyfunc = self.op.truediv_usecase
 
-    def test_bitwise_and(self):
-        self.run_binary(self.op.bitwise_and_usecase,
-                        allow_second_negative=False)
+        self.run_binary(pyfunc, control, samples, self.signed_pairs,
+                        expected_type=float)
+        self.run_binary(pyfunc, control, samples, self.unsigned_pairs,
+                        expected_type=float)
 
-    def test_bitwise_or(self):
-        self.run_binary(self.op.bitwise_or_usecase,
-                        allow_second_negative=False)
+    def test_and(self):
+        self.run_arith_binop(self.op.bitwise_and_usecase, 'and_', self.int_samples)
 
-    def test_bitwise_xor(self):
-        self.run_binary(self.op.bitwise_xor_usecase,
-                        allow_second_negative=False)
+    def test_or(self):
+        self.run_arith_binop(self.op.bitwise_or_usecase, 'or_', self.int_samples)
+
+    def test_xor(self):
+        self.run_arith_binop(self.op.bitwise_xor_usecase, 'xor', self.int_samples)
+
+    def run_shift_binop(self, pyfunc, opname):
+        samples = [x for x in self.int_samples if x >= 0]
+        signed_pairs = [(u, v) for u, v in self.type_pairs
+                        if u.signed]
+        unsigned_pairs = [(u, v) for u, v in self.type_pairs
+                          if not u.signed]
+
+        self.run_binary(pyfunc, self.get_control_signed(opname),
+                        samples, signed_pairs)
+        self.run_binary(pyfunc, self.get_control_unsigned(opname),
+                        samples, unsigned_pairs)
+
+    def test_lshift(self):
+        self.run_shift_binop(self.op.bitshift_left_usecase, 'lshift')
+
+    def test_rshift(self):
+        self.run_shift_binop(self.op.bitshift_right_usecase, 'rshift')
 
     def test_unary_positive(self):
-        self.run_unary(self.op.unary_positive_usecase)
+        def control(a):
+            return a
+        samples = self.int_samples
+        pyfunc = self.op.unary_positive_usecase
+
+        self.run_unary(pyfunc, control, samples, self.int_types)
 
     def test_unary_negative(self):
-        self.run_unary(self.op.negate_usecase)
+        def control_signed(a):
+            return np.intp(-a)
+        def control_unsigned(a):
+            return np.uintp(-a)
+        samples = self.int_samples
+        pyfunc = self.op.negate_usecase
 
-    def test_bitwise_not(self):
-        self.run_unary(self.op.bitwise_not_usecase)
+        self.run_unary(pyfunc, control_signed, samples, self.signed_types)
+        self.run_unary(pyfunc, control_unsigned, samples, self.unsigned_types)
+
+    def test_invert(self):
+        def control_signed(a):
+            return np.intp(~a)
+        def control_unsigned(a):
+            return np.uintp(~a)
+        samples = self.int_samples
+        pyfunc = self.op.bitwise_not_usecase
+
+        self.run_unary(pyfunc, control_signed, samples, self.signed_types)
+        self.run_unary(pyfunc, control_unsigned, samples, self.unsigned_types)
 
 
 class TestMixedIntsOperatorModule(TestMixedInts):
