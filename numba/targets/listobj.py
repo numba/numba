@@ -542,6 +542,17 @@ def in_list(context, builder, sig, args):
 
     return context.compile_internal(builder, list_contains_impl, sig, args)
 
+
+# XXX should there be a specific module for Sequence or collection base classes?
+@builtin
+@implement(bool, types.Kind(types.Sequence))
+def sequence_bool(context, builder, sig, args):
+    def sequence_bool_impl(seq):
+        return len(seq) != 0
+
+    return context.compile_internal(builder, sequence_bool_impl, sig, args)
+
+
 @builtin
 @implement("+", types.Kind(types.List), types.Kind(types.List))
 def list_add(context, builder, sig, args):

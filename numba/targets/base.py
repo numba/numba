@@ -757,16 +757,8 @@ class BaseContext(object):
         return optval._getvalue()
 
     def is_true(self, builder, typ, val):
-        if typ in types.integer_domain:
-            return builder.icmp(lc.ICMP_NE, val, Constant.null(val.type))
-        elif typ in types.real_domain:
-            return builder.fcmp(lc.FCMP_UNE, val, Constant.real(val.type, 0))
-        elif typ in types.complex_domain:
-            cmplx = self.make_complex(typ)(self, builder, val)
-            real_istrue = self.is_true(builder, typ.underlying_float, cmplx.real)
-            imag_istrue = self.is_true(builder, typ.underlying_float, cmplx.imag)
-            return builder.or_(real_istrue, imag_istrue)
-        raise NotImplementedError("is_true", val, typ)
+        impl = self.get_function(bool, typing.signature(types.boolean, typ))
+        return impl(builder, (val,))
 
     def get_c_value(self, builder, typ, name):
         """

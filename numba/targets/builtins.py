@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 import math
 from functools import reduce
 
+from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
@@ -1062,17 +1063,33 @@ def number_not_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def number_as_bool_impl(context, builder, sig, args):
+@builtin
+@implement(bool, types.Kind(types.Integer))
+def int_as_bool(context, builder, sig, args):
+    [val] = args
+    return builder.icmp_unsigned('!=', val, ir.Constant(val.type, 0))
+
+@builtin
+@implement(bool, types.Kind(types.Float))
+def float_as_bool(context, builder, sig, args):
+    [val] = args
+    return builder.fcmp(lc.FCMP_UNE, val, ir.Constant(val.type, 0.0))
+
+@builtin
+@implement(bool, types.Kind(types.Complex))
+def complex_as_bool(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
-    istrue = context.cast(builder, val, typ, sig.return_type)
-    res = istrue
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    cmplx = context.make_complex(typ)(context, builder, val)
+    real, imag = cmplx.real, cmplx.imag
+    zero = ir.Constant(real.type, 0.0)
+    real_istrue = builder.fcmp(lc.FCMP_UNE, real, zero)
+    imag_istrue = builder.fcmp(lc.FCMP_UNE, imag, zero)
+    return builder.or_(real_istrue, imag_istrue)
 
 
 for ty in (types.Integer, types.Float, types.Complex):
     builtin(implement('not', types.Kind(ty))(number_not_impl))
-    builtin(implement(bool, types.Kind(ty))(number_as_bool_impl))
 
 builtin(implement('not', types.boolean)(number_not_impl))
 

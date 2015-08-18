@@ -30,6 +30,16 @@ class SequenceLen(AbstractTemplate):
             return signature(types.intp, val)
 
 @builtin
+class SequenceBool(AbstractTemplate):
+    key = "is_true"
+
+    def generic(self, args, kws):
+        assert not kws
+        (val,) = args
+        if isinstance(val, (types.Sequence)):
+            return signature(types.boolean, val)
+
+@builtin
 class GetItemSequence(AbstractTemplate):
     key = "getitem"
 

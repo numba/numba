@@ -217,7 +217,7 @@ class Function(Callable, Opaque):
         return self.template(context).apply(args, kws)
 
     def get_call_signatures(self):
-        sigs = getattr(self.template, 'cases')
+        sigs = getattr(self.template, 'cases', [])
         return sigs, hasattr(self.template, 'generic')
 
 
