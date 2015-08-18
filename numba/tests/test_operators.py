@@ -8,7 +8,7 @@ import warnings
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import types, typeinfer
+from numba import types, typeinfer, utils
 from numba.config import PYVERSION
 from .support import TestCase
 from numba.tests.true_div_usecase import truediv_usecase, itruediv_usecase
@@ -1239,7 +1239,7 @@ class TestMixedInts(TestCase):
         return control_unsigned
 
     def run_binary(self, pyfunc, control_func, operands, types,
-                   expected_type=int, **assertPreciseEqualArgs):
+                   expected_type=utils.INT_TYPES, **assertPreciseEqualArgs):
         if pyfunc is NotImplemented:
             self.skipTest("test irrelevant on this version of Python")
 
@@ -1259,7 +1259,7 @@ class TestMixedInts(TestCase):
                                         **assertPreciseEqualArgs)
 
     def run_unary(self, pyfunc, control_func, operands, types,
-                  expected_type=int):
+                  expected_type=utils.INT_TYPES):
         if pyfunc is NotImplemented:
             self.skipTest("test irrelevant on this version of Python")
 
@@ -1275,7 +1275,8 @@ class TestMixedInts(TestCase):
                                 "mismatch for %r with type %s: %r != %r"
                                 % (x, xt, got, expected))
 
-    def run_arith_binop(self, pyfunc, opname, samples, expected_type=int):
+    def run_arith_binop(self, pyfunc, opname, samples,
+                        expected_type=utils.INT_TYPES):
         self.run_binary(pyfunc, self.get_control_signed(opname),
                         samples, self.signed_pairs, expected_type)
         self.run_binary(pyfunc, self.get_control_unsigned(opname),
