@@ -153,9 +153,6 @@ class TestIndexing(TestCase):
             self.assertPreciseEqual(cfunc(a, *indices), expected)
 
     def test_1d_slicing_npm(self):
-        """
-        Return of arbitrary array is not supported yet
-        """
         self.test_1d_slicing(flags=Noflags)
 
     def test_1d_slicing2(self, flags=enable_pyobj_flags):
