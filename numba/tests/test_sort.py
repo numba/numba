@@ -4,7 +4,7 @@ import itertools
 import random
 
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types
+from numba import jit, types, utils
 import numba.unittest_support as unittest
 from numba import testing
 from .support import TestCase, MemoryLeakMixin
@@ -62,6 +62,13 @@ class TestTimsortPurePython(TestCase):
             if k1 == k2:
                 # Assuming values are unique, which is enforced by the tests
                 self.assertLess(orig_values.index(v1), orig_values.index(v2))
+
+    def fibo(self):
+        a = 1
+        b = 1
+        while True:
+            yield a
+            a, b = b, a + b
 
     def test_binarysort(self):
         n = 20
@@ -205,6 +212,28 @@ class TestTimsortPurePython(TestCase):
         check_sorted_list(l)
         l = self.dupsorted_list(n, offset=100)
         check_sorted_list(l)
+
+    def test_merge_compute_minrun(self):
+        f = timsort.merge_compute_minrun
+
+        for i in range(0, 64):
+            self.assertEqual(f(i), i)
+        for i in range(6, 63):
+            self.assertEqual(f(2**i), 32)
+        for i in self.fibo():
+            if i < 64:
+                continue
+            if i >= 2 ** 63:
+                break
+            k = f(i)
+            self.assertGreaterEqual(k, 32)
+            self.assertLessEqual(k, 64)
+            if i > 500:
+                # i/k is close to, but strictly less than, an exact power of 2
+                quot = i // k
+                p = 2 ** utils.bit_length(quot)
+                self.assertLess(quot, p)
+                self.assertGreaterEqual(quot, 0.9 * p)
 
 
 if __name__ == '__main__':
