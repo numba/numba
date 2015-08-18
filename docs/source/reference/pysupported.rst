@@ -95,11 +95,7 @@ list
 ----
 
 Creating and returning lists from JIT-compiled functions is supported,
-as well as most methods and operations on lists.  Unsupported operations
-are:
-
-* the ``.sort()`` method
-* in-place operators (``+=`` and ``*=``)
+as well as all methods and operations except the ``.sort()`` method.
 
 .. note::
    Passing lists from Python into JIT-compiled functions is unsupported,

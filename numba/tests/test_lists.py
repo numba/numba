@@ -226,9 +226,20 @@ def list_add(m, n):
     res.append(42)   # check result is a copy
     return a, b, res
 
+def list_add_inplace(m, n):
+    a = list(range(0, m))
+    b = list(range(100, 100 + n))
+    a += b
+    return a, b
+
 def list_mul(n, v):
     a = list(range(n))
     return a * v
+
+def list_mul_inplace(n, v):
+    a = list(range(n))
+    a *= v
+    return a
 
 def list_bool(n):
     a = list(range(n))
@@ -484,21 +495,31 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_copy(self):
         self.check_unary_with_size(list_copy)
 
-    def test_add(self):
-        pyfunc = list_add
+    def check_add(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         sizes = [0, 3, 50, 300]
         for m, n in itertools.product(sizes, sizes):
             expected = pyfunc(m, n)
             self.assertPreciseEqual(cfunc(m, n), expected)
 
-    def test_mul(self):
-        pyfunc = list_mul
+    def test_add(self):
+        self.check_add(list_add)
+
+    def test_add_inplace(self):
+        self.check_add(list_add_inplace)
+
+    def check_mul(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         for n in [0, 3, 50, 300]:
             for v in [1, 2, 3, 0, -1, -42]:
                 expected = pyfunc(n, v)
                 self.assertPreciseEqual(cfunc(n, v), expected)
+
+    def test_mul(self):
+        self.check_mul(list_mul)
+
+    def test_mul_inplace(self):
+        self.check_mul(list_mul_inplace)
 
     @unittest.skipUnless(sys.maxsize >= 2**32,
                          "need a 64-bit system to test for MemoryError")

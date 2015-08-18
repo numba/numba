@@ -575,8 +575,17 @@ def list_add(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
 @builtin
+@implement("+=", types.Kind(types.List), types.Kind(types.List))
+def list_add_inplace(context, builder, sig, args):
+    assert sig.args[0].dtype == sig.args[1].dtype
+    dest = _list_extend_list(context, builder, sig, args)
+
+    return impl_ret_borrowed(context, builder, sig.return_type, dest.value)
+
+
+@builtin
 @implement("*", types.Kind(types.List), types.Kind(types.Integer))
-def list_add(context, builder, sig, args):
+def list_mul(context, builder, sig, args):
     src = ListInstance(context, builder, sig.args[0], args[0])
     src_size = src.size
 
@@ -594,6 +603,26 @@ def list_add(context, builder, sig, args):
             dest.setitem(builder.add(src_index, dest_offset), value)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
+
+@builtin
+@implement("*=", types.Kind(types.List), types.Kind(types.Integer))
+def list_mul_inplace(context, builder, sig, args):
+    inst = ListInstance(context, builder, sig.args[0], args[0])
+    src_size = inst.size
+
+    mult = args[1]
+    zero = ir.Constant(mult.type, 0)
+    mult = builder.select(cgutils.is_neg_int(builder, mult), zero, mult)
+    nitems = builder.mul(mult, src_size)
+
+    inst.resize(nitems)
+
+    with cgutils.for_range_slice(builder, src_size, nitems, src_size, inc=True) as (dest_offset, _):
+        with cgutils.for_range(builder, src_size) as src_index:
+            value = inst.getitem(src_index)
+            inst.setitem(builder.add(src_index, dest_offset), value)
+
+    return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
 
 #-------------------------------------------------------------------------------
@@ -655,14 +684,15 @@ def _list_extend_list(context, builder, sig, args):
         value = src.getitem(src_index)
         dest.setitem(builder.add(src_index, dest_size), value)
 
-    return context.get_dummy_value()
+    return dest
 
 @builtin
 @implement("list.extend", types.Kind(types.List), types.Kind(types.IterableType))
 def list_extend(context, builder, sig, args):
     if isinstance(sig.args[1], types.List) and sig.args[0].dtype == sig.args[1].dtype:
         # Specialize for same-type list operands, for speed
-        return _list_extend_list(context, builder, sig, args)
+        _list_extend_list(context, builder, sig, args)
+        return context.get_dummy_value()
 
     def list_extend(lst, iterable):
         # Speed hack to avoid NRT refcount operations inside the loop
