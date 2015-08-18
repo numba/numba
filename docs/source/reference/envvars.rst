@@ -36,6 +36,10 @@ These variables influence what is printed out during compilation of
    of the compiler frontend, up to and including generation of the Numba
    Intermediate Representation.
 
+.. envvar:: NUMBA_DEBUG_TYPEINFER
+
+   If set to non-zero, print out debugging information about type inference.
+
 .. envvar:: NUMBA_DUMP_BYTECODE
 
    If set to non-zero, print out the Python :py:term:`bytecode` of
