@@ -31,6 +31,8 @@ def binarysort(keys, values, lo, hi, start):
     while start < hi:
         pivot = keys[start]
         # Bisect to find where to insert `pivot`
+        # NOTE: bisection only wins over linear search if the comparison
+        # function is much more expensive than simply moving data.
         l = lo
         r = start
         # Invariants:
@@ -275,3 +277,8 @@ def merge_compute_minrun(n):
         r |= n & 1
         n >>= 1
     return n + r
+
+
+
+# A mergestate is a (min_gallop, temp, pending) tuple
+
