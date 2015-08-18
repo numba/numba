@@ -251,6 +251,7 @@ class CallConstrain(object):
     """Constrain for calling functions.
     Perform case analysis foreach combinations of argument types.
     """
+    signature = None
 
     def __init__(self, target, func, args, kws, vararg, loc):
         self.target = target
@@ -271,39 +272,48 @@ class CallConstrain(object):
 
         n_pos_args = len(self.args)
         kwds = [kw for (kw, var) in self.kws]
-        argtypes = [typevars[a.name].get() for a in self.args]
-        argtypes += [typevars[var.name].get() for (kw, var) in self.kws]
+        argtypes = [typevars[a.name] for a in self.args]
+        argtypes += [typevars[var.name] for (kw, var) in self.kws]
         if self.vararg is not None:
-            argtypes.append(typevars[self.vararg.name].get())
-        # Case analysis for each combination of argument types.
-        for args in itertools.product(*argtypes):
-            pos_args = args[:n_pos_args]
-            if self.vararg is not None:
-                if not isinstance(args[-1], types.BaseTuple):
-                    # Unsuitable for *args
-                    # (Python is more lenient and accepts all iterables)
-                    continue
-                pos_args += args[-1].types
-                args = args[:-1]
-            kw_args = dict(zip(kwds, args[n_pos_args:]))
-            sig = context.resolve_function_type(fnty, pos_args, kw_args)
-            if sig is None:
-                desc = context.explain_function_type(fnty)
-                headtemp = "Invalid usage of {0} with parameters ({1})"
-                head = headtemp.format(fnty, ', '.join(map(str, args)))
-                msg = '\n'.join([head, desc])
-                raise TypingError(msg, loc=self.loc)
-            typeinfer.add_type(self.target, sig.return_type)
-            # If the function is a bound function and its receiver type
-            # was refined, propagate it.
-            if (isinstance(fnty, types.BoundFunction)
-                and sig.recvr is not None
-                and sig.recvr != fnty.this):
-                refined_this = context.unify_pairs(sig.recvr, fnty.this)
-                if refined_this.is_precise():
-                    refined_fnty = types.BoundFunction(fnty.template,
-                                                       this=refined_this)
-                    typeinfer.propagate_refined_type(self.func, refined_fnty)
+            argtypes.append(typevars[self.vararg.name])
+
+        if not (a.defined for a in argtypes):
+            # Cannot resolve call type until all argument types are known
+            return
+
+        args = tuple(a.getone() for a in argtypes)
+        pos_args = args[:n_pos_args]
+        if self.vararg is not None:
+            if not isinstance(args[-1], types.BaseTuple):
+                # Unsuitable for *args
+                # (Python is more lenient and accepts all iterables)
+                return
+            pos_args += args[-1].types
+            args = args[:-1]
+        kw_args = dict(zip(kwds, args[n_pos_args:]))
+        sig = context.resolve_function_type(fnty, pos_args, kw_args)
+        if sig is None:
+            desc = context.explain_function_type(fnty)
+            headtemp = "Invalid usage of {0} with parameters ({1})"
+            head = headtemp.format(fnty, ', '.join(map(str, args)))
+            msg = '\n'.join([head, desc])
+            raise TypingError(msg, loc=self.loc)
+        typeinfer.add_type(self.target, sig.return_type)
+        # If the function is a bound function and its receiver type
+        # was refined, propagate it.
+        if (isinstance(fnty, types.BoundFunction)
+            and sig.recvr is not None
+            and sig.recvr != fnty.this):
+            refined_this = context.unify_pairs(sig.recvr, fnty.this)
+            if refined_this.is_precise():
+                refined_fnty = types.BoundFunction(fnty.template,
+                                                   this=refined_this)
+                typeinfer.propagate_refined_type(self.func, refined_fnty)
+
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
 
 
 class IntrinsicCallConstrain(CallConstrain):
@@ -569,16 +579,8 @@ class TypeInferer(object):
         """
         # XXX why can't this be done on the fly?
         calltypes = utils.UniqueDict()
-        for call, args, kws in self.intrcalls:
-            if call.op in ('inplace_binop', 'binop', 'unary'):
-                fnty = call.fn
-            else:
-                fnty = call.op
-            args = tuple(typemap[a.name] for a in args)
-            assert not kws
-            signature = self.context.resolve_function_type(fnty, args, ())
-            assert signature is not None, (fnty, args)
-            calltypes[call] = signature
+        for call, constrain in self.intrcalls:
+            calltypes[call] = constrain.get_call_signature()
 
         for call, args, kws, vararg in self.usercalls:
             if isinstance(call.func, ir.Intrinsic):
@@ -779,7 +781,8 @@ class TypeInferer(object):
             # We assume type constraints for inplace operators to be the
             # same as for normal operators.  This may have to be refined in
             # the future.
-            self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
+            self.typeof_intrinsic_call(inst, target, expr.immutable_fn,
+                                       expr.lhs, expr.rhs)
         elif expr.op == 'unary':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.value)
         elif expr.op == 'static_getitem':
@@ -820,8 +823,7 @@ class TypeInferer(object):
         constrain = IntrinsicCallConstrain(target.name, func, args,
                                            kws=(), vararg=None, loc=inst.loc)
         self.constrains.append(constrain)
-        self.intrcalls.append((inst.value, args, ()))
-
+        self.intrcalls.append((inst.value, constrain))
 
 
 class NullDebug(object):

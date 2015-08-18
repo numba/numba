@@ -177,11 +177,11 @@ class PyLower(BaseLower):
         # None is returned by the yield expression
         return self.pyapi.make_none()
 
-    def lower_binop(self, expr, inplace=False):
+    def lower_binop(self, expr, op, inplace=False):
         lhs = self.loadvar(expr.lhs.name)
         rhs = self.loadvar(expr.rhs.name)
-        if expr.fn in PYTHON_OPMAP:
-            fname = PYTHON_OPMAP[expr.fn]
+        if op in PYTHON_OPMAP:
+            fname = PYTHON_OPMAP[op]
             fn = getattr(self.pyapi, fname)
             res = fn(lhs, rhs, inplace=inplace)
         else:
@@ -192,9 +192,9 @@ class PyLower(BaseLower):
 
     def lower_expr(self, expr):
         if expr.op == 'binop':
-            return self.lower_binop(expr, inplace=False)
+            return self.lower_binop(expr, expr.fn, inplace=False)
         elif expr.op == 'inplace_binop':
-            return self.lower_binop(expr, inplace=True)
+            return self.lower_binop(expr, expr.immutable_fn, inplace=True)
         elif expr.op == 'unary':
             value = self.loadvar(expr.value.name)
             if expr.fn == '-':
