@@ -773,9 +773,9 @@ class Lower(BaseLower):
         # Store variable
         ptr = self.getvar(name)
         if value.type != ptr.type.pointee:
-            msg = ("Storing {value.type} to ptr of {ptr.type.pointee}. "
+            msg = ("Storing {value.type} to ptr of {ptr.type.pointee} ('{name}'). "
                    "FE type {fetype}").format(value=value, ptr=ptr,
-                                              fetype=fetype)
+                                              fetype=fetype, name=name)
             raise AssertionError(msg)
 
         self.builder.store(value, ptr)

@@ -131,6 +131,7 @@ class Propagate(object):
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
         typeinfer.copy_type(self.src, self.dst)
+        # If `dst` is refined, notify us
         typeinfer.refine_map[self.dst] = self
 
     def refine(self, typeinfer, target_type):
@@ -457,9 +458,10 @@ class TypeInferer(object):
         # Target var -> constraint with refine hook
         self.refine_map = {}
 
-    def dump(self):
-        print('---- type variables ----')
-        pprint(list(six.itervalues(self.typevars)))
+        if config.DEBUG or config.DEBUG_TYPEINFER:
+            self.debug = TypeInferDebug(self)
+        else:
+            self.debug = NullDebug()
 
     def _mangle_arg_name(self, name):
         # Disambiguise argument name
@@ -473,7 +475,7 @@ class TypeInferer(object):
     def seed_type(self, name, typ):
         """All arguments should be seeded.
         """
-        self.typevars[name].lock(typ)
+        self.lock_type(name, typ)
 
     def seed_return(self, typ):
         """Seeding of return value is optional.
@@ -481,7 +483,7 @@ class TypeInferer(object):
         for blk in utils.itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
-                self.typevars[inst.value.name].lock(typ)
+                self.lock_type(inst.value.name, typ)
 
     def build_constrain(self):
         for blk in utils.itervalues(self.blocks):
@@ -491,20 +493,16 @@ class TypeInferer(object):
     def propagate(self):
         newtoken = self.get_state_token()
         oldtoken = None
-        if config.DEBUG:
-            self.dump()
         # Since the number of types are finite, the typesets will eventually
         # stop growing.
         while newtoken != oldtoken:
-            if config.DEBUG:
-                print("propagate".center(80, '-'))
+            self.debug.propagate_started()
             oldtoken = newtoken
             # Errors can appear when the type set is incomplete; only
             # raise them when there is no progress anymore.
             errors = self.constrains.propagate(self)
             newtoken = self.get_state_token()
-            if config.DEBUG:
-                self.dump()
+            self.debug.propagate_finished()
         if errors:
             raise errors[0]
 
@@ -518,8 +516,10 @@ class TypeInferer(object):
 
     def copy_type(self, src_var, dest_var):
         unified = self.typevars[dest_var].union(self.typevars[src_var])
-        if unified is not None:
-            self.propagate_refined_type(src_var, unified)
+
+    def lock_type(self, var, tp):
+        tv = self.typevars[var]
+        tv.lock(tp)
 
     def propagate_refined_type(self, updated_var, updated_type):
         source_constraint = self.refine_map.get(updated_var)
@@ -555,6 +555,9 @@ class TypeInferer(object):
         fntys = self.get_function_types(typdict)
         if self.generator_info:
             retty = self.get_generator_type(typdict, retty)
+
+        self.debug.unify_finished(typdict, retty, fntys)
+
         return typdict, retty, fntys
 
     def get_generator_type(self, typdict, retty):
@@ -711,7 +714,7 @@ class TypeInferer(object):
                                          loc=inst.loc))
 
     def typeof_const(self, inst, target, const):
-        self.typevars[target.name].lock(self.resolve_value_type(inst, const))
+        self.lock_type(target.name, self.resolve_value_type(inst, const))
 
     def typeof_yield(self, inst, target, yield_):
         # Sending values into generators isn't supported.
@@ -743,7 +746,7 @@ class TypeInferer(object):
 
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)
-            self.typevars[target.name].lock(typ)
+            self.lock_type(target.name, typ)
             self.assumed_immutables.add(inst)
         else:
             raise TypingError("Untyped global name '%s'" % gvar.name,
@@ -821,3 +824,39 @@ class TypeInferer(object):
                                            kws=(), vararg=None, loc=inst.loc)
         self.constrains.append(constrain)
         self.intrcalls.append((inst.value, constrain))
+
+
+class NullDebug(object):
+
+    def propagate_started(self):
+        pass
+
+    def propagate_finished(self):
+        pass
+
+    def unify_finished(self, typdict, retty, fntys):
+        pass
+
+
+class TypeInferDebug(object):
+
+    def __init__(self, typeinfer):
+        self.typeinfer = typeinfer
+
+    def _dump_state(self):
+        print('---- type variables ----')
+        pprint([v for k, v in sorted(self.typeinfer.typevars.items())])
+
+    def propagate_started(self):
+        print("propagate".center(80, '-'))
+
+    def propagate_finished(self):
+        self._dump_state()
+
+    def unify_finished(self, typdict, retty, fntys):
+        print("Variable types".center(80, "-"))
+        pprint(typdict)
+        print("Return type".center(80, "-"))
+        pprint(retty)
+        print("Call types".center(80, "-"))
+        pprint(fntys)
