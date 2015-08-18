@@ -139,13 +139,17 @@ def choose_result_bitwidth(*inputs):
     return max(types.intp.bitwidth, *(tp.bitwidth for tp in inputs))
 
 def choose_result_int(*inputs):
+    """
+    Choose the integer result type for an operation on integer inputs,
+    according to the integer typing NBEP.
+    """
     bitwidth = choose_result_bitwidth(*inputs)
     signed = any(tp.signed for tp in inputs)
     return types.Integer.from_bitwidth(bitwidth, signed)
 
 
 # The "machine" integer types to take into consideration for operator typing
-# (according to NBEP #XX)
+# (according to the integer typing NBEP)
 machine_ints = (
     sorted(set((types.intp, types.int64))) +
     sorted(set((types.uintp, types.uint64)))
