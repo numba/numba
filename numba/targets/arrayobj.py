@@ -674,7 +674,11 @@ def array_reshape(context, builder, sig, args):
 def _change_dtype(context, builder, oldty, newty, ary):
     """
     Attempt to fix up *ary* for switching from *oldty* to *newty*.
-    Non-zero is returned on success.
+
+    See Numpy's array_descr_set()
+    (np/core/src/multiarray/getset.c).
+    Attempt to fix the array's shape and strides for a new dtype.
+    False is returned on failure, True on success.
     """
     assert oldty.ndim == newty.ndim
     assert oldty.layout == newty.layout
