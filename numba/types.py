@@ -898,14 +898,7 @@ class BaseTuple(Type):
     """
 
 
-class UniTuple(Sequence, BaseTuple):
-
-    def __init__(self, dtype, count):
-        self.dtype = dtype
-        self.count = count
-        name = "(%s x %d)" % (dtype, count)
-        super(UniTuple, self).__init__(name, param=True)
-        self._iterator_type = UniTupleIter(self)
+class _HomogenousTuple(Sequence, BaseTuple):
 
     @property
     def iterator_type(self):
@@ -927,12 +920,22 @@ class UniTuple(Sequence, BaseTuple):
         return self.count
 
     @property
-    def key(self):
-        return self.dtype, self.count
-
-    @property
     def types(self):
         return (self.dtype,) * self.count
+
+
+class UniTuple(_HomogenousTuple):
+
+    def __init__(self, dtype, count):
+        self.dtype = dtype
+        self.count = count
+        name = "(%s x %d)" % (dtype, count)
+        super(UniTuple, self).__init__(name, param=True)
+        self._iterator_type = UniTupleIter(self)
+
+    @property
+    def key(self):
+        return self.dtype, self.count
 
     def unify(self, typingctx, other):
         """
@@ -964,13 +967,7 @@ class UniTupleIter(SimpleIteratorType):
         return self.unituple
 
 
-class Tuple(BaseTuple):
-
-    def __init__(self, types):
-        self.types = tuple(types)
-        self.count = len(self.types)
-        name = "(%s)" % ', '.join(str(i) for i in self.types)
-        super(Tuple, self).__init__(name, param=True)
+class _HeterogenousTuple(BaseTuple):
 
     def __getitem__(self, i):
         """
@@ -982,12 +979,21 @@ class Tuple(BaseTuple):
         # Beware: this makes Tuple(()) false-ish
         return len(self.types)
 
+    def __iter__(self):
+        return iter(self.types)
+
+
+class Tuple(_HeterogenousTuple):
+
+    def __init__(self, types):
+        self.types = tuple(types)
+        self.count = len(self.types)
+        name = "(%s)" % ', '.join(str(i) for i in self.types)
+        super(Tuple, self).__init__(name, param=True)
+
     @property
     def key(self):
         return self.types
-
-    def __iter__(self):
-        return iter(self.types)
 
     def unify(self, typingctx, other):
         """
@@ -1011,6 +1017,39 @@ class Tuple(BaseTuple):
             if any(kind is None for kind in kinds):
                 return
             return max(kinds)
+
+
+class BaseNamedTuple(BaseTuple):
+    pass
+
+
+class NamedUniTuple(_HomogenousTuple, BaseNamedTuple):
+
+    def __init__(self, dtype, count, cls):
+        self.dtype = dtype
+        self.count = count
+        self.fields = tuple(cls._fields)
+        name = "%s(%s x %d)" % (cls.__name__, dtype, count)
+        super(NamedUniTuple, self).__init__(name, param=True)
+        self._iterator_type = UniTupleIter(self)
+
+    @property
+    def key(self):
+        return self.fields, self.dtype, self.count
+
+
+class NamedTuple(_HeterogenousTuple, BaseNamedTuple):
+
+    def __init__(self, types, cls):
+        self.types = tuple(types)
+        self.count = len(self.types)
+        self.fields = tuple(cls._fields)
+        name = "%s(%s)" % (cls.__name__, ', '.join(str(i) for i in self.types))
+        super(NamedTuple, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.fields, self.types
 
 
 class List(MutableSequence):

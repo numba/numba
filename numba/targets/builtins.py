@@ -7,8 +7,8 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from .imputils import (builtin, builtin_attr, implement, impl_attribute,
-                       iternext_impl, struct_factory, impl_ret_borrowed,
-                       impl_ret_untracked)
+                       impl_attribute_generic, iternext_impl, struct_factory,
+                       impl_ret_borrowed, impl_ret_untracked)
 from . import optional
 from .. import typing, types, cgutils, utils, intrinsics
 
@@ -1179,6 +1179,7 @@ def make_unituple_iter(tupiter):
 
 @builtin
 @implement('getiter', types.Kind(types.UniTuple))
+@implement('getiter', types.Kind(types.NamedUniTuple))
 def getiter_unituple(context, builder, sig, args):
     [tupty] = sig.args
     [tup] = args
@@ -1231,6 +1232,7 @@ def iternext_unituple(context, builder, sig, args, result):
 
 @builtin
 @implement('getitem', types.Kind(types.UniTuple), types.intp)
+@implement('getitem', types.Kind(types.NamedUniTuple), types.intp)
 def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
@@ -1519,6 +1521,7 @@ def array_ravel_impl(context, builder, sig, args):
 
 
 # -----------------------------------------------------------------------------
+# Tuples
 
 @builtin
 @implement(types.len_type, types.Kind(types.BaseTuple))
@@ -1594,3 +1597,13 @@ def tuple_gt(context, builder, sig, args):
 def tuple_ge(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '>=', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@builtin_attr
+@impl_attribute_generic(types.Kind(types.BaseNamedTuple))
+def array_record_getattr(context, builder, typ, value, attr):
+    """
+    Fetch a namedtuple's field.
+    """
+    index = typ.fields.index(attr)
+    return builder.extract_value(value, index)

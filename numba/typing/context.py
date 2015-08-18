@@ -128,7 +128,12 @@ class BaseContext(object):
             attrinfo = self.attributes[value]
         except KeyError:
             if value.is_parametric:
-                attrinfo = self.attributes[type(value)]
+                for cls in type(value).__mro__:
+                    if cls in self.attributes:
+                        attrinfo = self.attributes[cls]
+                        break
+                else:
+                    raise
             elif isinstance(value, types.Module):
                 attrty = self.resolve_module_constants(value, attr)
                 if attrty is not None:
@@ -195,13 +200,13 @@ class BaseContext(object):
 
         try:
             # Try to look up target specific typing information
-            return self.get_global_type(val)
+            return self._get_global_type(val)
         except KeyError:
             pass
 
         return None
 
-    def get_global_type(self, gv):
+    def _get_global_type(self, gv):
         try:
             return self._lookup_global(gv)
         except KeyError:

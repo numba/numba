@@ -367,7 +367,7 @@ class BaseContext(object):
             const = Constant.struct([real, imag])
             return const
 
-        elif isinstance(ty, types.Tuple):
+        elif isinstance(ty, (types.Tuple, types.NamedTuple)):
             consts = [self.get_constant_generic(builder, ty.types[i], v)
                       for i, v in enumerate(val)]
             return Constant.struct(consts)

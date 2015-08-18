@@ -64,3 +64,19 @@ class DelItemSequence(AbstractTemplate):
         if isinstance(seq, types.MutableSequence):
             idx = normalize_1d_index(idx)
             return signature(types.none, seq, idx)
+
+
+# --------------------------------------------------------------------------
+# named tuples
+
+@builtin_attr
+class NamedTupleAttribute(AttributeTemplate):
+    key = types.BaseNamedTuple
+
+    def generic_resolve(self, tup, attr):
+        # Resolution of other attributes
+        try:
+            index = tup.fields.index(attr)
+        except ValueError:
+            return
+        return tup[index]
