@@ -279,6 +279,21 @@ def merge_compute_minrun(n):
     return n + r
 
 
+MIN_GALLOP = 7
+MERGESTATE_TEMP_SIZE = 256
 
-# A mergestate is a (min_gallop, temp, pending) tuple
+# A mergestate is a (min_gallop, temp_keys, temp_values, pending) tuple, where:
+# - min_gallop is an integer controlling when we get into galloping mode
+# - temp_keys is a temp list for merging keys
+# - temp_values is a temp list for merging values, if needed
+# - pending is a stack of (start, stop) tuples indicating pending runs to be merged
+
+def merge_init(keys, values):
+    temp_keys = [keys[0]] * MERGESTATE_TEMP_SIZE
+    if values:
+        temp_values = [values[0]] * MERGESTATE_TEMP_SIZE
+    else:
+        temp_values = values[:]  # for typing
+    pending = [(0, 0)] * 0
+    return (MIN_GALLOP, temp_keys, temp_values, pending)
 
