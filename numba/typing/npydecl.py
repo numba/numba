@@ -206,6 +206,23 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         return sig
 
 
+class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
+    _op_map = {
+        '+=': "add",
+        '-=': "subtract",
+        '*=': "multiply",
+        '/=': "true_divide",
+       '//=': "floor_divide",
+        '%=': "remainder",
+       '**=': "power",
+       '<<=': "left_shift",
+       '>>=': "right_shift",
+        '&=': "bitwise_and",
+        '|=': "bitwise_or",
+        '^=': "bitwise_xor",
+            }
+
+
 class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
     _op_map = {
         # Positive is a special case since there is no Numpy ufunc
@@ -295,6 +312,7 @@ supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 
 NumpyRulesUnaryArrayOperator.install_operations()
 NumpyRulesArrayOperator.install_operations()
+NumpyRulesInplaceArrayOperator.install_operations()
 
 supported_array_operators = set(
     NumpyRulesUnaryArrayOperator._op_map.keys()).union(

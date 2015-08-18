@@ -55,6 +55,14 @@ class CompilationCache(object):
             self.cr_cache[cache_key] = cr
         return cr
 
+    def compile_no_cache(self, func, args, return_type=None, flags=DEFAULT_FLAGS):
+        """
+        Compile the function without caching it.
+        """
+        cr = compile_extra(self.typingctx, self.targetctx, func,
+                            args, return_type, flags, locals={})
+        return cr
+
 
 class TestCase(unittest.TestCase):
 

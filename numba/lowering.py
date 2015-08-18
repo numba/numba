@@ -422,6 +422,18 @@ class Lower(BaseLower):
         return self.context.cast(self.builder, res,
                                  signature.return_type, resty)
 
+
+    def lower_inplace_binop(self, resty, expr):
+        lhs = expr.lhs
+        lty = self.typeof(lhs.name)
+        # inplace operators on non-mutable types reuse the same
+        # definition as the corresponding copying operators.
+        if not lty.mutable:
+            expr.fn = expr.fn[:-1] # strip the right '='
+            return self.lower_binop(resty, expr)
+        else:
+            return self.lower_binop(resty, expr)
+
     def _cast_var(self, var, ty):
         """
         Cast a Numba IR variable to the given Numba type, returning a
@@ -568,11 +580,7 @@ class Lower(BaseLower):
         if expr.op == 'binop':
             return self.lower_binop(resty, expr)
         elif expr.op == 'inplace_binop':
-            lty = self.typeof(expr.lhs.name)
-            if not lty.mutable:
-                # inplace operators on non-mutable types reuse the same
-                # definition as the corresponding copying operators.
-                return self.lower_binop(resty, expr)
+            return self.lower_inplace_binop(resty, expr)
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)
             typ = self.typeof(expr.value.name)

@@ -1027,43 +1027,43 @@ class Interpreter(object):
         self._binop('^', lhs, rhs, res)
 
     def op_INPLACE_ADD(self, inst, lhs, rhs, res):
-        self._inplace_binop('+', lhs, rhs, res)
+        self._inplace_binop('+=', lhs, rhs, res)
 
     def op_INPLACE_SUBTRACT(self, inst, lhs, rhs, res):
-        self._inplace_binop('-', lhs, rhs, res)
+        self._inplace_binop('-=', lhs, rhs, res)
 
     def op_INPLACE_MULTIPLY(self, inst, lhs, rhs, res):
-        self._inplace_binop('*', lhs, rhs, res)
+        self._inplace_binop('*=', lhs, rhs, res)
 
     def op_INPLACE_DIVIDE(self, inst, lhs, rhs, res):
-        self._inplace_binop('/?', lhs, rhs, res)
+        self._inplace_binop('/?=', lhs, rhs, res)
 
     def op_INPLACE_TRUE_DIVIDE(self, inst, lhs, rhs, res):
-        self._inplace_binop('/', lhs, rhs, res)
+        self._inplace_binop('/=', lhs, rhs, res)
 
     def op_INPLACE_FLOOR_DIVIDE(self, inst, lhs, rhs, res):
-        self._inplace_binop('//', lhs, rhs, res)
+        self._inplace_binop('//=', lhs, rhs, res)
 
     def op_INPLACE_MODULO(self, inst, lhs, rhs, res):
-        self._inplace_binop('%', lhs, rhs, res)
+        self._inplace_binop('%=', lhs, rhs, res)
 
     def op_INPLACE_POWER(self, inst, lhs, rhs, res):
-        self._inplace_binop('**', lhs, rhs, res)
+        self._inplace_binop('**=', lhs, rhs, res)
 
     def op_INPLACE_LSHIFT(self, inst, lhs, rhs, res):
-        self._inplace_binop('<<', lhs, rhs, res)
+        self._inplace_binop('<<=', lhs, rhs, res)
 
     def op_INPLACE_RSHIFT(self, inst, lhs, rhs, res):
-        self._inplace_binop('>>', lhs, rhs, res)
+        self._inplace_binop('>>=', lhs, rhs, res)
 
     def op_INPLACE_AND(self, inst, lhs, rhs, res):
-        self._inplace_binop('&', lhs, rhs, res)
+        self._inplace_binop('&=', lhs, rhs, res)
 
     def op_INPLACE_OR(self, inst, lhs, rhs, res):
-        self._inplace_binop('|', lhs, rhs, res)
+        self._inplace_binop('|=', lhs, rhs, res)
 
     def op_INPLACE_XOR(self, inst, lhs, rhs, res):
-        self._inplace_binop('^', lhs, rhs, res)
+        self._inplace_binop('^=', lhs, rhs, res)
 
     def op_JUMP_ABSOLUTE(self, inst):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
