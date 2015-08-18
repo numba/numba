@@ -1211,23 +1211,35 @@ class TestMixedInts(TestCase):
     unsigned_pairs = [(u, v) for u, v in type_pairs
                       if not (u.signed or v.signed)]
 
+    def get_numpy_signed_upcast(self, *vals):
+        bitwidth = max(v.dtype.itemsize * 8 for v in vals)
+        bitwidth = max(bitwidth, types.intp.bitwidth)
+        return getattr(np, "int%d" % bitwidth)
+
+    def get_numpy_unsigned_upcast(self, *vals):
+        bitwidth = max(v.dtype.itemsize * 8 for v in vals)
+        bitwidth = max(bitwidth, types.intp.bitwidth)
+        return getattr(np, "uint%d" % bitwidth)
+
     def get_typed_int(self, typ, val):
         return getattr(np, typ.name)(val)
 
     def get_control_signed(self, opname):
         op = getattr(operator, opname)
         def control_signed(a, b):
-            return op(np.intp(a), np.intp(b))
+            tp = self.get_numpy_signed_upcast(a, b)
+            return op(tp(a), tp(b))
         return control_signed
 
     def get_control_unsigned(self, opname):
         op = getattr(operator, opname)
         def control_unsigned(a, b):
-            return op(np.uintp(a), np.uintp(b))
+            tp = self.get_numpy_unsigned_upcast(a, b)
+            return op(tp(a), tp(b))
         return control_unsigned
 
     def run_binary(self, pyfunc, control_func, operands, types,
-                   expected_type=int):
+                   expected_type=int, **assertPreciseEqualArgs):
         if pyfunc is NotImplemented:
             self.skipTest("test irrelevant on this version of Python")
 
@@ -1241,9 +1253,10 @@ class TestMixedInts(TestCase):
                 expected = control_func(x, y)
                 got = cfunc(x, y)
                 self.assertIsInstance(got, expected_type)
-                self.assertTrue(np.all(got == expected),
-                                "mismatch for (%r, %r) with types %s: %r != %r"
-                                % (x, y, (xt, yt), got, expected))
+                msg = ("mismatch for (%r, %r) with types %s"
+                       % (x, y, (xt, yt)))
+                self.assertPreciseEqual(got, expected, msg=msg,
+                                        **assertPreciseEqualArgs)
 
     def run_unary(self, pyfunc, control_func, operands, types,
                   expected_type=int):
@@ -1294,10 +1307,11 @@ class TestMixedInts(TestCase):
 
         # Now test all non-zero values, but only with signed types
         def control_signed(a, b):
+            tp = self.get_numpy_signed_upcast(a, b)
             if b >= 0:
-                return np.intp(a) ** np.intp(b)
+                return tp(a) ** tp(b)
             else:
-                inv = np.intp(a) ** np.intp(-b)
+                inv = tp(a) ** tp(-b)
                 if inv == 0:
                     # Overflow
                     return 0
@@ -1314,10 +1328,13 @@ class TestMixedInts(TestCase):
         samples = [x for x in self.int_samples if x != 0]
         pyfunc = self.op.truediv_usecase
 
+        # Note: there can be precision issues on x87
+        # e.g. for `1 / 18446744073709541616`
+        # -> 0x1.0000000000002p-64 vs. 0x1.0000000000003p-64.
         self.run_binary(pyfunc, control, samples, self.signed_pairs,
-                        expected_type=float)
+                        expected_type=float, prec='double')
         self.run_binary(pyfunc, control, samples, self.unsigned_pairs,
-                        expected_type=float)
+                        expected_type=float, prec='double')
 
     def test_and(self):
         self.run_arith_binop(self.op.bitwise_and_usecase, 'and_', self.int_samples)
@@ -1329,16 +1346,20 @@ class TestMixedInts(TestCase):
         self.run_arith_binop(self.op.bitwise_xor_usecase, 'xor', self.int_samples)
 
     def run_shift_binop(self, pyfunc, opname):
-        samples = [x for x in self.int_samples if x >= 0]
-        signed_pairs = [(u, v) for u, v in self.type_pairs
-                        if u.signed]
-        unsigned_pairs = [(u, v) for u, v in self.type_pairs
-                          if not u.signed]
+        opfunc = getattr(operator, opname)
+        def control_signed(a, b):
+            tp = self.get_numpy_signed_upcast(a, b)
+            return opfunc(tp(a), tp(b))
+        def control_unsigned(a, b):
+            tp = self.get_numpy_unsigned_upcast(a, b)
+            return opfunc(tp(a), tp(b))
 
-        self.run_binary(pyfunc, self.get_control_signed(opname),
-                        samples, signed_pairs)
-        self.run_binary(pyfunc, self.get_control_unsigned(opname),
-                        samples, unsigned_pairs)
+        samples = [x for x in self.int_samples if x >= 0]
+
+        self.run_binary(pyfunc, control_signed,
+                        samples, self.signed_pairs)
+        self.run_binary(pyfunc, control_unsigned,
+                        samples, self.unsigned_pairs)
 
     def test_lshift(self):
         self.run_shift_binop(self.op.bitshift_left_usecase, 'lshift')
@@ -1356,9 +1377,11 @@ class TestMixedInts(TestCase):
 
     def test_unary_negative(self):
         def control_signed(a):
-            return np.intp(-a)
+            tp = self.get_numpy_signed_upcast(a)
+            return tp(-a)
         def control_unsigned(a):
-            return np.uintp(-a)
+            tp = self.get_numpy_unsigned_upcast(a)
+            return tp(-a)
         samples = self.int_samples
         pyfunc = self.op.negate_usecase
 
@@ -1367,9 +1390,11 @@ class TestMixedInts(TestCase):
 
     def test_invert(self):
         def control_signed(a):
-            return np.intp(~a)
+            tp = self.get_numpy_signed_upcast(a)
+            return tp(~a)
         def control_unsigned(a):
-            return np.uintp(~a)
+            tp = self.get_numpy_unsigned_upcast(a)
+            return tp(~a)
         samples = self.int_samples
         pyfunc = self.op.bitwise_not_usecase
 

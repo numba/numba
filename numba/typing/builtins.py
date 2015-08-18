@@ -135,11 +135,13 @@ class PairSecond(AbstractTemplate):
             return signature(pair.second_type, pair)
 
 
+def choose_result_bitwidth(*inputs):
+    return max(types.intp.bitwidth, *(tp.bitwidth for tp in inputs))
+
 def choose_result_int(*inputs):
-    bitwidth = max(types.intp.bitwidth, *(tp.bitwidth for tp in inputs))
+    bitwidth = choose_result_bitwidth(*inputs)
     signed = any(tp.signed for tp in inputs)
-    name = ('int%d' if signed else 'uint%d') % bitwidth
-    return getattr(types, name)
+    return types.Integer.from_bitwidth(bitwidth, signed)
 
 
 # The "machine" integer types to take into consideration for operator typing
@@ -195,7 +197,7 @@ class BinOpTrueDiv(ConcreteTemplate):
     key = "/"
     cases = [signature(types.float64, op1, op2)
              for op1, op2 in itertools.product(machine_ints, machine_ints)]
-    cases = [signature(op, op, op) for op in sorted(types.real_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 
@@ -210,8 +212,6 @@ class BinOpFloorDiv(ConcreteTemplate):
 class BinOpPower(ConcreteTemplate):
     key = "**"
     cases = list(integer_binop_cases)
-    #cases = [signature(op, op, op)
-             #for op in (types.intp, types.int64)]
     cases += [signature(types.float64, types.float64, op)
               for op in sorted(types.signed_domain)]
     cases += [signature(types.float64, types.float64, op)
@@ -230,8 +230,7 @@ builtin_global(pow, types.Function(PowerBuiltin))
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
-    cases = [signature(op, op, types.uintp)
-             for op in machine_ints]
+    cases = list(integer_binop_cases)
 
 
 @builtin

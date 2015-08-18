@@ -115,9 +115,9 @@ def int_floordiv_impl(context, builder, sig, args):
     cgutils.guard_zero(context, builder, b,
                        (ZeroDivisionError, "integer division by zero"))
     if sig.return_type.signed:
-        res, _ = int_divmod(context, builder, va, vb)
+        res, _ = int_divmod(context, builder, a, b)
     else:
-        res = builder.udiv(va, vb)
+        res = builder.udiv(a, b)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -126,7 +126,6 @@ def int_floordiv_impl(context, builder, sig, args):
 def int_truediv_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
-    print("sig:", sig)
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
     cgutils.guard_zero(context, builder, b,
@@ -138,13 +137,16 @@ def int_truediv_impl(context, builder, sig, args):
 @builtin
 @implement('%', types.Kind(types.Integer), types.Kind(types.Integer))
 def int_rem_impl(context, builder, sig, args):
-    x, y = args
-    cgutils.guard_zero(context, builder, y,
+    [va, vb] = args
+    [ta, tb] = sig.args
+    a = context.cast(builder, va, ta, sig.return_type)
+    b = context.cast(builder, vb, tb, sig.return_type)
+    cgutils.guard_zero(context, builder, b,
                        (ZeroDivisionError, "integer modulo by zero"))
     if sig.return_type.signed:
-        _, res = int_divmod(context, builder, x, y)
+        _, res = int_divmod(context, builder, a, b)
     else:
-        res = builder.urem(x, y)
+        res = builder.urem(a, b)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -153,9 +155,12 @@ def int_power_impl(context, builder, sig, args):
     a ^ b, where a is an integer or real, and b an integer
     """
     is_integer = isinstance(sig.args[0], types.Integer)
+    tp = sig.return_type
 
     def int_power(a, b):
-        r = 1
+        # Ensure computations are done with a large enough width
+        r = tp(1)
+        a = tp(a)
         if b < 0:
             invert = True
             exp = -b
@@ -180,8 +185,7 @@ def int_power_impl(context, builder, sig, args):
 
         return 1.0 / r if invert else r
 
-    res = context.compile_internal(builder, int_power, sig, args,
-                                   locals={'r': sig.return_type})
+    res = context.compile_internal(builder, int_power, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -252,25 +256,21 @@ def uint_abs_impl(context, builder, sig, args):
 def int_shl_impl(context, builder, sig, args):
     [valty, amtty] = sig.args
     [val, amt] = args
+    val = context.cast(builder, val, valty, sig.return_type)
+    amt = context.cast(builder, amt, amtty, sig.return_type)
     res = builder.shl(val, amt)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_lshr_impl(context, builder, sig, args):
+def int_shr_impl(context, builder, sig, args):
     [valty, amtty] = sig.args
     [val, amt] = args
     val = context.cast(builder, val, valty, sig.return_type)
     amt = context.cast(builder, amt, amtty, sig.return_type)
-    res = builder.lshr(val, amt)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-def int_ashr_impl(context, builder, sig, args):
-    [valty, amtty] = sig.args
-    [val, amt] = args
-    val = context.cast(builder, val, valty, sig.return_type)
-    amt = context.cast(builder, amt, amtty, sig.return_type)
-    res = builder.ashr(val, amt)
+    if sig.return_type.signed:
+        res = builder.ashr(val, amt)
+    else:
+        res = builder.lshr(val, amt)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -390,7 +390,8 @@ def _implement_integer_operators():
     builtin(implement('==', ty, ty)(int_eq_impl))
     builtin(implement('!=', ty, ty)(int_ne_impl))
 
-    builtin(implement('<<', ty, types.uintp)(int_shl_impl))
+    builtin(implement('<<', ty, ty)(int_shl_impl))
+    builtin(implement('>>', ty, ty)(int_shr_impl))
 
     builtin(implement('&', ty, ty)(int_and_impl))
     builtin(implement('|', ty, ty)(int_or_impl))
@@ -412,8 +413,6 @@ def _implement_integer_operators():
         builtin(implement('>=', ty, ty)(int_uge_impl))
         builtin(implement('**', types.float64, ty)(int_power_impl))
         builtin(implement(pow, types.float64, ty)(int_power_impl))
-        # logical shift for unsigned
-        builtin(implement('>>', ty, types.uintp)(int_lshr_impl))
         builtin(implement(types.abs_type, ty)(uint_abs_impl))
 
     for ty in types.signed_domain:
@@ -424,8 +423,6 @@ def _implement_integer_operators():
         builtin(implement(types.abs_type, ty)(int_abs_impl))
         builtin(implement('**', types.float64, ty)(int_power_impl))
         builtin(implement(pow, types.float64, ty)(int_power_impl))
-        # arithmetic shift for signed
-        builtin(implement('>>', ty, types.uintp)(int_ashr_impl))
 
 _implement_integer_operators()
 
