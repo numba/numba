@@ -16,6 +16,7 @@ from __future__ import print_function, division, absolute_import
 
 from pprint import pprint
 import itertools
+import traceback
 
 from numba import ir, types, utils, config, six
 from .errors import TypingError
@@ -110,9 +111,11 @@ class ConstrainNetwork(object):
                 constrain(typeinfer)
             except TypingError as e:
                 errors.append(e)
-            except Exception as e:
-                msg = "Internal error at {con}:\n{err}"
-                e = TypingError(msg.format(con=constrain, err=e),
+            except Exception:
+                msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
+                e = TypingError(msg.format(con=constrain,
+                                           err=traceback.format_exc(),
+                                           sep='--%<' +'-' * 65),
                                 loc=constrain.loc)
                 errors.append(e)
         return errors

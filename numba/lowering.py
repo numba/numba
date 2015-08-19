@@ -338,7 +338,7 @@ class Lower(BaseLower):
                 # Try to infer the args tuple
                 args = tuple(self.interp.get_definition(arg).infer_constant()
                              for arg in excdef.args)
-            elif isinstance(exctype, types.ExceptionType):
+            elif isinstance(exctype, types.ExceptionClass):
                 args = None
             else:
                 raise NotImplementedError("cannot raise value of type %s"
@@ -721,10 +721,7 @@ class Lower(BaseLower):
             itemtys = [self.typeof(i.name) for i in expr.items]
             castvals = [self.context.cast(self.builder, val, fromty, toty)
                         for val, toty, fromty in zip(itemvals, resty, itemtys)]
-            tup = self.context.get_constant_undef(resty)
-            for i in range(len(castvals)):
-                tup = self.builder.insert_value(tup, castvals[i], i)
-
+            tup = self.context.make_tuple(self.builder, resty, castvals)
             self.incref(resty, tup)
             return tup
 
