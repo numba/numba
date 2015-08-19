@@ -10,7 +10,32 @@ import numba.unittest_support as unittest
 from numba import testing
 from .support import TestCase, MemoryLeakMixin
 
-from numba.targets.timsort import py_timsort, jitted_timsort, MergeState, MergeRun
+from numba.targets.timsort import (
+    py_timsort, jit_timsort, MergeState, MergeRun,
+    TimsortImplementation)
+
+
+jit_binarysort = jit_timsort.binarysort
+
+@jit(nopython=True)
+def tuple_binarysort(n, tup, lo, hi, start):
+    lkeys = list(tup)[:n]
+    lvalues = list(tup)[n:]
+    # XXX
+    # Wrapper generation needs list unboxing...
+    jit_binarysort(lkeys, lvalues, lo, hi, start)
+    return lkeys, lvalues
+
+def wrapped_binarysort(keys, values, lo, hi, start):
+    lkeys, lvalues = tuple_binarysort(len(keys), tuple(keys + values), lo, hi, start)
+    keys[:] = lkeys
+    values[:] = lvalues
+
+
+dct = jit_timsort._asdict()
+dct['binarysort'] = wrapped_binarysort
+
+wrapped_timsort = TimsortImplementation(**dct)
 
 
 class BaseTimsortTest(object):
@@ -83,7 +108,7 @@ class BaseTimsortTest(object):
         n = 20
         def check(l, n, start=0):
             res = l[:]
-            f(res, (), 0, n, start)
+            f(res, [], 0, n, start)
             self.assertSorted(l, res)
 
         f = self.timsort.binarysort
@@ -418,7 +443,7 @@ class TestTimsortPurePython(BaseTimsortTest, TestCase):
 
 #class TestTimsortNumba(BaseTimsortTest, TestCase):
 
-    #timsort = jitted_timsort
+    #timsort = wrapped_timsort
 
 
 if __name__ == '__main__':

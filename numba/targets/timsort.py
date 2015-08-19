@@ -910,4 +910,4 @@ def make_timsort_impl(wrap):
 
 py_timsort = make_timsort_impl(lambda f: f)
 
-jitted_timsort = make_timsort_impl(lambda f: numba.jit(nopython=True)(f))
+jit_timsort = make_timsort_impl(lambda f: numba.jit(nopython=True)(f))

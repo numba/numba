@@ -422,6 +422,29 @@ def box_list(c, typ, val):
     return obj
 
 
+# XXX unused but necessary
+@unbox(types.List)
+def unbox_List(c, typ, obj):
+    """
+    Convert list *obj* to a native list.
+    """
+    is_error = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+
+    nitems = c.pyapi.list_size(obj)
+    # XXX fails because of raising MemoryError with the wrong call conv
+    list = listobj.ListInstance.allocate(c.context, c.builder, typ, nitems)
+    list.size = nitems
+
+    with cgutils.for_range(c.builder, nitems) as index:
+        itemobj = c.pyapi.list_getitem(obj, index)
+        native = c.unbox(typ.dtype, itemobj)
+        c.builder.store(c.builder.or_(c.builder.load(is_error), native.is_error),
+                        is_error)
+        list.setitem(index, native.value)
+
+    return NativeValue(list.value, is_error=c.builder.load(is_error))
+
+
 #
 # Other types
 #
