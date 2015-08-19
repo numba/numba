@@ -228,30 +228,12 @@ class NamedTupleClass(Callable, Opaque):
 
     def __init__(self, instance_class):
         self.instance_class = instance_class
-        name = "%s" % (instance_class)
+        name = "class(%s)" % (instance_class)
         super(NamedTupleClass, self).__init__(name, param=True)
 
-    # XXX should get_call_type() be rewritten as an intrinsic "call"?
-    # that may ease typing...
-
     def get_call_type(self, context, args, kws):
-        from numba import typing
-        assert not kws
-        tys = args
-        # In sync with typing.typeof
-        homogenous = False
-        if tys:
-            first = tys[0]
-            for ty in tys[1:]:
-                if ty != first:
-                    break
-            else:
-                homogenous = True
-        if homogenous:
-            return_type = NamedUniTuple(first, len(tys), self.instance_class)
-        else:
-            return_type = NamedTuple(tys, self.instance_class)
-        return typing.signature(return_type, *args)
+        # Overriden by the __call__ constructor resolution in typing.collections
+        return None
 
     def get_call_signatures(self):
         return (), True

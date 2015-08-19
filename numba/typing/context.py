@@ -109,14 +109,23 @@ class BaseContext(object):
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
         """
-        if isinstance(func, types.Callable):
-            return func.get_call_type(self, args, kws)
-
         defns = self.functions[func]
         for defn in defns:
             res = defn.apply(args, kws)
             if res is not None:
                 return res
+
+        try:
+            func_type = self.resolve_getattr(func, "__call__")
+        except KeyError:
+            pass
+        else:
+            # The function has a __call__ method, type its call.
+            return self.resolve_function_type(func_type, args, kws)
+
+        if isinstance(func, types.Callable):
+            # XXX fold this into the __call__ attribute logic?
+            return func.get_call_type(self, args, kws)
 
     def resolve_getattr(self, value, attr):
         if isinstance(value, types.Record):
@@ -257,7 +266,7 @@ class BaseContext(object):
 
     def insert_attributes(self, at):
         key = at.key
-        assert key not in self.attributes, "Duplicated attributes template"
+        assert key not in self.attributes, "Duplicated attributes template %r" % (key,)
         self.attributes[key] = at
 
     def insert_function(self, ft):

@@ -33,10 +33,10 @@ else:
     intern = intern
 
 try:
-    from inspect import signature as pysignature
+    from inspect import Parameter, Signature, signature as pysignature
 except ImportError:
     try:
-        from funcsigs import signature as pysignature
+        from funcsigs import Parameter, Signature, signature as pysignature
     except ImportError:
         raise ImportError("please install the 'funcsigs' package "
                           "('pip install funcsigs')")

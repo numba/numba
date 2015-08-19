@@ -53,6 +53,9 @@ def le_usecase(a, b):
 def make_point(a, b, c):
     return Point(a, b, c)
 
+def make_point_kws(a, b, c):
+    return Point(z=c, y=b, x=a)
+
 
 class TestTupleReturn(TestCase):
 
@@ -247,16 +250,16 @@ class TestNamedTuple(TestCase):
         self._test_compare(le_usecase)
 
     def test_construct(self):
-        def check(pyfunc, cfunc):
+        def check(pyfunc):
+            cfunc = jit(nopython=True)(pyfunc)
             args = (4, 5, 6)
             expected = pyfunc(*args)
             got = cfunc(*args)
             self.assertIs(type(got), type(expected))
             self.assertPreciseEqual(got, expected)
 
-        pyfunc = make_point
-        cfunc = jit(nopython=True)(pyfunc)
-        check(pyfunc, cfunc)
+        check(make_point)
+        check(make_point_kws)
 
 
 if __name__ == '__main__':

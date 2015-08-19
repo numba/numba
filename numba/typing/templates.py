@@ -171,7 +171,6 @@ class CallableTemplate(FunctionTemplate):
     def apply(self, args, kws):
         generic = getattr(self, "generic")
         typer = generic()
-        pysig = utils.pysignature(typer)
         sig = typer(*args, **kws)
 
         # Unpack optional type if no matching signature
@@ -187,6 +186,12 @@ class CallableTemplate(FunctionTemplate):
                 sig = typer(*args, **kws)
             if sig is None:
                 return
+
+        # Get the pysig
+        try:
+            pysig = typer.pysig
+        except AttributeError:
+            pysig = utils.pysignature(typer)
 
         # Fold any keyword arguments
         bound = pysig.bind(*args, **kws)
