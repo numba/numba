@@ -292,7 +292,7 @@ MergeState = collections.namedtuple('MergeState',
 #  - *min_gallop* is an integer controlling when we get into galloping mode
 #  - *keys* is a temp list for merging keys
 #  - *values* is a temp list for merging values, if needed
-#  - *pending* is a stack of (start, stop) tuples indicating pending runs to be merged
+#  - *pending* is a stack of (start, size) tuples indicating pending runs to be merged
 
 def merge_init(keys):
     """
@@ -664,3 +664,50 @@ def merge_hi(ms, keys, values, ssa, na, ssb, nb):
         # A's front is already at the right place, do nothing
 
     return merge_adjust_gallop(ms, min_gallop)
+
+
+def merge_at(ms, keys, values, i):
+    """
+    Merge the two runs at stack indices i and i+1.
+
+    An updated MergeState is returned.
+    """
+    n = len(ms.pending)
+    assert n >= 2
+    assert i >= 0
+    assert i == n - 2 or i == n - 3, "merge_at(): bad arguments"
+
+    ssa, na = ms.pending[i]
+    ssb, nb = ms.pending[i + 1]
+    assert na > 0 and nb > 0
+    assert ssa + na == ssb, "merge_at(): stack invariant failure"
+
+    # Record the length of the combined runs; if i is the 3rd-last
+    # run now, also slide over the last run (which isn't involved
+    # in this merge).  The current run i+1 goes away in any case.
+    ms.pending[i] = ssa, na + nb
+    if i == n - 3:
+        ms.pending[i + 1] = ms.pending[i + 2]
+    ms.pending.pop()
+
+    # Where does b start in a?  Elements in a before that can be
+    # ignored (already in place).
+    k = gallop_right(keys[ssb], keys, ssa, ssa + na, ssa)
+    # [k, ssa + na) remains to be merged
+    na -= k - ssa
+    ssa = k
+    if na == 0:
+        return ms
+
+    # Where does a end in b?  Elements in b after that can be
+    # ignored (already in place).
+    k = gallop_left(keys[ssa + na - 1], keys, ssb, ssb + nb, ssb + nb - 1)
+    # [ssb, k) remains to be merged
+    nb = k - ssb
+
+    # Merge what remains of the runs, using a temp array with
+    # min(na, nb) elements.
+    if na <= nb:
+        return merge_lo(ms, keys, values, ssa, na, ssb, nb)
+    else:
+        return merge_hi(ms, keys, values, ssa, na, ssb, nb)

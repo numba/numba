@@ -262,23 +262,77 @@ class TestTimsortPurePython(TestCase):
         self.assertIs(new_ms.pending, ms.pending)
         self.assertGreaterEqual(new_ms.min_gallop, 1)
 
+    def make_sample_lists(self, n):
+        lists = []
+        for offset in (20, 120):
+            lists.append(self.sorted_list(n, offset))
+            lists.append(self.dupsorted_list(n, offset))
+        return lists
+
     def test_merge_lo_hi(self):
         f_lo = timsort.merge_lo
         f_hi = timsort.merge_hi
 
         # The larger sizes exercise galloping
         for (na, nb) in [(12, 16), (40, 40), (100, 110), (1000, 1100)]:
-            a_lists = []
-            b_lists = []
-            for offset in (20, 120):
-                a_lists.append(self.sorted_list(na, offset))
-                a_lists.append(self.dupsorted_list(na, offset))
-                b_lists.append(self.sorted_list(nb, offset))
-                b_lists.append(self.dupsorted_list(nb, offset))
-
-            for a, b in itertools.product(a_lists, b_lists):
+            for a, b in itertools.product(self.make_sample_lists(na),
+                                          self.make_sample_lists(nb)):
                 self.check_merge_lo_hi(f_lo, a, b)
                 self.check_merge_lo_hi(f_hi, b, a)
+
+    def check_merge_at(self, a, b):
+        f = timsort.merge_at
+        # Prepare the array to be sorted
+        na = len(a)
+        nb = len(b)
+        # Add sentinels at start and end, to check they weren't moved
+        orig_keys = [42] + a + b + [-42]
+        ssa = 1
+        ssb = ssa + na
+
+        stack_sentinels = [(-42, -42)] * 2
+
+        def run_merge_at(ms, keys, i):
+            new_ms = f(ms, keys, [], i)
+            self.assertEqual(keys[0], orig_keys[0])
+            self.assertEqual(keys[-1], orig_keys[-1])
+            self.assertEqual(keys[1:-1], sorted(orig_keys[1:-1]))
+            # Check stack state
+            self.assertIs(new_ms.pending, ms.pending)
+            self.assertEqual(ms.pending[i], (ssa, na + nb))
+            self.assertEqual(ms.pending[:i], stack_sentinels)
+
+        # First check with i == len(stack) - 2
+        keys = orig_keys[:]
+        ms = self.merge_init(keys)
+        # Push sentinels on stack, to check they weren't touched
+        ms.pending.extend(stack_sentinels)
+        i = len(ms.pending)
+        ms.pending.extend([(ssa, na), (ssb, nb)])
+        run_merge_at(ms, keys, i)
+        self.assertEqual(len(ms.pending), i + 1)
+
+        # Now check with i == len(stack) - 3
+        keys = orig_keys[:]
+        ms = self.merge_init(keys)
+        # Push sentinels on stack, to check they weren't touched
+        ms.pending.extend(stack_sentinels)
+        i = len(ms.pending)
+        ms.pending.extend([(ssa, na), (ssb, nb)])
+        # A last run (trivial here)
+        last_run = (ssb + nb, 1)
+        ms.pending.append(last_run)
+        run_merge_at(ms, keys, i)
+        self.assertEqual(len(ms.pending), i + 2)
+        self.assertEqual(ms.pending[-1], last_run)
+
+    def test_merge_at(self):
+        # The larger sizes exercise galloping
+        for (na, nb) in [(12, 16), (40, 40), (100, 110), (500, 510)]:
+            for a, b in itertools.product(self.make_sample_lists(na),
+                                          self.make_sample_lists(nb)):
+                self.check_merge_at(a, b)
+                self.check_merge_at(b, a)
 
 
 if __name__ == '__main__':
