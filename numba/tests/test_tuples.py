@@ -1,14 +1,19 @@
 from __future__ import print_function, division, absolute_import
 
+import collections
 import itertools
 
 import numpy
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import types
+from numba import jit, types
 from .support import TestCase
 
+
+Rect = collections.namedtuple('Rect', ('width', 'height'))
+
+Point = collections.namedtuple('Point', ('x', 'y', 'z'))
 
 def tuple_return_usecase(a, b):
     return a, b
@@ -44,6 +49,9 @@ def lt_usecase(a, b):
 
 def le_usecase(a, b):
     return a <= b
+
+def make_point(a, b, c):
+    return Point(a, b, c)
 
 
 class TestTupleReturn(TestCase):
@@ -164,6 +172,91 @@ class TestOperations(TestCase):
 
     def test_le(self):
         self._test_compare(le_usecase)
+
+
+class TestNamedTuple(TestCase):
+
+    def test_unpack(self):
+        def check(p):
+            for pyfunc in tuple_first, tuple_second:
+                cfunc = jit(nopython=True)(pyfunc)
+                self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogenous
+        check(Rect(4, 5))
+        # Heterogenous
+        check(Rect(4, 5.5))
+
+    def test_len(self):
+        def check(p):
+            pyfunc = len_usecase
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogenous
+        check(Rect(4, 5))
+        check(Point(4, 5, 6))
+        # Heterogenous
+        check(Rect(4, 5.5))
+        check(Point(4, 5.5, 6j))
+
+    def test_index(self):
+        pyfunc = tuple_index
+        cfunc = jit(nopython=True)(pyfunc)
+
+        p = Point(4, 5, 6)
+        for i in range(len(p)):
+            self.assertPreciseEqual(cfunc(p, i), pyfunc(p, i))
+
+    def _test_compare(self, pyfunc):
+        def eq(pyfunc, cfunc, args):
+            self.assertIs(cfunc(*args), pyfunc(*args),
+                          "mismatch for arguments %s" % (args,))
+
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Same-sized named tuples
+        for a, b in [((4, 5), (4, 5)),
+                     ((4, 5), (4, 6)),
+                     ((4, 6), (4, 5)),
+                     ((4, 5), (5, 4))]:
+            eq(pyfunc, cfunc, (Rect(*a), Rect(*b)))
+
+        # Different-sized named tuples
+        for a, b in [((4, 5), (4, 5, 6)),
+                     ((4, 5), (4, 4, 6)),
+                     ((4, 5), (4, 6, 7))]:
+            eq(pyfunc, cfunc, (Rect(*a), Point(*b)))
+
+    def test_eq(self):
+        self._test_compare(eq_usecase)
+
+    def test_ne(self):
+        self._test_compare(ne_usecase)
+
+    def test_gt(self):
+        self._test_compare(gt_usecase)
+
+    def test_ge(self):
+        self._test_compare(ge_usecase)
+
+    def test_lt(self):
+        self._test_compare(lt_usecase)
+
+    def test_le(self):
+        self._test_compare(le_usecase)
+
+    def test_construct(self):
+        def check(pyfunc, cfunc):
+            args = (4, 5, 6)
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertIs(type(got), type(expected))
+            self.assertPreciseEqual(got, expected)
+
+        pyfunc = make_point
+        cfunc = jit(nopython=True)(pyfunc)
+        check(pyfunc, cfunc)
 
 
 if __name__ == '__main__':
