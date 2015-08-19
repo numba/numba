@@ -77,6 +77,9 @@ def make_array_view(newtype):
         return arr.view(newtype)
     return array_view
 
+def array_sliced_view(arr, ):
+    return arr[0:4].view(np.float32)[0]
+
 def np_frombuffer(b):
     """
     np.frombuffer() on a Python-allocated buffer.
@@ -279,6 +282,22 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
         check_err(arr, np.int64)
         check_err(arr, dt1)
         check_err(arr, dt2)
+
+    def test_array_sliced_view(self):
+        """
+        Test .view() on A layout array but has contiguous innermost dimension.
+        """
+        pyfunc = array_sliced_view
+        cres = self.ccache.compile(pyfunc, (types.uint8[:],))
+        cfunc = cres.entry_point
+
+        orig = np.array([1.5, 2], dtype=np.float32)
+        byteary = orig.view(np.uint8)
+
+        expect = pyfunc(byteary)
+        got = cfunc(byteary)
+
+        self.assertEqual(expect, got)
 
     @unittest.skipIf(sys.version_info < (2, 7),
                      "buffer protocol not supported on Python 2.6")
