@@ -298,6 +298,8 @@ MIN_GALLOP = 7
 # Start size for temp arrays.
 MERGESTATE_TEMP_SIZE = 256
 
+_NO_VALUE = False
+
 # A mergestate is a (min_gallop, keys, values, pending) tuple, where:
 #  - *min_gallop* is an integer controlling when we get into galloping mode
 #  - *keys* is a temp list for merging keys
@@ -316,7 +318,7 @@ def merge_init(keys):
     """
     temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
     temp_keys = [keys[0]] * temp_size
-    temp_values = [False] * 0          # typed empty list
+    temp_values = [_NO_VALUE] * 0      # typed empty list
     pending = [MergeRun(0, 0)] * 0     # typed empty list
     return MergeState(MIN_GALLOP, temp_keys, temp_values, pending)
 
@@ -853,12 +855,17 @@ def run_timsort_with_mergestate(ms, keys, values):
     assert ms.pending[0] == (0, len(keys))
 
 
-def run_timsort(keys, values):
+def run_timsort(keys):
     """
-    Run timsort over the given keys and (optional) values.
+    Run timsort over the given keys.
     """
-    if values:
-        run_timsort_with_mergestate(merge_init_with_values(keys, values),
-                                    keys, values)
-    else:
-        run_timsort_with_mergestate(merge_init(keys), keys, values)
+    values = [_NO_VALUE] * 0
+    run_timsort_with_mergestate(merge_init(keys), keys, values)
+
+
+def run_timsort_with_values(keys, values):
+    """
+    Run timsort over the given keys and values.
+    """
+    run_timsort_with_mergestate(merge_init_with_values(keys, values),
+                                keys, values)

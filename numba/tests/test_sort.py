@@ -388,13 +388,13 @@ class TestTimsortPurePython(TestCase):
             for chunks in itertools.product(*all_lists):
                 orig_keys = sum(chunks, [])
                 keys = orig_keys[:]
-                f(keys, [])
+                f(keys)
                 # The list is now sorted
                 self.assertEqual(keys, sorted(orig_keys))
 
-    def test_run_timsort_values(self):
+    def test_run_timsort_with_values(self):
         # Run timsort, but also with a values array
-        f = timsort.run_timsort
+        f = timsort.run_timsort_with_values
 
         for size_factor in (1, 5):
             chunk_size = 200 * size_factor
