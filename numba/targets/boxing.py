@@ -339,8 +339,6 @@ def unbox_array(c, typ, obj):
     return NativeValue(c.builder.load(aryptr), is_error=failed)
 
 
-# XXX: can't box namedtuples yet
-
 @box(types.Tuple)
 @box(types.UniTuple)
 def box_tuple(c, typ, val):
