@@ -331,6 +331,9 @@ def merge_adjust_gallop(ms, new_gallop):
 def sortslice_copy(dest_keys, dest_values, dest_start,
                    src_keys, src_values, src_start,
                    nitems):
+    """
+    Upwards memcpy().
+    """
     assert src_start >= 0
     assert dest_start >= 0
     for i in range(nitems):
@@ -338,6 +341,20 @@ def sortslice_copy(dest_keys, dest_values, dest_start,
     if src_values:
         for i in range(nitems):
             dest_values[dest_start + i] = src_values[src_start + i]
+
+def sortslice_copy_down(dest_keys, dest_values, dest_start,
+                        src_keys, src_values, src_start,
+                        nitems):
+    """
+    Downwards memcpy().
+    """
+    assert src_start >= 0
+    assert dest_start >= 0
+    for i in range(nitems):
+        dest_keys[dest_start - i] = src_keys[src_start - i]
+    if src_values:
+        for i in range(nitems):
+            dest_values[dest_start - i] = src_values[src_start - i]
 
 
 def merge_lo(ms, keys, values, ssa, na, ssb, nb):
@@ -454,6 +471,8 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
             bcount = k
             if k > 0:
                 # Copy everything from B before k
+                # NOTE: source and dest are the same buffer, but the
+                # destination index is below the source index
                 sortslice_copy(keys, values, dest,
                                b_keys, b_values, ssb,
                                k)
@@ -562,6 +581,76 @@ def merge_hi(ms, keys, values, ssa, na, ssb, nb):
                 acount = 0
                 if bcount >= min_gallop:
                     break
+
+        # One run is winning so consistently that galloping may
+        # be a huge win.  So try that, and continue galloping until
+        # (if ever) neither run appears to be winning consistently
+        # anymore.
+        min_gallop += 1
+
+        while acount >= MIN_GALLOP or bcount >= MIN_GALLOP:
+            # As long as we gallop without leaving this loop, make
+            # the heuristic more likely
+            min_gallop -= min_gallop > 1
+
+            # Gallop in A to find where keys[ssb] should end up
+            k = gallop_right(b_keys[ssb], a_keys, ssa - na + 1, ssa + 1, ssa)
+            # k is an index, make it a size from the end
+            k = ssa + 1 - k
+            acount = k
+            if k > 0:
+                # Copy everything from A after k.
+                # Destination and source are the same buffer, and destination
+                # index is greater, so copy from the end to the start.
+                sortslice_copy_down(keys, values, dest,
+                                    a_keys, a_values, ssa,
+                                    k)
+                dest -= k
+                ssa -= k
+                na -= k
+                if na == 0:
+                    # Finished merging
+                    break
+            # Copy keys[ssb]
+            keys[dest] = b_keys[ssb]
+            if has_values:
+                values[dest] = b_values[ssb]
+            dest -= 1
+            ssb -= 1
+            nb -= 1
+            if nb == 0:
+                # Finished merging
+                break
+
+            # Gallop in B to find where keys[ssa] should end up
+            k = gallop_left(a_keys[ssa], b_keys, ssb - nb + 1, ssb + 1, ssb)
+            # k is an index, make it a size from the end
+            k = ssb + 1 - k
+            bcount = k
+            if k > 0:
+                # Copy everything from B before k
+                sortslice_copy_down(keys, values, dest,
+                                    b_keys, b_values, ssb,
+                                    k)
+                dest -= k
+                ssb -= k
+                nb -= k
+                if nb == 0:
+                    # Finished merging
+                    break
+            # Copy keys[ssa]
+            keys[dest] = a_keys[ssa]
+            if has_values:
+                values[dest] = a_values[ssa]
+            dest -= 1
+            ssa -= 1
+            na -= 1
+            if na == 0:
+                # Finished merging
+                break
+
+        # Penalize it for leaving galloping mode
+        min_gallop += 1
 
     # Merge finished, now handle the remaining areas
     if na == 0:
