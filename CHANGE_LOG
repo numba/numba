@@ -1,3 +1,34 @@
+
+Version 0.21.0
+--------------
+
+This release introduces support for AMD's Heterogeneous System Architecture,
+which allows running the same code both on the CPU and the GPU.
+Other major enhancements are support for lists and the introduction of
+an opt-in compilation cache.
+
+Improvements:
+
+* PR #1250: Implement numpy.median().
+* PR #1289: Make dispatching faster when calling a JIT-compiled function
+  from regular Python
+* Issue #1226: Improve performance of integer power
+* PR #1321: Document features supported with CUDA
+* PR #1345: HSA support
+* PR #1343: Add support for lists in nopython mode
+* PR #1356: Make Numba-allocated memory visible to tracemalloc
+* PR #1363: Add an environment variable NUMBA_DEBUG_TYPEINFER
+* PR #1051: Add an opt-in, per-function compilation cache (XXX not merged)
+
+Fixes:
+
+* Issue #1285: Support datetime64 and timedelta64 in Numpy reduction functions
+* Issue #1332: Handle the EXTENDED_ARG opcode.
+* PR #1329: Handle the ``in`` operator in object mode
+* Issue #1322: Fix augmented slice assignment on Python 2
+* PR #1357: Fix slicing with some negative bounds or step values.
+
+
 Version 0.20.0
 --------------
 
