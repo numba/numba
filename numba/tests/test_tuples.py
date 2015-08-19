@@ -50,6 +50,9 @@ def lt_usecase(a, b):
 def le_usecase(a, b):
     return a <= b
 
+def getattr_usecase(tup):
+    return tup.z, tup.y, tup.x
+
 def make_point(a, b, c):
     return Point(a, b, c)
 
@@ -248,6 +251,14 @@ class TestNamedTuple(TestCase):
 
     def test_le(self):
         self._test_compare(le_usecase)
+
+    def test_getattr(self):
+        pyfunc = getattr_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for args in (4, 5, 6), (4, 5.5, 6j):
+            p = Point(*args)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
     def test_construct(self):
         def check(pyfunc):
