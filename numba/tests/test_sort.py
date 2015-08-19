@@ -10,10 +10,10 @@ import numba.unittest_support as unittest
 from numba import testing
 from .support import TestCase, MemoryLeakMixin
 
-from numba.targets import timsort
+from numba.targets.timsort import py_timsort, jitted_timsort, MergeState, MergeRun
 
 
-class TestTimsortPurePython(TestCase):
+class BaseTimsortTest(object):
 
     def random_list(self, n, offset=10):
         random.seed(42)
@@ -76,7 +76,7 @@ class TestTimsortPurePython(TestCase):
             a, b = b, a + b
 
     def merge_init(self, keys):
-        f = timsort.merge_init
+        f = self.timsort.merge_init
         return f(keys)
 
     def test_binarysort(self):
@@ -86,7 +86,7 @@ class TestTimsortPurePython(TestCase):
             f(res, (), 0, n, start)
             self.assertSorted(l, res)
 
-        f = timsort.binarysort
+        f = self.timsort.binarysort
         l = self.sorted_list(n)
         check(l, n)
         check(l, n, n//2)
@@ -112,7 +112,7 @@ class TestTimsortPurePython(TestCase):
             f(res, res_v, 0, n, start)
             self.assertSortedValues(l, v, res, res_v)
 
-        f = timsort.binarysort
+        f = self.timsort.binarysort
         l = self.sorted_list(n)
         check(l, n)
         check(l, n, n//2)
@@ -130,7 +130,7 @@ class TestTimsortPurePython(TestCase):
 
     def test_count_run(self):
         n = 16
-        f = timsort.count_run
+        f = self.timsort.count_run
 
         def check(l, lo, hi):
             n, desc = f(l, lo, hi)
@@ -166,7 +166,7 @@ class TestTimsortPurePython(TestCase):
 
     def test_gallop_left(self):
         n = 20
-        f = timsort.gallop_left
+        f = self.timsort.gallop_left
 
         def check(l, key, start, stop, hint):
             k = f(key, l, start, stop, hint)
@@ -195,7 +195,7 @@ class TestTimsortPurePython(TestCase):
 
     def test_gallop_right(self):
         n = 20
-        f = timsort.gallop_right
+        f = self.timsort.gallop_right
 
         def check(l, key, start, stop, hint):
             k = f(key, l, start, stop, hint)
@@ -223,7 +223,7 @@ class TestTimsortPurePython(TestCase):
         check_sorted_list(l)
 
     def test_merge_compute_minrun(self):
-        f = timsort.merge_compute_minrun
+        f = self.timsort.merge_compute_minrun
 
         for i in range(0, 64):
             self.assertEqual(f(i), i)
@@ -245,7 +245,7 @@ class TestTimsortPurePython(TestCase):
                 self.assertGreaterEqual(quot, 0.9 * p)
 
     def check_merge_lo_hi(self, func, a, b):
-        f = timsort.merge_lo
+        f = self.timsort.merge_lo
 
         na = len(a)
         nb = len(b)
@@ -284,8 +284,8 @@ class TestTimsortPurePython(TestCase):
         return lists
 
     def test_merge_lo_hi(self):
-        f_lo = timsort.merge_lo
-        f_hi = timsort.merge_hi
+        f_lo = self.timsort.merge_lo
+        f_hi = self.timsort.merge_hi
 
         # The larger sizes exercise galloping
         for (na, nb) in [(12, 16), (40, 40), (100, 110), (1000, 1100)]:
@@ -295,7 +295,7 @@ class TestTimsortPurePython(TestCase):
                 self.check_merge_lo_hi(f_hi, b, a)
 
     def check_merge_at(self, a, b):
-        f = timsort.merge_at
+        f = self.timsort.merge_at
         # Prepare the array to be sorted
         na = len(a)
         nb = len(b)
@@ -304,7 +304,7 @@ class TestTimsortPurePython(TestCase):
         ssa = 1
         ssb = ssa + na
 
-        stack_sentinels = [timsort.MergeRun(-42, -42)] * 2
+        stack_sentinels = [MergeRun(-42, -42)] * 2
 
         def run_merge_at(ms, keys, i):
             new_ms = f(ms, keys, [], i)
@@ -322,8 +322,8 @@ class TestTimsortPurePython(TestCase):
         # Push sentinels on stack, to check they weren't touched
         ms.pending.extend(stack_sentinels)
         i = len(ms.pending)
-        ms.pending.extend([timsort.MergeRun(ssa, na),
-                           timsort.MergeRun(ssb, nb)])
+        ms.pending.extend([MergeRun(ssa, na),
+                           MergeRun(ssb, nb)])
         run_merge_at(ms, keys, i)
         self.assertEqual(len(ms.pending), i + 1)
 
@@ -333,10 +333,10 @@ class TestTimsortPurePython(TestCase):
         # Push sentinels on stack, to check they weren't touched
         ms.pending.extend(stack_sentinels)
         i = len(ms.pending)
-        ms.pending.extend([timsort.MergeRun(ssa, na),
-                           timsort.MergeRun(ssb, nb)])
+        ms.pending.extend([MergeRun(ssa, na),
+                           MergeRun(ssb, nb)])
         # A last run (trivial here)
-        last_run = timsort.MergeRun(ssb + nb, 1)
+        last_run = MergeRun(ssb + nb, 1)
         ms.pending.append(last_run)
         run_merge_at(ms, keys, i)
         self.assertEqual(len(ms.pending), i + 2)
@@ -351,7 +351,7 @@ class TestTimsortPurePython(TestCase):
                 self.check_merge_at(b, a)
 
     def test_merge_force_collapse(self):
-        f = timsort.merge_force_collapse
+        f = self.timsort.merge_force_collapse
 
         # Test with runs of ascending sizes, then descending sizes
         sizes_list = [(8, 10, 15, 20)]
@@ -366,19 +366,19 @@ class TestTimsortPurePython(TestCase):
                 ms = self.merge_init(keys)
                 pos = 0
                 for c in chunks:
-                    ms.pending.append(timsort.MergeRun(pos, len(c)))
+                    ms.pending.append(MergeRun(pos, len(c)))
                     pos += len(c)
                 # Sanity check
                 self.assertEqual(sum(ms.pending[-1]), len(keys))
                 # Now merge the runs
                 f(ms, keys, [])
                 # Remaining run is the whole list
-                self.assertEqual(ms.pending, [timsort.MergeRun(0, len(keys))])
+                self.assertEqual(ms.pending, [MergeRun(0, len(keys))])
                 # The list is now sorted
                 self.assertEqual(keys, sorted(orig_keys))
 
     def test_run_timsort(self):
-        f = timsort.run_timsort
+        f = self.timsort.run_timsort
 
         for size_factor in (1, 10):
             # Make lists to be sorted from three chunks of different kinds.
@@ -394,7 +394,7 @@ class TestTimsortPurePython(TestCase):
 
     def test_run_timsort_with_values(self):
         # Run timsort, but also with a values array
-        f = timsort.run_timsort_with_values
+        f = self.timsort.run_timsort_with_values
 
         for size_factor in (1, 5):
             chunk_size = 200 * size_factor
@@ -409,6 +409,16 @@ class TestTimsortPurePython(TestCase):
             f(keys, values)
             # This checks sort stability
             self.assertSortedValues(orig_keys, orig_values, keys, values)
+
+
+class TestTimsortPurePython(BaseTimsortTest, TestCase):
+
+    timsort = py_timsort
+
+
+#class TestTimsortNumba(BaseTimsortTest, TestCase):
+
+    #timsort = jitted_timsort
 
 
 if __name__ == '__main__':
