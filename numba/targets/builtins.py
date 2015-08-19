@@ -1198,21 +1198,15 @@ def setitem_cpointer(context, builder, sig, args):
 
 #-------------------------------------------------------------------------------
 
-
-def caster(restype):
-    @implement(restype, types.Any)
-    def _cast(context, builder, sig, args):
-        [val] = args
-        [valty] = sig.args
-        res = context.cast(builder, val, valty, restype)
-        return impl_ret_borrowed(context, builder, restype, res)
-
-    return _cast
-
-cast_types = set(types.number_domain)
-cast_types.add(types.bool_)
-for tp in cast_types:
-    builtin(caster(tp))
+@builtin
+@implement(types.NumberClass, types.Any)
+def number_constructor(context, builder, sig, args):
+    """
+    Convert any number to any other.
+    """
+    [val] = args
+    [valty] = sig.args
+    return context.cast(builder, val, valty, sig.return_type)
 
 
 #-------------------------------------------------------------------------------
@@ -1436,6 +1430,12 @@ def array_ravel_impl(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 # Tuples
+
+@builtin
+@implement(types.NamedTupleClass, types.VarArg(types.Any))
+def namedtuple_constructor(context, builder, sig, args):
+    # A namedtuple has the same representation as a regular tuple
+    return context.make_tuple(builder, sig.return_type, args)
 
 @builtin
 @implement(types.len_type, types.Kind(types.BaseTuple))

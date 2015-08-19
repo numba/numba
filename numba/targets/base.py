@@ -441,7 +441,7 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
-        if isinstance(fn, (types.NumberClass, types.Function)):
+        if isinstance(fn, (types.Function)):
             key = fn.template.key
 
             if isinstance(key, MethodType):
@@ -454,12 +454,6 @@ class BaseContext(object):
             else:
                 overloads = self.defns[key]
 
-        elif isinstance(fn, types.NamedTupleClass):
-            ty = sig.return_type
-            def impl(builder, args):
-                return self.make_tuple(builder, ty, args)
-            return impl
-
         elif isinstance(fn, types.Dispatcher):
             key = fn.overloaded.get_overload(sig.args)
             overloads = self.defns[key]
@@ -469,7 +463,11 @@ class BaseContext(object):
         try:
             return _wrap_impl(overloads.find(sig), self, sig)
         except NotImplementedError:
-            raise Exception("No definition for lowering %s%s" % (key, sig))
+            pass
+        if isinstance(fn, types.Type):
+            # It's a type instance => try to find a definition for the type class
+            return self.get_function(type(fn), sig)
+        raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
 
     def get_generator_desc(self, genty):
         """

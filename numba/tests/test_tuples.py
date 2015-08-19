@@ -252,11 +252,11 @@ class TestNamedTuple(TestCase):
     def test_construct(self):
         def check(pyfunc):
             cfunc = jit(nopython=True)(pyfunc)
-            args = (4, 5, 6)
-            expected = pyfunc(*args)
-            got = cfunc(*args)
-            self.assertIs(type(got), type(expected))
-            self.assertPreciseEqual(got, expected)
+            for args in (4, 5, 6), (4, 5.5, 6j):
+                expected = pyfunc(*args)
+                got = cfunc(*args)
+                self.assertIs(type(got), type(expected))
+                self.assertPreciseEqual(got, expected)
 
         check(make_point)
         check(make_point_kws)
