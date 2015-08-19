@@ -105,9 +105,7 @@ class NamedTupleConstructor(CallableTemplate):
     def generic(self):
         # Compute the pysig for the namedtuple constructor
         instance_class = self.classty.instance_class
-        params = [utils.Parameter(name, kind=utils.Parameter.POSITIONAL_OR_KEYWORD)
-                  for name in instance_class._fields]
-        pysig = utils.Signature(params)
+        pysig = utils.pysignature(instance_class)
 
         def typer(*args, **kws):
             # Fold keyword args
