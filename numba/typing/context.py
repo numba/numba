@@ -115,13 +115,15 @@ class BaseContext(object):
             if res is not None:
                 return res
 
-        try:
-            func_type = self.resolve_getattr(func, "__call__")
-        except KeyError:
-            pass
-        else:
-            # The function has a __call__ method, type its call.
-            return self.resolve_function_type(func_type, args, kws)
+        if isinstance(func, types.Type):
+            # If it's a type, it may support a __call__ method
+            try:
+                func_type = self.resolve_getattr(func, "__call__")
+            except KeyError:
+                pass
+            else:
+                # The function has a __call__ method, type its call.
+                return self.resolve_function_type(func_type, args, kws)
 
         if isinstance(func, types.Callable):
             # XXX fold this into the __call__ attribute logic?
