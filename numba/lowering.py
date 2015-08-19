@@ -338,7 +338,7 @@ class Lower(BaseLower):
                 # Try to infer the args tuple
                 args = tuple(self.interp.get_definition(arg).infer_constant()
                              for arg in excdef.args)
-            elif isinstance(exctype, types.ExceptionType):
+            elif isinstance(exctype, types.ExceptionClass):
                 args = None
             else:
                 raise NotImplementedError("cannot raise value of type %s"

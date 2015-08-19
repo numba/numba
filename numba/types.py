@@ -1295,7 +1295,7 @@ class NoneType(Opaque):
         return Optional(other)
 
 
-class ExceptionType(Callable, Phantom):
+class ExceptionClass(Callable, Phantom):
     """
     The type of exception classes (not instances).
     """
@@ -1304,7 +1304,7 @@ class ExceptionType(Callable, Phantom):
         assert issubclass(exc_class, BaseException)
         name = "%s" % (exc_class.__name__)
         self.exc_class = exc_class
-        super(ExceptionType, self).__init__(name, param=True)
+        super(ExceptionClass, self).__init__(name, param=True)
 
     def get_call_type(self, context, args, kws):
         return self.get_call_signatures()[0][0]

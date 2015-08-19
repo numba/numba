@@ -208,7 +208,7 @@ class BaseContext(object):
 
         if isinstance(val, type):
             if issubclass(val, BaseException):
-                return types.ExceptionType(val)
+                return types.ExceptionClass(val)
             if issubclass(val, tuple) and hasattr(val, "_asdict"):
                 return types.NamedTupleClass(val)
 
