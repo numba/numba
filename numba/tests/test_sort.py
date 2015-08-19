@@ -290,7 +290,7 @@ class TestTimsortPurePython(TestCase):
         ssa = 1
         ssb = ssa + na
 
-        stack_sentinels = [(-42, -42)] * 2
+        stack_sentinels = [timsort.MergeRun(-42, -42)] * 2
 
         def run_merge_at(ms, keys, i):
             new_ms = f(ms, keys, [], i)
@@ -308,7 +308,8 @@ class TestTimsortPurePython(TestCase):
         # Push sentinels on stack, to check they weren't touched
         ms.pending.extend(stack_sentinels)
         i = len(ms.pending)
-        ms.pending.extend([(ssa, na), (ssb, nb)])
+        ms.pending.extend([timsort.MergeRun(ssa, na),
+                           timsort.MergeRun(ssb, nb)])
         run_merge_at(ms, keys, i)
         self.assertEqual(len(ms.pending), i + 1)
 
@@ -318,9 +319,10 @@ class TestTimsortPurePython(TestCase):
         # Push sentinels on stack, to check they weren't touched
         ms.pending.extend(stack_sentinels)
         i = len(ms.pending)
-        ms.pending.extend([(ssa, na), (ssb, nb)])
+        ms.pending.extend([timsort.MergeRun(ssa, na),
+                           timsort.MergeRun(ssb, nb)])
         # A last run (trivial here)
-        last_run = (ssb + nb, 1)
+        last_run = timsort.MergeRun(ssb + nb, 1)
         ms.pending.append(last_run)
         run_merge_at(ms, keys, i)
         self.assertEqual(len(ms.pending), i + 2)
@@ -333,6 +335,32 @@ class TestTimsortPurePython(TestCase):
                                           self.make_sample_lists(nb)):
                 self.check_merge_at(a, b)
                 self.check_merge_at(b, a)
+
+    def test_merge_force_collapse(self):
+        f = timsort.merge_force_collapse
+
+        # Test with runs of ascending sizes, then descending sizes
+        sizes_list = [(8, 10, 15, 20)]
+        sizes_list.append(sizes_list[0][::-1])
+
+        for sizes in sizes_list:
+            for chunks in itertools.product(*(self.make_sample_lists(n) for n in sizes)):
+                # Create runs of the given sizes
+                orig_keys = sum(chunks, [])
+                keys = orig_keys[:]
+                ms = self.merge_init(keys)
+                pos = 0
+                for c in chunks:
+                    ms.pending.append(timsort.MergeRun(pos, len(c)))
+                    pos += len(c)
+                # Sanity check
+                self.assertEqual(sum(ms.pending[-1]), len(keys))
+                # Now merge the runs
+                f(ms, keys, [])
+                # Remaining run is the whole list
+                self.assertEqual(ms.pending, [timsort.MergeRun(0, len(keys))])
+                # The list is now sorted
+                self.assertEqual(keys, sorted(orig_keys))
 
 
 if __name__ == '__main__':
