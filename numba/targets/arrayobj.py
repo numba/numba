@@ -19,9 +19,8 @@ from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     iternext_impl, struct_factory,
                                     impl_ret_borrowed, impl_ret_new_ref,
                                     impl_ret_untracked)
-
 from numba.typing import signature
-from .builtins import Slice
+from . import slicing
 
 
 def increment_index(builder, val):
@@ -268,148 +267,86 @@ def getitem_arraynd_intp(context, builder, sig, args):
         raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
     return impl_ret_borrowed(context, builder, sig.return_type, result)
 
+
+def _getitem_array_generic(context, builder, return_type, aryty, ary,
+                           index_types, indices):
+    """
+    Return the result of indexing *ary* with the given *indices*.
+    """
+    shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
+    strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
+
+    output_indices = []
+    output_shapes = []
+    output_strides = []
+
+    for ax, (indexval, idxty) in enumerate(zip(indices, index_types)):
+        if idxty == types.slice3_type:
+            slice = slicing.Slice(context, builder, value=indexval)
+            slicing.fix_slice(builder, slice, shapes[ax])
+            output_indices.append(slice.start)
+            sh = slicing.get_slice_length(builder, slice)
+            st = slicing.fix_stride(builder, slice, strides[ax])
+            output_shapes.append(sh)
+            output_strides.append(st)
+        else:
+            assert isinstance(idxty, types.Integer)
+            ind = context.cast(builder, indexval, idxty, types.intp)
+            ind = slicing.fix_index(builder, ind, shapes[ax])
+            output_indices.append(ind)
+
+    dataptr = cgutils.get_item_pointer(builder, aryty, ary,
+                                       output_indices,
+                                       wraparound=False)
+    # Build array
+    retary = make_array(return_type)(context, builder)
+    populate_array(retary,
+                   data=dataptr,
+                   shape=cgutils.pack_array(builder, output_shapes),
+                   strides=cgutils.pack_array(builder, output_strides),
+                   itemsize=ary.itemsize,
+                   meminfo=ary.meminfo,
+                   parent=ary.parent)
+    return retary._getvalue()
+
+
 @builtin
 @implement('getitem', types.Kind(types.Buffer), types.slice3_type)
 def getitem_array1d_slice(context, builder, sig, args):
-    aryty, _ = sig.args
+    aryty, idxty = sig.args
+    ary, idx = args
+
     if aryty.ndim != 1:
         # TODO
         raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
 
-    ary, idx = args
+    ary = make_array(aryty)(context, builder, value=ary)
 
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, value=ary)
-
-    shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
-
-    slicestruct = Slice(context, builder, value=idx)
-    cgutils.normalize_slice(builder, slicestruct, shapes[0])
-
-    dataptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                       [slicestruct.start],
-                                       wraparound=True)
-
-    retstty = make_array(sig.return_type)
-    retary = retstty(context, builder)
-
-    shape = cgutils.get_slice_length(builder, slicestruct)
-    stride = cgutils.get_strides_from_slice(builder, aryty.ndim, ary.strides,
-                                            slicestruct, 0)
-
-    populate_array(retary,
-                   data=dataptr,
-                   shape=cgutils.pack_array(builder, [shape]),
-                   strides=cgutils.pack_array(builder, [stride]),
-                   itemsize=ary.itemsize,
-                   meminfo=ary.meminfo,
-                   parent=ary.parent)
-
-    res = retary._getvalue()
+    res = _getitem_array_generic(context, builder, sig.return_type,
+                                 aryty, ary, (idxty,), (idx,))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
 @builtin
-@implement('getitem', types.Kind(types.Buffer),
-           types.Kind(types.UniTuple))
-def getitem_array_unituple(context, builder, sig, args):
-    aryty, idxty = sig.args
-    ary, idx = args
-
-    ndim = aryty.ndim
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
-
-    if idxty.dtype == types.slice3_type:
-        # Slicing
-        raw_slices = cgutils.unpack_tuple(builder, idx, aryty.ndim)
-        slices = [Slice(context, builder, value=sl) for sl in raw_slices]
-        for sl, sh in zip(slices,
-                          cgutils.unpack_tuple(builder, ary.shape, ndim)):
-            cgutils.normalize_slice(builder, sl, sh)
-        indices = [sl.start for sl in slices]
-        dataptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                           wraparound=True)
-        # Build array
-        retstty = make_array(sig.return_type)
-        retary = retstty(context, builder)
-        shapes = [cgutils.get_slice_length(builder, sl)
-                  for sl in slices]
-        strides = [cgutils.get_strides_from_slice(builder, ndim, ary.strides,
-                                                  sl, i)
-                   for i, sl in enumerate(slices)]
-        populate_array(retary,
-                       data=dataptr,
-                       shape=cgutils.pack_array(builder, shapes),
-                       strides=cgutils.pack_array(builder, strides),
-                       itemsize=ary.itemsize,
-                       meminfo=ary.meminfo,
-                       parent=ary.parent)
-        res = retary._getvalue()
-    else:
-        # Indexing
-        assert isinstance(idxty.dtype, types.Integer)
-        indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-        indices = [context.cast(builder, i, t, types.intp)
-                   for t, i in zip(idxty, indices)]
-        ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=idxty.dtype.signed)
-
-        res = context.unpack_value(builder, aryty.dtype, ptr)
-
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
-
-
-@builtin
-@implement('getitem', types.Kind(types.Buffer),
-           types.Kind(types.Tuple))
+@implement('getitem', types.Kind(types.Buffer), types.Kind(types.BaseTuple))
 def getitem_array_tuple(context, builder, sig, args):
-    aryty, idxty = sig.args
-    ary, idx = args
+    aryty, tupty = sig.args
+    ary, tup = args
 
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
 
     ndim = aryty.ndim
     if isinstance(sig.return_type, types.Array):
-        # Slicing
-        raw_indices = cgutils.unpack_tuple(builder, idx, aryty.ndim)
-        start = []
-        shapes = []
-        strides = []
-
-        oshapes = cgutils.unpack_tuple(builder, ary.shape, ndim)
-        for ax, (indexval, idxty) in enumerate(zip(raw_indices, idxty)):
-            if idxty == types.slice3_type:
-                slice = Slice(context, builder, value=indexval)
-                cgutils.normalize_slice(builder, slice, oshapes[ax])
-                start.append(slice.start)
-                shapes.append(cgutils.get_slice_length(builder, slice))
-                strides.append(cgutils.get_strides_from_slice(builder, ndim,
-                                                              ary.strides,
-                                                              slice, ax))
-            else:
-                ind = context.cast(builder, indexval, idxty, types.intp)
-                start.append(ind)
-
-        dataptr = cgutils.get_item_pointer(builder, aryty, ary, start,
-                                           wraparound=True)
-        # Build array
-        retstty = make_array(sig.return_type)
-        retary = retstty(context, builder)
-        populate_array(retary,
-                       data=dataptr,
-                       shape=cgutils.pack_array(builder, shapes),
-                       strides=cgutils.pack_array(builder, strides),
-                       itemsize=ary.itemsize,
-                       meminfo=ary.meminfo,
-                       parent=ary.parent)
-        res = retary._getvalue()
+        # Generic array slicing
+        tup_items = cgutils.unpack_tuple(builder, tup, ndim)
+        res = _getitem_array_generic(context, builder, sig.return_type,
+                                     aryty, ary, tupty, tup_items)
     else:
-        # Indexing
-        indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+        # Plain indexing (returning a scalar)
+        indices = cgutils.unpack_tuple(builder, tup, count=len(tupty))
         indices = [context.cast(builder, i, t, types.intp)
-                   for t, i in zip(idxty, indices)]
+                   for t, i in zip(tupty, indices)]
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                        wraparound=True)
 
@@ -482,7 +419,7 @@ def setitem_array1d_slice(context, builder, sig, args):
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
-    slicestruct = Slice(context, builder, value=idx)
+    slicestruct = slicing.Slice(context, builder, value=idx)
 
     # the logic here follows that of Python's Objects/sliceobject.c
     # in particular PySlice_GetIndicesEx function

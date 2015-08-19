@@ -14,6 +14,7 @@ from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_ret_borrowed, impl_ret_new_ref,
                                     impl_ret_untracked)
 from numba.utils import cached_property
+from . import slicing
 
 
 def make_list_cls(list_type):
@@ -135,37 +136,7 @@ class _ListPayloadMixin(object):
         Fix slice start and stop to be valid (inclusive and exclusive, resp)
         indexing bounds.
         """
-        # See PySlice_GetIndicesEx()
-        builder = self._builder
-        size = self.size
-        zero = ir.Constant(size.type, 0)
-        minus_one = ir.Constant(size.type, -1)
-
-        def fix_bound(bound_name, lower_repl, upper_repl):
-            bound = getattr(slice, bound_name)
-            bound = self.fix_index(bound)
-            # Store value
-            setattr(slice, bound_name, bound)
-            # Still negative? => clamp to lower_repl
-            underflow = builder.icmp_signed('<', bound, zero)
-            with builder.if_then(underflow, likely=False):
-                setattr(slice, bound_name, lower_repl)
-            # Greater than size? => clamp to upper_repl
-            overflow = builder.icmp_signed('>', bound, size)
-            with builder.if_then(overflow, likely=False):
-                setattr(slice, bound_name, upper_repl)
-        
-        with builder.if_else(cgutils.is_neg_int(builder, slice.step)) as (if_neg_step, if_pos_step):
-            with if_pos_step:
-                # < 0 => 0; >= size => size
-                fix_bound('start', zero, size)
-                fix_bound('stop', zero, size)
-            with if_neg_step:
-                # < 0 => -1; >= size => size - 1
-                lower = minus_one
-                upper = builder.add(size, minus_one)
-                fix_bound('start', lower, upper)
-                fix_bound('stop', lower, upper)
+        return slicing.fix_slice(self._builder, slice, self.size)
 
 
 class ListInstance(_ListPayloadMixin):
@@ -414,15 +385,13 @@ def setitem_list(context, builder, sig, args):
 @builtin
 @implement('getitem', types.Kind(types.List), types.slice3_type)
 def getslice_list(context, builder, sig, args):
-    from .builtins import Slice
-
     inst = ListInstance(context, builder, sig.args[0], args[0])
-    slice = Slice(context, builder, value=args[1])
+    slice = slicing.Slice(context, builder, value=args[1])
     cgutils.guard_invalid_slice(context, builder, slice)
     inst.fix_slice(slice)
 
     # Allocate result and populate it
-    result_size = cgutils.get_slice_length(builder, slice)
+    result_size = slicing.get_slice_length(builder, slice)
     result = ListInstance.allocate(context, builder, sig.return_type,
                                    result_size)
     result.size = result_size
@@ -440,17 +409,15 @@ def getslice_list(context, builder, sig, args):
 @builtin
 @implement('setitem', types.Kind(types.List), types.slice3_type, types.Any)
 def setitem_list(context, builder, sig, args):
-    from .builtins import Slice
-
     dest = ListInstance(context, builder, sig.args[0], args[0])
-    slice = Slice(context, builder, value=args[1])
+    slice = slicing.Slice(context, builder, value=args[1])
     src = ListInstance(context, builder, sig.args[2], args[2])
 
     cgutils.guard_invalid_slice(context, builder, slice)
     dest.fix_slice(slice)
 
     src_size = src.size
-    avail_size = cgutils.get_slice_length(builder, slice)
+    avail_size = slicing.get_slice_length(builder, slice)
     size_delta = builder.sub(src.size, avail_size)
 
     zero = ir.Constant(size_delta.type, 0)
@@ -503,15 +470,13 @@ def setitem_list(context, builder, sig, args):
 @builtin
 @implement('delitem', types.Kind(types.List), types.slice3_type)
 def setitem_list(context, builder, sig, args):
-    from .builtins import Slice
-
     inst = ListInstance(context, builder, sig.args[0], args[0])
-    slice = Slice(context, builder, value=args[1])
+    slice = slicing.Slice(context, builder, value=args[1])
 
     cgutils.guard_invalid_slice(context, builder, slice)
     inst.fix_slice(slice)
 
-    slice_len = cgutils.get_slice_length(builder, slice)
+    slice_len = slicing.get_slice_length(builder, slice)
 
     zero = ir.Constant(slice_len.type, 0)
     one = ir.Constant(slice_len.type, 1)
@@ -564,8 +529,17 @@ def list_add(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
 @builtin
+@implement("+=", types.Kind(types.List), types.Kind(types.List))
+def list_add_inplace(context, builder, sig, args):
+    assert sig.args[0].dtype == sig.args[1].dtype
+    dest = _list_extend_list(context, builder, sig, args)
+
+    return impl_ret_borrowed(context, builder, sig.return_type, dest.value)
+
+
+@builtin
 @implement("*", types.Kind(types.List), types.Kind(types.Integer))
-def list_add(context, builder, sig, args):
+def list_mul(context, builder, sig, args):
     src = ListInstance(context, builder, sig.args[0], args[0])
     src_size = src.size
 
@@ -583,6 +557,26 @@ def list_add(context, builder, sig, args):
             dest.setitem(builder.add(src_index, dest_offset), value)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
+
+@builtin
+@implement("*=", types.Kind(types.List), types.Kind(types.Integer))
+def list_mul_inplace(context, builder, sig, args):
+    inst = ListInstance(context, builder, sig.args[0], args[0])
+    src_size = inst.size
+
+    mult = args[1]
+    zero = ir.Constant(mult.type, 0)
+    mult = builder.select(cgutils.is_neg_int(builder, mult), zero, mult)
+    nitems = builder.mul(mult, src_size)
+
+    inst.resize(nitems)
+
+    with cgutils.for_range_slice(builder, src_size, nitems, src_size, inc=True) as (dest_offset, _):
+        with cgutils.for_range(builder, src_size) as src_index:
+            value = inst.getitem(src_index)
+            inst.setitem(builder.add(src_index, dest_offset), value)
+
+    return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
 
 #-------------------------------------------------------------------------------
@@ -644,14 +638,15 @@ def _list_extend_list(context, builder, sig, args):
         value = src.getitem(src_index)
         dest.setitem(builder.add(src_index, dest_size), value)
 
-    return context.get_dummy_value()
+    return dest
 
 @builtin
 @implement("list.extend", types.Kind(types.List), types.Kind(types.IterableType))
 def list_extend(context, builder, sig, args):
     if isinstance(sig.args[1], types.List) and sig.args[0].dtype == sig.args[1].dtype:
         # Specialize for same-type list operands, for speed
-        return _list_extend_list(context, builder, sig, args)
+        _list_extend_list(context, builder, sig, args)
+        return context.get_dummy_value()
 
     def list_extend(lst, iterable):
         # Speed hack to avoid NRT refcount operations inside the loop
