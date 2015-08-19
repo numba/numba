@@ -252,26 +252,35 @@ class TestTimsortPurePython(TestCase):
         ssa = 1
         ssb = ssa + na
 
-        f(ms, keys, [], ssa, na, ssb, nb)
+        new_ms = f(ms, keys, [], ssa, na, ssb, nb)
+        #print("-- merge_lo() --", na, nb)
+        #print(orig_keys)
+        #print(keys)
         self.assertEqual(keys[0], orig_keys[0])
         self.assertEqual(keys[-1], orig_keys[-1])
         self.assertEqual(keys[1:-1], sorted(orig_keys[1:-1]))
+        # Check the MergeState result
+        self.assertGreaterEqual(len(new_ms.keys), len(ms.keys))
+        self.assertGreaterEqual(len(new_ms.values), len(ms.values))
+        self.assertIs(new_ms.pending, ms.pending)
+        self.assertGreaterEqual(new_ms.min_gallop, 1)
 
     def test_merge_lo(self):
         f = timsort.merge_lo
-        na, nb = 12, 16
 
-        a_lists = []
-        b_lists = []
-        for offset in (20, 40):
-            # a[-1] must end last in the merge
-            a_lists.append(self.sorted_list(na - 1, offset) + [1000])
-            a_lists.append(self.dupsorted_list(na - 1, offset) + [1000])
-            b_lists.append(self.sorted_list(nb, offset))
-            b_lists.append(self.dupsorted_list(nb, offset))
+        # The larger sizes exercise galloping
+        for (na, nb) in [(12, 16), (40, 50), (100, 110), (1000, 1100)]:
+            a_lists = []
+            b_lists = []
+            for offset in (20, 120):
+                # a[-1] must end last in the merge
+                a_lists.append(self.sorted_list(na - 1, offset) + [999999])
+                a_lists.append(self.dupsorted_list(na - 1, offset) + [999999])
+                b_lists.append(self.sorted_list(nb, offset))
+                b_lists.append(self.dupsorted_list(nb, offset))
 
-        for a, b in itertools.product(a_lists, b_lists):
-            self.check_merge_lo(a, b)
+            for a, b in itertools.product(a_lists, b_lists):
+                self.check_merge_lo(a, b)
 
 
 if __name__ == '__main__':

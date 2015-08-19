@@ -287,6 +287,7 @@ MERGESTATE_TEMP_SIZE = 256
 MergeState = collections.namedtuple('MergeState',
                                     ('min_gallop', 'keys', 'values', 'pending'))
 
+
 # A mergestate is a (min_gallop, keys, values, pending) tuple, where:
 #  - *min_gallop* is an integer controlling when we get into galloping mode
 #  - *keys* is a temp list for merging keys
@@ -316,7 +317,7 @@ def merge_getmem(ms, need):
     if ms.values:
         temp_values = [ms.values[0]] * need
     else:
-        temp_values = ms.values[0]
+        temp_values = ms.values
     return MergeState(ms.min_gallop, temp_keys, temp_values, ms.pending)
 
 
@@ -343,6 +344,9 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
     ssb = ssa + na in a stable way, in-place.  na and nb must be > 0.
     Must also have that keys[ssa + na - 1] belongs at the end of the merge, and
     should have na <= nb.  See listsort.txt for more info.
+
+    An updated MergeState is returned (with possibly a different min_gallop
+    or larger temp arrays).
     """
     assert na > 0 and nb > 0 and na <= nb, "merge_lo(): bad arguments"
     assert ssb == ssa + na, "merge_lo(): bad arguments"
@@ -405,7 +409,73 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
                 if acount >= min_gallop:
                     break
 
-        # TODO Gallop
+        # One run is winning so consistently that galloping may
+        # be a huge win.  So try that, and continue galloping until
+        # (if ever) neither run appears to be winning consistently
+        # anymore.
+        min_gallop += 1
+
+        while acount >= MIN_GALLOP or bcount >= MIN_GALLOP:
+            # As long as we gallop without leaving this loop, make
+            # the heuristic more likely
+            min_gallop -= min_gallop > 1
+
+            # Gallop in A to find where keys[ssb] should end up
+            k = gallop_right(b_keys[ssb], a_keys, ssa, ssa + na, ssa)
+            # k is an index, make it a size
+            k -= ssa
+            acount = k
+            if k > 0:
+                # Copy everything from A before k
+                sortslice_copy(keys, values, dest,
+                               a_keys, a_values, ssa,
+                               k)
+                dest += k
+                ssa += k
+                na -= k
+                if na <= 1:
+                    # Finished merging
+                    break
+            # Copy keys[ssb]
+            keys[dest] = b_keys[ssb]
+            if has_values:
+                values[dest] = b_values[ssb]
+            dest += 1
+            ssb += 1
+            nb -= 1
+            if nb == 0:
+                # Finished merging
+                break
+
+            # Gallop in B to find where keys[ssa] should end up
+            k = gallop_left(a_keys[ssa], b_keys, ssb, ssb + nb, ssb)
+            # k is an index, make it a size
+            k -= ssb
+            bcount = k
+            if k > 0:
+                # Copy everything from B before k
+                sortslice_copy(keys, values, dest,
+                               b_keys, b_values, ssb,
+                               k)
+                dest += k
+                ssb += k
+                nb -= k
+                if nb == 0:
+                    # Finished merging
+                    break
+            # Copy keys[ssa]
+            keys[dest] = a_keys[ssa]
+            if has_values:
+                values[dest] = a_values[ssa]
+            dest += 1
+            ssa += 1
+            na -= 1
+            if na == 1:
+                # Finished merging
+                break
+
+        # Penalize it for leaving galloping mode
+        min_gallop += 1
 
     # Merge finished, now handle the remaining areas
     if nb == 0:
@@ -414,14 +484,17 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
                        a_keys, a_values, ssa,
                        na)
     else:
-        assert na == 1
+        assert na <= 1
         # The last element of A belongs at the end of the merge.
         sortslice_copy(keys, values, dest,
                        b_keys, b_values, ssb,
                        nb)
-        keys[dest + nb] = a_keys[ssa]
-        if has_values:
-            values[dest + nb] = a_values[ssa]
+        if na == 1:
+            keys[dest + nb] = a_keys[ssa]
+            if has_values:
+                values[dest + nb] = a_values[ssa]
+
+    return merge_adjust_gallop(ms, min_gallop)
 
 
 #/* Merge the na elements starting at ssa with the nb elements starting at
