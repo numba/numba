@@ -41,8 +41,8 @@ class TestTimsortPurePython(TestCase):
         return l
 
     def dupsorted_list(self, n, factor=4, offset=10):
-        l = (list(range(offset, offset + n // factor)) * (factor + 1))[:n]
-        assert len(l) == n
+        l = (list(range(offset, offset + (n // factor) + 1)) * (factor + 1))[:n]
+        assert len(l) == n, (len(l), n)
         l.sort()
         return l
 
@@ -69,6 +69,10 @@ class TestTimsortPurePython(TestCase):
         while True:
             yield a
             a, b = b, a + b
+
+    def merge_init(self, keys):
+        f = timsort.merge_init
+        return f(keys)
 
     def test_binarysort(self):
         n = 20
@@ -234,6 +238,40 @@ class TestTimsortPurePython(TestCase):
                 p = 2 ** utils.bit_length(quot)
                 self.assertLess(quot, p)
                 self.assertGreaterEqual(quot, 0.9 * p)
+
+    def check_merge_lo(self, a, b):
+        f = timsort.merge_lo
+
+        na = len(a)
+        nb = len(b)
+
+        # Add sentinels at start and end check they weren't moved
+        keys = [42] + a + b + [-42]
+        orig_keys = keys[:]
+        ms = self.merge_init(keys)
+        ssa = 1
+        ssb = ssa + na
+
+        f(ms, keys, [], ssa, na, ssb, nb)
+        self.assertEqual(keys[0], orig_keys[0])
+        self.assertEqual(keys[-1], orig_keys[-1])
+        self.assertEqual(keys[1:-1], sorted(orig_keys[1:-1]))
+
+    def test_merge_lo(self):
+        f = timsort.merge_lo
+        na, nb = 12, 16
+
+        a_lists = []
+        b_lists = []
+        for offset in (20, 40):
+            # a[-1] must end last in the merge
+            a_lists.append(self.sorted_list(na - 1, offset) + [1000])
+            a_lists.append(self.dupsorted_list(na - 1, offset) + [1000])
+            b_lists.append(self.sorted_list(nb, offset))
+            b_lists.append(self.dupsorted_list(nb, offset))
+
+        for a, b in itertools.product(a_lists, b_lists):
+            self.check_merge_lo(a, b)
 
 
 if __name__ == '__main__':
