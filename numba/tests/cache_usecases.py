@@ -52,6 +52,19 @@ def use_c_sin(x):
     return c_sin(x)
 
 
+@jit(cache=True, nopython=True)
+def ambiguous_function(x):
+    return x + 2
+
+renamed_function1 = ambiguous_function
+
+@jit(cache=True, nopython=True)
+def ambiguous_function(x):
+    return x + 6
+
+renamed_function2 = ambiguous_function
+
+
 Z = 1
 
 # Exercise returning a record instance.  This used to hardcode the dtype

@@ -457,12 +457,14 @@ class FunctionCache(object):
     A per-function compilation cache.  The cache saves data in separate
     data files and maintains information in an index file.
 
-    There is one data file ("function_name.pyXY.<number>.nbc") per function
-    signature, target architecture and Python version.
+    There is one index file per function and Python version
+    ("function_name-<lineno>.pyXY.nbi") which contains a mapping of
+    signatures and architectures to data files.
+    It is prefixed by a versioning key and a timestamp of the Python source
+    file containing the function.
 
-    The index file ("function_name.pyXY.nbi") contains a mapping of signatures
-    and architectures to data files.  It is prefixed by a versioning key
-    and a timestamp of the Python source file containing the function.
+    There is one data file ("function_name-<lineno>.pyXY.<number>.nbc")
+    per function, function signature, target architecture and Python version.
 
     Separate index and data files per Python version avoid pickle
     compatibility problems.
@@ -488,8 +490,11 @@ class FunctionCache(object):
         self._cache_path = os.path.join(os.path.dirname(self._source_path),
                                         '__pycache__')
         abiflags = getattr(sys, 'abiflags', '')
-        filename_base = '%s.py%d%d%s' % (self._fullname, sys.version_info[0],
-                                         sys.version_info[1], abiflags)
+        filename_base = (
+            '%s-%d.py%d%d%s' % (self._fullname, self._lineno,
+                                sys.version_info[0], sys.version_info[1],
+                                abiflags)
+            )
         self._index_name = '%s.nbi' % (filename_base,)
         self._index_path = os.path.join(self._cache_path, self._index_name)
         self._data_name_pattern = '%s.{number:d}.nbc' % (filename_base,)
