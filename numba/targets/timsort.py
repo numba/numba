@@ -298,7 +298,6 @@ MIN_GALLOP = 7
 # Start size for temp arrays.
 MERGESTATE_TEMP_SIZE = 256
 
-
 # A mergestate is a (min_gallop, keys, values, pending) tuple, where:
 #  - *min_gallop* is an integer controlling when we get into galloping mode
 #  - *keys* is a temp list for merging keys
@@ -315,8 +314,20 @@ def merge_init(keys):
     """
     Initialize a MergeState for a non-keyed sort.
     """
-    temp_keys = [keys[0]] * MERGESTATE_TEMP_SIZE
+    temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
+    temp_keys = [keys[0]] * temp_size
     temp_values = [False] * 0          # typed empty list
+    pending = [MergeRun(0, 0)] * 0     # typed empty list
+    return MergeState(MIN_GALLOP, temp_keys, temp_values, pending)
+
+
+def merge_init_with_values(keys, values):
+    """
+    Initialize a MergeState for a keyed sort.
+    """
+    temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
+    temp_keys = [keys[0]] * temp_size
+    temp_values = [values[0]] * temp_size
     pending = [MergeRun(0, 0)] * 0     # typed empty list
     return MergeState(MIN_GALLOP, temp_keys, temp_values, pending)
 
@@ -805,15 +816,13 @@ def reverse_slice(keys, values, start, stop):
             j -= 1
 
 
-def run_timsort(keys, values):
+def run_timsort_with_mergestate(ms, keys, values):
     """
-    Run timsort over the given keys and (optional) values.
+    Run timsort with the mergestate.
     """
     nremaining = len(keys)
     if nremaining < 2:
         return
-
-    ms = merge_init(keys)
 
     # March over the array once, left to right, finding natural runs,
     # and extending short natural runs to minrun elements.
@@ -842,3 +851,14 @@ def run_timsort(keys, values):
     ms = merge_force_collapse(ms, keys, values)
     assert len(ms.pending) == 1
     assert ms.pending[0] == (0, len(keys))
+
+
+def run_timsort(keys, values):
+    """
+    Run timsort over the given keys and (optional) values.
+    """
+    if values:
+        run_timsort_with_mergestate(merge_init_with_values(keys, values),
+                                    keys, values)
+    else:
+        run_timsort_with_mergestate(merge_init(keys), keys, values)

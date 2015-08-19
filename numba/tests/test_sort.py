@@ -392,6 +392,24 @@ class TestTimsortPurePython(TestCase):
                 # The list is now sorted
                 self.assertEqual(keys, sorted(orig_keys))
 
+    def test_run_timsort_values(self):
+        # Run timsort, but also with a values array
+        f = timsort.run_timsort
+
+        for size_factor in (1, 5):
+            chunk_size = 200 * size_factor
+            a = self.dupsorted_list(chunk_size)
+            b = self.duprandom_list(chunk_size)
+            c = self.revsorted_list(chunk_size)
+            orig_keys = a + b + c
+            orig_values = list(range(1000, 1000 + len(orig_keys)))
+
+            keys = orig_keys[:]
+            values = orig_values[:]
+            f(keys, values)
+            # This checks sort stability
+            self.assertSortedValues(orig_keys, orig_values, keys, values)
+
 
 if __name__ == '__main__':
     unittest.main()
