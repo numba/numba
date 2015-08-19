@@ -1,12 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
-from .. import types
-from .templates import (AttributeTemplate, ConcreteTemplate,
-                        AbstractTemplate, CallableTemplate,
-                        builtin_global, builtin,
-                        builtin_attr, signature, bound_function)
+from .. import types, utils
+from .templates import (AttributeTemplate, ConcreteTemplate, AbstractTemplate,
+                        builtin_global, builtin, builtin_attr,
+                        signature, bound_function, make_callable_template)
 from .builtins import normalize_1d_index
-from numba import utils
 
 
 # NOTE: "in" and "len" are defined on all sized containers, but we have
@@ -88,23 +86,11 @@ class NamedTupleAttribute(AttributeTemplate):
 class NamedTupleClassAttribute(AttributeTemplate):
     key = types.NamedTupleClass
 
-    def resolve___call__(self, _classty):
+    def resolve___call__(self, classty):
         """
         Resolve the named tuple constructor, aka the class's __call__ method.
         """
-        class Constructor(NamedTupleConstructor):
-            classty = _classty
-            key = _classty
-        return types.Function(Constructor)
-
-
-class NamedTupleConstructor(CallableTemplate):
-    # The named tuple type class
-    classty = None
-
-    def generic(self):
-        # Compute the pysig for the namedtuple constructor
-        instance_class = self.classty.instance_class
+        instance_class = classty.instance_class
         pysig = utils.pysignature(instance_class)
 
         def typer(*args, **kws):
@@ -120,4 +106,4 @@ class NamedTupleConstructor(CallableTemplate):
 
         # Override the typer's pysig to match the namedtuple constructor's
         typer.pysig = pysig
-        return typer
+        return types.Function(make_callable_template(self.key, typer))

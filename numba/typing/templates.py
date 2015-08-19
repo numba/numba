@@ -61,6 +61,19 @@ def make_concrete_template(name, key, signatures):
     return type(name, baseclasses, gvars)
 
 
+def make_callable_template(key, typer):
+    """
+    Create a callable template with the given key and typer function.
+    """
+    def generic(self):
+        return typer
+
+    name = "%s_CallableTemplate" % (key,)
+    bases = (CallableTemplate,)
+    class_dict = dict(key=key, generic=generic)
+    return type(name, bases, class_dict)
+
+
 def signature(return_type, *args, **kws):
     recvr = kws.pop('recvr', None)
     assert not kws
