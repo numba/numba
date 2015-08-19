@@ -18,7 +18,7 @@ from numba.targets.imputils import (user_function, user_generator,
                                     builtin_registry, impl_attribute,
                                     type_registry,
                                     impl_ret_borrowed)
-from . import arrayobj, builtins, iterators, rangeobj, optional
+from . import arrayobj, builtins, iterators, rangeobj, optional, slicing
 from numba import datamodel
 
 try:
@@ -53,7 +53,7 @@ LTYPEMAP = {
 STRUCT_TYPES = {
     types.complex64: builtins.Complex64,
     types.complex128: builtins.Complex128,
-    types.slice3_type: builtins.Slice,
+    types.slice3_type: slicing.Slice,
 }
 
 
