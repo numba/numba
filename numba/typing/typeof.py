@@ -112,6 +112,8 @@ def _typeof_none(val, c):
 @typeof_impl.register(tuple)
 def _typeof_tuple(val, c):
     tys = [typeof_impl(v, c) for v in val]
+    if any(ty is None for ty in tys):
+        return
     return types.BaseTuple.from_types(tys, type(val))
 
 @typeof_impl.register(np.dtype)

@@ -1,8 +1,11 @@
 from __future__ import print_function
 
+import copy
 import itertools
 import math
 import random
+
+import numpy as np
 
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types, utils
@@ -38,28 +41,50 @@ dct['binarysort'] = wrapped_binarysort
 wrapped_timsort = TimsortImplementation(**dct)
 
 
+array_factory = lambda lst: np.array(lst, dtype=np.int32)
+array_factory = list
+
+def array_factory_wrapper(list_factory):
+    def wrapper(*args, **kwargs):
+        lst = list_factory(*args, **kwargs)
+        return array_factory(lst)
+    return wrapper
+
+
 class BaseTimsortTest(object):
 
-    def random_list(self, n, offset=10):
+    def _random_list(self, n, offset=10):
         random.seed(42)
         l = list(range(offset, offset + n))
         random.shuffle(l)
         return l
 
-    def sorted_list(self, n, offset=10):
+    #random_list = array_factory_wrapper(_random_list)
+    random_list = _random_list
+
+    def _sorted_list(self, n, offset=10):
         return list(range(offset, offset + n))
 
-    def revsorted_list(self, n, offset=10):
+    #sorted_list = array_factory_wrapper(_sorted_list)
+    sorted_list = _sorted_list
+
+    def _revsorted_list(self, n, offset=10):
         return list(range(offset, offset + n))[::-1]
 
-    def initially_sorted_list(self, n, m=None, offset=10):
+    #revsorted_list = array_factory_wrapper(_revsorted_list)
+    revsorted_list = _revsorted_list
+
+    def _initially_sorted_list(self, n, m=None, offset=10):
         if m is None:
             m = n // 2
-        l = self.sorted_list(m, offset)
-        l += self.random_list(n - m, offset=l[-1] + offset)
+        l = self._sorted_list(m, offset)
+        l += self._random_list(n - m, offset=l[-1] + offset)
         return l
 
-    def duprandom_list(self, n, factor=None, offset=10):
+    #initially_sorted_list = array_factory_wrapper(_initially_sorted_list)
+    initially_sorted_list = _initially_sorted_list
+
+    def _duprandom_list(self, n, factor=None, offset=10):
         random.seed(42)
         if factor is None:
             factor = int(math.sqrt(n))
@@ -68,7 +93,10 @@ class BaseTimsortTest(object):
         random.shuffle(l)
         return l
 
-    def dupsorted_list(self, n, factor=None, offset=10):
+    #duprandom_list = array_factory_wrapper(_duprandom_list)
+    duprandom_list = _duprandom_list
+
+    def _dupsorted_list(self, n, factor=None, offset=10):
         if factor is None:
             factor = int(math.sqrt(n))
         l = (list(range(offset, offset + (n // factor) + 1)) * (factor + 1))[:n]
@@ -76,13 +104,17 @@ class BaseTimsortTest(object):
         l.sort()
         return l
 
+    #dupsorted_list = array_factory_wrapper(_dupsorted_list)
+    dupsorted_list = _dupsorted_list
+
     def assertSorted(self, orig, result):
         self.assertEqual(len(result), len(orig))
-        self.assertEqual(result, sorted(orig))
+        # sorted() returns a list, so make sure we compare to another list
+        self.assertEqual(list(result), sorted(orig))
 
     def assertSortedValues(self, orig, orig_values, result, result_values):
         self.assertEqual(len(result), len(orig))
-        self.assertEqual(result, sorted(orig))
+        self.assertEqual(list(result), sorted(orig))
         zip_sorted = sorted(zip(orig, orig_values), key=lambda x: x[0])
         zip_result = list(zip(result, result_values))
         self.assertEqual(zip_sorted, zip_result)
@@ -107,8 +139,8 @@ class BaseTimsortTest(object):
     def test_binarysort(self):
         n = 20
         def check(l, n, start=0):
-            res = l[:]
-            f(res, [], 0, n, start)
+            res = self.array_factory(l)
+            f(res, self.array_factory(()), 0, n, start)
             self.assertSorted(l, res)
 
         f = self.timsort.binarysort
@@ -132,8 +164,8 @@ class BaseTimsortTest(object):
         v = list(range(100, 100+n))
 
         def check(l, n, start=0):
-            res = l[:]
-            res_v = v[:]
+            res = self.array_factory(l)
+            res_v = self.array_factory(v)
             f(res, res_v, 0, n, start)
             self.assertSortedValues(l, v, res, res_v)
 
@@ -158,7 +190,7 @@ class BaseTimsortTest(object):
         f = self.timsort.count_run
 
         def check(l, lo, hi):
-            n, desc = f(l, lo, hi)
+            n, desc = f(self.array_factory(l), lo, hi)
             # Fully check invariants
             if desc:
                 for k in range(lo, lo + n - 1):
@@ -208,6 +240,7 @@ class BaseTimsortTest(object):
                 check(l, key, start, stop, hint)
 
         def check_sorted_list(l):
+            l = self.array_factory(l)
             for key in (l[5], l[15], l[0], -1000, l[-1], 1000):
                 check_all_hints(l, key, 0, n)
                 check_all_hints(l, key, 1, n - 1)
@@ -237,6 +270,7 @@ class BaseTimsortTest(object):
                 check(l, key, start, stop, hint)
 
         def check_sorted_list(l):
+            l = self.array_factory(l)
             for key in (l[5], l[15], l[0], -1000, l[-1], 1000):
                 check_all_hints(l, key, 0, n)
                 check_all_hints(l, key, 1, n - 1)
@@ -276,8 +310,8 @@ class BaseTimsortTest(object):
         nb = len(b)
 
         # Add sentinels at start and end, to check they weren't moved
-        keys = [42] + a + b + [-42]
-        orig_keys = keys[:]
+        orig_keys = [42] + a + b + [-42]
+        keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
         ssa = 1
         ssb = ssa + na
@@ -285,7 +319,7 @@ class BaseTimsortTest(object):
         new_ms = func(ms, keys, [], ssa, na, ssb, nb)
         self.assertEqual(keys[0], orig_keys[0])
         self.assertEqual(keys[-1], orig_keys[-1])
-        self.assertEqual(keys[1:-1], sorted(orig_keys[1:-1]))
+        self.assertSorted(orig_keys[1:-1], keys[1:-1])
         # Check the MergeState result
         self.assertGreaterEqual(len(new_ms.keys), len(ms.keys))
         self.assertGreaterEqual(len(new_ms.values), len(ms.values))
@@ -332,17 +366,17 @@ class BaseTimsortTest(object):
         stack_sentinels = [MergeRun(-42, -42)] * 2
 
         def run_merge_at(ms, keys, i):
-            new_ms = f(ms, keys, [], i)
+            new_ms = f(ms, keys, self.array_factory(()), i)
             self.assertEqual(keys[0], orig_keys[0])
             self.assertEqual(keys[-1], orig_keys[-1])
-            self.assertEqual(keys[1:-1], sorted(orig_keys[1:-1]))
+            self.assertSorted(orig_keys[1:-1], keys[1:-1])
             # Check stack state
             self.assertIs(new_ms.pending, ms.pending)
             self.assertEqual(ms.pending[i], (ssa, na + nb))
             self.assertEqual(ms.pending[:i], stack_sentinels)
 
         # First check with i == len(stack) - 2
-        keys = orig_keys[:]
+        keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
         # Push sentinels on stack, to check they weren't touched
         ms.pending.extend(stack_sentinels)
@@ -353,7 +387,7 @@ class BaseTimsortTest(object):
         self.assertEqual(len(ms.pending), i + 1)
 
         # Now check with i == len(stack) - 3
-        keys = orig_keys[:]
+        keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
         # Push sentinels on stack, to check they weren't touched
         ms.pending.extend(stack_sentinels)
@@ -387,7 +421,7 @@ class BaseTimsortTest(object):
                                               for n in sizes)):
                 # Create runs of the given sizes
                 orig_keys = sum(chunks, [])
-                keys = orig_keys[:]
+                keys = self.array_factory(orig_keys)
                 ms = self.merge_init(keys)
                 pos = 0
                 for c in chunks:
@@ -400,7 +434,7 @@ class BaseTimsortTest(object):
                 # Remaining run is the whole list
                 self.assertEqual(ms.pending, [MergeRun(0, len(keys))])
                 # The list is now sorted
-                self.assertEqual(keys, sorted(orig_keys))
+                self.assertSorted(orig_keys, keys)
 
     def test_run_timsort(self):
         f = self.timsort.run_timsort
@@ -412,10 +446,10 @@ class BaseTimsortTest(object):
             all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
             for chunks in itertools.product(*all_lists):
                 orig_keys = sum(chunks, [])
-                keys = orig_keys[:]
+                keys = self.array_factory(orig_keys)
                 f(keys)
                 # The list is now sorted
-                self.assertEqual(keys, sorted(orig_keys))
+                self.assertSorted(orig_keys, keys)
 
     def test_run_timsort_with_values(self):
         # Run timsort, but also with a values array
@@ -429,8 +463,8 @@ class BaseTimsortTest(object):
             orig_keys = a + b + c
             orig_values = list(range(1000, 1000 + len(orig_keys)))
 
-            keys = orig_keys[:]
-            values = orig_values[:]
+            keys = self.array_factory(orig_keys)
+            values = self.array_factory(orig_values)
             f(keys, values)
             # This checks sort stability
             self.assertSortedValues(orig_keys, orig_values, keys, values)
@@ -439,11 +473,16 @@ class BaseTimsortTest(object):
 class TestTimsortPurePython(BaseTimsortTest, TestCase):
 
     timsort = py_timsort
+    # Much faster than a Numpy array in pure Python
+    array_factory = list
 
 
-#class TestTimsortNumba(BaseTimsortTest, TestCase):
+class TestTimsortNumba(BaseTimsortTest, TestCase):
 
-    #timsort = wrapped_timsort
+    timsort = jit_timsort
+
+    def array_factory(self, lst):
+        return np.array(lst, dtype=np.int32)
 
 
 if __name__ == '__main__':

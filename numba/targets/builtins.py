@@ -1452,7 +1452,10 @@ def array_ravel_impl(context, builder, sig, args):
 @implement(types.NamedTupleClass, types.VarArg(types.Any))
 def namedtuple_constructor(context, builder, sig, args):
     # A namedtuple has the same representation as a regular tuple
-    return context.make_tuple(builder, sig.return_type, args)
+    res = context.make_tuple(builder, sig.return_type, args)
+    if context.enable_nrt:
+        context.nrt_incref(builder, sig.return_type, res)
+    return res
 
 @builtin
 @implement(types.len_type, types.Kind(types.BaseTuple))

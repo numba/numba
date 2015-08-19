@@ -38,7 +38,7 @@ MIN_GALLOP = 7
 # Start size for temp arrays.
 MERGESTATE_TEMP_SIZE = 256
 
-_NO_VALUE = False
+_NO_VALUE = 0
 
 # A mergestate is a (min_gallop, keys, values, pending) tuple, where:
 #  - *min_gallop* is an integer controlling when we get into galloping mode
@@ -103,7 +103,7 @@ def make_timsort_impl(wrap):
             for p in range(start, l, -1):
                 keys[p] = keys[p - 1]
             keys[l] = pivot
-            if values:
+            if len(values):
                 pivot_val = values[start]
                 for p in range(start, l, -1):
                     values[p] = values[p - 1]
@@ -389,7 +389,7 @@ def make_timsort_impl(wrap):
         assert dest_start >= 0
         for i in range(nitems):
             dest_keys[dest_start + i] = src_keys[src_start + i]
-        if src_values:
+        if len(src_values):
             for i in range(nitems):
                 dest_values[dest_start + i] = src_values[src_start + i]
 
@@ -404,7 +404,7 @@ def make_timsort_impl(wrap):
         assert dest_start >= 0
         for i in range(nitems):
             dest_keys[dest_start - i] = src_keys[src_start - i]
-        if src_values:
+        if len(src_values):
             for i in range(nitems):
                 dest_values[dest_start - i] = src_values[src_start - i]
 
@@ -441,7 +441,7 @@ def make_timsort_impl(wrap):
         dest = ssa
         ssa = 0
 
-        has_values = bool(a_values)
+        has_values = len(a_values) != 0
         min_gallop = ms.min_gallop
 
         # Now start merging into the space left from [ssa, ...)
@@ -603,7 +603,7 @@ def make_timsort_impl(wrap):
         ssb = nb - 1
         ssa = ssa + na - 1
 
-        has_values = bool(a_values)
+        has_values = len(a_values) != 0
         min_gallop = ms.min_gallop
 
         while nb > 0 and na > 0:
@@ -837,7 +837,7 @@ def make_timsort_impl(wrap):
             keys[i], keys[j] = keys[j], keys[i]
             i += 1
             j -= 1
-        if values:
+        if len(values):
             i = start
             j = stop - 1
             while i < j:
