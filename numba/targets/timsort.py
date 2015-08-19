@@ -331,6 +331,8 @@ def merge_adjust_gallop(ms, new_gallop):
 def sortslice_copy(dest_keys, dest_values, dest_start,
                    src_keys, src_values, src_start,
                    nitems):
+    assert src_start >= 0
+    assert dest_start >= 0
     for i in range(nitems):
         dest_keys[dest_start + i] = src_keys[src_start + i]
     if src_values:
@@ -341,12 +343,16 @@ def sortslice_copy(dest_keys, dest_values, dest_start,
 def merge_lo(ms, keys, values, ssa, na, ssb, nb):
     """
     Merge the na elements starting at ssa with the nb elements starting at
-    ssb = ssa + na in a stable way, in-place.  na and nb must be > 0.
-    Must also have that keys[ssa + na - 1] belongs at the end of the merge, and
-    should have na <= nb.  See listsort.txt for more info.
+    ssb = ssa + na in a stable way, in-place.  na and nb must be > 0,
+    and should have na <= nb. See listsort.txt for more info.
 
     An updated MergeState is returned (with possibly a different min_gallop
     or larger temp arrays).
+
+    NOTE: compared to CPython's timsort, the requirement that
+        "Must also have that keys[ssa + na - 1] belongs at the end of the merge"
+
+    is removed. This makes the code a bit simpler and easier to reason about.
     """
     assert na > 0 and nb > 0 and na <= nb, "merge_lo(): bad arguments"
     assert ssb == ssa + na, "merge_lo(): bad arguments"
@@ -366,14 +372,8 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
     min_gallop = ms.min_gallop
 
     # Now start merging into the space left from [ssa, ...)
-    #keys[dest] = b_keys[ssb]
-    #if has_values:
-        #values[dest] = b_values[ssb]
-    #dest += 1
-    #ssb += 1
-    #nb -= 1
 
-    while nb > 0 and na > 1:
+    while nb > 0 and na > 0:
         # Do the straightforward thing until (if ever) one run
         # appears to win consistently.
         acount = 0
@@ -401,7 +401,7 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
                 dest += 1
                 ssa += 1
                 na -= 1
-                if na == 1:
+                if na == 0:
                     break
                 # It's a A run
                 acount += 1
@@ -433,7 +433,7 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
                 dest += k
                 ssa += k
                 na -= k
-                if na <= 1:
+                if na == 0:
                     # Finished merging
                     break
             # Copy keys[ssb]
@@ -470,7 +470,7 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
             dest += 1
             ssa += 1
             na -= 1
-            if na == 1:
+            if na == 0:
                 # Finished merging
                 break
 
@@ -479,53 +479,140 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
 
     # Merge finished, now handle the remaining areas
     if nb == 0:
-        # Only A remaining to copy
+        # Only A remaining to copy at the end of the destination area
         sortslice_copy(keys, values, dest,
                        a_keys, a_values, ssa,
                        na)
     else:
-        assert na <= 1
-        # The last element of A belongs at the end of the merge.
-        sortslice_copy(keys, values, dest,
-                       b_keys, b_values, ssb,
-                       nb)
-        if na == 1:
-            keys[dest + nb] = a_keys[ssa]
-            if has_values:
-                values[dest + nb] = a_values[ssa]
+        assert na == 0
+        assert dest == ssb
+        # B's tail is already at the right place, do nothing
 
     return merge_adjust_gallop(ms, min_gallop)
 
 
-#/* Merge the na elements starting at ssa with the nb elements starting at
- #* ssb.keys = ssa.keys + na in a stable way, in-place.  na and nb must be > 0.
- #* Must also have that ssa.keys[na-1] belongs at the end of the merge, and
- #* should have na <= nb.  See listsort.txt for more info.  Return 0 if
- #* successful, -1 if error.
- #*/
+def merge_hi(ms, keys, values, ssa, na, ssb, nb):
+    """
+    Merge the na elements starting at ssa with the nb elements starting at
+    ssb = ssa + na in a stable way, in-place.  na and nb must be > 0,
+    and should have na >= nb.  See listsort.txt for more info.
+
+    An updated MergeState is returned (with possibly a different min_gallop
+    or larger temp arrays).
+
+    NOTE: compared to CPython's timsort, the requirement that
+        "Must also have that keys[ssa + na - 1] belongs at the end of the merge"
+
+    is removed. This makes the code a bit simpler and easier to reason about.
+    """
+    assert na > 0 and nb > 0 and na >= nb, "merge_lo(): bad arguments"
+    assert ssb == ssa + na, "merge_lo(): bad arguments"
+    # First copy [ssb, ssb + nb) into the temp space
+    ms = merge_getmem(ms, nb)
+    sortslice_copy(ms.keys, ms.values, 0,
+                   keys, values, ssb,
+                   nb)
+    a_keys = keys
+    a_values = values
+    b_keys = ms.keys
+    b_values = ms.values
+
+    # Now start merging *in descending order* into the space left
+    # from [..., ssb + nb).
+    dest = ssb + nb - 1
+    ssb = nb - 1
+    ssa = ssa + na - 1
+
+    has_values = bool(a_values)
+    min_gallop = ms.min_gallop
+
+    while nb > 0 and na > 0:
+        # Do the straightforward thing until (if ever) one run
+        # appears to win consistently.
+        acount = 0
+        bcount = 0
+
+        while True:
+            if LT(b_keys[ssb], a_keys[ssa]):
+                # We merge in descending order, so copy the larger value
+                keys[dest] = a_keys[ssa]
+                if has_values:
+                    values[dest] = a_values[ssa]
+                dest -= 1
+                ssa -= 1
+                na -= 1
+                if na == 0:
+                    break
+                # It's a A run
+                acount += 1
+                bcount = 0
+                if acount >= min_gallop:
+                    break
+            else:
+                keys[dest] = b_keys[ssb]
+                if has_values:
+                    values[dest] = b_values[ssb]
+                dest -= 1
+                ssb -= 1
+                nb -= 1
+                if nb == 0:
+                    break
+                # It's a B run
+                bcount += 1
+                acount = 0
+                if bcount >= min_gallop:
+                    break
+
+    # Merge finished, now handle the remaining areas
+    if na == 0:
+        # Only B remaining to copy at the front of the destination area
+        sortslice_copy(keys, values, dest - nb + 1,
+                       b_keys, b_values, ssb - nb + 1,
+                       nb)
+    else:
+        assert nb == 0
+        assert dest == ssa
+        # A's front is already at the right place, do nothing
+
+    return merge_adjust_gallop(ms, min_gallop)
+
+
+
+#Merge the na elements starting at pa with the nb elements starting at
+#ssb.keys = ssa.keys + na in a stable way, in-place.  na and nb must be > 0.
+#Must also have that ssa.keys[na-1] belongs at the end of the merge, and
+#should have na >= nb.  See listsort.txt for more info.  Return 0 if
+#successful, -1 if error.
+
 #static Py_ssize_t
-#merge_lo(MergeState *ms, sortslice ssa, Py_ssize_t na,
+#merge_hi(MergeState *ms, sortslice ssa, Py_ssize_t na,
          #sortslice ssb, Py_ssize_t nb)
 #{
     #Py_ssize_t k;
-    #sortslice dest;
+    #sortslice dest, basea, baseb;
     #int result = -1;            /* guilty until proved innocent */
     #Py_ssize_t min_gallop;
 
     #assert(ms && ssa.keys && ssb.keys && na > 0 && nb > 0);
     #assert(ssa.keys + na == ssb.keys);
-    #if (MERGE_GETMEM(ms, na) < 0)
+    #if (MERGE_GETMEM(ms, nb) < 0)
         #return -1;
-    #sortslice_memcpy(&ms->a, 0, &ssa, 0, na);
-    #dest = ssa;
-    #ssa = ms->a;
+    #dest = ssb;
+    #sortslice_advance(&dest, nb-1);
+    #sortslice_memcpy(&ms->a, 0, &ssb, 0, nb);
+    #basea = ssa;
+    #baseb = ms->a;
+    #ssb.keys = ms->a.keys + nb - 1;
+    #if (ssb.values != NULL)
+        #ssb.values = ms->a.values + nb - 1;
+    #sortslice_advance(&ssa, na - 1);
 
-    #sortslice_copy_incr(&dest, &ssb);
-    #--nb;
-    #if (nb == 0)
+    #sortslice_copy_decr(&dest, &ssa);
+    #--na;
+    #if (na == 0)
         #goto Succeed;
-    #if (na == 1)
-        #goto CopyB;
+    #if (nb == 1)
+        #goto CopyA;
 
     #min_gallop = ms->min_gallop;
     #for (;;) {
@@ -536,28 +623,28 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
          #* appears to win consistently.
          #*/
         #for (;;) {
-            #assert(na > 1 && nb > 0);
+            #assert(na > 0 && nb > 1);
             #k = ISLT(ssb.keys[0], ssa.keys[0]);
             #if (k) {
                 #if (k < 0)
                     #goto Fail;
-                #sortslice_copy_incr(&dest, &ssb);
-                #++bcount;
-                #acount = 0;
-                #--nb;
-                #if (nb == 0)
-                    #goto Succeed;
-                #if (bcount >= min_gallop)
-                    #break;
-            #}
-            #else {
-                #sortslice_copy_incr(&dest, &ssa);
+                #sortslice_copy_decr(&dest, &ssa);
                 #++acount;
                 #bcount = 0;
                 #--na;
-                #if (na == 1)
-                    #goto CopyB;
+                #if (na == 0)
+                    #goto Succeed;
                 #if (acount >= min_gallop)
+                    #break;
+            #}
+            #else {
+                #sortslice_copy_decr(&dest, &ssb);
+                #++bcount;
+                #acount = 0;
+                #--nb;
+                #if (nb == 1)
+                    #goto CopyA;
+                #if (bcount >= min_gallop)
                     #break;
             #}
         #}
@@ -569,48 +656,50 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
          #*/
         #++min_gallop;
         #do {
-            #assert(na > 1 && nb > 0);
+            #assert(na > 0 && nb > 1);
             #min_gallop -= min_gallop > 1;
             #ms->min_gallop = min_gallop;
-            #k = gallop_right(ssb.keys[0], ssa.keys, na, 0);
+            #k = gallop_right(ssb.keys[0], basea.keys, na, na-1);
+            #if (k < 0)
+                #goto Fail;
+            #k = na - k;
             #acount = k;
             #if (k) {
-                #if (k < 0)
-                    #goto Fail;
-                #sortslice_memcpy(&dest, 0, &ssa, 0, k);
-                #sortslice_advance(&dest, k);
-                #sortslice_advance(&ssa, k);
+                #sortslice_advance(&dest, -k);
+                #sortslice_advance(&ssa, -k);
+                #sortslice_memmove(&dest, 1, &ssa, 1, k);
                 #na -= k;
-                #if (na == 1)
-                    #goto CopyB;
-                #/* na==0 is impossible now if the comparison
-                 #* function is consistent, but we can't assume
-                 #* that it is.
-                 #*/
                 #if (na == 0)
                     #goto Succeed;
             #}
-            #sortslice_copy_incr(&dest, &ssb);
+            #sortslice_copy_decr(&dest, &ssb);
             #--nb;
-            #if (nb == 0)
-                #goto Succeed;
+            #if (nb == 1)
+                #goto CopyA;
 
-            #k = gallop_left(ssa.keys[0], ssb.keys, nb, 0);
+            #k = gallop_left(ssa.keys[0], baseb.keys, nb, nb-1);
+            #if (k < 0)
+                #goto Fail;
+            #k = nb - k;
             #bcount = k;
             #if (k) {
-                #if (k < 0)
-                    #goto Fail;
-                #sortslice_memmove(&dest, 0, &ssb, 0, k);
-                #sortslice_advance(&dest, k);
-                #sortslice_advance(&ssb, k);
+                #sortslice_advance(&dest, -k);
+                #sortslice_advance(&ssb, -k);
+                #sortslice_memcpy(&dest, 1, &ssb, 1, k);
                 #nb -= k;
+                #if (nb == 1)
+                    #goto CopyA;
+                #/* nb==0 is impossible now if the comparison
+                 #* function is consistent, but we can't assume
+                 #* that it is.
+                 #*/
                 #if (nb == 0)
                     #goto Succeed;
             #}
-            #sortslice_copy_incr(&dest, &ssa);
+            #sortslice_copy_decr(&dest, &ssa);
             #--na;
-            #if (na == 1)
-                #goto CopyB;
+            #if (na == 0)
+                #goto Succeed;
         #} while (acount >= MIN_GALLOP || bcount >= MIN_GALLOP);
         #++min_gallop;           /* penalize it for leaving galloping mode */
         #ms->min_gallop = min_gallop;
@@ -618,13 +707,15 @@ def merge_lo(ms, keys, values, ssa, na, ssb, nb):
 #Succeed:
     #result = 0;
 #Fail:
-    #if (na)
-        #sortslice_memcpy(&dest, 0, &ssa, 0, na);
+    #if (nb)
+        #sortslice_memcpy(&dest, -(nb-1), &baseb, 0, nb);
     #return result;
-#CopyB:
-    #assert(na == 1 && nb > 0);
-    #/* The last element of ssa belongs at the end of the merge. */
-    #sortslice_memmove(&dest, 0, &ssb, 0, nb);
-    #sortslice_copy(&dest, nb, &ssa, 0);
+#CopyA:
+    #assert(nb == 1 && na > 0);
+    #/* The first element of ssb belongs at the front of the merge. */
+    #sortslice_memmove(&dest, 1-na, &ssa, 1-na, na);
+    #sortslice_advance(&dest, -na);
+    #sortslice_advance(&ssa, -na);
+    #sortslice_copy(&dest, 0, &ssb, 0);
     #return 0;
 #}

@@ -239,23 +239,20 @@ class TestTimsortPurePython(TestCase):
                 self.assertLess(quot, p)
                 self.assertGreaterEqual(quot, 0.9 * p)
 
-    def check_merge_lo(self, a, b):
+    def check_merge_lo_hi(self, func, a, b):
         f = timsort.merge_lo
 
         na = len(a)
         nb = len(b)
 
-        # Add sentinels at start and end check they weren't moved
+        # Add sentinels at start and end, to check they weren't moved
         keys = [42] + a + b + [-42]
         orig_keys = keys[:]
         ms = self.merge_init(keys)
         ssa = 1
         ssb = ssa + na
 
-        new_ms = f(ms, keys, [], ssa, na, ssb, nb)
-        #print("-- merge_lo() --", na, nb)
-        #print(orig_keys)
-        #print(keys)
+        new_ms = func(ms, keys, [], ssa, na, ssb, nb)
         self.assertEqual(keys[0], orig_keys[0])
         self.assertEqual(keys[-1], orig_keys[-1])
         self.assertEqual(keys[1:-1], sorted(orig_keys[1:-1]))
@@ -265,22 +262,23 @@ class TestTimsortPurePython(TestCase):
         self.assertIs(new_ms.pending, ms.pending)
         self.assertGreaterEqual(new_ms.min_gallop, 1)
 
-    def test_merge_lo(self):
-        f = timsort.merge_lo
+    def test_merge_lo_hi(self):
+        f_lo = timsort.merge_lo
+        f_hi = timsort.merge_hi
 
         # The larger sizes exercise galloping
-        for (na, nb) in [(12, 16), (40, 50), (100, 110), (1000, 1100)]:
+        for (na, nb) in [(12, 16), (40, 40), (100, 110), (1000, 1100)]:
             a_lists = []
             b_lists = []
             for offset in (20, 120):
-                # a[-1] must end last in the merge
-                a_lists.append(self.sorted_list(na - 1, offset) + [999999])
-                a_lists.append(self.dupsorted_list(na - 1, offset) + [999999])
+                a_lists.append(self.sorted_list(na, offset))
+                a_lists.append(self.dupsorted_list(na, offset))
                 b_lists.append(self.sorted_list(nb, offset))
                 b_lists.append(self.dupsorted_list(nb, offset))
 
             for a, b in itertools.product(a_lists, b_lists):
-                self.check_merge_lo(a, b)
+                self.check_merge_lo_hi(f_lo, a, b)
+                self.check_merge_lo_hi(f_hi, b, a)
 
 
 if __name__ == '__main__':
