@@ -221,6 +221,28 @@ class Function(Callable, Opaque):
         return sigs, hasattr(self.template, 'generic')
 
 
+class NamedTupleClass(Callable, Opaque):
+    """
+    Type class for namedtuple classes.
+    """
+
+    def __init__(self, instance_class):
+        self.instance_class = instance_class
+        name = "class(%s)" % (instance_class)
+        super(NamedTupleClass, self).__init__(name, param=True)
+
+    def get_call_type(self, context, args, kws):
+        # Overriden by the __call__ constructor resolution in typing.collections
+        return None
+
+    def get_call_signatures(self):
+        return (), True
+
+    @property
+    def key(self):
+        return self.instance_class
+
+
 class NumberClass(Callable, DTypeSpec, Opaque):
     """
     Type class for number classes (e.g. "np.float64").
@@ -897,15 +919,35 @@ class BaseTuple(Type):
     The base class for all tuple types (with a known size).
     """
 
+    @classmethod
+    def from_types(cls, tys, pyclass=None):
+        """
+        Instantiate the right tuple type for the given element types.
+        """
+        homogenous = False
+        if tys:
+            first = tys[0]
+            for ty in tys[1:]:
+                if ty != first:
+                    break
+            else:
+                homogenous = True
 
-class UniTuple(Sequence, BaseTuple):
+        if pyclass is not None and pyclass is not tuple:
+            # A subclass => is it a namedtuple?
+            assert issubclass(pyclass, tuple)
+            if hasattr(pyclass, "_asdict"):
+                if homogenous:
+                    return NamedUniTuple(first, len(tys), pyclass)
+                else:
+                    return NamedTuple(tys, pyclass)
+        if homogenous:
+            return UniTuple(first, len(tys))
+        else:
+            return Tuple(tys)
 
-    def __init__(self, dtype, count):
-        self.dtype = dtype
-        self.count = count
-        name = "(%s x %d)" % (dtype, count)
-        super(UniTuple, self).__init__(name, param=True)
-        self._iterator_type = UniTupleIter(self)
+
+class _HomogenousTuple(Sequence, BaseTuple):
 
     @property
     def iterator_type(self):
@@ -927,12 +969,22 @@ class UniTuple(Sequence, BaseTuple):
         return self.count
 
     @property
-    def key(self):
-        return self.dtype, self.count
-
-    @property
     def types(self):
         return (self.dtype,) * self.count
+
+
+class UniTuple(_HomogenousTuple):
+
+    def __init__(self, dtype, count):
+        self.dtype = dtype
+        self.count = count
+        name = "(%s x %d)" % (dtype, count)
+        super(UniTuple, self).__init__(name, param=True)
+        self._iterator_type = UniTupleIter(self)
+
+    @property
+    def key(self):
+        return self.dtype, self.count
 
     def unify(self, typingctx, other):
         """
@@ -964,13 +1016,7 @@ class UniTupleIter(SimpleIteratorType):
         return self.unituple
 
 
-class Tuple(BaseTuple):
-
-    def __init__(self, types):
-        self.types = tuple(types)
-        self.count = len(self.types)
-        name = "(%s)" % ', '.join(str(i) for i in self.types)
-        super(Tuple, self).__init__(name, param=True)
+class _HeterogenousTuple(BaseTuple):
 
     def __getitem__(self, i):
         """
@@ -982,12 +1028,21 @@ class Tuple(BaseTuple):
         # Beware: this makes Tuple(()) false-ish
         return len(self.types)
 
+    def __iter__(self):
+        return iter(self.types)
+
+
+class Tuple(_HeterogenousTuple):
+
+    def __init__(self, types):
+        self.types = tuple(types)
+        self.count = len(self.types)
+        name = "(%s)" % ', '.join(str(i) for i in self.types)
+        super(Tuple, self).__init__(name, param=True)
+
     @property
     def key(self):
         return self.types
-
-    def __iter__(self):
-        return iter(self.types)
 
     def unify(self, typingctx, other):
         """
@@ -1011,6 +1066,41 @@ class Tuple(BaseTuple):
             if any(kind is None for kind in kinds):
                 return
             return max(kinds)
+
+
+class BaseNamedTuple(BaseTuple):
+    pass
+
+
+class NamedUniTuple(_HomogenousTuple, BaseNamedTuple):
+
+    def __init__(self, dtype, count, cls):
+        self.dtype = dtype
+        self.count = count
+        self.fields = tuple(cls._fields)
+        self.instance_class = cls
+        name = "%s(%s x %d)" % (cls.__name__, dtype, count)
+        super(NamedUniTuple, self).__init__(name, param=True)
+        self._iterator_type = UniTupleIter(self)
+
+    @property
+    def key(self):
+        return self.instance_class, self.dtype, self.count
+
+
+class NamedTuple(_HeterogenousTuple, BaseNamedTuple):
+
+    def __init__(self, types, cls):
+        self.types = tuple(types)
+        self.count = len(self.types)
+        self.fields = tuple(cls._fields)
+        self.instance_class = cls
+        name = "%s(%s)" % (cls.__name__, ', '.join(str(i) for i in self.types))
+        super(NamedTuple, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.instance_class, self.types
 
 
 class List(MutableSequence):
@@ -1205,7 +1295,7 @@ class NoneType(Opaque):
         return Optional(other)
 
 
-class ExceptionType(Callable, Phantom):
+class ExceptionClass(Callable, Phantom):
     """
     The type of exception classes (not instances).
     """
@@ -1214,7 +1304,7 @@ class ExceptionType(Callable, Phantom):
         assert issubclass(exc_class, BaseException)
         name = "%s" % (exc_class.__name__)
         self.exc_class = exc_class
-        super(ExceptionType, self).__init__(name, param=True)
+        super(ExceptionClass, self).__init__(name, param=True)
 
     def get_call_type(self, context, args, kws):
         return self.get_call_signatures()[0][0]
@@ -1248,17 +1338,6 @@ class ExceptionInstance(Phantom):
 
 class Slice3Type(Type):
     pass
-
-
-# Utils
-
-def is_int_tuple(x):
-    if isinstance(x, Tuple):
-        return all(i in integer_domain for i in x.types)
-    elif isinstance(x, UniTuple):
-        return x.dtype in integer_domain
-    else:
-        return False
 
 
 # Short names
