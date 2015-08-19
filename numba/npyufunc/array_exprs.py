@@ -287,11 +287,18 @@ def _lower_array_expr(lowerer, expr):
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
     expr_var_list = expr.list_vars()
     expr_var_map = {}
+
+    expr_var_name_map = {}
+
     for expr_var in expr_var_list:
         expr_var_name = expr_var.name
         expr_var_new_name = expr_var_name.replace("$", "_").replace(".", "_")
         expr_var_map[expr_var_new_name] = expr_var_name, expr_var
         expr_var.name = expr_var_new_name
+
+        if expr_var_new_name not in expr_var_name_map:
+            expr_var_name_map[expr_var_new_name] = expr_var_name
+
     expr_filename = expr_var_list[0].loc.filename
     # Parameters are the names internal to the new closure.
     expr_params = sorted(expr_var_map.keys())
@@ -321,7 +328,15 @@ def _lower_array_expr(lowerer, expr):
 
     context = lowerer.context
     builder = lowerer.builder
-    outer_sig = expr.ty(*(lowerer.typeof(name) for name in expr_args))
+
+    def typeof(name):
+        try:
+            return lowerer.typeof(name)
+        except KeyError:
+            return lowerer.typeof(expr_var_name_map[name])
+
+
+    outer_sig = expr.ty(*(typeof(name) for name in expr_args))
     inner_sig_args = []
     for argty in outer_sig.args:
         if isinstance(argty, types.Array):
@@ -342,6 +357,12 @@ def _lower_array_expr(lowerer, expr):
             return self.cast(result, inner_sig.return_type,
                              self.outer_sig.return_type)
 
-    args = [lowerer.loadvar(name) for name in expr_args]
+    def loadvar(name):
+        try:
+            return lowerer.loadvar(name)
+        except KeyError:
+            return lowerer.loadvar(expr_var_name_map[name])
+
+    args = [loadvar(name) for name in expr_args]
     return npyimpl.numpy_ufunc_kernel(
         context, builder, outer_sig, args, ExprKernel, explicit_output=False)
