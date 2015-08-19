@@ -112,27 +112,7 @@ def _typeof_none(val, c):
 @typeof_impl.register(tuple)
 def _typeof_tuple(val, c):
     tys = [typeof_impl(v, c) for v in val]
-    homogenous = False
-    if tys:
-        first = tys[0]
-        for ty in tys[1:]:
-            if ty != first:
-                break
-        else:
-            homogenous = True
-
-    cls = type(val)
-    if cls is not tuple:
-        # A subclass => is it a namedtuple?
-        if hasattr(cls, "_asdict"):
-            if homogenous:
-                return types.NamedUniTuple(first, len(tys), cls)
-            else:
-                return types.NamedTuple(tys, cls)
-    if homogenous:
-        return types.UniTuple(first, len(tys))
-    else:
-        return types.Tuple(tys)
+    return types.BaseTuple.from_types(tys, type(val))
 
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):

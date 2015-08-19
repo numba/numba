@@ -919,6 +919,33 @@ class BaseTuple(Type):
     The base class for all tuple types (with a known size).
     """
 
+    @classmethod
+    def from_types(cls, tys, pyclass=None):
+        """
+        Instantiate the right tuple type for the given element types.
+        """
+        homogenous = False
+        if tys:
+            first = tys[0]
+            for ty in tys[1:]:
+                if ty != first:
+                    break
+            else:
+                homogenous = True
+
+        if pyclass is not None and pyclass is not tuple:
+            # A subclass => is it a namedtuple?
+            assert issubclass(pyclass, tuple)
+            if hasattr(pyclass, "_asdict"):
+                if homogenous:
+                    return NamedUniTuple(first, len(tys), pyclass)
+                else:
+                    return NamedTuple(tys, pyclass)
+        if homogenous:
+            return UniTuple(first, len(tys))
+        else:
+            return Tuple(tys)
+
 
 class _HomogenousTuple(Sequence, BaseTuple):
 
@@ -1311,17 +1338,6 @@ class ExceptionInstance(Phantom):
 
 class Slice3Type(Type):
     pass
-
-
-# Utils
-
-def is_int_tuple(x):
-    if isinstance(x, Tuple):
-        return all(i in integer_domain for i in x.types)
-    elif isinstance(x, UniTuple):
-        return x.dtype in integer_domain
-    else:
-        return False
 
 
 # Short names

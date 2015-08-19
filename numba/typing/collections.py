@@ -115,22 +115,8 @@ class NamedTupleConstructor(CallableTemplate):
                 msg = "In '%s': %s" % (instance_class, e)
                 e.args = (msg,)
                 raise
-            tys = bound.args
-            # In sync with typing.typeof
-            # XXX dedup using a classmethod?
-            homogenous = False
-            if tys:
-                first = tys[0]
-                for ty in tys[1:]:
-                    if ty != first:
-                        break
-                else:
-                    homogenous = True
-            if homogenous:
-                return_type = types.NamedUniTuple(first, len(tys), instance_class)
-            else:
-                return_type = types.NamedTuple(tys, instance_class)
-            return return_type
+            assert not bound.kwargs
+            return types.BaseTuple.from_types(bound.args, instance_class)
 
         # Override the typer's pysig to match the namedtuple constructor's
         typer.pysig = pysig
