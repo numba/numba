@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import itertools
+import math
 import random
 
 from numba.compiler import compile_isolated, Flags
@@ -33,14 +34,18 @@ class TestTimsortPurePython(TestCase):
         l += self.random_list(n - m, offset=l[-1] + offset)
         return l
 
-    def duprandom_list(self, n, factor=4, offset=10):
+    def duprandom_list(self, n, factor=None, offset=10):
         random.seed(42)
-        l = (list(range(offset, offset + n // factor)) * (factor + 1))[:n]
+        if factor is None:
+            factor = int(math.sqrt(n))
+        l = (list(range(offset, offset + (n // factor) + 1)) * (factor + 1))[:n]
         assert len(l) == n
         random.shuffle(l)
         return l
 
-    def dupsorted_list(self, n, factor=4, offset=10):
+    def dupsorted_list(self, n, factor=None, offset=10):
+        if factor is None:
+            factor = int(math.sqrt(n))
         l = (list(range(offset, offset + (n // factor) + 1)) * (factor + 1))[:n]
         assert len(l) == n, (len(l), n)
         l.sort()
@@ -262,11 +267,20 @@ class TestTimsortPurePython(TestCase):
         self.assertIs(new_ms.pending, ms.pending)
         self.assertGreaterEqual(new_ms.min_gallop, 1)
 
+    def make_sample_sorted_lists(self, n):
+        lists = []
+        for offset in (20, 120):
+            lists.append(self.sorted_list(n, offset))
+            lists.append(self.dupsorted_list(n, offset))
+        return lists
+
     def make_sample_lists(self, n):
         lists = []
         for offset in (20, 120):
             lists.append(self.sorted_list(n, offset))
             lists.append(self.dupsorted_list(n, offset))
+            lists.append(self.revsorted_list(n, offset))
+            lists.append(self.duprandom_list(n, offset))
         return lists
 
     def test_merge_lo_hi(self):
@@ -275,8 +289,8 @@ class TestTimsortPurePython(TestCase):
 
         # The larger sizes exercise galloping
         for (na, nb) in [(12, 16), (40, 40), (100, 110), (1000, 1100)]:
-            for a, b in itertools.product(self.make_sample_lists(na),
-                                          self.make_sample_lists(nb)):
+            for a, b in itertools.product(self.make_sample_sorted_lists(na),
+                                          self.make_sample_sorted_lists(nb)):
                 self.check_merge_lo_hi(f_lo, a, b)
                 self.check_merge_lo_hi(f_hi, b, a)
 
@@ -331,8 +345,8 @@ class TestTimsortPurePython(TestCase):
     def test_merge_at(self):
         # The larger sizes exercise galloping
         for (na, nb) in [(12, 16), (40, 40), (100, 110), (500, 510)]:
-            for a, b in itertools.product(self.make_sample_lists(na),
-                                          self.make_sample_lists(nb)):
+            for a, b in itertools.product(self.make_sample_sorted_lists(na),
+                                          self.make_sample_sorted_lists(nb)):
                 self.check_merge_at(a, b)
                 self.check_merge_at(b, a)
 
@@ -344,7 +358,8 @@ class TestTimsortPurePython(TestCase):
         sizes_list.append(sizes_list[0][::-1])
 
         for sizes in sizes_list:
-            for chunks in itertools.product(*(self.make_sample_lists(n) for n in sizes)):
+            for chunks in itertools.product(*(self.make_sample_sorted_lists(n)
+                                              for n in sizes)):
                 # Create runs of the given sizes
                 orig_keys = sum(chunks, [])
                 keys = orig_keys[:]
@@ -359,6 +374,21 @@ class TestTimsortPurePython(TestCase):
                 f(ms, keys, [])
                 # Remaining run is the whole list
                 self.assertEqual(ms.pending, [timsort.MergeRun(0, len(keys))])
+                # The list is now sorted
+                self.assertEqual(keys, sorted(orig_keys))
+
+    def test_run_timsort(self):
+        f = timsort.run_timsort
+
+        for size_factor in (1, 10):
+            # Make lists to be sorted from three chunks of different kinds.
+            sizes = (15, 30, 20)
+
+            all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
+            for chunks in itertools.product(*all_lists):
+                orig_keys = sum(chunks, [])
+                keys = orig_keys[:]
+                f(keys, [])
                 # The list is now sorted
                 self.assertEqual(keys, sorted(orig_keys))
 

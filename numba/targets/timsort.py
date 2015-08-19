@@ -281,20 +281,35 @@ def merge_compute_minrun(n):
     return n + r
 
 
+
+# The maximum number of entries in a MergeState's pending-runs stack.
+# This is enough to sort arrays of size up to about
+#    32 * phi ** MAX_MERGE_PENDING
+# where phi ~= 1.618.  85 is ridiculously large enough, good for an array
+# with 2**64 elements.
+# NOTE this implementation doesn't depend on it (the stack is dynamically
+# allocated), but it's still good to check as an invariant.
+MAX_MERGE_PENDING  = 85
+
+# When we get into galloping mode, we stay there until both runs win less
+# often than MIN_GALLOP consecutive times.  See listsort.txt for more info.
 MIN_GALLOP = 7
+
+# Start size for temp arrays.
 MERGESTATE_TEMP_SIZE = 256
-
-MergeState = collections.namedtuple('MergeState',
-                                    ('min_gallop', 'keys', 'values', 'pending'))
-
-MergeRun = collections.namedtuple('MergeRun', ('start', 'size'))
 
 
 # A mergestate is a (min_gallop, keys, values, pending) tuple, where:
 #  - *min_gallop* is an integer controlling when we get into galloping mode
 #  - *keys* is a temp list for merging keys
 #  - *values* is a temp list for merging values, if needed
-#  - *pending* is a stack of (start, size) tuples indicating pending runs to be merged
+#  - *pending* is a stack of pending runs to be merged
+
+MergeState = collections.namedtuple('MergeState',
+                                    ('min_gallop', 'keys', 'values', 'pending'))
+
+MergeRun = collections.namedtuple('MergeRun', ('start', 'size'))
+
 
 def merge_init(keys):
     """
@@ -359,8 +374,8 @@ def sortslice_copy_down(dest_keys, dest_values, dest_start,
             dest_values[dest_start - i] = src_values[src_start - i]
 
 
-# Disable this for debug
-DO_GALLOP = True
+# Disable this for debug or perf comparison
+DO_GALLOP = 1
 
 def merge_lo(ms, keys, values, ssa, na, ssb, nb):
     """
@@ -726,11 +741,39 @@ def merge_at(ms, keys, values, i):
         return merge_hi(ms, keys, values, ssa, na, ssb, nb)
 
 
+def merge_collapse(ms, keys, values):
+    """
+    Examine the stack of runs waiting to be merged, merging adjacent runs
+    until the stack invariants are re-established:
+
+    1. len[-3] > len[-2] + len[-1]
+    2. len[-2] > len[-1]
+
+    An updated MergeState is returned.
+
+    See listsort.txt for more info.
+    """
+    pending = ms.pending
+    while len(pending) > 1:
+        n = len(pending) - 2
+        if ((n > 0 and pending[n-1].size <= pending[n].size + pending[n+1].size) or
+            (n > 1 and pending[n-2].size <= pending[n-1].size + pending[n].size)):
+            if pending[n - 1].size < pending[n + 1].size:
+                # Merge smaller one first
+                n -= 1
+            ms = merge_at(ms, keys, values, n)
+        elif pending[n].size < pending[n + 1].size:
+            ms = merge_at(ms, keys, values, n)
+        else:
+            break
+    return ms
 
 def merge_force_collapse(ms, keys, values):
     """
     Regardless of invariants, merge all runs on the stack until only one
     remains.  This is used at the end of the mergesort.
+
+    An updated MergeState is returned.
     """
     pending = ms.pending
     while len(pending) > 1:
@@ -741,3 +784,61 @@ def merge_force_collapse(ms, keys, values):
                 n -= 1
         ms = merge_at(ms, keys, values, n)
     return ms
+
+
+def reverse_slice(keys, values, start, stop):
+    """
+    Reverse a slice, in-place.
+    """
+    i = start
+    j = stop - 1
+    while i < j:
+        keys[i], keys[j] = keys[j], keys[i]
+        i += 1
+        j -= 1
+    if values:
+        i = start
+        j = stop - 1
+        while i < j:
+            values[i], values[j] = values[j], values[i]
+            i += 1
+            j -= 1
+
+
+def run_timsort(keys, values):
+    """
+    Run timsort over the given keys and (optional) values.
+    """
+    nremaining = len(keys)
+    if nremaining < 2:
+        return
+
+    ms = merge_init(keys)
+
+    # March over the array once, left to right, finding natural runs,
+    # and extending short natural runs to minrun elements.
+    minrun = merge_compute_minrun(nremaining)
+
+    lo = 0
+    while nremaining > 0:
+        n, desc = count_run(keys, lo, lo + nremaining)
+        if desc:
+            # Descending run => reverse
+            reverse_slice(keys, values, lo, lo + n)
+        # If short, extend to min(minrun, nremaining)
+        if n < minrun:
+            force = min(minrun, nremaining)
+            binarysort(keys, values, lo, lo + force, lo + n)
+            n = force
+        # Push run onto stack, and maybe merge.
+        assert len(ms.pending) < MAX_MERGE_PENDING
+        ms.pending.append(MergeRun(lo, n))
+        ms = merge_collapse(ms, keys, values)
+        # Advance to find next run.
+        lo += n
+        nremaining -= n
+
+    # All initial runs have been discovered, now finish merging.
+    ms = merge_force_collapse(ms, keys, values)
+    assert len(ms.pending) == 1
+    assert ms.pending[0] == (0, len(keys))
