@@ -1464,7 +1464,7 @@ def tuple_len(context, builder, sig, args):
 
 @builtin
 @implement(bool, types.Kind(types.BaseTuple))
-def sequence_bool(context, builder, sig, args):
+def tuple_bool(context, builder, sig, args):
     tupty, = sig.args
     if len(tupty):
         return cgutils.true_bit
