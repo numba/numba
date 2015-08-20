@@ -15,6 +15,8 @@ Rect = collections.namedtuple('Rect', ('width', 'height'))
 
 Point = collections.namedtuple('Point', ('x', 'y', 'z'))
 
+Empty = collections.namedtuple('Empty', ())
+
 def tuple_return_usecase(a, b):
     return a, b
 
@@ -49,6 +51,9 @@ def lt_usecase(a, b):
 
 def le_usecase(a, b):
     return a <= b
+
+def bool_usecase(tup):
+    return bool(tup), (3 if tup else 2)
 
 def getattr_usecase(tup):
     return tup.z, tup.y, tup.x
@@ -135,6 +140,20 @@ class TestOperations(TestCase):
         for i in range(len(tup)):
             self.assertPreciseEqual(cr.entry_point(tup, i), tup[i])
 
+    def test_bool(self):
+        pyfunc = bool_usecase
+        cr = compile_isolated(pyfunc,
+                              [types.Tuple((types.int64, types.int32))])
+        args = ((4, 5),)
+        self.assertPreciseEqual(cr.entry_point(*args), pyfunc(*args))
+        cr = compile_isolated(pyfunc,
+                              [types.UniTuple(types.int64, 3)])
+        args = ((4, 5, 6),)
+        self.assertPreciseEqual(cr.entry_point(*args), pyfunc(*args))
+        cr = compile_isolated(pyfunc,
+                              [types.Tuple(())])
+        self.assertPreciseEqual(cr.entry_point(()), pyfunc(()))
+
     def _test_compare(self, pyfunc):
         def eq(pyfunc, cfunc, args):
             self.assertIs(cfunc(*args), pyfunc(*args),
@@ -213,6 +232,18 @@ class TestNamedTuple(TestCase):
         p = Point(4, 5, 6)
         for i in range(len(p)):
             self.assertPreciseEqual(cfunc(p, i), pyfunc(p, i))
+
+    def test_bool(self):
+        def check(p):
+            pyfunc = bool_usecase
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        # Homogenous
+        check(Rect(4, 5))
+        # Heterogenous
+        check(Rect(4, 5.5))
+        check(Empty())
 
     def _test_compare(self, pyfunc):
         def eq(pyfunc, cfunc, args):

@@ -516,6 +516,17 @@ class Len(AbstractTemplate):
             return signature(types.intp, val)
 
 
+@builtin
+class TupleBool(AbstractTemplate):
+    key = "is_true"
+
+    def generic(self, args, kws):
+        assert not kws
+        (val,) = args
+        if isinstance(val, (types.BaseTuple)):
+            return signature(types.boolean, val)
+
+
 #-------------------------------------------------------------------------------
 
 def normalize_shape(shape):
@@ -873,13 +884,13 @@ class Bool(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-
         [arg] = args
-
-        if arg not in types.number_domain:
-            raise TypeError("bool() only support for numbers")
-
-        return signature(types.boolean, arg)
+        if arg in types.number_domain:
+            return signature(types.boolean, arg)
+        # XXX typing for bool cannot be polymorphic because of the
+        # types.Function thing, so we redirect to the "is_true"
+        # intrinsic.
+        return self.context.resolve_function_type("is_true", args, kws)
 
 
 class Int(AbstractTemplate):
