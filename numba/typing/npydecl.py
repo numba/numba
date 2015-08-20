@@ -180,7 +180,7 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
             builtin(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
                          dict(key=op)))
 
-    def generic(self, *args, **kws):
+    def generic(self, args, kws):
         '''Overloads and calls base class generic() method, returning
         None if a TypingError occurred.
 
@@ -190,8 +190,7 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         (particularly user-defined operators).
         '''
         try:
-            sig = super(NumpyRulesArrayOperator, self).generic(
-                *args, **kws)
+            sig = super(NumpyRulesArrayOperator, self).generic(args, kws)
             # Stay out of the timedelta64 range and domain; already
             # handled elsewhere.
             if sig is not None:
@@ -214,6 +213,12 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
         '-': "negative",
         '~': "invert",
     }
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1 and isinstance(args[0], types.Array):
+            return super(NumpyRulesUnaryArrayOperator, self).generic(args, kws)
+
 
 
 # list of unary ufuncs to register

@@ -303,6 +303,23 @@ class TestRewriteIssues(MemoryLeakMixin, unittest.TestCase):
         got = foo(a, b)
         np.testing.assert_allclose(got, expect)
 
+    def test_unary_arrayexpr(self):
+        """
+        Typing of unary array expression (np.negate) can be incorrect.
+        """
+        @njit
+        def foo(a, b):
+            return b - a + -a
+
+        b = 1.5
+        a = np.arange(10, dtype=np.int32)
+
+        expect = foo.py_func(a, b)
+        got = foo(a, b)
+
+        self.assertEqual(got.dtype, np.float64)
+        np.testing.assert_allclose(got, expect)
+
 
 if __name__ == "__main__":
     unittest.main()
