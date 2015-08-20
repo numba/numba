@@ -355,23 +355,14 @@ np_types.add(numpy.uintc)
 np_types.add(numpy.uintp)
 
 
-def register_casters(register_global):
+def register_number_classes(register_global):
     for np_type in np_types:
         nb_type = getattr(types, np_type.__name__)
 
-        class Caster(AbstractTemplate):
-            key = np_type
-            restype = nb_type
+        register_global(np_type, types.NumberClass(nb_type))
 
-            def generic(self, args, kws):
-                assert not kws
-                [a] = args
-                if a in types.number_domain:
-                    return signature(self.restype, a)
 
-        register_global(np_type, types.NumberClass(nb_type, Caster))
-
-register_casters(builtin_global)
+register_number_classes(builtin_global)
 
 
 # -----------------------------------------------------------------------------

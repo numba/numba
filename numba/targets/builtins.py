@@ -1332,3 +1332,14 @@ def array_ravel_impl(context, builder, sig, args):
 
     res = flatarr._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+# -----------------------------------------------------------------------------
+
+@builtin
+@implement(type, types.Any)
+def type_impl(context, builder, sig, args):
+    """
+    One-argument type() builtin.
+    """
+    return context.get_dummy_value()

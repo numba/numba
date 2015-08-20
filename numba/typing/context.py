@@ -138,19 +138,15 @@ class BaseContext(object):
         try:
             attrinfo = self.attributes[value]
         except KeyError:
-            if value.is_parametric:
-                for cls in type(value).__mro__:
-                    if cls in self.attributes:
-                        attrinfo = self.attributes[cls]
-                        break
-                else:
-                    raise
-            elif isinstance(value, types.Module):
-                attrty = self.resolve_module_constants(value, attr)
-                if attrty is not None:
-                    return attrty
-                raise
+            for cls in type(value).__mro__:
+                if cls in self.attributes:
+                    attrinfo = self.attributes[cls]
+                    break
             else:
+                if isinstance(value, types.Module):
+                    attrty = self.resolve_module_constants(value, attr)
+                    if attrty is not None:
+                        return attrty
                 raise
 
         ret = attrinfo.resolve(value, attr)
