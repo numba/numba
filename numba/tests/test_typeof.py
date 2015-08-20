@@ -5,6 +5,7 @@ Tests for the typeof() machinery.
 from __future__ import print_function
 
 import array
+from collections import namedtuple
 import mmap
 import sys
 
@@ -28,6 +29,10 @@ recordtype = np.dtype([('a', np.float64),
 
 recordtype2 = np.dtype([('e', np.int32),
                         ('f', np.float64)])
+
+Point = namedtuple('Point', ('x', 'y'))
+
+Rect = namedtuple('Rect', ('width', 'height'))
 
 
 class Custom(object):
@@ -143,6 +148,21 @@ class TestTypeof(ValueTypingTestBase, TestCase):
                          types.Tuple((types.int64,
                                       types.Tuple((types.float64, types.int64))))
                          )
+
+    def test_namedtuple(self):
+        v = Point(1, 2)
+        tp_point = typeof(v)
+        self.assertEqual(tp_point,
+                         types.NamedUniTuple(types.int64, 2, Point))
+        v = Point(1, 2.0)
+        self.assertEqual(typeof(v),
+                         types.NamedTuple([types.int64, types.float64], Point))
+        w = Rect(3, 4)
+        tp_rect = typeof(w)
+        self.assertEqual(tp_rect,
+                         types.NamedUniTuple(types.int64, 2, Rect))
+        self.assertNotEqual(tp_rect, tp_point)
+        self.assertNotEqual(tp_rect, types.UniTuple(tp_rect.dtype, tp_rect.count))
 
     def test_dtype(self):
         dtype = np.dtype('int64')

@@ -15,7 +15,6 @@ from numba import numpy_support
 from numba import types, utils, cgutils, lowering, _helperlib
 
 
-
 class _Registry(object):
 
     def __init__(self):
@@ -82,6 +81,7 @@ class NativeValue(object):
 class EnvironmentManager(object):
 
     def __init__(self, pyapi, env, env_body, env_ptr):
+        assert isinstance(env, lowering.Environment)
         self.pyapi = pyapi
         self.env = env
         self.env_body = env_body
@@ -162,7 +162,6 @@ class PythonAPI(object):
                 self.context.call_conv.return_user_exc(self.builder,
                                                        RuntimeError,
                                                        ("missing Environment",))
-
 
     # ------ Python API -----
 

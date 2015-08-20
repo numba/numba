@@ -5,15 +5,24 @@ Tests for numba.types.
 from __future__ import print_function, absolute_import
 
 import gc
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 import weakref
 
 import numpy as np
 
 from numba.utils import IS_PY3
 from numba import abstracttypes, types, typing
+from numba import jit, numpy_support
 from numba import unittest_support as unittest
 from numba.npdatetime import NPDATETIME_SUPPORTED
 from .support import TestCase
+
+
+def gen(x):
+    yield x + 1
 
 
 class Dummy(object):
@@ -216,6 +225,87 @@ class TestTypes(TestCase):
         """
         for ty in types.number_domain:
             self.assertTrue(hasattr(ty, "bitwidth"))
+
+
+class TestPickling(TestCase):
+    """
+    Pickling and unpickling should preserve type identity (singleton-ness)
+    and the _code attribute.  This is only a requirement for types that
+    can be part of function signatures.
+    """
+
+    def predefined_types(self):
+        """
+        Yield all predefined type instances
+        """
+        for ty in types.__dict__.values():
+            if isinstance(ty, types.Type):
+                yield ty
+
+    def check_pickling(self, orig):
+        pickled = pickle.dumps(orig, protocol=-1)
+        ty = pickle.loads(pickled)
+        self.assertIs(ty, orig)
+        self.assertGreaterEqual(ty._code, 0)
+
+    def test_predefined_types(self):
+        tys = list(self.predefined_types())
+        self.assertIn(types.int16, tys)
+        for ty in tys:
+            self.check_pickling(ty)
+
+    def test_atomic_types(self):
+        for unit in ('M', 'ms'):
+            ty = types.NPDatetime(unit)
+            self.check_pickling(ty)
+            ty = types.NPTimedelta(unit)
+            self.check_pickling(ty)
+
+    def test_arrays(self):
+        for ndim in (0, 1, 2):
+            for layout in ('A', 'C', 'F'):
+                ty = types.Array(types.int16, ndim, layout)
+                self.check_pickling(ty)
+
+    def test_records(self):
+        recordtype = np.dtype([('a', np.float64),
+                               ('b', np.int32),
+                               ('c', np.complex64),
+                               ('d', (np.str, 5))])
+        ty = numpy_support.from_dtype(recordtype)
+        self.check_pickling(ty)
+        self.check_pickling(types.Array(ty, 1, 'A'))
+
+    def test_optional(self):
+        ty = types.Optional(types.int32)
+        self.check_pickling(ty)
+
+    def test_tuples(self):
+        ty1 = types.UniTuple(types.int32, 3)
+        self.check_pickling(ty1)
+        ty2 = types.Tuple((types.int32, ty1))
+        self.check_pickling(ty2)
+
+    def test_lists(self):
+        ty = types.List(types.int32)
+        self.check_pickling(ty)
+
+    def test_generator(self):
+        cfunc = jit("(int32,)", nopython=True)(gen)
+        sigs = list(cfunc.nopython_signatures)
+        ty = sigs[0].return_type
+        self.assertIsInstance(ty, types.Generator)
+        self.check_pickling(ty)
+
+    # call templates are not picklable
+    @unittest.expectedFailure
+    def test_external_function_pointers(self):
+        from numba.typing import ctypes_utils
+        from .ctypes_usecases import c_sin, c_cos
+        for fnptr in (c_sin, c_cos):
+            ty = ctypes_utils.make_function_type(fnptr)
+            self.assertIsInstance(ty, types.ExternalFunctionPointer)
+            self.check_pickling(ty)
 
 
 if __name__ == '__main__':

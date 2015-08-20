@@ -167,3 +167,14 @@ This will not be possible if the function is compiled in :term:`object mode`.
 When using ``nogil=True``, you'll have to be wary of the usual pitfalls
 of multi-threaded programming (consistency, synchronization, race conditions,
 etc.).
+
+``cache``
+---------
+
+To avoid compilation times each time you invoke a Python program,
+you can instruct Numba to write the result of function compilation into
+a file-based cache.  This is done by passing ``cache=True``::
+
+   @jit(cache=True)
+   def f(x, y):
+       return x + y

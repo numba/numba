@@ -241,6 +241,10 @@ def list_mul_inplace(n, v):
     a *= v
     return a
 
+def list_bool(n):
+    a = list(range(n))
+    return bool(a), (True if a else False)
+
 
 class TestLists(MemoryLeakMixin, TestCase):
 
@@ -529,6 +533,29 @@ class TestLists(MemoryLeakMixin, TestCase):
         # Overflow size computation when multiplying by item size
         with self.assertRaises(MemoryError):
             cfunc(1, 2**62)
+
+    def test_bool(self):
+        pyfunc = list_bool
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [0, 1, 3]:
+            expected = pyfunc(n)
+            self.assertPreciseEqual(cfunc(n), expected)
+
+    def test_list_passing(self):
+        # Check one can pass a list from a Numba function to another
+        @jit(nopython=True)
+        def inner(lst):
+            return len(lst), lst[-1]
+
+        @jit(nopython=True)
+        def outer(n):
+            l = list(range(n))
+            return inner(l)
+
+        self.assertPreciseEqual(outer(5), (5, 4))
+        # Cannot call the inner function directly
+        with self.assertRaises(TypeError):
+            inner([42])
 
 
 if __name__ == '__main__':
