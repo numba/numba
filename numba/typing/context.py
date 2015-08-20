@@ -92,14 +92,25 @@ class BaseContext(object):
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
         """
-        if isinstance(func, types.Callable):
-            return func.get_call_type(self, args, kws)
-
         defns = self.functions[func]
         for defn in defns:
             res = defn.apply(args, kws)
             if res is not None:
                 return res
+
+        if isinstance(func, types.Type):
+            # If it's a type, it may support a __call__ method
+            try:
+                func_type = self.resolve_getattr(func, "__call__")
+            except KeyError:
+                pass
+            else:
+                # The function has a __call__ method, type its call.
+                return self.resolve_function_type(func_type, args, kws)
+
+        if isinstance(func, types.Callable):
+            # XXX fold this into the __call__ attribute logic?
+            return func.get_call_type(self, args, kws)
 
     def resolve_getattr(self, value, attr):
         if isinstance(value, types.Record):
@@ -111,7 +122,12 @@ class BaseContext(object):
             attrinfo = self.attributes[value]
         except KeyError:
             if value.is_parametric:
-                attrinfo = self.attributes[type(value)]
+                for cls in type(value).__mro__:
+                    if cls in self.attributes:
+                        attrinfo = self.attributes[cls]
+                        break
+                else:
+                    raise
             elif isinstance(value, types.Module):
                 attrty = self.resolve_module_constants(value, attr)
                 if attrty is not None:
@@ -173,18 +189,21 @@ class BaseContext(object):
         if isinstance(val, (types.ExternalFunction, types.NumbaFunction)):
             return val
 
-        if isinstance(val, type) and issubclass(val, BaseException):
-            return types.ExceptionType(val)
+        if isinstance(val, type):
+            if issubclass(val, BaseException):
+                return types.ExceptionClass(val)
+            if issubclass(val, tuple) and hasattr(val, "_asdict"):
+                return types.NamedTupleClass(val)
 
         try:
             # Try to look up target specific typing information
-            return self.get_global_type(val)
+            return self._get_global_type(val)
         except KeyError:
             pass
 
         return None
 
-    def get_global_type(self, gv):
+    def _get_global_type(self, gv):
         try:
             return self._lookup_global(gv)
         except KeyError:
@@ -232,7 +251,7 @@ class BaseContext(object):
 
     def insert_attributes(self, at):
         key = at.key
-        assert key not in self.attributes, "Duplicated attributes template"
+        assert key not in self.attributes, "Duplicated attributes template %r" % (key,)
         self.attributes[key] = at
 
     def insert_function(self, ft):

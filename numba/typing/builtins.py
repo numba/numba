@@ -346,8 +346,7 @@ class CmpOpNe(UnorderedCmpOp):
 class TupleCompare(AbstractTemplate):
     def generic(self, args, kws):
         [lhs, rhs] = args
-        tuple_types = (types.Tuple, types.UniTuple)
-        if isinstance(lhs, tuple_types) and isinstance(rhs, tuple_types):
+        if isinstance(lhs, types.BaseTuple) and isinstance(rhs, types.BaseTuple):
             for u, v in zip(lhs, rhs):
                 # Check element-wise comparability
                 res = self.context.resolve_function_type(self.key, (u, v), {})
@@ -522,7 +521,7 @@ class Len(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         (val,) = args
-        if isinstance(val, (types.Buffer, types.Tuple)):
+        if isinstance(val, (types.Buffer, types.BaseTuple)):
             return signature(types.intp, val)
 
 

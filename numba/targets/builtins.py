@@ -7,8 +7,8 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from .imputils import (builtin, builtin_attr, implement, impl_attribute,
-                       iternext_impl, struct_factory, impl_ret_borrowed,
-                       impl_ret_untracked)
+                       impl_attribute_generic, iternext_impl, struct_factory,
+                       impl_ret_borrowed, impl_ret_untracked)
 from . import optional
 from .. import typing, types, cgutils, utils, intrinsics
 
@@ -1053,92 +1053,6 @@ builtin(implement('not', types.boolean)(number_not_impl))
 
 #------------------------------------------------------------------------------
 
-class Slice(cgutils.Structure):
-    _fields = [('start', types.intp),
-               ('stop', types.intp),
-               ('step', types.intp), ]
-
-
-@builtin
-@implement(types.slice_type, types.intp, types.intp, types.intp)
-def slice3_impl(context, builder, sig, args):
-    start, stop, step = args
-
-    slice3 = Slice(context, builder)
-    slice3.start = start
-    slice3.stop = stop
-    slice3.step = step
-
-    res = slice3._getvalue()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@builtin
-@implement(types.slice_type, types.intp, types.intp)
-def slice2_impl(context, builder, sig, args):
-    start, stop = args
-
-    slice3 = Slice(context, builder)
-    slice3.start = start
-    slice3.stop = stop
-    slice3.step = context.get_constant(types.intp, 1)
-
-    res = slice3._getvalue()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@builtin
-@implement(types.slice_type, types.intp, types.none)
-def slice1_start_impl(context, builder, sig, args):
-    start, stop = args
-
-    slice3 = Slice(context, builder)
-    slice3.start = start
-    maxint = (1 << (context.address_size - 1)) - 1
-    slice3.stop = context.get_constant(types.intp, maxint)
-    slice3.step = context.get_constant(types.intp, 1)
-
-    res = slice3._getvalue()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@builtin
-@implement(types.slice_type, types.none, types.intp)
-def slice1_stop_impl(context, builder, sig, args):
-    start, stop = args
-
-    slice3 = Slice(context, builder)
-    slice3.start = context.get_constant(types.intp, 0)
-    slice3.stop = stop
-    slice3.step = context.get_constant(types.intp, 1)
-
-    res = slice3._getvalue()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@builtin
-@implement(types.slice_type)
-def slice0_empty_impl(context, builder, sig, args):
-    assert not args
-
-    slice3 = Slice(context, builder)
-    slice3.start = context.get_constant(types.intp, 0)
-    maxint = (1 << (context.address_size - 1)) - 1
-    slice3.stop = context.get_constant(types.intp, maxint)
-    slice3.step = context.get_constant(types.intp, 1)
-
-    res = slice3._getvalue()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@builtin
-@implement(types.slice_type, types.none, types.none)
-def slice0_none_none_impl(context, builder, sig, args):
-    assert len(args) == 2
-    newsig = typing.signature(types.slice_type)
-    return slice0_empty_impl(context, builder, newsig, ())
-
-
 def make_pair(first_type, second_type):
     return cgutils.create_struct_proxy(types.Pair(first_type, second_type))
 
@@ -1154,6 +1068,7 @@ def make_unituple_iter(tupiter):
 
 @builtin
 @implement('getiter', types.Kind(types.UniTuple))
+@implement('getiter', types.Kind(types.NamedUniTuple))
 def getiter_unituple(context, builder, sig, args):
     [tupty] = sig.args
     [tup] = args
@@ -1206,6 +1121,7 @@ def iternext_unituple(context, builder, sig, args, result):
 
 @builtin
 @implement('getitem', types.Kind(types.UniTuple), types.intp)
+@implement('getitem', types.Kind(types.NamedUniTuple), types.intp)
 def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
@@ -1257,21 +1173,15 @@ def setitem_cpointer(context, builder, sig, args):
 
 #-------------------------------------------------------------------------------
 
-
-def caster(restype):
-    @implement(restype, types.Any)
-    def _cast(context, builder, sig, args):
-        [val] = args
-        [valty] = sig.args
-        res = context.cast(builder, val, valty, restype)
-        return impl_ret_borrowed(context, builder, restype, res)
-
-    return _cast
-
-cast_types = set(types.number_domain)
-cast_types.add(types.bool_)
-for tp in cast_types:
-    builtin(caster(tp))
+@builtin
+@implement(types.NumberClass, types.Any)
+def number_constructor(context, builder, sig, args):
+    """
+    Convert any number to any other.
+    """
+    [val] = args
+    [valty] = sig.args
+    return context.cast(builder, val, valty, sig.return_type)
 
 
 #-------------------------------------------------------------------------------
@@ -1494,6 +1404,13 @@ def array_ravel_impl(context, builder, sig, args):
 
 
 # -----------------------------------------------------------------------------
+# Tuples
+
+@builtin
+@implement(types.NamedTupleClass, types.VarArg(types.Any))
+def namedtuple_constructor(context, builder, sig, args):
+    # A namedtuple has the same representation as a regular tuple
+    return context.make_tuple(builder, sig.return_type, args)
 
 @builtin
 @implement(types.len_type, types.Kind(types.BaseTuple))
@@ -1569,3 +1486,13 @@ def tuple_gt(context, builder, sig, args):
 def tuple_ge(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '>=', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@builtin_attr
+@impl_attribute_generic(types.Kind(types.BaseNamedTuple))
+def array_record_getattr(context, builder, typ, value, attr):
+    """
+    Fetch a namedtuple's field.
+    """
+    index = typ.fields.index(attr)
+    return builder.extract_value(value, index)

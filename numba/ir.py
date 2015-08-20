@@ -138,9 +138,10 @@ class Expr(Inst):
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
 
     @classmethod
-    def inplace_binop(cls, fn, lhs, rhs, loc):
+    def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
         op = 'inplace_binop'
-        return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
+        return cls(op=op, loc=loc, fn=fn, immutable_fn=immutable_fn,
+                   lhs=lhs, rhs=rhs)
 
     @classmethod
     def unary(cls, fn, value, loc):
