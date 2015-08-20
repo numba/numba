@@ -46,7 +46,7 @@ Improvements:
 * PR #1200: Migrate cgutils to llvmlite
 * PR #1190: Support more array methods: .transpose(), .T, .copy(), .reshape(), .view()
 * PR #1214: Simplify setup.py and avoid manual maintenance
-* PR #1217: Support datatime64 and timedelta64 constants
+* PR #1217: Support datetime64 and timedelta64 constants
 * PR #1236: Reload environment variables when compiling
 * PR #1225: Various speed improvements in generated code
 * PR #1252: Support cmath module in CUDA
