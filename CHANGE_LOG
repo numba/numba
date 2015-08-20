@@ -9,6 +9,7 @@ an opt-in compilation cache.
 
 Improvements:
 
+* PR #1375: Allow boolean evaluation of lists and tuples
 * PR #1371: Support array.view() in CUDA mode
 * PR #1369: Support named tuples in nopython mode
 * PR #1250: Implement numpy.median().
@@ -20,7 +21,7 @@ Improvements:
 * PR #1343: Support lists in nopython mode
 * PR #1356: Make Numba-allocated memory visible to tracemalloc
 * PR #1363: Add an environment variable NUMBA_DEBUG_TYPEINFER
-* PR #1051: Add an opt-in, per-function compilation cache (XXX not merged)
+* PR #1051: Add an opt-in, per-function compilation cache
 
 Fixes:
 
