@@ -3,19 +3,21 @@ Version 0.21.0
 --------------
 
 This release introduces support for AMD's Heterogeneous System Architecture,
-which allows running the same code both on the CPU and the GPU.
+which allows memory to be shared directly between the CPU and the GPU.
 Other major enhancements are support for lists and the introduction of
 an opt-in compilation cache.
 
 Improvements:
 
+* PR #1371: Support array.view() in CUDA mode
+* PR #1369: Support named tuples in nopython mode
 * PR #1250: Implement numpy.median().
 * PR #1289: Make dispatching faster when calling a JIT-compiled function
   from regular Python
 * Issue #1226: Improve performance of integer power
 * PR #1321: Document features supported with CUDA
 * PR #1345: HSA support
-* PR #1343: Add support for lists in nopython mode
+* PR #1343: Support lists in nopython mode
 * PR #1356: Make Numba-allocated memory visible to tracemalloc
 * PR #1363: Add an environment variable NUMBA_DEBUG_TYPEINFER
 * PR #1051: Add an opt-in, per-function compilation cache (XXX not merged)
