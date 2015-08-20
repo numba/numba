@@ -19,6 +19,7 @@ from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     iternext_impl, struct_factory,
                                     impl_ret_borrowed, impl_ret_new_ref,
                                     impl_ret_untracked)
+from numba.typing import signature
 from . import slicing
 
 
@@ -610,29 +611,126 @@ def array_reshape(context, builder, sig, args):
 def _change_dtype(context, builder, oldty, newty, ary):
     """
     Attempt to fix up *ary* for switching from *oldty* to *newty*.
-    Non-zero is returned on success.
+
+    See Numpy's array_descr_set()
+    (np/core/src/multiarray/getset.c).
+    Attempt to fix the array's shape and strides for a new dtype.
+    False is returned on failure, True on success.
     """
     assert oldty.ndim == newty.ndim
     assert oldty.layout == newty.layout
-    ll_intp = context.get_value_type(types.intp)
-    ll_intp_star = ll_intp.as_pointer()
-    ll_intc = context.get_value_type(types.intc)
-    ll_char = context.get_value_type(types.int8)
-    fnty = lc.Type.function(ll_intc, [ll_intp, ll_intp_star, ll_intp_star,
-                                      ll_intp, ll_intp, ll_char])
-    fn = builder.module.get_or_insert_function(fnty,
-                                               name="numba_change_dtype")
 
-    old_itemsize = context.get_constant(types.intp, get_itemsize(context, oldty))
-    new_itemsize = context.get_constant(types.intp, get_itemsize(context, newty))
+    new_layout = ord(newty.layout)
+    any_layout = ord('A')
+    c_layout = ord('C')
+    f_layout = ord('F')
 
-    nd = lc.Constant.int(ll_intp, newty.ndim)
-    shape = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('shape'), 0, 0)
-    strides = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('strides'), 0, 0)
-    layout = lc.Constant.int(ll_char, ord(newty.layout))
-    res = builder.call(fn, [nd, shape, strides,
-                            old_itemsize, new_itemsize, layout])
+    int8 = types.int8
+
+    def imp(nd, dims, strides, old_itemsize, new_itemsize, layout):
+        # Attempt to update the layout due to limitation of the numba
+        # type system.
+        if layout == any_layout:
+            # Test rightmost stride to be contiguous
+            if strides[-1] == old_itemsize:
+                # Process this as if it is C contiguous
+                layout = int8(c_layout)
+            # Test leftmost stride to be F contiguous
+            elif strides[0] == old_itemsize:
+                # Process this as if it is F contiguous
+                layout = int8(f_layout)
+
+        if old_itemsize != new_itemsize and (layout == any_layout or nd == 0):
+            return False
+
+        if layout == c_layout:
+            i = nd - 1
+        else:
+            i = 0
+
+        if new_itemsize < old_itemsize:
+            # If it is compatible, increase the size of the dimension
+            # at the end (or at the front if F-contiguous)
+            if (old_itemsize % new_itemsize) != 0:
+                return False
+
+            newdim = old_itemsize // new_itemsize
+            dims[i] *= newdim
+            strides[i] = new_itemsize
+
+        elif new_itemsize > old_itemsize:
+            # Determine if last (or first if F-contiguous) dimension
+            # is compatible
+            bytelength = dims[i] * old_itemsize
+            if (bytelength % new_itemsize) != 0:
+                return False
+
+            dims[i] = bytelength // new_itemsize
+            strides[i] = new_itemsize
+
+        else:
+            # Same item size: nothing to do (this also works for
+            # non-contiguous arrays).
+            pass
+
+        return True
+
+    old_itemsize = context.get_constant(types.intp,
+                                        get_itemsize(context, oldty))
+    new_itemsize = context.get_constant(types.intp,
+                                        get_itemsize(context, newty))
+
+    nd = context.get_constant(types.intp, newty.ndim)
+    shape_data = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('shape'),
+                                      0, 0)
+    strides_data = cgutils.gep_inbounds(builder,
+                                        ary._get_ptr_by_name('strides'), 0, 0)
+
+    shape_strides_array_type = types.Array(dtype=types.intp, ndim=1, layout='C')
+    arycls = context.make_array(shape_strides_array_type)
+
+    shape_constant = cgutils.pack_array(builder,
+                                        [context.get_constant(types.intp,
+                                                              newty.ndim)])
+
+    sizeof_intp = context.get_abi_sizeof(context.get_data_type(types.intp))
+    sizeof_intp = context.get_constant(types.intp, sizeof_intp)
+    strides_constant = cgutils.pack_array(builder, [sizeof_intp])
+
+    shape_ary = arycls(context, builder)
+
+    populate_array(shape_ary,
+                   data=shape_data,
+                   shape=shape_constant,
+                   strides=strides_constant,
+                   itemsize=sizeof_intp,
+                   meminfo=None)
+
+    strides_ary = arycls(context, builder)
+    populate_array(strides_ary,
+                   data=strides_data,
+                   shape=shape_constant,
+                   strides=strides_constant,
+                   itemsize=sizeof_intp,
+                   meminfo=None)
+
+    shape = shape_ary._getvalue()
+    strides = strides_ary._getvalue()
+    args = [nd, shape, strides, old_itemsize, new_itemsize,
+            context.get_constant(types.int8, new_layout)]
+
+    sig = signature(types.boolean,
+                    types.intp,  # nd
+                    shape_strides_array_type,  # dims
+                    shape_strides_array_type,  # strides
+                    types.intp,  # old_itemsize
+                    types.intp,  # new_itemsize
+                    types.int8,  # layout
+                    )
+
+    res = context.compile_internal(builder, imp, sig, args)
     update_array_info(newty, ary)
+    res = impl_ret_borrowed(context, builder, sig.return_type, res)
     return res
 
 

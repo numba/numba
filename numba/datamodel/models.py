@@ -203,14 +203,14 @@ class PrimitiveModel(DataModel):
 @register_default(types.Module)
 @register_default(types.Phantom)
 @register_default(types.Dispatcher)
-@register_default(types.ExceptionType)
+@register_default(types.ExceptionClass)
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
 @register_default(types.ExternalFunction)
 @register_default(types.NumbaFunction)
-@register_default(types.Method)
 @register_default(types.Macro)
 @register_default(types.NumberClass)
+@register_default(types.NamedTupleClass)
 @register_default(types.DType)
 @register_default(types.ArrayFlags)
 class OpaqueModel(PrimitiveModel):
@@ -316,6 +316,7 @@ class ExternalFuncPointerModel(PrimitiveModel):
 
 
 @register_default(types.UniTuple)
+@register_default(types.NamedUniTuple)
 class UniTupleModel(DataModel):
     def __init__(self, dmm, fe_type):
         super(UniTupleModel, self).__init__(dmm, fe_type)
@@ -584,6 +585,7 @@ class ComplexModel(StructModel):
 
 
 @register_default(types.Tuple)
+@register_default(types.NamedTuple)
 class TupleModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('f' + str(i), t) for i, t in enumerate(fe_type)]

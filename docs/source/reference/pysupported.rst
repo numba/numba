@@ -188,6 +188,16 @@ The following functions from the :mod:`cmath` module are supported:
 * :func:`cmath.tan`
 * :func:`cmath.tanh`
 
+``collections``
+---------------
+
+Named tuple classes, as returned by :func:`collections.namedtuple`, are
+supported in the same way regular tuples are supported.  Attribute access
+and named parameters in the constructor are also supported.
+
+Creating a named tuple class inside Numba code is *not* supported; the class
+must be created at the global level.
+
 ``ctypes``
 ----------
 

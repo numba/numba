@@ -337,8 +337,7 @@ class CmpOpNe(UnorderedCmpOp):
 class TupleCompare(AbstractTemplate):
     def generic(self, args, kws):
         [lhs, rhs] = args
-        tuple_types = (types.Tuple, types.UniTuple)
-        if isinstance(lhs, tuple_types) and isinstance(rhs, tuple_types):
+        if isinstance(lhs, types.BaseTuple) and isinstance(rhs, types.BaseTuple):
             for u, v in zip(lhs, rhs):
                 # Check element-wise comparability
                 res = self.context.resolve_function_type(self.key, (u, v), {})
@@ -513,8 +512,19 @@ class Len(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         (val,) = args
-        if isinstance(val, (types.Buffer, types.Tuple)):
+        if isinstance(val, (types.Buffer, types.BaseTuple)):
             return signature(types.intp, val)
+
+
+@builtin
+class TupleBool(AbstractTemplate):
+    key = "is_true"
+
+    def generic(self, args, kws):
+        assert not kws
+        (val,) = args
+        if isinstance(val, (types.BaseTuple)):
+            return signature(types.boolean, val)
 
 
 #-------------------------------------------------------------------------------
@@ -874,13 +884,13 @@ class Bool(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-
         [arg] = args
-
-        if arg not in types.number_domain:
-            raise TypeError("bool() only support for numbers")
-
-        return signature(types.boolean, arg)
+        if arg in types.number_domain:
+            return signature(types.boolean, arg)
+        # XXX typing for bool cannot be polymorphic because of the
+        # types.Function thing, so we redirect to the "is_true"
+        # intrinsic.
+        return self.context.resolve_function_type("is_true", args, kws)
 
 
 class Int(AbstractTemplate):

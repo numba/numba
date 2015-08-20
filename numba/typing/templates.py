@@ -61,6 +61,19 @@ def make_concrete_template(name, key, signatures):
     return type(name, baseclasses, gvars)
 
 
+def make_callable_template(key, typer):
+    """
+    Create a callable template with the given key and typer function.
+    """
+    def generic(self):
+        return typer
+
+    name = "%s_CallableTemplate" % (key,)
+    bases = (CallableTemplate,)
+    class_dict = dict(key=key, generic=generic)
+    return type(name, bases, class_dict)
+
+
 def signature(return_type, *args, **kws):
     recvr = kws.pop('recvr', None)
     assert not kws
@@ -171,7 +184,6 @@ class CallableTemplate(FunctionTemplate):
     def apply(self, args, kws):
         generic = getattr(self, "generic")
         typer = generic()
-        pysig = utils.pysignature(typer)
         sig = typer(*args, **kws)
 
         # Unpack optional type if no matching signature
@@ -187,6 +199,12 @@ class CallableTemplate(FunctionTemplate):
                 sig = typer(*args, **kws)
             if sig is None:
                 return
+
+        # Get the pysig
+        try:
+            pysig = typer.pysig
+        except AttributeError:
+            pysig = utils.pysignature(typer)
 
         # Fold any keyword arguments
         bound = pysig.bind(*args, **kws)
@@ -274,16 +292,6 @@ def bound_function(template_key):
             return types.BoundFunction(MethodTemplate, ty)
         return attribute_resolver
     return wrapper
-
-
-class ClassAttrTemplate(AttributeTemplate):
-    def __init__(self, context, key, clsdict):
-        super(ClassAttrTemplate, self).__init__(context)
-        self.key = key
-        self.clsdict = clsdict
-
-    def resolve(self, value, attr):
-        return self.clsdict[attr]
 
 
 class MacroTemplate(object):

@@ -1,9 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
-from .. import types
-from .templates import (AttributeTemplate, ConcreteTemplate,
-                        AbstractTemplate, builtin_global, builtin,
-                        builtin_attr, signature, bound_function)
+from .. import types, utils
+from .templates import (AttributeTemplate, ConcreteTemplate, AbstractTemplate,
+                        builtin_global, builtin, builtin_attr,
+                        signature, bound_function, make_callable_template)
 from .builtins import normalize_1d_index
 
 
@@ -28,6 +28,16 @@ class SequenceLen(AbstractTemplate):
         (val,) = args
         if isinstance(val, (types.Sequence)):
             return signature(types.intp, val)
+
+@builtin
+class SequenceBool(AbstractTemplate):
+    key = "is_true"
+
+    def generic(self, args, kws):
+        assert not kws
+        (val,) = args
+        if isinstance(val, (types.Sequence)):
+            return signature(types.boolean, val)
 
 @builtin
 class GetItemSequence(AbstractTemplate):
@@ -64,3 +74,46 @@ class DelItemSequence(AbstractTemplate):
         if isinstance(seq, types.MutableSequence):
             idx = normalize_1d_index(idx)
             return signature(types.none, seq, idx)
+
+
+# --------------------------------------------------------------------------
+# named tuples
+
+@builtin_attr
+class NamedTupleAttribute(AttributeTemplate):
+    key = types.BaseNamedTuple
+
+    def generic_resolve(self, tup, attr):
+        # Resolution of other attributes
+        try:
+            index = tup.fields.index(attr)
+        except ValueError:
+            return
+        return tup[index]
+
+
+@builtin_attr
+class NamedTupleClassAttribute(AttributeTemplate):
+    key = types.NamedTupleClass
+
+    def resolve___call__(self, classty):
+        """
+        Resolve the named tuple constructor, aka the class's __call__ method.
+        """
+        instance_class = classty.instance_class
+        pysig = utils.pysignature(instance_class)
+
+        def typer(*args, **kws):
+            # Fold keyword args
+            try:
+                bound = pysig.bind(*args, **kws)
+            except TypeError as e:
+                msg = "In '%s': %s" % (instance_class, e)
+                e.args = (msg,)
+                raise
+            assert not bound.kwargs
+            return types.BaseTuple.from_types(bound.args, instance_class)
+
+        # Override the typer's pysig to match the namedtuple constructor's
+        typer.pysig = pysig
+        return types.Function(make_callable_template(self.key, typer))

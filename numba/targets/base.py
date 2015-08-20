@@ -14,11 +14,11 @@ from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
-                                    python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     type_registry,
                                     impl_ret_borrowed)
-from . import arrayobj, builtins, iterators, rangeobj, optional, slicing
+from . import (
+    arrayobj, builtins, iterators, rangeobj, optional, slicing, tupleobj)
 from numba import datamodel
 
 try:
@@ -229,12 +229,6 @@ class BaseContext(object):
         impl = user_generator(gendesc, libs)
         self.generators[genty] = gendesc, impl
 
-    def insert_class(self, cls, attrs):
-        clsty = types.Object(cls)
-        for name, vtype in utils.iteritems(attrs):
-            impl = python_attr_impl(clsty, name, vtype)
-            self.attrs[impl.attr].append(impl, impl.signature)
-
     def remove_user_function(self, func):
         """
         Remove user function *func*.
@@ -367,7 +361,7 @@ class BaseContext(object):
             const = Constant.struct([real, imag])
             return const
 
-        elif isinstance(ty, types.Tuple):
+        elif isinstance(ty, (types.Tuple, types.NamedTuple)):
             consts = [self.get_constant_generic(builder, ty.types[i], v)
                       for i, v in enumerate(val)]
             return Constant.struct(consts)
@@ -404,7 +398,7 @@ class BaseContext(object):
         elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
             return Constant.real(lty, val.astype(numpy.int64))
 
-        elif isinstance(ty, types.UniTuple):
+        elif isinstance(ty, (types.UniTuple, types.NamedUniTuple)):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
 
@@ -441,7 +435,7 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
-        if isinstance(fn, (types.NumberClass, types.Function)):
+        if isinstance(fn, (types.Function)):
             key = fn.template.key
 
             if isinstance(key, MethodType):
@@ -463,7 +457,11 @@ class BaseContext(object):
         try:
             return _wrap_impl(overloads.find(sig), self, sig)
         except NotImplementedError:
-            raise Exception("No definition for lowering %s%s" % (key, sig))
+            pass
+        if isinstance(fn, types.Type):
+            # It's a type instance => try to find a definition for the type class
+            return self.get_function(type(fn), sig)
+        raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
 
     def get_generator_desc(self, genty):
         """
@@ -757,16 +755,8 @@ class BaseContext(object):
         return optval._getvalue()
 
     def is_true(self, builder, typ, val):
-        if typ in types.integer_domain:
-            return builder.icmp(lc.ICMP_NE, val, Constant.null(val.type))
-        elif typ in types.real_domain:
-            return builder.fcmp(lc.FCMP_UNE, val, Constant.real(val.type, 0))
-        elif typ in types.complex_domain:
-            cmplx = self.make_complex(typ)(self, builder, val)
-            real_istrue = self.is_true(builder, typ.underlying_float, cmplx.real)
-            imag_istrue = self.is_true(builder, typ.underlying_float, cmplx.imag)
-            return builder.or_(real_istrue, imag_istrue)
-        raise NotImplementedError("is_true", val, typ)
+        impl = self.get_function(bool, typing.signature(types.boolean, typ))
+        return impl(builder, (val,))
 
     def get_c_value(self, builder, typ, name):
         """
@@ -791,30 +781,6 @@ class BaseContext(object):
 
     def call_function_pointer(self, builder, funcptr, args, cconv=None):
         return builder.call(funcptr, args, cconv=cconv)
-
-    def call_class_method(self, builder, func, signature, args):
-        api = self.get_python_api(builder)
-        tys = signature.args
-        retty = signature.return_type
-        pyargs = [api.from_native_value(av, at) for av, at in zip(args, tys)]
-        res = api.call_function_objargs(func, pyargs)
-
-        # clean up
-        api.decref(func)
-        for obj in pyargs:
-            api.decref(obj)
-
-        with builder.if_then(cgutils.is_null(builder, res)):
-            self.call_conv.return_exc(builder)
-
-        if retty == types.none:
-            api.decref(res)
-            return self.get_dummy_value()
-        else:
-            native = api.to_native_value(res, retty)
-            assert native.cleanup is None
-            api.decref(res)
-            return native.value
 
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module
@@ -942,6 +908,15 @@ class BaseContext(object):
         Create a heterogenous pair class parametered for the given types.
         """
         return builtins.make_pair(first_type, second_type)
+
+    def make_tuple(self, builder, typ, values):
+        """
+        Create a tuple of the given *typ* containing the *values*.
+        """
+        tup = self.get_constant_undef(typ)
+        for i, val in enumerate(values):
+            tup = builder.insert_value(tup, val, i)
+        return tup
 
     def make_constant_array(self, builder, typ, ary):
         assert typ.layout == 'C'                # assumed in typeinfer.py
