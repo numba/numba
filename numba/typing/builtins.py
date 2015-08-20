@@ -516,6 +516,17 @@ class Len(AbstractTemplate):
             return signature(types.intp, val)
 
 
+@builtin
+class TupleBool(AbstractTemplate):
+    key = "is_true"
+
+    def generic(self, args, kws):
+        assert not kws
+        (val,) = args
+        if isinstance(val, (types.BaseTuple)):
+            return signature(types.boolean, val)
+
+
 #-------------------------------------------------------------------------------
 
 def normalize_shape(shape):
