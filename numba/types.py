@@ -447,19 +447,6 @@ class BoundFunction(Function):
         return self.template.key, self.this
 
 
-class Method(Function):
-    def __init__(self, template, this):
-        self.this = this
-        # Create a derived template with an attribute *this*
-        newcls = type(template.__name__ + '.' + str(this), (template,),
-                      dict(this=this))
-        super(Method, self).__init__(newcls)
-
-    @property
-    def key(self):
-        return self.template.key, self.this
-
-
 class Pair(Type):
     """
     A heterogenous pair.
@@ -666,7 +653,9 @@ class Record(Type):
 
     @property
     def key(self):
-        return (self.size, self.aligned, self.dtype)
+        # Numpy dtype equality doesn't always succeed, use the descr instead
+        # (https://github.com/numpy/numpy/issues/5715)
+        return (self.descr, self.size, self.aligned)
 
     def __len__(self):
         return len(self.fields)
@@ -725,11 +714,10 @@ class Buffer(IterableType):
                 type_name = "readonly %s" % type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Buffer, self).__init__(name, param=True)
-        self._iterator_type = ArrayIterator(self)
 
     @property
     def iterator_type(self):
-        return self._iterator_type
+        return ArrayIterator(self)
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
@@ -951,7 +939,7 @@ class _HomogenousTuple(Sequence, BaseTuple):
 
     @property
     def iterator_type(self):
-        return self._iterator_type
+        return UniTupleIter(self)
 
     def getitem(self, ind):
         return self.dtype, intp
@@ -974,13 +962,15 @@ class _HomogenousTuple(Sequence, BaseTuple):
 
 
 class UniTuple(_HomogenousTuple):
+    """
+    Type class for homogenous tuples.
+    """
 
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
         name = "(%s x %d)" % (dtype, count)
         super(UniTuple, self).__init__(name, param=True)
-        self._iterator_type = UniTupleIter(self)
 
     @property
     def key(self):
@@ -1113,7 +1103,6 @@ class List(MutableSequence):
         self.dtype = dtype
         name = "list(%s)" % (self.dtype,)
         super(List, self).__init__(name=name, param=True)
-        self._iterator_type = ListIter(self)
 
     def unify(self, typingctx, other):
         if isinstance(other, List):
@@ -1127,7 +1116,7 @@ class List(MutableSequence):
 
     @property
     def iterator_type(self):
-        return self._iterator_type
+        return ListIter(self)
 
     def is_precise(self):
         return self.dtype.is_precise()

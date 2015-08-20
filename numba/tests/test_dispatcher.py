@@ -1,11 +1,20 @@
 from __future__ import print_function, division, absolute_import
 
+import errno
+import imp
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 import threading
+import warnings
 
 import numpy as np
 
 from numba import unittest_support as unittest
 from numba import utils, vectorize, jit
+from numba.config import NumbaWarning
 from .support import TestCase
 
 
@@ -369,6 +378,272 @@ class TestDispatcherMethods(TestCase):
 
         self.assertEqual(exp_c, got_c)
         self.assertEqual(exp_f, got_f)
+
+
+class TestCache(TestCase):
+
+    here = os.path.dirname(__file__)
+    # The source file that will be copied
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    # Make sure this doesn't conflict with another module
+    modname = "caching_test_fodder"
+
+    def setUp(self):
+        self.tempdir = tempfile.mkdtemp()
+        sys.path.insert(0, self.tempdir)
+        self.modfile = os.path.join(self.tempdir, self.modname + ".py")
+        self.cache_dir = os.path.join(self.tempdir, "__pycache__")
+        shutil.copy(self.usecases_file, self.modfile)
+
+    def tearDown(self):
+        sys.modules.pop(self.modname, None)
+        sys.path.remove(self.tempdir)
+        shutil.rmtree(self.tempdir)
+
+    def import_module(self):
+        # Import a fresh version of the test module
+        old = sys.modules.pop(self.modname, None)
+        if old is not None:
+            # Make sure cached bytecode is removed
+            if sys.version_info >= (3,):
+                cached = [old.__cached__]
+            else:
+                if old.__file__.endswith(('.pyc', '.pyo')):
+                    cached = [old.__file__]
+                else:
+                    cached = [old.__file__ + 'c', old.__file__ + 'o']
+            for fn in cached:
+                try:
+                    os.unlink(fn)
+                except OSError as e:
+                    if e.errno != errno.ENOENT:
+                        raise
+        mod = __import__(self.modname)
+        self.assertEqual(mod.__file__.rstrip('co'), self.modfile)
+        return mod
+
+    def cache_contents(self):
+        try:
+            return [fn for fn in os.listdir(self.cache_dir)
+                    if not fn.endswith(('.pyc', ".pyo"))]
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
+            return []
+
+    def get_cache_mtimes(self):
+        return dict((fn, os.path.getmtime(os.path.join(self.cache_dir, fn)))
+                    for fn in sorted(self.cache_contents()))
+
+    def check_cache(self, n):
+        c = self.cache_contents()
+        self.assertEqual(len(c), n, c)
+
+    def dummy_test(self):
+        pass
+
+    def run_in_separate_process(self):
+        # Cached functions can be run from a distinct process
+        code = """if 1:
+            import sys
+
+            sys.path.insert(0, %(tempdir)r)
+            mod = __import__(%(modname)r)
+            assert mod.add_usecase(2, 3) == 6
+            assert mod.add_objmode_usecase(2, 3) == 6
+            assert mod.outer(3, 2) == 2
+            packed_rec = mod.record_return(mod.packed_arr, 1)
+            assert tuple(packed_rec) == (2, 43.5), packed_rec
+            aligned_rec = mod.record_return(mod.aligned_arr, 1)
+            assert tuple(aligned_rec) == (2, 43.5), aligned_rec
+            """ % dict(tempdir=self.tempdir, modname=self.modname,
+                       test_class=self.__class__.__name__)
+
+        popen = subprocess.Popen([sys.executable, "-c", code],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        if popen.returncode != 0:
+            raise AssertionError("process failed with code %s: stderr follows\n%s\n"
+                                 % (popen.returncode, err.decode()))
+
+    def check_module(self, mod):
+        self.check_cache(0)
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_cache(2)  # 1 index, 1 data
+        self.assertPreciseEqual(f(2.5, 3), 6.5)
+        self.check_cache(3)  # 1 index, 2 data
+
+        f = mod.add_objmode_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_cache(5)  # 2 index, 3 data
+        self.assertPreciseEqual(f(2.5, 3), 6.5)
+        self.check_cache(6)  # 2 index, 4 data
+
+    def test_caching(self):
+        self.check_cache(0)
+        mod = self.import_module()
+        self.check_cache(0)
+
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_cache(2)  # 1 index, 1 data
+        self.assertPreciseEqual(f(2.5, 3), 6.5)
+        self.check_cache(3)  # 1 index, 2 data
+
+        f = mod.add_objmode_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_cache(5)  # 2 index, 3 data
+        self.assertPreciseEqual(f(2.5, 3), 6.5)
+        self.check_cache(6)  # 2 index, 4 data
+
+        f = mod.record_return
+        rec = f(mod.aligned_arr, 1)
+        self.assertPreciseEqual(tuple(rec), (2, 43.5))
+        rec = f(mod.packed_arr, 1)
+        self.assertPreciseEqual(tuple(rec), (2, 43.5))
+        self.check_cache(9)  # 3 index, 6 data
+
+        # Check the code runs ok from another process
+        self.run_in_separate_process()
+
+    def test_inner_then_outer(self):
+        # Caching inner then outer function is ok
+        mod = self.import_module()
+        self.assertPreciseEqual(mod.inner(3, 2), 6)
+        self.check_cache(2)  # 1 index, 1 data
+        f = mod.outer
+        self.assertPreciseEqual(f(3, 2), 2)
+        self.check_cache(4)  # 2 index, 2 data
+        self.assertPreciseEqual(f(3.5, 2), 2.5)
+        self.check_cache(6)  # 2 index, 4 data
+
+    def test_outer_then_inner(self):
+        # Caching outer then inner function is ok
+        mod = self.import_module()
+        self.assertPreciseEqual(mod.outer(3, 2), 2)
+        self.check_cache(4)  # 2 index, 2 data
+        f = mod.inner
+        self.assertPreciseEqual(f(3, 2), 6)
+        self.assertPreciseEqual(f(3.5, 2), 6.5)
+        self.check_cache(5)  # 2 index, 3 data
+
+    def test_no_caching(self):
+        mod = self.import_module()
+
+        f = mod.add_nocache_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_cache(0)
+
+    def test_looplifted(self):
+        # Loop-lifted functions can't be cached and raise a warning
+        mod = self.import_module()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.looplifted
+            self.assertPreciseEqual(f(4), 6)
+            self.check_cache(0)
+
+        self.assertEqual(len(w), 1)
+        self.assertEqual(str(w[0].message),
+                         'Cannot cache compiled function "looplifted" '
+                         'as it uses lifted loops')
+
+    def test_ctypes(self):
+        # Functions using a ctypes pointer can't be cached and raise
+        # a warning.
+        mod = self.import_module()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.use_c_sin
+            self.assertPreciseEqual(f(0.0), 0.0)
+            self.check_cache(0)
+
+        self.assertEqual(len(w), 1)
+        self.assertIn('Cannot cache compiled function "use_c_sin"',
+                      str(w[0].message))
+
+    def test_closure(self):
+        mod = self.import_module()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.closure1
+            self.assertPreciseEqual(f(3), 6)
+            f = mod.closure2
+            self.assertPreciseEqual(f(3), 8)
+            self.check_cache(0)
+
+        self.assertEqual(len(w), 2)
+        for item in w:
+            self.assertIn('Cannot cache compiled function "closure"',
+                          str(item.message))
+
+    def test_cache_reuse(self):
+        mod = self.import_module()
+        mod.add_usecase(2, 3)
+        mod.add_objmode_usecase(2, 3)
+        mod.outer(2, 3)
+        mod.record_return(mod.packed_arr, 0)
+        mod.record_return(mod.aligned_arr, 1)
+        mtimes = self.get_cache_mtimes()
+
+        mod2 = self.import_module()
+        self.assertIsNot(mod, mod2)
+        mod.add_usecase(2, 3)
+        mod.add_objmode_usecase(2, 3)
+
+        # The files haven't changed
+        self.assertEqual(self.get_cache_mtimes(), mtimes)
+
+        self.run_in_separate_process()
+        self.assertEqual(self.get_cache_mtimes(), mtimes)
+
+    def test_cache_invalidate(self):
+        mod = self.import_module()
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+
+        # This should change the functions' results
+        with open(self.modfile, "a") as f:
+            f.write("\nZ = 10\n")
+
+        mod = self.import_module()
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 15)
+        f = mod.add_objmode_usecase
+        self.assertPreciseEqual(f(2, 3), 15)
+
+    def test_recompile(self):
+        # Explicit call to recompile() should overwrite the cache
+        mod = self.import_module()
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+
+        mod = self.import_module()
+        f = mod.add_usecase
+        mod.Z = 10
+        self.assertPreciseEqual(f(2, 3), 6)
+        f.recompile()
+        self.assertPreciseEqual(f(2, 3), 15)
+
+        # Freshly recompiled version is re-used from other imports
+        mod = self.import_module()
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 15)
+
+    def test_same_names(self):
+        # Function with the same names should still disambiguate
+        mod = self.import_module()
+        f = mod.renamed_function1
+        self.assertPreciseEqual(f(2), 4)
+        f = mod.renamed_function2
+        self.assertPreciseEqual(f(2), 8)
 
 
 if __name__ == '__main__':

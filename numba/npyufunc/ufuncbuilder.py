@@ -123,7 +123,7 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
         envptr = None
 
     wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature,
-                                  cres.objectmode, envptr)
+                                  cres.objectmode, envptr, env)
     ptr = library.get_pointer_to_function(wrapper.name)
 
     # Get dtypes

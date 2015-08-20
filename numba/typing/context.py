@@ -290,11 +290,6 @@ class BaseContext(object):
         """
         self._insert_global(fn, types.Function(ft))
 
-    def insert_class(self, cls, attrs):
-        clsty = types.Object(cls)
-        at = templates.ClassAttrTemplate(self, clsty, attrs)
-        self.insert_attributes(at)
-
     def can_convert(self, fromty, toty):
         """
         Check whether conversion is possible from *fromty* to *toty*.
@@ -461,10 +456,4 @@ class Context(BaseContext):
         self.install(npydecl.registry)
         self.install(operatordecl.registry)
         self.install(randomdecl.registry)
-
-
-def new_method(fn, sig):
-    name = "UserFunction_%s" % fn
-    ft = templates.make_concrete_template(name, fn, [sig])
-    return types.Method(ft, this=sig.recvr)
 
