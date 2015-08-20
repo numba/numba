@@ -446,9 +446,9 @@ def setitem_list(context, builder, sig, args):
 
             dest_offset = slice.start
 
-            with cgutils.for_range(builder, src_size) as src_index:
-                value = src.getitem(src_index)
-                dest.setitem(builder.add(src_index, dest_offset), value)
+            with cgutils.for_range(builder, src_size) as loop:
+                value = src.getitem(loop.index)
+                dest.setitem(builder.add(loop.index, dest_offset), value)
         
         with otherwise:
             with builder.if_then(builder.icmp_signed('!=', size_delta, zero)):
@@ -530,12 +530,12 @@ def list_add(context, builder, sig, args):
     dest = ListInstance.allocate(context, builder, sig.return_type, nitems)
     dest.size = nitems
 
-    with cgutils.for_range(builder, a_size) as src_index:
-        value = a.getitem(src_index)
-        dest.setitem(src_index, value)
-    with cgutils.for_range(builder, b_size) as src_index:
-        value = b.getitem(src_index)
-        dest.setitem(builder.add(src_index, a_size), value)
+    with cgutils.for_range(builder, a_size) as loop:
+        value = a.getitem(loop.index)
+        dest.setitem(loop.index, value)
+    with cgutils.for_range(builder, b_size) as loop:
+        value = b.getitem(loop.index)
+        dest.setitem(builder.add(loop.index, a_size), value)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
@@ -563,9 +563,9 @@ def list_mul(context, builder, sig, args):
     dest.size = nitems
 
     with cgutils.for_range_slice(builder, zero, nitems, src_size, inc=True) as (dest_offset, _):
-        with cgutils.for_range(builder, src_size) as src_index:
-            value = src.getitem(src_index)
-            dest.setitem(builder.add(src_index, dest_offset), value)
+        with cgutils.for_range(builder, src_size) as loop:
+            value = src.getitem(loop.index)
+            dest.setitem(builder.add(loop.index, dest_offset), value)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
@@ -583,11 +583,51 @@ def list_mul_inplace(context, builder, sig, args):
     inst.resize(nitems)
 
     with cgutils.for_range_slice(builder, src_size, nitems, src_size, inc=True) as (dest_offset, _):
-        with cgutils.for_range(builder, src_size) as src_index:
-            value = inst.getitem(src_index)
-            inst.setitem(builder.add(src_index, dest_offset), value)
+        with cgutils.for_range(builder, src_size) as loop:
+            value = inst.getitem(loop.index)
+            inst.setitem(builder.add(loop.index, dest_offset), value)
 
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
+
+
+#-------------------------------------------------------------------------------
+# Comparisons
+
+@builtin
+@implement('is', types.Kind(types.List), types.Kind(types.List))
+def list_is(context, builder, sig, args):
+    a = ListInstance(context, builder, sig.args[0], args[0])
+    b = ListInstance(context, builder, sig.args[1], args[1])
+    ma = builder.ptrtoint(a.meminfo, cgutils.intp_t)
+    mb = builder.ptrtoint(b.meminfo, cgutils.intp_t)
+    return builder.icmp_signed('==', ma, mb)
+
+@builtin
+@implement('==', types.Kind(types.List), types.Kind(types.List))
+def list_eq(context, builder, sig, args):
+    from .tupleobj import generic_compare
+
+    aty, bty = sig.args
+    a = ListInstance(context, builder, aty, args[0])
+    b = ListInstance(context, builder, bty, args[1])
+
+    a_size = a.size
+    same_size = builder.icmp_signed('==', a_size, b.size)
+
+    res = cgutils.alloca_once_value(builder, same_size)
+
+    with builder.if_then(same_size):
+        with cgutils.for_range(builder, a_size) as loop:
+            v = a.getitem(loop.index)
+            w = b.getitem(loop.index)
+            itemres = generic_compare(context, builder, '==',
+                                      (aty.dtype, bty.dtype), (v, w))
+            with builder.if_then(builder.not_(itemres)):
+                # Exit early
+                builder.store(cgutils.false_bit, res)
+                loop.do_break()
+
+    return builder.load(res)
 
 
 #-------------------------------------------------------------------------------
@@ -645,9 +685,9 @@ def _list_extend_list(context, builder, sig, args):
     dest.resize(nitems)
     dest.size = nitems
 
-    with cgutils.for_range(builder, src_size) as src_index:
-        value = src.getitem(src_index)
-        dest.setitem(builder.add(src_index, dest_size), value)
+    with cgutils.for_range(builder, src_size) as loop:
+        value = src.getitem(loop.index)
+        dest.setitem(builder.add(loop.index, dest_size), value)
 
     return dest
 

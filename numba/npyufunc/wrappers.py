@@ -195,11 +195,11 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env)
                                                        is_strided):
 
             with is_unit_strided:
-                with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
+                with cgutils.for_range(builder, loopcount, intp=intp_t) as loop:
                     fastloop = build_fast_loop_body(context, func, builder,
                                                     arrays, out, offsets,
                                                     store_offset, signature,
-                                                    ind)
+                                                    loop.index)
                 builder.ret_void()
 
             with is_strided:
@@ -338,8 +338,8 @@ class _GufuncWrapper(object):
         self.gen_prologue(builder)
 
         # Loop
-        with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
-            args = [a.get_array_at_offset(ind) for a in arrays]
+        with cgutils.for_range(builder, loopcount, intp=intp_t) as loop:
+            args = [a.get_array_at_offset(loop.index) for a in arrays]
             innercall, error = self.gen_loop_body(builder, func, args)
             # If error, escape
             cgutils.cbranch_or_continue(builder, error, bbreturn)

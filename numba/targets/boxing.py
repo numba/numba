@@ -411,10 +411,10 @@ def box_list(c, typ, val):
 
     with c.builder.if_then(cgutils.is_not_null(c.builder, obj),
                            likely=True):
-        with cgutils.for_range(c.builder, nitems) as index:
-            item = list.getitem(index)
+        with cgutils.for_range(c.builder, nitems) as loop:
+            item = list.getitem(loop.index)
             itemobj = c.box(typ.dtype, item)
-            c.pyapi.list_setitem(obj, index, itemobj)
+            c.pyapi.list_setitem(obj, loop.index, itemobj)
 
     # Steal NRT ref
     c.context.nrt_decref(c.builder, typ, val)

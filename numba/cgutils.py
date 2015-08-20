@@ -3,6 +3,8 @@ Generic helpers for LLVM code generation.
 """
 
 from __future__ import print_function, division, absolute_import
+
+import collections
 from contextlib import contextmanager
 import functools
 import re
@@ -365,8 +367,16 @@ class IfBranchObj(object):
         terminate(self.builder, self.bbend)
 
 
+Loop = collections.namedtuple('Loop', ('index', 'do_break'))
+
 @contextmanager
 def for_range(builder, count, intp=None):
+    """
+    Generate LLVM IR for a for-loop in [0, count).  Yields a
+    Loop namedtuple with the following members:
+    - `index` is the loop index's value
+    - `do_break` is a no-argument callable to break out of the loop
+    """
     if intp is None:
         intp = count.type
     start = Constant.int(intp, 0)
@@ -375,6 +385,9 @@ def for_range(builder, count, intp=None):
     bbcond = builder.append_basic_block("for.cond")
     bbbody = builder.append_basic_block("for.body")
     bbend = builder.append_basic_block("for.end")
+
+    def do_break():
+        builder.branch(bbend)
 
     bbstart = builder.basic_block
     builder.branch(bbcond)
@@ -387,7 +400,8 @@ def for_range(builder, count, intp=None):
         builder.cbranch(pred, bbbody, bbend)
 
     with builder.goto_block(bbbody):
-        yield index
+        yield _Loop(index, do_break)
+        # Update bbbody as a new basic block may have been activated
         bbbody = builder.basic_block
         incr = builder.add(index, ONE)
         terminate(builder, bbcond)
@@ -495,12 +509,12 @@ def loop_nest(builder, shape, intp):
 
 @contextmanager
 def _loop_nest(builder, shape, intp):
-    with for_range(builder, shape[0], intp) as ind:
+    with for_range(builder, shape[0], intp) as loop:
         if len(shape) > 1:
             with _loop_nest(builder, shape[1:], intp) as indices:
-                yield (ind,) + indices
+                yield (loop.index,) + indices
         else:
-            yield (ind,)
+            yield (loop.index,)
 
 
 def pack_array(builder, values, ty=None):
@@ -850,9 +864,9 @@ def memcpy(builder, dst, src, count):
     * count is positive
     """
     assert dst.type == src.type
-    with for_range(builder, count, count.type) as idx:
-        out_ptr = builder.gep(dst, [idx])
-        in_ptr = builder.gep(src, [idx])
+    with for_range(builder, count, count.type) as loop:
+        out_ptr = builder.gep(dst, [loop.index])
+        in_ptr = builder.gep(src, [loop.index])
         builder.store(builder.load(in_ptr), out_ptr)
 
 
