@@ -1462,7 +1462,6 @@ def tuple_len(context, builder, sig, args):
     res = context.get_constant(retty, len(tupty.types))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-# XXX should there be a specific module for Sequence or collection base classes?
 @builtin
 @implement(bool, types.Kind(types.BaseTuple))
 def sequence_bool(context, builder, sig, args):
