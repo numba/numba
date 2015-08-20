@@ -570,11 +570,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyList_New")
         return self.builder.call(fn, [szval])
 
-    def list_size(self, lst):
-        fnty = Type.function(self.py_ssize_t, [self.pyobj])
-        fn = self._get_function(fnty, name="PyList_Size")
-        return self.builder.call(fn, [lst])
-
     def list_setitem(self, seq, idx, val):
         """
         Warning: Steals reference to ``val``
