@@ -248,18 +248,17 @@ class NumberClass(Callable, DTypeSpec, Opaque):
     Type class for number classes (e.g. "np.float64").
     """
 
-    def __init__(self, instance_type, template):
+    def __init__(self, instance_type):
         self.instance_type = instance_type
-        self.template = template
-        name = "type(%s)" % (instance_type,)
-        super(NumberClass, self).__init__(name)
+        name = "class(%s)" % (instance_type,)
+        super(NumberClass, self).__init__(name, param=True)
 
     def get_call_type(self, context, args, kws):
-        return self.template(context).apply(args, kws)
+        # Overriden by the __call__ constructor resolution in typing.builtins
+        return None
 
     def get_call_signatures(self):
-        sigs = getattr(self.template, 'cases')
-        return sigs, hasattr(self.template, 'generic')
+        return (), True
 
     @property
     def key(self):
