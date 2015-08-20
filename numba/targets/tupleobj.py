@@ -31,7 +31,9 @@ def generic_compare(context, builder, key, argtypes, args):
 @implement(types.NamedTupleClass, types.VarArg(types.Any))
 def namedtuple_constructor(context, builder, sig, args):
     # A namedtuple has the same representation as a regular tuple
-    return context.make_tuple(builder, sig.return_type, args)
+    res = context.make_tuple(builder, sig.return_type, args)
+    # The tuple's contents are borrowed
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @builtin
 @implement(types.len_type, types.Kind(types.BaseTuple))
@@ -125,7 +127,8 @@ def namedtuple_getattr(context, builder, typ, value, attr):
     Fetch a namedtuple's field.
     """
     index = typ.fields.index(attr)
-    return builder.extract_value(value, index)
+    res = builder.extract_value(value, index)
+    return impl_ret_borrowed(context, builder, typ[index], res)
 
 
 #------------------------------------------------------------------------------
