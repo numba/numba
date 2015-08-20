@@ -65,7 +65,7 @@ def make_point_kws(a, b, c):
     return Point(z=c, y=b, x=a)
 
 def make_point_nrt(n):
-    r = Rect(list(range(n)), np.arange(n))
+    r = Rect(list(range(n)), np.zeros(n + 1))
     # This also exercises attribute access
     p = Point(r, len(r.width), len(r.height))
     return p

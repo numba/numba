@@ -491,8 +491,11 @@ class FunctionCache(object):
         self._cache_path = os.path.join(os.path.dirname(self._source_path),
                                         '__pycache__')
         abiflags = getattr(sys, 'abiflags', '')
+        # '<' and '>' can appear in the qualname (e.g. '<locals>') but
+        # are forbidden in Windows filenames
+        fixed_fullname = self._fullname.replace('<', '').replace('>', '')
         filename_base = (
-            '%s-%d.py%d%d%s' % (self._fullname, self._lineno,
+            '%s-%d.py%d%d%s' % (fixed_fullname, self._lineno,
                                 sys.version_info[0], sys.version_info[1],
                                 abiflags)
             )
