@@ -530,6 +530,22 @@ class TestLists(MemoryLeakMixin, TestCase):
         with self.assertRaises(MemoryError):
             cfunc(1, 2**62)
 
+    def test_list_passing(self):
+        # Check one can pass a list from a Numba function to another
+        @jit(nopython=True)
+        def inner(lst):
+            return len(lst), lst[-1]
+
+        @jit(nopython=True)
+        def outer(n):
+            l = list(range(n))
+            return inner(l)
+
+        self.assertPreciseEqual(outer(5), (5, 4))
+        # Cannot call the inner function directly
+        with self.assertRaises(TypeError):
+            inner([42])
+
 
 if __name__ == '__main__':
     unittest.main()
