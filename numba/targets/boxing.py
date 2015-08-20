@@ -339,7 +339,8 @@ def unbox_array(c, typ, obj):
     return NativeValue(c.builder.load(aryptr), is_error=failed)
 
 
-@box(types.BaseTuple)
+@box(types.Tuple)
+@box(types.UniTuple)
 def box_tuple(c, typ, val):
     """
     Convert native array or structure *val* to a tuple object.
@@ -352,6 +353,20 @@ def box_tuple(c, typ, val):
         c.pyapi.tuple_setitem(tuple_val, i, obj)
 
     return tuple_val
+
+@box(types.NamedTuple)
+@box(types.NamedUniTuple)
+def box_namedtuple(c, typ, val):
+    """
+    Convert native array or structure *val* to a namedtuple object.
+    """
+    cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
+    tuple_obj = box_tuple(c, typ, val)
+    obj = c.pyapi.call(cls_obj, tuple_obj)
+    c.pyapi.decref(cls_obj)
+    c.pyapi.decref(tuple_obj)
+    return obj
+
 
 @unbox(types.BaseTuple)
 def unbox_tuple(c, typ, obj):

@@ -112,13 +112,7 @@ def _typeof_none(val, c):
 @typeof_impl.register(tuple)
 def _typeof_tuple(val, c):
     tys = [typeof_impl(v, c) for v in val]
-    if not tys:
-        return types.Tuple(())
-    first = tys[0]
-    for ty in tys[1:]:
-        if ty != first:
-            return types.Tuple(tys)
-    return types.UniTuple(first, len(tys))
+    return types.BaseTuple.from_types(tys, type(val))
 
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):

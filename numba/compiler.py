@@ -752,11 +752,6 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     infer.propagate()
     typemap, restype, calltypes = infer.unify()
 
-    if config.DEBUG:
-        pprint(typemap)
-        pprint(restype)
-        pprint(calltypes)
-
     return typemap, restype, calltypes
 
 

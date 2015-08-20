@@ -16,6 +16,7 @@ from __future__ import print_function, division, absolute_import
 
 from pprint import pprint
 import itertools
+import traceback
 
 from numba import ir, types, utils, config, six
 from .errors import TypingError
@@ -110,9 +111,11 @@ class ConstrainNetwork(object):
                 constrain(typeinfer)
             except TypingError as e:
                 errors.append(e)
-            except Exception as e:
-                msg = "Internal error at {con}:\n{err}"
-                e = TypingError(msg.format(con=constrain, err=e),
+            except Exception:
+                msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
+                e = TypingError(msg.format(con=constrain,
+                                           err=traceback.format_exc(),
+                                           sep='--%<' +'-' * 65),
                                 loc=constrain.loc)
                 errors.append(e)
         return errors
@@ -131,6 +134,7 @@ class Propagate(object):
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
         typeinfer.copy_type(self.src, self.dst)
+        # If `dst` is refined, notify us
         typeinfer.refine_map[self.dst] = self
 
     def refine(self, typeinfer, target_type):
@@ -250,6 +254,7 @@ class CallConstrain(object):
     """Constrain for calling functions.
     Perform case analysis foreach combinations of argument types.
     """
+    signature = None
 
     def __init__(self, target, func, args, kws, vararg, loc):
         self.target = target
@@ -270,39 +275,48 @@ class CallConstrain(object):
 
         n_pos_args = len(self.args)
         kwds = [kw for (kw, var) in self.kws]
-        argtypes = [typevars[a.name].get() for a in self.args]
-        argtypes += [typevars[var.name].get() for (kw, var) in self.kws]
+        argtypes = [typevars[a.name] for a in self.args]
+        argtypes += [typevars[var.name] for (kw, var) in self.kws]
         if self.vararg is not None:
-            argtypes.append(typevars[self.vararg.name].get())
-        # Case analysis for each combination of argument types.
-        for args in itertools.product(*argtypes):
-            pos_args = args[:n_pos_args]
-            if self.vararg is not None:
-                if not isinstance(args[-1], types.BaseTuple):
-                    # Unsuitable for *args
-                    # (Python is more lenient and accepts all iterables)
-                    continue
-                pos_args += args[-1].types
-                args = args[:-1]
-            kw_args = dict(zip(kwds, args[n_pos_args:]))
-            sig = context.resolve_function_type(fnty, pos_args, kw_args)
-            if sig is None:
-                desc = context.explain_function_type(fnty)
-                headtemp = "Invalid usage of {0} with parameters ({1})"
-                head = headtemp.format(fnty, ', '.join(map(str, args)))
-                msg = '\n'.join([head, desc])
-                raise TypingError(msg, loc=self.loc)
-            typeinfer.add_type(self.target, sig.return_type)
-            # If the function is a bound function and its receiver type
-            # was refined, propagate it.
-            if (isinstance(fnty, types.BoundFunction)
-                and sig.recvr is not None
-                and sig.recvr != fnty.this):
-                refined_this = context.unify_pairs(sig.recvr, fnty.this)
-                if refined_this.is_precise():
-                    refined_fnty = types.BoundFunction(fnty.template,
-                                                       this=refined_this)
-                    typeinfer.propagate_refined_type(self.func, refined_fnty)
+            argtypes.append(typevars[self.vararg.name])
+
+        if not (a.defined for a in argtypes):
+            # Cannot resolve call type until all argument types are known
+            return
+
+        args = tuple(a.getone() for a in argtypes)
+        pos_args = args[:n_pos_args]
+        if self.vararg is not None:
+            if not isinstance(args[-1], types.BaseTuple):
+                # Unsuitable for *args
+                # (Python is more lenient and accepts all iterables)
+                return
+            pos_args += args[-1].types
+            args = args[:-1]
+        kw_args = dict(zip(kwds, args[n_pos_args:]))
+        sig = context.resolve_function_type(fnty, pos_args, kw_args)
+        if sig is None:
+            desc = context.explain_function_type(fnty)
+            headtemp = "Invalid usage of {0} with parameters ({1})"
+            head = headtemp.format(fnty, ', '.join(map(str, args)))
+            msg = '\n'.join([head, desc])
+            raise TypingError(msg, loc=self.loc)
+        typeinfer.add_type(self.target, sig.return_type)
+        # If the function is a bound function and its receiver type
+        # was refined, propagate it.
+        if (isinstance(fnty, types.BoundFunction)
+            and sig.recvr is not None
+            and sig.recvr != fnty.this):
+            refined_this = context.unify_pairs(sig.recvr, fnty.this)
+            if refined_this.is_precise():
+                refined_fnty = types.BoundFunction(fnty.template,
+                                                   this=refined_this)
+                typeinfer.propagate_refined_type(self.func, refined_fnty)
+
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
 
 
 class IntrinsicCallConstrain(CallConstrain):
@@ -447,9 +461,10 @@ class TypeInferer(object):
         # Target var -> constraint with refine hook
         self.refine_map = {}
 
-    def dump(self):
-        print('---- type variables ----')
-        pprint(list(six.itervalues(self.typevars)))
+        if config.DEBUG or config.DEBUG_TYPEINFER:
+            self.debug = TypeInferDebug(self)
+        else:
+            self.debug = NullDebug()
 
     def _mangle_arg_name(self, name):
         # Disambiguise argument name
@@ -463,7 +478,7 @@ class TypeInferer(object):
     def seed_type(self, name, typ):
         """All arguments should be seeded.
         """
-        self.typevars[name].lock(typ)
+        self.lock_type(name, typ)
 
     def seed_return(self, typ):
         """Seeding of return value is optional.
@@ -471,7 +486,7 @@ class TypeInferer(object):
         for blk in utils.itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
-                self.typevars[inst.value.name].lock(typ)
+                self.lock_type(inst.value.name, typ)
 
     def build_constrain(self):
         for blk in utils.itervalues(self.blocks):
@@ -481,20 +496,16 @@ class TypeInferer(object):
     def propagate(self):
         newtoken = self.get_state_token()
         oldtoken = None
-        if config.DEBUG:
-            self.dump()
         # Since the number of types are finite, the typesets will eventually
         # stop growing.
         while newtoken != oldtoken:
-            if config.DEBUG:
-                print("propagate".center(80, '-'))
+            self.debug.propagate_started()
             oldtoken = newtoken
             # Errors can appear when the type set is incomplete; only
             # raise them when there is no progress anymore.
             errors = self.constrains.propagate(self)
             newtoken = self.get_state_token()
-            if config.DEBUG:
-                self.dump()
+            self.debug.propagate_finished()
         if errors:
             raise errors[0]
 
@@ -508,8 +519,10 @@ class TypeInferer(object):
 
     def copy_type(self, src_var, dest_var):
         unified = self.typevars[dest_var].union(self.typevars[src_var])
-        if unified is not None:
-            self.propagate_refined_type(src_var, unified)
+
+    def lock_type(self, var, tp):
+        tv = self.typevars[var]
+        tv.lock(tp)
 
     def propagate_refined_type(self, updated_var, updated_type):
         source_constraint = self.refine_map.get(updated_var)
@@ -545,6 +558,9 @@ class TypeInferer(object):
         fntys = self.get_function_types(typdict)
         if self.generator_info:
             retty = self.get_generator_type(typdict, retty)
+
+        self.debug.unify_finished(typdict, retty, fntys)
+
         return typdict, retty, fntys
 
     def get_generator_type(self, typdict, retty):
@@ -566,16 +582,8 @@ class TypeInferer(object):
         """
         # XXX why can't this be done on the fly?
         calltypes = utils.UniqueDict()
-        for call, args, kws in self.intrcalls:
-            if call.op in ('inplace_binop', 'binop', 'unary'):
-                fnty = call.fn
-            else:
-                fnty = call.op
-            args = tuple(typemap[a.name] for a in args)
-            assert not kws
-            signature = self.context.resolve_function_type(fnty, args, ())
-            assert signature is not None, (fnty, args)
-            calltypes[call] = signature
+        for call, constrain in self.intrcalls:
+            calltypes[call] = constrain.get_call_signature()
 
         for call, args, kws, vararg in self.usercalls:
             if isinstance(call.func, ir.Intrinsic):
@@ -709,7 +717,7 @@ class TypeInferer(object):
                                          loc=inst.loc))
 
     def typeof_const(self, inst, target, const):
-        self.typevars[target.name].lock(self.resolve_value_type(inst, const))
+        self.lock_type(target.name, self.resolve_value_type(inst, const))
 
     def typeof_yield(self, inst, target, yield_):
         # Sending values into generators isn't supported.
@@ -741,7 +749,7 @@ class TypeInferer(object):
 
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)
-            self.typevars[target.name].lock(typ)
+            self.lock_type(target.name, typ)
             self.assumed_immutables.add(inst)
         else:
             raise TypingError("Untyped global name '%s'" % gvar.name,
@@ -776,7 +784,8 @@ class TypeInferer(object):
             # We assume type constraints for inplace operators to be the
             # same as for normal operators.  This may have to be refined in
             # the future.
-            self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
+            self.typeof_intrinsic_call(inst, target, expr.immutable_fn,
+                                       expr.lhs, expr.rhs)
         elif expr.op == 'unary':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.value)
         elif expr.op == 'static_getitem':
@@ -817,4 +826,40 @@ class TypeInferer(object):
         constrain = IntrinsicCallConstrain(target.name, func, args,
                                            kws=(), vararg=None, loc=inst.loc)
         self.constrains.append(constrain)
-        self.intrcalls.append((inst.value, args, ()))
+        self.intrcalls.append((inst.value, constrain))
+
+
+class NullDebug(object):
+
+    def propagate_started(self):
+        pass
+
+    def propagate_finished(self):
+        pass
+
+    def unify_finished(self, typdict, retty, fntys):
+        pass
+
+
+class TypeInferDebug(object):
+
+    def __init__(self, typeinfer):
+        self.typeinfer = typeinfer
+
+    def _dump_state(self):
+        print('---- type variables ----')
+        pprint([v for k, v in sorted(self.typeinfer.typevars.items())])
+
+    def propagate_started(self):
+        print("propagate".center(80, '-'))
+
+    def propagate_finished(self):
+        self._dump_state()
+
+    def unify_finished(self, typdict, retty, fntys):
+        print("Variable types".center(80, "-"))
+        pprint(typdict)
+        print("Return type".center(80, "-"))
+        pprint(retty)
+        print("Call types".center(80, "-"))
+        pprint(fntys)

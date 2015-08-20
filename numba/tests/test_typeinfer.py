@@ -542,8 +542,9 @@ def list_unify_usecase1(n):
             x.append(np.int64(i))
     x.append(5.0)
 
-    for i in range(len(x)):
-        res += i * x[i]
+    # Note `i` and `j` may have different types (int64 vs. int32)
+    for j in range(len(x)):
+        res += j * x[j]
     for val in x:
         res += int(val) & len(x)
     while len(x) > 0:
