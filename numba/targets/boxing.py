@@ -422,27 +422,18 @@ def box_list(c, typ, val):
     return obj
 
 
-# XXX unused but necessary
 @unbox(types.List)
-def unbox_List(c, typ, obj):
-    """
-    Convert list *obj* to a native list.
-    """
-    is_error = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+def unbox_list(c, typ, obj):
+    # Since a wrapper is always compiled even for an inner function,
+    # we have to define this to be able to pass lists from one Numba
+    # function to another.
+    # This code should nevertheless never be executed at runtime.
+    c.pyapi.err_set_string("PyExc_RuntimeError",
+                           "cannot unbox list objects")
 
-    nitems = c.pyapi.list_size(obj)
-    # XXX fails because of raising MemoryError with the wrong call conv
-    list = listobj.ListInstance.allocate(c.context, c.builder, typ, nitems)
-    list.size = nitems
-
-    with cgutils.for_range(c.builder, nitems) as index:
-        itemobj = c.pyapi.list_getitem(obj, index)
-        native = c.unbox(typ.dtype, itemobj)
-        c.builder.store(c.builder.or_(c.builder.load(is_error), native.is_error),
-                        is_error)
-        list.setitem(index, native.value)
-
-    return NativeValue(list.value, is_error=c.builder.load(is_error))
+    # Just return a zero-initialized list value for successful codegen.
+    value = ir.Constant(c.context.get_value_type(typ), None)
+    return NativeValue(value, is_error=cgutils.true_bit)
 
 
 #

@@ -14,77 +14,56 @@ from numba import testing
 from .support import TestCase, MemoryLeakMixin
 
 from numba.targets.timsort import (
-    py_timsort, jit_timsort, MergeState, MergeRun,
+    make_py_timsort, make_jit_timsort, MergeRun,
     TimsortImplementation)
 
 
-jit_binarysort = jit_timsort.binarysort
+def make_temp_list(keys, n):
+    return [keys[0]] * n
 
-@jit(nopython=True)
-def tuple_binarysort(n, tup, lo, hi, start):
-    lkeys = list(tup)[:n]
-    lvalues = list(tup)[n:]
-    # XXX
-    # Wrapper generation needs list unboxing...
-    jit_binarysort(lkeys, lvalues, lo, hi, start)
-    return lkeys, lvalues
+def make_temp_array(keys, n):
+    return np.empty(n, keys.dtype)
 
-def wrapped_binarysort(keys, values, lo, hi, start):
-    lkeys, lvalues = tuple_binarysort(len(keys), tuple(keys + values), lo, hi, start)
-    keys[:] = lkeys
-    values[:] = lvalues
+py_list_timsort = make_py_timsort(make_temp_list)
+
+jit_array_timsort = make_jit_timsort(make_temp_array)
 
 
-dct = jit_timsort._asdict()
-dct['binarysort'] = wrapped_binarysort
+#def wrap_with_mergestate(timsort, func_name):
+    #merge_init = timsort.merge_init
+    #func = getattr(timsort, func_name)
 
-wrapped_timsort = TimsortImplementation(**dct)
+    #@timsort.compile
+    #def wrapper(keys, values, *args):
+        #ms = merge_init(keys)
+        #res = func(ms, keys, values, *args)
+        #return res
 
-
-array_factory = lambda lst: np.array(lst, dtype=np.int32)
-array_factory = list
-
-def array_factory_wrapper(list_factory):
-    def wrapper(*args, **kwargs):
-        lst = list_factory(*args, **kwargs)
-        return array_factory(lst)
-    return wrapper
+    #return wrapper
 
 
 class BaseTimsortTest(object):
 
-    def _random_list(self, n, offset=10):
+    def random_list(self, n, offset=10):
         random.seed(42)
         l = list(range(offset, offset + n))
         random.shuffle(l)
         return l
 
-    #random_list = array_factory_wrapper(_random_list)
-    random_list = _random_list
-
-    def _sorted_list(self, n, offset=10):
+    def sorted_list(self, n, offset=10):
         return list(range(offset, offset + n))
 
-    #sorted_list = array_factory_wrapper(_sorted_list)
-    sorted_list = _sorted_list
-
-    def _revsorted_list(self, n, offset=10):
+    def revsorted_list(self, n, offset=10):
         return list(range(offset, offset + n))[::-1]
 
-    #revsorted_list = array_factory_wrapper(_revsorted_list)
-    revsorted_list = _revsorted_list
-
-    def _initially_sorted_list(self, n, m=None, offset=10):
+    def initially_sorted_list(self, n, m=None, offset=10):
         if m is None:
             m = n // 2
-        l = self._sorted_list(m, offset)
-        l += self._random_list(n - m, offset=l[-1] + offset)
+        l = self.sorted_list(m, offset)
+        l += self.random_list(n - m, offset=l[-1] + offset)
         return l
 
-    #initially_sorted_list = array_factory_wrapper(_initially_sorted_list)
-    initially_sorted_list = _initially_sorted_list
-
-    def _duprandom_list(self, n, factor=None, offset=10):
+    def duprandom_list(self, n, factor=None, offset=10):
         random.seed(42)
         if factor is None:
             factor = int(math.sqrt(n))
@@ -93,19 +72,13 @@ class BaseTimsortTest(object):
         random.shuffle(l)
         return l
 
-    #duprandom_list = array_factory_wrapper(_duprandom_list)
-    duprandom_list = _duprandom_list
-
-    def _dupsorted_list(self, n, factor=None, offset=10):
+    def dupsorted_list(self, n, factor=None, offset=10):
         if factor is None:
             factor = int(math.sqrt(n))
         l = (list(range(offset, offset + (n // factor) + 1)) * (factor + 1))[:n]
         assert len(l) == n, (len(l), n)
         l.sort()
         return l
-
-    #dupsorted_list = array_factory_wrapper(_dupsorted_list)
-    dupsorted_list = _dupsorted_list
 
     def assertSorted(self, orig, result):
         self.assertEqual(len(result), len(orig))
@@ -472,14 +445,22 @@ class BaseTimsortTest(object):
 
 class TestTimsortPurePython(BaseTimsortTest, TestCase):
 
-    timsort = py_timsort
+    timsort = py_list_timsort
+
     # Much faster than a Numpy array in pure Python
     array_factory = list
 
 
-class TestTimsortNumba(BaseTimsortTest, TestCase):
+#class TestTimsortLists(BaseTimsortTest, TestCase):
 
-    timsort = jit_timsort
+    #timsort = jit_timsort
+
+    #array_factory = list
+
+
+class TestTimsortArrays(BaseTimsortTest, TestCase):
+
+    timsort = jit_array_timsort
 
     def array_factory(self, lst):
         return np.array(lst, dtype=np.int32)

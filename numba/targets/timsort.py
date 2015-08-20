@@ -8,12 +8,14 @@ from __future__ import print_function, absolute_import, division
 
 import collections
 
-import numba
+from numba import types
 
 
 TimsortImplementation = collections.namedtuple(
     'TimsortImplementation',
-    (# All tested subroutines
+    (# The compile function itself
+     'compile',
+     # All subroutines exercised by test_sort
      'count_run', 'binarysort', 'merge_init', 'gallop_left', 'gallop_right',
      'merge_compute_minrun', 'merge_lo', 'merge_hi', 'merge_at',
      'merge_force_collapse', 'merge_collapse',
@@ -49,16 +51,78 @@ _NO_VALUE = 0
 MergeState = collections.namedtuple('MergeState',
                                     ('min_gallop', 'keys', 'values', 'pending'))
 
+class PlainMergeState(MergeState):
+    __slots__ = ()
+
+class KeyedMergeState(MergeState):
+    __slots__ = ()
+
+
 MergeRun = collections.namedtuple('MergeRun', ('start', 'size'))
 
 
-def make_timsort_impl(wrap):
+def make_timsort_impl(wrap, make_temp_area):
+
+    make_temp_area = wrap(make_temp_area)
+    intp = types.intp
+
+    @wrap
+    def merge_init(keys):
+        """
+        Initialize a MergeState for a non-keyed sort.
+        """
+        temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
+        temp_keys = make_temp_area(keys, temp_size)
+        temp_values = [_NO_VALUE] * 0      # typed empty list
+        #temp_values = make_temp_area(keys, temp_size)
+        #temp_keys = [keys[0]] * temp_size
+        pending = [MergeRun(0, 0)] * 0     # typed empty list
+        return PlainMergeState(MIN_GALLOP, temp_keys, temp_values, pending)
+
+    @wrap
+    def merge_init_with_values(keys, values):
+        """
+        Initialize a MergeState for a keyed sort.
+        """
+        temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
+        temp_keys = make_temp_area(keys, temp_size)
+        temp_values = make_temp_area(values, temp_size)
+        #temp_keys = [keys[0]] * temp_size
+        #temp_values = [values[0]] * temp_size
+        pending = [MergeRun(0, 0)] * 0     # typed empty list
+        return KeyedMergeState(MIN_GALLOP, temp_keys, temp_values, pending)
+
+    @wrap
+    def merge_getmem(ms, need):
+        """
+        Ensure enough temp memory for 'need' items is available.
+        """
+        alloced = len(ms.keys)
+        if need <= alloced:
+            return ms
+        # Don't realloc!  That can cost cycles to copy the old data, but
+        # we don't care what's in the block.
+        temp_keys = make_temp_area(ms.keys, need)
+        #temp_keys = [ms.keys[0]] * need
+        if ms.values:
+            temp_values = [ms.values[0]] * need
+        else:
+            temp_values = ms.values
+        return MergeState(ms.min_gallop, temp_keys, temp_values, ms.pending)
+
+    @wrap
+    def merge_adjust_gallop(ms, new_gallop):
+        """
+        Modify the MergeState's min_gallop.
+        """
+        return MergeState(new_gallop, ms.keys, ms.values, ms.pending)
+
 
     @wrap
     def LT(a, b):
         """
         Trivial comparison function between two keys.  This is factored out to
-        make it clear where comparison occurs.
+        make it clear where comparisons occur.
         """
         return a < b
 
@@ -331,52 +395,6 @@ def make_timsort_impl(wrap):
             n >>= 1
         return n + r
 
-
-    @wrap
-    def merge_init(keys):
-        """
-        Initialize a MergeState for a non-keyed sort.
-        """
-        temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
-        temp_keys = [keys[0]] * temp_size
-        temp_values = [_NO_VALUE] * 0      # typed empty list
-        pending = [MergeRun(0, 0)] * 0     # typed empty list
-        return MergeState(MIN_GALLOP, temp_keys, temp_values, pending)
-
-    @wrap
-    def merge_init_with_values(keys, values):
-        """
-        Initialize a MergeState for a keyed sort.
-        """
-        temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
-        temp_keys = [keys[0]] * temp_size
-        temp_values = [values[0]] * temp_size
-        pending = [MergeRun(0, 0)] * 0     # typed empty list
-        return MergeState(MIN_GALLOP, temp_keys, temp_values, pending)
-
-    @wrap
-    def merge_getmem(ms, need):
-        """
-        Ensure enough temp memory for 'need' items is available.
-        """
-        alloced = len(ms.keys)
-        if need <= alloced:
-            return ms
-        # Don't realloc!  That can cost cycles to copy the old data, but
-        # we don't care what's in the block.
-        temp_keys = [ms.keys[0]] * need
-        if ms.values:
-            temp_values = [ms.values[0]] * need
-        else:
-            temp_values = ms.values
-        return MergeState(ms.min_gallop, temp_keys, temp_values, ms.pending)
-
-    @wrap
-    def merge_adjust_gallop(ms, new_gallop):
-        """
-        Modify the MergeState's min_gallop.
-        """
-        return MergeState(new_gallop, ms.keys, ms.values, ms.pending)
 
     @wrap
     def sortslice_copy(dest_keys, dest_values, dest_start,
@@ -859,7 +877,7 @@ def make_timsort_impl(wrap):
         # and extending short natural runs to minrun elements.
         minrun = merge_compute_minrun(nremaining)
 
-        lo = 0
+        lo = intp(0)
         while nremaining > 0:
             n, desc = count_run(keys, lo, lo + nremaining)
             if desc:
@@ -902,12 +920,17 @@ def make_timsort_impl(wrap):
                                     keys, values)
 
     return TimsortImplementation(
+        wrap,
         count_run, binarysort, merge_init, gallop_left, gallop_right,
         merge_compute_minrun, merge_lo, merge_hi, merge_at,
         merge_force_collapse, merge_collapse,
         run_timsort, run_timsort_with_values)
 
 
-py_timsort = make_timsort_impl(lambda f: f)
+def make_py_timsort(*args):
+    return make_timsort_impl((lambda f: f), *args)
 
-jit_timsort = make_timsort_impl(lambda f: numba.jit(nopython=True)(f))
+def make_jit_timsort(*args):
+    from numba import jit
+    return make_timsort_impl((lambda f: jit(nopython=True)(f)),
+                              *args)
