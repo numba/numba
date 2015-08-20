@@ -567,6 +567,23 @@ class TestCache(TestCase):
         self.assertIn('Cannot cache compiled function "use_c_sin"',
                       str(w[0].message))
 
+    def test_closure(self):
+        mod = self.import_module()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.closure1
+            self.assertPreciseEqual(f(3), 6)
+            f = mod.closure2
+            self.assertPreciseEqual(f(3), 8)
+            self.check_cache(0)
+
+        self.assertEqual(len(w), 2)
+        for item in w:
+            self.assertIn('Cannot cache compiled function "closure"',
+                          str(item.message))
+
     def test_cache_reuse(self):
         mod = self.import_module()
         mod.add_usecase(2, 3)

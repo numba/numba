@@ -483,6 +483,7 @@ class FunctionCache(object):
         self._funcname = qualname.split('.')[-1]
         self._fullname = "%s.%s" % (modname, qualname)
         self._source_path = inspect.getfile(py_func)
+        self._is_closure = bool(py_func.__closure__)
         self._lineno = py_func.__code__.co_firstlineno
         # NOTE: this assumes the __pycache__ directory is writable, which
         # is false for system installs, but true for conda environments
@@ -572,7 +573,9 @@ class FunctionCache(object):
         Check cachability of the given compile result.
         """
         cannot_cache = None
-        if cres.lifted:
+        if self._is_closure:
+            cannot_cache = "as it uses outer variables in a closure"
+        elif cres.lifted:
             cannot_cache = "as it uses lifted loops"
         elif cres.has_dynamic_globals:
             cannot_cache = "as it uses dynamic globals (such as ctypes pointers)"
