@@ -287,7 +287,6 @@ def _lower_array_expr(lowerer, expr):
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
     expr_var_list = expr.list_vars()
     expr_var_map = {}
-
     for expr_var in expr_var_list:
         expr_var_name = expr_var.name
         expr_var_new_name = expr_var_name.replace("$", "_").replace(".", "_")
@@ -295,7 +294,6 @@ def _lower_array_expr(lowerer, expr):
         if expr_var_new_name not in expr_var_map:
             expr_var_map[expr_var_new_name] = expr_var_name, expr_var
         expr_var.name = expr_var_new_name
-
     expr_filename = expr_var_list[0].loc.filename
     # Parameters are the names internal to the new closure.
     expr_params = sorted(expr_var_map.keys())
@@ -325,7 +323,6 @@ def _lower_array_expr(lowerer, expr):
 
     context = lowerer.context
     builder = lowerer.builder
-
     outer_sig = expr.ty(*(lowerer.typeof(name) for name in expr_args))
     inner_sig_args = []
     for argty in outer_sig.args:
