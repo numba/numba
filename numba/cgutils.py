@@ -400,7 +400,7 @@ def for_range(builder, count, intp=None):
         builder.cbranch(pred, bbbody, bbend)
 
     with builder.goto_block(bbbody):
-        yield _Loop(index, do_break)
+        yield Loop(index, do_break)
         # Update bbbody as a new basic block may have been activated
         bbbody = builder.basic_block
         incr = builder.add(index, ONE)
