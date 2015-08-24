@@ -41,8 +41,6 @@ MIN_GALLOP = 7
 # Start size for temp arrays.
 MERGESTATE_TEMP_SIZE = 256
 
-_NO_VALUE = 0
-
 # A mergestate is a named tuple with the following members:
 #  - *min_gallop* is an integer controlling when we get into galloping mode
 #  - *keys* is a temp list for merging keys
