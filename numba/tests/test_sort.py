@@ -14,8 +14,8 @@ from numba import testing
 from .support import TestCase, MemoryLeakMixin
 
 from numba.targets.timsort import (
-    make_py_timsort, make_jit_timsort, MergeRun,
-    TimsortImplementation)
+    make_py_timsort, make_jit_timsort, MergeRun,)
+from numba.targets.quicksort import make_py_quicksort, make_jit_quicksort
 
 
 def make_temp_list(keys, n):
@@ -32,6 +32,10 @@ py_array_timsort = make_py_timsort(make_temp_array)
 jit_list_timsort = make_jit_timsort(make_temp_list)
 
 jit_array_timsort = make_jit_timsort(make_temp_array)
+
+py_quicksort = make_py_quicksort()
+
+jit_quicksort = make_jit_quicksort()
 
 
 def wrap_with_mergestate(timsort, func, _cache={}):
@@ -51,7 +55,7 @@ def wrap_with_mergestate(timsort, func, _cache={}):
     return wrapper
 
 
-class BaseTimsortTest(object):
+class BaseSortingTest(object):
 
     def random_list(self, n, offset=10):
         random.seed(42)
@@ -113,6 +117,25 @@ class BaseTimsortTest(object):
         while True:
             yield a
             a, b = b, a + b
+
+    def make_sample_sorted_lists(self, n):
+        lists = []
+        for offset in (20, 120):
+            lists.append(self.sorted_list(n, offset))
+            lists.append(self.dupsorted_list(n, offset))
+        return lists
+
+    def make_sample_lists(self, n):
+        lists = []
+        for offset in (20, 120):
+            lists.append(self.sorted_list(n, offset))
+            lists.append(self.dupsorted_list(n, offset))
+            lists.append(self.revsorted_list(n, offset))
+            lists.append(self.duprandom_list(n, offset))
+        return lists
+
+
+class BaseTimsortTest(BaseSortingTest):
 
     def merge_init(self, keys):
         f = self.timsort.merge_init
@@ -307,22 +330,6 @@ class BaseTimsortTest(object):
         self.assertIs(new_ms.pending, ms.pending)
         self.assertGreaterEqual(new_ms.min_gallop, 1)
 
-    def make_sample_sorted_lists(self, n):
-        lists = []
-        for offset in (20, 120):
-            lists.append(self.sorted_list(n, offset))
-            lists.append(self.dupsorted_list(n, offset))
-        return lists
-
-    def make_sample_lists(self, n):
-        lists = []
-        for offset in (20, 120):
-            lists.append(self.sorted_list(n, offset))
-            lists.append(self.dupsorted_list(n, offset))
-            lists.append(self.revsorted_list(n, offset))
-            lists.append(self.duprandom_list(n, offset))
-        return lists
-
     def test_merge_lo_hi(self):
         f_lo = self.timsort.merge_lo
         f_hi = self.timsort.merge_hi
@@ -498,6 +505,120 @@ class TestTimsortArrays(JITTimsortMixin, BaseTimsortTest, TestCase):
         self.assertEqual(keys[0], orig_keys[0])
         self.assertEqual(keys[-1], orig_keys[-1])
         self.assertSorted(orig_keys[1:-1], keys[1:-1])
+
+
+
+class BaseQuicksortTest(BaseSortingTest):
+
+    def test_insertion_sort(self):
+        n = 20
+        def check(l, n):
+            res = self.array_factory([9999] + l + [-9999])
+            f(res, 1, n)
+            self.assertEqual(res[0], 9999)
+            self.assertEqual(res[-1], -9999)
+            self.assertSorted(l, res[1:-1])
+
+        f = self.quicksort.insertion_sort
+        l = self.sorted_list(n)
+        check(l, n)
+        l = self.revsorted_list(n)
+        check(l, n)
+        l = self.initially_sorted_list(n, n//2)
+        check(l, n)
+        l = self.revsorted_list(n)
+        check(l, n)
+        l = self.random_list(n)
+        check(l, n)
+        l = self.duprandom_list(n)
+        check(l, n)
+
+    def test_partition(self):
+        n = 20
+        def check(l, n):
+            res = self.array_factory([9999] + l + [-9999])
+            index = f(res, 1, n)
+            self.assertEqual(res[0], 9999)
+            self.assertEqual(res[-1], -9999)
+            pivot = res[index]
+            for i in range(1, index):
+                self.assertLessEqual(res[i], pivot)
+            for i in range(index + 1, n):
+                self.assertGreaterEqual(res[i], pivot)
+
+        f = self.quicksort.partition
+        l = self.sorted_list(n)
+        check(l, n)
+        l = self.revsorted_list(n)
+        check(l, n)
+        l = self.initially_sorted_list(n, n//2)
+        check(l, n)
+        l = self.revsorted_list(n)
+        check(l, n)
+        l = self.random_list(n)
+        check(l, n)
+        l = self.duprandom_list(n)
+        check(l, n)
+
+    def test_partition3(self):
+        n = 20
+        def check(l, n):
+            res = self.array_factory([9999] + l + [-9999])
+            lt, gt = f(res, 1, n)
+            self.assertEqual(res[0], 9999)
+            self.assertEqual(res[-1], -9999)
+            pivot = res[lt]
+            for i in range(1, lt):
+                self.assertLessEqual(res[i], pivot)
+            for i in range(lt, gt + 1):
+                self.assertEqual(res[i], pivot)
+            for i in range(gt + 1, n):
+                self.assertGreater(res[i], pivot)
+
+        f = self.quicksort.partition3
+        l = self.sorted_list(n)
+        check(l, n)
+        l = self.revsorted_list(n)
+        check(l, n)
+        l = self.initially_sorted_list(n, n//2)
+        check(l, n)
+        l = self.revsorted_list(n)
+        check(l, n)
+        l = self.random_list(n)
+        check(l, n)
+        l = self.duprandom_list(n)
+        check(l, n)
+
+    def test_run_quicksort(self):
+        f = self.quicksort.run_quicksort
+
+        for size_factor in (1, 5):
+            # Make lists to be sorted from two chunks of different kinds.
+            sizes = (15, 20)
+
+            all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
+            for chunks in itertools.product(*all_lists):
+                orig_keys = sum(chunks, [])
+                keys = self.array_factory(orig_keys)
+                f(keys)
+                # The list is now sorted
+                self.assertSorted(orig_keys, keys)
+
+
+class TestQuicksortPurePython(BaseQuicksortTest, TestCase):
+
+    quicksort = py_quicksort
+
+    # Much faster than a Numpy array in pure Python
+    array_factory = list
+
+
+class TestQuicksortArrays(BaseQuicksortTest, TestCase):
+
+    quicksort = jit_quicksort
+
+    def array_factory(self, lst):
+        return np.array(lst, dtype=np.int32)
 
 
 if __name__ == '__main__':
