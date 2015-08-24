@@ -605,8 +605,6 @@ def list_is(context, builder, sig, args):
 @builtin
 @implement('==', types.Kind(types.List), types.Kind(types.List))
 def list_eq(context, builder, sig, args):
-    from .tupleobj import generic_compare
-
     aty, bty = sig.args
     a = ListInstance(context, builder, aty, args[0])
     b = ListInstance(context, builder, bty, args[1])
@@ -620,8 +618,8 @@ def list_eq(context, builder, sig, args):
         with cgutils.for_range(builder, a_size) as loop:
             v = a.getitem(loop.index)
             w = b.getitem(loop.index)
-            itemres = generic_compare(context, builder, '==',
-                                      (aty.dtype, bty.dtype), (v, w))
+            itemres = context.generic_compare(builder, '==',
+                                              (aty.dtype, bty.dtype), (v, w))
             with builder.if_then(builder.not_(itemres)):
                 # Exit early
                 builder.store(cgutils.false_bit, res)
@@ -629,6 +627,64 @@ def list_eq(context, builder, sig, args):
 
     return builder.load(res)
 
+@builtin
+@implement('!=', types.Kind(types.List), types.Kind(types.List))
+def list_ne(context, builder, sig, args):
+
+    def list_ne_impl(a, b):
+        return not (a == b)
+
+    return context.compile_internal(builder, list_ne_impl, sig, args)
+
+@builtin
+@implement('<=', types.Kind(types.List), types.Kind(types.List))
+def list_le(context, builder, sig, args):
+
+    def list_le_impl(a, b):
+        m = len(a)
+        n = len(b)
+        for i in range(min(m, n)):
+            if a[i] < b[i]:
+                return True
+            elif a[i] > b[i]:
+                return False
+        return m <= n
+
+    return context.compile_internal(builder, list_le_impl, sig, args)
+
+@builtin
+@implement('<', types.Kind(types.List), types.Kind(types.List))
+def list_lt(context, builder, sig, args):
+
+    def list_lt_impl(a, b):
+        m = len(a)
+        n = len(b)
+        for i in range(min(m, n)):
+            if a[i] < b[i]:
+                return True
+            elif a[i] > b[i]:
+                return False
+        return m < n
+
+    return context.compile_internal(builder, list_lt_impl, sig, args)
+
+@builtin
+@implement('>=', types.Kind(types.List), types.Kind(types.List))
+def list_ge(context, builder, sig, args):
+
+    def list_ge_impl(a, b):
+        return b <= a
+
+    return context.compile_internal(builder, list_ge_impl, sig, args)
+
+@builtin
+@implement('>', types.Kind(types.List), types.Kind(types.List))
+def list_gt(context, builder, sig, args):
+
+    def list_gt_impl(a, b):
+        return b < a
+
+    return context.compile_internal(builder, list_gt_impl, sig, args)
 
 #-------------------------------------------------------------------------------
 # Methods

@@ -163,3 +163,19 @@ class ListEq(ListCompare):
 @builtin
 class ListNe(ListCompare):
     key = '!='
+
+@builtin
+class ListLt(ListCompare):
+    key = '<'
+
+@builtin
+class ListLe(ListCompare):
+    key = '<='
+
+@builtin
+class ListGt(ListCompare):
+    key = '>'
+
+@builtin
+class ListGe(ListCompare):
+    key = '>='

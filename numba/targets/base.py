@@ -738,6 +738,21 @@ class BaseContext(object):
 
         raise NotImplementedError("cast", val, fromty, toty)
 
+    def generic_compare(self, builder, key, argtypes, args):
+        """
+        Compare the given LLVM values of the given Numba types using
+        the comparison *key* (e.g. '==').  The values are first cast to
+        a common safe conversion type.
+        """
+        at, bt = argtypes
+        av, bv = args
+        ty = self.typing_context.unify_types(at, bt)
+        cav = self.cast(builder, av, at, ty)
+        cbv = self.cast(builder, bv, bt, ty)
+        cmpsig = typing.signature(types.boolean, ty, ty)
+        cmpfunc = self.get_function(key, cmpsig)
+        return cmpfunc(builder, (cav, cbv))
+
     def make_optional(self, optionaltype):
         return optional.make_optional(optionaltype.type)
 
