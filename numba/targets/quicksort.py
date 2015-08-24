@@ -59,8 +59,11 @@ def make_quicksort_impl(wrap):
         Partition A[low:high + 1] around a chosen pivot.  The pivot's index
         is returned.
         """
+        assert low >= 0
+        assert high > low
+
         mid = (low + high) >> 1
-        # NOTE: this pattern of swaps for the pivot choice and the
+        # NOTE: the pattern of swaps below for the pivot choice and the
         # partitioning gives good results (i.e. regular O(n log n))
         # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
         # risk breaking this property.
@@ -80,7 +83,7 @@ def make_quicksort_impl(wrap):
         while True:
             while A[i] < pivot:
                 i += 1
-            while A[j] > pivot and j >= low:
+            while A[j] > pivot:
                 j -= 1
             if i >= j:
                 break
@@ -127,7 +130,7 @@ def make_quicksort_impl(wrap):
 
     @wrap
     def run_quicksort(A):
-        stack = [Partition(zero, zero)] * 100
+        stack = [Partition(zero, zero)] * MAX_STACK
         stack[0] = Partition(zero, len(A) - 1)
         n = 1
 
@@ -137,6 +140,7 @@ def make_quicksort_impl(wrap):
             assert high > low
             # Partition until it becomes more efficient to do an insertion sort
             while high - low >= SMALL_QUICKSORT:
+                assert n < MAX_STACK
                 i = partition(A, low, high)
                 # Push largest partition on the stack
                 if high - i > i - low:
@@ -162,9 +166,9 @@ def make_quicksort_impl(wrap):
         while n > 0:
             n -= 1
             low, high = stack[n]
-            assert high > low
             # Partition until it becomes more efficient to do an insertion sort
             while high - low >= SMALL_QUICKSORT:
+                assert n < MAX_STACK
                 l, r = partition3(A, low, high)
                 # One trivial (empty) partition => iterate on the other
                 if r == high:

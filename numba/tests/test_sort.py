@@ -561,6 +561,7 @@ class BaseQuicksortTest(BaseSortingTest):
         check(l, n)
 
     def test_partition3(self):
+        # Test the unused partition3() function
         n = 20
         def check(l, n):
             res = self.array_factory([9999] + l + [-9999])
