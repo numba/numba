@@ -51,12 +51,6 @@ _NO_VALUE = 0
 MergeState = collections.namedtuple('MergeState',
                                     ('min_gallop', 'keys', 'values', 'pending'))
 
-class PlainMergeState(MergeState):
-    __slots__ = ()
-
-class KeyedMergeState(MergeState):
-    __slots__ = ()
-
 
 MergeRun = collections.namedtuple('MergeRun', ('start', 'size'))
 
@@ -65,6 +59,11 @@ def make_timsort_impl(wrap, make_temp_area):
 
     make_temp_area = wrap(make_temp_area)
     intp = types.intp
+    zero = intp(0)
+
+    @wrap
+    def has_values(keys, values):
+        return values is not keys
 
     @wrap
     def merge_init(keys):
@@ -73,11 +72,10 @@ def make_timsort_impl(wrap, make_temp_area):
         """
         temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
         temp_keys = make_temp_area(keys, temp_size)
-        temp_values = [_NO_VALUE] * 0      # typed empty list
-        #temp_values = make_temp_area(keys, temp_size)
-        #temp_keys = [keys[0]] * temp_size
-        pending = [MergeRun(0, 0)] * 0     # typed empty list
-        return PlainMergeState(MIN_GALLOP, temp_keys, temp_values, pending)
+        temp_values = temp_keys
+
+        pending = [MergeRun(zero, zero)] * 0     # typed empty list
+        return MergeState(intp(MIN_GALLOP), temp_keys, temp_values, pending)
 
     @wrap
     def merge_init_with_values(keys, values):
@@ -87,10 +85,8 @@ def make_timsort_impl(wrap, make_temp_area):
         temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
         temp_keys = make_temp_area(keys, temp_size)
         temp_values = make_temp_area(values, temp_size)
-        #temp_keys = [keys[0]] * temp_size
-        #temp_values = [values[0]] * temp_size
-        pending = [MergeRun(0, 0)] * 0     # typed empty list
-        return KeyedMergeState(MIN_GALLOP, temp_keys, temp_values, pending)
+        pending = [MergeRun(zero, zero)] * 0     # typed empty list
+        return MergeState(intp(MIN_GALLOP), temp_keys, temp_values, pending)
 
     @wrap
     def merge_getmem(ms, need):
@@ -103,11 +99,10 @@ def make_timsort_impl(wrap, make_temp_area):
         # Don't realloc!  That can cost cycles to copy the old data, but
         # we don't care what's in the block.
         temp_keys = make_temp_area(ms.keys, need)
-        #temp_keys = [ms.keys[0]] * need
-        if ms.values:
-            temp_values = [ms.values[0]] * need
+        if has_values(ms.keys, ms.values):
+            temp_values = make_temp_area(ms.values, need)
         else:
-            temp_values = ms.values
+            temp_values = temp_keys
         return MergeState(ms.min_gallop, temp_keys, temp_values, ms.pending)
 
     @wrap
@@ -115,7 +110,7 @@ def make_timsort_impl(wrap, make_temp_area):
         """
         Modify the MergeState's min_gallop.
         """
-        return MergeState(new_gallop, ms.keys, ms.values, ms.pending)
+        return MergeState(intp(new_gallop), ms.keys, ms.values, ms.pending)
 
 
     @wrap
@@ -167,7 +162,7 @@ def make_timsort_impl(wrap, make_temp_area):
             for p in range(start, l, -1):
                 keys[p] = keys[p - 1]
             keys[l] = pivot
-            if len(values):
+            if has_values(keys, values):
                 pivot_val = values[start]
                 for p in range(start, l, -1):
                     values[p] = values[p - 1]
@@ -407,7 +402,7 @@ def make_timsort_impl(wrap, make_temp_area):
         assert dest_start >= 0
         for i in range(nitems):
             dest_keys[dest_start + i] = src_keys[src_start + i]
-        if len(src_values):
+        if has_values(src_keys, src_values):
             for i in range(nitems):
                 dest_values[dest_start + i] = src_values[src_start + i]
 
@@ -422,7 +417,7 @@ def make_timsort_impl(wrap, make_temp_area):
         assert dest_start >= 0
         for i in range(nitems):
             dest_keys[dest_start - i] = src_keys[src_start - i]
-        if len(src_values):
+        if has_values(src_keys, src_values):
             for i in range(nitems):
                 dest_values[dest_start - i] = src_values[src_start - i]
 
@@ -459,7 +454,7 @@ def make_timsort_impl(wrap, make_temp_area):
         dest = ssa
         ssa = 0
 
-        has_values = len(a_values) != 0
+        _has_values = has_values(a_keys, a_values)
         min_gallop = ms.min_gallop
 
         # Now start merging into the space left from [ssa, ...)
@@ -473,7 +468,7 @@ def make_timsort_impl(wrap, make_temp_area):
             while True:
                 if LT(b_keys[ssb], a_keys[ssa]):
                     keys[dest] = b_keys[ssb]
-                    if has_values:
+                    if _has_values:
                         values[dest] = b_values[ssb]
                     dest += 1
                     ssb += 1
@@ -487,7 +482,7 @@ def make_timsort_impl(wrap, make_temp_area):
                         break
                 else:
                     keys[dest] = a_keys[ssa]
-                    if has_values:
+                    if _has_values:
                         values[dest] = a_values[ssa]
                     dest += 1
                     ssa += 1
@@ -500,14 +495,11 @@ def make_timsort_impl(wrap, make_temp_area):
                     if acount >= min_gallop:
                         break
 
-            if na == 0 or nb == 0:
-                break
-
             # One run is winning so consistently that galloping may
             # be a huge win.  So try that, and continue galloping until
             # (if ever) neither run appears to be winning consistently
             # anymore.
-            if DO_GALLOP:
+            if DO_GALLOP and na > 0 and nb > 0:
                 min_gallop += 1
 
                 while acount >= MIN_GALLOP or bcount >= MIN_GALLOP:
@@ -533,7 +525,7 @@ def make_timsort_impl(wrap, make_temp_area):
                             break
                     # Copy keys[ssb]
                     keys[dest] = b_keys[ssb]
-                    if has_values:
+                    if _has_values:
                         values[dest] = b_values[ssb]
                     dest += 1
                     ssb += 1
@@ -562,7 +554,7 @@ def make_timsort_impl(wrap, make_temp_area):
                             break
                     # Copy keys[ssa]
                     keys[dest] = a_keys[ssa]
-                    if has_values:
+                    if _has_values:
                         values[dest] = a_values[ssa]
                     dest += 1
                     ssa += 1
@@ -621,7 +613,7 @@ def make_timsort_impl(wrap, make_temp_area):
         ssb = nb - 1
         ssa = ssa + na - 1
 
-        has_values = len(a_values) != 0
+        _has_values = has_values(b_keys, b_values)
         min_gallop = ms.min_gallop
 
         while nb > 0 and na > 0:
@@ -634,7 +626,7 @@ def make_timsort_impl(wrap, make_temp_area):
                 if LT(b_keys[ssb], a_keys[ssa]):
                     # We merge in descending order, so copy the larger value
                     keys[dest] = a_keys[ssa]
-                    if has_values:
+                    if _has_values:
                         values[dest] = a_values[ssa]
                     dest -= 1
                     ssa -= 1
@@ -648,7 +640,7 @@ def make_timsort_impl(wrap, make_temp_area):
                         break
                 else:
                     keys[dest] = b_keys[ssb]
-                    if has_values:
+                    if _has_values:
                         values[dest] = b_values[ssb]
                     dest -= 1
                     ssb -= 1
@@ -661,14 +653,11 @@ def make_timsort_impl(wrap, make_temp_area):
                     if bcount >= min_gallop:
                         break
 
-            if na == 0 or nb == 0:
-                break
-
             # One run is winning so consistently that galloping may
             # be a huge win.  So try that, and continue galloping until
             # (if ever) neither run appears to be winning consistently
             # anymore.
-            if DO_GALLOP:
+            if DO_GALLOP and na > 0 and nb > 0:
                 min_gallop += 1
 
                 while acount >= MIN_GALLOP or bcount >= MIN_GALLOP:
@@ -696,7 +685,7 @@ def make_timsort_impl(wrap, make_temp_area):
                             break
                     # Copy keys[ssb]
                     keys[dest] = b_keys[ssb]
-                    if has_values:
+                    if _has_values:
                         values[dest] = b_values[ssb]
                     dest -= 1
                     ssb -= 1
@@ -723,7 +712,7 @@ def make_timsort_impl(wrap, make_temp_area):
                             break
                     # Copy keys[ssa]
                     keys[dest] = a_keys[ssa]
-                    if has_values:
+                    if _has_values:
                         values[dest] = a_values[ssa]
                     dest -= 1
                     ssa -= 1
@@ -855,7 +844,7 @@ def make_timsort_impl(wrap, make_temp_area):
             keys[i], keys[j] = keys[j], keys[i]
             i += 1
             j -= 1
-        if len(values):
+        if has_values(keys, values):
             i = start
             j = stop - 1
             while i < j:
@@ -877,7 +866,7 @@ def make_timsort_impl(wrap, make_temp_area):
         # and extending short natural runs to minrun elements.
         minrun = merge_compute_minrun(nremaining)
 
-        lo = intp(0)
+        lo = zero
         while nremaining > 0:
             n, desc = count_run(keys, lo, lo + nremaining)
             if desc:
@@ -907,7 +896,7 @@ def make_timsort_impl(wrap, make_temp_area):
         """
         Run timsort over the given keys.
         """
-        values = [_NO_VALUE] * 0
+        values = keys
         run_timsort_with_mergestate(merge_init(keys), keys, values)
 
 

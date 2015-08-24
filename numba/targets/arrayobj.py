@@ -1330,6 +1330,24 @@ def array_record_getattr(context, builder, typ, value, attr):
 
 
 #-------------------------------------------------------------------------------
+# Comparisons
+
+@builtin
+@implement('is', types.Kind(types.Array), types.Kind(types.Array))
+def list_is(context, builder, sig, args):
+    aty, bty = sig.args
+    if aty != bty:
+        return cgutils.false_bit
+
+    def array_is_impl(a, b):
+        return (a.shape == b.shape and
+                a.strides == b.strides and
+                a.ctypes.data == b.ctypes.data)
+
+    return context.compile_internal(builder, array_is_impl, sig, args)
+
+
+#-------------------------------------------------------------------------------
 # builtin `numpy.flat` implementation
 
 @struct_factory(types.NumpyFlatType)

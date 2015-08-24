@@ -100,6 +100,9 @@ def np_frombuffer_allocated_dtype(shape):
     arr = np.ones(shape, dtype=np.int32)
     return np.frombuffer(arr, dtype=np.complex64)
 
+def identity_usecase(a, b):
+    return (a is b), (a is not b)
+
 
 class TestArrayMethodsCustom(MemoryLeak, TestCase):
     """
@@ -427,6 +430,25 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_np_frombuffer_allocated(self):
         self.check_np_frombuffer_allocated(np_frombuffer_allocated_dtype)
+
+
+class TestArrayComparisons(TestCase):
+
+    def test_identity(self):
+        def check(a, b, expected):
+            cres = compile_isolated(pyfunc, (typeof(a), typeof(b)))
+            self.assertPreciseEqual(cres.entry_point(a, b),
+                                    (expected, not expected))
+
+        pyfunc = identity_usecase
+
+        arr = np.zeros(10, dtype=np.int32).reshape((2, 5))
+        check(arr, arr, True)
+        check(arr, arr[:], True)
+        check(arr, arr.copy(), False)
+        check(arr, arr.view('uint32'), False)
+        check(arr, arr.T, False)
+        check(arr, arr[:-1], False)
 
 
 if __name__ == '__main__':

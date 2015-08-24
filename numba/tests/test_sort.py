@@ -24,22 +24,31 @@ def make_temp_list(keys, n):
 def make_temp_array(keys, n):
     return np.empty(n, keys.dtype)
 
+
 py_list_timsort = make_py_timsort(make_temp_list)
+
+py_array_timsort = make_py_timsort(make_temp_array)
+
+jit_list_timsort = make_jit_timsort(make_temp_list)
 
 jit_array_timsort = make_jit_timsort(make_temp_array)
 
 
-#def wrap_with_mergestate(timsort, func_name):
-    #merge_init = timsort.merge_init
-    #func = getattr(timsort, func_name)
+def wrap_with_mergestate(timsort, func, _cache={}):
+    key = timsort, func
+    if key in _cache:
+        return _cache[key]
 
-    #@timsort.compile
-    #def wrapper(keys, values, *args):
-        #ms = merge_init(keys)
-        #res = func(ms, keys, values, *args)
-        #return res
+    merge_init = timsort.merge_init
 
-    #return wrapper
+    @timsort.compile
+    def wrapper(keys, values, *args):
+        ms = merge_init(keys)
+        res = func(ms, keys, values, *args)
+        return res
+
+    _cache[key] = wrapper
+    return wrapper
 
 
 class BaseTimsortTest(object):
@@ -113,7 +122,7 @@ class BaseTimsortTest(object):
         n = 20
         def check(l, n, start=0):
             res = self.array_factory(l)
-            f(res, self.array_factory(()), 0, n, start)
+            f(res, res, 0, n, start)
             self.assertSorted(l, res)
 
         f = self.timsort.binarysort
@@ -277,8 +286,6 @@ class BaseTimsortTest(object):
                 self.assertGreaterEqual(quot, 0.9 * p)
 
     def check_merge_lo_hi(self, func, a, b):
-        f = self.timsort.merge_lo
-
         na = len(a)
         nb = len(b)
 
@@ -289,7 +296,8 @@ class BaseTimsortTest(object):
         ssa = 1
         ssb = ssa + na
 
-        new_ms = func(ms, keys, [], ssa, na, ssb, nb)
+        #new_ms = func(ms, keys, [], ssa, na, ssb, nb)
+        new_ms = func(ms, keys, keys, ssa, na, ssb, nb)
         self.assertEqual(keys[0], orig_keys[0])
         self.assertEqual(keys[-1], orig_keys[-1])
         self.assertSorted(orig_keys[1:-1], keys[1:-1])
@@ -339,7 +347,8 @@ class BaseTimsortTest(object):
         stack_sentinels = [MergeRun(-42, -42)] * 2
 
         def run_merge_at(ms, keys, i):
-            new_ms = f(ms, keys, self.array_factory(()), i)
+            #new_ms = f(ms, keys, self.array_factory(()), i)
+            new_ms = f(ms, keys, keys, i)
             self.assertEqual(keys[0], orig_keys[0])
             self.assertEqual(keys[-1], orig_keys[-1])
             self.assertSorted(orig_keys[1:-1], keys[1:-1])
@@ -403,7 +412,8 @@ class BaseTimsortTest(object):
                 # Sanity check
                 self.assertEqual(sum(ms.pending[-1]), len(keys))
                 # Now merge the runs
-                f(ms, keys, [])
+                #f(ms, keys, [])
+                f(ms, keys, keys)
                 # Remaining run is the whole list
                 self.assertEqual(ms.pending, [MergeRun(0, len(keys))])
                 # The list is now sorted
@@ -420,7 +430,9 @@ class BaseTimsortTest(object):
             for chunks in itertools.product(*all_lists):
                 orig_keys = sum(chunks, [])
                 keys = self.array_factory(orig_keys)
+                #print("run_timsort:", keys)
                 f(keys)
+                #print("-> done")
                 # The list is now sorted
                 self.assertSorted(orig_keys, keys)
 
@@ -429,7 +441,7 @@ class BaseTimsortTest(object):
         f = self.timsort.run_timsort_with_values
 
         for size_factor in (1, 5):
-            chunk_size = 200 * size_factor
+            chunk_size = 80 * size_factor
             a = self.dupsorted_list(chunk_size)
             b = self.duprandom_list(chunk_size)
             c = self.revsorted_list(chunk_size)
@@ -451,19 +463,43 @@ class TestTimsortPurePython(BaseTimsortTest, TestCase):
     array_factory = list
 
 
-#class TestTimsortLists(BaseTimsortTest, TestCase):
+class TestTimsortArraysPurePython(BaseTimsortTest, TestCase):
 
-    #timsort = jit_timsort
-
-    #array_factory = list
-
-
-class TestTimsortArrays(BaseTimsortTest, TestCase):
-
-    timsort = jit_array_timsort
+    timsort = py_array_timsort
 
     def array_factory(self, lst):
         return np.array(lst, dtype=np.int32)
+
+
+class JITTimsortMixin(object):
+
+    timsort = jit_array_timsort
+
+    test_merge_at = None
+    test_merge_force_collapse = None
+
+
+class TestTimsortArrays(JITTimsortMixin, BaseTimsortTest, TestCase):
+
+    def array_factory(self, lst):
+        return np.array(lst, dtype=np.int32)
+
+    def check_merge_lo_hi(self, func, a, b):
+        na = len(a)
+        nb = len(b)
+
+        func = wrap_with_mergestate(self.timsort, func)
+
+        # Add sentinels at start and end, to check they weren't moved
+        orig_keys = [42] + a + b + [-42]
+        keys = self.array_factory(orig_keys)
+        ssa = 1
+        ssb = ssa + na
+
+        new_ms = func(keys, keys, ssa, na, ssb, nb)
+        self.assertEqual(keys[0], orig_keys[0])
+        self.assertEqual(keys[-1], orig_keys[-1])
+        self.assertSorted(orig_keys[1:-1], keys[1:-1])
 
 
 if __name__ == '__main__':
