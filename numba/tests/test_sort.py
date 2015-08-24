@@ -344,10 +344,9 @@ class BaseTimsortTest(object):
         ssa = 1
         ssb = ssa + na
 
-        stack_sentinels = [MergeRun(-42, -42)] * 2
+        stack_sentinel = MergeRun(-42, -42)
 
         def run_merge_at(ms, keys, i):
-            #new_ms = f(ms, keys, self.array_factory(()), i)
             new_ms = f(ms, keys, keys, i)
             self.assertEqual(keys[0], orig_keys[0])
             self.assertEqual(keys[-1], orig_keys[-1])
@@ -355,33 +354,34 @@ class BaseTimsortTest(object):
             # Check stack state
             self.assertIs(new_ms.pending, ms.pending)
             self.assertEqual(ms.pending[i], (ssa, na + nb))
-            self.assertEqual(ms.pending[:i], stack_sentinels)
+            self.assertEqual(ms.pending[0], stack_sentinel)
+            return new_ms
 
         # First check with i == len(stack) - 2
         keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
-        # Push sentinels on stack, to check they weren't touched
-        ms.pending.extend(stack_sentinels)
-        i = len(ms.pending)
-        ms.pending.extend([MergeRun(ssa, na),
-                           MergeRun(ssb, nb)])
-        run_merge_at(ms, keys, i)
-        self.assertEqual(len(ms.pending), i + 1)
+        # Push sentinel on stack, to check it was't touched
+        ms = self.timsort.merge_append(ms, stack_sentinel)
+        i = ms.n
+        ms = self.timsort.merge_append(ms, MergeRun(ssa, na))
+        ms = self.timsort.merge_append(ms, MergeRun(ssb, nb))
+        ms = run_merge_at(ms, keys, i)
+        self.assertEqual(ms.n, i + 1)
 
         # Now check with i == len(stack) - 3
         keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
-        # Push sentinels on stack, to check they weren't touched
-        ms.pending.extend(stack_sentinels)
-        i = len(ms.pending)
-        ms.pending.extend([MergeRun(ssa, na),
-                           MergeRun(ssb, nb)])
+        # Push sentinel on stack, to check it was't touched
+        ms = self.timsort.merge_append(ms, stack_sentinel)
+        i = ms.n
+        ms = self.timsort.merge_append(ms, MergeRun(ssa, na))
+        ms = self.timsort.merge_append(ms, MergeRun(ssb, nb))
         # A last run (trivial here)
         last_run = MergeRun(ssb + nb, 1)
-        ms.pending.append(last_run)
-        run_merge_at(ms, keys, i)
-        self.assertEqual(len(ms.pending), i + 2)
-        self.assertEqual(ms.pending[-1], last_run)
+        ms = self.timsort.merge_append(ms, last_run)
+        ms = run_merge_at(ms, keys, i)
+        self.assertEqual(ms.n, i + 2)
+        self.assertEqual(ms.pending[ms.n - 1], last_run)
 
     def test_merge_at(self):
         # The larger sizes exercise galloping
@@ -407,15 +407,15 @@ class BaseTimsortTest(object):
                 ms = self.merge_init(keys)
                 pos = 0
                 for c in chunks:
-                    ms.pending.append(MergeRun(pos, len(c)))
+                    ms = self.timsort.merge_append(ms, MergeRun(pos, len(c)))
                     pos += len(c)
                 # Sanity check
-                self.assertEqual(sum(ms.pending[-1]), len(keys))
+                self.assertEqual(sum(ms.pending[ms.n - 1]), len(keys))
                 # Now merge the runs
-                #f(ms, keys, [])
-                f(ms, keys, keys)
+                ms = f(ms, keys, keys)
                 # Remaining run is the whole list
-                self.assertEqual(ms.pending, [MergeRun(0, len(keys))])
+                self.assertEqual(ms.n, 1)
+                self.assertEqual(ms.pending[0], MergeRun(0, len(keys)))
                 # The list is now sorted
                 self.assertSorted(orig_keys, keys)
 
@@ -430,9 +430,7 @@ class BaseTimsortTest(object):
             for chunks in itertools.product(*all_lists):
                 orig_keys = sum(chunks, [])
                 keys = self.array_factory(orig_keys)
-                #print("run_timsort:", keys)
                 f(keys)
-                #print("-> done")
                 # The list is now sorted
                 self.assertSorted(orig_keys, keys)
 

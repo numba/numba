@@ -16,7 +16,8 @@ TimsortImplementation = collections.namedtuple(
     (# The compile function itself
      'compile',
      # All subroutines exercised by test_sort
-     'count_run', 'binarysort', 'merge_init', 'gallop_left', 'gallop_right',
+     'count_run', 'binarysort', 'gallop_left', 'gallop_right',
+     'merge_init', 'merge_append', 'merge_pop',
      'merge_compute_minrun', 'merge_lo', 'merge_hi', 'merge_at',
      'merge_force_collapse', 'merge_collapse',
      # The top-level functions
@@ -42,14 +43,15 @@ MERGESTATE_TEMP_SIZE = 256
 
 _NO_VALUE = 0
 
-# A mergestate is a (min_gallop, keys, values, pending) tuple, where:
+# A mergestate is a named tuple with the following members:
 #  - *min_gallop* is an integer controlling when we get into galloping mode
 #  - *keys* is a temp list for merging keys
 #  - *values* is a temp list for merging values, if needed
 #  - *pending* is a stack of pending runs to be merged
+#  - *n* is the current stack length of *pending*
 
-MergeState = collections.namedtuple('MergeState',
-                                    ('min_gallop', 'keys', 'values', 'pending'))
+MergeState = collections.namedtuple(
+    'MergeState', ('min_gallop', 'keys', 'values', 'pending', 'n'))
 
 
 MergeRun = collections.namedtuple('MergeRun', ('start', 'size'))
@@ -73,9 +75,8 @@ def make_timsort_impl(wrap, make_temp_area):
         temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
         temp_keys = make_temp_area(keys, temp_size)
         temp_values = temp_keys
-
-        pending = [MergeRun(zero, zero)] * 0     # typed empty list
-        return MergeState(intp(MIN_GALLOP), temp_keys, temp_values, pending)
+        pending = [MergeRun(zero, zero)] * MAX_MERGE_PENDING
+        return MergeState(intp(MIN_GALLOP), temp_keys, temp_values, pending, zero)
 
     @wrap
     def merge_init_with_values(keys, values):
@@ -85,8 +86,25 @@ def make_timsort_impl(wrap, make_temp_area):
         temp_size = min(len(keys) // 2 + 1, MERGESTATE_TEMP_SIZE)
         temp_keys = make_temp_area(keys, temp_size)
         temp_values = make_temp_area(values, temp_size)
-        pending = [MergeRun(zero, zero)] * 0     # typed empty list
-        return MergeState(intp(MIN_GALLOP), temp_keys, temp_values, pending)
+        pending = [MergeRun(zero, zero)] * MAX_MERGE_PENDING
+        return MergeState(intp(MIN_GALLOP), temp_keys, temp_values, pending, zero)
+
+    @wrap
+    def merge_append(ms, run):
+        """
+        Append a run on the merge stack.
+        """
+        n = ms.n
+        assert n < MAX_MERGE_PENDING
+        ms.pending[n] = run
+        return MergeState(ms.min_gallop, ms.keys, ms.values, ms.pending, n + 1)
+
+    @wrap
+    def merge_pop(ms):
+        """
+        Pop the top run from the merge stack.
+        """
+        return MergeState(ms.min_gallop, ms.keys, ms.values, ms.pending, ms.n - 1)
 
     @wrap
     def merge_getmem(ms, need):
@@ -96,21 +114,24 @@ def make_timsort_impl(wrap, make_temp_area):
         alloced = len(ms.keys)
         if need <= alloced:
             return ms
+        # Over-allocate
+        while alloced < need:
+            alloced = alloced << 1
         # Don't realloc!  That can cost cycles to copy the old data, but
         # we don't care what's in the block.
-        temp_keys = make_temp_area(ms.keys, need)
+        temp_keys = make_temp_area(ms.keys, alloced)
         if has_values(ms.keys, ms.values):
-            temp_values = make_temp_area(ms.values, need)
+            temp_values = make_temp_area(ms.values, alloced)
         else:
             temp_values = temp_keys
-        return MergeState(ms.min_gallop, temp_keys, temp_values, ms.pending)
+        return MergeState(ms.min_gallop, temp_keys, temp_values, ms.pending, ms.n)
 
     @wrap
     def merge_adjust_gallop(ms, new_gallop):
         """
         Modify the MergeState's min_gallop.
         """
-        return MergeState(intp(new_gallop), ms.keys, ms.values, ms.pending)
+        return MergeState(intp(new_gallop), ms.keys, ms.values, ms.pending, ms.n)
 
 
     @wrap
@@ -120,7 +141,6 @@ def make_timsort_impl(wrap, make_temp_area):
         make it clear where comparisons occur.
         """
         return a < b
-
 
     @wrap
     def binarysort(keys, values, lo, hi, start):
@@ -134,6 +154,7 @@ def make_timsort_impl(wrap, make_temp_area):
         sorted (pass start == lo if you don't know!).
         """
         assert lo <= start and start <= hi, "Bad input for binarysort()"
+        _has_values = has_values(keys, values)
         if lo == start:
             start += 1
         while start < hi:
@@ -162,7 +183,7 @@ def make_timsort_impl(wrap, make_temp_area):
             for p in range(start, l, -1):
                 keys[p] = keys[p - 1]
             keys[l] = pivot
-            if has_values(keys, values):
+            if _has_values:
                 pivot_val = values[start]
                 for p in range(start, l, -1):
                     values[p] = values[p - 1]
@@ -745,7 +766,7 @@ def make_timsort_impl(wrap, make_temp_area):
 
         An updated MergeState is returned.
         """
-        n = len(ms.pending)
+        n = ms.n
         assert n >= 2
         assert i >= 0
         assert i == n - 2 or i == n - 3, "merge_at(): bad arguments"
@@ -761,7 +782,7 @@ def make_timsort_impl(wrap, make_temp_area):
         ms.pending[i] = MergeRun(ssa, na + nb)
         if i == n - 3:
             ms.pending[i + 1] = ms.pending[i + 2]
-        ms.pending.pop()
+        ms = merge_pop(ms)
 
         # Where does b start in a?  Elements in a before that can be
         # ignored (already in place).
@@ -799,9 +820,9 @@ def make_timsort_impl(wrap, make_temp_area):
 
         See listsort.txt for more info.
         """
-        pending = ms.pending
-        while len(pending) > 1:
-            n = len(pending) - 2
+        while ms.n > 1:
+            pending = ms.pending
+            n = ms.n - 2
             if ((n > 0 and pending[n-1].size <= pending[n].size + pending[n+1].size) or
                 (n > 1 and pending[n-2].size <= pending[n-1].size + pending[n].size)):
                 if pending[n - 1].size < pending[n + 1].size:
@@ -822,9 +843,9 @@ def make_timsort_impl(wrap, make_temp_area):
 
         An updated MergeState is returned.
         """
-        pending = ms.pending
-        while len(pending) > 1:
-            n = len(pending) - 2
+        while ms.n > 1:
+            pending = ms.pending
+            n = ms.n - 2
             if n > 0:
                 if pending[n - 1].size < pending[n + 1].size:
                     # Merge the smaller one first
@@ -878,8 +899,7 @@ def make_timsort_impl(wrap, make_temp_area):
                 binarysort(keys, values, lo, lo + force, lo + n)
                 n = force
             # Push run onto stack, and maybe merge.
-            assert len(ms.pending) < MAX_MERGE_PENDING
-            ms.pending.append(MergeRun(lo, n))
+            ms = merge_append(ms, MergeRun(lo, n))
             ms = merge_collapse(ms, keys, values)
             # Advance to find next run.
             lo += n
@@ -887,7 +907,7 @@ def make_timsort_impl(wrap, make_temp_area):
 
         # All initial runs have been discovered, now finish merging.
         ms = merge_force_collapse(ms, keys, values)
-        assert len(ms.pending) == 1
+        assert ms.n == 1
         assert ms.pending[0] == (0, len(keys))
 
 
@@ -910,7 +930,8 @@ def make_timsort_impl(wrap, make_temp_area):
 
     return TimsortImplementation(
         wrap,
-        count_run, binarysort, merge_init, gallop_left, gallop_right,
+        count_run, binarysort, gallop_left, gallop_right,
+        merge_init, merge_append, merge_pop,
         merge_compute_minrun, merge_lo, merge_hi, merge_at,
         merge_force_collapse, merge_collapse,
         run_timsort, run_timsort_with_values)
