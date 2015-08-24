@@ -11,22 +11,6 @@ from .imputils import (builtin, builtin_attr, implement, impl_attribute,
 from .. import typing, types, cgutils
 
 
-def generic_compare(context, builder, key, argtypes, args):
-    """
-    Compare the given LLVM values of the given Numba types using
-    the comparison *key* (e.g. '==').  The values are first cast to
-    a common safe conversion type.
-    """
-    at, bt = argtypes
-    av, bv = args
-    ty = context.typing_context.unify_types(at, bt)
-    cav = context.cast(builder, av, at, ty)
-    cbv = context.cast(builder, bv, bt, ty)
-    cmpsig = typing.signature(types.boolean, ty, ty)
-    cmpfunc = context.get_function(key, cmpsig)
-    return cmpfunc(builder, (cav, cbv))
-
-
 @builtin
 @implement(types.NamedTupleClass, types.VarArg(types.Any))
 def namedtuple_constructor(context, builder, sig, args):
@@ -60,9 +44,9 @@ def tuple_cmp_ordered(context, builder, op, sig, args):
     for i, (ta, tb) in enumerate(zip(tu.types, tv.types)):
         a = builder.extract_value(u, i)
         b = builder.extract_value(v, i)
-        not_equal = generic_compare(context, builder, '!=', (ta, tb), (a, b))
+        not_equal = context.generic_compare(builder, '!=', (ta, tb), (a, b))
         with builder.if_then(not_equal):
-            pred = generic_compare(context, builder, op, (ta, tb), (a, b))
+            pred = context.generic_compare(builder, op, (ta, tb), (a, b))
             builder.store(pred, res)
             builder.branch(bbend)
     # Everything matched equal => compare lengths
@@ -85,7 +69,7 @@ def tuple_eq(context, builder, sig, args):
     for i, (ta, tb) in enumerate(zip(tu.types, tv.types)):
         a = builder.extract_value(u, i)
         b = builder.extract_value(v, i)
-        pred = generic_compare(context, builder, "==", (ta, tb), (a, b))
+        pred = context.generic_compare(builder, "==", (ta, tb), (a, b))
         res = builder.and_(res, pred)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 

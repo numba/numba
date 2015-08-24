@@ -13,6 +13,16 @@ from .imputils import (builtin, builtin_attr, implement, impl_attribute,
 from . import optional
 from .. import typing, types, cgutils, utils, intrinsics
 
+
+@builtin
+@implement('is not', types.Any, types.Any)
+def generic_is_not(context, builder, sig, args):
+    """
+    Implement `x is not y` as `not (x is y)`.
+    """
+    is_impl = context.get_function('is', sig)
+    return builder.not_(is_impl(builder, args))
+
 #-------------------------------------------------------------------------------
 
 def _int_arith_flags(rettype):
@@ -485,22 +495,12 @@ def optional_is_not_none(context, builder, sig, args):
 builtin(implement('is', types.none, types.none)(
     optional.always_return_true_impl))
 
-builtin(implement('is not', types.none, types.none)(
-    optional.always_return_false_impl))
-
 # Optional is None
 builtin(implement('is',
                   types.Kind(types.Optional), types.none)(optional_is_none))
 
 builtin(implement('is',
                   types.none, types.Kind(types.Optional))(optional_is_none))
-
-# Optional is not None
-builtin(implement('is not',
-                  types.Kind(types.Optional), types.none)(optional_is_not_none))
-
-builtin(implement('is not',
-                  types.none, types.Kind(types.Optional))(optional_is_not_none))
 
 
 def real_add_impl(context, builder, sig, args):
