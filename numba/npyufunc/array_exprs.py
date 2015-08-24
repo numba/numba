@@ -290,7 +290,9 @@ def _lower_array_expr(lowerer, expr):
     for expr_var in expr_var_list:
         expr_var_name = expr_var.name
         expr_var_new_name = expr_var_name.replace("$", "_").replace(".", "_")
-        expr_var_map[expr_var_new_name] = expr_var_name, expr_var
+        # Avoid inserting existing var into the expr_var_map
+        if expr_var_new_name not in expr_var_map:
+            expr_var_map[expr_var_new_name] = expr_var_name, expr_var
         expr_var.name = expr_var_new_name
     expr_filename = expr_var_list[0].loc.filename
     # Parameters are the names internal to the new closure.

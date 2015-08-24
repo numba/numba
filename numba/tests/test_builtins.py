@@ -129,6 +129,9 @@ def round_usecase2(x, n):
 def sum_usecase(x):
     return sum(x)
 
+def type_unary_usecase(a, b):
+    return type(a)(b)
+
 def unichr_usecase(x):
     return unichr(x)
 
@@ -691,6 +694,21 @@ class TestBuiltins(TestCase):
     def test_sum_npm(self):
         with self.assertTypingError():
             self.test_sum(flags=no_pyobj_flags)
+
+    def test_type_unary(self):
+        # Test type(val) and type(val)(other_val)
+        pyfunc = type_unary_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(*args):
+            expected = pyfunc(*args)
+            self.assertPreciseEqual(cfunc(*args), expected)
+
+        check(1.5, 2)
+        check(1, 2.5)
+        check(1.5j, 2)
+        check(True, 2)
+        check(2.5j, False)
 
     @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
     def test_unichr(self, flags=enable_pyobj_flags):
