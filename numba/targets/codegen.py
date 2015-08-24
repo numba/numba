@@ -159,6 +159,12 @@ class CodeLibrary(object):
         self._optimize_final_module()
 
         self._final_module.verify()
+        self._finalize_final_module()
+
+    def _finalize_final_module(self):
+        """
+        Make the underlying LLVM module ready to use.
+        """
         # It seems add_module() must be done only here and not before
         # linking in other modules, otherwise get_pointer_to_function()
         # could fail.
@@ -181,6 +187,20 @@ class CodeLibrary(object):
 
     def get_function(self, name):
         return self._final_module.get_function(name)
+
+    def serialize(self):
+        self._ensure_finalized()
+        return (self._name, self._final_module.as_bitcode())
+
+    @classmethod
+    def _unserialize(cls, codegen, state):
+        name, bitcode = state
+        self = codegen.create_library(name)
+        assert isinstance(self, cls)
+        # No need to re-run optimizations, just make the module ready
+        self._final_module = ll.parse_bitcode(bitcode)
+        self._finalize_final_module()
+        return self
 
     def get_llvm_str(self):
         """
@@ -291,6 +311,9 @@ class BaseCPUCodegen(object):
         """
         return self._library_class(self, name)
 
+    def unserialize_library(self, serialized):
+        return self._library_class._unserialize(self, serialized)
+
     def _module_pass_manager(self):
         pm = ll.create_module_pass_manager()
         dl = ll.create_target_data(self._data_layout)
@@ -322,6 +345,13 @@ class BaseCPUCodegen(object):
         pmb = lp.create_pass_manager_builder(
             opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
         return pmb
+
+    def magic_tuple(self):
+        """
+        Return a tuple unambiguously describing the codegen behaviour.
+        """
+        return (self._llvm_module.triple, ll.get_host_cpu_name(),
+                config.ENABLE_AVX)
 
 
 class AOTCPUCodegen(BaseCPUCodegen):

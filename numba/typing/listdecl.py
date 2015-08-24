@@ -143,3 +143,39 @@ class AddList(AbstractTemplate):
         a, b = args
         if isinstance(a, types.List) and isinstance(b, types.Integer):
             return signature(a, a, types.intp)
+
+
+class ListCompare(AbstractTemplate):
+
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.List) and isinstance(rhs, types.List):
+            # Check element-wise comparability
+            res = self.context.resolve_function_type(self.key,
+                                                     (lhs.dtype, rhs.dtype), {})
+            if res is not None:
+                return signature(types.boolean, lhs, rhs)
+
+@builtin
+class ListEq(ListCompare):
+    key = '=='
+
+@builtin
+class ListNe(ListCompare):
+    key = '!='
+
+@builtin
+class ListLt(ListCompare):
+    key = '<'
+
+@builtin
+class ListLe(ListCompare):
+    key = '<='
+
+@builtin
+class ListGt(ListCompare):
+    key = '>'
+
+@builtin
+class ListGe(ListCompare):
+    key = '>='

@@ -208,7 +208,6 @@ class PrimitiveModel(DataModel):
 @register_default(types.ExceptionInstance)
 @register_default(types.ExternalFunction)
 @register_default(types.NumbaFunction)
-@register_default(types.Method)
 @register_default(types.Macro)
 @register_default(types.NumberClass)
 @register_default(types.NamedTupleClass)

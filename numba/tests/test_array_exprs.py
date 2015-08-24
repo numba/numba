@@ -288,6 +288,38 @@ class TestRewriteIssues(MemoryLeakMixin, unittest.TestCase):
         actual = njit(distance_matrix)(x)
         np.testing.assert_array_almost_equal(expected, actual)
 
+    def test_issue_1372(self):
+        """Test array expression with duplicated term"""
+        from numba import njit
+
+        @njit
+        def foo(a, b):
+            b = np.sin(b)
+            return b + b + a
+
+        a = np.random.uniform(10)
+        b = np.random.uniform(10)
+        expect = foo.py_func(a, b)
+        got = foo(a, b)
+        np.testing.assert_allclose(got, expect)
+
+    def test_unary_arrayexpr(self):
+        """
+        Typing of unary array expression (np.negate) can be incorrect.
+        """
+        @njit
+        def foo(a, b):
+            return b - a + -a
+
+        b = 1.5
+        a = np.arange(10, dtype=np.int32)
+
+        expect = foo.py_func(a, b)
+        got = foo(a, b)
+
+        self.assertEqual(got.dtype, np.float64)
+        np.testing.assert_allclose(got, expect)
+
 
 if __name__ == "__main__":
     unittest.main()

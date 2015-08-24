@@ -83,6 +83,9 @@ class DelItemSequence(AbstractTemplate):
 class NamedTupleAttribute(AttributeTemplate):
     key = types.BaseNamedTuple
 
+    def resolve___class__(self, tup):
+        return types.NamedTupleClass(tup.instance_class)
+
     def generic_resolve(self, tup, attr):
         # Resolution of other attributes
         try:
