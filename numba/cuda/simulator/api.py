@@ -27,6 +27,9 @@ class stream(object):
         pass
 
 
+def synchronize():
+    pass
+
 def close():
     gpus.closed = True
 
