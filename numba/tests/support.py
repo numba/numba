@@ -9,7 +9,7 @@ import sys
 
 import numpy as np
 
-from numba import config, errors, typing, utils
+from numba import config, errors, typing, utils, numpy_support
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
@@ -25,7 +25,7 @@ force_pyobj_flags.set("force_pyobject")
 no_pyobj_flags = Flags()
 
 
-is_on_numpy_16 = np.__version__.startswith("1.6.")
+is_on_numpy_16 = numpy_support.version == (1, 6)
 skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
                                    "test requires Numpy 1.7 or later")
 
@@ -143,6 +143,15 @@ class TestCase(unittest.TestCase):
         return [stride / arr.itemsize
                 for (stride, shape) in zip(arr.strides, arr.shape)
                 if shape > 1]
+
+    def assertStridesEqual(self, first, second):
+        """
+        Test that two arrays have the same shape and strides.
+        """
+        self.assertEqual(first.shape, second.shape, "shapes differ")
+        self.assertEqual(first.itemsize, second.itemsize, "itemsizes differ")
+        self.assertEqual(self._fix_strides(first), self._fix_strides(second),
+                         "strides differ")
 
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                            msg=None):

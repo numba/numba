@@ -9,13 +9,13 @@ from numba import unittest_support as unittest
 from numba import njit
 from numba import utils
 from numba.numpy_support import version as numpy_version
-from .support import MemoryLeakMixin
+from .support import MemoryLeakMixin, TestCase
 
 
 nrtjit = njit(_nrt=True, nogil=True)
 
 
-class BaseTest(unittest.TestCase):
+class BaseTest(TestCase):
 
     def check_outputs(self, pyfunc, argslist, exact=True):
         cfunc = nrtjit(pyfunc)
@@ -23,9 +23,8 @@ class BaseTest(unittest.TestCase):
             expected = pyfunc(*args)
             ret = cfunc(*args)
             self.assertEqual(ret.size, expected.size)
-            self.assertEqual(ret.shape, expected.shape)
             self.assertEqual(ret.dtype, expected.dtype)
-            self.assertEqual(ret.strides, expected.strides)
+            self.assertStridesEqual(ret, expected)
             if exact:
                 np.testing.assert_equal(expected, ret)
             else:
@@ -39,7 +38,7 @@ class NrtRefCtTest(MemoryLeakMixin):
 
 
 
-class TestDynArray(NrtRefCtTest, unittest.TestCase):
+class TestDynArray(NrtRefCtTest, TestCase):
 
     def test_empty_0d(self):
         @nrtjit
@@ -544,7 +543,7 @@ class ConstructorBaseTest(NrtRefCtTest):
         self.assertEqual(str(cm.exception), "negative dimensions not allowed")
 
 
-class TestNdZeros(ConstructorBaseTest, unittest.TestCase):
+class TestNdZeros(ConstructorBaseTest, TestCase):
 
     def setUp(self):
         super(TestNdZeros, self).setUp()
@@ -600,7 +599,7 @@ class TestNdOnes(TestNdZeros):
 
 
 @unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
-class TestNdFull(ConstructorBaseTest, unittest.TestCase):
+class TestNdFull(ConstructorBaseTest, TestCase):
 
     def check_result_value(self, ret, expected):
         np.testing.assert_equal(ret, expected)
@@ -659,9 +658,8 @@ class ConstructorLikeBaseTest(object):
             expected = pyfunc(arr)
             ret = cfunc(arr)
             self.assertEqual(ret.size, expected.size)
-            self.assertEqual(ret.shape, expected.shape)
             self.assertEqual(ret.dtype, expected.dtype)
-            self.assertEqual(ret.strides, expected.strides)
+            self.assertStridesEqual(ret, expected)
             self.check_result_value(ret, expected)
             # test writability
             self.mutate_array(ret)
@@ -669,7 +667,7 @@ class ConstructorLikeBaseTest(object):
             np.testing.assert_equal(ret, expected)
 
 
-class TestNdEmptyLike(ConstructorLikeBaseTest, unittest.TestCase):
+class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
 
     def setUp(self):
         super(TestNdEmptyLike, self).setUp()
@@ -758,7 +756,7 @@ class TestNdOnesLike(TestNdZerosLike):
 
 
 @unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
-class TestNdFullLike(ConstructorLikeBaseTest, unittest.TestCase):
+class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
 
     def check_result_value(self, ret, expected):
         np.testing.assert_equal(ret, expected)
@@ -866,7 +864,7 @@ class TestNdArange(BaseTest):
                            exact=False)
 
 
-class TestNpyEmptyKeyword(unittest.TestCase):
+class TestNpyEmptyKeyword(TestCase):
     def _test_with_dtype_kw(self, dtype):
         def pyfunc(shape):
             return np.empty(shape, dtype=dtype)
