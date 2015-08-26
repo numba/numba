@@ -29,8 +29,9 @@ from .numpy_support import from_dtype
 # Re-export test entrypoint
 test = testing.test
 
-# Try initialize cuda
+# Try to initialize cuda
 from . import cuda
+from .cuda import cudapy
 
 
 __all__ = """
