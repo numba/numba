@@ -1334,7 +1334,7 @@ def array_record_getattr(context, builder, typ, value, attr):
 
 @builtin
 @implement('is', types.Kind(types.Array), types.Kind(types.Array))
-def list_is(context, builder, sig, args):
+def array_is(context, builder, sig, args):
     aty, bty = sig.args
     if aty != bty:
         return cgutils.false_bit

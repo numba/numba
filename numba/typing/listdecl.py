@@ -123,6 +123,12 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         return signature(types.none)
 
+    @bound_function("list.sort")
+    def resolve_sort(self, list, args, kws):
+        assert not args
+        assert not kws
+        return signature(types.none)
+
 
 @builtin
 class AddList(AbstractTemplate):

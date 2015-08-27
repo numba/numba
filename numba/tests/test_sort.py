@@ -41,8 +41,20 @@ jit_quicksort = make_jit_quicksort()
 def sort_usecase(val):
     val.sort()
 
+def sorted_usecase(val):
+    return sorted(val)
+
 def np_sort_usecase(val):
     return np.sort(val)
+
+def list_sort_usecase(n):
+    np.random.seed(42)
+    l = []
+    for i in range(n):
+        l.append(np.random.random())
+    ll = l[:]
+    ll.sort()
+    return l, ll
 
 
 class BaseSortingTest(object):
@@ -728,6 +740,18 @@ class TestNumpySort(TestCase):
             orig = np.random.random(size=size) * 100
             orig[np.random.random(size=size) < 0.1] = float('nan')
             self.check_sort_copy(pyfunc, cfunc, orig)
+
+
+class TestPythonSort(TestCase):
+
+    def test_list_sort(self):
+        pyfunc = list_sort_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for size in (20, 50, 500):
+            orig, ret = cfunc(size)
+            self.assertEqual(sorted(orig), ret)
+            self.assertNotEqual(orig, ret)   # sanity check
 
 
 if __name__ == '__main__':

@@ -14,7 +14,7 @@ from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_ret_borrowed, impl_ret_new_ref,
                                     impl_ret_untracked)
 from numba.utils import cached_property
-from . import slicing
+from . import quicksort, slicing
 
 
 def make_list_cls(list_type):
@@ -892,3 +892,32 @@ def list_reverse(context, builder, sig, args):
             lst[a], lst[b] = lst[b], lst[a]
 
     return context.compile_internal(builder, list_reverse_impl, sig, args)
+
+
+# -----------------------------------------------------------------------------
+# Sorting
+
+_sorting_init = False
+
+def load_sorts():
+    """
+    Load quicksort lazily, to avoid circular imports accross the jit() global.
+    """
+    g = globals()
+    if g['_sorting_init']:
+        return
+
+    default_quicksort = quicksort.make_jit_quicksort()
+    g['run_default_quicksort'] = default_quicksort.run_quicksort
+    g['_sorting_init'] = True
+
+
+@builtin
+@implement("list.sort", types.Kind(types.List))
+def list_sort(context, builder, sig, args):
+    load_sorts()
+
+    def list_sort_impl(lst):
+        return run_default_quicksort(lst)
+
+    return context.compile_internal(builder, list_sort_impl, sig, args)
