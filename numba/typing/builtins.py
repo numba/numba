@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import itertools
 
 from numba import types, intrinsics
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS
@@ -135,13 +136,39 @@ class PairSecond(AbstractTemplate):
             return signature(pair.second_type, pair)
 
 
+def choose_result_bitwidth(*inputs):
+    return max(types.intp.bitwidth, *(tp.bitwidth for tp in inputs))
+
+def choose_result_int(*inputs):
+    """
+    Choose the integer result type for an operation on integer inputs,
+    according to the integer typing NBEP.
+    """
+    bitwidth = choose_result_bitwidth(*inputs)
+    signed = any(tp.signed for tp in inputs)
+    return types.Integer.from_bitwidth(bitwidth, signed)
+
+
+# The "machine" integer types to take into consideration for operator typing
+# (according to the integer typing NBEP)
+machine_ints = (
+    sorted(set((types.intp, types.int64))) +
+    sorted(set((types.uintp, types.uint64)))
+    )
+
+# Explicit integer rules for binary operators; smaller ints will be
+# automatically upcast.
+integer_binop_cases = tuple(
+    signature(choose_result_int(op1, op2), op1, op2)
+    for op1, op2 in itertools.product(machine_ints, machine_ints)
+    )
+
+
 class BinOp(ConcreteTemplate):
-    cases = [signature(max(types.intp, op), op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(max(types.uintp, op), op, op)
-              for op in sorted(types.unsigned_domain)]
+    cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
+
 
 @builtin
 class BinOpAdd(BinOp):
@@ -166,20 +193,15 @@ class BinOpDiv(BinOp):
 @builtin
 class BinOpMod(ConcreteTemplate):
     key = "%"
-    cases = [signature(op, op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(op, op, op)
-              for op in sorted(types.unsigned_domain)]
+    cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @builtin
 class BinOpTrueDiv(ConcreteTemplate):
     key = "/"
-    cases = [signature(types.float64, op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(types.float64, op, op)
-              for op in sorted(types.unsigned_domain)]
+    cases = [signature(types.float64, op1, op2)
+             for op1, op2 in itertools.product(machine_ints, machine_ints)]
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
@@ -187,18 +209,14 @@ class BinOpTrueDiv(ConcreteTemplate):
 @builtin
 class BinOpFloorDiv(ConcreteTemplate):
     key = "//"
-    cases = [signature(op, op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(op, op, op)
-              for op in sorted(types.unsigned_domain)]
+    cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @builtin
 class BinOpPower(ConcreteTemplate):
     key = "**"
-    cases = [signature(op, op, op)
-             for op in (types.intp, types.int64)]
+    cases = list(integer_binop_cases)
     cases += [signature(types.float64, types.float64, op)
               for op in sorted(types.signed_domain)]
     cases += [signature(types.float64, types.float64, op)
@@ -217,10 +235,7 @@ builtin_global(pow, types.Function(PowerBuiltin))
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
-    cases = [signature(op, op, types.uint32)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(op, op, types.uint32)
-              for op in sorted(types.unsigned_domain)]
+    cases = list(integer_binop_cases)
 
 
 @builtin
@@ -234,10 +249,7 @@ class BitwiseRightShift(BitwiseShiftOperation):
 
 
 class BitwiseLogicOperation(BinOp):
-    cases = [signature(max(types.intp, op), op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(max(types.uintp, op), op, op)
-              for op in sorted(types.unsigned_domain)]
+    cases = list(integer_binop_cases)
 
 
 @builtin
@@ -255,47 +267,44 @@ class BitwiseXor(BitwiseLogicOperation):
     key = "^"
 
 
+# Bitwise invert and negate are special: we must not upcast the operand
+# for unsigned numbers, as that would change the result.
+# (i.e. ~np.int8(0) == 255 but ~np.int32(0) == 4294967295).
+
 @builtin
 class BitwiseInvert(ConcreteTemplate):
     key = "~"
 
     cases = [signature(types.int8, types.boolean)]
-    cases += [signature(op, op) for op in sorted(types.signed_domain)]
-    cases += [signature(op, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(choose_result_int(op), op) for op in types.unsigned_domain]
+    cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
 
 
 class UnaryOp(ConcreteTemplate):
-    cases = [signature(op, op) for op in sorted(types.signed_domain)]
-    cases += [signature(op, op) for op in sorted(types.unsigned_domain)]
+    cases = [signature(choose_result_int(op), op) for op in types.unsigned_domain]
+    cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
     cases += [signature(op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op) for op in sorted(types.complex_domain)]
 
 
 @builtin
-class UnaryNot(UnaryOp):
+class UnaryNegate(UnaryOp):
+    key = "-"
+
+
+@builtin
+class UnaryPositive(UnaryOp):
+    key = "+"
+
+
+@builtin
+class UnaryNot(ConcreteTemplate):
     key = "not"
     cases = [signature(types.boolean, types.boolean)]
     cases += [signature(types.boolean, op) for op in sorted(types.signed_domain)]
     cases += [signature(types.boolean, op) for op in sorted(types.unsigned_domain)]
     cases += [signature(types.boolean, op) for op in sorted(types.real_domain)]
     cases += [signature(types.boolean, op) for op in sorted(types.complex_domain)]
-
-
-@builtin
-class UnaryNegate(UnaryOp):
-    key = "-"
-    cases = [signature(max(types.intp, op), op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(max(types.uintp, op), op)
-              for op in sorted(types.unsigned_domain)]
-    cases += [signature(op, op) for op in sorted(types.real_domain)]
-    cases += [signature(op, op) for op in sorted(types.complex_domain)]
-
-
-@builtin
-class UnaryPositive(UnaryOp):
-    key = "+"
-    cases = UnaryNegate.cases
 
 
 class OrderedCmpOp(ConcreteTemplate):
@@ -875,12 +884,12 @@ class Round(ConcreteTemplate):
         ]
     else:
         cases = [
-            signature(types.int32, types.float32),
+            signature(types.intp, types.float32),
             signature(types.int64, types.float64),
         ]
     cases += [
-        signature(types.float32, types.float32, types.int32),
-        signature(types.float64, types.float64, types.int32),
+        signature(types.float32, types.float32, types.intp),
+        signature(types.float64, types.float64, types.intp),
     ]
 
 

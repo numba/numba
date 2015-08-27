@@ -69,17 +69,6 @@ def int_mul_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_udiv_impl(context, builder, sig, args):
-    [va, vb] = args
-    [ta, tb] = sig.args
-    a = context.cast(builder, va, ta, sig.return_type)
-    b = context.cast(builder, vb, tb, sig.return_type)
-    cgutils.guard_zero(context, builder, b,
-                       (ZeroDivisionError, "integer division by zero"))
-    res = builder.udiv(a, b)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
 def int_divmod(context, builder, x, y):
     """
     Reference Objects/intobject.c
@@ -126,54 +115,49 @@ def int_divmod(context, builder, x, y):
     return resdiv, resmod
 
 
-def int_sdiv_impl(context, builder, sig, args):
+@builtin
+@implement('/?', types.Kind(types.Integer), types.Kind(types.Integer))
+@implement('//', types.Kind(types.Integer), types.Kind(types.Integer))
+def int_floordiv_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
     cgutils.guard_zero(context, builder, b,
                        (ZeroDivisionError, "integer division by zero"))
-    div, _ = int_divmod(context, builder, a, b)
-    return impl_ret_untracked(context, builder, sig.return_type, div)
-
-
-def int_struediv_impl(context, builder, sig, args):
-    x, y = args
-    fx = builder.sitofp(x, Type.double())
-    fy = builder.sitofp(y, Type.double())
-    cgutils.guard_zero(context, builder, y,
-                       (ZeroDivisionError, "division by zero"))
-    res = builder.fdiv(fx, fy)
+    if sig.return_type.signed:
+        res, _ = int_divmod(context, builder, a, b)
+    else:
+        res = builder.udiv(a, b)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_utruediv_impl(context, builder, sig, args):
-    x, y = args
-    fx = builder.uitofp(x, Type.double())
-    fy = builder.uitofp(y, Type.double())
-    cgutils.guard_zero(context, builder, y,
+@builtin
+@implement('/', types.Kind(types.Integer), types.Kind(types.Integer))
+def int_truediv_impl(context, builder, sig, args):
+    [va, vb] = args
+    [ta, tb] = sig.args
+    a = context.cast(builder, va, ta, sig.return_type)
+    b = context.cast(builder, vb, tb, sig.return_type)
+    cgutils.guard_zero(context, builder, b,
                        (ZeroDivisionError, "division by zero"))
-    res = builder.fdiv(fx, fy)
+    res = builder.fdiv(a, b)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-int_sfloordiv_impl = int_sdiv_impl
-int_ufloordiv_impl = int_udiv_impl
-
-
-def int_srem_impl(context, builder, sig, args):
-    x, y = args
-    cgutils.guard_zero(context, builder, y,
+@builtin
+@implement('%', types.Kind(types.Integer), types.Kind(types.Integer))
+def int_rem_impl(context, builder, sig, args):
+    [va, vb] = args
+    [ta, tb] = sig.args
+    a = context.cast(builder, va, ta, sig.return_type)
+    b = context.cast(builder, vb, tb, sig.return_type)
+    cgutils.guard_zero(context, builder, b,
                        (ZeroDivisionError, "integer modulo by zero"))
-    _, rem = int_divmod(context, builder, x, y)
-    return impl_ret_untracked(context, builder, sig.return_type, rem)
-
-
-def int_urem_impl(context, builder, sig, args):
-    x, y = args
-    cgutils.guard_zero(context, builder, y,
-                       (ZeroDivisionError, "integer modulo by zero"))
-    res = builder.urem(x, y)
+    if sig.return_type.signed:
+        _, res = int_divmod(context, builder, a, b)
+    else:
+        res = builder.urem(a, b)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -181,13 +165,23 @@ def int_power_impl(context, builder, sig, args):
     """
     a ^ b, where a is an integer or real, and b an integer
     """
+    is_integer = isinstance(sig.args[0], types.Integer)
+    tp = sig.return_type
+
     def int_power(a, b):
-        r = 1
+        # Ensure computations are done with a large enough width
+        r = tp(1)
+        a = tp(a)
         if b < 0:
             invert = True
             exp = -b
             if exp < 0:
                 raise OverflowError
+            if is_integer:
+                if a == 0:
+                    raise ZeroDivisionError("0 cannot be raised to a negative power")
+                if a != 1 and a != -1:
+                    return 0
         else:
             invert = False
             exp = b
@@ -202,8 +196,7 @@ def int_power_impl(context, builder, sig, args):
 
         return 1.0 / r if invert else r
 
-    res = context.compile_internal(builder, int_power, sig, args,
-                                   locals={'r': sig.return_type})
+    res = context.compile_internal(builder, int_power, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -280,21 +273,15 @@ def int_shl_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_lshr_impl(context, builder, sig, args):
+def int_shr_impl(context, builder, sig, args):
     [valty, amtty] = sig.args
     [val, amt] = args
     val = context.cast(builder, val, valty, sig.return_type)
     amt = context.cast(builder, amt, amtty, sig.return_type)
-    res = builder.lshr(val, amt)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-def int_ashr_impl(context, builder, sig, args):
-    [valty, amtty] = sig.args
-    [val, amt] = args
-    val = context.cast(builder, val, valty, sig.return_type)
-    amt = context.cast(builder, amt, amtty, sig.return_type)
-    res = builder.ashr(val, amt)
+    if sig.return_type.signed:
+        res = builder.ashr(val, amt)
+    else:
+        res = builder.lshr(val, amt)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -328,11 +315,9 @@ def int_xor_impl(context, builder, sig, args):
 def int_negate_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
-    val = context.cast(builder, val, typ, sig.return_type)
-    if sig.return_type in types.real_domain:
-        res = builder.fsub(context.get_constant(sig.return_type, 0), val)
-    else:
-        res = builder.neg(val)
+    # Negate before upcasting, for unsigned numbers
+    res = builder.neg(val)
+    res = context.cast(builder, res, typ, sig.return_type)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -346,8 +331,9 @@ def int_positive_impl(context, builder, sig, args):
 def int_invert_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
-    val = context.cast(builder, val, typ, sig.return_type)
+    # Invert before upcasting, for unsigned numbers
     res = builder.xor(val, Constant.all_ones(val.type))
+    res = context.cast(builder, res, typ, sig.return_type)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -415,7 +401,8 @@ def _implement_integer_operators():
     builtin(implement('==', ty, ty)(int_eq_impl))
     builtin(implement('!=', ty, ty)(int_ne_impl))
 
-    builtin(implement('<<', ty, types.uint32)(int_shl_impl))
+    builtin(implement('<<', ty, ty)(int_shl_impl))
+    builtin(implement('>>', ty, ty)(int_shr_impl))
 
     builtin(implement('&', ty, ty)(int_and_impl))
     builtin(implement('|', ty, ty)(int_or_impl))
@@ -431,25 +418,15 @@ def _implement_integer_operators():
     builtin(implement(pow, ty, ty)(int_power_impl))
 
     for ty in types.unsigned_domain:
-        builtin(implement('/?', ty, ty)(int_udiv_impl))
-        builtin(implement('//', ty, ty)(int_ufloordiv_impl))
-        builtin(implement('/', ty, ty)(int_utruediv_impl))
-        builtin(implement('%', ty, ty)(int_urem_impl))
         builtin(implement('<', ty, ty)(int_ult_impl))
         builtin(implement('<=', ty, ty)(int_ule_impl))
         builtin(implement('>', ty, ty)(int_ugt_impl))
         builtin(implement('>=', ty, ty)(int_uge_impl))
         builtin(implement('**', types.float64, ty)(int_power_impl))
         builtin(implement(pow, types.float64, ty)(int_power_impl))
-        # logical shift for unsigned
-        builtin(implement('>>', ty, types.uint32)(int_lshr_impl))
         builtin(implement(types.abs_type, ty)(uint_abs_impl))
 
     for ty in types.signed_domain:
-        builtin(implement('/?', ty, ty)(int_sdiv_impl))
-        builtin(implement('//', ty, ty)(int_sfloordiv_impl))
-        builtin(implement('/', ty, ty)(int_struediv_impl))
-        builtin(implement('%', ty, ty)(int_srem_impl))
         builtin(implement('<', ty, ty)(int_slt_impl))
         builtin(implement('<=', ty, ty)(int_sle_impl))
         builtin(implement('>', ty, ty)(int_sgt_impl))
@@ -457,8 +434,6 @@ def _implement_integer_operators():
         builtin(implement(types.abs_type, ty)(int_abs_impl))
         builtin(implement('**', types.float64, ty)(int_power_impl))
         builtin(implement(pow, types.float64, ty)(int_power_impl))
-        # arithmetic shift for signed
-        builtin(implement('>>', ty, types.uint32)(int_ashr_impl))
 
 _implement_integer_operators()
 

@@ -226,6 +226,11 @@ class TestTypes(TestCase):
         for ty in types.number_domain:
             self.assertTrue(hasattr(ty, "bitwidth"))
 
+    def test_from_bidwidth(self):
+        f = types.Integer.from_bitwidth
+        self.assertIs(f(32), types.int32)
+        self.assertIs(f(8, signed=False), types.uint8)
+
 
 class TestPickling(TestCase):
     """
