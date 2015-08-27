@@ -342,17 +342,10 @@ class Overloaded(_OverloadedBase):
             flags = compiler.Flags()
             self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
 
-            print("compiling %s [%d, %d] with %s" % (self.__name__, len(self.overloads), id(self), sig))
-            try:
-                cres = compiler.compile_extra(self.typingctx, self.targetctx,
-                                              self.py_func,
-                                              args=args, return_type=return_type,
-                                              flags=flags, locals=self.locals)
-            except Exception as e:
-                print("!!! errored", self.__name__, e)
-                raise
-            finally:
-                print("--> finished", self.__name__)
+            cres = compiler.compile_extra(self.typingctx, self.targetctx,
+                                          self.py_func,
+                                          args=args, return_type=return_type,
+                                          flags=flags, locals=self.locals)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:
