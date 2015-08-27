@@ -82,6 +82,12 @@ class FunctionDescriptor(object):
         else:
             return sys.modules[self.modname]
 
+    def lookup_function(self):
+        """
+        Return the original function object described by this object.
+        """
+        return getattr(self.lookup_module(), self.qualname)
+
     @property
     def llvm_func_name(self):
         """

@@ -5,6 +5,7 @@ import collections
 import functools
 import io
 import itertools
+import os
 import threading
 import timeit
 import math
@@ -24,6 +25,7 @@ if IS_PY3:
     longint = int
     get_ident = threading.get_ident
     intern = sys.intern
+    file_replace = os.replace
 else:
     import thread
     import __builtin__ as builtins
@@ -31,6 +33,16 @@ else:
     longint = long
     get_ident = thread.get_ident
     intern = intern
+    if sys.platform == 'win32':
+        def file_replace(src, dest):
+            # Best-effort emulation of os.replace()
+            try:
+                os.rename(src, dest)
+            except OSError:
+                os.unlink(dest)
+                os.rename(src, dest)
+    else:
+        file_replace = os.rename
 
 try:
     from inspect import signature as pysignature

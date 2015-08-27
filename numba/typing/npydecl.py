@@ -180,7 +180,7 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
             builtin(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
                          dict(key=op)))
 
-    def generic(self, *args, **kws):
+    def generic(self, args, kws):
         '''Overloads and calls base class generic() method, returning
         None if a TypingError occurred.
 
@@ -190,8 +190,7 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         (particularly user-defined operators).
         '''
         try:
-            sig = super(NumpyRulesArrayOperator, self).generic(
-                *args, **kws)
+            sig = super(NumpyRulesArrayOperator, self).generic(args, kws)
             # Stay out of the timedelta64 range and domain; already
             # handled elsewhere.
             if sig is not None:
@@ -214,6 +213,12 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
         '-': "negative",
         '~': "invert",
     }
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1 and isinstance(args[0], types.Array):
+            return super(NumpyRulesUnaryArrayOperator, self).generic(args, kws)
+
 
 
 # list of unary ufuncs to register
@@ -350,23 +355,14 @@ np_types.add(numpy.uintc)
 np_types.add(numpy.uintp)
 
 
-def register_casters(register_global):
+def register_number_classes(register_global):
     for np_type in np_types:
         nb_type = getattr(types, np_type.__name__)
 
-        class Caster(AbstractTemplate):
-            key = np_type
-            restype = nb_type
+        register_global(np_type, types.NumberClass(nb_type))
 
-            def generic(self, args, kws):
-                assert not kws
-                [a] = args
-                if a in types.number_domain:
-                    return signature(self.restype, a)
 
-        register_global(np_type, types.NumberClass(nb_type, Caster))
-
-register_casters(builtin_global)
+register_number_classes(builtin_global)
 
 
 # -----------------------------------------------------------------------------

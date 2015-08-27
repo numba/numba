@@ -14,11 +14,11 @@ from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
-                                    python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     type_registry,
                                     impl_ret_borrowed)
-from . import arrayobj, builtins, iterators, rangeobj, optional, slicing
+from . import (
+    arrayobj, builtins, iterators, rangeobj, optional, slicing, tupleobj)
 from numba import datamodel
 
 try:
@@ -228,12 +228,6 @@ class BaseContext(object):
         assert isinstance(genty, types.Generator)
         impl = user_generator(gendesc, libs)
         self.generators[genty] = gendesc, impl
-
-    def insert_class(self, cls, attrs):
-        clsty = types.Object(cls)
-        for name, vtype in utils.iteritems(attrs):
-            impl = python_attr_impl(clsty, name, vtype)
-            self.attrs[impl.attr].append(impl, impl.signature)
 
     def remove_user_function(self, func):
         """
@@ -739,6 +733,21 @@ class BaseContext(object):
 
         raise NotImplementedError("cast", val, fromty, toty)
 
+    def generic_compare(self, builder, key, argtypes, args):
+        """
+        Compare the given LLVM values of the given Numba types using
+        the comparison *key* (e.g. '==').  The values are first cast to
+        a common safe conversion type.
+        """
+        at, bt = argtypes
+        av, bv = args
+        ty = self.typing_context.unify_types(at, bt)
+        cav = self.cast(builder, av, at, ty)
+        cbv = self.cast(builder, bv, bt, ty)
+        cmpsig = typing.signature(types.boolean, ty, ty)
+        cmpfunc = self.get_function(key, cmpsig)
+        return cmpfunc(builder, (cav, cbv))
+
     def make_optional(self, optionaltype):
         return optional.make_optional(optionaltype.type)
 
@@ -756,16 +765,8 @@ class BaseContext(object):
         return optval._getvalue()
 
     def is_true(self, builder, typ, val):
-        if typ in types.integer_domain:
-            return builder.icmp(lc.ICMP_NE, val, Constant.null(val.type))
-        elif typ in types.real_domain:
-            return builder.fcmp(lc.FCMP_UNE, val, Constant.real(val.type, 0))
-        elif typ in types.complex_domain:
-            cmplx = self.make_complex(typ)(self, builder, val)
-            real_istrue = self.is_true(builder, typ.underlying_float, cmplx.real)
-            imag_istrue = self.is_true(builder, typ.underlying_float, cmplx.imag)
-            return builder.or_(real_istrue, imag_istrue)
-        raise NotImplementedError("is_true", val, typ)
+        impl = self.get_function(bool, typing.signature(types.boolean, typ))
+        return impl(builder, (val,))
 
     def get_c_value(self, builder, typ, name):
         """
@@ -790,30 +791,6 @@ class BaseContext(object):
 
     def call_function_pointer(self, builder, funcptr, args, cconv=None):
         return builder.call(funcptr, args, cconv=cconv)
-
-    def call_class_method(self, builder, func, signature, args):
-        api = self.get_python_api(builder)
-        tys = signature.args
-        retty = signature.return_type
-        pyargs = [api.from_native_value(av, at) for av, at in zip(args, tys)]
-        res = api.call_function_objargs(func, pyargs)
-
-        # clean up
-        api.decref(func)
-        for obj in pyargs:
-            api.decref(obj)
-
-        with builder.if_then(cgutils.is_null(builder, res)):
-            self.call_conv.return_exc(builder)
-
-        if retty == types.none:
-            api.decref(res)
-            return self.get_dummy_value()
-        else:
-            native = api.to_native_value(res, retty)
-            assert native.cleanup is None
-            api.decref(res)
-            return native.value
 
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module

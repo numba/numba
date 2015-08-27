@@ -10,6 +10,27 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
 from .errors import LoweringError
 
+
+class Environment(_dynfunc.Environment):
+    __slots__ = ()
+
+    @classmethod
+    def from_fndesc(cls, fndesc):
+        mod = fndesc.lookup_module()
+        return cls(mod.__dict__)
+
+    def __reduce__(self):
+        return _rebuild_env, (self.globals['__name__'], self.consts)
+
+
+def _rebuild_env(modname, consts):
+    from . import serialize
+    mod = serialize._rebuild_module(modname)
+    env = Environment(mod.__dict__)
+    env.consts[:] = consts
+    return env
+
+
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
 
@@ -17,6 +38,9 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
+
+    # If true, then can't cache LLVM module accross process calls
+    has_dynamic_globals = False
 
     def __init__(self, context, library, fndesc, interp):
         self.context = context
@@ -32,8 +56,7 @@ class BaseLower(object):
 
         # Python execution environment (will be available to the compiled
         # function).
-        self.env = _dynfunc.Environment(
-            globals=self.fndesc.lookup_module().__dict__)
+        self.env = Environment.from_fndesc(self.fndesc)
 
         # Internal states
         self.blkmap = {}
@@ -352,6 +375,7 @@ class Lower(BaseLower):
             if isinstance(ty, types.ExternalFunctionPointer):
                 res = self.context.get_constant_generic(self.builder, ty,
                                                         value.value)
+                self.has_dynamic_globals = True
 
             elif isinstance(ty, types.Dummy):
                 res = self.context.get_dummy_value()
@@ -498,13 +522,6 @@ class Lower(BaseLower):
             self.debug_print("# calling numba function")
             res = self.context.call_internal(self.builder, fnty.fndesc,
                                              fnty.sig, argvals)
-
-        elif isinstance(fnty, types.Method):
-            self.debug_print("# calling method")
-            # Method of objects are handled differently
-            fnobj = self.loadvar(expr.func.name)
-            res = self.context.call_class_method(self.builder, fnobj,
-                                                 signature, argvals)
 
         elif isinstance(fnty, types.ExternalFunctionPointer):
             self.debug_print("# calling external function pointer")

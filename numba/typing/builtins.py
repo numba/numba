@@ -6,7 +6,8 @@ from numba import types, intrinsics
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
-                                    builtin_attr, signature, bound_function)
+                                    builtin_attr, signature, bound_function,
+                                    make_callable_template)
 
 for obj in RANGE_ITER_OBJECTS:
     builtin_global(obj, types.range_type)
@@ -525,6 +526,17 @@ class Len(AbstractTemplate):
             return signature(types.intp, val)
 
 
+@builtin
+class TupleBool(AbstractTemplate):
+    key = "is_true"
+
+    def generic(self, args, kws):
+        assert not kws
+        (val,) = args
+        if isinstance(val, (types.BaseTuple)):
+            return signature(types.boolean, val)
+
+
 #-------------------------------------------------------------------------------
 
 def normalize_shape(shape):
@@ -765,13 +777,28 @@ class MemoryViewAttribute(AttributeTemplate):
 
 
 #-------------------------------------------------------------------------------
-class ComplexAttribute(AttributeTemplate):
+
+
+@builtin_attr
+class BooleanAttribute(AttributeTemplate):
+    key = types.Boolean
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
+
+
+@builtin_attr
+class NumberAttribute(AttributeTemplate):
+    key = types.Number
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
 
     def resolve_real(self, ty):
-        return self.innertype
+        return getattr(ty, "underlying_float", ty)
 
     def resolve_imag(self, ty):
-        return self.innertype
+        return getattr(ty, "underlying_float", ty)
 
     @bound_function("complex.conjugate")
     def resolve_conjugate(self, ty, args, kws):
@@ -780,37 +807,34 @@ class ComplexAttribute(AttributeTemplate):
         return signature(ty)
 
 
-def register_complex_attributes(ty):
-    @builtin_attr
-    class ConcreteComplexAttribute(ComplexAttribute):
-        key = ty
-        try:
-            innertype = ty.underlying_float
-        except AttributeError:
-            innertype = ty
-
-for ty in types.number_domain:
-    register_complex_attributes(ty)
-
 #-------------------------------------------------------------------------------
 
-def register_casters(register_global):
+
+@builtin_attr
+class NumberClassAttribute(AttributeTemplate):
+    key = types.NumberClass
+
+    def resolve___call__(self, classty):
+        """
+        Resolve a number class's constructor (e.g. calling int(...))
+        """
+        ty = classty.instance_type
+
+        def typer(val):
+            return ty
+
+        return types.Function(make_callable_template(key=ty, typer=typer))
+
+
+def register_number_classes(register_global):
     nb_types = set(types.number_domain)
     nb_types.add(types.bool_)
 
-    for restype in nb_types:
-        class Caster(AbstractTemplate):
-            key = restype
+    for ty in nb_types:
+        register_global(ty, types.NumberClass(ty))
 
-            def generic(self, args, kws):
-                assert not kws
-                [a] = args
-                if a in nb_types:
-                    return signature(self.key, a)
 
-        register_global(restype, types.NumberClass(restype, Caster))
-
-register_casters(builtin_global)
+register_number_classes(builtin_global)
 
 #------------------------------------------------------------------------------
 
@@ -882,13 +906,13 @@ class Bool(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-
         [arg] = args
-
-        if arg not in types.number_domain:
-            raise TypeError("bool() only support for numbers")
-
-        return signature(types.boolean, arg)
+        if arg in types.number_domain:
+            return signature(types.boolean, arg)
+        # XXX typing for bool cannot be polymorphic because of the
+        # types.Function thing, so we redirect to the "is_true"
+        # intrinsic.
+        return self.context.resolve_function_type("is_true", args, kws)
 
 
 class Int(AbstractTemplate):
@@ -1014,3 +1038,24 @@ class Intrinsic_array_ravel(AbstractTemplate):
             return signature(arr.copy(ndim=1), arr)
 
 builtin_global(intrinsics.array_ravel, types.Function(Intrinsic_array_ravel))
+
+
+#------------------------------------------------------------------------------
+
+@builtin
+class TypeBuiltin(AbstractTemplate):
+    key = type
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1:
+            # One-argument type() -> return the __class__
+            try:
+                classty = self.context.resolve_getattr(args[0], "__class__")
+            except KeyError:
+                return
+            else:
+                return signature(classty, *args)
+
+
+builtin_global(type, types.Function(TypeBuiltin))

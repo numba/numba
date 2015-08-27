@@ -96,26 +96,6 @@ def user_generator(gendesc, libs):
     return imp
 
 
-def python_attr_impl(cls, attr, atyp):
-    @impl_attribute(cls, attr, atyp)
-    def imp(context, builder, typ, value):
-        api = context.get_python_api(builder)
-        aval = api.object_getattr_string(value, attr)
-        with builder.if_then(cgutils.is_null(builder, aval)):
-            context.call_conv.return_exc(builder)
-
-        if isinstance(atyp, types.Method):
-            res = aval
-        else:
-            native = api.to_native_value(aval, atyp)
-            assert native.cleanup is None
-            api.decref(aval)
-            res = native.value
-        return impl_ret_borrowed(context, builder, atyp, res)
-
-    return imp
-
-
 def iterator_impl(iterable_type, iterator_type):
     """
     Decorator a given class as implementing *iterator_type*

@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 import math
 from functools import reduce
 
+from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
@@ -11,6 +12,16 @@ from .imputils import (builtin, builtin_attr, implement, impl_attribute,
                        impl_ret_borrowed, impl_ret_untracked)
 from . import optional
 from .. import typing, types, cgutils, utils, intrinsics
+
+
+@builtin
+@implement('is not', types.Any, types.Any)
+def generic_is_not(context, builder, sig, args):
+    """
+    Implement `x is not y` as `not (x is y)`.
+    """
+    is_impl = context.get_function('is', sig)
+    return builder.not_(is_impl(builder, args))
 
 #-------------------------------------------------------------------------------
 
@@ -459,22 +470,12 @@ def optional_is_not_none(context, builder, sig, args):
 builtin(implement('is', types.none, types.none)(
     optional.always_return_true_impl))
 
-builtin(implement('is not', types.none, types.none)(
-    optional.always_return_false_impl))
-
 # Optional is None
 builtin(implement('is',
                   types.Kind(types.Optional), types.none)(optional_is_none))
 
 builtin(implement('is',
                   types.none, types.Kind(types.Optional))(optional_is_none))
-
-# Optional is not None
-builtin(implement('is not',
-                  types.Kind(types.Optional), types.none)(optional_is_not_none))
-
-builtin(implement('is not',
-                  types.none, types.Kind(types.Optional))(optional_is_not_none))
 
 
 def real_add_impl(context, builder, sig, args):
@@ -1037,17 +1038,33 @@ def number_not_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def number_as_bool_impl(context, builder, sig, args):
+@builtin
+@implement(bool, types.Kind(types.Integer))
+def int_as_bool(context, builder, sig, args):
+    [val] = args
+    return builder.icmp_unsigned('!=', val, ir.Constant(val.type, 0))
+
+@builtin
+@implement(bool, types.Kind(types.Float))
+def float_as_bool(context, builder, sig, args):
+    [val] = args
+    return builder.fcmp(lc.FCMP_UNE, val, ir.Constant(val.type, 0.0))
+
+@builtin
+@implement(bool, types.Kind(types.Complex))
+def complex_as_bool(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
-    istrue = context.cast(builder, val, typ, sig.return_type)
-    res = istrue
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    cmplx = context.make_complex(typ)(context, builder, val)
+    real, imag = cmplx.real, cmplx.imag
+    zero = ir.Constant(real.type, 0.0)
+    real_istrue = builder.fcmp(lc.FCMP_UNE, real, zero)
+    imag_istrue = builder.fcmp(lc.FCMP_UNE, imag, zero)
+    return builder.or_(real_istrue, imag_istrue)
 
 
 for ty in (types.Integer, types.Float, types.Complex):
     builtin(implement('not', types.Kind(ty))(number_not_impl))
-    builtin(implement(bool, types.Kind(ty))(number_as_bool_impl))
 
 builtin(implement('not', types.boolean)(number_not_impl))
 
@@ -1055,102 +1072,6 @@ builtin(implement('not', types.boolean)(number_not_impl))
 
 def make_pair(first_type, second_type):
     return cgutils.create_struct_proxy(types.Pair(first_type, second_type))
-
-
-@struct_factory(types.UniTupleIter)
-def make_unituple_iter(tupiter):
-    """
-    Return the Structure representation of the given *tupiter* (an
-    instance of types.UniTupleIter).
-    """
-    return cgutils.create_struct_proxy(tupiter)
-
-
-@builtin
-@implement('getiter', types.Kind(types.UniTuple))
-@implement('getiter', types.Kind(types.NamedUniTuple))
-def getiter_unituple(context, builder, sig, args):
-    [tupty] = sig.args
-    [tup] = args
-
-    tupitercls = make_unituple_iter(types.UniTupleIter(tupty))
-    iterval = tupitercls(context, builder)
-
-    index0 = context.get_constant(types.intp, 0)
-    indexptr = cgutils.alloca_once(builder, index0.type)
-    builder.store(index0, indexptr)
-
-    iterval.index = indexptr
-    iterval.tuple = tup
-
-    res = iterval._getvalue()
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
-
-
-# Unfortunately, we can't make decorate UniTupleIter with iterator_impl
-# as it would register the iternext() method too late. It really has to
-# be registered at module import time, not while compiling.
-
-@builtin
-@implement('iternext', types.Kind(types.UniTupleIter))
-@iternext_impl
-def iternext_unituple(context, builder, sig, args, result):
-    [tupiterty] = sig.args
-    [tupiter] = args
-
-    tupitercls = make_unituple_iter(tupiterty)
-    iterval = tupitercls(context, builder, value=tupiter)
-    tup = iterval.tuple
-    idxptr = iterval.index
-    idx = builder.load(idxptr)
-    count = context.get_constant(types.intp, tupiterty.unituple.count)
-
-    is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
-    result.set_valid(is_valid)
-
-    with builder.if_then(is_valid):
-        getitem_sig = typing.signature(tupiterty.unituple.dtype,
-                                       tupiterty.unituple,
-                                       types.intp)
-        getitem_out = getitem_unituple(context, builder, getitem_sig,
-                                       [tup, idx])
-        result.yield_(getitem_out)
-        nidx = builder.add(idx, context.get_constant(types.intp, 1))
-        builder.store(nidx, iterval.index)
-
-
-@builtin
-@implement('getitem', types.Kind(types.UniTuple), types.intp)
-@implement('getitem', types.Kind(types.NamedUniTuple), types.intp)
-def getitem_unituple(context, builder, sig, args):
-    tupty, _ = sig.args
-    tup, idx = args
-
-    bbelse = builder.append_basic_block("switch.else")
-    bbend = builder.append_basic_block("switch.end")
-    switch = builder.switch(idx, bbelse, n=tupty.count)
-
-    with builder.goto_block(bbelse):
-        context.call_conv.return_user_exc(builder, IndexError,
-                                          ("tuple index out of range",))
-
-    lrtty = context.get_value_type(tupty.dtype)
-    with builder.goto_block(bbend):
-        phinode = builder.phi(lrtty)
-
-    for i in range(tupty.count):
-        ki = context.get_constant(types.intp, i)
-        bbi = builder.append_basic_block("switch.%d" % i)
-        switch.add_case(ki, bbi)
-        with builder.goto_block(bbi):
-            value = builder.extract_value(tup, i)
-            builder.branch(bbend)
-            phinode.add_incoming(value, bbi)
-
-    builder.position_at_end(bbend)
-    res = phinode
-    assert sig.return_type == tupty.dtype
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
 @builtin
@@ -1185,21 +1106,6 @@ def number_constructor(context, builder, sig, args):
 
 
 #-------------------------------------------------------------------------------
-
-def generic_compare(context, builder, key, argtypes, args):
-    """
-    Compare the given LLVM values of the given Numba types using
-    the comparison *key* (e.g. '==').  The values are first cast to
-    a common safe conversion type.
-    """
-    at, bt = argtypes
-    av, bv = args
-    ty = context.typing_context.unify_types(at, bt)
-    cav = context.cast(builder, av, at, ty)
-    cbv = context.cast(builder, bv, bt, ty)
-    cmpsig = typing.signature(types.boolean, ty, ty)
-    cmpfunc = context.get_function(key, cmpsig)
-    return cmpfunc(builder, (cav, cbv))
 
 @builtin
 @implement(max, types.VarArg(types.Any))
@@ -1404,95 +1310,11 @@ def array_ravel_impl(context, builder, sig, args):
 
 
 # -----------------------------------------------------------------------------
-# Tuples
 
 @builtin
-@implement(types.NamedTupleClass, types.VarArg(types.Any))
-def namedtuple_constructor(context, builder, sig, args):
-    # A namedtuple has the same representation as a regular tuple
-    return context.make_tuple(builder, sig.return_type, args)
-
-@builtin
-@implement(types.len_type, types.Kind(types.BaseTuple))
-def tuple_len(context, builder, sig, args):
-    tupty, = sig.args
-    retty = sig.return_type
-    res = context.get_constant(retty, len(tupty.types))
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-def tuple_cmp_ordered(context, builder, op, sig, args):
-    tu, tv = sig.args
-    u, v = args
-    res = cgutils.alloca_once_value(builder, cgutils.true_bit)
-    bbend = builder.append_basic_block("cmp_end")
-    for i, (ta, tb) in enumerate(zip(tu.types, tv.types)):
-        a = builder.extract_value(u, i)
-        b = builder.extract_value(v, i)
-        not_equal = generic_compare(context, builder, '!=', (ta, tb), (a, b))
-        with builder.if_then(not_equal):
-            pred = generic_compare(context, builder, op, (ta, tb), (a, b))
-            builder.store(pred, res)
-            builder.branch(bbend)
-    # Everything matched equal => compare lengths
-    len_compare = eval("%d %s %d" % (len(tu.types), op, len(tv.types)))
-    pred = context.get_constant(types.boolean, len_compare)
-    builder.store(pred, res)
-    builder.branch(bbend)
-    builder.position_at_end(bbend)
-    return builder.load(res)
-
-@builtin
-@implement('==', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
-def tuple_eq(context, builder, sig, args):
-    tu, tv = sig.args
-    u, v = args
-    if len(tu.types) != len(tv.types):
-        res = context.get_constant(types.boolean, False)
-        return impl_ret_untracked(context, builder, sig.return_type, res)
-    res = context.get_constant(types.boolean, True)
-    for i, (ta, tb) in enumerate(zip(tu.types, tv.types)):
-        a = builder.extract_value(u, i)
-        b = builder.extract_value(v, i)
-        pred = generic_compare(context, builder, "==", (ta, tb), (a, b))
-        res = builder.and_(res, pred)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@builtin
-@implement('!=', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
-def tuple_ne(context, builder, sig, args):
-    res = builder.not_(tuple_eq(context, builder, sig, args))
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@builtin
-@implement('<', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
-def tuple_lt(context, builder, sig, args):
-    res = tuple_cmp_ordered(context, builder, '<', sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@builtin
-@implement('<=', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
-def tuple_le(context, builder, sig, args):
-    res = tuple_cmp_ordered(context, builder, '<=', sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@builtin
-@implement('>', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
-def tuple_gt(context, builder, sig, args):
-    res = tuple_cmp_ordered(context, builder, '>', sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@builtin
-@implement('>=', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
-def tuple_ge(context, builder, sig, args):
-    res = tuple_cmp_ordered(context, builder, '>=', sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@builtin_attr
-@impl_attribute_generic(types.Kind(types.BaseNamedTuple))
-def array_record_getattr(context, builder, typ, value, attr):
+@implement(type, types.Any)
+def type_impl(context, builder, sig, args):
     """
-    Fetch a namedtuple's field.
+    One-argument type() builtin.
     """
-    index = typ.fields.index(attr)
-    return builder.extract_value(value, index)
+    return context.get_dummy_value()

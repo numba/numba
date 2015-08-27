@@ -411,15 +411,29 @@ def box_list(c, typ, val):
 
     with c.builder.if_then(cgutils.is_not_null(c.builder, obj),
                            likely=True):
-        with cgutils.for_range(c.builder, nitems) as index:
-            item = list.getitem(index)
+        with cgutils.for_range(c.builder, nitems) as loop:
+            item = list.getitem(loop.index)
             itemobj = c.box(typ.dtype, item)
-            c.pyapi.list_setitem(obj, index, itemobj)
+            c.pyapi.list_setitem(obj, loop.index, itemobj)
 
     # Steal NRT ref
     c.context.nrt_decref(c.builder, typ, val)
 
     return obj
+
+
+@unbox(types.List)
+def unbox_list(c, typ, obj):
+    # Since a wrapper is always compiled even for an inner function,
+    # we have to define this to be able to pass lists from one Numba
+    # function to another.
+    # This code should nevertheless never be executed at runtime.
+    c.pyapi.err_set_string("PyExc_RuntimeError",
+                           "cannot unbox list objects")
+
+    # Just return a zero-initialized list value for successful codegen.
+    value = ir.Constant(c.context.get_value_type(typ), None)
+    return NativeValue(value, is_error=cgutils.true_bit)
 
 
 #

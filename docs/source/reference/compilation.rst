@@ -4,7 +4,7 @@ Compilation
 JIT functions
 -------------
 
-.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, forceobj=False, locals={})
+.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, locals={})
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters all optional.
@@ -57,6 +57,15 @@ JIT functions
    inside the compiled function.  The GIL will only be released if Numba can
    compile the function in :term:`nopython mode`, otherwise a compilation
    warning will be printed.
+
+   If true, *cache* enables a file-based cache to shorten compilation times
+   when the function was already compiled in a previous invocation.
+   The cache is maintained in the ``__pycache__`` subdirectory of
+   the directory containing the source file.
+
+   Not all functions can be cached, since some functionality cannot be
+   always persisted to disk.  When a function cannot be cached, a
+   warning is emitted; use :envvar:`NUMBA_WARNINGS` to see it.
 
    The *locals* dictionary may be used to force the :ref:`numba-types`
    of particular local variables, for example if you want to force the

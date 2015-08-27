@@ -222,7 +222,7 @@ class Function(Callable, Opaque):
         return self.template(context).apply(args, kws)
 
     def get_call_signatures(self):
-        sigs = getattr(self.template, 'cases')
+        sigs = getattr(self.template, 'cases', [])
         return sigs, hasattr(self.template, 'generic')
 
 
@@ -253,18 +253,17 @@ class NumberClass(Callable, DTypeSpec, Opaque):
     Type class for number classes (e.g. "np.float64").
     """
 
-    def __init__(self, instance_type, template):
+    def __init__(self, instance_type):
         self.instance_type = instance_type
-        self.template = template
-        name = "type(%s)" % (instance_type,)
-        super(NumberClass, self).__init__(name)
+        name = "class(%s)" % (instance_type,)
+        super(NumberClass, self).__init__(name, param=True)
 
     def get_call_type(self, context, args, kws):
-        return self.template(context).apply(args, kws)
+        # Overriden by the __call__ constructor resolution in typing.builtins
+        return None
 
     def get_call_signatures(self):
-        sigs = getattr(self.template, 'cases')
-        return sigs, hasattr(self.template, 'generic')
+        return (), True
 
     @property
     def key(self):
@@ -446,19 +445,6 @@ class BoundFunction(Function):
             if this != pyobject:
                 # XXX is it right that both template instances are distinct?
                 return BoundFunction(self.template, this)
-
-    @property
-    def key(self):
-        return self.template.key, self.this
-
-
-class Method(Function):
-    def __init__(self, template, this):
-        self.this = this
-        # Create a derived template with an attribute *this*
-        newcls = type(template.__name__ + '.' + str(this), (template,),
-                      dict(this=this))
-        super(Method, self).__init__(newcls)
 
     @property
     def key(self):
@@ -671,7 +657,9 @@ class Record(Type):
 
     @property
     def key(self):
-        return (self.size, self.aligned, self.dtype)
+        # Numpy dtype equality doesn't always succeed, use the descr instead
+        # (https://github.com/numpy/numpy/issues/5715)
+        return (self.descr, self.size, self.aligned)
 
     def __len__(self):
         return len(self.fields)
@@ -730,11 +718,10 @@ class Buffer(IterableType):
                 type_name = "readonly %s" % type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Buffer, self).__init__(name, param=True)
-        self._iterator_type = ArrayIterator(self)
 
     @property
     def iterator_type(self):
-        return self._iterator_type
+        return ArrayIterator(self)
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
@@ -956,7 +943,7 @@ class _HomogenousTuple(Sequence, BaseTuple):
 
     @property
     def iterator_type(self):
-        return self._iterator_type
+        return UniTupleIter(self)
 
     def getitem(self, ind):
         return self.dtype, intp
@@ -979,13 +966,15 @@ class _HomogenousTuple(Sequence, BaseTuple):
 
 
 class UniTuple(_HomogenousTuple):
+    """
+    Type class for homogenous tuples.
+    """
 
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
         name = "(%s x %d)" % (dtype, count)
         super(UniTuple, self).__init__(name, param=True)
-        self._iterator_type = UniTupleIter(self)
 
     @property
     def key(self):
@@ -1118,7 +1107,6 @@ class List(MutableSequence):
         self.dtype = dtype
         name = "list(%s)" % (self.dtype,)
         super(List, self).__init__(name=name, param=True)
-        self._iterator_type = ListIter(self)
 
     def unify(self, typingctx, other):
         if isinstance(other, List):
@@ -1132,7 +1120,7 @@ class List(MutableSequence):
 
     @property
     def iterator_type(self):
-        return self._iterator_type
+        return ListIter(self)
 
     def is_precise(self):
         return self.dtype.is_precise()
