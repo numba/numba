@@ -43,11 +43,15 @@ def make_quicksort_impl(wrap):
         """
         Insertion sort A[low:high + 1]. Note the inclusive bounds.
         """
+        assert low >= 0
+        if high <= low:
+            return
+
         for i in range(low + 1, high + 1):
             v = A[i]
             # Insert v into A[low:i]
             j = i
-            while j > low and v < A[j - 1]:
+            while j > low and LT(v, A[j - 1]):
                 # Make place for moving A[i] downwards
                 A[j] = A[j - 1]
                 j -= 1
@@ -69,11 +73,11 @@ def make_quicksort_impl(wrap):
         # risk breaking this property.
 
         # median of three {low, middle, high}
-        if A[mid] < A[low]:
+        if LT(A[mid], A[low]):
             A[low], A[mid] = A[mid], A[low]
-        if A[high] < A[mid]:
+        if LT(A[high], A[mid]):
             A[high], A[mid] = A[mid], A[high]
-        if A[mid] < A[low]:
+        if LT(A[mid], A[low]):
             A[low], A[mid] = A[mid], A[low]
         pivot = A[mid]
 
@@ -81,9 +85,9 @@ def make_quicksort_impl(wrap):
         i = low
         j = high - 1
         while True:
-            while A[i] < pivot:
+            while LT(A[i], pivot):
                 i += 1
-            while A[j] > pivot:
+            while LT(pivot, A[j]):
                 j -= 1
             if i >= j:
                 break
@@ -104,11 +108,11 @@ def make_quicksort_impl(wrap):
         """
         mid = (low + high) >> 1
         # median of three {low, middle, high}
-        if A[mid] < A[low]:
+        if LT(A[mid], A[low]):
             A[low], A[mid] = A[mid], A[low]
-        if A[high] < A[mid]:
+        if LT(A[high], A[mid]):
             A[high], A[mid] = A[mid], A[high]
-        if A[mid] < A[low]:
+        if LT(A[mid], A[low]):
             A[low], A[mid] = A[mid], A[low]
         pivot = A[mid]
 
@@ -117,11 +121,11 @@ def make_quicksort_impl(wrap):
         gt = high
         i = low + 1
         while i <= gt:
-            if A[i] < pivot:
+            if LT(A[i], pivot):
                 A[lt], A[i] = A[i], A[lt]
                 lt += 1
                 i += 1
-            elif A[i] > pivot:
+            elif LT(pivot, A[i]):
                 A[gt], A[i] = A[i], A[gt]
                 gt -= 1
             else:
@@ -130,6 +134,9 @@ def make_quicksort_impl(wrap):
 
     @wrap
     def run_quicksort(A):
+        if len(A) < 2:
+            return
+
         stack = [Partition(zero, zero)] * MAX_STACK
         stack[0] = Partition(zero, len(A) - 1)
         n = 1
@@ -137,7 +144,6 @@ def make_quicksort_impl(wrap):
         while n > 0:
             n -= 1
             low, high = stack[n]
-            assert high > low
             # Partition until it becomes more efficient to do an insertion sort
             while high - low >= SMALL_QUICKSORT:
                 assert n < MAX_STACK
@@ -145,12 +151,14 @@ def make_quicksort_impl(wrap):
                 # Push largest partition on the stack
                 if high - i > i - low:
                     # Right is larger
-                    stack[n] = Partition(i + 1, high)
-                    n += 1
+                    if high > i:
+                        stack[n] = Partition(i + 1, high)
+                        n += 1
                     high = i - 1
                 else:
-                    stack[n] = Partition(low, i - 1)
-                    n += 1
+                    if i > low:
+                        stack[n] = Partition(low, i - 1)
+                        n += 1
                     low = i + 1
 
             insertion_sort(A, low, high)
