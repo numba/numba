@@ -32,6 +32,11 @@ class Integer(Number):
         self.bitwidth = bitwidth
         self.signed = self.name.startswith('int')
 
+    @classmethod
+    def from_bitwidth(cls, bitwidth, signed=True):
+        name = ('int%d' if signed else 'uint%d') % bitwidth
+        return globals()[name]
+
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 

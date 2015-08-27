@@ -1,9 +1,11 @@
 ﻿from __future__ import print_function, absolute_import, division
 
-
-from numba import njit
-from numba import unittest_support as unittest
 import random
+
+import numpy as np
+
+from numba import njit, types
+from numba import unittest_support as unittest
 
 class TestMulti3(unittest.TestCase):
     """
@@ -17,7 +19,7 @@ class TestMulti3(unittest.TestCase):
     is then lowered to __multi3.
     """
     def test_multi3(self):
-        @njit
+        @njit("(int64,)")
         def func(x):
             res = 0
             for i in range(x):

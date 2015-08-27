@@ -681,7 +681,7 @@ class Round(AbstractTemplate):
 
         arg = args[0]
         if len(args) == 1:
-            decimals = types.int32
+            decimals = types.intp
             out = None
         else:
             decimals = args[1]

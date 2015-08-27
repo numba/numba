@@ -880,16 +880,16 @@ def _fill_ufunc_db(ufunc_db):
     }
 
     ufunc_db[np.right_shift] = {
-        'bb->b': builtins.int_ashr_impl,
-        'BB->B': builtins.int_lshr_impl,
-        'hh->h': builtins.int_ashr_impl,
-        'HH->H': builtins.int_lshr_impl,
-        'ii->i': builtins.int_ashr_impl,
-        'II->I': builtins.int_lshr_impl,
-        'll->l': builtins.int_ashr_impl,
-        'LL->L': builtins.int_lshr_impl,
-        'qq->q': builtins.int_ashr_impl,
-        'QQ->Q': builtins.int_lshr_impl,
+        'bb->b': builtins.int_shr_impl,
+        'BB->B': builtins.int_shr_impl,
+        'hh->h': builtins.int_shr_impl,
+        'HH->H': builtins.int_shr_impl,
+        'ii->i': builtins.int_shr_impl,
+        'II->I': builtins.int_shr_impl,
+        'll->l': builtins.int_shr_impl,
+        'LL->L': builtins.int_shr_impl,
+        'qq->q': builtins.int_shr_impl,
+        'QQ->Q': builtins.int_shr_impl,
     }
 
     # Inject datetime64 support
