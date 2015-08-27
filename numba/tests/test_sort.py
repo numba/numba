@@ -38,21 +38,11 @@ py_quicksort = make_py_quicksort()
 jit_quicksort = make_jit_quicksort()
 
 
-def wrap_with_mergestate(timsort, func, _cache={}):
-    key = timsort, func
-    if key in _cache:
-        return _cache[key]
+def sort_usecase(val):
+    val.sort()
 
-    merge_init = timsort.merge_init
-
-    @timsort.compile
-    def wrapper(keys, values, *args):
-        ms = merge_init(keys)
-        res = func(ms, keys, values, *args)
-        return res
-
-    _cache[key] = wrapper
-    return wrapper
+def np_sort_usecase(val):
+    return np.sort(val)
 
 
 class BaseSortingTest(object):
@@ -483,6 +473,26 @@ class JITTimsortMixin(object):
     test_merge_at = None
     test_merge_force_collapse = None
 
+    def wrap_with_mergestate(self, timsort, func, _cache={}):
+        """
+        Wrap *func* into another compiled function inserting a runtime-created
+        mergestate as the first function argument.
+        """
+        key = timsort, func
+        if key in _cache:
+            return _cache[key]
+
+        merge_init = timsort.merge_init
+
+        @timsort.compile
+        def wrapper(keys, values, *args):
+            ms = merge_init(keys)
+            res = func(ms, keys, values, *args)
+            return res
+
+        _cache[key] = wrapper
+        return wrapper
+
 
 class TestTimsortArrays(JITTimsortMixin, BaseTimsortTest, TestCase):
 
@@ -493,7 +503,7 @@ class TestTimsortArrays(JITTimsortMixin, BaseTimsortTest, TestCase):
         na = len(a)
         nb = len(b)
 
-        func = wrap_with_mergestate(self.timsort, func)
+        func = self.wrap_with_mergestate(self.timsort, func)
 
         # Add sentinels at start and end, to check they weren't moved
         orig_keys = [42] + a + b + [-42]
@@ -623,6 +633,24 @@ class BaseQuicksortTest(BaseSortingTest):
                 # The list is now rev-sorted
                 self.assertSorted(orig_keys, keys[::-1])
 
+        # An imperfect comparison function, as LT(a, b) does not imply not LT(b, a).
+        # The sort should handle it gracefully.
+        def lt_floats(a, b):
+            return math.isnan(b) or a < b
+
+        f = self.make_quicksort(lt=lt_floats).run_quicksort
+
+        np.random.seed(42)
+        for size in (5, 20, 50, 500):
+            orig = np.random.random(size=size) * 100
+            orig[np.random.random(size=size) < 0.1] = float('nan')
+            orig_keys = list(orig)
+            keys = self.array_factory(orig_keys)
+            f(keys)
+            non_nans = orig[~np.isnan(orig)]
+            # Non-NaNs are sorted at the front
+            self.assertSorted(non_nans, keys[:len(non_nans)])
+
 
 class TestQuicksortPurePython(BaseQuicksortTest, TestCase):
 
@@ -639,7 +667,67 @@ class TestQuicksortArrays(BaseQuicksortTest, TestCase):
     make_quicksort = staticmethod(make_jit_quicksort)
 
     def array_factory(self, lst):
-        return np.array(lst, dtype=np.int32)
+        return np.array(lst, dtype=np.float64)
+
+
+class TestNumpySort(TestCase):
+
+    def setUp(self):
+        np.random.seed(42)
+
+    def check_sort_inplace(self, pyfunc, cfunc, val):
+        expected = copy.copy(val)
+        got = copy.copy(val)
+        pyfunc(expected)
+        cfunc(got)
+        self.assertPreciseEqual(got, expected)
+
+    def check_sort_copy(self, pyfunc, cfunc, val):
+        orig = copy.copy(val)
+        expected = pyfunc(val)
+        got = cfunc(val)
+        self.assertPreciseEqual(got, expected)
+        # The original wasn't mutated
+        self.assertPreciseEqual(val, orig)
+
+    def test_array_sort_int(self):
+        pyfunc = sort_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for size in (5, 20, 50, 500):
+            orig = np.random.randint(99, size=size)
+            self.check_sort_inplace(pyfunc, cfunc, orig)
+
+    def test_array_sort_float(self):
+        pyfunc = sort_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for size in (5, 20, 50, 500):
+            orig = np.random.random(size=size) * 100
+            self.check_sort_inplace(pyfunc, cfunc, orig)
+
+        # Now with NaNs.  Numpy sorts them at the end.
+        for size in (5, 20, 50, 500):
+            orig = np.random.random(size=size) * 100
+            orig[np.random.random(size=size) < 0.1] = float('nan')
+            self.check_sort_inplace(pyfunc, cfunc, orig)
+
+    def test_np_sort_int(self):
+        pyfunc = np_sort_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for size in (5, 20, 50, 500):
+            orig = np.random.randint(99, size=size)
+            self.check_sort_copy(pyfunc, cfunc, orig)
+
+    def test_np_sort_float(self):
+        pyfunc = np_sort_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for size in (5, 20, 50, 500):
+            orig = np.random.random(size=size) * 100
+            orig[np.random.random(size=size) < 0.1] = float('nan')
+            self.check_sort_copy(pyfunc, cfunc, orig)
 
 
 if __name__ == '__main__':

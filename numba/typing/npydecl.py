@@ -616,6 +616,20 @@ class NdFromBuffer(CallableTemplate):
 builtin_global(numpy.frombuffer, types.Function(NdFromBuffer))
 
 
+@builtin
+class NdSort(CallableTemplate):
+    key = numpy.sort
+
+    def generic(self):
+        def typer(a):
+            if isinstance(a, types.Array) and a.ndim == 1:
+                return a
+
+        return typer
+
+builtin_global(numpy.sort, types.Function(NdSort))
+
+
 # -----------------------------------------------------------------------------
 # Miscellaneous functions
 

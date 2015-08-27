@@ -20,7 +20,7 @@ from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_ret_borrowed, impl_ret_new_ref,
                                     impl_ret_untracked)
 from numba.typing import signature
-from . import slicing
+from . import quicksort, slicing
 
 
 def increment_index(builder, val):
@@ -2313,3 +2313,55 @@ def np_frombuffer(context, builder, sig, args):
     res = out_ary._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
+
+# -----------------------------------------------------------------------------
+# Sorting
+
+_sorting_init = False
+
+def lt_floats(a, b):
+    return math.isnan(b) or a < b
+
+def load_sorts():
+    """
+    Load quicksort lazily, to avoid circular imports accross the jit() global.
+    """
+    g = globals()
+    if g['_sorting_init']:
+        return
+
+    default_quicksort = quicksort.make_jit_quicksort()
+    g['run_default_quicksort'] = default_quicksort.run_quicksort
+    float_quicksort = quicksort.make_jit_quicksort(lt=lt_floats)
+    g['run_float_quicksort'] = float_quicksort.run_quicksort
+    g['_sorting_init'] = True
+
+
+@builtin
+@implement("array.sort", types.Kind(types.Array))
+def array_sort(context, builder, sig, args):
+    load_sorts()
+
+    arytype = sig.args[0]
+    dtype = arytype.dtype
+
+    if isinstance(dtype, types.Float):
+        def array_sort_impl(arr):
+            return run_float_quicksort(arr)
+    else:
+        def array_sort_impl(arr):
+            return run_default_quicksort(arr)
+
+    return context.compile_internal(builder, array_sort_impl, sig, args)
+
+
+@builtin
+@implement(numpy.sort, types.Kind(types.Array))
+def np_sort(context, builder, sig, args):
+
+    def np_sort_impl(a):
+        res = a.copy()
+        res.sort()
+        return res
+
+    return context.compile_internal(builder, np_sort_impl, sig, args)

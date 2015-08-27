@@ -85,9 +85,9 @@ def make_quicksort_impl(wrap, lt=None):
         i = low
         j = high - 1
         while True:
-            while LT(A[i], pivot):
+            while i < high and LT(A[i], pivot):
                 i += 1
-            while LT(pivot, A[j]):
+            while j >= low and LT(pivot, A[j]):
                 j -= 1
             if i >= j:
                 break
