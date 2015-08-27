@@ -44,11 +44,12 @@ class CUDATargetContext(BaseContext):
         return self._internal_codegen._create_empty_module(name)
 
     def init(self):
-        from . import cudaimpl, libdevice
+        from . import cudaimpl, printimpl, libdevice
 
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
 
         self.install_registry(cudaimpl.registry)
+        self.install_registry(printimpl.registry)
         self.install_registry(libdevice.registry)
         self.install_registry(cmathimpl.registry)
         self.install_registry(operatorimpl.registry)
