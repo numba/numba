@@ -1,21 +1,13 @@
 from __future__ import print_function, absolute_import, division
+
 import sys
-from contextlib import contextmanager
+
 import numpy
+
 from numba import numpy_support, types
 from numba.compiler import compile_isolated
 from numba import unittest_support as unittest
-from numba.io_support import StringIO
-
-
-@contextmanager
-def swap_stdout():
-    old_stdout = sys.stdout
-    sys.stdout = StringIO()
-    try:
-        yield
-    finally:
-        sys.stdout = old_stdout
+from .support import captured_stdout
 
 
 def usecase1(arr1, arr2):
@@ -120,11 +112,11 @@ class TestRecordUsecase(unittest.TestCase):
         cres = compile_isolated(pyfunc, (record_type[:], types.intp))
         cfunc = cres.entry_point
 
-        with swap_stdout():
+        with captured_stdout():
             pyfunc(array, N)
             expect = sys.stdout.getvalue()
 
-        with swap_stdout():
+        with captured_stdout():
             cfunc(array, N)
             got = sys.stdout.getvalue()
 
