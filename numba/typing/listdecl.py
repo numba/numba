@@ -31,6 +31,20 @@ class ListBuiltin(AbstractTemplate):
 builtin_global(list, types.Function(ListBuiltin))
 
 
+class SortedBuiltin(AbstractTemplate):
+    key = sorted
+
+    def generic(self, args, kws):
+        assert not kws
+        if args:
+            iterable, = args
+            if isinstance(iterable, types.IterableType):
+                dtype = iterable.iterator_type.yield_type
+                return signature(types.List(dtype), iterable)
+
+builtin_global(sorted, types.Function(SortedBuiltin))
+
+
 @builtin_attr
 class ListAttribute(AttributeTemplate):
     key = types.List

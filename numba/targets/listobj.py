@@ -921,3 +921,14 @@ def list_sort(context, builder, sig, args):
         return run_default_quicksort(lst)
 
     return context.compile_internal(builder, list_sort_impl, sig, args)
+
+@builtin
+@implement(sorted, types.Kind(types.IterableType))
+def sorted_impl(context, builder, sig, args):
+
+    def sorted_impl(it):
+        lst = list(it)
+        lst.sort()
+        return lst
+
+    return context.compile_internal(builder, sorted_impl, sig, args)

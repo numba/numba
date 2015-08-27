@@ -753,6 +753,17 @@ class TestPythonSort(TestCase):
             self.assertEqual(sorted(orig), ret)
             self.assertNotEqual(orig, ret)   # sanity check
 
+    def test_sorted(self):
+        pyfunc = sorted_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for size in (20, 50, 500):
+            orig = np.random.random(size=size) * 100
+            expected = sorted(orig)
+            got = cfunc(orig)
+            self.assertPreciseEqual(got, expected)
+            self.assertNotEqual(list(orig), got)   # sanity check
+
 
 if __name__ == '__main__':
     unittest.main()
