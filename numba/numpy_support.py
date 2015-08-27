@@ -13,7 +13,7 @@ version = tuple(map(int, numpy.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
 
 # Starting from Numpy 1.10, ufuncs accept argument conversion according
-# to the "same_kind" rule (used to be "safe").
+# to the "same_kind" rule (used to be "unsafe").
 strict_ufunc_typing = version >= (1, 10)
 
 
