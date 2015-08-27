@@ -31,10 +31,6 @@ no_pyobj_flags = Flags()
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")
 
-# Starting from Numpy 1.10, ufuncs accept argument conversion according
-# to the "same_kind" rule (used to be "safe").
-strict_ufunc_typing = numpy_support.version >= (1, 10)
-
 
 def _unimplemented(func):
     """An 'expectedFailure' like decorator that only expects compilation errors
@@ -176,7 +172,8 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
                 continue
             # Some ufuncs don't allow all kinds of arguments, and implicit
             # conversion has become stricter in 1.10.
-            if strict_ufunc_typing and input_operand.dtype.kind not in kinds:
+            if (numpy_support.strict_ufunc_typing and
+                input_operand.dtype.kind not in kinds):
                 continue
 
             output_type = self._determine_output_type(
@@ -274,7 +271,8 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
 
             # Some ufuncs don't allow all kinds of arguments, and implicit
             # conversion has become stricter in 1.10.
-            if strict_ufunc_typing and input_operand.dtype.kind not in kinds:
+            if (numpy_support.strict_ufunc_typing and
+                input_operand.dtype.kind not in kinds):
                 continue
 
             output_type = self._determine_output_type(
@@ -1004,7 +1002,7 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
                                 np.allclose(result, expected))
 
     def test_mixed_types(self):
-        if not strict_ufunc_typing:
+        if not numpy_support.strict_ufunc_typing:
             self.binary_ufunc_mixed_types_test(np.divide, flags=no_pyobj_flags)
 
     def test_broadcasting(self):
@@ -1645,7 +1643,7 @@ class TestLoopTypesDatetimeNoPython(_TestLoopTypes):
         # heterogenous inputs
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[s]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[s]'])
-        if not strict_ufunc_typing:
+        if not numpy_support.strict_ufunc_typing:
             self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8', 'm8[m]'])
             self._check_ufunc_with_dtypes(fn, ufunc, ['m8', 'm8[m]', 'm8[m]'])
         # heterogenous inputs, scaled output
@@ -1706,7 +1704,7 @@ class TestLoopTypesDatetimeNoPython(_TestLoopTypes):
         # timedelta
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', '?'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', '?'])
-        if not strict_ufunc_typing:
+        if not numpy_support.strict_ufunc_typing:
             self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8', '?'])
             self._check_ufunc_with_dtypes(fn, ufunc, ['m8', 'm8[m]', '?'])
         # datetime

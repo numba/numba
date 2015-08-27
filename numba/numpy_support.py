@@ -12,6 +12,11 @@ from .targets import ufunc_db
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
 
+# Starting from Numpy 1.10, ufuncs accept argument conversion according
+# to the "same_kind" rule (used to be "safe").
+strict_ufunc_typing = version >= (1, 10)
+
+
 FROM_DTYPE = {
     numpy.dtype('bool'): types.boolean,
     numpy.dtype('int8'): types.int8,
