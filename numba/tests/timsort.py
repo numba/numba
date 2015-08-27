@@ -151,7 +151,7 @@ def make_timsort_impl(wrap, make_temp_area):
         On entry, must have lo <= start <= hi, and that [lo, start) is already
         sorted (pass start == lo if you don't know!).
         """
-        assert lo <= start and start <= hi, "Bad input for binarysort()"
+        assert lo <= start and start <= hi
         _has_values = has_values(keys, values)
         if lo == start:
             start += 1
@@ -209,7 +209,7 @@ def make_timsort_impl(wrap, make_temp_area):
         sequence without violating stability (strict > ensures there are no equal
         elements to get out of order).
         """
-        assert lo < hi, "Bad input for count_run()"
+        assert lo < hi
         if lo + 1 == hi:
             # Trivial 1-long run
             return 1, False
@@ -251,8 +251,8 @@ def make_timsort_impl(wrap, make_temp_area):
 
         See listsort.txt for info on the method.
         """
-        assert stop > start, "gallop_left(): stop <= start"
-        assert hint >= start and hint < stop, "gallop_left(): hint not in [start, stop)"
+        assert stop > start
+        assert hint >= start and hint < stop
         n = stop - start
 
         # First, gallop from the hint to find a "good" subinterval for bisecting
@@ -327,8 +327,8 @@ def make_timsort_impl(wrap, make_temp_area):
         we're sticking to "<" comparisons that it's much harder to follow if
         written as one routine with yet another "left or right?" flag.
         """
-        assert stop > start, "gallop_right(): stop <= start"
-        assert hint >= start and hint < stop, "gallop_right(): hint not in [start, stop)"
+        assert stop > start
+        assert hint >= start and hint < stop
         n = stop - start
 
         # First, gallop from the hint to find a "good" subinterval for bisecting
@@ -459,8 +459,8 @@ def make_timsort_impl(wrap, make_temp_area):
 
         is removed. This makes the code a bit simpler and easier to reason about.
         """
-        assert na > 0 and nb > 0 and na <= nb, "merge_lo(): bad arguments"
-        assert ssb == ssa + na, "merge_lo(): bad arguments"
+        assert na > 0 and nb > 0 and na <= nb
+        assert ssb == ssa + na
         # First copy [ssa, ssa + na) into the temp space
         ms = merge_getmem(ms, na)
         sortslice_copy(ms.keys, ms.values, 0,
@@ -614,8 +614,8 @@ def make_timsort_impl(wrap, make_temp_area):
 
         is removed. This makes the code a bit simpler and easier to reason about.
         """
-        assert na > 0 and nb > 0 and na >= nb, "merge_lo(): bad arguments"
-        assert ssb == ssa + na, "merge_lo(): bad arguments"
+        assert na > 0 and nb > 0 and na >= nb
+        assert ssb == ssa + na
         # First copy [ssb, ssb + nb) into the temp space
         ms = merge_getmem(ms, nb)
         sortslice_copy(ms.keys, ms.values, 0,
@@ -767,12 +767,12 @@ def make_timsort_impl(wrap, make_temp_area):
         n = ms.n
         assert n >= 2
         assert i >= 0
-        assert i == n - 2 or i == n - 3, "merge_at(): bad arguments"
+        assert i == n - 2 or i == n - 3
 
         ssa, na = ms.pending[i]
         ssb, nb = ms.pending[i + 1]
         assert na > 0 and nb > 0
-        assert ssa + na == ssb, "merge_at(): stack invariant failure"
+        assert ssa + na == ssb
 
         # Record the length of the combined runs; if i is the 3rd-last
         # run now, also slide over the last run (which isn't involved
