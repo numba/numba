@@ -25,18 +25,18 @@ SMALL_QUICKSORT = 15
 MAX_STACK = 100
 
 
-def make_quicksort_impl(wrap):
+def make_quicksort_impl(wrap, lt=None):
 
     intp = types.intp
     zero = intp(0)
 
-    @wrap
-    def LT(a, b):
+    def default_lt(a, b):
         """
-        Trivial comparison function between two keys.  This is factored out to
-        make it clear where comparisons occur.
+        Trivial comparison function between two keys.
         """
         return a < b
+
+    LT = wrap(lt if lt is not None else default_lt)
 
     @wrap
     def insertion_sort(A, low, high):
@@ -202,10 +202,10 @@ def make_quicksort_impl(wrap):
                                    run_quicksort)
 
 
-def make_py_quicksort(*args):
-    return make_quicksort_impl((lambda f: f), *args)
+def make_py_quicksort(*args, **kwargs):
+    return make_quicksort_impl((lambda f: f), *args, **kwargs)
 
-def make_jit_quicksort(*args):
+def make_jit_quicksort(*args, **kwargs):
     from numba import jit
     return make_quicksort_impl((lambda f: jit(nopython=True)(f)),
-                               *args)
+                               *args, **kwargs)

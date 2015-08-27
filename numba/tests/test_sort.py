@@ -605,10 +605,29 @@ class BaseQuicksortTest(BaseSortingTest):
                 # The list is now sorted
                 self.assertSorted(orig_keys, keys)
 
+    def test_run_quicksort_lt(self):
+        def lt(a, b):
+            return a > b
+
+        f = self.make_quicksort(lt=lt).run_quicksort
+
+        for size_factor in (1, 5):
+            # Make lists to be sorted from two chunks of different kinds.
+            sizes = (15, 20)
+
+            all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
+            for chunks in itertools.product(*all_lists):
+                orig_keys = sum(chunks, [])
+                keys = self.array_factory(orig_keys)
+                f(keys)
+                # The list is now rev-sorted
+                self.assertSorted(orig_keys, keys[::-1])
+
 
 class TestQuicksortPurePython(BaseQuicksortTest, TestCase):
 
     quicksort = py_quicksort
+    make_quicksort = staticmethod(make_py_quicksort)
 
     # Much faster than a Numpy array in pure Python
     array_factory = list
@@ -617,6 +636,7 @@ class TestQuicksortPurePython(BaseQuicksortTest, TestCase):
 class TestQuicksortArrays(BaseQuicksortTest, TestCase):
 
     quicksort = jit_quicksort
+    make_quicksort = staticmethod(make_jit_quicksort)
 
     def array_factory(self, lst):
         return np.array(lst, dtype=np.int32)
