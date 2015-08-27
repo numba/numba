@@ -13,9 +13,8 @@ import numba.unittest_support as unittest
 from numba import testing
 from .support import TestCase, MemoryLeakMixin
 
-from numba.targets.timsort import (
-    make_py_timsort, make_jit_timsort, MergeRun,)
 from numba.targets.quicksort import make_py_quicksort, make_jit_quicksort
+from .timsort import make_py_timsort, make_jit_timsort, MergeRun
 
 
 def make_temp_list(keys, n):
