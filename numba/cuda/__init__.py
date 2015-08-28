@@ -7,6 +7,8 @@ else:
     from .device_init import *
     from .device_init import _auto_device
 
+from . import reduction
+reduce = Reduce = reduction.Reduce
 
 def test():
     if not is_available():
