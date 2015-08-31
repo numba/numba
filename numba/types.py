@@ -32,6 +32,11 @@ class Integer(Number):
         self.bitwidth = bitwidth
         self.signed = self.name.startswith('int')
 
+    @classmethod
+    def from_bitwidth(cls, bitwidth, signed=True):
+        name = ('int%d' if signed else 'uint%d') % bitwidth
+        return globals()[name]
+
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 
@@ -248,18 +253,17 @@ class NumberClass(Callable, DTypeSpec, Opaque):
     Type class for number classes (e.g. "np.float64").
     """
 
-    def __init__(self, instance_type, template):
+    def __init__(self, instance_type):
         self.instance_type = instance_type
-        self.template = template
-        name = "type(%s)" % (instance_type,)
-        super(NumberClass, self).__init__(name)
+        name = "class(%s)" % (instance_type,)
+        super(NumberClass, self).__init__(name, param=True)
 
     def get_call_type(self, context, args, kws):
-        return self.template(context).apply(args, kws)
+        # Overriden by the __call__ constructor resolution in typing.builtins
+        return None
 
     def get_call_signatures(self):
-        sigs = getattr(self.template, 'cases')
-        return sigs, hasattr(self.template, 'generic')
+        return (), True
 
     @property
     def key(self):

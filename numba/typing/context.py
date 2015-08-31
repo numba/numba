@@ -56,23 +56,6 @@ class BaseContext(object):
     def init(self):
         pass
 
-    def get_number_type(self, num):
-        if isinstance(num, utils.INT_TYPES):
-            nbits = utils.bit_length(num)
-            if nbits < 32:
-                typ = types.int32
-            elif nbits < 64:
-                typ = types.int64
-            elif nbits == 64 and num >= 0:
-                typ = types.uint64
-            else:
-                raise ValueError("Int value is too large: %s" % num)
-            return typ
-        elif isinstance(num, float):
-            return types.float64
-        else:
-            raise NotImplementedError(type(num), num)
-
     def explain_function_type(self, func):
         """
         Returns a string description of the type of a function
@@ -138,19 +121,15 @@ class BaseContext(object):
         try:
             attrinfo = self.attributes[value]
         except KeyError:
-            if value.is_parametric:
-                for cls in type(value).__mro__:
-                    if cls in self.attributes:
-                        attrinfo = self.attributes[cls]
-                        break
-                else:
-                    raise
-            elif isinstance(value, types.Module):
-                attrty = self.resolve_module_constants(value, attr)
-                if attrty is not None:
-                    return attrty
-                raise
+            for cls in type(value).__mro__:
+                if cls in self.attributes:
+                    attrinfo = self.attributes[cls]
+                    break
             else:
+                if isinstance(value, types.Module):
+                    attrty = self.resolve_module_constants(value, attr)
+                    if attrty is not None:
+                        return attrty
                 raise
 
         ret = attrinfo.resolve(value, attr)

@@ -351,7 +351,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         # Special case local addrespace allocation to use alloca
         # NVVM is smart enough to only use local memory if no register is
         # available
-        dataptr = builder.alloca(laryty, name=symbol_name)
+        dataptr = cgutils.alloca_once(builder, laryty, name=symbol_name)
     else:
         lmod = builder.module
 

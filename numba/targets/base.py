@@ -596,24 +596,19 @@ class BaseContext(object):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
 
-        elif ((fromty in types.unsigned_domain and
-                       toty in types.signed_domain) or
-                  (fromty in types.integer_domain and
-                           toty in types.unsigned_domain)):
-            lfrom = self.get_value_type(fromty)
-            lto = self.get_value_type(toty)
-            if lfrom.width <= lto.width:
-                return builder.zext(val, lto)
-            elif lfrom.width > lto.width:
-                return builder.trunc(val, lto)
-
-        elif fromty in types.signed_domain and toty in types.signed_domain:
-            lfrom = self.get_value_type(fromty)
-            lto = self.get_value_type(toty)
-            if lfrom.width <= lto.width:
-                return builder.sext(val, lto)
-            elif lfrom.width > lto.width:
-                return builder.trunc(val, lto)
+        elif isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
+            if toty.bitwidth == fromty.bitwidth:
+                # Just a change of signedness
+                return val
+            elif toty.bitwidth < fromty.bitwidth:
+                # Downcast
+                return builder.trunc(val, self.get_value_type(toty))
+            elif fromty.signed:
+                # Signed upcast
+                return builder.sext(val, self.get_value_type(toty))
+            else:
+                # Unsigned upcast
+                return builder.zext(val, self.get_value_type(toty))
 
         elif fromty in types.real_domain and toty in types.real_domain:
             lty = self.get_value_type(toty)
@@ -737,6 +732,21 @@ class BaseContext(object):
             return builder.inttoptr(val, self.get_value_type(toty))
 
         raise NotImplementedError("cast", val, fromty, toty)
+
+    def generic_compare(self, builder, key, argtypes, args):
+        """
+        Compare the given LLVM values of the given Numba types using
+        the comparison *key* (e.g. '==').  The values are first cast to
+        a common safe conversion type.
+        """
+        at, bt = argtypes
+        av, bv = args
+        ty = self.typing_context.unify_types(at, bt)
+        cav = self.cast(builder, av, at, ty)
+        cbv = self.cast(builder, bv, bt, ty)
+        cmpsig = typing.signature(types.boolean, ty, ty)
+        cmpfunc = self.get_function(key, cmpsig)
+        return cmpfunc(builder, (cav, cbv))
 
     def make_optional(self, optionaltype):
         return optional.make_optional(optionaltype.type)

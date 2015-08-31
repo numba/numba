@@ -1,7 +1,12 @@
+"""
+Typing declarations for the operator module.
+"""
+
 import operator
+
 from numba import types
 from numba import utils
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
+from numba.typing.templates import (ConcreteTemplate, AbstractTemplate,
                                     signature, Registry)
 
 registry = Registry()
@@ -9,85 +14,40 @@ builtin_attr = registry.register_attr
 builtin_global = registry.register_global
 
 
-class TruthOperator(ConcreteTemplate):
-    cases = [signature(types.boolean, op) for op in sorted(types.signed_domain)]
-    cases += [signature(types.boolean, op) for op in sorted(types.unsigned_domain)]
-    cases += [signature(types.boolean, op) for op in sorted(types.real_domain)]
-    cases += [signature(types.boolean, op) for op in sorted(types.complex_domain)]
+class MappedOperator(AbstractTemplate):
 
-class UnaryOperator(ConcreteTemplate):
-    cases = [signature(op, op) for op in sorted(types.signed_domain)]
-    cases += [signature(op, op) for op in sorted(types.unsigned_domain)]
-    cases += [signature(op, op) for op in sorted(types.real_domain)]
-    cases += [signature(op, op) for op in sorted(types.complex_domain)]
-
-class BinaryOperator(ConcreteTemplate):
-    cases = [signature(op, op, op) for op in sorted(types.signed_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.unsigned_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
-
-class TruedivOperator(ConcreteTemplate):
-    cases = [signature(types.float64, op, op) for op in sorted(types.signed_domain)]
-    cases += [signature(types.float64, op, op) for op in sorted(types.unsigned_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
-
-class PowerOperator(ConcreteTemplate):
-    cases = [signature(types.float64, types.float64, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(types.float64, types.float64, op)
-              for op in sorted(types.unsigned_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
-
-class ComparisonOperator(ConcreteTemplate):
-    cases = [signature(types.boolean, op, op) for op in sorted(types.signed_domain)]
-    cases += [signature(types.boolean, op, op) for op in sorted(types.unsigned_domain)]
-    cases += [signature(types.boolean, op, op) for op in sorted(types.real_domain)]
-    cases += [signature(types.boolean, op, op) for op in sorted(types.complex_domain)]
+    def generic(self, args, kws):
+        assert not kws
+        return self.context.resolve_function_type(self.op, args, kws)
 
 
-unary_operators = ['pos', 'neg', 'invert']
-truth_operators = ['not_']
+class MappedInplaceOperator(AbstractTemplate):
 
-for op in unary_operators:
-    op_type = type('Operator_' + op, (UnaryOperator,), {'key':getattr(operator, op)})
-    builtin_global(getattr(operator, op), types.Function(op_type))
+    def generic(self, args, kws):
+        assert not kws
+        if not args:
+            return
+        first = args[0]
+        op = self.mutable_op if first.mutable else self.immutable_op
+        return self.context.resolve_function_type(op, args, kws)
 
-for op in truth_operators:
-    op_type = type('Operator_' + op, (TruthOperator,), {'key':getattr(operator, op)})
-    builtin_global(getattr(operator, op), types.Function(op_type))
 
+# Redirect all functions in the operator module to the corresponding
+# built-in operators.
 
-binary_operators = ['add', 'sub', 'mul', 'div', 'floordiv', 'mod',
-                    'and_', 'or_', 'xor', 'lshift', 'rshift',
-                    'iadd', 'isub', 'imul', 'idiv', 'ifloordiv', 'imod',
-                    'iand', 'ior', 'ixor', 'ilshift', 'irshift',
-                    ]
-comparison_operators = ['eq', 'ne', 'lt', 'le', 'gt', 'ge']
-truediv_operators = ['truediv', 'itruediv']
-power_operators = ['pow', 'ipow']
+for name, inplace_name, op in utils.operator_map:
+    op_func = getattr(operator, name)
+    op_type = type('Operator_' + name, (MappedOperator,),
+                   {'key': op_func, 'op': op})
+    builtin_global(op_func, types.Function(op_type))
 
-if utils.IS_PY3:
-    binary_operators.remove('div')
-    binary_operators.remove('idiv')
-
-for op in binary_operators:
-    op_type = type('Operator_' + op, (BinaryOperator,), {'key':getattr(operator, op)})
-    builtin_global(getattr(operator, op), types.Function(op_type))
-
-for op in comparison_operators:
-    op_type = type('Operator_' + op, (ComparisonOperator,), {'key':getattr(operator, op)})
-    builtin_global(getattr(operator, op), types.Function(op_type))
-
-for op in truediv_operators:
-    op_type = type('Operator_' + op, (TruedivOperator,), {'key':getattr(operator, op)})
-    builtin_global(getattr(operator, op), types.Function(op_type))
-
-for op in power_operators:
-    op_type = type('Operator_' + op, (PowerOperator,), {'key':getattr(operator, op)})
-    builtin_global(getattr(operator, op), types.Function(op_type))
+    if inplace_name:
+        op_func = getattr(operator, inplace_name)
+        op_type = type('Operator_' + inplace_name, (MappedInplaceOperator,),
+                       {'key': op_func,
+                        'mutable_op': op + '=',
+                        'immutable_op': op})
+        builtin_global(op_func, types.Function(op_type))
 
 
 builtin_global(operator, types.Module(operator))

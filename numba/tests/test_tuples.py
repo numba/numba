@@ -65,10 +65,13 @@ def make_point_kws(a, b, c):
     return Point(z=c, y=b, x=a)
 
 def make_point_nrt(n):
-    r = Rect(list(range(n)), np.arange(n))
+    r = Rect(list(range(n)), np.zeros(n + 1))
     # This also exercises attribute access
     p = Point(r, len(r.width), len(r.height))
     return p
+
+def type_usecase(tup, *args):
+    return type(tup)(*args)
 
 
 class TestTupleReturn(TestCase):
@@ -308,6 +311,19 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
 
         check(make_point)
         check(make_point_kws)
+
+    def test_type(self):
+        # Test the type() built-in on named tuples
+        pyfunc = type_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arg_tuples = [(4, 5, 6), (4, 5.5, 6j)]
+        for tup_args, args in itertools.product(arg_tuples, arg_tuples):
+            tup = Point(*tup_args)
+            expected = pyfunc(tup, *args)
+            got = cfunc(tup, *args)
+            self.assertIs(type(got), type(expected))
+            self.assertPreciseEqual(got, expected)
 
 
 class TestNamedTupleNRT(TestCase, MemoryLeakMixin):

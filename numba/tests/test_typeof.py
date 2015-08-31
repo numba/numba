@@ -57,8 +57,10 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         """
         self.check_number_values(typeof)
         # These values mirror Dispatcher semantics
-        self.assertEqual(typeof(1), types.int64)
-        self.assertEqual(typeof(-1), types.int64)
+        self.assertEqual(typeof(1), types.intp)
+        self.assertEqual(typeof(-1), types.intp)
+        self.assertEqual(typeof(2**40), types.int64)
+        self.assertEqual(typeof(2**63), types.uint64)
 
     def test_datetime_values(self):
         """
@@ -142,25 +144,25 @@ class TestTypeof(ValueTypingTestBase, TestCase):
 
     def test_tuples(self):
         v = (1, 2)
-        self.assertEqual(typeof(v), types.UniTuple(types.int64, 2))
+        self.assertEqual(typeof(v), types.UniTuple(types.intp, 2))
         v = (1, (2.0, 3))
         self.assertEqual(typeof(v),
-                         types.Tuple((types.int64,
-                                      types.Tuple((types.float64, types.int64))))
+                         types.Tuple((types.intp,
+                                      types.Tuple((types.float64, types.intp))))
                          )
 
     def test_namedtuple(self):
         v = Point(1, 2)
         tp_point = typeof(v)
         self.assertEqual(tp_point,
-                         types.NamedUniTuple(types.int64, 2, Point))
+                         types.NamedUniTuple(types.intp, 2, Point))
         v = Point(1, 2.0)
         self.assertEqual(typeof(v),
-                         types.NamedTuple([types.int64, types.float64], Point))
+                         types.NamedTuple([types.intp, types.float64], Point))
         w = Rect(3, 4)
         tp_rect = typeof(w)
         self.assertEqual(tp_rect,
-                         types.NamedUniTuple(types.int64, 2, Rect))
+                         types.NamedUniTuple(types.intp, 2, Rect))
         self.assertNotEqual(tp_rect, tp_point)
         self.assertNotEqual(tp_rect, types.UniTuple(tp_rect.dtype, tp_rect.count))
 
