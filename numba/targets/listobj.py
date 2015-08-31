@@ -907,28 +907,45 @@ def load_sorts():
     if g['_sorting_init']:
         return
 
-    default_quicksort = quicksort.make_jit_quicksort()
-    g['run_default_quicksort'] = default_quicksort.run_quicksort
+    def gt(a, b):
+        return a > b
+
+    default_sort = quicksort.make_jit_quicksort()
+    reversed_sort = quicksort.make_jit_quicksort(lt=gt)
+    g['run_default_sort'] = default_sort.run_quicksort
+    g['run_reversed_sort'] = reversed_sort.run_quicksort
     g['_sorting_init'] = True
 
 
 @builtin
 @implement("list.sort", types.Kind(types.List))
+@implement("list.sort", types.Kind(types.List), types.Kind(types.Boolean))
 def list_sort(context, builder, sig, args):
     load_sorts()
 
-    def list_sort_impl(lst):
-        return run_default_quicksort(lst)
+    if len(args) == 1:
+        sig = typing.signature(sig.return_type, *sig.args + (types.boolean,))
+        args = tuple(args) + (cgutils.false_bit,)
+
+    def list_sort_impl(lst, reverse):
+        if reverse:
+            return run_reversed_sort(lst)
+        else:
+            return run_default_sort(lst)
 
     return context.compile_internal(builder, list_sort_impl, sig, args)
 
 @builtin
 @implement(sorted, types.Kind(types.IterableType))
+@implement(sorted, types.Kind(types.IterableType), types.Kind(types.Boolean))
 def sorted_impl(context, builder, sig, args):
+    if len(args) == 1:
+        sig = typing.signature(sig.return_type, *sig.args + (types.boolean,))
+        args = tuple(args) + (cgutils.false_bit,)
 
-    def sorted_impl(it):
+    def sorted_impl(it, reverse):
         lst = list(it)
-        lst.sort()
+        lst.sort(reverse=reverse)
         return lst
 
     return context.compile_internal(builder, sorted_impl, sig, args)

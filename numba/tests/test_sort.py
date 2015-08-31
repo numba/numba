@@ -43,6 +43,9 @@ def sort_usecase(val):
 def sorted_usecase(val):
     return sorted(val)
 
+def sorted_reverse_usecase(val, b):
+    return sorted(val, reverse=b)
+
 def np_sort_usecase(val):
     return np.sort(val)
 
@@ -53,6 +56,15 @@ def list_sort_usecase(n):
         l.append(np.random.random())
     ll = l[:]
     ll.sort()
+    return l, ll
+
+def list_sort_reverse_usecase(n, b):
+    np.random.seed(42)
+    l = []
+    for i in range(n):
+        l.append(np.random.random())
+    ll = l[:]
+    ll.sort(reverse=b)
     return l, ll
 
 
@@ -752,6 +764,16 @@ class TestPythonSort(TestCase):
             self.assertEqual(sorted(orig), ret)
             self.assertNotEqual(orig, ret)   # sanity check
 
+    def test_list_sort_reverse(self):
+        pyfunc = list_sort_reverse_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for size in (20, 50, 500):
+            for b in (False, True):
+                orig, ret = cfunc(size, b)
+                self.assertEqual(sorted(orig, reverse=b), ret)
+                self.assertNotEqual(orig, ret)   # sanity check
+
     def test_sorted(self):
         pyfunc = sorted_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -760,6 +782,18 @@ class TestPythonSort(TestCase):
             orig = np.random.random(size=size) * 100
             expected = sorted(orig)
             got = cfunc(orig)
+            self.assertPreciseEqual(got, expected)
+            self.assertNotEqual(list(orig), got)   # sanity check
+
+    def test_sorted_reverse(self):
+        pyfunc = sorted_reverse_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        size = 20
+
+        orig = np.random.random(size=size) * 100
+        for b in (False, True):
+            expected = sorted(orig, reverse=b)
+            got = cfunc(orig, b)
             self.assertPreciseEqual(got, expected)
             self.assertNotEqual(list(orig), got)   # sanity check
 

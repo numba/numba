@@ -95,7 +95,7 @@ list
 ----
 
 Creating and returning lists from JIT-compiled functions is supported,
-as well as all methods and operations except the ``.sort()`` method.
+as well as all methods and operations.
 
 .. note::
    Passing lists from Python into JIT-compiled functions is unsupported,
@@ -147,6 +147,7 @@ The following built-in functions are supported:
 * :class:`range`: semantics are similar to those of Python 3 even in Python 2:
   a range object is returned instead of an array of values.
 * :func:`round`
+* :func:`sorted`: the ``key`` argument is not supported
 * :func:`type`: only the one-argument form, and only on some types
   (e.g. numbers and named tuples)
 * :func:`zip`

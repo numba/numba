@@ -61,7 +61,7 @@ def make_concrete_template(name, key, signatures):
     return type(name, baseclasses, gvars)
 
 
-def make_callable_template(key, typer):
+def make_callable_template(key, typer, recvr=None):
     """
     Create a callable template with the given key and typer function.
     """
@@ -70,7 +70,7 @@ def make_callable_template(key, typer):
 
     name = "%s_CallableTemplate" % (key,)
     bases = (CallableTemplate,)
-    class_dict = dict(key=key, generic=generic)
+    class_dict = dict(key=key, generic=generic, recvr=recvr)
     return type(name, bases, class_dict)
 
 
@@ -180,6 +180,7 @@ class CallableTemplate(FunctionTemplate):
     does not have to match the input types. It is compared against the
     input types afterwards.
     """
+    recvr = None
 
     def apply(self, args, kws):
         generic = getattr(self, "generic")
@@ -214,6 +215,8 @@ class CallableTemplate(FunctionTemplate):
             # If not a signature, `sig` is assumed to be the return type
             assert isinstance(sig, types.Type)
             sig = signature(sig, *bound.args)
+        if self.recvr is not None:
+            sig.recvr = self.recvr
         # Hack any omitted parameters out of the typer's pysig,
         # as lowering expects an exact match between formal signature
         # and actual args.
