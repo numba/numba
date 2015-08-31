@@ -56,15 +56,16 @@ def print_varargs(context, builder, sig, args):
 
     mod = builder.module
     vprint = nvvmutils.declare_vprint(mod)
+    sep = context.insert_string_const_addrspace(builder, " ")
+    eol = context.insert_string_const_addrspace(builder, "\n")
+
     for i, (argtype, argval) in enumerate(zip(sig.args, args)):
         signature = typing.signature(types.none, argtype)
         imp = context.get_function(types.print_item_type, signature)
         imp(builder, [argval])
-        if i == len(args) - 1:
-            eos = context.insert_string_const_addrspace(builder, "\n")
-        else:
-            eos = context.insert_string_const_addrspace(builder, " ")
+        if i < len(args) - 1:
+            builder.call(vprint, (sep, Constant.null(voidptr)))
 
-        builder.call(vprint, (eos, Constant.null(voidptr)))
+    builder.call(vprint, (eol, Constant.null(voidptr)))
 
     return context.get_dummy_value()
