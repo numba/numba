@@ -21,6 +21,19 @@ try:
 except ImportError:
     from Queue import Empty as TimeoutError
 
+try:
+    import faulthandler
+except ImportError:
+    faulthandler = None
+else:
+    try:
+        # May fail in IPython Notebook with UnsupportedOperation
+        faulthandler.enable()
+    except BaseException as e:
+        msg = "Failed to enable faulthandler due to:\n{err}"
+        warnings.warn(msg.format(err=e))
+
+
 # "unittest.main" is really the TestProgram class!
 # (defined in a module named itself "unittest.main"...)
 
@@ -318,9 +331,10 @@ class _MinimalRunner(object):
     child process and run a test case with it.
     """
 
-    def __init__(self, runner_cls, runner_args):
+    def __init__(self, runner_cls, runner_args, timeout=None):
         self.runner_cls = runner_cls
         self.runner_args = runner_args
+        self.timeout = timeout
 
     # Python 2 doesn't know how to pickle instance methods, so we use __call__
     # instead.
@@ -338,11 +352,19 @@ class _MinimalRunner(object):
         signals.registerResult(result)
         result.failfast = runner.failfast
         result.buffer = runner.buffer
-        with self.cleanup_object(test):
-            test(result)
-        # HACK as cStringIO.StringIO isn't picklable in 2.x
-        result.stream = _FakeStringIO(result.stream.getvalue())
-        return _MinimalResult(result, test.id())
+        # Install faulthandler hook to dump tracebacks just before the
+        # timeout, to get a better view of where the test is hanging.
+        if self.timeout is not None and faulthandler is not None:
+            faulthandler.dump_traceback_later(self.timeout, exit=True)
+        try:
+            with self.cleanup_object(test):
+                test(result)
+            # HACK as cStringIO.StringIO isn't picklable in 2.x
+            result.stream = _FakeStringIO(result.stream.getvalue())
+            return _MinimalResult(result, test.id())
+        finally:
+            if self.timeout is not None and faulthandler is not None:
+                faulthandler.cancel_dump_traceback_later()
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -366,6 +388,8 @@ class ParallelTestRunner(runner.TextTestRunner):
     """
 
     resultclass = ParallelTestResult
+    # A test can't run longer than 2 minutes
+    timeout = 120
 
     def __init__(self, runner_cls, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
@@ -375,7 +399,8 @@ class ParallelTestRunner(runner.TextTestRunner):
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
         # method as if it were a test case.
-        child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
+        child_runner = _MinimalRunner(self.runner_cls, self.runner_args,
+                                      timeout=self.timeout - 5)
         pool = multiprocessing.Pool()
 
         try:
@@ -391,13 +416,11 @@ class ParallelTestRunner(runner.TextTestRunner):
         it = pool.imap_unordered(child_runner, self._test_list)
         while True:
             try:
-                # A test can't run longer than 2 minutes
-                child_result = it.__next__(120)
+                child_result = it.__next__(self.timeout)
             except StopIteration:
                 return
-            except Exception as e:
-                # Most likely error here is a timeout, so print out
-                # the names of unfinished tests.
+            except TimeoutError as e:
+                # Diagnose the names of unfinished tests
                 msg = ("%s [unfinished tests: %s]"
                        % (str(e), ", ".join(map(repr, sorted(remaining_ids))))
                        )
@@ -413,16 +436,3 @@ class ParallelTestRunner(runner.TextTestRunner):
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
-
-
-try:
-    import faulthandler
-except ImportError:
-    pass
-else:
-    try:
-        # May fail in IPython Notebook with UnsupportedOperation
-        faulthandler.enable()
-    except BaseException as e:
-        msg = "Failed to enable faulthandler due to:\n{err}"
-        warnings.warn(msg.format(err=e))
