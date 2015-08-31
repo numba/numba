@@ -278,7 +278,8 @@ class _MinimalResult(object):
 
     __slots__ = (
         'failures', 'errors', 'skipped', 'expectedFailures',
-        'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun')
+        'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun',
+        'test_id')
 
     def fixup_case(self, case):
         """
@@ -287,15 +288,16 @@ class _MinimalResult(object):
         # Python 3.3 doesn't reset this one.
         case._outcomeForDoCleanups = None
 
-    def __init__(self, original_result):
+    def __init__(self, original_result, test_id=None):
         for attr in self.__slots__:
-            setattr(self, attr, getattr(original_result, attr))
+            setattr(self, attr, getattr(original_result, attr, None))
         for case, _ in self.expectedFailures:
             self.fixup_case(case)
         for case, _ in self.errors:
             self.fixup_case(case)
         for case, _ in self.failures:
             self.fixup_case(case)
+        self.test_id = test_id
 
 
 class _FakeStringIO(object):
@@ -340,7 +342,7 @@ class _MinimalRunner(object):
             test(result)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
-        return _MinimalResult(result)
+        return _MinimalResult(result, test.id())
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -385,6 +387,7 @@ class ParallelTestRunner(runner.TextTestRunner):
             pool.join()
 
     def _inner(self, result, pool, child_runner):
+        remaining_ids = set(t.id() for t in self._test_list)
         it = pool.imap_unordered(child_runner, self._test_list)
         while True:
             try:
@@ -392,7 +395,16 @@ class ParallelTestRunner(runner.TextTestRunner):
                 child_result = it.__next__(120)
             except StopIteration:
                 return
+            except Exception as e:
+                # Most likely error here is a timeout, so print out
+                # the names of unfinished tests.
+                msg = ("%s [unfinished tests: %s]"
+                       % (str(e), ", ".join(map(repr, sorted(remaining_ids))))
+                       )
+                e.args = (msg,) + e.args[1:]
+                raise e
             result.add_results(child_result)
+            remaining_ids.discard(child_result.test_id)
             if child_result.shouldStop:
                 return
 
