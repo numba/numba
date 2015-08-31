@@ -748,7 +748,7 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     for k, v in locals.items():
         infer.seed_type(k, v)
 
-    infer.build_constrain()
+    infer.build_constraint()
     infer.propagate()
     typemap, restype, calltypes = infer.unify()
 
