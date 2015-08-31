@@ -44,10 +44,6 @@ class CUDATextCapture(object):
     def getvalue(self):
         return self._stream.read()
 
-    def sync(self):
-        from numba import cuda
-        cuda.synchronize()
-
 
 class PythonTextCapture(object):
 
@@ -56,9 +52,6 @@ class PythonTextCapture(object):
 
     def getvalue(self):
         return self._stream.getvalue()
-
-    def sync(self):
-        pass
 
 
 @contextlib.contextmanager
@@ -73,5 +66,7 @@ def captured_cuda_stdout():
             yield PythonTextCapture(stream)
     else:
         # The CUDA runtime writes onto the system stdout
+        from numba import cuda
         with redirect_fd(1) as stream:
             yield CUDATextCapture(stream)
+            cuda.synchronize()

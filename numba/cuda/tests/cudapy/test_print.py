@@ -32,7 +32,6 @@ class TestPrint(unittest.TestCase):
         jcuhello = cuda.jit('void()', debug=False)(cuhello)
         with captured_cuda_stdout() as stdout:
             jcuhello[2, 3]()
-            stdout.sync()
         # The output of GPU threads is intermingled, just sanity check it
         out = stdout.getvalue()
         expected = ''.join('%d 999\n' % i for i in range(6))
@@ -42,7 +41,6 @@ class TestPrint(unittest.TestCase):
         jprintfloat = cuda.jit('void()', debug=False)(printfloat)
         with captured_cuda_stdout() as stdout:
             jprintfloat()
-            stdout.sync()
         # CUDA and the simulator use different formats for float formatting
         self.assertIn(stdout.getvalue(), ["0 23 34.750000 321\n",
                                           "0 23 34.75 321\n"])
@@ -51,7 +49,6 @@ class TestPrint(unittest.TestCase):
         cufunc = cuda.jit('void()', debug=False)(printempty)
         with captured_cuda_stdout() as stdout:
             cufunc()
-            stdout.sync()
         self.assertEqual(stdout.getvalue(), "\n")
 
     @unittest.skipIf(True, "Print string not implemented yet")
