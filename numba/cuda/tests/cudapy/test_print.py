@@ -22,6 +22,10 @@ def cuprintary(A):
     print("A[", i, "]", A[i])
 
 
+def printempty():
+    print()
+
+
 class TestPrint(unittest.TestCase):
 
     def test_cuhello(self):
@@ -39,8 +43,16 @@ class TestPrint(unittest.TestCase):
         with captured_cuda_stdout() as stdout:
             jprintfloat()
             stdout.sync()
+        # CUDA and the simulator use different formats for float formatting
         self.assertIn(stdout.getvalue(), ["0 23 34.750000 321\n",
                                           "0 23 34.75 321\n"])
+
+    def test_printempty(self):
+        cufunc = cuda.jit('void()', debug=False)(printempty)
+        with captured_cuda_stdout() as stdout:
+            cufunc()
+            stdout.sync()
+        self.assertEqual(stdout.getvalue(), "\n")
 
     @unittest.skipIf(True, "Print string not implemented yet")
     def test_print_array(self):
