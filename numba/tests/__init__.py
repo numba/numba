@@ -331,10 +331,9 @@ class _MinimalRunner(object):
     child process and run a test case with it.
     """
 
-    def __init__(self, runner_cls, runner_args, timeout=None):
+    def __init__(self, runner_cls, runner_args):
         self.runner_cls = runner_cls
         self.runner_args = runner_args
-        self.timeout = timeout
 
     # Python 2 doesn't know how to pickle instance methods, so we use __call__
     # instead.
@@ -352,20 +351,11 @@ class _MinimalRunner(object):
         signals.registerResult(result)
         result.failfast = runner.failfast
         result.buffer = runner.buffer
-        # Install faulthandler hook to dump tracebacks just before the
-        # timeout, to get a better view of where the test is hanging.
-        #if self.timeout is not None and faulthandler is not None:
-            #faulthandler.dump_traceback_later(self.timeout, exit=True)
-        #try:
-        if 1:
-            with self.cleanup_object(test):
-                test(result)
-            # HACK as cStringIO.StringIO isn't picklable in 2.x
-            result.stream = _FakeStringIO(result.stream.getvalue())
-            return _MinimalResult(result, test.id())
-        #finally:
-            #if self.timeout is not None and faulthandler is not None:
-                #faulthandler.cancel_dump_traceback_later()
+        with self.cleanup_object(test):
+            test(result)
+        # HACK as cStringIO.StringIO isn't picklable in 2.x
+        result.stream = _FakeStringIO(result.stream.getvalue())
+        return _MinimalResult(result, test.id())
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -400,8 +390,7 @@ class ParallelTestRunner(runner.TextTestRunner):
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
         # method as if it were a test case.
-        child_runner = _MinimalRunner(self.runner_cls, self.runner_args,
-                                      timeout=self.timeout - 5)
+        child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
         pool = multiprocessing.Pool()
 
         try:
