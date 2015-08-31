@@ -9,6 +9,7 @@ import ctypes
 import pickle
 import subprocess
 import sys
+import weakref
 
 import llvmlite.binding as ll
 
@@ -140,6 +141,21 @@ class JITCPUCodegenTestCase(TestCase):
         library.enable_object_caching()
         state = library.serialize_using_object_code()
         self._check_unserialize_other_process(state)
+
+    # Lifetime tests
+
+    def test_library_lifetime(self):
+        library = self.compile_module(asm_sum_outer, asm_sum_inner)
+        # Exercise code generation
+        library.enable_object_caching()
+        library.serialize_using_bitcode()
+        library.serialize_using_object_code()
+        u = weakref.ref(library)
+        v = weakref.ref(library._final_module)
+        del library
+        # Both the library and its backing LLVM module are collected
+        self.assertIs(u(), None)
+        self.assertIs(v(), None)
 
 
 if __name__ == '__main__':
