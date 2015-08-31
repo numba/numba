@@ -139,7 +139,8 @@ class TestNumberCtor(TestCase):
         for val in values:
             expected = np_converter(val)
             got = cfunc(val)
-            self.assertPreciseEqual(got, expected)
+            self.assertPreciseEqual(got, expected,
+                                    msg="for type %s with arg %s" % (np_type, val))
 
     def check_number_types(self, tp_factory):
         values = [0, 1, -1, 100003, 10000000000007, -100003, -10000000000007,

@@ -596,24 +596,19 @@ class BaseContext(object):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
 
-        elif ((fromty in types.unsigned_domain and
-                       toty in types.signed_domain) or
-                  (fromty in types.integer_domain and
-                           toty in types.unsigned_domain)):
-            lfrom = self.get_value_type(fromty)
-            lto = self.get_value_type(toty)
-            if lfrom.width <= lto.width:
-                return builder.zext(val, lto)
-            elif lfrom.width > lto.width:
-                return builder.trunc(val, lto)
-
-        elif fromty in types.signed_domain and toty in types.signed_domain:
-            lfrom = self.get_value_type(fromty)
-            lto = self.get_value_type(toty)
-            if lfrom.width <= lto.width:
-                return builder.sext(val, lto)
-            elif lfrom.width > lto.width:
-                return builder.trunc(val, lto)
+        elif isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
+            if toty.bitwidth == fromty.bitwidth:
+                # Just a change of signedness
+                return val
+            elif toty.bitwidth < fromty.bitwidth:
+                # Downcast
+                return builder.trunc(val, self.get_value_type(toty))
+            elif fromty.signed:
+                # Signed upcast
+                return builder.sext(val, self.get_value_type(toty))
+            else:
+                # Unsigned upcast
+                return builder.zext(val, self.get_value_type(toty))
 
         elif fromty in types.real_domain and toty in types.real_domain:
             lty = self.get_value_type(toty)
