@@ -63,6 +63,40 @@ except ImportError:
                           "('pip install singledispatch')")
 
 
+# Mapping between operator module functions and the corresponding built-in
+# operators.
+
+operator_map = [
+    # Binary
+    ('add', 'iadd', '+'),
+    ('sub', 'isub', '-'),
+    ('mul', 'imul', '*'),
+    ('floordiv', 'ifloordiv', '//'),
+    ('truediv', 'itruediv', '/'),
+    ('mod', 'imod', '%'),
+    ('pow', 'ipow', '**'),
+    ('and_', 'iand', '&'),
+    ('or_', 'ior', '|'),
+    ('xor', 'ixor', '^'),
+    ('lshift', 'ilshift', '<<'),
+    ('rshift', 'irshift', '>>'),
+    ('eq', '', '=='),
+    ('ne', '', '!='),
+    ('lt', '', '<'),
+    ('le', '', '<='),
+    ('gt', '', '>'),
+    ('ge', '', '>='),
+    # Unary
+    ('pos', '', '+'),
+    ('neg', '', '-'),
+    ('invert', '', '~'),
+    ('not_', '', 'not'),
+    ]
+
+if not IS_PY3:
+    operator_map.append(('div', 'idiv', '/?'))
+
+
 _shutting_down = False
 
 def _at_shutdown():

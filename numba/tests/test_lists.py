@@ -226,9 +226,48 @@ def list_add(m, n):
     res.append(42)   # check result is a copy
     return a, b, res
 
+def list_add_inplace(m, n):
+    a = list(range(0, m))
+    b = list(range(100, 100 + n))
+    a += b
+    return a, b
+
 def list_mul(n, v):
     a = list(range(n))
     return a * v
+
+def list_mul_inplace(n, v):
+    a = list(range(n))
+    a *= v
+    return a
+
+def list_bool(n):
+    a = list(range(n))
+    return bool(a), (True if a else False)
+
+def eq_usecase(a, b):
+    return list(a) == list(b)
+
+def ne_usecase(a, b):
+    return list(a) != list(b)
+
+def gt_usecase(a, b):
+    return list(a) > list(b)
+
+def ge_usecase(a, b):
+    return list(a) >= list(b)
+
+def lt_usecase(a, b):
+    return list(a) < list(b)
+
+def le_usecase(a, b):
+    return list(a) <= list(b)
+
+def identity_usecase(n):
+    a = list(range(n))
+    b = a
+    c = a[:]
+    return (a is b), (a is not b), (a is c), (a is not c)
 
 
 class TestLists(MemoryLeakMixin, TestCase):
@@ -480,21 +519,31 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_copy(self):
         self.check_unary_with_size(list_copy)
 
-    def test_add(self):
-        pyfunc = list_add
+    def check_add(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         sizes = [0, 3, 50, 300]
         for m, n in itertools.product(sizes, sizes):
             expected = pyfunc(m, n)
             self.assertPreciseEqual(cfunc(m, n), expected)
 
-    def test_mul(self):
-        pyfunc = list_mul
+    def test_add(self):
+        self.check_add(list_add)
+
+    def test_add_inplace(self):
+        self.check_add(list_add_inplace)
+
+    def check_mul(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         for n in [0, 3, 50, 300]:
             for v in [1, 2, 3, 0, -1, -42]:
                 expected = pyfunc(n, v)
                 self.assertPreciseEqual(cfunc(n, v), expected)
+
+    def test_mul(self):
+        self.check_mul(list_mul)
+
+    def test_mul_inplace(self):
+        self.check_mul(list_mul_inplace)
 
     @unittest.skipUnless(sys.maxsize >= 2**32,
                          "need a 64-bit system to test for MemoryError")
@@ -508,6 +557,65 @@ class TestLists(MemoryLeakMixin, TestCase):
         # Overflow size computation when multiplying by item size
         with self.assertRaises(MemoryError):
             cfunc(1, 2**62)
+
+    def test_bool(self):
+        pyfunc = list_bool
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [0, 1, 3]:
+            expected = pyfunc(n)
+            self.assertPreciseEqual(cfunc(n), expected)
+
+    def test_list_passing(self):
+        # Check one can pass a list from a Numba function to another
+        @jit(nopython=True)
+        def inner(lst):
+            return len(lst), lst[-1]
+
+        @jit(nopython=True)
+        def outer(n):
+            l = list(range(n))
+            return inner(l)
+
+        self.assertPreciseEqual(outer(5), (5, 4))
+        # Cannot call the inner function directly
+        with self.assertRaises(TypeError):
+            inner([42])
+
+    def _test_compare(self, pyfunc):
+        def eq(args):
+            self.assertIs(cfunc(*args), pyfunc(*args),
+                          "mismatch for arguments %s" % (args,))
+
+        cfunc = jit(nopython=True)(pyfunc)
+        eq(((1, 2), (1, 2)))
+        eq(((1, 2, 3), (1, 2)))
+        eq(((1, 2), (1, 2, 3)))
+        eq(((1, 2, 4), (1, 2, 3)))
+        eq(((1.0, 2.0, 3.0), (1, 2, 3)))
+        eq(((1.0, 2.0, 3.5), (1, 2, 3)))
+
+    def test_eq(self):
+        self._test_compare(eq_usecase)
+
+    def test_ne(self):
+        self._test_compare(ne_usecase)
+
+    def test_le(self):
+        self._test_compare(le_usecase)
+
+    def test_lt(self):
+        self._test_compare(lt_usecase)
+
+    def test_ge(self):
+        self._test_compare(ge_usecase)
+
+    def test_gt(self):
+        self._test_compare(gt_usecase)
+
+    def test_identity(self):
+        pyfunc = identity_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(3), pyfunc(3))
 
 
 if __name__ == '__main__':

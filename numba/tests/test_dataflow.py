@@ -182,7 +182,7 @@ class TestDataFlow(TestCase):
     def test_for_break(self, flags=force_pyobj_flags):
         # BREAK_LOOP must unwind the current inner syntax block.
         pyfunc = for_break
-        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
+        cr = compile_isolated(pyfunc, (types.intp, types.intp), flags=flags)
         cfunc = cr.entry_point
         for (n, x) in [(4, 2), (4, 6)]:
             self.assertPreciseEqual(pyfunc(n, x), cfunc(n, x))

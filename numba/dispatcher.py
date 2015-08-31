@@ -326,7 +326,6 @@ class Overloaded(_OverloadedBase):
         with self._compile_lock:
             args, return_type = sigutils.normalize_signature(sig)
             # Don't recompile if signature already exists
-            # (e.g. if another thread compiled it before we got the lock)
             existing = self.overloads.get(tuple(args))
             if existing is not None:
                 return existing
@@ -459,12 +458,14 @@ class FunctionCache(object):
     A per-function compilation cache.  The cache saves data in separate
     data files and maintains information in an index file.
 
-    There is one data file ("function_name.pyXY.<number>.nbc") per function
-    signature, target architecture and Python version.
+    There is one index file per function and Python version
+    ("function_name-<lineno>.pyXY.nbi") which contains a mapping of
+    signatures and architectures to data files.
+    It is prefixed by a versioning key and a timestamp of the Python source
+    file containing the function.
 
-    The index file ("function_name.pyXY.nbi") contains a mapping of signatures
-    and architectures to data files.  It is prefixed by a versioning key
-    and a timestamp of the Python source file containing the function.
+    There is one data file ("function_name-<lineno>.pyXY.<number>.nbc")
+    per function, function signature, target architecture and Python version.
 
     Separate index and data files per Python version avoid pickle
     compatibility problems.
@@ -483,6 +484,7 @@ class FunctionCache(object):
         self._funcname = qualname.split('.')[-1]
         self._fullname = "%s.%s" % (modname, qualname)
         self._source_path = inspect.getfile(py_func)
+        self._is_closure = bool(py_func.__closure__)
         self._lineno = py_func.__code__.co_firstlineno
         # NOTE: this assumes the __pycache__ directory is writable, which
         # is false for system installs, but true for conda environments
@@ -490,8 +492,14 @@ class FunctionCache(object):
         self._cache_path = os.path.join(os.path.dirname(self._source_path),
                                         '__pycache__')
         abiflags = getattr(sys, 'abiflags', '')
-        filename_base = '%s.py%d%d%s' % (self._fullname, sys.version_info[0],
-                                         sys.version_info[1], abiflags)
+        # '<' and '>' can appear in the qualname (e.g. '<locals>') but
+        # are forbidden in Windows filenames
+        fixed_fullname = self._fullname.replace('<', '').replace('>', '')
+        filename_base = (
+            '%s-%d.py%d%d%s' % (fixed_fullname, self._lineno,
+                                sys.version_info[0], sys.version_info[1],
+                                abiflags)
+            )
         self._index_name = '%s.nbi' % (filename_base,)
         self._index_path = os.path.join(self._cache_path, self._index_name)
         self._data_name_pattern = '%s.{number:d}.nbc' % (filename_base,)
@@ -517,6 +525,10 @@ class FunctionCache(object):
         self._save_index({})
 
     def load_overload(self, sig, target_context):
+        """
+        Load and recreate the cached CompileResult for the given signature,
+        using the *target_context*.
+        """
         if not self._enabled:
             return
         overloads = self._load_index()
@@ -531,14 +543,12 @@ class FunctionCache(object):
             return
 
     def save_overload(self, sig, cres):
+        """
+        Save the CompileResult for the given signature in the cache.
+        """
         if not self._enabled:
             return
-        # Check cachability
-        if cres.lifted:
-            msg = ('Cannot cache compiled function "%s" as it uses lifted loops'
-                   % self._funcname)
-            warnings.warn_explicit(msg, NumbaWarning,
-                                   self._source_path, self._lineno)
+        if not self._check_cachable(cres):
             return
         try:
             os.mkdir(self._cache_path)
@@ -561,6 +571,25 @@ class FunctionCache(object):
             self._save_index(overloads)
 
         self._save_data(data_name, cres)
+
+    def _check_cachable(self, cres):
+        """
+        Check cachability of the given compile result.
+        """
+        cannot_cache = None
+        if self._is_closure:
+            cannot_cache = "as it uses outer variables in a closure"
+        elif cres.lifted:
+            cannot_cache = "as it uses lifted loops"
+        elif cres.has_dynamic_globals:
+            cannot_cache = "as it uses dynamic globals (such as ctypes pointers)"
+        if cannot_cache:
+            msg = ('Cannot cache compiled function "%s" %s'
+                   % (self._funcname, cannot_cache))
+            warnings.warn_explicit(msg, NumbaWarning,
+                                   self._source_path, self._lineno)
+            return False
+        return True
 
     def _index_key(self, sig, codegen):
         """

@@ -17,7 +17,8 @@ from numba.targets.imputils import (user_function, user_generator,
                                     builtin_registry, impl_attribute,
                                     type_registry,
                                     impl_ret_borrowed)
-from . import arrayobj, builtins, iterators, rangeobj, optional
+from . import (
+    arrayobj, builtins, iterators, rangeobj, optional, slicing, tupleobj)
 from numba import datamodel
 
 try:
@@ -52,7 +53,7 @@ LTYPEMAP = {
 STRUCT_TYPES = {
     types.complex64: builtins.Complex64,
     types.complex128: builtins.Complex128,
-    types.slice3_type: builtins.Slice,
+    types.slice3_type: slicing.Slice,
 }
 
 
@@ -360,7 +361,7 @@ class BaseContext(object):
             const = Constant.struct([real, imag])
             return const
 
-        elif isinstance(ty, types.Tuple):
+        elif isinstance(ty, (types.Tuple, types.NamedTuple)):
             consts = [self.get_constant_generic(builder, ty.types[i], v)
                       for i, v in enumerate(val)]
             return Constant.struct(consts)
@@ -397,7 +398,7 @@ class BaseContext(object):
         elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
             return Constant.real(lty, val.astype(numpy.int64))
 
-        elif isinstance(ty, types.UniTuple):
+        elif isinstance(ty, (types.UniTuple, types.NamedUniTuple)):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
 
@@ -434,7 +435,7 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
-        if isinstance(fn, (types.NumberClass, types.Function)):
+        if isinstance(fn, (types.Function)):
             key = fn.template.key
 
             if isinstance(key, MethodType):
@@ -456,7 +457,11 @@ class BaseContext(object):
         try:
             return _wrap_impl(overloads.find(sig), self, sig)
         except NotImplementedError:
-            raise Exception("No definition for lowering %s%s" % (key, sig))
+            pass
+        if isinstance(fn, types.Type):
+            # It's a type instance => try to find a definition for the type class
+            return self.get_function(type(fn), sig)
+        raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
 
     def get_generator_desc(self, genty):
         """
@@ -591,24 +596,19 @@ class BaseContext(object):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
 
-        elif ((fromty in types.unsigned_domain and
-                       toty in types.signed_domain) or
-                  (fromty in types.integer_domain and
-                           toty in types.unsigned_domain)):
-            lfrom = self.get_value_type(fromty)
-            lto = self.get_value_type(toty)
-            if lfrom.width <= lto.width:
-                return builder.zext(val, lto)
-            elif lfrom.width > lto.width:
-                return builder.trunc(val, lto)
-
-        elif fromty in types.signed_domain and toty in types.signed_domain:
-            lfrom = self.get_value_type(fromty)
-            lto = self.get_value_type(toty)
-            if lfrom.width <= lto.width:
-                return builder.sext(val, lto)
-            elif lfrom.width > lto.width:
-                return builder.trunc(val, lto)
+        elif isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
+            if toty.bitwidth == fromty.bitwidth:
+                # Just a change of signedness
+                return val
+            elif toty.bitwidth < fromty.bitwidth:
+                # Downcast
+                return builder.trunc(val, self.get_value_type(toty))
+            elif fromty.signed:
+                # Signed upcast
+                return builder.sext(val, self.get_value_type(toty))
+            else:
+                # Unsigned upcast
+                return builder.zext(val, self.get_value_type(toty))
 
         elif fromty in types.real_domain and toty in types.real_domain:
             lty = self.get_value_type(toty)
@@ -733,6 +733,21 @@ class BaseContext(object):
 
         raise NotImplementedError("cast", val, fromty, toty)
 
+    def generic_compare(self, builder, key, argtypes, args):
+        """
+        Compare the given LLVM values of the given Numba types using
+        the comparison *key* (e.g. '==').  The values are first cast to
+        a common safe conversion type.
+        """
+        at, bt = argtypes
+        av, bv = args
+        ty = self.typing_context.unify_types(at, bt)
+        cav = self.cast(builder, av, at, ty)
+        cbv = self.cast(builder, bv, bt, ty)
+        cmpsig = typing.signature(types.boolean, ty, ty)
+        cmpfunc = self.get_function(key, cmpsig)
+        return cmpfunc(builder, (cav, cbv))
+
     def make_optional(self, optionaltype):
         return optional.make_optional(optionaltype.type)
 
@@ -750,16 +765,8 @@ class BaseContext(object):
         return optval._getvalue()
 
     def is_true(self, builder, typ, val):
-        if typ in types.integer_domain:
-            return builder.icmp(lc.ICMP_NE, val, Constant.null(val.type))
-        elif typ in types.real_domain:
-            return builder.fcmp(lc.FCMP_UNE, val, Constant.real(val.type, 0))
-        elif typ in types.complex_domain:
-            cmplx = self.make_complex(typ)(self, builder, val)
-            real_istrue = self.is_true(builder, typ.underlying_float, cmplx.real)
-            imag_istrue = self.is_true(builder, typ.underlying_float, cmplx.imag)
-            return builder.or_(real_istrue, imag_istrue)
-        raise NotImplementedError("is_true", val, typ)
+        impl = self.get_function(bool, typing.signature(types.boolean, typ))
+        return impl(builder, (val,))
 
     def get_c_value(self, builder, typ, name):
         """
@@ -911,6 +918,15 @@ class BaseContext(object):
         Create a heterogenous pair class parametered for the given types.
         """
         return builtins.make_pair(first_type, second_type)
+
+    def make_tuple(self, builder, typ, values):
+        """
+        Create a tuple of the given *typ* containing the *values*.
+        """
+        tup = self.get_constant_undef(typ)
+        for i, val in enumerate(values):
+            tup = builder.insert_value(tup, val, i)
+        return tup
 
     def make_constant_array(self, builder, typ, ary):
         assert typ.layout == 'C'                # assumed in typeinfer.py

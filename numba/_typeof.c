@@ -692,8 +692,20 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
     /* This needs to be kept in sync with Dispatcher.typeof_pyval(),
      * otherwise funny things may happen.
      */
-    if (tyobj == &PyInt_Type || tyobj == &PyLong_Type)
+    if (tyobj == &PyInt_Type || tyobj == &PyLong_Type) {
+#if SIZEOF_VOID_P < 8
+        /* On 32-bit platforms, choose between tc_intp (32-bit) and tc_int64 */
+        PY_LONG_LONG ll = PyLong_AsLongLong(val);
+        if (ll == -1 && PyErr_Occurred()) {
+            /* The integer is too large, let us truncate it */
+            PyErr_Clear();
+            return tc_int64;
+        }
+        if ((ll & 0xffffffff) != ll)
+            return tc_int64;
+#endif
         return tc_intp;
+    }
     else if (tyobj == &PyFloat_Type)
         return tc_float64;
     else if (tyobj == &PyComplex_Type)

@@ -10,6 +10,8 @@ import numpy as np
 
 from numba import jit
 
+from numba.tests.ctypes_usecases import c_sin
+
 
 @jit(cache=True, nopython=True)
 def add_usecase(x, y):
@@ -43,6 +45,35 @@ def looplifted(n):
     for i in range(n):
         res = res + i
     return res
+
+
+@jit(cache=True, nopython=True)
+def use_c_sin(x):
+    return c_sin(x)
+
+
+@jit(cache=True, nopython=True)
+def ambiguous_function(x):
+    return x + 2
+
+renamed_function1 = ambiguous_function
+
+@jit(cache=True, nopython=True)
+def ambiguous_function(x):
+    return x + 6
+
+renamed_function2 = ambiguous_function
+
+
+def make_closure(x):
+    @jit(cache=True, nopython=True)
+    def closure(y):
+        return x + y
+
+    return closure
+
+closure1 = make_closure(3)
+closure2 = make_closure(5)
 
 
 Z = 1

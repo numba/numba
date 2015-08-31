@@ -984,7 +984,7 @@ class Interpreter(object):
     def _inplace_binop(self, op, lhs, rhs, res):
         lhs = self.get(lhs)
         rhs = self.get(rhs)
-        expr = ir.Expr.inplace_binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
+        expr = ir.Expr.inplace_binop(op + '=', op, lhs=lhs, rhs=rhs, loc=self.loc)
         self.store(expr, res)
 
     def op_BINARY_ADD(self, inst, lhs, rhs, res):

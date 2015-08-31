@@ -3,6 +3,8 @@ Generic helpers for LLVM code generation.
 """
 
 from __future__ import print_function, division, absolute_import
+
+import collections
 from contextlib import contextmanager
 import functools
 import re
@@ -365,8 +367,16 @@ class IfBranchObj(object):
         terminate(self.builder, self.bbend)
 
 
+Loop = collections.namedtuple('Loop', ('index', 'do_break'))
+
 @contextmanager
 def for_range(builder, count, intp=None):
+    """
+    Generate LLVM IR for a for-loop in [0, count).  Yields a
+    Loop namedtuple with the following members:
+    - `index` is the loop index's value
+    - `do_break` is a no-argument callable to break out of the loop
+    """
     if intp is None:
         intp = count.type
     start = Constant.int(intp, 0)
@@ -375,6 +385,9 @@ def for_range(builder, count, intp=None):
     bbcond = builder.append_basic_block("for.cond")
     bbbody = builder.append_basic_block("for.body")
     bbend = builder.append_basic_block("for.end")
+
+    def do_break():
+        builder.branch(bbend)
 
     bbstart = builder.basic_block
     builder.branch(bbcond)
@@ -387,7 +400,8 @@ def for_range(builder, count, intp=None):
         builder.cbranch(pred, bbbody, bbend)
 
     with builder.goto_block(bbbody):
-        yield index
+        yield Loop(index, do_break)
+        # Update bbbody as a new basic block may have been activated
         bbbody = builder.basic_block
         incr = builder.add(index, ONE)
         terminate(builder, bbcond)
@@ -495,12 +509,12 @@ def loop_nest(builder, shape, intp):
 
 @contextmanager
 def _loop_nest(builder, shape, intp):
-    with for_range(builder, shape[0], intp) as ind:
+    with for_range(builder, shape[0], intp) as loop:
         if len(shape) > 1:
             with _loop_nest(builder, shape[1:], intp) as indices:
-                yield (ind,) + indices
+                yield (loop.index,) + indices
         else:
-            yield (ind,)
+            yield (loop.index,)
 
 
 def pack_array(builder, values, ty=None):
@@ -584,64 +598,6 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
         offset = functools.reduce(builder.add, dimoffs)
         return pointer_add(builder, data, offset)
-
-
-def normalize_slice(builder, slice, length):
-    """
-    Clip stop
-    """
-    stop = slice.stop
-    doclip = builder.icmp(lc.ICMP_SGT, stop, length)
-    slice.stop = builder.select(doclip, length, stop)
-
-
-def get_slice_length(builder, slicestruct):
-    """
-    Given a slice, compute the number of indices it spans, i.e. the
-    number of iterations that for_range_slice() will execute.
-    
-    Pseudo-code:
-        assert step != 0
-        if step > 0:
-            if stop <= start:
-                return 0
-            else:
-                return (stop - start - 1) // step + 1
-        else:
-            if stop >= start:
-                return 0
-            else:
-                return (stop - start + 1) // step + 1
-    
-    (see PySlice_GetIndicesEx() in CPython)
-    """
-    start = slicestruct.start
-    stop = slicestruct.stop
-    step = slicestruct.step
-    one = ir.Constant(start.type, 1)
-    zero = ir.Constant(start.type, 0)
-
-    is_step_negative = is_neg_int(builder, step)
-    delta = builder.sub(stop, start)
-
-    # Nominal case
-    pos_dividend = builder.sub(delta, one)
-    neg_dividend = builder.add(delta, one)
-    dividend  = builder.select(is_step_negative, neg_dividend, pos_dividend)
-    nominal_length = builder.add(one, builder.sdiv(dividend, step))
-
-    # Catch zero length
-    is_zero_length = builder.select(is_step_negative,
-                                    builder.icmp_signed('>=', delta, zero),
-                                    builder.icmp_signed('<=', delta, zero))
-
-    # Clamp to 0 if is_zero_length
-    return builder.select(is_zero_length, zero, nominal_length)
-
-
-def get_strides_from_slice(builder, ndim, strides, slice, ax):
-    oldstrides = unpack_tuple(builder, strides, ndim)
-    return builder.mul(slice.step, oldstrides[ax])
 
 
 def is_scalar_zero(builder, value):
@@ -908,9 +864,9 @@ def memcpy(builder, dst, src, count):
     * count is positive
     """
     assert dst.type == src.type
-    with for_range(builder, count, count.type) as idx:
-        out_ptr = builder.gep(dst, [idx])
-        in_ptr = builder.gep(src, [idx])
+    with for_range(builder, count, count.type) as loop:
+        out_ptr = builder.gep(dst, [loop.index])
+        in_ptr = builder.gep(src, [loop.index])
         builder.store(builder.load(in_ptr), out_ptr)
 
 

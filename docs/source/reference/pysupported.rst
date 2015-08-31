@@ -95,11 +95,7 @@ list
 ----
 
 Creating and returning lists from JIT-compiled functions is supported,
-as well as most methods and operations on lists.  Unsupported operations
-are:
-
-* the ``.sort()`` method
-* in-place operators (``+=`` and ``*=``)
+as well as all methods and operations except the ``.sort()`` method.
 
 .. note::
    Passing lists from Python into JIT-compiled functions is unsupported,
@@ -151,6 +147,8 @@ The following built-in functions are supported:
 * :class:`range`: semantics are similar to those of Python 3 even in Python 2:
   a range object is returned instead of an array of values.
 * :func:`round`
+* :func:`type`: only the one-argument form, and only on some types
+  (e.g. numbers and named tuples)
 * :func:`zip`
 
 
@@ -191,6 +189,16 @@ The following functions from the :mod:`cmath` module are supported:
 * :func:`cmath.sqrt`
 * :func:`cmath.tan`
 * :func:`cmath.tanh`
+
+``collections``
+---------------
+
+Named tuple classes, as returned by :func:`collections.namedtuple`, are
+supported in the same way regular tuples are supported.  Attribute access
+and named parameters in the constructor are also supported.
+
+Creating a named tuple class inside Numba code is *not* supported; the class
+must be created at the global level.
 
 ``ctypes``
 ----------

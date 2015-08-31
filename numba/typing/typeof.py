@@ -76,20 +76,17 @@ def _typeof_bool(val, c):
     return types.complex128
 
 def _typeof_int(val, c):
-    if c.purpose is Purpose.argument:
-        # As in _typeof.c
-        return types.int64
+    # As in _typeof.c
+    nbits = utils.bit_length(val)
+    if nbits < 32:
+        typ = types.intp
+    elif nbits < 64:
+        typ = types.int64
+    elif nbits == 64 and val >= 0:
+        typ = types.uint64
     else:
-        nbits = utils.bit_length(val)
-        if nbits < 32:
-            typ = types.int32
-        elif nbits < 64:
-            typ = types.int64
-        elif nbits == 64 and val >= 0:
-            typ = types.uint64
-        else:
-            raise ValueError("Int value is too large: %s" % val)
-        return typ
+        raise ValueError("Int value is too large: %s" % val)
+    return typ
 
 for cls in utils.INT_TYPES:
     typeof_impl.register(cls, _typeof_int)
@@ -112,13 +109,7 @@ def _typeof_none(val, c):
 @typeof_impl.register(tuple)
 def _typeof_tuple(val, c):
     tys = [typeof_impl(v, c) for v in val]
-    if not tys:
-        return types.Tuple(())
-    first = tys[0]
-    for ty in tys[1:]:
-        if ty != first:
-            return types.Tuple(tys)
-    return types.UniTuple(first, len(tys))
+    return types.BaseTuple.from_types(tys, type(val))
 
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):

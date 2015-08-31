@@ -551,6 +551,39 @@ class TestCache(TestCase):
                          'Cannot cache compiled function "looplifted" '
                          'as it uses lifted loops')
 
+    def test_ctypes(self):
+        # Functions using a ctypes pointer can't be cached and raise
+        # a warning.
+        mod = self.import_module()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.use_c_sin
+            self.assertPreciseEqual(f(0.0), 0.0)
+            self.check_cache(0)
+
+        self.assertEqual(len(w), 1)
+        self.assertIn('Cannot cache compiled function "use_c_sin"',
+                      str(w[0].message))
+
+    def test_closure(self):
+        mod = self.import_module()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            f = mod.closure1
+            self.assertPreciseEqual(f(3), 6)
+            f = mod.closure2
+            self.assertPreciseEqual(f(3), 8)
+            self.check_cache(0)
+
+        self.assertEqual(len(w), 2)
+        for item in w:
+            self.assertIn('Cannot cache compiled function "closure"',
+                          str(item.message))
+
     def test_cache_reuse(self):
         mod = self.import_module()
         mod.add_usecase(2, 3)
@@ -603,6 +636,14 @@ class TestCache(TestCase):
         mod = self.import_module()
         f = mod.add_usecase
         self.assertPreciseEqual(f(2, 3), 15)
+
+    def test_same_names(self):
+        # Function with the same names should still disambiguate
+        mod = self.import_module()
+        f = mod.renamed_function1
+        self.assertPreciseEqual(f(2), 4)
+        f = mod.renamed_function2
+        self.assertPreciseEqual(f(2), 8)
 
 
 if __name__ == '__main__':
