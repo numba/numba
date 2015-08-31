@@ -354,17 +354,18 @@ class _MinimalRunner(object):
         result.buffer = runner.buffer
         # Install faulthandler hook to dump tracebacks just before the
         # timeout, to get a better view of where the test is hanging.
-        if self.timeout is not None and faulthandler is not None:
-            faulthandler.dump_traceback_later(self.timeout, exit=True)
-        try:
+        #if self.timeout is not None and faulthandler is not None:
+            #faulthandler.dump_traceback_later(self.timeout, exit=True)
+        #try:
+        if 1:
             with self.cleanup_object(test):
                 test(result)
             # HACK as cStringIO.StringIO isn't picklable in 2.x
             result.stream = _FakeStringIO(result.stream.getvalue())
             return _MinimalResult(result, test.id())
-        finally:
-            if self.timeout is not None and faulthandler is not None:
-                faulthandler.cancel_dump_traceback_later()
+        #finally:
+            #if self.timeout is not None and faulthandler is not None:
+                #faulthandler.cancel_dump_traceback_later()
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -388,8 +389,8 @@ class ParallelTestRunner(runner.TextTestRunner):
     """
 
     resultclass = ParallelTestResult
-    # A test can't run longer than 3 minutes
-    timeout = 180
+    # A test can't run longer than 2 minutes
+    timeout = 120
 
     def __init__(self, runner_cls, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
