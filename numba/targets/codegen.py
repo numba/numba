@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import sys
+import weakref
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
@@ -43,7 +44,7 @@ class CodeLibrary(object):
             str(self._codegen._create_empty_module(self._name)))
         self._final_module.name = self._name
         # Remember this on the module, for the object cache hooks
-        self._final_module.__library = self
+        self._final_module.__library = weakref.proxy(self)
         self._shared_module = None
 
     @property
