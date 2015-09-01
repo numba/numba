@@ -79,19 +79,15 @@ def reduction_template(binop, typ, blocksize):
 
 
 class Reduce(object):
-    """CUDA Reduce kernel
-
-    Notes
-    -----
-    The reduction kernels are compiled lazily as needed. A single reduction
-    can use multiple kernels specialized for different sizes. These compiled
-    kernels are cached inside the ``Reduce`` instance that created them.
-    **Keeping the instance alive can avoid re-compiling**.
-
-    The reduction kernel may not fully reduce the array on device.
-    The last few elements (usually less than 16) is copied back to the host
-    for the final reduction.
-    """
+    # The reduction kernels are compiled lazily as needed. A single reduction
+    # can use multiple kernels specialized for different sizes. These compiled
+    # kernels are cached inside the ``Reduce`` instance that created them.
+    #
+    # Keeping the instance alive can avoid re-compiling.
+    #
+    # The reduction kernel may not fully reduce the array on device.
+    # The last few elements (usually less than 16) is copied back to the host
+    # for the final reduction.
 
     def __init__(self, binop):
         """Uses binop as the binary operation for reduction.
@@ -141,29 +137,17 @@ class Reduce(object):
         """Partially reduce a device array inplace as much as possible in an
         efficient manner. Does not automatically transfer host array.
 
-        Args
-        ----
-        darr : device array
-            Used to input and output.
+        :param darr: Used to input and output.
+        :type darr: device array
+        :param size: Number of element in ``arr``.  If None, the entire array is used.
+        :type size: int or None
+        :param init: Initial value for the reduction
+        :type init: dtype of darr
+        :param stream: All CUDA operations are performed on this stream if it is given.
+          Otherwise, a new stream is created.
+        :type stream: cuda stream
+        :returns: int -- Number of elements in ``darr`` that contains the reduction result.
 
-        size : int or None
-            Number of element in ``arr``.  If None, the entire array is used.
-
-        init : dtype of darr
-            Initial value for the reduction
-
-        stream : cuda stream
-            All CUDA operations are performed on this stream if it is given.
-            Otherwise, a new stream is created.
-
-        Returns
-        -------
-        int
-            Number of elements in ``darr`` that contains the reduction result.
-
-        Notes
-        -----
-        Use this to avoiding host reduction
         """
         if stream == 0:
             from numba import cuda
