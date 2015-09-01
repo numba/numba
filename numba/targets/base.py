@@ -308,17 +308,17 @@ class BaseContext(object):
     def get_value_type(self, ty):
         return self.data_model_manager[ty].get_value_type()
 
-    def pack_value(self, builder, ty, value, ptr):
+    def pack_value(self, builder, ty, value, ptr, align=None):
         """Pack data for array storage
         """
         dataval = self.data_model_manager[ty].as_data(builder, value)
-        builder.store(dataval, ptr)
+        builder.store(dataval, ptr, align=align)
 
-    def unpack_value(self, builder, ty, ptr):
+    def unpack_value(self, builder, ty, ptr, align=None):
         """Unpack data from array storage
         """
         dm = self.data_model_manager[ty]
-        return dm.load_from_data_pointer(builder, ptr)
+        return dm.load_from_data_pointer(builder, ptr, align)
 
     def is_struct_type(self, ty):
         return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
@@ -426,12 +426,8 @@ class BaseContext(object):
                 dptr = cgutils.get_record_member(builder, target, offset,
                                                  self.get_data_type(elemty))
                 val = context.cast(builder, val, valty, elemty)
-                if typ.aligned:
-                    self.pack_value(builder, elemty, val, dptr)
-                else:
-                    tmp = cgutils.alloca_once(builder, dptr.type.pointee)
-                    self.pack_value(builder, elemty, val, tmp)
-                    cgutils.copy_to_unaligned(context, builder, dptr, tmp)
+                align = None if typ.aligned else 1
+                self.pack_value(builder, elemty, val, dptr, align=align)
 
             return _wrap_impl(imp, self, sig)
 
@@ -519,12 +515,12 @@ class BaseContext(object):
                 def imp(context, builder, typ, val):
                     dptr = cgutils.get_record_member(builder, val, offset,
                                                      context.get_data_type(elemty))
-                    if not typ.aligned:
-                        # Make an aligned copy on the stack
-                        dptr = cgutils.copy_from_unaligned(context, builder,
-                                                           dptr)
-
-                    res = self.unpack_value(builder, elemty, dptr)
+                    #if not typ.aligned:
+                        ## Make an aligned copy on the stack
+                        #dptr = cgutils.copy_from_unaligned(context, builder,
+                                                           #dptr)
+                    align = None if typ.aligned else 1
+                    res = self.unpack_value(builder, elemty, dptr, align)
                     return impl_ret_borrowed(context, builder, typ, res)
             return imp
 

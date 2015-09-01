@@ -26,7 +26,8 @@ class TestMulti3(unittest.TestCase):
                 res += i
             return res
 
-        x_cases = [-1, 0, 1, 0xffffffff - 1, 0xffffffff, 0xffffffff + 1,
+        x_cases = [-1, 0, 1, 3, 4, 8,
+                   0xffffffff - 1, 0xffffffff, 0xffffffff + 1,
                    0x123456789abcdef, -0x123456789abcdef]
         for _ in range(500):
             x_cases.append(random.randint(0, 0xffffffff))
