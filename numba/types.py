@@ -698,6 +698,7 @@ class Buffer(IterableType):
     """
     mutable = True
     slice_is_copy = False
+    aligned = True
 
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
@@ -784,11 +785,19 @@ class Array(Buffer):
     Type class for Numpy arrays.
     """
 
-    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None,
+                 aligned=True):
         if readonly:
             self.mutable = False
+        if (not aligned or
+            (isinstance(dtype, Record) and not dtype.aligned)):
+            self.aligned = False
         if name is None:
-            type_name = "array" if self.mutable else "readonly array"
+            type_name = "array"
+            if not self.mutable:
+                type_name = "readonly " + type_name
+            if not self.aligned:
+                type_name = "unaligned " + type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Array, self).__init__(dtype, ndim, layout, name=name)
 
@@ -801,11 +810,12 @@ class Array(Buffer):
             layout = self.layout
         if readonly is None:
             readonly = not self.mutable
-        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly)
+        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
+                     aligned=self.aligned)
 
     @property
     def key(self):
-        return self.dtype, self.ndim, self.layout, self.mutable
+        return self.dtype, self.ndim, self.layout, self.mutable, self.aligned
 
     def unify(self, typingctx, other):
         """
@@ -818,8 +828,9 @@ class Array(Buffer):
             else:
                 layout = 'A'
             readonly = not (self.mutable and other.mutable)
+            aligned = self.aligned and other.aligned
             return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
-                         readonly=readonly)
+                         readonly=readonly, aligned=aligned)
 
     def can_convert_to(self, typingctx, other):
         """
@@ -828,7 +839,8 @@ class Array(Buffer):
         if (isinstance(other, Array) and other.ndim == self.ndim
             and other.dtype == self.dtype):
             if (other.layout in ('A', self.layout)
-                and (self.mutable or not other.mutable)):
+                and (self.mutable or not other.mutable)
+                and (self.aligned or not other.aligned)):
                 return Conversion.safe
 
 

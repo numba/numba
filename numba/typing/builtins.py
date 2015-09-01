@@ -631,8 +631,7 @@ class ArrayAttribute(AttributeTemplate):
         # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
-                return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,
-                                   layout='A')
+                return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
 
 
 @builtin_attr
