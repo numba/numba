@@ -98,6 +98,7 @@ def get_itemsize(context, array_type):
 
 def load_item(context, builder, arrayty, ptr):
     """
+    Load the item at the given array pointer.
     """
     align = None if arrayty.aligned else 1
     return context.unpack_value(builder, arrayty.dtype, ptr,
@@ -1313,7 +1314,6 @@ def array_record_getattr(context, builder, typ, value, attr):
     dtype = rectype.typeof(attr)
     offset = rectype.offset(attr)
 
-    resty = types.Array(dtype, ndim=typ.ndim, layout='A', aligned=rectype.aligned)
     resty = typ.copy(dtype=dtype, layout='A')
 
     raryty = make_array(resty)

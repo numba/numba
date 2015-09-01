@@ -515,10 +515,6 @@ class BaseContext(object):
                 def imp(context, builder, typ, val):
                     dptr = cgutils.get_record_member(builder, val, offset,
                                                      context.get_data_type(elemty))
-                    #if not typ.aligned:
-                        ## Make an aligned copy on the stack
-                        #dptr = cgutils.copy_from_unaligned(context, builder,
-                                                           #dptr)
                     align = None if typ.aligned else 1
                     res = self.unpack_value(builder, elemty, dptr, align)
                     return impl_ret_borrowed(context, builder, typ, res)

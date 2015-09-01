@@ -162,6 +162,8 @@ def get_charseq_tuple(ary, i):
     return ary[i].m, ary[i].n
 
 
+# Note: these record types are unaligned
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int16),
                        ('c', np.complex64),
