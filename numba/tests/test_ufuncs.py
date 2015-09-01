@@ -1371,6 +1371,7 @@ class _TestLoopTypes(TestCase):
     _ufuncs = all_ufuncs[:]
     # Have their own test classes
     _ufuncs.remove(np.left_shift)
+    _ufuncs.remove(np.right_shift)
     _ufuncs.remove(np.reciprocal)
     _ufuncs.remove(np.power)
     _compile_flags = enable_pyobj_flags

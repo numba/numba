@@ -889,6 +889,41 @@ def memmove(builder, dst, src, count, itemsize, align=1):
                            is_volatile])
 
 
+def memcpy2(builder, dst, src, count, itemsize, align=1):
+    """
+    Emit a memcpy() call for `count` items of size `itemsize`
+    from `src` to `dest`.
+    """
+    ptr_t = ir.IntType(8).as_pointer()
+    size_t = count.type
+
+    memmove = builder.module.declare_intrinsic('llvm.memcpy',
+                                               [ptr_t, ptr_t, size_t])
+    align = ir.Constant(ir.IntType(32), align)
+    is_volatile = false_bit
+    builder.call(memmove, [builder.bitcast(dst, ptr_t),
+                           builder.bitcast(src, ptr_t),
+                           builder.mul(count, ir.Constant(size_t, itemsize)),
+                           align,
+                           is_volatile])
+
+
+def copy_from_unaligned(context, builder, ptr):
+    llty = ptr.type.pointee
+    datasize = context.get_abi_sizeof(llty)
+    tmp = alloca_once(builder, llty)
+    count = ir.Constant(intp_t, 1)
+    memcpy2(builder, tmp, ptr, count, datasize)
+    return tmp
+
+def copy_to_unaligned(context, builder, destptr, srcptr):
+    assert srcptr.type == destptr.type
+    llty = srcptr.type.pointee
+    datasize = context.get_abi_sizeof(llty)
+    count = ir.Constant(intp_t, 1)
+    memcpy2(builder, destptr, srcptr, count, datasize)
+
+
 def muladd_with_overflow(builder, a, b, c):
     """
     Compute (a * b + c) and return a (result, overflow bit) pair.

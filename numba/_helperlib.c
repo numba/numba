@@ -386,21 +386,44 @@ Numba_poisson_ptrs(rnd_state_t *state, double lam)
  * Other helpers.
  */
 
-/* provide 128-bit multiplilcation inplace for __multi3
+/* provide 128-bit multiplication inplace for __multi3
  * on 32-bit platform */
 
-typedef union i128 {
-    struct {
-        uint64_t low;
-        int64_t high;
-    } s;
-} i128;
+/* NOTE only with a proper 128-bit integer type is this guaranteed
+ * to work.  Only clang is known to offer a 128-bit integer on 32-bit
+ * architectures.  On x86 the fallback works anyway, but it crashes on
+ * ARMv7 (test_multi3), so on ARMv7 you need to compile with clang.
+ * (`CC=clang python setup.py build_ext`).
+ */
+
+#if defined(__clang__)
+#define HAVE_I128 1
+#else
+#define HAVE_I128 0
+#endif
+
+#if HAVE_I128
+typedef int i128 __attribute__ ((mode (TI)));
+#endif
+
+/* XXX little-endian only */
+typedef struct {
+    uint64_t low;
+    int64_t high;
+} s128;
+
+typedef union {
+    s128 s;
+#if HAVE_I128
+    i128 value;
+#endif
+} _i128;
 
 
-static
-i128 umul64(uint64_t a, uint64_t b) {
+static _i128
+umul64(uint64_t a, uint64_t b) {
     /* Adapted from __mulddi in compiler-rt */
-    i128 r;
+    _i128 r;
     uint64_t t;
     const int bits_in_dword_2 = 32;
     const uint64_t lower_mask = (uint64_t)~0 >> bits_in_dword_2;
@@ -420,21 +443,33 @@ i128 umul64(uint64_t a, uint64_t b) {
     return r;
 }
 
-static
-i128 mul128(i128 a, i128 b) {
+static _i128
+mul128(_i128 a, _i128 b) {
     /* Adapted from __multi3 in compiler-rt */
-    i128 r = umul64(a.s.low, b.s.low);
+    _i128 r = umul64(a.s.low, b.s.low);
     r.s.high += a.s.high * b.s.low + a.s.low * b.s.high;
     return r;
 }
 
-
-static
-i128
+#if HAVE_I128
+static i128
 Numba_multi3(i128 x, i128 y) {
-	return mul128(x, y);
+    _i128 _x, _y, r;
+    _x.value = x;
+    _y.value = y;
+    r = mul128(_x, _y);
+    return r.value;
 }
-
+#else
+/* Fallback for when no 128-bit integer type is available.
+ * We pretend passing the union type is equivalent - which it isn't
+ * necessarily.
+ */
+static _i128
+Numba_multi3(_i128 x, _i128 y) {
+    return mul128(x, y);
+}
+#endif
 
 /* provide 64-bit division function to 32-bit platforms */
 static

@@ -426,7 +426,12 @@ class BaseContext(object):
                 dptr = cgutils.get_record_member(builder, target, offset,
                                                  self.get_data_type(elemty))
                 val = context.cast(builder, val, valty, elemty)
-                self.pack_value(builder, elemty, val, dptr)
+                if typ.aligned:
+                    self.pack_value(builder, elemty, val, dptr)
+                else:
+                    tmp = cgutils.alloca_once(builder, dptr.type.pointee)
+                    self.pack_value(builder, elemty, val, tmp)
+                    cgutils.copy_to_unaligned(context, builder, dptr, tmp)
 
             return _wrap_impl(imp, self, sig)
 
@@ -513,7 +518,12 @@ class BaseContext(object):
                 @impl_attribute(typ, attr, elemty)
                 def imp(context, builder, typ, val):
                     dptr = cgutils.get_record_member(builder, val, offset,
-                                                     self.get_data_type(elemty))
+                                                     context.get_data_type(elemty))
+                    if not typ.aligned:
+                        # Make an aligned copy on the stack
+                        dptr = cgutils.copy_from_unaligned(context, builder,
+                                                           dptr)
+
                     res = self.unpack_value(builder, elemty, dptr)
                     return impl_ret_borrowed(context, builder, typ, res)
             return imp

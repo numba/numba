@@ -163,7 +163,7 @@ def get_charseq_tuple(ary, i):
 
 
 recordtype = np.dtype([('a', np.float64),
-                       ('b', np.int32),
+                       ('b', np.int16),
                        ('c', np.complex64),
                        ('d', (np.str, 5))])
 
@@ -235,7 +235,7 @@ class TestRecordDtype(unittest.TestCase):
     def test_from_dtype(self):
         rec = numpy_support.from_dtype(recordtype)
         self.assertEqual(rec.typeof('a'), types.float64)
-        self.assertEqual(rec.typeof('b'), types.int32)
+        self.assertEqual(rec.typeof('b'), types.int16)
         self.assertEqual(rec.typeof('c'), types.complex64)
         if IS_PY3:
             self.assertEqual(rec.typeof('d'), types.UnicodeCharSeq(5))
@@ -349,8 +349,8 @@ class TestRecordDtype(unittest.TestCase):
         npval = self.refsample1d.copy()[0]
         nbval = self.nbsample1d.copy()[0]
         attrs = 'abc'
-        valtypes = types.float64, types.int32, types.complex64
-        values = 1.23, 123432, 132j
+        valtypes = types.float64, types.int16, types.complex64
+        values = 1.23, 12345, 123+456j
         old_refcnt = sys.getrefcount(nbval)
 
         for attr, valtyp, val in zip(attrs, valtypes, values):
@@ -373,7 +373,7 @@ class TestRecordDtype(unittest.TestCase):
 
             got = cfunc(*args)
             self.assertEqual(expected, got)
-            self.assertNotEqual(nbval['a'], got)
+            self.assertNotEqual(nbval[attr], got)
             del got, expected, args
 
         # Check for potential leaks (issue #441)

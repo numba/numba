@@ -9,7 +9,7 @@ from numba import unittest_support as unittest
 
 class TestMulti3(unittest.TestCase):
     """
-    This test is only valid for x86-32.
+    This test is only relevant for 32-bit architectures.
 
     Test __multi3 implementation in _helperlib.c.
     The symbol defines a i128 multiplication.
@@ -26,13 +26,14 @@ class TestMulti3(unittest.TestCase):
                 res += i
             return res
 
-        x_cases = [-1, 0, 1, 0xffffffff - 1, 0xffffffff, 0xffffffff + 1]
+        x_cases = [-1, 0, 1, 0xffffffff - 1, 0xffffffff, 0xffffffff + 1,
+                   0x123456789abcdef, -0x123456789abcdef]
         for _ in range(500):
             x_cases.append(random.randint(0, 0xffffffff))
 
         def expected(x):
             if x <= 0: return 0
-            return (x * (x - 1)) // 2
+            return ((x * (x - 1)) // 2) & (2**64 - 1)
 
         for x in x_cases:
             self.assertEqual(expected(x), func(x))

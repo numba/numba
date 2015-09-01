@@ -1294,7 +1294,7 @@ def array_ctypes_data(context, builder, typ, value):
 def array_record_getattr(context, builder, typ, value, attr):
     """
     Generic getattr() implementation for record arrays: fetch the given
-    record member.
+    record member, i.e. a subarray.
     """
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
