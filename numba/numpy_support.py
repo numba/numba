@@ -287,9 +287,11 @@ if numpy.__version__ <= '1.7':
     # for dtype.  We implement the behavior of the function here.
     def _is_aligned_struct(struct):
         for (dtype, offset) in struct.fields.values():
-            # Make sure all attributes have offset equal to the alignment of
-            # the attribute dtype.
+            # Make sure all attributes can only appear at offsets equal
+            # to the alignment of the attribute dtype.
             if offset % dtype.alignment:
+                return False
+            if struct.itemsize % dtype.alignment:
                 return False
         return True
 

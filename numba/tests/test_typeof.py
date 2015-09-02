@@ -121,10 +121,13 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         dtype = np.dtype([('m', np.int32), ('n', 'S5')], align=True)
         rec_ty = numpy_support.from_struct_dtype(dtype)
 
+        # On Numpy 1.6, align=True doesn't align the itemsize
+        actual_aligned = numpy_support.version >= (1, 7)
+
         arr = np.empty(4, dtype=dtype)
-        check(arr, rec_ty, 1, "C", True)
+        check(arr, rec_ty, 1, "C", actual_aligned)
         arr = np.recarray(4, dtype=dtype)
-        check(arr, rec_ty, 1, "C", True)
+        check(arr, rec_ty, 1, "C", actual_aligned)
 
     @unittest.skipIf(sys.version_info < (2, 7),
                      "buffer protocol not supported on Python 2.6")
