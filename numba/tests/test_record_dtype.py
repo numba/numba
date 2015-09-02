@@ -13,13 +13,20 @@ from numba.utils import IS_PY3
 def get_a(ary, i):
     return ary[i].a
 
-
 def get_b(ary, i):
     return ary[i].b
 
-
 def get_c(ary, i):
     return ary[i].c
+
+def get_a_subarray(ary, i):
+    return ary.a[i]
+
+def get_b_subarray(ary, i):
+    return ary.b[i]
+
+def get_c_subarray(ary, i):
+    return ary.c[i]
 
 
 def get_two_arrays_a(ary1, ary2, i):
@@ -39,14 +46,20 @@ def get_two_arrays_distinct(ary1, ary2, i):
 def set_a(ary, i, v):
     ary[i].a = v
 
-
 def set_b(ary, i, v):
     ary[i].b = v
-
 
 def set_c(ary, i, v):
     ary[i].c = v
 
+def set_a_subarray(ary, i, v):
+    ary.a[i] = v
+
+def set_b_subarray(ary, i, v):
+    ary.b[i] = v
+
+def set_c_subarray(ary, i, v):
+    ary.c[i] = v
 
 def set_record(ary, i, j):
     ary[i] = ary[j]
@@ -255,12 +268,15 @@ class TestRecordDtype(unittest.TestCase):
 
     def test_get_a(self):
         self._test_get_equal(get_a)
+        self._test_get_equal(get_a_subarray)
 
     def test_get_b(self):
         self._test_get_equal(get_b)
+        self._test_get_equal(get_b_subarray)
 
     def test_get_c(self):
         self._test_get_equal(get_c)
+        self._test_get_equal(get_c_subarray)
 
     def _test_get_two_equal(self, pyfunc):
         '''
@@ -309,19 +325,28 @@ class TestRecordDtype(unittest.TestCase):
             self.assertTrue(np.all(expect == got))
 
     def test_set_a(self):
-        self._test_set_equal(set_a, 3.1415, types.float64)
-        # Test again to check if coercion works
-        self._test_set_equal(set_a, 3., types.float32)
+        def check(pyfunc):
+            self._test_set_equal(pyfunc, 3.1415, types.float64)
+            # Test again to check if coercion works
+            self._test_set_equal(pyfunc, 3., types.float32)
+        check(set_a)
+        check(set_a_subarray)
 
     def test_set_b(self):
-        self._test_set_equal(set_b, 123, types.int32)
-        # Test again to check if coercion works
-        self._test_set_equal(set_b, 123, types.float64)
+        def check(pyfunc):
+            self._test_set_equal(pyfunc, 123, types.int32)
+            # Test again to check if coercion works
+            self._test_set_equal(pyfunc, 123, types.float64)
+        check(set_b)
+        check(set_b_subarray)
 
     def test_set_c(self):
-        self._test_set_equal(set_c, 43j, types.complex64)
-        # Test again to check if coercion works
-        self._test_set_equal(set_c, 43j, types.complex128)
+        def check(pyfunc):
+            self._test_set_equal(pyfunc, 43j, types.complex64)
+            # Test again to check if coercion works
+            self._test_set_equal(pyfunc, 43j, types.complex128)
+        check(set_c)
+        check(set_c_subarray)
 
     def test_set_record(self):
         pyfunc = set_record
