@@ -162,15 +162,13 @@ def get_charseq_tuple(ary, i):
     return ary[i].m, ary[i].n
 
 
-# Note: these record types are unaligned
-
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int16),
                        ('c', np.complex64),
                        ('d', (np.str, 5))])
 
 recordtype2 = np.dtype([('e', np.int32),
-                        ('f', np.float64)])
+                        ('f', np.float64)], align=True)
 
 recordtype3 = np.dtype([('first', np.float32),
                         ('second', np.float64)])

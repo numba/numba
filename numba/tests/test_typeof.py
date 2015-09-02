@@ -30,6 +30,9 @@ recordtype = np.dtype([('a', np.float64),
 recordtype2 = np.dtype([('e', np.int32),
                         ('f', np.float64)])
 
+recordtype3 = np.dtype([('e', np.int32),
+                        ('f', np.float64)], align=True)
+
 Point = namedtuple('Point', ('x', 'y'))
 
 Rect = namedtuple('Rect', ('width', 'height'))
@@ -78,40 +81,50 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         """
         Test special.typeof() with ndarray values.
         """
-        def check(arr, ndim, layout, mutable):
+        def check(arr, ndim, layout, mutable, aligned):
             ty = typeof(arr)
             self.assertIsInstance(ty, types.Array)
             self.assertEqual(ty.ndim, ndim)
             self.assertEqual(ty.layout, layout)
             self.assertEqual(ty.mutable, mutable)
+            self.assertEqual(ty.aligned, aligned)
 
         a1 = np.arange(10)
-        check(a1, 1, 'C', True)
+        check(a1, 1, 'C', True, True)
         a2 = np.arange(10).reshape(2, 5)
-        check(a2, 2, 'C', True)
-        check(a2.T, 2, 'F', True)
+        check(a2, 2, 'C', True, True)
+        check(a2.T, 2, 'F', True, True)
         a3 = (np.arange(60))[::2].reshape((2, 5, 3))
-        check(a3, 3, 'A', True)
+        check(a3, 3, 'A', True, True)
         a4 = np.arange(1).reshape(())
-        check(a4, 0, 'C', True)
+        check(a4, 0, 'C', True, True)
         a4.flags.writeable = False
-        check(a4, 0, 'C', False)
+        check(a4, 0, 'C', False, True)
 
     def test_structured_arrays(self):
-        def check(arr, dtype, ndim, layout):
+        def check(arr, dtype, ndim, layout, aligned):
             ty = typeof(arr)
             self.assertIsInstance(ty, types.Array)
             self.assertEqual(ty.dtype, dtype)
             self.assertEqual(ty.ndim, ndim)
             self.assertEqual(ty.layout, layout)
+            self.assertEqual(ty.aligned, aligned)
 
         dtype = np.dtype([('m', np.int32), ('n', 'S5')])
         rec_ty = numpy_support.from_struct_dtype(dtype)
 
         arr = np.empty(4, dtype=dtype)
-        check(arr, rec_ty, 1, "C")
+        check(arr, rec_ty, 1, "C", False)
         arr = np.recarray(4, dtype=dtype)
-        check(arr, rec_ty, 1, "C")
+        check(arr, rec_ty, 1, "C", False)
+
+        dtype = np.dtype([('m', np.int32), ('n', 'S5')], align=True)
+        rec_ty = numpy_support.from_struct_dtype(dtype)
+
+        arr = np.empty(4, dtype=dtype)
+        check(arr, rec_ty, 1, "C", True)
+        arr = np.recarray(4, dtype=dtype)
+        check(arr, rec_ty, 1, "C", True)
 
     @unittest.skipIf(sys.version_info < (2, 7),
                      "buffer protocol not supported on Python 2.6")
@@ -314,6 +327,8 @@ class TestFingerprint(TestCase):
         distinct.add(s)
         self.assertEqual(compute_fingerprint(arr[:1]), s)
         arr = np.empty(5, dtype=recordtype2)
+        distinct.add(compute_fingerprint(arr))
+        arr = np.empty(5, dtype=recordtype3)
         distinct.add(compute_fingerprint(arr))
 
         # np.recarray() is peculiar: it creates a new dtype instance in
