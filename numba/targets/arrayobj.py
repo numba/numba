@@ -104,6 +104,13 @@ def load_item(context, builder, arrayty, ptr):
     return context.unpack_value(builder, arrayty.dtype, ptr,
                                 align=align)
 
+def store_item(context, builder, arrayty, ptr, val):
+    """
+    Store the item at the given array pointer.
+    """
+    align = None if arrayty.aligned else 1
+    return context.pack_value(builder, arrayty.dtype, ptr, val,  align=align)
+
 
 def populate_array(array, data, shape, strides, itemsize, meminfo,
                    parent=None):
@@ -379,7 +386,7 @@ def setitem_array1d(context, builder, sig, args):
 
     val = context.cast(builder, val, valty, aryty.dtype)
 
-    context.pack_value(builder, aryty.dtype, val, ptr)
+    store_item(context, builder, aryty, val, ptr)
 
 
 @builtin
@@ -398,7 +405,7 @@ def setitem_array_unituple(context, builder, sig, args):
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=idxty.dtype.signed)
-    context.pack_value(builder, aryty.dtype, val, ptr)
+    store_item(context, builder, aryty, val, ptr)
 
 
 @builtin
@@ -417,7 +424,7 @@ def setitem_array_tuple(context, builder, sig, args):
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=True)
-    context.pack_value(builder, aryty.dtype, val, ptr)
+    store_item(context, builder, aryty, val, ptr)
 
 @builtin
 @implement('setitem', types.Kind(types.Buffer),
@@ -488,12 +495,12 @@ def setitem_array1d_slice(context, builder, sig, args):
             ptr = cgutils.get_item_pointer(builder, aryty, ary,
                                 [loop_idx1],
                                 wraparound=True)
-            context.pack_value(builder, aryty.dtype, val, ptr)
+            store_item(context, builder, aryty, val, ptr)
         with neg_range as (loop_idx2, _):
             ptr = cgutils.get_item_pointer(builder, aryty, ary,
                                 [loop_idx2],
                                 wraparound=True)
-            context.pack_value(builder, aryty.dtype, val, ptr)
+            store_item(context, builder, aryty, val, ptr)
 
 
 @builtin

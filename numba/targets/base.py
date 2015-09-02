@@ -309,13 +309,19 @@ class BaseContext(object):
         return self.data_model_manager[ty].get_value_type()
 
     def pack_value(self, builder, ty, value, ptr, align=None):
-        """Pack data for array storage
+        """
+        Pack value into the array storage at *ptr*.
+        If *align* is given, it is the guaranteed alignment for *ptr*
+        (by default, the standard ABI alignment).
         """
         dataval = self.data_model_manager[ty].as_data(builder, value)
         builder.store(dataval, ptr, align=align)
 
     def unpack_value(self, builder, ty, ptr, align=None):
-        """Unpack data from array storage
+        """
+        Unpack value from the array storage at *ptr*.
+        If *align* is given, it is the guaranteed alignment for *ptr*
+        (by default, the standard ABI alignment).
         """
         dm = self.data_model_manager[ty]
         return dm.load_from_data_pointer(builder, ptr, align)
