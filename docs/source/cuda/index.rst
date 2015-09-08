@@ -13,3 +13,4 @@ Numba for CUDA GPUs
    device-management.rst
    examples.rst
    simulator.rst
+   reduction.rst

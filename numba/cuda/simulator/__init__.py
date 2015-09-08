@@ -3,7 +3,8 @@ from __future__ import absolute_import
 from .api import *
 from .array import (devicearray, device_array, device_array_like, pinned,
                     pinned_array, to_device)
-
+from .reduction import Reduce
+reduce = Reduce
 
 # Ensure that any user code attempting to import cudadrv etc. gets the
 # simulator's version and not the real version if the simulator is enabled.
