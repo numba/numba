@@ -19,7 +19,7 @@ requirements:
     - argparse        [py26]
     - numpy
     # On channel https://binstar.org/numba/
-    - llvmlite 0.7*
+    - llvmlite 0.8*
     - funcsigs       [py26 or py27]
     - singledispatch [py26 or py27 or py33]
   run:
@@ -27,7 +27,7 @@ requirements:
     - argparse        [py26]
     - numpy
     # On channel https://binstar.org/numba/
-    - llvmlite 0.7*
+    - llvmlite 0.8*
     - funcsigs       [py26 or py27]
     - singledispatch [py26 or py27 or py33]
 test:
