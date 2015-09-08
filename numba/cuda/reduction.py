@@ -5,10 +5,33 @@ from __future__ import print_function, division, absolute_import
 from functools import reduce
 import math
 from numba.numpy_support import from_dtype
-from numba.types import uint32
+from numba.types import uint32, intp
+
+# This implementations is based on patterns described in "Optimizing Parallel
+# Reduction In CUDA" by Mark Harris:
+# http://developer.download.nvidia.com/compute/cuda/1.1-Beta/x86_website/projects/reduction/doc/reduction.pdf
+# - sections of this document are referred to throughout this code.
+#
+# In this implementation, a tree-based approach to performing the reduction in
+# parallel is taken, with threads in one block co-operating to reduce a
+# sub-vector into a single value. Each block's partial reduction result is
+# written out to produce a vector of partially-reduced results. Reduction
+# kernels are invoked repeatedly until the remaining vector of partially-reduced
+# results contains 16 or fewer elements, at which point the vector of partial
+# results is transferred to the CPU for a final reduction to a single value.
+#
+# NOTE: This transfer of to the CPU for the final reduction is not an optimal
+# strategy, as it required a roundtrip transferring data between the CPU and GPU
+# when the reduction forms part of a set of operations on data on the GPU.
+# Remedying this by performing the final reduction on the GPU is a TODO item -
+# see https://github.com/numba/numba/issues/1407
 
 def reduction_template(binop, typ, blocksize):
     """
+    Returns a kernel that performs a partial reduction. This implementation is
+    similar to that shown in the section "Reduction #6" of "Optimizing Parallel
+    Reduction in CUDA" by Mark Harris.
+
     Args
     ----
     binop : function object
@@ -19,10 +42,11 @@ def reduction_template(binop, typ, blocksize):
         The CUDA block size (thread per block)
     """
     from numba import cuda
-    from numba import intp
 
     if blocksize > 512:
-        # The reducer implementation is limited to 512 threads per block
+        # The reducer implementation is limited to 512 threads per block. This
+        # is not an issue in practice, since the reduction plan function does
+        # not generate kernel launches with a blocksize greater than 512.
         raise ValueError("blocksize too big")
 
     # Compile binary operation as device function
@@ -34,14 +58,26 @@ def reduction_template(binop, typ, blocksize):
         tid = cuda.threadIdx.x
         i = cuda.blockIdx.x * (blocksize * 2) + tid
         gridSize = blocksize * 2 * cuda.gridDim.x
+
+        # Blocks perform most of the reduction within shared memory, in the
+        # sdata array
         sdata = cuda.shared.array(blocksize, dtype=typ)
 
+        # The first reduction operation is performed during the process of
+        # loading the data from global memory, in order to reduce the number of
+        # idle threads (See "Reduction #4: First Add During Load")
         while i < nelem:
             sdata[tid] = binop(inp[i], inp[i + blocksize])
             i += gridSize
 
+        # The following reduction steps rely on all values being loaded into
+        # sdata; we need to synchronize in order to meet this condition
         cuda.syncthreads()
 
+        # The following lines implement an unrolled loop that repeatedly reduces
+        # the number of values by two (by performing the reduction operation)
+        # until only a single value is left. This is done to reduce instruction
+        # overhead (See the section "Instruction Bottleneck")
         if blocksize >= 512:
             if tid < 256:
                 sdata[tid] = binop(sdata[tid], sdata[tid + 256])
@@ -57,6 +93,11 @@ def reduction_template(binop, typ, blocksize):
                 sdata[tid] = binop(sdata[tid], sdata[tid + 64])
                 cuda.syncthreads()
 
+        # At this point only the first warp has any work to do - we perform a
+        # check on the thread ID here so that we can avoid calling syncthreads
+        # (operations are synchronous within a warp) and also to avoid checking
+        # the thread ID at each iteration (See the section "Unrolling the Last
+        # Warp)
         if tid < 32:
             if blocksize >= 64:
                 sdata[tid] = binop(sdata[tid], sdata[tid + 32])
@@ -71,6 +112,8 @@ def reduction_template(binop, typ, blocksize):
             if blocksize >= 2:
                 sdata[tid] = binop(sdata[tid], sdata[tid + 1])
 
+        # Write this block's partially reduced value into the vector of all
+        # partially-reduced values.
         if tid == 0:
             out[cuda.blockIdx.x * ostride] = sdata[0]
 
@@ -164,6 +207,9 @@ class Reduce(object):
 
         nbtype, size = self._type_and_size(dary, size)
 
+        # Partial reduction kernels write their output strided - this kernel is
+        # used to copy the strided output to a compacted array which can be used
+        # as input to the next kernel.
         @cuda.jit
         def copy_strides(arr, n, stride, tpb):
             sm = cuda.shared.array(1, dtype=uint32)
@@ -193,7 +239,8 @@ class Reduce(object):
         while size >= 16:
             # Find the closest size that is power of two
             p2size = 2 ** int(math.log(size, 2))
-            # Plan for p2size
+            # Generate a plan for invoking kernels to reduce the first p2size
+            # elements
             plan = self._plan(p2size, nbtype, init)
 
             diffsz = size - p2size
@@ -217,7 +264,8 @@ class Reduce(object):
                 # New size is gridsz
                 size = gridsz
 
-            # Compact any leftover
+            # Compact any leftover elements beyond the p2size-th element of the
+            # input vector.
             if diffsz > 0:
                 from numba import cuda
                 itemsize = dary.dtype.itemsize
@@ -269,10 +317,18 @@ class Reduce(object):
         return reduce(self.binop, hary, init)
 
     def _plan(self, size, nbtype, init):
-        """Compile the kernels necessary for the job.
+        """Compile the kernels necessary for a reduction operation on a vector
+        of a given size.
 
         Compiled kernels are cached.
         """
+        # The number and blocksize of kernels used in the operation depends on
+        # the length of the vector - for longer vectors, a larger blocksize is
+        # needed as there is enough work for many threads. For shorter vectors,
+        # and for completing the reduction of larger vectors, smaller blocksizes
+        # are required. Global synchronization is required after each partial
+        # reduction by blocks, which can only be achieved by launching separate
+        # kernels (See the section "Problem: Global Synchronization").
         plan = []
         if size >= 1024:
             plan.append(self._compile(nbtype, 512, init))
