@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda, int32, float32
 from numba.cuda.testing import unittest
+from numba.config import ENABLE_CUDASIM
 
 
 def useless_sync(ary):
@@ -94,21 +95,24 @@ class TestCudaSync(unittest.TestCase):
         ary = np.zeros(10, dtype=np.int32)
         compiled[1, 1](ary)
         self.assertEqual(123 + 321, ary[0])
-        self.assertIn("membar.gl;", compiled.ptx)
+        if not ENABLE_CUDASIM:
+            self.assertIn("membar.gl;", compiled.ptx)
 
     def test_threadfence_block_codegen(self):
         compiled = cuda.jit("void(int32[:])")(use_threadfence_block)
         ary = np.zeros(10, dtype=np.int32)
         compiled[1, 1](ary)
         self.assertEqual(123 + 321, ary[0])
-        self.assertIn("membar.cta;", compiled.ptx)
+        if not ENABLE_CUDASIM:
+            self.assertIn("membar.cta;", compiled.ptx)
 
     def test_threadfence_system_codegen(self):
         compiled = cuda.jit("void(int32[:])")(use_threadfence_system)
         ary = np.zeros(10, dtype=np.int32)
         compiled[1, 1](ary)
         self.assertEqual(123 + 321, ary[0])
-        self.assertIn("membar.sys;", compiled.ptx)
+        if not ENABLE_CUDASIM:
+            self.assertIn("membar.sys;", compiled.ptx)
 
 
 if __name__ == '__main__':
