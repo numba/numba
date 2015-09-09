@@ -45,8 +45,8 @@ def reduction_template(binop, typ, blocksize):
 
     if blocksize > 512:
         # The reducer implementation is limited to 512 threads per block. This
-        # is not an issue in practice, since the reduction plan function does
-        # not generate kernel launches with a blocksize greater than 512.
+        # is not an issue in practice, since the reduction function does not
+        # instantiate this template with a blocksize greater than 512.
         raise ValueError("blocksize too big")
 
     # Compile binary operation as device function
@@ -234,46 +234,46 @@ class Reduce(object):
 
                 base += tpb
 
-
-
+        # The reduction is split into multiple steps, because each block writes
+        # a partial result out, which cannot be used as input to other blocks
+        # within the same kernel launch because this would require a global
+        # synchronization. The global synchronization takes place between kernel
+        # launches. See the section "Problem: Global Synchronization".
         while size >= 16:
-            # Find the closest size that is power of two
+            # Find the closest size that is power of two, and the remainder
             p2size = 2 ** int(math.log(size, 2))
-            # Generate a plan for invoking kernels to reduce the first p2size
-            # elements
-            plan = self._plan(p2size, nbtype, init)
+            diffsize = size - p2size
 
-            diffsz = size - p2size
+            # Generate a kernel to reduce the first p2size elements
+            kernel, blocksize = self._instantiate_template(p2size, nbtype, init)
+
             size = p2size
-            # Run kernels
-            kernel, blockSize = plan[0]
-
-            gridsz = size // blockSize
-            assert gridsz <= p2size
-            if gridsz > 0:
-                worksz = blockSize * gridsz
-                blocksz = blockSize // 2
-                assert size - worksz == 0
-                # Launch reduction kernel
-                # Process data inplace
-                # Result stored at start of each threadblock
-                kernel[gridsz, blocksz, stream](dary, dary, worksz, blockSize)
-                # Stream compact
-                # Move all results to the start
-                copy_strides[1, 512, stream](dary, gridsz, blockSize, 512)
-                # New size is gridsz
-                size = gridsz
+            gridsize = size // blocksize
+            assert gridsize <= p2size
+            if gridsize > 0:
+                worksize = blocksize * gridsize
+                blocksize = blocksize // 2
+                assert size - worksize == 0
+                # The reduction kernel stores its result in the first element of
+                # its assigned sub-vector
+                kernel[gridsize, blocksize, stream](dary, dary, worksize, blocksize)
+                # Make the partial results contiguous by copying them to the
+                # beginning of the vector
+                copy_strides[1, 512, stream](dary, gridsize, blocksize, 512)
+                # New size is gridsize, because there are exactly as many
+                # elements remaining as there were thread blocks.
+                size = gridsize
 
             # Compact any leftover elements beyond the p2size-th element of the
-            # input vector.
-            if diffsz > 0:
-                from numba import cuda
+            # input vector by appending them to the contiguous vector of partial
+            # results from the reduction kernel.
+            if diffsize > 0:
                 itemsize = dary.dtype.itemsize
                 dst = dary.gpu_data.view(size * itemsize)
                 src = dary.gpu_data.view(p2size * itemsize)
-                cuda.driver.device_to_device(dst, src, diffsz * itemsize,
+                cuda.driver.device_to_device(dst, src, diffsize * itemsize,
                                              stream=stream)
-                size += diffsz
+                size += diffsize
 
         return size
 
@@ -316,28 +316,24 @@ class Reduce(object):
         hary = darr.bind(stream=stream)[:size].copy_to_host(stream=stream)
         return reduce(self.binop, hary, init)
 
-    def _plan(self, size, nbtype, init):
-        """Compile the kernels necessary for a reduction operation on a vector
+    def _instantiate_template(self, size, nbtype, init):
+        """Compile the kernel necessary for a reduction operation on a vector
         of a given size.
-
-        Compiled kernels are cached.
         """
         # The number and blocksize of kernels used in the operation depends on
         # the length of the vector - for longer vectors, a larger blocksize is
         # needed as there is enough work for many threads. For shorter vectors,
-        # and for completing the reduction of larger vectors, smaller blocksizes
-        # are required. Global synchronization is required after each partial
-        # reduction by blocks, which can only be achieved by launching separate
-        # kernels (See the section "Problem: Global Synchronization").
-        plan = []
+        # smaller blocksizes are more efficient.
         if size >= 1024:
-            plan.append(self._compile(nbtype, 512, init))
-        if size >= 128:
-            plan.append(self._compile(nbtype, 64, init))
-        if size >= 16:
-            plan.append(self._compile(nbtype, 8, init))
-
-        return plan
+            return self._compile(nbtype, 512, init)
+        elif size >= 128:
+            return self._compile(nbtype, 64, init)
+        elif size >= 16:
+            return self._compile(nbtype, 8, init)
+        else:
+            # When there are fewer than 16 elements, the reduction is not
+            # performed on the GPU.
+            raise ValueError('size < 16 unsupported')
 
     def _compile(self, nbtype, blockSize, init):
         """Compile a kernel for the parameter.
