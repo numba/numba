@@ -1,4 +1,4 @@
-%PYTHON% setup.py install
+%PYTHON% setup.py build install
 if errorlevel 1 exit 1
 
 if "%PY3K%"=="1" (

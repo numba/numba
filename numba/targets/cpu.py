@@ -40,10 +40,11 @@ class CPUContext(BaseContext):
 
     def init(self):
         self.is32bit = (utils.MACHINE_BITS == 32)
+        self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
         # Map external C functions.
-        externals.c_math_functions.install()
-        externals.c_numpy_functions.install()
+        externals.c_math_functions.install(self)
+        externals.c_numpy_functions.install(self)
 
         # Add target specific implementations
         self.install_registry(cmathimpl.registry)
@@ -52,8 +53,6 @@ class CPUContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
-
-        self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
         # Initialize NRT runtime
         rtsys.initialize(self)

@@ -34,16 +34,24 @@ class TestPrint(unittest.TestCase):
 
         cr = compile_isolated(pyfunc, (types.int32,))
         cfunc = cr.entry_point
-
-        with captured_stdout():
-            cfunc(1)
-            self.assertEqual(sys.stdout.getvalue(), '1\n')
+        for val in (1, -234):
+            with captured_stdout():
+                cfunc(val)
+                self.assertEqual(sys.stdout.getvalue(), str(val) + '\n')
 
         cr = compile_isolated(pyfunc, (types.int64,))
         cfunc = cr.entry_point
-        with captured_stdout():
-            cfunc(1)
-            self.assertEqual(sys.stdout.getvalue(), '1\n')
+        for val in (1, -234, 123456789876543210, -123456789876543210):
+            with captured_stdout():
+                cfunc(val)
+                self.assertEqual(sys.stdout.getvalue(), str(val) + '\n')
+
+        cr = compile_isolated(pyfunc, (types.uint64,))
+        cfunc = cr.entry_point
+        for val in (1, 234, 123456789876543210, 2**63 + 123):
+            with captured_stdout():
+                cfunc(val)
+                self.assertEqual(sys.stdout.getvalue(), str(val) + '\n')
 
         cr = compile_isolated(pyfunc, (types.float32,))
         cfunc = cr.entry_point

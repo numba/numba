@@ -19,8 +19,10 @@ register = registry.register
 def int_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
-    szval = context.cast(builder, x, sig.args[0], types.intp)
-    intobj = py.long_from_ssize_t(szval)
+    if sig.args[0].signed:
+        intobj = py.long_from_signed_int(x)
+    else:
+        intobj = py.long_from_unsigned_int(x)
     py.print_object(intobj)
     py.decref(intobj)
     res = context.get_dummy_value()

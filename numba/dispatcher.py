@@ -330,6 +330,7 @@ class Overloaded(_OverloadedBase):
             if existing is not None:
                 return existing
 
+            # Try to load from disk cache
             cres = self._cache.load_overload(sig, self.targetctx)
             if cres is not None:
                 # XXX fold this in add_overload()? (also see compiler.py)

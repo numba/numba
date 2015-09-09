@@ -21,6 +21,19 @@ try:
 except ImportError:
     from Queue import Empty as TimeoutError
 
+try:
+    import faulthandler
+except ImportError:
+    faulthandler = None
+else:
+    try:
+        # May fail in IPython Notebook with UnsupportedOperation
+        faulthandler.enable()
+    except BaseException as e:
+        msg = "Failed to enable faulthandler due to:\n{err}"
+        warnings.warn(msg.format(err=e))
+
+
 # "unittest.main" is really the TestProgram class!
 # (defined in a module named itself "unittest.main"...)
 
@@ -278,7 +291,8 @@ class _MinimalResult(object):
 
     __slots__ = (
         'failures', 'errors', 'skipped', 'expectedFailures',
-        'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun')
+        'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun',
+        'test_id')
 
     def fixup_case(self, case):
         """
@@ -287,15 +301,16 @@ class _MinimalResult(object):
         # Python 3.3 doesn't reset this one.
         case._outcomeForDoCleanups = None
 
-    def __init__(self, original_result):
+    def __init__(self, original_result, test_id=None):
         for attr in self.__slots__:
-            setattr(self, attr, getattr(original_result, attr))
+            setattr(self, attr, getattr(original_result, attr, None))
         for case, _ in self.expectedFailures:
             self.fixup_case(case)
         for case, _ in self.errors:
             self.fixup_case(case)
         for case, _ in self.failures:
             self.fixup_case(case)
+        self.test_id = test_id
 
 
 class _FakeStringIO(object):
@@ -340,7 +355,7 @@ class _MinimalRunner(object):
             test(result)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
-        return _MinimalResult(result)
+        return _MinimalResult(result, test.id())
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -364,6 +379,8 @@ class ParallelTestRunner(runner.TextTestRunner):
     """
 
     resultclass = ParallelTestResult
+    # A test can't run longer than 2 minutes
+    timeout = 120
 
     def __init__(self, runner_cls, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
@@ -385,14 +402,22 @@ class ParallelTestRunner(runner.TextTestRunner):
             pool.join()
 
     def _inner(self, result, pool, child_runner):
+        remaining_ids = set(t.id() for t in self._test_list)
         it = pool.imap_unordered(child_runner, self._test_list)
         while True:
             try:
-                # A test can't run longer than 2 minutes
-                child_result = it.__next__(120)
+                child_result = it.__next__(self.timeout)
             except StopIteration:
                 return
+            except TimeoutError as e:
+                # Diagnose the names of unfinished tests
+                msg = ("%s [unfinished tests: %s]"
+                       % (str(e), ", ".join(map(repr, sorted(remaining_ids))))
+                       )
+                e.args = (msg,) + e.args[1:]
+                raise e
             result.add_results(child_result)
+            remaining_ids.discard(child_result.test_id)
             if child_result.shouldStop:
                 return
 
@@ -401,16 +426,3 @@ class ParallelTestRunner(runner.TextTestRunner):
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
-
-
-try:
-    import faulthandler
-except ImportError:
-    pass
-else:
-    try:
-        # May fail in IPython Notebook with UnsupportedOperation
-        faulthandler.enable()
-    except BaseException as e:
-        msg = "Failed to enable faulthandler due to:\n{err}"
-        warnings.warn(msg.format(err=e))

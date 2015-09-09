@@ -7,7 +7,6 @@ else:
     from .device_init import *
     from .device_init import _auto_device
 
-
 def test():
     if not is_available():
         raise cuda_error()

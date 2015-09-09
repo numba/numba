@@ -394,6 +394,7 @@ class TestCache(TestCase):
         self.modfile = os.path.join(self.tempdir, self.modname + ".py")
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
         shutil.copy(self.usecases_file, self.modfile)
+        self.maxDiff = None
 
     def tearDown(self):
         sys.modules.pop(self.modname, None)
