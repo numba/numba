@@ -43,6 +43,9 @@ def reduction_template(binop, typ, blocksize):
     """
     from numba import cuda
 
+    # Ensure that there is enough shared memory for smaller block sizes
+    sdatasize = max(blocksize, 64)
+
     if blocksize > 512:
         # The reducer implementation is limited to 512 threads per block. This
         # is not an issue in practice, since the reduction function does not
@@ -61,7 +64,7 @@ def reduction_template(binop, typ, blocksize):
 
         # Blocks perform most of the reduction within shared memory, in the
         # sdata array
-        sdata = cuda.shared.array(blocksize, dtype=typ)
+        sdata = cuda.shared.array(sdatasize, dtype=typ)
 
         # The first reduction operation is performed during the process of
         # loading the data from global memory, in order to reduce the number of
@@ -147,8 +150,14 @@ class Reduce(object):
         Function are compiled once and cached inside this object.  Keep this
         object alive will prevent re-compilation.
         """
-        self.binop = binop
-        self._cache = {}
+        self._kernels = {}
+        self._cached_types = set()
+        self._binop = binop
+
+    def _get_kernel(self, size, nbtype):
+        blocksize = min(size // 2, 512)
+        key = nbtype, blocksize
+        return self._kernels[key], blocksize * 2
 
     def _prepare(self, arr, stream):
         if arr.ndim != 1:
@@ -220,8 +229,7 @@ class Reduce(object):
             diffsize = size - p2size
 
             # Generate a kernel to reduce the first p2size elements
-            kernel, blocksize = self._instantiate_template(p2size, nbtype)
-
+            kernel, blocksize = self._get_kernel(p2size, nbtype)
             size = p2size
             gridsize = size // blocksize
             assert gridsize <= p2size
@@ -286,38 +294,17 @@ class Reduce(object):
         if (size is not None and size == 0) or (arr.size == 0):
             return init
         darr, stream, conv = self._prepare(arr, stream)
+
+        # Compile the reduction template for all required block sizes. See the
+        # section "Invoking Template Kernels"
+        nbtype = from_dtype(arr.dtype)
+        if nbtype not in self._cached_types:
+            for blocksize in (1, 2, 4, 8, 16, 32, 64, 128, 256, 512):
+                key = nbtype, blocksize
+                self._kernels[key] = reduction_template(self._binop, nbtype, blocksize)
+                self._cached_types.add(nbtype)
+
         size = self._partial_inplace_driver(darr, size=size, init=init,
                                             stream=stream)
         hary = darr.bind(stream=stream)[:size].copy_to_host(stream=stream)
-        return reduce(self.binop, hary, init)
-
-    def _instantiate_template(self, size, nbtype):
-        """Compile the kernel necessary for a reduction operation on a vector
-        of a given size.
-        """
-        # The number and blocksize of kernels used in the operation depends on
-        # the length of the vector - for longer vectors, a larger blocksize is
-        # needed as there is enough work for many threads. For shorter vectors,
-        # smaller blocksizes are more efficient.
-        if size >= 1024:
-            return self._compile(nbtype, 512)
-        elif size >= 128:
-            return self._compile(nbtype, 64)
-        elif size >= 16:
-            return self._compile(nbtype, 8)
-        else:
-            # When there are fewer than 16 elements, the reduction is not
-            # performed on the GPU.
-            raise ValueError('size < 16 unsupported')
-
-    def _compile(self, nbtype, blockSize):
-        """Compile a kernel for the parameter.
-
-        Compiled kernels are cached.
-        """
-        key = nbtype, blockSize
-        reducer = self._cache.get(key)
-        if reducer is None:
-            reducer = reduction_template(self.binop, nbtype, blockSize)
-            self._cache[key] = reducer
-        return reducer, blockSize * 2
+        return reduce(self._binop, hary, init)
