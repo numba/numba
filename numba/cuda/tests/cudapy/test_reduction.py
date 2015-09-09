@@ -2,14 +2,28 @@ from __future__ import print_function
 import numpy as np
 from numba import cuda
 from numba import unittest_support as unittest
+from numba.config import ENABLE_CUDASIM
 
 class TestReduction(unittest.TestCase):
-    def test_sum_reduce(self):
+    def _sum_reduce(self, n):
         sum_reduce = cuda.Reduce(lambda a, b: a + b)
-        A = (np.arange(34567, dtype=np.float64) + 1)
+        A = (np.arange(n, dtype=np.float64) + 1)
         expect = A.sum()
         got = sum_reduce(A)
         self.assertEqual(expect, got)
+
+    def test_sum_reduce(self):
+        if ENABLE_CUDASIM:
+            # Minimal test set for the simulator (which only wraps
+            # functools.reduce)
+            test_sizes = [ 1, 16 ]
+        else:
+            # Tests around the points where blocksize changes, and around larger
+            # powers of two, sums of powers of two, and some "random" sizes
+            test_sizes = [ 1, 15, 16, 17, 127, 128, 129, 1023, 1024,
+                           1025, 1536, 1048576, 1049600, 1049728, 34567 ]
+        for n in test_sizes:
+            self._sum_reduce(n)
 
     def test_empty_array_host(self):
         sum_reduce = cuda.Reduce(lambda a, b: a + b)
