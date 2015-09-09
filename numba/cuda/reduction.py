@@ -176,31 +176,6 @@ class Reduce(object):
 
         return nbtype, size
 
-    def device_partial_inplace(self, darr, size=None, init=0, stream=0):
-        """Partially reduce a device array inplace as much as possible in an
-        efficient manner. Does not automatically transfer host array.
-
-        :param darr: Used to input and output.
-        :type darr: device array
-        :param size: Number of element in ``arr``.  If None, the entire array is used.
-        :type size: int or None
-        :param init: Initial value for the reduction
-        :type init: dtype of darr
-        :param stream: All CUDA operations are performed on this stream if it is given.
-          Otherwise, a new stream is created.
-        :type stream: cuda stream
-        :returns: int -- Number of elements in ``darr`` that contains the reduction result.
-
-        """
-        if stream == 0:
-            from numba import cuda
-            stream = cuda.stream()
-            ret = self._partial_inplace_driver(darr, size, init, stream)
-            stream.synchronize()
-        else:
-            ret = self._partial_inplace_driver(darr, size, init, stream)
-        return ret
-
     def _partial_inplace_driver(self, dary, size, init, stream):
 
         from numba import cuda
@@ -245,7 +220,7 @@ class Reduce(object):
             diffsize = size - p2size
 
             # Generate a kernel to reduce the first p2size elements
-            kernel, blocksize = self._instantiate_template(p2size, nbtype, init)
+            kernel, blocksize = self._instantiate_template(p2size, nbtype)
 
             size = p2size
             gridsize = size // blocksize
@@ -316,7 +291,7 @@ class Reduce(object):
         hary = darr.bind(stream=stream)[:size].copy_to_host(stream=stream)
         return reduce(self.binop, hary, init)
 
-    def _instantiate_template(self, size, nbtype, init):
+    def _instantiate_template(self, size, nbtype):
         """Compile the kernel necessary for a reduction operation on a vector
         of a given size.
         """
@@ -325,22 +300,22 @@ class Reduce(object):
         # needed as there is enough work for many threads. For shorter vectors,
         # smaller blocksizes are more efficient.
         if size >= 1024:
-            return self._compile(nbtype, 512, init)
+            return self._compile(nbtype, 512)
         elif size >= 128:
-            return self._compile(nbtype, 64, init)
+            return self._compile(nbtype, 64)
         elif size >= 16:
-            return self._compile(nbtype, 8, init)
+            return self._compile(nbtype, 8)
         else:
             # When there are fewer than 16 elements, the reduction is not
             # performed on the GPU.
             raise ValueError('size < 16 unsupported')
 
-    def _compile(self, nbtype, blockSize, init):
+    def _compile(self, nbtype, blockSize):
         """Compile a kernel for the parameter.
 
         Compiled kernels are cached.
         """
-        key = nbtype, blockSize, init
+        key = nbtype, blockSize
         reducer = self._cache.get(key)
         if reducer is None:
             reducer = reduction_template(self.binop, nbtype, blockSize)
