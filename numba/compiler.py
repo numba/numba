@@ -66,7 +66,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         """
         Reduce a CompileResult to picklable components.
         """
-        libdata = self.library.serialize()
+        libdata = self.library.serialize_using_object_code()
         # Make it (un)picklable efficiently
         typeann = str(self.type_annotation)
         fndesc = self.fndesc
@@ -530,6 +530,10 @@ class Pipeline(object):
         if self.library is None:
             codegen = self.targetctx.jit_codegen()
             self.library = codegen.create_library(self.bc.func_qualname)
+            # Enable object caching upfront, so that the library can
+            # be later serialized.
+            self.library.enable_object_caching()
+
         lowered = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
         cr = compile_result(typing_context=self.typingctx,
