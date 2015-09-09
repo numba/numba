@@ -5,11 +5,10 @@ from numba import unittest_support as unittest
 from numba.config import ENABLE_CUDASIM
 
 class TestReduction(unittest.TestCase):
-    def _sum_reduce(self, n):
-        sum_reduce = cuda.Reduce(lambda a, b: a + b)
+    def _reduce(self, reducer, n):
         A = (np.arange(n, dtype=np.float64) + 1)
         expect = A.sum()
-        got = sum_reduce(A)
+        got = reducer(A)
         self.assertEqual(expect, got)
 
     def test_sum_reduce(self):
@@ -22,8 +21,10 @@ class TestReduction(unittest.TestCase):
             # powers of two, sums of powers of two, and some "random" sizes
             test_sizes = [ 1, 15, 16, 17, 127, 128, 129, 1023, 1024,
                            1025, 1536, 1048576, 1049600, 1049728, 34567 ]
+        # Avoid recompilation by keeping sum_reduce here
+        sum_reduce = cuda.Reduce(lambda a, b: a + b)
         for n in test_sizes:
-            self._sum_reduce(n)
+            self._reduce(sum_reduce, n)
 
     def test_empty_array_host(self):
         sum_reduce = cuda.Reduce(lambda a, b: a + b)
