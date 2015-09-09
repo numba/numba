@@ -102,6 +102,10 @@ as well as all methods and operations.
    as mutations done by Numba code would not be visible from the Python
    interpreter.
 
+.. warning::
+   Sorting currently uses a quicksort algorithm, which has different
+   performance characterics than the algorithm used by Python.
+
 
 None
 ----
