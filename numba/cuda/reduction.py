@@ -159,20 +159,6 @@ class Reduce(object):
         key = nbtype, blocksize
         return self._kernels[key], blocksize * 2
 
-    def _prepare(self, arr, stream):
-        if arr.ndim != 1:
-            raise TypeError("only support 1D array")
-
-        from numba import cuda
-        # If no stream is specified, allocate one
-        if stream == 0:
-            stream = cuda.stream()
-
-        # Make sure `arr` in on the device
-        darr, conv = cuda.devicearray.auto_device(arr, stream=stream)
-
-        return darr, stream, conv
-
     def _type_and_size(self, dary, size):
         nbtype = from_dtype(dary.dtype)
 
@@ -185,7 +171,7 @@ class Reduce(object):
 
         return nbtype, size
 
-    def _partial_inplace_driver(self, dary, size, init, stream):
+    def _execute_reduction(self, dary, size, stream, init=0):
 
         from numba import cuda
 
@@ -223,7 +209,7 @@ class Reduce(object):
         # within the same kernel launch because this would require a global
         # synchronization. The global synchronization takes place between kernel
         # launches. See the section "Problem: Global Synchronization".
-        while size >= 16:
+        while size >= 2:
             # Find the closest size that is power of two, and the remainder
             p2size = 2 ** int(math.log(size, 2))
             diffsize = size - p2size
@@ -258,9 +244,12 @@ class Reduce(object):
                                              stream=stream)
                 size += diffsize
 
-        return size
+        # Finalise reduction with initial value if necessary
+        if init != 0:
+            kernel, _ = self._get_kernel(0, nbtype)
+            kernel(dary, init)
 
-    def __call__(self, arr, size=None, init=0, stream=0):
+    def __call__(self, arr, res=None, size=None, init=0, stream=0):
         """Performs a full reduction.
 
         Returns the result of the full reduction
@@ -275,6 +264,10 @@ class Reduce(object):
         size : int or None
             Number of element in ``arr``.  If None, the entire array is used.
 
+        res: device array or None
+            if a device array is given, the reduction result is written to the
+            first element of that array.
+
         init : dtype of darr
             Initial value for the reduction
 
@@ -285,15 +278,23 @@ class Reduce(object):
         Returns
         -------
         depends on ``arr.dtype``
-            Reduction result.
-
-        Notes
-        -----
-        Calls ``device_partial_inplace`` internally.
+            If res is specified, None is returned. If res is not specified, the
+            reduction result is returned.
         """
+        from numba import cuda
+
+        if arr.ndim != 1:
+            raise TypeError("only support 1D array")
+
+        # Avoid computation for zero-length input
         if (size is not None and size == 0) or (arr.size == 0):
-            return init
-        darr, stream, conv = self._prepare(arr, stream)
+            if res is None:
+                return init
+            else:
+                res[0] = init
+                return None
+
+        darr, _ = cuda.devicearray.auto_device(arr, stream=stream)
 
         # Compile the reduction template for all required block sizes. See the
         # section "Invoking Template Kernels"
@@ -302,9 +303,21 @@ class Reduce(object):
             for blocksize in (1, 2, 4, 8, 16, 32, 64, 128, 256, 512):
                 key = nbtype, blocksize
                 self._kernels[key] = reduction_template(self._binop, nbtype, blocksize)
-                self._cached_types.add(nbtype)
 
-        size = self._partial_inplace_driver(darr, size=size, init=init,
-                                            stream=stream)
-        hary = darr.bind(stream=stream)[:size].copy_to_host(stream=stream)
-        return reduce(self._binop, hary, init)
+            # Precompile the kernel for reducing with the initial value
+            binop_dev = cuda.jit((nbtype, nbtype), device=True)(self._binop)
+            @cuda.jit((nbtype[:], nbtype))
+            def reduction_finish(arr, init):
+                arr[0] = binop_dev(arr[0], init)
+            self._kernels[nbtype, 0] = reduction_finish
+
+            self._cached_types.add(nbtype)
+
+        self._execute_reduction(darr, size, stream, init=init)
+
+        if res is None:
+            return darr[0]
+        else:
+            view = darr.bind(stream=stream)[:1]
+            res.copy_to_device(view, stream=stream)
+            return None
