@@ -386,56 +386,6 @@ Numba_poisson_ptrs(rnd_state_t *state, double lam)
  * Other helpers.
  */
 
-/* provide 128-bit multiplilcation inplace for __multi3
- * on 32-bit platform */
-
-typedef union i128 {
-    struct {
-        uint64_t low;
-        int64_t high;
-    } s;
-} i128;
-
-
-static
-i128 umul64(uint64_t a, uint64_t b) {
-    /* Adapted from __mulddi in compiler-rt */
-    i128 r;
-    uint64_t t;
-    const int bits_in_dword_2 = 32;
-    const uint64_t lower_mask = (uint64_t)~0 >> bits_in_dword_2;
-
-    r.s.low = (a & lower_mask) * (b & lower_mask);
-    t = r.s.low >> bits_in_dword_2;
-    r.s.low &= lower_mask;
-    t += (a >> bits_in_dword_2) * (b & lower_mask);
-    r.s.low += (t & lower_mask) << bits_in_dword_2;
-    r.s.high = t >> bits_in_dword_2;
-    t = r.s.low >> bits_in_dword_2;
-    r.s.low &= lower_mask;
-    t += (b >> bits_in_dword_2) * (a & lower_mask);
-    r.s.low += (t & lower_mask) << bits_in_dword_2;
-    r.s.high += t >> bits_in_dword_2;
-    r.s.high += (a >> bits_in_dword_2) * (b >> bits_in_dword_2);
-    return r;
-}
-
-static
-i128 mul128(i128 a, i128 b) {
-    /* Adapted from __multi3 in compiler-rt */
-    i128 r = umul64(a.s.low, b.s.low);
-    r.s.high += a.s.high * b.s.low + a.s.low * b.s.high;
-    return r;
-}
-
-
-static
-i128
-Numba_multi3(i128 x, i128 y) {
-	return mul128(x, y);
-}
-
-
 /* provide 64-bit division function to 32-bit platforms */
 static
 int64_t Numba_sdiv(int64_t a, int64_t b) {
@@ -1550,7 +1500,6 @@ build_c_helpers_dict(void)
 
 #define declpointer(ptr) _declpointer(#ptr, &ptr)
 
-    declmethod(multi3);
     declmethod(sdiv);
     declmethod(srem);
     declmethod(udiv);

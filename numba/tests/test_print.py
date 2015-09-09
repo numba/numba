@@ -32,22 +32,30 @@ class TestPrint(unittest.TestCase):
 
         cr = compile_isolated(pyfunc, (types.int32,))
         cfunc = cr.entry_point
-
-        with swap_stdout():
-            cfunc(1)
-            self.assertEqual(sys.stdout.getvalue().strip(), '1')
+        for val in (1, -234):
+            with swap_stdout():
+                cfunc(val)
+                self.assertEqual(sys.stdout.getvalue().strip(), str(val))
 
         cr = compile_isolated(pyfunc, (types.int64,))
         cfunc = cr.entry_point
-        with swap_stdout():
-            cfunc(1)
-            self.assertEqual(sys.stdout.getvalue().strip(), '1')
+        for val in (1, -234, 123456789876543210, -123456789876543210):
+            with swap_stdout():
+                cfunc(val)
+                self.assertEqual(sys.stdout.getvalue().strip(), str(val))
+
+        cr = compile_isolated(pyfunc, (types.uint64,))
+        cfunc = cr.entry_point
+        for val in (1, 234, 123456789876543210, 2**63 + 123):
+            with swap_stdout():
+                cfunc(val)
+                self.assertEqual(sys.stdout.getvalue().strip(), str(val))
 
         cr = compile_isolated(pyfunc, (types.float32,))
         cfunc = cr.entry_point
         with swap_stdout():
             cfunc(1.1)
-            # Float32 will loose precision
+            # Float32 will lose precision
             got = sys.stdout.getvalue().strip()
             expect = '1.10000002384'
             self.assertTrue(got.startswith(expect))

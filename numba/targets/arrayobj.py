@@ -96,6 +96,22 @@ def get_itemsize(context, array_type):
     return context.get_abi_sizeof(llty)
 
 
+def load_item(context, builder, arrayty, ptr):
+    """
+    Load the item at the given array pointer.
+    """
+    align = None if arrayty.aligned else 1
+    return context.unpack_value(builder, arrayty.dtype, ptr,
+                                align=align)
+
+def store_item(context, builder, arrayty, ptr, val):
+    """
+    Store the item at the given array pointer.
+    """
+    align = None if arrayty.aligned else 1
+    return context.pack_value(builder, arrayty.dtype, ptr, val,  align=align)
+
+
 def populate_array(array, data, shape, strides, itemsize, meminfo,
                    parent=None):
     """
@@ -202,7 +218,7 @@ def getiter_array(context, builder, sig, args):
 def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
     ptr = cgutils.get_item_pointer(builder, arrayty, array, [idx],
                                    wraparound=wraparound)
-    return context.unpack_value(builder, arrayty.dtype, ptr)
+    return load_item(context, builder, arrayty, ptr)
 
 @builtin
 @implement('iternext', types.Kind(types.ArrayIterator))
@@ -350,7 +366,7 @@ def getitem_array_tuple(context, builder, sig, args):
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                        wraparound=True)
 
-        res = context.unpack_value(builder, aryty.dtype, ptr)
+        res = load_item(context, builder, aryty, ptr)
 
     return impl_ret_borrowed(context, builder ,sig.return_type, res)
 
@@ -370,7 +386,7 @@ def setitem_array1d(context, builder, sig, args):
 
     val = context.cast(builder, val, valty, aryty.dtype)
 
-    context.pack_value(builder, aryty.dtype, val, ptr)
+    store_item(context, builder, aryty, val, ptr)
 
 
 @builtin
@@ -389,7 +405,7 @@ def setitem_array_unituple(context, builder, sig, args):
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=idxty.dtype.signed)
-    context.pack_value(builder, aryty.dtype, val, ptr)
+    store_item(context, builder, aryty, val, ptr)
 
 
 @builtin
@@ -408,7 +424,7 @@ def setitem_array_tuple(context, builder, sig, args):
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=True)
-    context.pack_value(builder, aryty.dtype, val, ptr)
+    store_item(context, builder, aryty, val, ptr)
 
 @builtin
 @implement('setitem', types.Kind(types.Buffer),
@@ -479,12 +495,12 @@ def setitem_array1d_slice(context, builder, sig, args):
             ptr = cgutils.get_item_pointer(builder, aryty, ary,
                                 [loop_idx1],
                                 wraparound=True)
-            context.pack_value(builder, aryty.dtype, val, ptr)
+            store_item(context, builder, aryty, val, ptr)
         with neg_range as (loop_idx2, _):
             ptr = cgutils.get_item_pointer(builder, aryty, ary,
                                 [loop_idx2],
                                 wraparound=True)
-            context.pack_value(builder, aryty.dtype, val, ptr)
+            store_item(context, builder, aryty, val, ptr)
 
 
 @builtin
@@ -1294,7 +1310,7 @@ def array_ctypes_data(context, builder, typ, value):
 def array_record_getattr(context, builder, typ, value, attr):
     """
     Generic getattr() implementation for record arrays: fetch the given
-    record member.
+    record member, i.e. a subarray.
     """
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -1305,7 +1321,7 @@ def array_record_getattr(context, builder, typ, value, attr):
     dtype = rectype.typeof(attr)
     offset = rectype.offset(attr)
 
-    resty = types.Array(dtype, ndim=typ.ndim, layout='A')
+    resty = typ.copy(dtype=dtype, layout='A')
 
     raryty = make_array(resty)
 
@@ -1495,7 +1511,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
                 with cgutils.if_likely(builder, is_valid):
                     ptr = builder.gep(arr.data, [index])
-                    value = context.unpack_value(builder, arrty.dtype, ptr)
+                    value = load_item(context, builder, arrty, ptr)
                     if kind == 'flat':
                         result.yield_(value)
                     else:
@@ -1583,7 +1599,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 # Current pointer inside last dimension
                 last_ptr = cgutils.gep_inbounds(builder, pointers, ndim - 1)
                 ptr = builder.load(last_ptr)
-                value = context.unpack_value(builder, arrty.dtype, ptr)
+                value = load_item(context, builder, arrty, ptr)
                 if kind == 'flat':
                     result.yield_(value)
                 else:

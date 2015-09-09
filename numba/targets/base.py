@@ -308,17 +308,23 @@ class BaseContext(object):
     def get_value_type(self, ty):
         return self.data_model_manager[ty].get_value_type()
 
-    def pack_value(self, builder, ty, value, ptr):
-        """Pack data for array storage
+    def pack_value(self, builder, ty, value, ptr, align=None):
+        """
+        Pack value into the array storage at *ptr*.
+        If *align* is given, it is the guaranteed alignment for *ptr*
+        (by default, the standard ABI alignment).
         """
         dataval = self.data_model_manager[ty].as_data(builder, value)
-        builder.store(dataval, ptr)
+        builder.store(dataval, ptr, align=align)
 
-    def unpack_value(self, builder, ty, ptr):
-        """Unpack data from array storage
+    def unpack_value(self, builder, ty, ptr, align=None):
+        """
+        Unpack value from the array storage at *ptr*.
+        If *align* is given, it is the guaranteed alignment for *ptr*
+        (by default, the standard ABI alignment).
         """
         dm = self.data_model_manager[ty]
-        return dm.load_from_data_pointer(builder, ptr)
+        return dm.load_from_data_pointer(builder, ptr, align)
 
     def is_struct_type(self, ty):
         return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
@@ -426,7 +432,8 @@ class BaseContext(object):
                 dptr = cgutils.get_record_member(builder, target, offset,
                                                  self.get_data_type(elemty))
                 val = context.cast(builder, val, valty, elemty)
-                self.pack_value(builder, elemty, val, dptr)
+                align = None if typ.aligned else 1
+                self.pack_value(builder, elemty, val, dptr, align=align)
 
             return _wrap_impl(imp, self, sig)
 
@@ -513,8 +520,9 @@ class BaseContext(object):
                 @impl_attribute(typ, attr, elemty)
                 def imp(context, builder, typ, val):
                     dptr = cgutils.get_record_member(builder, val, offset,
-                                                     self.get_data_type(elemty))
-                    res = self.unpack_value(builder, elemty, dptr)
+                                                     context.get_data_type(elemty))
+                    align = None if typ.aligned else 1
+                    res = self.unpack_value(builder, elemty, dptr, align)
                     return impl_ret_borrowed(context, builder, typ, res)
             return imp
 
