@@ -125,15 +125,12 @@ def reduction_template(binop, typ, blocksize):
 
 
 class Reduce(object):
-    # The reduction kernels are compiled lazily as needed. A single reduction
-    # can use multiple kernels specialized for different sizes. These compiled
-    # kernels are cached inside the ``Reduce`` instance that created them.
+    # The reduction kernels are precompiled for all block sizes at the time when
+    # the reduction operation is first called. A single reduction can use
+    # multiple kernels specialized for different sizes. These compiled kernels
+    # are cached inside the ``Reduce`` instance that created them.
     #
     # Keeping the instance alive can avoid re-compiling.
-    #
-    # The reduction kernel may not fully reduce the array on device.
-    # The last few elements (usually less than 16) is copied back to the host
-    # for the final reduction.
 
     def __init__(self, binop):
         """Uses binop as the binary operation for reduction.
@@ -264,11 +261,11 @@ class Reduce(object):
             # Precompile the kernel for reducing with the initial value. We use
             # a block size of 0 as a placeholder for the reduction with the
             # initial value.
-            binop_dev = cuda.jit((nbtype, nbtype), device=True)(self._binop)
+            binop = cuda.jit((nbtype, nbtype), device=True)(self._binop)
 
             @cuda.jit((nbtype[:], nbtype))
             def reduction_finish(arr, init):
-                arr[0] = binop_dev(arr[0], init)
+                arr[0] = binop(arr[0], init)
 
             self._kernels[nbtype, 0] = reduction_finish
 
