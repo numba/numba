@@ -225,7 +225,8 @@ class Reduce(object):
                 assert size - worksize == 0
                 # The reduction kernel stores its result in the first element of
                 # its assigned sub-vector
-                kernel[gridsize, blocksize, stream](dary, dary, worksize, blocksize)
+                kernel[gridsize, blocksize, stream](dary, dary, worksize,
+                                                    blocksize)
                 # Make the partial results contiguous by copying them to the
                 # beginning of the vector
                 copy_strides[1, 512, stream](dary, gridsize, blocksize, 512)
@@ -248,6 +249,30 @@ class Reduce(object):
         if init != 0:
             kernel, _ = self._get_kernel(0, nbtype)
             kernel(dary, init)
+
+    def _precompile_kernels(self, nbtype):
+        from numba import cuda
+
+        # Compile the reduction template for all required block sizes. See the
+        # section "Invoking Template Kernels"
+        if nbtype not in self._cached_types:
+            for blocksize in (1, 2, 4, 8, 16, 32, 64, 128, 256, 512):
+                key = nbtype, blocksize
+                self._kernels[key] = reduction_template(self._binop, nbtype,
+                                                        blocksize)
+
+            # Precompile the kernel for reducing with the initial value. We use
+            # a block size of 0 as a placeholder for the reduction with the
+            # initial value.
+            binop_dev = cuda.jit((nbtype, nbtype), device=True)(self._binop)
+
+            @cuda.jit((nbtype[:], nbtype))
+            def reduction_finish(arr, init):
+                arr[0] = binop_dev(arr[0], init)
+
+            self._kernels[nbtype, 0] = reduction_finish
+
+            self._cached_types.add(nbtype)
 
     def __call__(self, arr, res=None, size=None, init=0, stream=0):
         """Performs a full reduction.
@@ -295,24 +320,8 @@ class Reduce(object):
                 return None
 
         darr, _ = cuda.devicearray.auto_device(arr, stream=stream)
-
-        # Compile the reduction template for all required block sizes. See the
-        # section "Invoking Template Kernels"
         nbtype = from_dtype(arr.dtype)
-        if nbtype not in self._cached_types:
-            for blocksize in (1, 2, 4, 8, 16, 32, 64, 128, 256, 512):
-                key = nbtype, blocksize
-                self._kernels[key] = reduction_template(self._binop, nbtype, blocksize)
-
-            # Precompile the kernel for reducing with the initial value
-            binop_dev = cuda.jit((nbtype, nbtype), device=True)(self._binop)
-            @cuda.jit((nbtype[:], nbtype))
-            def reduction_finish(arr, init):
-                arr[0] = binop_dev(arr[0], init)
-            self._kernels[nbtype, 0] = reduction_finish
-
-            self._cached_types.add(nbtype)
-
+        self._precompile_kernels(nbtype)
         self._execute_reduction(darr, size, stream, init=init)
 
         if res is None:
