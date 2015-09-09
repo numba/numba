@@ -133,19 +133,14 @@ class Reduce(object):
     # Keeping the instance alive can avoid re-compiling.
 
     def __init__(self, binop):
-        """Uses binop as the binary operation for reduction.
-        Uses ``cuda.jit(signature, device=True)`` to compile.
+        """Create a reduction object that reduces values using a given binary
+        function. The binary function is compiled once and cached inside this
+        object. Keeping this object alive will prevent re-compilation.
 
-        Args
-        -----
-        binop: function
-            A function to be compiled as a CUDA device function to be used
-            as the binary operation for reduction on a CUDA device.
-
-        Notes
-        -----
-        Function are compiled once and cached inside this object.  Keep this
-        object alive will prevent re-compilation.
+        :param binop: A function to be compiled as a CUDA device function that
+                      will be used as the binary operation for reduction on a
+                      CUDA device. Internally, it is compiled using
+                      ``cuda.jit(signature, device=True)``.
         """
         self._kernels = {}
         self._cached_types = set()
@@ -274,34 +269,25 @@ class Reduce(object):
     def __call__(self, arr, res=None, size=None, init=0, stream=0):
         """Performs a full reduction.
 
-        Returns the result of the full reduction
-
-        Args
-        ----
-        arr : host or device array
-            If a device array is given, the reduction is performed inplace.
-            The values in the array may be overwritten.
-            If a host array is given, it is copied to the device automatically.
-
-        size : int or None
-            Number of element in ``arr``.  If None, the entire array is used.
-
-        res: device array or None
-            if a device array is given, the reduction result is written to the
-            first element of that array.
-
-        init : dtype of darr
-            Initial value for the reduction
-
-        stream : cuda stream
-            All CUDA operations are performed on this stream if it is given.
-            Otherwise, a new stream is created.
-
-        Returns
-        -------
-        depends on ``arr.dtype``
-            If res is specified, None is returned. If res is not specified, the
-            reduction result is returned.
+        :param arr: A host or device array. If a device array is given, the
+                    reduction is performed inplace and the values in the array
+                    are overwritten. If a host array is given, it is copied to
+                    the device automatically.
+        :param size: Optional integer specifying the number of elements in
+                     ``arr`` to reduce. If this parameter is not specified, the
+                     entire array is reduced.
+        :param res: Optional device array into which to write the reduction
+                    result to. The result is written into the first element of
+                    this array. If this parameter is specified, then no
+                    communication of the reduction output takes place from the
+                    device to the host.
+        :param init: Optional initial value for the reduction, the type of which
+                     must match ``arr.dtype``.
+        :param stream: Optional CUDA stream in which to perform the reduction.
+                       If no stream is specified, the default stream of 0 is
+                       used.
+        :return: If ``res`` is specified, ``None`` is returned. Otherwise, the
+                 result of the reduction is returned.
         """
         from numba import cuda
 
