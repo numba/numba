@@ -133,8 +133,12 @@ The following methods of Numpy arrays are supported:
 
 * :meth:`~numpy.ndarray.copy` (without arguments)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
+* :meth:`~numpy.ndarray.sort` (without arguments)
 * :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
+
+.. warning::
+   Sorting may be slightly slower than Numpy's implementation.
 
 
 Functions
@@ -157,6 +161,7 @@ The following top-level functions are supported:
 * :func:`numpy.ones`
 * :func:`numpy.ones_like`
 * :func:`numpy.round_`
+* :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.zeros`
 * :func:`numpy.zeros_like`
 

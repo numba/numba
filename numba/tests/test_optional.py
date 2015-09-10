@@ -92,24 +92,10 @@ class TestOptional(unittest.TestCase):
         with self.assertRaises(lowering.LoweringError):
             cres = compile_isolated(pyfunc, [types.intp, types.intp])
 
-    def test_a_is_b_array(self):
-        pyfunc = a_is_b
-        ary = numpy.arange(2)
-        aryty = typeof(ary)
-        with self.assertRaises(lowering.LoweringError):
-            compile_isolated(pyfunc, [aryty, aryty])
-
     def test_a_is_not_b_intp(self):
         pyfunc = a_is_not_b
         with self.assertRaises(lowering.LoweringError):
             cres = compile_isolated(pyfunc, [types.intp, types.intp])
-
-    def test_a_is_not_b_array(self):
-        pyfunc = a_is_not_b
-        ary = numpy.arange(2)
-        aryty = typeof(ary)
-        with self.assertRaises(lowering.LoweringError):
-            compile_isolated(pyfunc, [aryty, aryty])
 
     def test_optional_float(self):
         def pyfunc(x, y):

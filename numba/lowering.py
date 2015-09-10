@@ -570,7 +570,7 @@ class Lower(BaseLower):
                 # for bounded function
                 the_self = self.loadvar(expr.func.name)
                 # Prepend the self reference
-                argvals = [the_self] + argvals
+                argvals = [the_self] + list(argvals)
 
             res = impl(self.builder, argvals)
 

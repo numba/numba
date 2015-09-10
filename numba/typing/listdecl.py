@@ -6,7 +6,8 @@ import numpy as np
 
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
-                        Registry, signature, bound_function)
+                        CallableTemplate,  Registry, signature, bound_function,
+                        make_callable_template)
 # Ensure list is typed as a collection as well
 from . import collections
 
@@ -29,6 +30,23 @@ class ListBuiltin(AbstractTemplate):
                 return signature(types.List(dtype), iterable)
 
 builtin_global(list, types.Function(ListBuiltin))
+
+
+class SortedBuiltin(CallableTemplate):
+    key = sorted
+
+    def generic(self):
+        def typer(iterable, reverse=None):
+            if not isinstance(iterable, types.IterableType):
+                return
+            if (reverse is not None and
+                not isinstance(reverse, types.Boolean)):
+                return
+            return types.List(iterable.iterator_type.yield_type)
+
+        return typer
+
+builtin_global(sorted, types.Function(SortedBuiltin))
 
 
 @builtin_attr
@@ -122,6 +140,18 @@ class ListAttribute(AttributeTemplate):
         assert not args
         assert not kws
         return signature(types.none)
+
+    def resolve_sort(self, list):
+        def typer(reverse=None):
+            if (reverse is not None and
+                not isinstance(reverse, types.Boolean)):
+                return
+            return types.none
+
+        return types.BoundFunction(make_callable_template(key="list.sort",
+                                                          typer=typer,
+                                                          recvr=list),
+                                   list)
 
 
 @builtin
