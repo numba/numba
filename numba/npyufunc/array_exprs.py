@@ -1,6 +1,8 @@
 from __future__ import print_function, division, absolute_import
+
 import ast
 from collections import defaultdict
+import sys
 
 from numpy import ufunc
 
@@ -270,7 +272,11 @@ def _arr_expr_to_ast(expr):
                 hex(hash(op)).replace("-", "_"))
             fn_ast_name = ast.Name(fn_name, ast.Load())
             env[fn_name] = op # Stash the ufunc or DUFunc in the environment
-            return ast.Call(fn_ast_name, ast_args, [], None, None), env
+            if sys.version_info >= (3, 5):
+                ast_call = ast.Call(fn_ast_name, ast_args, [])
+            else:
+                ast_call = ast.Call(fn_ast_name, ast_args, [], None, None)
+            return ast_call, env
     elif isinstance(expr, ir.Var):
         return ast.Name(expr.name, ast.Load(),
                         lineno=expr.loc.line,

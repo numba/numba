@@ -946,8 +946,9 @@ class Interpreter(object):
                                  loc=self.loc)
         self.store(expr, res)
 
-    def op_BUILD_MAP(self, inst, size, res):
-        expr = ir.Expr.build_map(size=size, loc=self.loc)
+    def op_BUILD_MAP(self, inst, items, size, res):
+        items = [(self.get(k), self.get(v)) for k, v in items]
+        expr = ir.Expr.build_map(items=items, size=size, loc=self.loc)
         self.store(expr, res)
 
     def op_STORE_MAP(self, inst, dct, key, value):
