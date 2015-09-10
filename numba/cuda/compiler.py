@@ -8,6 +8,7 @@ from numba import config, compiler, types
 from numba.typing.templates import ConcreteTemplate
 from numba import funcdesc, typing, utils
 
+from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import KernelRuntimeError
@@ -159,6 +160,39 @@ class ExternFunction(object):
         self.name = name
         self.sig = sig
 
+def _compute_thread_per_block(kernel, tpb):
+    if tpb != 0:
+        return tpb
+
+    else:
+        try:
+            tpb = kernel.autotune.best()
+        except ValueError:
+            warnings.warn('Could not autotune, using default tpb of 128')
+            tpb = 128
+
+        return tpb
+
+class ForAll(object):
+    def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
+        self.kernel = kernel
+        self.ntasks = ntasks
+        self.thread_per_block = tpb
+        self.stream = stream
+        self.sharedmem = sharedmem
+
+    def __call__(self, *args):
+        if isinstance(self.kernel, AutoJitCUDAKernel):
+            kernel = self.kernel.specialize(*args)
+        else:
+            kernel = self.kernel
+
+        tpb = _compute_thread_per_block(kernel, self.thread_per_block)
+        tpbm1 = tpb - 1
+        blkct = (self.ntasks + tpbm1) // tpb
+
+        return kernel.configure(blkct, tpb, stream=self.stream,
+                                sharedmem=self.sharedmem)(*args)
 
 class CUDAKernelBase(object):
     """Define interface for configurable kernels
@@ -203,6 +237,16 @@ class CUDAKernelBase(object):
         if len(args) not in [2, 3, 4]:
             raise ValueError('must specify at least the griddim and blockdim')
         return self.configure(*args)
+
+    def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
+        """Returns a configured kernel for 1D kernel of given number of tasks
+        ``ntasks``.
+
+        This assumes that:
+        - the kernel 1-to-1 maps global thread id ``cuda.grid(1)`` to tasks.
+        - the kernel must check if the thread id is valid."""
+
+        return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
 
 
 class CachedPTX(object):
@@ -475,6 +519,27 @@ class CUDAKernel(CUDAKernelBase):
 
         else:
             raise NotImplementedError(ty, val)
+
+
+    @property
+    def autotune(self):
+        has_autotune = hasattr(self, '_autotune')
+        if has_autotune and self._autotune.dynsmem == self.sharedmem:
+            return self._autotune
+        else:
+            # Get CUDA Function
+            cufunc = self._func.get()
+            at = AutoTuner(info=cufunc.attrs, cc=cufunc.device.compute_capability)
+            self._autotune = at
+            return self._autotune
+
+    @property
+    def occupancy(self):
+        """calculate the theoretical occupancy of the kernel given the
+        configuration."""
+        thread_per_block = reduce(operator.mul, self.blockdim, 1)
+        return self.autotune.closest(thread_per_block)
+
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):
