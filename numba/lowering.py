@@ -641,6 +641,8 @@ class Lower(BaseLower):
             # If we have a tuple, we needn't do anything
             # (and we can't iterate over the heterogenous ones).
             if isinstance(ty, types.BaseTuple):
+                assert ty == resty
+                self.incref(ty, val)
                 return val
 
             itemty = ty.iterator_type.yield_type
