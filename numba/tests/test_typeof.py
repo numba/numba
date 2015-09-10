@@ -27,10 +27,10 @@ recordtype = np.dtype([('a', np.float64),
                        ('c', np.complex64),
                        ('d', (np.str, 5))])
 
-recordtype2 = np.dtype([('e', np.int32),
+recordtype2 = np.dtype([('e', np.int8),
                         ('f', np.float64)])
 
-recordtype3 = np.dtype([('e', np.int32),
+recordtype3 = np.dtype([('e', np.int8),
                         ('f', np.float64)], align=True)
 
 Point = namedtuple('Point', ('x', 'y'))
