@@ -67,10 +67,9 @@ def print_varargs(context, builder, sig, args):
         signature = typing.signature(types.none, argtype)
         imp = context.get_function(types.print_item_type, signature)
         imp(builder, [argval])
-        if i == len(args) - 1:
-            py.print_string('\n')
-        else:
+        if i < len(args) - 1:
             py.print_string(' ')
+    py.print_string('\n')
 
     res = context.get_dummy_value()
     return impl_ret_untracked(context, builder, sig.return_type, res)

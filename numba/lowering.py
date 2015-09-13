@@ -570,7 +570,7 @@ class Lower(BaseLower):
                 # for bounded function
                 the_self = self.loadvar(expr.func.name)
                 # Prepend the self reference
-                argvals = [the_self] + argvals
+                argvals = [the_self] + list(argvals)
 
             res = impl(self.builder, argvals)
 
@@ -641,6 +641,8 @@ class Lower(BaseLower):
             # If we have a tuple, we needn't do anything
             # (and we can't iterate over the heterogenous ones).
             if isinstance(ty, types.BaseTuple):
+                assert ty == resty
+                self.incref(ty, val)
                 return val
 
             itemty = ty.iterator_type.yield_type

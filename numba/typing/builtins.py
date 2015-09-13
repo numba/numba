@@ -618,6 +618,13 @@ class ArrayAttribute(AttributeTemplate):
         retty = ary.copy(ndim=ndim)
         return signature(retty, shape)
 
+    @bound_function("array.sort")
+    def resolve_sort(self, ary, args, kws):
+        assert not args
+        assert not kws
+        if ary.ndim == 1:
+            return signature(types.none)
+
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):
         from .npydecl import _parse_dtype
