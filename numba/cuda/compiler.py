@@ -523,6 +523,7 @@ class CUDAKernel(CUDAKernelBase):
 
     @property
     def autotune(self):
+        """Return the autotuner object associated with this kernel."""
         has_autotune = hasattr(self, '_autotune')
         if has_autotune and self._autotune.dynsmem == self.sharedmem:
             return self._autotune
@@ -535,8 +536,10 @@ class CUDAKernel(CUDAKernelBase):
 
     @property
     def occupancy(self):
-        """calculate the theoretical occupancy of the kernel given the
-        configuration."""
+        """Occupancy is the ratio of the number of active warps per multiprocessor to the maximum
+        number of warps that can be active on the multiprocessor at once.
+        Calculate the theoretical occupancy of the kernel given the
+        current configuration."""
         thread_per_block = reduce(operator.mul, self.blockdim, 1)
         return self.autotune.closest(thread_per_block)
 
