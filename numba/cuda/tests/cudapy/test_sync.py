@@ -91,6 +91,7 @@ class TestCudaSync(unittest.TestCase):
         self.assertTrue(np.all(ary == 2 * np.arange(ary.size, dtype=np.int32)))
 
     def test_threadfence_codegen(self):
+        # Does not test runtime behavior, just the code generation.
         compiled = cuda.jit("void(int32[:])")(use_threadfence)
         ary = np.zeros(10, dtype=np.int32)
         compiled[1, 1](ary)
@@ -99,6 +100,7 @@ class TestCudaSync(unittest.TestCase):
             self.assertIn("membar.gl;", compiled.ptx)
 
     def test_threadfence_block_codegen(self):
+        # Does not test runtime behavior, just the code generation.
         compiled = cuda.jit("void(int32[:])")(use_threadfence_block)
         ary = np.zeros(10, dtype=np.int32)
         compiled[1, 1](ary)
@@ -107,6 +109,7 @@ class TestCudaSync(unittest.TestCase):
             self.assertIn("membar.cta;", compiled.ptx)
 
     def test_threadfence_system_codegen(self):
+        # Does not test runtime behavior, just the code generation.
         compiled = cuda.jit("void(int32[:])")(use_threadfence_system)
         ary = np.zeros(10, dtype=np.int32)
         compiled[1, 1](ary)
