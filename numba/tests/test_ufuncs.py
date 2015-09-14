@@ -1101,9 +1101,10 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
             result = cfunc(x, y)
             np.testing.assert_array_equal(expected, result)
 
-    def test_implicit_output_layout(self):
+    def test_implicit_output_layout_binary(self):
         def pyfunc(a0, a1):
             return np.add(a0, a1)
+
         # C layout
         X = np.linspace(0, 1, 20).reshape(4, 5)
         # F layout
@@ -1130,6 +1131,38 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
                                     flags=enable_nrt_flags)
             expected = pyfunc(arg0, arg1)
             result = cr.entry_point(arg0, arg1)
+
+            self.assertEqual(expected.flags.c_contiguous,
+                             result.flags.c_contiguous)
+            self.assertEqual(expected.flags.f_contiguous,
+                             result.flags.f_contiguous)
+            np.testing.assert_array_equal(expected, result)
+
+    def test_implicit_output_layout_unary(self):
+        def pyfunc(a0):
+            return np.sqrt(a0)
+
+        # C layout
+        X = np.linspace(0, 1, 20).reshape(4, 5)
+        # F layout
+        Y = np.array(X, order='F')
+        # A layout
+        Z = X.reshape(5, 4).T[0]
+
+        Xty = typeof(X)
+        assert X.flags.c_contiguous and Xty.layout == 'C'
+        Yty = typeof(Y)
+        assert Y.flags.f_contiguous and Yty.layout == 'F'
+        Zty = typeof(Z)
+        assert Zty.layout == 'A'
+        assert not Z.flags.c_contiguous
+        assert not Z.flags.f_contiguous
+
+        for arg0 in [X, Y, Z]:
+            cr = self.cache.compile(pyfunc, (typeof(arg0),),
+                                    flags=enable_nrt_flags)
+            expected = pyfunc(arg0)
+            result = cr.entry_point(arg0)
 
             self.assertEqual(expected.flags.c_contiguous,
                              result.flags.c_contiguous)
