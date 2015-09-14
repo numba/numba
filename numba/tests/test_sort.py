@@ -4,6 +4,7 @@ import copy
 import itertools
 import math
 import random
+import sys
 
 import numpy as np
 
@@ -305,11 +306,13 @@ class BaseTimsortTest(BaseSortingTest):
         for i in range(0, 64):
             self.assertEqual(f(i), i)
         for i in range(6, 63):
+            if 2**i > sys.maxsize:
+                break
             self.assertEqual(f(2**i), 32)
         for i in self.fibo():
             if i < 64:
                 continue
-            if i >= 2 ** 63:
+            if i >= sys.maxsize:
                 break
             k = f(i)
             self.assertGreaterEqual(k, 32)
