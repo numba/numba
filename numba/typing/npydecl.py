@@ -72,14 +72,12 @@ class Numpy_rules_ufunc(AbstractTemplate):
             layout = 'C'
             layouts = [x.layout if isinstance(x, types.Array) else ''
                        for x in args]
-            if 'C' not in layouts:
-                if 'F' in layouts:
-                    layout = 'F'
-                elif 'A' in layouts:
-                    # See also _empty_nd_impl() in numba.targets.arrayobj.
-                    raise NotImplementedError(
-                        "Don't know how to create implicit output array "
-                        "with 'A' layout.")
+
+            # Prefer C contig if any array is C contig.
+            # Next, prefer F contig.
+            # Defaults to C contig if not layouts are C/F.
+            if 'C' not in layouts and 'F' in layouts:
+                layout = 'F'
 
         return base_types, explicit_outputs, ndims, layout
 
