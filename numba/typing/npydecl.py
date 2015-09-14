@@ -73,14 +73,11 @@ class Numpy_rules_ufunc(AbstractTemplate):
             layouts = [x.layout if isinstance(x, types.Array) else ''
                        for x in args]
 
-            # Prefer C contig if any array is C contig
-            if 'C' not in layouts:
-                # Next, prefer F contig
-                if 'F' in layouts:
-                    layout = 'F'
-                # If none of the arrays are C or F, default to C
-                elif 'A' in layouts:
-                    layout = 'C'
+            # Prefer C contig if any array is C contig.
+            # Next, prefer F contig.
+            # Defaults to C contig if not layouts are C/F.
+            if 'C' not in layouts and 'F' in layouts:
+                layout = 'F'
 
         return base_types, explicit_outputs, ndims, layout
 
