@@ -1,6 +1,9 @@
 from __future__ import print_function, division, absolute_import
-import numpy as np
+
 from timeit import default_timer as time
+
+import numpy as np
+
 from numba import cuda, config, float32
 from numba.cuda.testing import unittest
 
@@ -49,6 +52,7 @@ def cu_square_matrix_mul(A, B, C):
 
 class TestCudaMatMul(unittest.TestCase):
     def test_func(self):
+        np.random.seed(42)
         A = np.array(np.random.random((n, n)), dtype=np.float32)
         B = np.array(np.random.random((n, n)), dtype=np.float32)
         C = np.empty_like(A)
@@ -66,16 +70,13 @@ class TestCudaMatMul(unittest.TestCase):
         tcuda = e - s
 
         # Host compute
-        Amat = np.matrix(A)
-        Bmat = np.matrix(B)
-
         s = time()
-        Cans = Amat * Bmat
+        Cans = np.dot(A, B)
         e = time()
         tcpu = e - s
 
         # Check result
-        self.assertTrue(np.allclose(C, Cans))
+        np.testing.assert_allclose(C, Cans)
 
 
 if __name__ == '__main__':
