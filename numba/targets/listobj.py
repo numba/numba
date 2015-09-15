@@ -757,8 +757,8 @@ def _list_extend_list(context, builder, sig, args):
 @builtin
 @implement("list.extend", types.Kind(types.List), types.Kind(types.IterableType))
 def list_extend(context, builder, sig, args):
-    if isinstance(sig.args[1], types.List) and sig.args[0].dtype == sig.args[1].dtype:
-        # Specialize for same-type list operands, for speed
+    if isinstance(sig.args[1], types.List):
+        # Specialize for list operands, for speed.
         _list_extend_list(context, builder, sig, args)
         return context.get_dummy_value()
 
