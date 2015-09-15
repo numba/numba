@@ -284,6 +284,8 @@ class TestNRTIssue(MemoryLeakMixin, TestCase):
         def f():
             return 0.0, np.zeros(1, dtype=np.int32)
 
+        # Note the return type isn't the same as the tuple type above:
+        # the first element is a complex rather than a float.
         cres = compile_isolated(f, (),
                                 types.Tuple((types.complex128,
                                              types.Array(types.int32, 1, 'C')
