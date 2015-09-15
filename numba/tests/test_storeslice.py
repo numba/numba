@@ -4,10 +4,10 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba import types, errors
 
 
-def setitem_slice(a, start, stop, step, scalar): 
+def setitem_slice(a, start, stop, step, scalar):
     a[start:stop:step] = scalar
 
 
@@ -36,20 +36,22 @@ class TestStoreSlice(unittest.TestCase):
 
     def test_array_slice_setitem(self):
         n = 10
-        cres = compile_isolated(setitem_slice, (types.int64[:], types.int64, types.int64, types.int64, types.int64))
+        argtys = (types.int64[:], types.int64, types.int64, types.int64,
+                  types.int64)
+        cres = compile_isolated(setitem_slice, argtys)
         a = np.arange(n, dtype=np.int64)
         # tuple is (start, stop, step, scalar)
         tests = ((2, 6, 1, 7),
-                (2, 6, -1, 7),
-                (-2, len(a), 2, 77),
-                (-2, 2 * len(a), 2, 77),
-                (-2, -6, 3, 88),
-                (-2, -6, -3, 9999),
-                (-6, -2, 4, 88),
-                (-6, -2, -4, 88),
-                (16, 20, 2, 88),
-                (16, 20, -2, 88),
-                )
+                 (2, 6, -1, 7),
+                 (-2, len(a), 2, 77),
+                 (-2, 2 * len(a), 2, 77),
+                 (-2, -6, 3, 88),
+                 (-2, -6, -3, 9999),
+                 (-6, -2, 4, 88),
+                 (-6, -2, -4, 88),
+                 (16, 20, 2, 88),
+                 (16, 20, -2, 88),
+                 )
 
         for start, stop, step, scalar in tests:
             a = np.arange(n, dtype=np.int64)
@@ -57,14 +59,24 @@ class TestStoreSlice(unittest.TestCase):
             cres.entry_point(a, start, stop, step, scalar)
             setitem_slice(b, start, stop, step, scalar)
             self.assertTrue(np.allclose(a, b))
-        
-        #test if step = 0
+
+        # test if step = 0
         a = np.arange(n, dtype=np.int64)
-        b = np.arange(n, dtype=np.int64)
         with self.assertRaises(ValueError) as cm:
             cres.entry_point(a, 3, 6, 0, 88)
         self.assertEqual(str(cm.exception), "slice step cannot be zero")
-   
+
+    def test_array_assign_slice_error(self):
+        """Ensure that we have a meaning error message"""
+        def pyfunc(inp, out):
+            out[:] = out
+
+        with self.assertRaises(errors.TypingError) as cm:
+            cres = compile_isolated(pyfunc, (types.int64[:], types.int64[:]))
+
+        # Test the error message
+        errmsg = "Storing array into array slice is not supported, yet"
+        self.assertIn(errmsg, str(cm.exception))
 
 if __name__ == '__main__':
     unittest.main()

@@ -429,6 +429,55 @@ def normalize_nd_index(index):
 
     return normalize_1d_index(index)
 
+def get_array_index_type(ary, idx):
+    """
+    Returns None or a tuple-3 for the types of the input array, index, and
+    resulting type of ``array[index]``.
+
+    Note: This is shared logic for ndarray getitem and setitem.
+    """
+    if not isinstance(ary, types.Buffer):
+            return
+
+    idx = normalize_nd_index(idx)
+    if idx is None:
+        return
+
+    if idx == types.slice3_type:
+        res = ary.copy(layout='A')
+    elif isinstance(idx, (types.UniTuple, types.Tuple)):
+        if ary.ndim > len(idx):
+            return
+        elif ary.ndim < len(idx):
+            return
+        elif any(i == types.slice3_type for i in idx):
+            ndim = ary.ndim
+            for i in idx:
+                if i != types.slice3_type:
+                    ndim -= 1
+            res = ary.copy(ndim=ndim, layout='A')
+        else:
+            res = ary.dtype
+    elif isinstance(idx, types.Integer):
+        if ary.ndim == 1:
+            res = ary.dtype
+        elif not ary.slice_is_copy and ary.ndim > 1:
+            # Left-index into a F-contiguous array gives a non-contiguous view
+            layout = 'C' if ary.layout == 'C' else 'A'
+            res = ary.copy(ndim=ary.ndim - 1, layout=layout)
+        else:
+            return
+
+    else:
+        raise Exception("unreachable: index type of %s" % idx)
+
+    if isinstance(res, types.Buffer) and res.slice_is_copy:
+        # Avoid view semantics when the original type creates a copy
+        # when slicing.
+        return
+
+    return ary, idx, res
+
 
 @builtin
 class GetItemBuffer(AbstractTemplate):
@@ -437,47 +486,10 @@ class GetItemBuffer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [ary, idx] = args
-        if not isinstance(ary, types.Buffer):
-            return
-
-        idx = normalize_nd_index(idx)
-        if idx is None:
-            return
-
-        if idx == types.slice3_type:
-            res = ary.copy(layout='A')
-        elif isinstance(idx, (types.UniTuple, types.Tuple)):
-            if ary.ndim > len(idx):
-                return
-            elif ary.ndim < len(idx):
-                return
-            elif any(i == types.slice3_type for i in idx):
-                ndim = ary.ndim
-                for i in idx:
-                    if i != types.slice3_type:
-                        ndim -= 1
-                res = ary.copy(ndim=ndim, layout='A')
-            else:
-                res = ary.dtype
-        elif isinstance(idx, types.Integer):
-            if ary.ndim == 1:
-                res = ary.dtype
-            elif not ary.slice_is_copy and ary.ndim > 1:
-                # Left-index into a F-contiguous array gives a non-contiguous view
-                layout = 'C' if ary.layout == 'C' else 'A'
-                res = ary.copy(ndim=ary.ndim - 1, layout=layout)
-            else:
-                return
-
-        else:
-            raise Exception("unreachable: index type of %s" % idx)
-
-        if isinstance(res, types.Buffer) and res.slice_is_copy:
-            # Avoid view semantics when the original type creates a copy
-            # when slicing.
-            return
-
-        return signature(res, ary, idx)
+        out = get_array_index_type(ary, idx)
+        if out is not None:
+            ary, idx, res = out
+            return signature(res, ary, idx)
 
 
 @builtin
@@ -501,8 +513,18 @@ class SetItemBuffer(AbstractTemplate):
         if isinstance(ary, types.Buffer):
             if not ary.mutable:
                 raise TypeError("Cannot modify value of type %s" %(ary,))
-            return signature(types.none, ary, normalize_nd_index(idx), ary.dtype)
 
+            out = get_array_index_type(ary, idx)
+            if out is not None:
+                ary, idx, res = out
+                # Allow for broadcasting.
+                if isinstance(res, types.Array):
+                    if not isinstance(val, types.Array):
+                        res = res.dtype
+                    else:
+                        raise TypeError("Storing array into array slice is not "
+                                        "supported, yet")
+                return signature(types.none, ary, idx, res)
 
 @builtin
 class SetItemCPointer(AbstractTemplate):
