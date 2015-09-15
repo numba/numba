@@ -496,3 +496,25 @@ def unbox_class(c, typ, val):
     struct_cls = cgutils.create_struct_proxy(typ)
     ret = struct_cls(c.context, c.builder)._getvalue()
     return NativeValue(ret)
+
+
+@unbox(types.StructRefType)
+def unbox_structref(c, typ, val):
+    # XXX: not implemented
+    struct_cls = cgutils.create_struct_proxy(typ.instance_type)
+    ret = struct_cls(c.context, c.builder)._getpointer()
+    return NativeValue(ret)
+
+
+@unbox(types.StructInstanceType)
+def unbox_structinst(c, typ, val):
+    # XXX: not implemented
+    struct_cls = cgutils.create_struct_proxy(typ)
+    ret = struct_cls(c.context, c.builder)._getvalue()
+    return NativeValue(ret)
+
+
+@box(types.StructInstanceType)
+def box_structinst(c, typ, val):
+    # XXX: not implemented
+    return ir.Constant(c.pyapi.pyobj, None)
