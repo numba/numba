@@ -61,6 +61,14 @@ struct MemSys{
 /* The Memory System object */
 static MemSys TheMSys;
 
+
+typedef struct {
+    size_t allocated_size;
+    dtor_function dtor;
+} DtorInfo;
+
+
+
 void NRT_MemSys_init(void) {
     memset(&TheMSys, 0, sizeof(MemSys));
     /* Bind to libc allocator */
@@ -214,6 +222,20 @@ void *nrt_allocate_meminfo_and_data(size_t size, MemInfo **mi_out) {
     return base + sizeof(MemInfo);
 }
 
+static
+void nrt_internal_custom_dtor_safe(void *ptr, void *info) {
+    DtorInfo *dtor_info = (DtorInfo*)info;
+    NRT_Debug(nrt_debug_print("nrt_internal_custom_dtor_safe %p, %p\n",
+                              ptr, info));
+    if (dtor_info->dtor) {
+        dtor_info->dtor(ptr, NULL);
+    }
+
+    nrt_internal_dtor_safe(ptr, (void*)dtor_info->allocated_size);
+    free(info);
+}
+
+
 MemInfo* NRT_MemInfo_alloc(size_t size) {
     MemInfo *mi;
     void *data = nrt_allocate_meminfo_and_data(size, &mi);
@@ -232,6 +254,27 @@ MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
     NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe, (void*)size);
     return mi;
 }
+
+MemInfo* NRT_MemInfo_alloc_dtor_safe(size_t size, dtor_function dtor) {
+    MemInfo *mi;
+    DtorInfo *dtor_info;
+    void *data = nrt_allocate_meminfo_and_data(size, &mi);
+
+    /* Allocate space for destructor information.
+       TODO: merge the allocation into the data buffer
+    */
+    dtor_info = (DtorInfo*)malloc(sizeof(DtorInfo));
+    dtor_info->allocated_size = size;
+    dtor_info->dtor = dtor;
+
+    /* Only fill up a couple cachelines with debug markers, to minimize
+       overhead. */
+    memset(data, 0xCB, MIN(size, 256));
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_dtor_safe %p %zu\n", data, size));
+    NRT_MemInfo_init(mi, data, size, nrt_internal_custom_dtor_safe, dtor_info);
+    return mi;
+}
+
 
 static
 void* nrt_allocate_meminfo_and_data_align(size_t size, unsigned align,

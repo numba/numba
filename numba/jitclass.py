@@ -19,9 +19,15 @@ def jitclass(struct):
 
 class ClassModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
+        cls_data_ty = types.ClassDataType(fe_typ)
+        # MemInfoPointer uses the `dtype` attribute to traverse for nested
+        # NRT MemInfo.  Since we handle nested NRT MemInfo ourselves,
+        # we will replace provide MemInfoPointer with an opaque type
+        # so that it does not raise exception for nested meminfo.
+        dtype = types.Opaque('Opaque.' + str(cls_data_ty))
         members = [
-            ('meminfo', types.meminfo_pointer),
-            ('data', types.CPointer(types.ClassDataType(fe_typ)),)
+            ('meminfo', types.MemInfoPointer(dtype)),
+            ('data', types.CPointer(cls_data_ty)),
         ]
         super(ClassModel, self).__init__(dmm, fe_typ, members)
 
