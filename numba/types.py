@@ -1371,19 +1371,20 @@ class ClassDataType(Type):
 
 
 class StructClassType(Opaque):
-    def __init__(self, instance):
-        self.instance = instance
-        super(StructClassType, self).__init__("struct.{0}".format(
-            instance.name))
+    def __init__(self, class_def):
+        self.class_def = class_def
+        name = "struct.{0}#{1}".format(class_def, id(class_def))
+        super(StructClassType, self).__init__(name)
 
 
 class StructInstanceType(Type):
-    def __init__(self, classname, struct, methods):
-        self.classname = classname
+    def __init__(self, class_type, struct, methods):
+        self.class_type = class_type
         self.struct = struct
+        parameters = tuple((k, v) for k, v in self.struct.items())
         self.methods = methods
-        super(StructInstanceType, self).__init__("jitstruct.{0}".format(
-            classname))
+        super(StructInstanceType, self).__init__("jitstruct.{0}!{1}".format(
+            self.class_type.name, parameters))
 
     def get_reference_type(self):
         return StructRefType(self)
@@ -1393,8 +1394,6 @@ class StructRefType(Type):
     def __init__(self, instance_type):
         self.instance_type = instance_type
         super(StructRefType, self).__init__("*{0}".format(instance_type.name))
-        
-
 
 
 # Utils

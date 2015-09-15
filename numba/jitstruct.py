@@ -9,9 +9,14 @@ from numba import cgutils
 from llvmlite import ir as llvmir
 
 
-def jitstruct(struct):
+def jitstruct(spec):
+    if not callable(spec):
+        specfn = lambda *args, **kwargs: spec
+    else:
+        specfn = spec
+
     def wrap(cls):
-        register_struct_type(cls, struct)
+        register_struct_type(cls, specfn)
         return cls
 
     return wrap
@@ -30,21 +35,20 @@ class StructRefModel(models.PrimitiveModel):
         be_type = self._pointee_be_type.as_pointer()
         super(StructRefModel, self).__init__(dmm, fe_type, be_type)
 
+
 default_manager.register(types.StructInstanceType, StructInstanceModel)
 default_manager.register(types.StructClassType, models.OpaqueModel)
 default_manager.register(types.StructRefType, StructRefModel)
 
 
-def register_struct_type(cls, struct):
+def register_struct_type(cls, specfn):
     clsdct = cls.__dict__
     methods = dict((k, v) for k, v in clsdct.items()
                    if isinstance(v, pytypes.FunctionType))
-    classname = cls.__name__
+    # classname = cls.__name__
 
-    instance_type = types.StructInstanceType(classname=classname,
-                                             struct=struct,
-                                             methods=methods)
-    class_type = types.StructClassType(instance=instance_type)
+
+    class_type = types.StructClassType(cls)
 
     jitmethods = {}
     for k, v in methods.items():
@@ -54,86 +58,74 @@ def register_struct_type(cls, struct):
     typer = CPUTarget.typing_context
     typer.insert_global(cls, class_type)
 
-    # Register typing of the class attributes
+    def defer_frontend(instance_type):
 
-    class StructAttribute(templates.AttributeTemplate):
-        key = instance_type
+        # Register typing of the class attributes
 
-        def __init__(self, context, instance):
-            self.instance = instance
-            super(StructAttribute, self).__init__(context)
+        class StructAttribute(templates.AttributeTemplate):
+            key = instance_type
 
-        def generic_resolve(self, instance, attr):
+            def __init__(self, context, instance):
+                self.instance = instance
+                super(StructAttribute, self).__init__(context)
 
-            if attr in instance.struct:
-                return instance.struct[attr]
+            def generic_resolve(self, instance, attr):
 
-            elif attr in instance.methods:
-                meth = jitmethods[attr]
+                if attr in instance.struct:
+                    return instance.struct[attr]
 
-                class MethodTemplate(templates.AbstractTemplate):
-                    key = (instance_type, attr)
+                elif attr in instance.methods:
+                    meth = jitmethods[attr]
 
-                    def generic(self, args, kws):
-                        args = (instance,) + tuple(args)
-                        template, args, kws = meth.get_call_template(args, kws)
-                        sig = template(self.context).apply(args, kws)
-                        sig = templates.signature(sig.return_type,
-                                                  *sig.args[1:],
-                                                  recvr=sig.args[0])
-                        return sig
+                    class MethodTemplate(templates.AbstractTemplate):
+                        key = (instance_type, attr)
 
-                return types.BoundFunction(MethodTemplate, instance)
+                        def generic(self, args, kws):
+                            args = (instance,) + tuple(args)
+                            template, args, kws = meth.get_call_template(args, kws)
+                            sig = template(self.context).apply(args, kws)
+                            sig = templates.signature(sig.return_type,
+                                                      *sig.args[1:],
+                                                      recvr=sig.args[0])
+                            return sig
 
-    attrspec = StructAttribute(typer, instance_type)
-    typer.insert_attributes(attrspec)
+                    return types.BoundFunction(MethodTemplate, instance)
 
+        attrspec = StructAttribute(typer, instance_type)
+        typer.insert_attributes(attrspec)
 
-    class RefStructAttribute(templates.AttributeTemplate):
-        key = instance_type.get_reference_type()
+        class RefStructAttribute(templates.AttributeTemplate):
+            key = instance_type.get_reference_type()
 
-        def __init__(self, context, instance):
-            self.instance = instance.instance_type
-            super(RefStructAttribute, self).__init__(context)
+            def __init__(self, context, instance):
+                self.instance = instance.instance_type
+                super(RefStructAttribute, self).__init__(context)
 
-        def generic_resolve(self, instance, attr):
-            structdct = instance.instance_type.struct
-            if attr in structdct:
-                return structdct[attr]
-            #
-            # elif attr in instance.methods:
-            #     meth = jitmethods[attr]
-            #
-            #     class MethodTemplate(templates.AbstractTemplate):
-            #         key = (instance_type, attr)
-            #
-            #         def generic(self, args, kws):
-            #             args = (instance,) + tuple(args)
-            #             template, args, kws = meth.get_call_template(args, kws)
-            #             sig = template(self.context).apply(args, kws)
-            #             sig = templates.signature(sig.return_type,
-            #                                       *sig.args[1:],
-            #                                       recvr=sig.args[0])
-            #             return sig
-            #
-            #     return types.BoundFunction(MethodTemplate, instance)
+            def generic_resolve(self, instance, attr):
+                structdct = instance.instance_type.struct
+                if attr in structdct:
+                    return structdct[attr]
+                    #
+                    # elif attr in instance.methods:
+                    #     meth = jitmethods[attr]
+                    #
+                    #     class MethodTemplate(templates.AbstractTemplate):
+                    #         key = (instance_type, attr)
+                    #
+                    #         def generic(self, args, kws):
+                    #             args = (instance,) + tuple(args)
+                    #             template, args, kws = meth.get_call_template(args, kws)
+                    #             sig = template(self.context).apply(args, kws)
+                    #             sig = templates.signature(sig.return_type,
+                    #                                       *sig.args[1:],
+                    #                                       recvr=sig.args[0])
+                    #             return sig
+                    #
+                    #     return types.BoundFunction(MethodTemplate, instance)
 
-    refattrspec = RefStructAttribute(typer, instance_type.get_reference_type())
-    typer.insert_attributes(refattrspec)
+        refattrspec = RefStructAttribute(typer, instance_type.get_reference_type())
+        typer.insert_attributes(refattrspec)
 
-    # Register constructor
-    class ConstructorTemplate(templates.AbstractTemplate):
-        key = class_type
-
-        def generic(self, args, kws):
-            ctor = jitmethods['__init__']
-            boundargs = (instance_type.get_reference_type(),) + args
-            template, args, kws = ctor.get_call_template(boundargs, kws)
-            sig = template(self.context).apply(args, kws)
-            out = templates.signature(sig.args[0].instance_type, *sig.args[1:])
-            return out
-
-    typer.insert_function(ConstructorTemplate(typer))
 
     ### Backend ###
     backend = CPUTarget.target_context
@@ -142,6 +134,54 @@ def register_struct_type(cls, struct):
 
     # Add constructor
     ctor_nargs = len(jitmethods['__init__']._pysig.parameters) - 1
+
+    def defer_backend(instance_type):
+        # Add attributes
+
+        def make_attr(attr):
+            @registry.register_attr
+            @imputils.impl_attribute(instance_type, attr)
+            def imp(context, builder, typ, value):
+                inst_struct = cgutils.create_struct_proxy(typ)
+                inst = inst_struct(context, builder, value=value)
+                return imputils.impl_ret_borrowed(context, builder,
+                                                  typ.struct[attr],
+                                                  getattr(inst, attr))
+
+            @registry.register_attr
+            @imputils.impl_attribute(instance_type.get_reference_type(), attr)
+            def imp(context, builder, typ, value):
+                inst_struct = cgutils.create_struct_proxy(typ)
+                inst = inst_struct(context, builder, ref=value)
+                return imputils.impl_ret_borrowed(context, builder,
+                                                  typ.struct[attr],
+                                                  getattr(inst, attr))
+
+        for attr in instance_type.struct:
+            make_attr(attr)
+
+        # Add methods
+        def make_method(attr):
+            nargs = len(jitmethods[attr]._pysig.parameters)
+            self_type = (instance_type
+                         if attr != '__init__'
+                         else instance_type.get_reference_type())
+
+            @registry.register
+            @imputils.implement((self_type, attr), *([types.Any] * nargs))
+            def imp(context, builder, sig, args):
+                method = jitmethods[attr]
+                method.compile(sig)
+                cres = method._compileinfos[sig.args]
+                out = context.call_internal(builder, cres.fndesc, sig, args)
+                return imputils.impl_ret_new_ref(context, builder,
+                                                 sig.return_type, out)
+
+        for meth in instance_type.methods:
+            make_method(meth)
+
+        backend.insert_func_defn(registry.functions)
+        backend.insert_attr_defn(registry.attributes)
 
     @registry.register
     @imputils.implement(class_type, *([types.Any] * ctor_nargs))
@@ -172,50 +212,32 @@ def register_struct_type(cls, struct):
 
         return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)
 
-    # Add attributes
+    # ------------
+    # Constructor
 
-    def make_attr(attr):
-        @registry.register_attr
-        @imputils.impl_attribute(instance_type, attr)
-        def imp(context, builder, typ, value):
-            inst_struct = cgutils.create_struct_proxy(typ)
-            inst = inst_struct(context, builder, value=value)
-            return imputils.impl_ret_borrowed(context, builder,
-                                              typ.struct[attr],
-                                              getattr(inst, attr))
+    # Register constructor
+    class ConstructorTemplate(templates.AbstractTemplate):
+        key = class_type
 
-        @registry.register_attr
-        @imputils.impl_attribute(instance_type.get_reference_type(), attr)
-        def imp(context, builder, typ, value):
-            inst_struct = cgutils.create_struct_proxy(typ)
-            inst = inst_struct(context, builder, ref=value)
-            return imputils.impl_ret_borrowed(context, builder,
-                                              typ.struct[attr],
-                                              getattr(inst, attr))
+        def generic(self, args, kws):
+            ctor = jitmethods['__init__']
+            struct = specfn(*args, **kws)
+            instance_type = types.StructInstanceType(class_type=class_type,
+                                                     struct=struct,
+                                                     methods=methods)
 
-    for attr in instance_type.struct:
-        make_attr(attr)
+            if instance_type not in defined_types:
+                defined_types.add(instance_type)
+                defer_frontend(instance_type)
+                defer_backend(instance_type)
 
-    # Add methods
-    def make_method(attr):
-        nargs = len(jitmethods[attr]._pysig.parameters)
-        self_type = (instance_type
-                     if attr != '__init__'
-                     else instance_type.get_reference_type())
-        @registry.register
-        @imputils.implement((self_type, attr), *([types.Any] * nargs))
-        def imp(context, builder, sig, args):
-            method = jitmethods[attr]
-            method.compile(sig)
-            cres = method._compileinfos[sig.args]
-            out = context.call_internal(builder, cres.fndesc, sig, args)
-            return imputils.impl_ret_new_ref(context, builder,
-                                             sig.return_type, out)
+            boundargs = (instance_type.get_reference_type(),) + args
+            template, args, kws = ctor.get_call_template(boundargs, kws)
+            sig = template(self.context).apply(args, kws)
+            out = templates.signature(sig.args[0].instance_type, *sig.args[1:])
+            return out
 
-    for meth in instance_type.methods:
-        make_method(meth)
+    typer.insert_function(ConstructorTemplate(typer))
 
-    backend.insert_func_defn(registry.functions)
-    backend.insert_attr_defn(registry.attributes)
 
-    return instance_type
+defined_types = set()
