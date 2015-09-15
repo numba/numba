@@ -290,6 +290,11 @@ class TestUnify(unittest.TestCase):
         bty = types.List(types.Tuple([i16]))
         self.assert_unify_failure(aty, bty)
 
+    def test_range(self):
+        aty = types.range_state32_type
+        bty = types.range_state64_type
+        self.assert_unify(aty, bty, bty)
+
 
 class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
     """
@@ -561,6 +566,23 @@ def list_unify_usecase2(n):
     res.append((123j, 42))
     return res
 
+def range_unify_usecase(v):
+    if v:
+        r = range(np.int32(3))
+    else:
+        r = range(np.int64(5))
+    for x in r:
+        return x
+
+def issue_1394(a):
+    if a:
+        for i in range(a):
+            a += i
+        i = 1.2
+    else:
+        i = 3
+    return a, i
+
 
 class TestMiscIssues(TestCase):
 
@@ -598,6 +620,20 @@ class TestMiscIssues(TestCase):
         # NOTE: the types will differ (Numba returns a homogenous list with
         # converted values).
         self.assertEqual(res, pyfunc(3))
+
+    def test_range_unify(self):
+        pyfunc = range_unify_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        for v in (0, 1):
+            res = cfunc(v)
+            self.assertPreciseEqual(res, pyfunc(v))
+
+    def test_issue_1394(self):
+        pyfunc = issue_1394
+        cfunc = jit(nopython=True)(pyfunc)
+        for v in (0, 1, 2):
+            res = cfunc(v)
+            self.assertEqual(res, pyfunc(v))
 
 
 if __name__ == '__main__':
