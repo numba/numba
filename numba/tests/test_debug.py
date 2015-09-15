@@ -21,8 +21,8 @@ def simple_gen(x, y):
 
 class DebugTestBase(TestCase):
 
-    all_dumps = set(['bytecode', 'cfg', 'ir', 'llvm', 'func_opt_llvm',
-                     'optimized_llvm', 'assembly'])
+    all_dumps = set(['bytecode', 'cfg', 'ir', 'typeinfer', 'llvm',
+                     'func_opt_llvm', 'optimized_llvm', 'assembly'])
 
     def assert_fails(self, *args, **kwargs):
         self.assertRaises(AssertionError, *args, **kwargs)
@@ -47,6 +47,9 @@ class DebugTestBase(TestCase):
 
     def _check_dump_ir(self, out):
         self.assertIn('--IR DUMP: %s--' % self.func_name, out)
+
+    def _check_dump_typeinfer(self, out):
+        self.assertIn('--propagate--', out)
 
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
@@ -154,7 +157,8 @@ class TestEnvironmentOverride(FunctionDebugTestBase):
             out = self.compile_simple_nopython()
             # Note that all variables dependent on NUMBA_DEBUG are
             # updated too.
-            self.check_debug_output(out, ['ir', 'llvm', 'func_opt_llvm',
+            self.check_debug_output(out, ['ir', 'typeinfer',
+                                          'llvm', 'func_opt_llvm',
                                           'optimized_llvm', 'assembly'])
         finally:
             del os.environ['NUMBA_DEBUG']

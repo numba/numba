@@ -386,56 +386,6 @@ Numba_poisson_ptrs(rnd_state_t *state, double lam)
  * Other helpers.
  */
 
-/* provide 128-bit multiplilcation inplace for __multi3
- * on 32-bit platform */
-
-typedef union i128 {
-    struct {
-        uint64_t low;
-        int64_t high;
-    } s;
-} i128;
-
-
-static
-i128 umul64(uint64_t a, uint64_t b) {
-    /* Adapted from __mulddi in compiler-rt */
-    i128 r;
-    uint64_t t;
-    const int bits_in_dword_2 = 32;
-    const uint64_t lower_mask = (uint64_t)~0 >> bits_in_dword_2;
-
-    r.s.low = (a & lower_mask) * (b & lower_mask);
-    t = r.s.low >> bits_in_dword_2;
-    r.s.low &= lower_mask;
-    t += (a >> bits_in_dword_2) * (b & lower_mask);
-    r.s.low += (t & lower_mask) << bits_in_dword_2;
-    r.s.high = t >> bits_in_dword_2;
-    t = r.s.low >> bits_in_dword_2;
-    r.s.low &= lower_mask;
-    t += (b >> bits_in_dword_2) * (a & lower_mask);
-    r.s.low += (t & lower_mask) << bits_in_dword_2;
-    r.s.high += t >> bits_in_dword_2;
-    r.s.high += (a >> bits_in_dword_2) * (b >> bits_in_dword_2);
-    return r;
-}
-
-static
-i128 mul128(i128 a, i128 b) {
-    /* Adapted from __multi3 in compiler-rt */
-    i128 r = umul64(a.s.low, b.s.low);
-    r.s.high += a.s.high * b.s.low + a.s.low * b.s.high;
-    return r;
-}
-
-
-static
-i128
-Numba_multi3(i128 x, i128 y) {
-	return mul128(x, y);
-}
-
-
 /* provide 64-bit division function to 32-bit platforms */
 static
 int64_t Numba_sdiv(int64_t a, int64_t b) {
@@ -1324,62 +1274,6 @@ Numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
     return 1;
 }
 
-/*
- * See Numpy's array_descr_set()
- * (np/core/src/multiarray/getset.c).
- * Attempt to fix the array's shape and strides for a new dtype.
- * 0 is returned on failure, 1 on success.
- */
-static int
-Numba_change_dtype(npy_intp nd, npy_intp *dims, npy_intp *strides,
-                   npy_intp old_itemsize, npy_intp new_itemsize,
-                   char layout)
-{
-    npy_intp i, newdim, bytelength;
-
-    assert (layout == 'C' || layout == 'F' || layout == 'A');
-    if (old_itemsize != new_itemsize && (layout == 'A' || nd == 0)) {
-        return 0;
-    }
-    /* Determine the index of the dimension we have to fix up */
-    if (layout == 'C') {
-        i = nd - 1;
-    }
-    else {
-        i = 0;
-    }
-    if (new_itemsize < old_itemsize) {
-        /*
-         * if it is compatible increase the size of the
-         * dimension at end (or at the front if F-contiguous)
-         */
-        if (old_itemsize % new_itemsize != 0) {
-            return 0;
-        }
-        newdim = old_itemsize / new_itemsize;
-        dims[i] *= newdim;
-        strides[i] = new_itemsize;
-    }
-    else if (new_itemsize > old_itemsize) {
-        /*
-         * Determine if last (or first if F-contiguous) dimension
-         * is compatible
-         */
-        bytelength = dims[i] * old_itemsize;
-        if ((bytelength % new_itemsize) != 0) {
-            return 0;
-        }
-        dims[i] = bytelength / new_itemsize;
-        strides[i] = new_itemsize;
-    }
-    else {
-        /* Same item size: nothing to do (this also works for
-         * non-contiguous arrays).
-         */
-    }
-    return 1;
-}
-
 /* We use separate functions for datetime64 and timedelta64, to ensure
  * proper type checking.
  */
@@ -1606,7 +1500,6 @@ build_c_helpers_dict(void)
 
 #define declpointer(ptr) _declpointer(#ptr, &ptr)
 
-    declmethod(multi3);
     declmethod(sdiv);
     declmethod(srem);
     declmethod(udiv);
@@ -1646,7 +1539,6 @@ build_c_helpers_dict(void)
     declmethod(rnd_init);
     declmethod(poisson_ptrs);
     declmethod(attempt_nocopy_reshape);
-    declmethod(change_dtype);
 
     declpointer(py_random_state);
     declpointer(np_random_state);

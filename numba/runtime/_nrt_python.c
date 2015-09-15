@@ -20,6 +20,14 @@ memsys_shutdown(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
+static PyObject *
+memsys_use_cpython_allocator(PyObject *self, PyObject *args) {
+    NRT_MemSys_set_allocator(PyMem_RawMalloc,
+                             PyMem_RawRealloc,
+                             PyMem_RawFree);
+    Py_RETURN_NONE;
+}
+
 static
 PyObject*
 memsys_set_atomic_inc_dec(PyObject *self, PyObject *args) {
@@ -47,13 +55,6 @@ memsys_set_atomic_cas(PyObject *self, PyObject *args) {
     addr_cas = PyLong_AsVoidPtr(addr_cas_obj);
     if(PyErr_Occurred()) return NULL;
     NRT_MemSys_set_atomic_cas(addr_cas);
-    Py_RETURN_NONE;
-}
-
-static
-PyObject*
-memsys_process_defer_dtor(PyObject *self, PyObject *args) {
-    NRT_MemSys_process_defer_dtor();
     Py_RETURN_NONE;
 }
 
@@ -153,7 +154,6 @@ meminfo_alloc_safe(PyObject *self, PyObject *args) {
 typedef struct {
     PyObject_HEAD
     MemInfo *meminfo;
-    int      defer;
 } MemInfoObject;
 
 static
@@ -167,7 +167,6 @@ int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
     raw_ptr = PyLong_AsVoidPtr(raw_ptr_obj);
     if(PyErr_Occurred()) return -1;
     self->meminfo = (MemInfo*)raw_ptr;
-    self->defer = 0;
     assert (NRT_MemInfo_refcount(self->meminfo) > 0 && "0 refcount");
     return 0;
 }
@@ -226,32 +225,9 @@ MemInfo_acquire(MemInfoObject *self) {
 static
 PyObject*
 MemInfo_release(MemInfoObject *self) {
-    NRT_MemInfo_release(self->meminfo, self->defer);
+    NRT_MemInfo_release(self->meminfo);
     Py_RETURN_NONE;
 }
-
-static
-int
-MemInfo_set_defer(MemInfoObject *self, PyObject *value, void *closure) {
-    int defer = PyObject_IsTrue(value);
-    if (defer == -1) {
-        return -1;
-    }
-    self->defer = defer;
-    return 0;
-}
-
-
-static
-PyObject*
-MemInfo_get_defer(MemInfoObject *self, void *closure) {
-    if (self->defer) {
-        Py_RETURN_TRUE;
-    } else {
-        Py_RETURN_FALSE;
-    }
-}
-
 
 static
 PyObject*
@@ -273,7 +249,7 @@ MemInfo_get_refcount(MemInfoObject *self, void *closure) {
 static void
 MemInfo_dealloc(MemInfoObject *self)
 {
-    NRT_MemInfo_release(self->meminfo, self->defer);
+    NRT_MemInfo_release(self->meminfo);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -289,10 +265,6 @@ static PyMethodDef MemInfo_methods[] = {
 
 
 static PyGetSetDef MemInfo_getsets[] = {
-    {"defer",
-     (getter)MemInfo_get_defer, (setter)MemInfo_set_defer,
-     "Boolean flag for the defer attribute",
-     NULL},
     {"data",
      (getter)MemInfo_get_data, NULL,
      "Get the data pointer as an integer",
@@ -425,9 +397,10 @@ RETURN_ARRAY_COPY:
     return NULL;
 }
 
-static
-PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
-                                      int writeable, PyArray_Descr *descr) {
+static PyObject *
+NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
+                            int writeable, PyArray_Descr *descr)
+{
     PyArrayObject *array;
     MemInfoObject *miobj = NULL;
     PyObject *args;
@@ -443,9 +416,9 @@ PyObject* NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
 
     if (arystruct->parent) {
         PyObject *obj = try_to_return_parent(arystruct, ndim, descr);
-        if (obj){
+        if (obj) {
             /* Release NRT reference to the numpy array */
-            NRT_MemInfo_release(arystruct->meminfo, 0);
+            NRT_MemInfo_release(arystruct->meminfo);
             return obj;
         }
     }
@@ -546,17 +519,17 @@ NRT_incref(MemInfo* mi) {
 static void
 NRT_decref(MemInfo* mi) {
     if (mi) {
-        NRT_MemInfo_release(mi, 0);
+        NRT_MemInfo_release(mi);
     }
 }
 
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
 #define declmethod_noargs(func) { #func , ( PyCFunction )func , METH_NOARGS, NULL }
+    declmethod_noargs(memsys_use_cpython_allocator),
     declmethod_noargs(memsys_shutdown),
     declmethod(memsys_set_atomic_inc_dec),
     declmethod(memsys_set_atomic_cas),
-    declmethod_noargs(memsys_process_defer_dtor),
     declmethod_noargs(memsys_get_stats_alloc),
     declmethod_noargs(memsys_get_stats_free),
     declmethod_noargs(memsys_get_stats_mi_alloc),
@@ -594,13 +567,14 @@ declmethod(adapt_ndarray_to_python);
 declmethod(adapt_buffer_from_python);
 declmethod(incref);
 declmethod(decref);
-declmethod(MemInfo_data);
 declmethod(MemInfo_alloc);
 declmethod(MemInfo_alloc_safe);
 declmethod(MemInfo_alloc_dtor_safe);
 declmethod(MemInfo_alloc_aligned);
 declmethod(MemInfo_alloc_safe_aligned);
 declmethod(MemInfo_call_dtor);
+declmethod(MemInfo_varsize_alloc);
+declmethod(MemInfo_varsize_realloc);
 
 
 #undef declmethod

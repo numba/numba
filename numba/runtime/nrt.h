@@ -13,7 +13,6 @@ All functions described here are threadsafe.
 #   define NRT_Debug(X)
 #endif
 
-
 /*
  * Debugging printf function used internally
  */
@@ -34,8 +33,13 @@ typedef size_t (*atomic_inc_dec_func)(size_t *ptr);
 typedef int (*atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
                                void **oldptr);
 
-typedef union MemInfo MemInfo;
+typedef struct MemInfo MemInfo;
 typedef struct MemSys MemSys;
+
+typedef void *(*NRT_malloc_func)(size_t size);
+typedef void *(*NRT_realloc_func)(void *ptr, size_t new_size);
+typedef void (*NRT_free_func)(void *ptr);
+
 
 /* Memory System API */
 
@@ -46,18 +50,9 @@ void NRT_MemSys_init(void);
 void NRT_MemSys_shutdown(void);
 
 /*
- * Internal API
- * Add a new MemInfo to the freelist (available MemInfo for use).
- * If `newnode` is NULL, a new MemInfo is created.
+ * Register the system allocation functions
  */
-void NRT_MemSys_insert_meminfo(MemInfo *newnode);
-
-
-/*
- * Internal API
- * Pop a MemInfo from the freelist.
- */
-MemInfo* NRT_MemSys_pop_meminfo(void);
+void NRT_MemSys_set_allocator(NRT_malloc_func, NRT_realloc_func, NRT_free_func);
 
 /*
  * Register the atomic increment and decrement functions
@@ -82,21 +77,16 @@ void NRT_MemSys_set_atomic_inc_dec_stub(void);
 void NRT_MemSys_set_atomic_cas_stub(void);
 
 /*
- * Process all pending deferred dtors
- */
-void NRT_MemSys_process_defer_dtor(void);
-
-/*
  * The following functions get internal statistics of the memory subsystem.
  */
-size_t NRT_MemSys_get_stats_alloc();
-size_t NRT_MemSys_get_stats_free();
-size_t NRT_MemSys_get_stats_mi_alloc();
-size_t NRT_MemSys_get_stats_mi_free();
+size_t NRT_MemSys_get_stats_alloc(void);
+size_t NRT_MemSys_get_stats_free(void);
+size_t NRT_MemSys_get_stats_mi_alloc(void);
+size_t NRT_MemSys_get_stats_mi_free(void);
 
 /* Memory Info API */
 
-/* Create a new MemInfo
+/* Create a new MemInfo for external memory
  *
  * data: data pointer being tracked
  * dtor: destructor to execute
@@ -104,6 +94,9 @@ size_t NRT_MemSys_get_stats_mi_free();
  */
 MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
                          void *dtor_info);
+
+void NRT_MemInfo_init(MemInfo *mi, void *data, size_t size, dtor_function dtor,
+                      void *dtor_info);
 
 /*
  * Returns the refcount of a MemInfo or (size_t)-1 if error.
@@ -115,7 +108,6 @@ size_t NRT_MemInfo_refcount(MemInfo *mi);
  * that describes the allocation
  */
 MemInfo* NRT_MemInfo_alloc(size_t size);
-
 
 /*
  * The "safe" NRT_MemInfo_alloc performs additional steps to help debug
@@ -152,15 +144,13 @@ void NRT_MemInfo_acquire(MemInfo* mi);
 /*
  * Release a reference to a MemInfo
  */
-void NRT_MemInfo_release(MemInfo* mi, int defer);
+void NRT_MemInfo_release(MemInfo* mi);
 
 /*
  * Internal/Compiler API.
  * Invoke the registered destructor of a MemInfo.
- * if `defer` is true, the MemInfo is added to the deferred dtor list.
- * Calls NRT_MemInfo_defer_dtor.
  */
-void NRT_MemInfo_call_dtor(MemInfo *mi, int defer);
+void NRT_MemInfo_call_dtor(MemInfo *mi);
 
 /*
  * Returns the data pointer
@@ -172,11 +162,13 @@ void* NRT_MemInfo_data(MemInfo* mi);
  */
 size_t NRT_MemInfo_size(MemInfo* mi);
 
+
 /*
- * Internal API.
- * Append the MemInfo to the deferred dtor list.
+ * NRT API for resizable buffers.
  */
-void NRT_MemInfo_defer_dtor(MemInfo* mi);
+
+MemInfo *NRT_MemInfo_varsize_alloc(size_t size);
+void *NRT_MemInfo_varsize_realloc(MemInfo *mi, size_t size);
 
 
 /*
@@ -184,7 +176,8 @@ void NRT_MemInfo_defer_dtor(MemInfo* mi);
  */
 void NRT_MemInfo_dump(MemInfo *mi, FILE *out);
 
-/* General allocator */
+
+/* Low-level allocation wrappers. */
 
 /*
  * Allocate memory of `size` bytes.
@@ -197,9 +190,7 @@ void* NRT_Allocate(size_t size);
 void NRT_Free(void *ptr);
 
 /*
- * Allocate memory of `size` bytes on the given `align` byte boundary
- * The allocated output is stored to `ptr`.
- * The return value is the base pointer to be passed to NRT_Free
+ * Reallocate memory at `ptr`.
  */
-void* NRT_MemAlign(void **ptr, size_t size, unsigned align);
+void *NRT_Reallocate(void *ptr, size_t size);
 

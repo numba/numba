@@ -14,11 +14,11 @@ from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
-                                    python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     type_registry,
                                     impl_ret_borrowed)
-from . import arrayobj, builtins, iterators, rangeobj, optional
+from . import (
+    arrayobj, builtins, iterators, rangeobj, optional, slicing, tupleobj)
 from numba import datamodel
 
 try:
@@ -29,6 +29,7 @@ except NotImplementedError:
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
+void_ptr = GENERIC_POINTER
 
 LTYPEMAP = {
     types.pyobject: PYOBJECT,
@@ -52,7 +53,7 @@ LTYPEMAP = {
 STRUCT_TYPES = {
     types.complex64: builtins.Complex64,
     types.complex128: builtins.Complex128,
-    types.slice3_type: builtins.Slice,
+    types.slice3_type: slicing.Slice,
 }
 
 
@@ -228,12 +229,6 @@ class BaseContext(object):
         impl = user_generator(gendesc, libs)
         self.generators[genty] = gendesc, impl
 
-    def insert_class(self, cls, attrs):
-        clsty = types.Object(cls)
-        for name, vtype in utils.iteritems(attrs):
-            impl = python_attr_impl(clsty, name, vtype)
-            self.attrs[impl.attr].append(impl, impl.signature)
-
     def remove_user_function(self, func):
         """
         Remove user function *func*.
@@ -313,17 +308,23 @@ class BaseContext(object):
     def get_value_type(self, ty):
         return self.data_model_manager[ty].get_value_type()
 
-    def pack_value(self, builder, ty, value, ptr):
-        """Pack data for array storage
+    def pack_value(self, builder, ty, value, ptr, align=None):
+        """
+        Pack value into the array storage at *ptr*.
+        If *align* is given, it is the guaranteed alignment for *ptr*
+        (by default, the standard ABI alignment).
         """
         dataval = self.data_model_manager[ty].as_data(builder, value)
-        builder.store(dataval, ptr)
+        builder.store(dataval, ptr, align=align)
 
-    def unpack_value(self, builder, ty, ptr):
-        """Unpack data from array storage
+    def unpack_value(self, builder, ty, ptr, align=None):
+        """
+        Unpack value from the array storage at *ptr*.
+        If *align* is given, it is the guaranteed alignment for *ptr*
+        (by default, the standard ABI alignment).
         """
         dm = self.data_model_manager[ty]
-        return dm.load_from_data_pointer(builder, ptr)
+        return dm.load_from_data_pointer(builder, ptr, align)
 
     def is_struct_type(self, ty):
         return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
@@ -366,7 +367,7 @@ class BaseContext(object):
             const = Constant.struct([real, imag])
             return const
 
-        elif isinstance(ty, types.Tuple):
+        elif isinstance(ty, (types.Tuple, types.NamedTuple)):
             consts = [self.get_constant_generic(builder, ty.types[i], v)
                       for i, v in enumerate(val)]
             return Constant.struct(consts)
@@ -403,7 +404,7 @@ class BaseContext(object):
         elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
             return Constant.real(lty, val.astype(numpy.int64))
 
-        elif isinstance(ty, types.UniTuple):
+        elif isinstance(ty, (types.UniTuple, types.NamedUniTuple)):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
 
@@ -431,7 +432,8 @@ class BaseContext(object):
                 dptr = cgutils.get_record_member(builder, target, offset,
                                                  self.get_data_type(elemty))
                 val = context.cast(builder, val, valty, elemty)
-                self.pack_value(builder, elemty, val, dptr)
+                align = None if typ.aligned else 1
+                self.pack_value(builder, elemty, val, dptr, align=align)
 
             return _wrap_impl(imp, self, sig)
 
@@ -462,7 +464,7 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
-        if isinstance(fn, (types.NumberClass, types.Function)):
+        if isinstance(fn, (types.Function)):
             key = fn.template.key
 
             if isinstance(key, MethodType):
@@ -484,7 +486,11 @@ class BaseContext(object):
         try:
             return _wrap_impl(overloads.find(sig), self, sig)
         except NotImplementedError:
-            raise Exception("No definition for lowering %s%s" % (key, sig))
+            pass
+        if isinstance(fn, types.Type):
+            # It's a type instance => try to find a definition for the type class
+            return self.get_function(type(fn), sig)
+        raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
 
     def get_generator_desc(self, genty):
         """
@@ -536,8 +542,9 @@ class BaseContext(object):
                 @impl_attribute(typ, attr, elemty)
                 def imp(context, builder, typ, val):
                     dptr = cgutils.get_record_member(builder, val, offset,
-                                                     self.get_data_type(elemty))
-                    res = self.unpack_value(builder, elemty, dptr)
+                                                     context.get_data_type(elemty))
+                    align = None if typ.aligned else 1
+                    res = self.unpack_value(builder, elemty, dptr, align)
                     return impl_ret_borrowed(context, builder, typ, res)
             return imp
 
@@ -619,24 +626,19 @@ class BaseContext(object):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
 
-        elif ((fromty in types.unsigned_domain and
-                       toty in types.signed_domain) or
-                  (fromty in types.integer_domain and
-                           toty in types.unsigned_domain)):
-            lfrom = self.get_value_type(fromty)
-            lto = self.get_value_type(toty)
-            if lfrom.width <= lto.width:
-                return builder.zext(val, lto)
-            elif lfrom.width > lto.width:
-                return builder.trunc(val, lto)
-
-        elif fromty in types.signed_domain and toty in types.signed_domain:
-            lfrom = self.get_value_type(fromty)
-            lto = self.get_value_type(toty)
-            if lfrom.width <= lto.width:
-                return builder.sext(val, lto)
-            elif lfrom.width > lto.width:
-                return builder.trunc(val, lto)
+        elif isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
+            if toty.bitwidth == fromty.bitwidth:
+                # Just a change of signedness
+                return val
+            elif toty.bitwidth < fromty.bitwidth:
+                # Downcast
+                return builder.trunc(val, self.get_value_type(toty))
+            elif fromty.signed:
+                # Signed upcast
+                return builder.sext(val, self.get_value_type(toty))
+            else:
+                # Unsigned upcast
+                return builder.zext(val, self.get_value_type(toty))
 
         elif fromty in types.real_domain and toty in types.real_domain:
             lty = self.get_value_type(toty)
@@ -761,6 +763,21 @@ class BaseContext(object):
 
         raise NotImplementedError("cast", val, fromty, toty)
 
+    def generic_compare(self, builder, key, argtypes, args):
+        """
+        Compare the given LLVM values of the given Numba types using
+        the comparison *key* (e.g. '==').  The values are first cast to
+        a common safe conversion type.
+        """
+        at, bt = argtypes
+        av, bv = args
+        ty = self.typing_context.unify_types(at, bt)
+        cav = self.cast(builder, av, at, ty)
+        cbv = self.cast(builder, bv, bt, ty)
+        cmpsig = typing.signature(types.boolean, ty, ty)
+        cmpfunc = self.get_function(key, cmpsig)
+        return cmpfunc(builder, (cav, cbv))
+
     def make_optional(self, optionaltype):
         return optional.make_optional(optionaltype.type)
 
@@ -778,16 +795,8 @@ class BaseContext(object):
         return optval._getvalue()
 
     def is_true(self, builder, typ, val):
-        if typ in types.integer_domain:
-            return builder.icmp(lc.ICMP_NE, val, Constant.null(val.type))
-        elif typ in types.real_domain:
-            return builder.fcmp(lc.FCMP_UNE, val, Constant.real(val.type, 0))
-        elif typ in types.complex_domain:
-            cmplx = self.make_complex(typ)(self, builder, val)
-            real_istrue = self.is_true(builder, typ.underlying_float, cmplx.real)
-            imag_istrue = self.is_true(builder, typ.underlying_float, cmplx.imag)
-            return builder.or_(real_istrue, imag_istrue)
-        raise NotImplementedError("is_true", val, typ)
+        impl = self.get_function(bool, typing.signature(types.boolean, typ))
+        return impl(builder, (val,))
 
     def get_c_value(self, builder, typ, name):
         """
@@ -812,30 +821,6 @@ class BaseContext(object):
 
     def call_function_pointer(self, builder, funcptr, args, cconv=None):
         return builder.call(funcptr, args, cconv=cconv)
-
-    def call_class_method(self, builder, func, signature, args):
-        api = self.get_python_api(builder)
-        tys = signature.args
-        retty = signature.return_type
-        pyargs = [api.from_native_value(av, at) for av, at in zip(args, tys)]
-        res = api.call_function_objargs(func, pyargs)
-
-        # clean up
-        api.decref(func)
-        for obj in pyargs:
-            api.decref(obj)
-
-        with builder.if_then(cgutils.is_null(builder, res)):
-            self.call_conv.return_exc(builder)
-
-        if retty == types.none:
-            api.decref(res)
-            return self.get_dummy_value()
-        else:
-            native = api.to_native_value(res, retty)
-            assert native.cleanup is None
-            api.decref(res)
-            return native.value
 
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module
@@ -964,6 +949,15 @@ class BaseContext(object):
         """
         return builtins.make_pair(first_type, second_type)
 
+    def make_tuple(self, builder, typ, values):
+        """
+        Create a tuple of the given *typ* containing the *values*.
+        """
+        tup = self.get_constant_undef(typ)
+        for i, val in enumerate(values):
+            tup = builder.insert_value(tup, val, i)
+        return tup
+
     def make_constant_array(self, builder, typ, ary):
         assert typ.layout == 'C'                # assumed in typeinfer.py
         ary = numpy.ascontiguousarray(ary)
@@ -1024,10 +1018,9 @@ class BaseContext(object):
         assert isinstance(ty, llvmir.Type), "Expected LLVM type"
         return ty.get_abi_alignment(self.target_data)
 
-    def post_lowering(self, func):
+    def post_lowering(self, mod, library):
         """Run target specific post-lowering transformation here.
         """
-        pass
 
     def create_module(self, name):
         """Create a LLVM module
@@ -1035,10 +1028,15 @@ class BaseContext(object):
         return lc.Module.new(name)
 
     def nrt_meminfo_alloc(self, builder, size):
+        """
+        Allocate a new MemInfo with a data payload of `size` bytes.
+
+        A pointer to the MemInfo is returned.
+        """
         if not self.enable_nrt:
             raise Exception("Require NRT")
         mod = builder.module
-        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+        fnty = llvmir.FunctionType(void_ptr,
                                    [self.get_value_type(types.intp)])
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         fn.return_value.add_attribute("noalias")
@@ -1059,51 +1057,90 @@ class BaseContext(object):
 
     def nrt_meminfo_alloc_aligned(self, builder, size, align):
         """
-        Allocate a new MemInfo of `size` bytes and and align the data pointer
-        to `align` bytes.  The `align` arg can be either a Python int or a LLVM
-        uint32 value.
+        Allocate a new MemInfo with an aligned data payload of `size` bytes.
+        The data pointer is aligned to `align` bytes.  `align` can be either
+        a Python int or a LLVM uint32 value.
+
+        A pointer to the MemInfo is returned.
         """
         if not self.enable_nrt:
             raise Exception("Require NRT")
         mod = builder.module
         intp = self.get_value_type(types.intp)
         u32 = self.get_value_type(types.uint32)
-        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(), [intp, u32])
+        fnty = llvmir.FunctionType(void_ptr, [intp, u32])
         fn = mod.get_or_insert_function(fnty,
                                         name="NRT_MemInfo_alloc_safe_aligned")
+        fn.return_value.add_attribute("noalias")
         if isinstance(align, int):
             align = self.get_constant(types.uint32, align)
         else:
             assert align.type == u32, "align must be a uint32"
         return builder.call(fn, [size, align])
 
-    def nrt_meminfo_data(self, builder, meminfo):
+    def nrt_meminfo_varsize_alloc(self, builder, size):
+        """
+        Allocate a MemInfo pointing to a variable-sized data area.  The area
+        is separately allocated (i.e. two allocations are made) so that
+        re-allocating it doesn't change the MemInfo's address.
+
+        A pointer to the MemInfo is returned.
+        """
         if not self.enable_nrt:
             raise Exception("Require NRT")
         mod = builder.module
-        voidptr = llvmir.IntType(8).as_pointer()
-        fnty = llvmir.FunctionType(voidptr, [voidptr])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_data")
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_alloc")
         fn.return_value.add_attribute("noalias")
-        return builder.call(fn, [meminfo])
+        return builder.call(fn, [size])
 
-    def get_nrt_meminfo(self, builder, typ, value):
-        return self.data_model_manager[typ].get_nrt_meminfo(builder, value)
-
-    def _call_nrt_incref_decref(self, builder, typ, value, funcname):
+    def nrt_meminfo_varsize_realloc(self, builder, meminfo, size):
+        """
+        Reallocate a data area allocated by nrt_meminfo_varsize_alloc().
+        The new data pointer is returned, for convenience.
+        """
         if not self.enable_nrt:
             raise Exception("Require NRT")
+        mod = builder.module
+        fnty = llvmir.FunctionType(void_ptr,
+                                   [void_ptr, self.get_value_type(types.intp)])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_realloc")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [meminfo, size])
 
-        members = self.data_model_manager[typ].traverse(builder, value)
+    def nrt_meminfo_data(self, builder, meminfo):
+        """
+        Given a MemInfo pointer, return a pointer to the allocated data
+        managed by it.  This works for MemInfos allocated with all the
+        above methods.
+        """
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        from numba.runtime.atomicops import meminfo_data_ty
+
+        mod = builder.module
+        fn = mod.get_or_insert_function(meminfo_data_ty, name="NRT_MemInfo_data")
+        return builder.call(fn, [meminfo])
+
+    def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        from numba.runtime.atomicops import incref_decref_ty
+
+        data_model = self.data_model_manager[typ]
+
+        members = data_model.traverse(builder, value)
         for mt, mv in members:
-            self._call_nrt_incref_decref(builder, mt, mv, funcname)
+            self._call_nrt_incref_decref(builder, root_type, mt, mv, funcname)
 
-        meminfo = self.get_nrt_meminfo(builder, typ, value)
+        try:
+            meminfo = data_model.get_nrt_meminfo(builder, value)
+        except NotImplementedError as e:
+            raise NotImplementedError("%s: %s" % (root_type, str(e)))
         if meminfo:
             mod = builder.module
-            fnty = llvmir.FunctionType(llvmir.VoidType(),
-                                       [llvmir.IntType(8).as_pointer()])
-            fn = mod.get_or_insert_function(fnty, name=funcname)
+            fn = mod.get_or_insert_function(incref_decref_ty, name=funcname)
             # XXX "nonnull" causes a crash in test_dyn_array: can this
             # function be called with a NULL pointer?
             fn.args[0].add_attribute("noalias")
@@ -1111,10 +1148,16 @@ class BaseContext(object):
             builder.call(fn, [meminfo])
 
     def nrt_incref(self, builder, typ, value):
-        self._call_nrt_incref_decref(builder, typ, value, "NRT_incref")
+        """
+        Recursively incref the given *value* and its members.
+        """
+        self._call_nrt_incref_decref(builder, typ, typ, value, "NRT_incref")
 
     def nrt_decref(self, builder, typ, value):
-        self._call_nrt_incref_decref(builder, typ, value, "NRT_decref")
+        """
+        Recursively decref the given *value* and its members.
+        """
+        self._call_nrt_incref_decref(builder, typ, typ, value, "NRT_decref")
 
 
 class _wrap_impl(object):

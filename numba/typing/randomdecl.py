@@ -20,7 +20,7 @@ builtin_attr = registry.register_attr
 # object (e.g. the string "random.seed") as a key, not the bound method itself.
 # (same for np.random.random(), etc.)
 
-_int_types = [types.int32, types.int64]
+_int_types = sorted(set((types.intp, types.int64)))
 # Should we support float32?
 _float_types = [types.float64]
 

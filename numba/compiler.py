@@ -55,10 +55,50 @@ CR_FIELDS = ["typing_context",
              "interpmode",
              "library",
              "call_helper",
-             "environment"]
+             "environment",
+             "has_dynamic_globals"]
 
 
-CompileResult = namedtuple("CompileResult", CR_FIELDS)
+class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
+    __slots__ = ()
+
+    def _reduce(self):
+        """
+        Reduce a CompileResult to picklable components.
+        """
+        libdata = self.library.serialize_using_object_code()
+        # Make it (un)picklable efficiently
+        typeann = str(self.type_annotation)
+        fndesc = self.fndesc
+        # Those don't need to be pickled and may fail
+        fndesc.typemap = fndesc.calltypes = None
+
+        return (libdata, self.fndesc, self.environment, self.signature,
+                self.objectmode, self.interpmode, self.lifted, typeann)
+
+    @classmethod
+    def _rebuild(cls, target_context, libdata, fndesc, env,
+                 signature, objectmode, interpmode, lifted, typeann):
+        library = target_context.jit_codegen().unserialize_library(libdata)
+        cfunc = target_context.get_executable(library, fndesc, env)
+        cr = cls(target_context=target_context,
+                 typing_context=target_context.typing_context,
+                 library=library,
+                 environment=env,
+                 entry_point=cfunc,
+                 fndesc=fndesc,
+                 type_annotation=typeann,
+                 signature=signature,
+                 objectmode=objectmode,
+                 interpmode=interpmode,
+                 lifted=lifted,
+                 typing_error=None,
+                 call_helper=None,
+                 has_dynamic_globals=False,  # by definition
+                 )
+        return cr
+
+
 FunctionAttributes = namedtuple("FunctionAttributes",
                                 ['name', 'filename', 'lineno'])
 DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
@@ -69,6 +109,7 @@ _LowerResult = namedtuple("_LowerResult", [
     "call_helper",
     "cfunc",
     "env",
+    "has_dynamic_globals",
 ])
 
 
@@ -489,6 +530,10 @@ class Pipeline(object):
         if self.library is None:
             codegen = self.targetctx.jit_codegen()
             self.library = codegen.create_library(self.bc.func_qualname)
+            # Enable object caching upfront, so that the library can
+            # be later serialized.
+            self.library.enable_object_caching()
+
         lowered = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
         cr = compile_result(typing_context=self.typingctx,
@@ -503,7 +548,9 @@ class Pipeline(object):
                             interpmode=False,
                             lifted=self.lifted,
                             fndesc=lowered.fndesc,
-                            environment=lowered.env,)
+                            environment=lowered.env,
+                            has_dynamic_globals=lowered.has_dynamic_globals,
+                            )
         return cr
 
     def stage_objectmode_backend(self):
@@ -705,14 +752,9 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     for k, v in locals.items():
         infer.seed_type(k, v)
 
-    infer.build_constrain()
+    infer.build_constraint()
     infer.propagate()
     typemap, restype, calltypes = infer.unify()
-
-    if config.DEBUG:
-        pprint(typemap)
-        pprint(restype)
-        pprint(calltypes)
 
     return typemap, restype, calltypes
 
@@ -730,17 +772,20 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         lower.create_cpython_wrapper(flags.release_gil)
     env = lower.env
     call_helper = lower.call_helper
+    has_dynamic_globals = lower.has_dynamic_globals
     del lower
 
     if flags.no_compile:
-        return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
+        return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
+                            has_dynamic_globals=has_dynamic_globals)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         # Insert native function for use by other jitted-functions.
         # We also register its library to allow for inlining.
         targetctx.insert_user_function(cfunc, fndesc, [library])
-        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env)
+        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env,
+                            has_dynamic_globals=has_dynamic_globals)
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
@@ -751,14 +796,17 @@ def py_lowering_stage(targetctx, library, interp, flags):
         lower.create_cpython_wrapper()
     env = lower.env
     call_helper = lower.call_helper
+    has_dynamic_globals = lower.has_dynamic_globals
     del lower
 
     if flags.no_compile:
-        return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
+        return _LowerResult(fndesc, call_helper, cfunc=None, env=env,
+                            has_dynamic_globals=has_dynamic_globals)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
-        return _LowerResult(fndesc, call_helper, cfunc, env)
+        return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env,
+                            has_dynamic_globals=has_dynamic_globals)
 
 
 def ir_optimize_for_py_stage(interp):

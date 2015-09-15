@@ -15,6 +15,8 @@ cu_event = c_void_p
 cu_link_state = c_void_p
 cu_function_attribute = c_int
 
+cu_occupancy_b2d_size = CFUNCTYPE(c_size_t, c_int)
+
 
 API_PROTOTYPES = {
 # CUresult cuInit(unsigned int Flags);
@@ -273,5 +275,32 @@ API_PROTOTYPES = {
 #                              CUfunction hfunc )
 'cuFuncGetAttribute': (c_int,
                        POINTER(c_int), cu_function_attribute, cu_function),
+
+# CUresult CUDAAPI cuOccupancyMaxActiveBlocksPerMultiprocessor(int *numBlocks,
+#                                                              CUfunction func,
+#                                                              int blockSize,
+#                                                              size_t dynamicSMemSize);
+'cuOccupancyMaxActiveBlocksPerMultiprocessor': (c_int,
+                                                POINTER(c_int), cu_function, c_size_t, c_uint),
+
+# CUresult CUDAAPI cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(int *numBlocks,
+#                                                              CUfunction func,
+#                                                              int blockSize,
+#                                                              size_t dynamicSMemSize,
+#                                                              unsigned int flags);
+'cuOccupancyMaxActiveBlocksPerMultiprocessor': (c_int,
+                                                POINTER(c_int), cu_function, c_size_t, c_uint),
+
+# CUresult CUDAAPI cuOccupancyMaxPotentialBlockSize(int *minGridSize, int *blockSize,
+#                                                   CUfunction func, CUoccupancyB2DSize blockSizeToDynamicSMemSize,
+#                                                   size_t dynamicSMemSize, int blockSizeLimit);
+'cuOccupancyMaxPotentialBlockSize': (c_int,
+                                     POINTER(c_int), POINTER(c_int), cu_function, cu_occupancy_b2d_size, c_size_t, c_int),
+
+# CUresult CUDAAPI cuOccupancyMaxPotentialBlockSizeWithFlags(int *minGridSize, int *blockSize,
+#                                                            CUfunction func, CUoccupancyB2DSize blockSizeToDynamicSMemSize,
+#                                                            size_t dynamicSMemSize, int blockSizeLimit, unsigned int flags);
+'cuOccupancyMaxPotentialBlockSizeWithFlags': (c_int,
+                                              POINTER(c_int), POINTER(c_int), cu_function, cu_occupancy_b2d_size, c_size_t, c_int, c_uint),
 
 }

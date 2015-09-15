@@ -5,6 +5,7 @@ import collections
 import functools
 import io
 import itertools
+import os
 import threading
 import timeit
 import math
@@ -24,6 +25,7 @@ if IS_PY3:
     longint = int
     get_ident = threading.get_ident
     intern = sys.intern
+    file_replace = os.replace
 else:
     import thread
     import __builtin__ as builtins
@@ -31,6 +33,16 @@ else:
     longint = long
     get_ident = thread.get_ident
     intern = intern
+    if sys.platform == 'win32':
+        def file_replace(src, dest):
+            # Best-effort emulation of os.replace()
+            try:
+                os.rename(src, dest)
+            except OSError:
+                os.unlink(dest)
+                os.rename(src, dest)
+    else:
+        file_replace = os.rename
 
 try:
     from inspect import signature as pysignature
@@ -49,6 +61,40 @@ except ImportError:
     except ImportError:
         raise ImportError("please install the 'singledispatch' package "
                           "('pip install singledispatch')")
+
+
+# Mapping between operator module functions and the corresponding built-in
+# operators.
+
+operator_map = [
+    # Binary
+    ('add', 'iadd', '+'),
+    ('sub', 'isub', '-'),
+    ('mul', 'imul', '*'),
+    ('floordiv', 'ifloordiv', '//'),
+    ('truediv', 'itruediv', '/'),
+    ('mod', 'imod', '%'),
+    ('pow', 'ipow', '**'),
+    ('and_', 'iand', '&'),
+    ('or_', 'ior', '|'),
+    ('xor', 'ixor', '^'),
+    ('lshift', 'ilshift', '<<'),
+    ('rshift', 'irshift', '>>'),
+    ('eq', '', '=='),
+    ('ne', '', '!='),
+    ('lt', '', '<'),
+    ('le', '', '<='),
+    ('gt', '', '>'),
+    ('ge', '', '>='),
+    # Unary
+    ('pos', '', '+'),
+    ('neg', '', '-'),
+    ('invert', '', '~'),
+    ('not_', '', 'not'),
+    ]
+
+if not IS_PY3:
+    operator_map.append(('div', 'idiv', '/?'))
 
 
 _shutting_down = False

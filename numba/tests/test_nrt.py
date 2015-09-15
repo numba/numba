@@ -1,7 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+import math
+import os
+import sys
+
 import numpy as np
+
 from numba import unittest_support as unittest
+from numba import njit
 from numba.runtime import rtsys
 from numba.config import PYVERSION
 from .support import MemoryLeakMixin
@@ -60,26 +66,6 @@ class TestNrtMemInfo(unittest.TestCase):
             mi.release()
         self.assertEqual(mi.refcount, 1)
         del mi
-        self.assertEqual(Dummy.alive, 0)
-
-    def test_defer_dtor(self):
-        d = Dummy()
-        self.assertEqual(Dummy.alive, 1)
-        addr = 0xdeadcafe  # some made up location
-
-        mi = rtsys.meminfo_new(addr, d)
-        self.assertEqual(mi.refcount, 1)
-        # Set defer flag
-        mi.defer = True
-        del d
-        self.assertEqual(Dummy.alive, 1)
-        mi.acquire()
-        self.assertEqual(Dummy.alive, 1)
-        mi.release()
-        del mi
-        # mi refct is zero but not yet removed due to deferring
-        self.assertEqual(Dummy.alive, 1)
-        rtsys.process_defer_dtor()
         self.assertEqual(Dummy.alive, 0)
 
     @unittest.skipIf(PYVERSION <= (2, 7), "memoryview not supported")
@@ -184,15 +170,71 @@ class TestNrtMemInfo(unittest.TestCase):
         # consumed by another thread.
 
 
+@unittest.skipUnless(sys.version_info >= (3, 4),
+                     "need Python 3.4+ for the tracemalloc module")
+class TestTracemalloc(unittest.TestCase):
+    """
+    Test NRT-allocated memory can be tracked by tracemalloc.
+    """
+
+    def measure_memory_diff(self, func):
+        import tracemalloc
+        tracemalloc.start()
+        try:
+            before = tracemalloc.take_snapshot()
+            # Keep the result and only delete it after taking a snapshot
+            res = func()
+            after = tracemalloc.take_snapshot()
+            del res
+            return after.compare_to(before, 'lineno')
+        finally:
+            tracemalloc.stop()
+
+    def test_snapshot(self):
+        N = 1000000
+        dtype = np.int8
+
+        @njit
+        def alloc_nrt_memory():
+            """
+            Allocate and return a large array.
+            """
+            return np.empty(N, dtype)
+
+        def keep_memory():
+            return alloc_nrt_memory()
+
+        def release_memory():
+            alloc_nrt_memory()
+
+        alloc_lineno = keep_memory.__code__.co_firstlineno + 1
+
+        # Warmup JIT
+        alloc_nrt_memory()
+
+        # The large NRT-allocated array should appear topmost in the diff
+        diff = self.measure_memory_diff(keep_memory)
+        stat = diff[0]
+        # There is a slight overhead, so the allocated size won't exactly be N
+        self.assertGreaterEqual(stat.size, N)
+        self.assertLess(stat.size, N * 1.01)
+        frame = stat.traceback[0]
+        self.assertEqual(os.path.basename(frame.filename), "test_nrt.py")
+        self.assertEqual(frame.lineno, alloc_lineno)
+
+        # If NRT memory is released before taking a snapshot, it shouldn't
+        # appear.
+        diff = self.measure_memory_diff(release_memory)
+        stat = diff[0]
+        # Something else appears, but nothing the magnitude of N
+        self.assertLess(stat.size, N * 0.01)
+
+
 class TestNRTIssue(MemoryLeakMixin, unittest.TestCase):
     def test_issue_with_refct_op_pruning(self):
         """
         GitHub Issue #1244 https://github.com/numba/numba/issues/1244
         """
-        from numba import njit
-        import numpy as np
-        import math
-
         @njit
         def calculate_2D_vector_mag(vector):
             x, y = vector

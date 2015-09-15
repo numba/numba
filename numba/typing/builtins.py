@@ -1,11 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
+import itertools
 
 from numba import types, intrinsics
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
-                                    builtin_attr, signature, bound_function)
+                                    builtin_attr, signature, bound_function,
+                                    make_callable_template)
 
 for obj in RANGE_ITER_OBJECTS:
     builtin_global(obj, types.range_type)
@@ -134,13 +136,39 @@ class PairSecond(AbstractTemplate):
             return signature(pair.second_type, pair)
 
 
+def choose_result_bitwidth(*inputs):
+    return max(types.intp.bitwidth, *(tp.bitwidth for tp in inputs))
+
+def choose_result_int(*inputs):
+    """
+    Choose the integer result type for an operation on integer inputs,
+    according to the integer typing NBEP.
+    """
+    bitwidth = choose_result_bitwidth(*inputs)
+    signed = any(tp.signed for tp in inputs)
+    return types.Integer.from_bitwidth(bitwidth, signed)
+
+
+# The "machine" integer types to take into consideration for operator typing
+# (according to the integer typing NBEP)
+machine_ints = (
+    sorted(set((types.intp, types.int64))) +
+    sorted(set((types.uintp, types.uint64)))
+    )
+
+# Explicit integer rules for binary operators; smaller ints will be
+# automatically upcast.
+integer_binop_cases = tuple(
+    signature(choose_result_int(op1, op2), op1, op2)
+    for op1, op2 in itertools.product(machine_ints, machine_ints)
+    )
+
+
 class BinOp(ConcreteTemplate):
-    cases = [signature(max(types.intp, op), op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(max(types.uintp, op), op, op)
-              for op in sorted(types.unsigned_domain)]
+    cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
+
 
 @builtin
 class BinOpAdd(BinOp):
@@ -165,20 +193,15 @@ class BinOpDiv(BinOp):
 @builtin
 class BinOpMod(ConcreteTemplate):
     key = "%"
-    cases = [signature(op, op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(op, op, op)
-              for op in sorted(types.unsigned_domain)]
+    cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @builtin
 class BinOpTrueDiv(ConcreteTemplate):
     key = "/"
-    cases = [signature(types.float64, op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(types.float64, op, op)
-              for op in sorted(types.unsigned_domain)]
+    cases = [signature(types.float64, op1, op2)
+             for op1, op2 in itertools.product(machine_ints, machine_ints)]
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
@@ -186,18 +209,14 @@ class BinOpTrueDiv(ConcreteTemplate):
 @builtin
 class BinOpFloorDiv(ConcreteTemplate):
     key = "//"
-    cases = [signature(op, op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(op, op, op)
-              for op in sorted(types.unsigned_domain)]
+    cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @builtin
 class BinOpPower(ConcreteTemplate):
     key = "**"
-    cases = [signature(op, op, op)
-             for op in (types.intp, types.int64)]
+    cases = list(integer_binop_cases)
     cases += [signature(types.float64, types.float64, op)
               for op in sorted(types.signed_domain)]
     cases += [signature(types.float64, types.float64, op)
@@ -216,10 +235,7 @@ builtin_global(pow, types.Function(PowerBuiltin))
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
-    cases = [signature(op, op, types.uint32)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(op, op, types.uint32)
-              for op in sorted(types.unsigned_domain)]
+    cases = list(integer_binop_cases)
 
 
 @builtin
@@ -233,10 +249,7 @@ class BitwiseRightShift(BitwiseShiftOperation):
 
 
 class BitwiseLogicOperation(BinOp):
-    cases = [signature(max(types.intp, op), op, op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(max(types.uintp, op), op, op)
-              for op in sorted(types.unsigned_domain)]
+    cases = list(integer_binop_cases)
 
 
 @builtin
@@ -254,47 +267,44 @@ class BitwiseXor(BitwiseLogicOperation):
     key = "^"
 
 
+# Bitwise invert and negate are special: we must not upcast the operand
+# for unsigned numbers, as that would change the result.
+# (i.e. ~np.int8(0) == 255 but ~np.int32(0) == 4294967295).
+
 @builtin
 class BitwiseInvert(ConcreteTemplate):
     key = "~"
 
     cases = [signature(types.int8, types.boolean)]
-    cases += [signature(op, op) for op in sorted(types.signed_domain)]
-    cases += [signature(op, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(choose_result_int(op), op) for op in types.unsigned_domain]
+    cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
 
 
 class UnaryOp(ConcreteTemplate):
-    cases = [signature(op, op) for op in sorted(types.signed_domain)]
-    cases += [signature(op, op) for op in sorted(types.unsigned_domain)]
+    cases = [signature(choose_result_int(op), op) for op in types.unsigned_domain]
+    cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
     cases += [signature(op, op) for op in sorted(types.real_domain)]
     cases += [signature(op, op) for op in sorted(types.complex_domain)]
 
 
 @builtin
-class UnaryNot(UnaryOp):
+class UnaryNegate(UnaryOp):
+    key = "-"
+
+
+@builtin
+class UnaryPositive(UnaryOp):
+    key = "+"
+
+
+@builtin
+class UnaryNot(ConcreteTemplate):
     key = "not"
     cases = [signature(types.boolean, types.boolean)]
     cases += [signature(types.boolean, op) for op in sorted(types.signed_domain)]
     cases += [signature(types.boolean, op) for op in sorted(types.unsigned_domain)]
     cases += [signature(types.boolean, op) for op in sorted(types.real_domain)]
     cases += [signature(types.boolean, op) for op in sorted(types.complex_domain)]
-
-
-@builtin
-class UnaryNegate(UnaryOp):
-    key = "-"
-    cases = [signature(max(types.intp, op), op)
-             for op in sorted(types.signed_domain)]
-    cases += [signature(max(types.uintp, op), op)
-              for op in sorted(types.unsigned_domain)]
-    cases += [signature(op, op) for op in sorted(types.real_domain)]
-    cases += [signature(op, op) for op in sorted(types.complex_domain)]
-
-
-@builtin
-class UnaryPositive(UnaryOp):
-    key = "+"
-    cases = UnaryNegate.cases
 
 
 class OrderedCmpOp(ConcreteTemplate):
@@ -337,8 +347,7 @@ class CmpOpNe(UnorderedCmpOp):
 class TupleCompare(AbstractTemplate):
     def generic(self, args, kws):
         [lhs, rhs] = args
-        tuple_types = (types.Tuple, types.UniTuple)
-        if isinstance(lhs, tuple_types) and isinstance(rhs, tuple_types):
+        if isinstance(lhs, types.BaseTuple) and isinstance(rhs, types.BaseTuple):
             for u, v in zip(lhs, rhs):
                 # Check element-wise comparability
                 res = self.context.resolve_function_type(self.key, (u, v), {})
@@ -388,7 +397,22 @@ class CmpOpIsNot(CmpOpIdentity):
     key = 'is not'
 
 
-def normalize_index(index):
+def normalize_1d_index(index):
+    """
+    Normalize the *index* type (an integer or slice) for indexing a 1D
+    sequence.
+    """
+    if index == types.slice3_type:
+        return types.slice3_type
+
+    elif isinstance(index, types.Integer):
+        return types.intp if index.signed else types.uintp
+
+def normalize_nd_index(index):
+    """
+    Normalize the *index* type (an integer, slice or tuple thereof) for
+    indexing a N-D sequence.
+    """
     if isinstance(index, types.UniTuple):
         if index.dtype in types.integer_domain:
             idxtype = types.intp if index.dtype.signed else types.uintp
@@ -403,34 +427,7 @@ def normalize_index(index):
                                  % (ty, index))
         return index
 
-    elif index == types.slice3_type:
-        return types.slice3_type
-
-    elif isinstance(index, types.Integer):
-        return types.intp if index.signed else types.uintp
-
-
-# XXX Should there be a base Sequence type for plain 1d sequences?
-
-@builtin
-class GetItemUniTuple(AbstractTemplate):
-    key = "getitem"
-
-    def generic(self, args, kws):
-        tup, idx = args
-        if isinstance(tup, types.UniTuple):
-            return signature(tup.dtype, tup, normalize_index(idx))
-
-
-@builtin
-class GetItemFlat(AbstractTemplate):
-    key = "getitem"
-
-    def generic(self, args, kws):
-        obj, idx = args
-        if (isinstance(obj, types.NumpyFlatType)
-            and isinstance(idx, types.Integer)):
-            return signature(obj.array_type.dtype, obj, normalize_index(idx))
+    return normalize_1d_index(index)
 
 
 @builtin
@@ -443,11 +440,11 @@ class GetItemBuffer(AbstractTemplate):
         if not isinstance(ary, types.Buffer):
             return
 
-        idx = normalize_index(idx)
+        idx = normalize_nd_index(idx)
         if idx is None:
             return
 
-        if idx == types.slice3_type: #(types.slice2_type, types.slice3_type):
+        if idx == types.slice3_type:
             res = ary.copy(layout='A')
         elif isinstance(idx, (types.UniTuple, types.Tuple)):
             if ary.ndim > len(idx):
@@ -491,7 +488,7 @@ class GetItemCPointer(AbstractTemplate):
         assert not kws
         ptr, idx = args
         if isinstance(ptr, types.CPointer) and isinstance(idx, types.Integer):
-            return signature(ptr.dtype, ptr, normalize_index(idx))
+            return signature(ptr.dtype, ptr, normalize_1d_index(idx))
 
 
 @builtin
@@ -504,7 +501,7 @@ class SetItemBuffer(AbstractTemplate):
         if isinstance(ary, types.Buffer):
             if not ary.mutable:
                 raise TypeError("Cannot modify value of type %s" %(ary,))
-            return signature(types.none, ary, normalize_index(idx), ary.dtype)
+            return signature(types.none, ary, normalize_nd_index(idx), ary.dtype)
 
 
 @builtin
@@ -515,7 +512,7 @@ class SetItemCPointer(AbstractTemplate):
         assert not kws
         ptr, idx, val = args
         if isinstance(ptr, types.CPointer) and isinstance(idx, types.Integer):
-            return signature(types.none, ptr, normalize_index(idx), ptr.dtype)
+            return signature(types.none, ptr, normalize_1d_index(idx), ptr.dtype)
 
 
 @builtin
@@ -525,8 +522,19 @@ class Len(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         (val,) = args
-        if isinstance(val, (types.Buffer, types.Tuple, types.UniTuple)):
+        if isinstance(val, (types.Buffer, types.BaseTuple)):
             return signature(types.intp, val)
+
+
+@builtin
+class TupleBool(AbstractTemplate):
+    key = "is_true"
+
+    def generic(self, args, kws):
+        assert not kws
+        (val,) = args
+        if isinstance(val, (types.BaseTuple)):
+            return signature(types.boolean, val)
 
 
 #-------------------------------------------------------------------------------
@@ -610,6 +618,13 @@ class ArrayAttribute(AttributeTemplate):
         retty = ary.copy(ndim=ndim)
         return signature(retty, shape)
 
+    @bound_function("array.sort")
+    def resolve_sort(self, ary, args, kws):
+        assert not args
+        assert not kws
+        if ary.ndim == 1:
+            return signature(types.none)
+
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):
         from .npydecl import _parse_dtype
@@ -623,8 +638,7 @@ class ArrayAttribute(AttributeTemplate):
         # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
-                return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,
-                                   layout='A')
+                return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
 
 
 @builtin_attr
@@ -769,13 +783,28 @@ class MemoryViewAttribute(AttributeTemplate):
 
 
 #-------------------------------------------------------------------------------
-class ComplexAttribute(AttributeTemplate):
+
+
+@builtin_attr
+class BooleanAttribute(AttributeTemplate):
+    key = types.Boolean
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
+
+
+@builtin_attr
+class NumberAttribute(AttributeTemplate):
+    key = types.Number
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
 
     def resolve_real(self, ty):
-        return self.innertype
+        return getattr(ty, "underlying_float", ty)
 
     def resolve_imag(self, ty):
-        return self.innertype
+        return getattr(ty, "underlying_float", ty)
 
     @bound_function("complex.conjugate")
     def resolve_conjugate(self, ty, args, kws):
@@ -784,37 +813,34 @@ class ComplexAttribute(AttributeTemplate):
         return signature(ty)
 
 
-def register_complex_attributes(ty):
-    @builtin_attr
-    class ConcreteComplexAttribute(ComplexAttribute):
-        key = ty
-        try:
-            innertype = ty.underlying_float
-        except AttributeError:
-            innertype = ty
-
-for ty in types.number_domain:
-    register_complex_attributes(ty)
-
 #-------------------------------------------------------------------------------
 
-def register_casters(register_global):
+
+@builtin_attr
+class NumberClassAttribute(AttributeTemplate):
+    key = types.NumberClass
+
+    def resolve___call__(self, classty):
+        """
+        Resolve a number class's constructor (e.g. calling int(...))
+        """
+        ty = classty.instance_type
+
+        def typer(val):
+            return ty
+
+        return types.Function(make_callable_template(key=ty, typer=typer))
+
+
+def register_number_classes(register_global):
     nb_types = set(types.number_domain)
     nb_types.add(types.bool_)
 
-    for restype in nb_types:
-        class Caster(AbstractTemplate):
-            key = restype
+    for ty in nb_types:
+        register_global(ty, types.NumberClass(ty))
 
-            def generic(self, args, kws):
-                assert not kws
-                [a] = args
-                if a in nb_types:
-                    return signature(self.key, a)
 
-        register_global(restype, types.NumberClass(restype, Caster))
-
-register_casters(builtin_global)
+register_number_classes(builtin_global)
 
 #------------------------------------------------------------------------------
 
@@ -864,12 +890,12 @@ class Round(ConcreteTemplate):
         ]
     else:
         cases = [
-            signature(types.int32, types.float32),
+            signature(types.intp, types.float32),
             signature(types.int64, types.float64),
         ]
     cases += [
-        signature(types.float32, types.float32, types.int32),
-        signature(types.float64, types.float64, types.int32),
+        signature(types.float32, types.float32, types.intp),
+        signature(types.float64, types.float64, types.intp),
     ]
 
 
@@ -886,13 +912,13 @@ class Bool(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-
         [arg] = args
-
-        if arg not in types.number_domain:
-            raise TypeError("bool() only support for numbers")
-
-        return signature(types.boolean, arg)
+        if arg in types.number_domain:
+            return signature(types.boolean, arg)
+        # XXX typing for bool cannot be polymorphic because of the
+        # types.Function thing, so we redirect to the "is_true"
+        # intrinsic.
+        return self.context.resolve_function_type("is_true", args, kws)
 
 
 class Int(AbstractTemplate):
@@ -1018,3 +1044,24 @@ class Intrinsic_array_ravel(AbstractTemplate):
             return signature(arr.copy(ndim=1), arr)
 
 builtin_global(intrinsics.array_ravel, types.Function(Intrinsic_array_ravel))
+
+
+#------------------------------------------------------------------------------
+
+@builtin
+class TypeBuiltin(AbstractTemplate):
+    key = type
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1:
+            # One-argument type() -> return the __class__
+            try:
+                classty = self.context.resolve_getattr(args[0], "__class__")
+            except KeyError:
+                return
+            else:
+                return signature(classty, *args)
+
+
+builtin_global(type, types.Function(TypeBuiltin))

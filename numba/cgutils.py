@@ -3,6 +3,8 @@ Generic helpers for LLVM code generation.
 """
 
 from __future__ import print_function, division, absolute_import
+
+import collections
 from contextlib import contextmanager
 import functools
 import re
@@ -18,6 +20,8 @@ true_bit = Constant.int(Type.int(1), 1)
 false_bit = Constant.int(Type.int(1), 0)
 true_byte = Constant.int(Type.int(8), 1)
 false_byte = Constant.int(Type.int(8), 0)
+
+intp_t = Type.int(utils.MACHINE_BITS)
 
 
 def as_bool_byte(builder, value):
@@ -88,7 +92,9 @@ class StructProxy(object):
 
         if ref is not None:
             assert value is None
-            assert ref.type.pointee == self._be_type
+            if ref.type.pointee != self._be_type:
+                raise AssertionError("bad ref type: expected %s, got %s"
+                                     % (self._be_type.as_pointer(), ref.type))
             self._value = ref
         else:
             self._value = alloca_once(self._builder, self._be_type, zfill=True)
@@ -131,6 +137,20 @@ class StructProxy(object):
         Store the LLVM *value* into the field at *index*.
         """
         ptr = self._get_ptr_by_index(index)
+        if value.type != ptr.type.pointee:
+            if (is_pointer(value.type) and is_pointer(ptr.type.pointee)
+                and  value.type.pointee == ptr.type.pointee.pointee):
+                # Differ by address-space only
+                # Auto coerce it
+                value = self._context.addrspacecast(self._builder,
+                                                    value,
+                                                    ptr.type.pointee.addrspace)
+            else:
+                raise TypeError("Invalid store {value.type} {"
+                                "ptr.type.pointee} in "
+                                "{self._datamodel}".format(value=value,
+                                                           ptr=ptr,
+                                                           self=self))
         self._builder.store(value, ptr)
 
     def __len__(self):
@@ -347,14 +367,27 @@ class IfBranchObj(object):
         terminate(self.builder, self.bbend)
 
 
+Loop = collections.namedtuple('Loop', ('index', 'do_break'))
+
 @contextmanager
-def for_range(builder, count, intp):
+def for_range(builder, count, intp=None):
+    """
+    Generate LLVM IR for a for-loop in [0, count).  Yields a
+    Loop namedtuple with the following members:
+    - `index` is the loop index's value
+    - `do_break` is a no-argument callable to break out of the loop
+    """
+    if intp is None:
+        intp = count.type
     start = Constant.int(intp, 0)
     stop = count
 
     bbcond = builder.append_basic_block("for.cond")
     bbbody = builder.append_basic_block("for.body")
     bbend = builder.append_basic_block("for.end")
+
+    def do_break():
+        builder.branch(bbend)
 
     bbstart = builder.basic_block
     builder.branch(bbcond)
@@ -367,7 +400,8 @@ def for_range(builder, count, intp):
         builder.cbranch(pred, bbbody, bbend)
 
     with builder.goto_block(bbbody):
-        yield index
+        yield Loop(index, do_break)
+        # Update bbbody as a new basic block may have been activated
         bbbody = builder.basic_block
         incr = builder.add(index, ONE)
         terminate(builder, bbcond)
@@ -379,9 +413,11 @@ def for_range(builder, count, intp):
 
 
 @contextmanager
-def for_range_slice(builder, start, stop, step, intp, inc=True):
+def for_range_slice(builder, start, stop, step, intp=None, inc=True):
     """
-    Generate LLVM IR for a for-loop based on a slice
+    Generate LLVM IR for a for-loop based on a slice.  Yields a
+    (index, count) tuple where `index` is the slice index's value
+    inside the loop, and `count` the iteration count.
 
     Parameters
     -------------
@@ -396,12 +432,14 @@ def for_range_slice(builder, start, stop, step, intp, inc=True):
     intp :
         The data type
     inc : boolean, optional
-        A flag to handle the step < 0 case, in which case we decrement the loop
+        Signals whether the step is positive (True) or negative (False).
 
     Returns
     -----------
         None
     """
+    if intp is None:
+        intp = start.type
 
     bbcond = builder.append_basic_block("for.cond")
     bbbody = builder.append_basic_block("for.body")
@@ -411,6 +449,7 @@ def for_range_slice(builder, start, stop, step, intp, inc=True):
 
     with builder.goto_block(bbcond):
         index = builder.phi(intp, name="loop.index")
+        count = builder.phi(intp, name="loop.count")
         if (inc):
             pred = builder.icmp(lc.ICMP_SLT, index, stop)
         else:
@@ -418,14 +457,47 @@ def for_range_slice(builder, start, stop, step, intp, inc=True):
         builder.cbranch(pred, bbbody, bbend)
 
     with builder.goto_block(bbbody):
-        yield index
+        yield index, count
         bbbody = builder.basic_block
         incr = builder.add(index, step)
+        next_count = builder.add(count, ir.Constant(intp, 1))
         terminate(builder, bbcond)
 
     index.add_incoming(start, bbstart)
     index.add_incoming(incr, bbbody)
+    count.add_incoming(ir.Constant(intp, 0), bbstart)
+    count.add_incoming(next_count, bbbody)
     builder.position_at_end(bbend)
+
+
+@contextmanager
+def for_range_slice_generic(builder, start, stop, step):
+    """
+    A helper wrapper for for_range_slice().  This is a context manager which
+    yields two for_range_slice()-alike context managers, the first for
+    the positive step case, the second for the negative step case.
+    
+    Use:
+        with for_range_slice_generic(...) as (pos_range, neg_range):
+            with pos_range as (idx, count):
+                ...
+            with neg_range as (idx, count):
+                ...
+    """
+    intp = start.type
+    is_pos_step = builder.icmp_signed('>=', step, ir.Constant(intp, 0))
+    
+    pos_for_range = for_range_slice(builder, start, stop, step, intp, inc=True)
+    neg_for_range = for_range_slice(builder, start, stop, step, intp, inc=False)
+
+    @contextmanager
+    def cm_cond(cond, inner_cm):
+        with cond:
+            with inner_cm as value:
+                yield value
+
+    with builder.if_else(is_pos_step, likely=True) as (then, otherwise):
+        yield cm_cond(then, pos_for_range), cm_cond(otherwise, neg_for_range)
 
 
 @contextmanager
@@ -437,12 +509,12 @@ def loop_nest(builder, shape, intp):
 
 @contextmanager
 def _loop_nest(builder, shape, intp):
-    with for_range(builder, shape[0], intp) as ind:
+    with for_range(builder, shape[0], intp) as loop:
         if len(shape) > 1:
             with _loop_nest(builder, shape[1:], intp) as indices:
-                yield (ind,) + indices
+                yield (loop.index,) + indices
         else:
-            yield (ind,)
+            yield (loop.index,)
 
 
 def pack_array(builder, values, ty=None):
@@ -528,28 +600,6 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         return pointer_add(builder, data, offset)
 
 
-def normalize_slice(builder, slice, length):
-    """
-    Clip stop
-    """
-    stop = slice.stop
-    doclip = builder.icmp(lc.ICMP_SGT, stop, length)
-    slice.stop = builder.select(doclip, length, stop)
-
-
-def get_range_from_slice(builder, slicestruct):
-    diff = builder.sub(slicestruct.stop, slicestruct.start)
-    length = builder.sdiv(diff, slicestruct.step)
-    is_neg = is_neg_int(builder, length)
-    length = builder.select(is_neg, get_null_value(length.type), length)
-    return length
-
-
-def get_strides_from_slice(builder, ndim, strides, slice, ax):
-    oldstrides = unpack_tuple(builder, strides, ndim)
-    return builder.mul(slice.step, oldstrides[ax])
-
-
 def is_scalar_zero(builder, value):
     """
     Return a predicate representing whether *value* is equal to zero.
@@ -615,6 +665,22 @@ def guard_null(context, builder, value, exc_tuple):
         exc = exc_tuple[0]
         exc_args = exc_tuple[1:] or None
         context.call_conv.return_user_exc(builder, exc, exc_args)
+
+def guard_invalid_slice(context, builder, slicestruct):
+    """
+    Guard against *slicestruct* having a zero step (and raise ValueError).
+    """
+    guard_null(context, builder, slicestruct.step,
+               (ValueError, "slice step cannot be zero"))
+
+def guard_memory_error(context, builder, pointer, msg=None):
+    """
+    Guard against *pointer* being NULL (and raise a MemoryError).
+    """
+    assert isinstance(pointer.type, ir.PointerType), pointer.type
+    exc_args = (msg,) if msg else ()
+    with builder.if_then(is_null(builder, pointer), likely=False):
+        context.call_conv.return_user_exc(builder, MemoryError, exc_args)
 
 
 guard_zero = guard_null
@@ -685,10 +751,9 @@ def pointer_add(builder, ptr, offset, return_type=None):
     Note the computation is done in bytes, and ignores the width of
     the pointed item type.
     """
-    intptr_t = Type.int(utils.MACHINE_BITS)
-    intptr = builder.ptrtoint(ptr, intptr_t)
+    intptr = builder.ptrtoint(ptr, intp_t)
     if isinstance(offset, int):
-        offset = Constant.int(intptr_t, offset)
+        offset = Constant.int(intp_t, offset)
     intptr = builder.add(intptr, offset)
     return builder.inttoptr(intptr, return_type or ptr.type)
 
@@ -799,7 +864,40 @@ def memcpy(builder, dst, src, count):
     * count is positive
     """
     assert dst.type == src.type
-    with for_range(builder, count, count.type) as idx:
-        out_ptr = builder.gep(dst, [idx])
-        in_ptr = builder.gep(src, [idx])
+    with for_range(builder, count, count.type) as loop:
+        out_ptr = builder.gep(dst, [loop.index])
+        in_ptr = builder.gep(src, [loop.index])
         builder.store(builder.load(in_ptr), out_ptr)
+
+
+def memmove(builder, dst, src, count, itemsize, align=1):
+    """
+    Emit a memmove() call for `count` items of size `itemsize`
+    from `src` to `dest`.
+    """
+    ptr_t = ir.IntType(8).as_pointer()
+    size_t = count.type
+
+    memmove = builder.module.declare_intrinsic('llvm.memmove',
+                                               [ptr_t, ptr_t, size_t])
+    align = ir.Constant(ir.IntType(32), align)
+    is_volatile = false_bit
+    builder.call(memmove, [builder.bitcast(dst, ptr_t),
+                           builder.bitcast(src, ptr_t),
+                           builder.mul(count, ir.Constant(size_t, itemsize)),
+                           align,
+                           is_volatile])
+
+
+def muladd_with_overflow(builder, a, b, c):
+    """
+    Compute (a * b + c) and return a (result, overflow bit) pair.
+    The operands must be signed integers.
+    """
+    p = builder.smul_with_overflow(a, b)
+    prod = builder.extract_value(p, 0)
+    prod_ovf = builder.extract_value(p, 1)
+    s = builder.sadd_with_overflow(prod, c)
+    res = builder.extract_value(s, 0)
+    ovf = builder.or_(prod_ovf, builder.extract_value(s, 1))
+    return res, ovf

@@ -10,6 +10,27 @@ from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
 from .errors import LoweringError
 
+
+class Environment(_dynfunc.Environment):
+    __slots__ = ()
+
+    @classmethod
+    def from_fndesc(cls, fndesc):
+        mod = fndesc.lookup_module()
+        return cls(mod.__dict__)
+
+    def __reduce__(self):
+        return _rebuild_env, (self.globals['__name__'], self.consts)
+
+
+def _rebuild_env(modname, consts):
+    from . import serialize
+    mod = serialize._rebuild_module(modname)
+    env = Environment(mod.__dict__)
+    env.consts[:] = consts
+    return env
+
+
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
 
@@ -17,6 +38,9 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
+
+    # If true, then can't cache LLVM module accross process calls
+    has_dynamic_globals = False
 
     def __init__(self, context, library, fndesc, interp):
         self.context = context
@@ -32,8 +56,7 @@ class BaseLower(object):
 
         # Python execution environment (will be available to the compiled
         # function).
-        self.env = _dynfunc.Environment(
-            globals=self.fndesc.lookup_module().__dict__)
+        self.env = Environment.from_fndesc(self.fndesc)
 
         # Internal states
         self.blkmap = {}
@@ -112,6 +135,9 @@ class BaseLower(object):
             print(self.module)
             print('=' * 80)
 
+        # Run target specific post lowering transformation
+        self.context.post_lowering(self.module, self.library)
+
         # Materialize LLVM Module
         self.library.add_ir_module(self.module)
 
@@ -134,9 +160,6 @@ class BaseLower(object):
         # Close tail of entry block
         self.builder.position_at_end(entry_block_tail)
         self.builder.branch(self.blkmap[self.firstblk])
-
-        # Run target specific post lowering transformation
-        self.context.post_lowering(self.function)
 
     def lower_function_body(self):
         """
@@ -273,6 +296,23 @@ class Lower(BaseLower):
 
             return impl(self.builder, (target, index, value))
 
+        elif isinstance(inst, ir.DelItem):
+            target = self.loadvar(inst.target.name)
+            index = self.loadvar(inst.index.name)
+
+            targetty = self.typeof(inst.target.name)
+            indexty = self.typeof(inst.index.name)
+
+            signature = self.fndesc.calltypes[inst]
+            assert signature is not None
+            impl = self.context.get_function('delitem', signature)
+
+            assert targetty == signature.args[0]
+            index = self.context.cast(self.builder, index, indexty,
+                                      signature.args[1])
+
+            return impl(self.builder, (target, index))
+
         elif isinstance(inst, ir.Del):
             try:
                 # XXX: incorrect Del injection?
@@ -323,7 +363,7 @@ class Lower(BaseLower):
                 # Try to infer the args tuple
                 args = tuple(self.interp.get_definition(arg).infer_constant()
                              for arg in excdef.args)
-            elif isinstance(exctype, types.ExceptionType):
+            elif isinstance(exctype, types.ExceptionClass):
                 args = None
             else:
                 raise NotImplementedError("cannot raise value of type %s"
@@ -337,6 +377,7 @@ class Lower(BaseLower):
             if isinstance(ty, types.ExternalFunctionPointer):
                 res = self.context.get_constant_generic(self.builder, ty,
                                                         value.value)
+                self.has_dynamic_globals = True
 
             elif isinstance(ty, types.Dummy):
                 res = self.context.get_dummy_value()
@@ -390,7 +431,7 @@ class Lower(BaseLower):
         # None is returned by the yield expression
         return self.context.get_constant_generic(self.builder, retty, None)
 
-    def lower_binop(self, resty, expr):
+    def lower_binop(self, resty, expr, op):
         lhs = expr.lhs
         rhs = expr.rhs
         lty = self.typeof(lhs.name)
@@ -399,7 +440,7 @@ class Lower(BaseLower):
         rhs = self.loadvar(rhs.name)
         # Get function
         signature = self.fndesc.calltypes[expr]
-        impl = self.context.get_function(expr.fn, signature)
+        impl = self.context.get_function(op, signature)
         # Convert argument to match
         lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
         rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
@@ -484,13 +525,6 @@ class Lower(BaseLower):
             res = self.context.call_internal(self.builder, fnty.fndesc,
                                              fnty.sig, argvals)
 
-        elif isinstance(fnty, types.Method):
-            self.debug_print("# calling method")
-            # Method of objects are handled differently
-            fnobj = self.loadvar(expr.func.name)
-            res = self.context.call_class_method(self.builder, fnobj,
-                                                 signature, argvals)
-
         elif isinstance(fnty, types.ExternalFunctionPointer):
             self.debug_print("# calling external function pointer")
             # Handle a C function pointer
@@ -538,7 +572,7 @@ class Lower(BaseLower):
                 # for bounded function
                 the_self = self.loadvar(expr.func.name)
                 # Prepend the self reference
-                argvals = [the_self] + argvals
+                argvals = [the_self] + list(argvals)
 
             res = impl(self.builder, argvals)
 
@@ -551,13 +585,15 @@ class Lower(BaseLower):
 
     def lower_expr(self, resty, expr):
         if expr.op == 'binop':
-            return self.lower_binop(resty, expr)
+            return self.lower_binop(resty, expr, expr.fn)
         elif expr.op == 'inplace_binop':
             lty = self.typeof(expr.lhs.name)
-            if not lty.mutable:
+            if lty.mutable:
+                return self.lower_binop(resty, expr, expr.fn)
+            else:
                 # inplace operators on non-mutable types reuse the same
                 # definition as the corresponding copying operators.
-                return self.lower_binop(resty, expr)
+                return self.lower_binop(resty, expr, expr.immutable_fn)
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)
             typ = self.typeof(expr.value.name)
@@ -607,6 +643,8 @@ class Lower(BaseLower):
             # If we have a tuple, we needn't do anything
             # (and we can't iterate over the heterogenous ones).
             if isinstance(ty, types.BaseTuple):
+                assert ty == resty
+                self.incref(ty, val)
                 return val
 
             itemty = ty.iterator_type.yield_type
@@ -704,12 +742,16 @@ class Lower(BaseLower):
             itemtys = [self.typeof(i.name) for i in expr.items]
             castvals = [self.context.cast(self.builder, val, fromty, toty)
                         for val, toty, fromty in zip(itemvals, resty, itemtys)]
-            tup = self.context.get_constant_undef(resty)
-            for i in range(len(castvals)):
-                tup = self.builder.insert_value(tup, castvals[i], i)
-
+            tup = self.context.make_tuple(self.builder, resty, castvals)
             self.incref(resty, tup)
             return tup
+
+        elif expr.op == "build_list":
+            itemvals = [self.loadvar(i.name) for i in expr.items]
+            itemtys = [self.typeof(i.name) for i in expr.items]
+            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
+                        for val, fromty in zip(itemvals, itemtys)]
+            return self.context.build_list(self.builder, resty, castvals)
 
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)
@@ -749,9 +791,9 @@ class Lower(BaseLower):
         # Store variable
         ptr = self.getvar(name)
         if value.type != ptr.type.pointee:
-            msg = ("Storing {value.type} to ptr of {ptr.type.pointee}. "
+            msg = ("Storing {value.type} to ptr of {ptr.type.pointee} ('{name}'). "
                    "FE type {fetype}").format(value=value, ptr=ptr,
-                                              fetype=fetype)
+                                              fetype=fetype, name=name)
             raise AssertionError(msg)
 
         self.builder.store(value, ptr)

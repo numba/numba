@@ -12,6 +12,9 @@ from .decorators import jit, autojit, declare_device
 from .api import *
 from .api import _auto_device
 
+from . import reduction
+reduce = Reduce = reduction.Reduce
+
 
 def is_available():
     """Returns a boolean to indicate the availability of a CUDA GPU.

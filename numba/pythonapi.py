@@ -15,7 +15,6 @@ from numba import numpy_support
 from numba import types, utils, cgutils, lowering, _helperlib
 
 
-
 class _Registry(object):
 
     def __init__(self):
@@ -82,6 +81,7 @@ class NativeValue(object):
 class EnvironmentManager(object):
 
     def __init__(self, pyapi, env, env_body, env_ptr):
+        assert isinstance(env, lowering.Environment)
         self.pyapi = pyapi
         self.env = env
         self.env_body = env_body
@@ -136,8 +136,9 @@ class PythonAPI(object):
         self.pyobj = self.context.get_argument_type(types.pyobject)
         self.voidptr = Type.pointer(Type.int(8))
         self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
-        self.ulonglong = Type.int(ctypes.sizeof(ctypes.c_ulonglong) * 8)
-        self.longlong = self.ulonglong
+        self.ulong = self.long
+        self.longlong = Type.int(ctypes.sizeof(ctypes.c_ulonglong) * 8)
+        self.ulonglong = self.longlong
         self.double = Type.double()
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
@@ -162,7 +163,6 @@ class PythonAPI(object):
                 self.context.call_conv.return_user_exc(self.builder,
                                                        RuntimeError,
                                                        ("missing Environment",))
-
 
     # ------ Python API -----
 
@@ -432,6 +432,10 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=func_name)
         return self.builder.call(fn, [ival])
 
+    def long_from_ulong(self, ival):
+        return self._long_from_native_int(ival, "PyLong_FromUnsignedLong",
+                                          self.long, signed=False)
+
     def long_from_ssize_t(self, ival):
         return self._long_from_native_int(ival, "PyLong_FromSsize_t",
                                           self.py_ssize_t, signed=True)
@@ -443,6 +447,30 @@ class PythonAPI(object):
     def long_from_ulonglong(self, ival):
         return self._long_from_native_int(ival, "PyLong_FromUnsignedLongLong",
                                           self.ulonglong, signed=False)
+
+    def long_from_signed_int(self, ival):
+        """
+        Return a Python integer from any native integer value.
+        """
+        bits = ival.type.width
+        if bits <= self.long.width:
+            return self.long_from_long(self.builder.sext(ival, self.long))
+        elif bits <= self.longlong.width:
+            return self.long_from_longlong(self.builder.sext(ival, self.longlong))
+        else:
+            raise OverflowError("integer too big (%d bits)" % (bits))
+
+    def long_from_unsigned_int(self, ival):
+        """
+        Same as long_from_signed_int, but for unsigned values.
+        """
+        bits = ival.type.width
+        if bits <= self.ulong.width:
+            return self.long_from_ulong(self.builder.zext(ival, self.ulong))
+        elif bits <= self.ulonglong.width:
+            return self.long_from_ulonglong(self.builder.zext(ival, self.ulonglong))
+        else:
+            raise OverflowError("integer too big (%d bits)" % (bits))
 
     def _get_number_operator(self, name):
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
@@ -743,6 +771,23 @@ class PythonAPI(object):
         elif opstr == 'is not':
             bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
             return self.from_native_value(bitflag, types.boolean)
+        elif opstr == 'in':
+            fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+            fn = self._get_function(fnty, name="PySequence_Contains")
+            status = self.builder.call(fn, (rhs, lhs))
+            negone = self.context.get_constant(types.int32, -1)
+            is_good = self.builder.icmp(lc.ICMP_NE, status, negone)
+            # Stack allocate output and initialize to Null
+            outptr = cgutils.alloca_once_value(self.builder,
+                                               Constant.null(self.pyobj))
+            # If PySequence_Contains returns non-error value
+            with cgutils.if_likely(self.builder, is_good):
+                # Store the status as a boolean object
+                truncated = self.builder.trunc(status, Type.int(1))
+                self.builder.store(self.bool_from_bool(truncated),
+                                   outptr)
+
+            return self.builder.load(outptr)
         else:
             raise NotImplementedError("Unknown operator {op!r}".format(
                 op=opstr))

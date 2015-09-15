@@ -29,6 +29,7 @@ from collections import namedtuple
 from numba import utils, servicelib, mviewbuf
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
+from .drvapi import cu_occupancy_b2d_size
 from . import enums, drvapi
 from numba import config
 from numba.utils import longint as long
@@ -491,6 +492,41 @@ class Context(object):
         total = c_size_t()
         driver.cuMemGetInfo(byref(free), byref(total))
         return free.value, total.value
+
+    def get_active_blocks_per_multiprocessor(self, func, blocksize, memsize, flags=None):
+        """Return occupancy of a function.
+        :param func: kernel for which occupancy is calculated
+        :param blocksize: block size the kernel is intended to be launched with
+        :param memsize: per-block dynamic shared memory usage intended, in bytes"""
+
+        retval = c_int()
+        if not flags:
+            driver.cuOccupancyMaxActiveBlocksPerMultiprocessor(byref(retval), func.handle, blocksize, memsize)
+        else:
+            driver.cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(byref(retval), func.handle, blocksize, memsize, flags)
+        return retval.value
+
+    def get_max_potential_block_size(self, func, b2d_func, memsize, blocksizelimit, flags=None):
+        """Suggest a launch configuration with reasonable occupancy.
+        :param func: kernel for which occupancy is calculated
+        :param b2d_func: function that calculates how much per-block dynamic shared memory 'func' 
+          uses based on the block size.
+        :param memsize: per-block dynamic shared memory usage intended, in bytes
+        :param blocksizelimit: maximum block size the kernel is designed to handle"""
+
+        gridsize = c_int()
+        blocksize = c_int()
+        b2d_cb = cu_occupancy_b2d_size(b2d_func)
+        if not flags:
+            driver.cuOccupancyMaxPotentialBlockSize(byref(gridsize), byref(blocksize),
+                                                    func.handle,
+                                                    b2d_cb,
+                                                    memsize, blocksizelimit)
+        else:
+            driver.cuOccupancyMaxPotentialBlockSizeWithFlags(byref(gridsize), byref(blocksize),
+                                                             func.handle, b2d_cb,
+                                                             memsize, blocksizelimit, flags)
+        return (gridsize.value, blocksize.value)
 
     def push(self):
         """

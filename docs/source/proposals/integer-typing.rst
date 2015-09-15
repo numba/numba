@@ -1,10 +1,10 @@
-=========================
-Changes in integer typing
-=========================
+=================================
+NBEP 1: Changes in integer typing
+=================================
 
 :Author: Antoine Pitrou
 :Date: July 2015
-:Status: Draft
+:Status: Accepted
 
 
 Current semantics

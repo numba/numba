@@ -10,6 +10,7 @@ from numba.compiler import compile_isolated
 from numba import types, typeinfer, typing, jit, errors
 from numba.typeconv import Conversion
 
+from .support import TestCase
 from .test_typeconv import CompatibilityTestMixin
 
 
@@ -274,6 +275,21 @@ class TestUnify(unittest.TestCase):
         bty = types.Array(u32, 2, "C")
         self.assert_unify_failure(aty, bty)
 
+    def test_list(self):
+        aty = types.List(types.undefined)
+        bty = types.List(i32)
+        self.assert_unify(aty, bty, bty)
+        aty = types.List(i16)
+        bty = types.List(i32)
+        self.assert_unify(aty, bty, bty)
+        aty = types.List(types.Tuple([i32, i16]))
+        bty = types.List(types.Tuple([i16, i64]))
+        cty = types.List(types.Tuple([i32, i64]))
+        self.assert_unify(aty, bty, cty)
+        aty = types.List(i16)
+        bty = types.List(types.Tuple([i16]))
+        self.assert_unify_failure(aty, bty)
+
 
 class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
     """
@@ -516,7 +532,37 @@ def issue_1080(a, b):
     return b
 
 
-class TestMiscIssues(unittest.TestCase):
+def list_unify_usecase1(n):
+    res = 0
+    x = []
+    if n < 10:
+        x.append(np.int32(n))
+    else:
+        for i in range(n):
+            x.append(np.int64(i))
+    x.append(5.0)
+
+    # Note `i` and `j` may have different types (int64 vs. int32)
+    for j in range(len(x)):
+        res += j * x[j]
+    for val in x:
+        res += int(val) & len(x)
+    while len(x) > 0:
+        res += x.pop()
+    return res
+
+def list_unify_usecase2(n):
+    res = []
+    for i in range(n):
+        if i & 1:
+            res.append((i, 1.0))
+        else:
+            res.append((2.0, i))
+    res.append((123j, 42))
+    return res
+
+
+class TestMiscIssues(TestCase):
 
     def test_issue_797(self):
         """https://github.com/numba/numba/issues/797#issuecomment-58592401
@@ -534,6 +580,24 @@ class TestMiscIssues(unittest.TestCase):
         """
         foo = jit(nopython=True)(issue_1080)
         foo(True, False)
+
+    def test_list_unify1(self):
+        """
+        Exercise back-propagation of refined list type.
+        """
+        pyfunc = list_unify_usecase1
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [5, 100]:
+            res = cfunc(n)
+            self.assertPreciseEqual(res, pyfunc(n))
+
+    def test_list_unify2(self):
+        pyfunc = list_unify_usecase2
+        cfunc = jit(nopython=True)(pyfunc)
+        res = cfunc(3)
+        # NOTE: the types will differ (Numba returns a homogenous list with
+        # converted values).
+        self.assertEqual(res, pyfunc(3))
 
 
 if __name__ == '__main__':

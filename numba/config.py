@@ -97,6 +97,9 @@ class _EnvReloader(object):
         # Enable debugging of front-end operation (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
+        # Enable debugging of type inference
+        DEBUG_TYPEINFER = _readenv("NUMBA_DEBUG_TYPEINFER", int, 0)
+
         # Optimization level
         OPT = _readenv("NUMBA_OPT", int, 3)
 
@@ -107,7 +110,8 @@ class _EnvReloader(object):
         DUMP_CFG = _readenv("NUMBA_DUMP_CFG", int, DEBUG_FRONTEND)
 
         # Force dump of Numba IR
-        DUMP_IR = _readenv("NUMBA_DUMP_IR", int, DEBUG_FRONTEND)
+        DUMP_IR = _readenv("NUMBA_DUMP_IR", int,
+                           DEBUG_FRONTEND or DEBUG_TYPEINFER)
 
         # Force dump of LLVM IR
         DUMP_LLVM = _readenv("NUMBA_DUMP_LLVM", int, DEBUG)
@@ -153,6 +157,11 @@ class _EnvReloader(object):
 
         # Enable CUDA simulator
         ENABLE_CUDASIM = _readenv("NUMBA_ENABLE_CUDASIM", int, 0)
+
+        # HSA Configs
+
+        # Disable HSA support
+        DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
 
         # Inject the configuration values into the module globals
         for name, value in locals().items():

@@ -1,12 +1,8 @@
 from __future__ import print_function, absolute_import
 
 from collections import defaultdict
-import functools
 import types as pytypes
-import sys
 import weakref
-
-import numpy
 
 from numba import types
 from numba.typeconv import Conversion, rules
@@ -15,9 +11,9 @@ from .typeof import typeof, Purpose
 
 # Initialize declarations
 from . import (
-    builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl,
-    randomdecl)
-from numba import numpy_support, utils
+    builtins, cmathdecl, listdecl, mathdecl, npdatetime, npydecl,
+    operatordecl, randomdecl)
+from numba import utils
 from . import ctypes_utils, cffi_utils, bufproto
 
 
@@ -60,36 +56,61 @@ class BaseContext(object):
     def init(self):
         pass
 
-    def get_number_type(self, num):
-        if isinstance(num, utils.INT_TYPES):
-            nbits = utils.bit_length(num)
-            if nbits < 32:
-                typ = types.int32
-            elif nbits < 64:
-                typ = types.int64
-            elif nbits == 64 and num >= 0:
-                typ = types.uint64
-            else:
-                raise ValueError("Int value is too large: %s" % num)
-            return typ
-        elif isinstance(num, float):
-            return types.float64
+    def explain_function_type(self, func):
+        """
+        Returns a string description of the type of a function
+        """
+        desc = []
+        defns = []
+        param = False
+        if isinstance(func, types.Callable):
+            sigs, param = func.get_call_signatures()
+            defns.extend(sigs)
+
+        elif func in self.functions:
+            for tpl in self.functions[func]:
+                param = param or hasattr(tpl, 'generic')
+                defns.extend(getattr(tpl, 'cases', []))
+
         else:
-            raise NotImplementedError(type(num), num)
+            msg = "No type info available for {func} as a callable."
+            desc.append(msg.format(func=func))
+            return desc
+
+        if defns:
+            desc = ['Known signatures:']
+            for sig in defns:
+                desc.append(' * {0}'.format(sig))
+
+        if param:
+            desc.append(' * parameterized')
+
+        return '\n'.join(desc)
 
     def resolve_function_type(self, func, args, kws):
         """
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
         """
-        if isinstance(func, types.Callable):
-            return func.get_call_type(self, args, kws)
-
         defns = self.functions[func]
         for defn in defns:
             res = defn.apply(args, kws)
             if res is not None:
                 return res
+
+        if isinstance(func, types.Type):
+            # If it's a type, it may support a __call__ method
+            try:
+                func_type = self.resolve_getattr(func, "__call__")
+            except KeyError:
+                pass
+            else:
+                # The function has a __call__ method, type its call.
+                return self.resolve_function_type(func_type, args, kws)
+
+        if isinstance(func, types.Callable):
+            # XXX fold this into the __call__ attribute logic?
+            return func.get_call_type(self, args, kws)
 
     def resolve_getattr(self, value, attr):
         if isinstance(value, types.Record):
@@ -100,25 +121,21 @@ class BaseContext(object):
         try:
             attrinfo = self.attributes[value]
         except KeyError:
-            if value.is_parametric:
-                attrinfo = self.attributes[type(value)]
-            elif isinstance(value, types.Module):
-                attrty = self.resolve_module_constants(value, attr)
-                if attrty is not None:
-                    return attrty
-                raise
+            for cls in type(value).__mro__:
+                if cls in self.attributes:
+                    attrinfo = self.attributes[cls]
+                    break
             else:
+                if isinstance(value, types.Module):
+                    attrty = self.resolve_module_constants(value, attr)
+                    if attrty is not None:
+                        return attrty
                 raise
 
         ret = attrinfo.resolve(value, attr)
         if ret is None:
             raise KeyError(attr)
         return ret
-
-    def resolve_setitem(self, target, index, value):
-        args = target, index, value
-        kws = ()
-        return self.resolve_function_type("setitem", args, kws)
 
     def resolve_setattr(self, target, attr, value):
         if isinstance(target, types.Record):
@@ -128,6 +145,16 @@ class BaseContext(object):
         elif target in self.attributes:
             expectedty = self.attributes[target].resolve(target, attr)
             return templates.signature(types.void, target, expectedty)
+
+    def resolve_setitem(self, target, index, value):
+        args = target, index, value
+        kws = ()
+        return self.resolve_function_type("setitem", args, kws)
+
+    def resolve_delitem(self, target, index):
+        args = target, index
+        kws = ()
+        return self.resolve_function_type("delitem", args, kws)
 
     def resolve_module_constants(self, typ, attr):
         """Resolve module-level global constants
@@ -161,18 +188,21 @@ class BaseContext(object):
         if isinstance(val, (types.ExternalFunction, types.NumbaFunction)):
             return val
 
-        if isinstance(val, type) and issubclass(val, BaseException):
-            return types.ExceptionType(val)
+        if isinstance(val, type):
+            if issubclass(val, BaseException):
+                return types.ExceptionClass(val)
+            if issubclass(val, tuple) and hasattr(val, "_asdict"):
+                return types.NamedTupleClass(val)
 
         try:
             # Try to look up target specific typing information
-            return self.get_global_type(val)
+            return self._get_global_type(val)
         except KeyError:
             pass
 
         return None
 
-    def get_global_type(self, gv):
+    def _get_global_type(self, gv):
         try:
             return self._lookup_global(gv)
         except KeyError:
@@ -220,7 +250,7 @@ class BaseContext(object):
 
     def insert_attributes(self, at):
         key = at.key
-        assert key not in self.attributes, "Duplicated attributes template"
+        assert key not in self.attributes, "Duplicated attributes template %r" % (key,)
         self.attributes[key] = at
 
     def insert_function(self, ft):
@@ -241,11 +271,6 @@ class BaseContext(object):
             function template
         """
         self._insert_global(fn, types.Function(ft))
-
-    def insert_class(self, cls, attrs):
-        clsty = types.Object(cls)
-        at = templates.ClassAttrTemplate(self, clsty, attrs)
-        self.insert_attributes(at)
 
     def can_convert(self, fromty, toty):
         """
@@ -382,6 +407,11 @@ class BaseContext(object):
         """
         if first == second:
             return first
+        
+        if first is types.undefined:
+            return second
+        elif second is types.undefined:
+            return first
 
         # Types with special unification rules
         unified = first.unify(self, second)
@@ -403,14 +433,9 @@ class BaseContext(object):
 class Context(BaseContext):
     def init(self):
         self.install(cmathdecl.registry)
+        self.install(listdecl.registry)
         self.install(mathdecl.registry)
         self.install(npydecl.registry)
         self.install(operatordecl.registry)
         self.install(randomdecl.registry)
-
-
-def new_method(fn, sig):
-    name = "UserFunction_%s" % fn
-    ft = templates.make_concrete_template(name, fn, [sig])
-    return types.Method(ft, this=sig.recvr)
 

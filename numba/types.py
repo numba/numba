@@ -32,6 +32,11 @@ class Integer(Number):
         self.bitwidth = bitwidth
         self.signed = self.name.startswith('int')
 
+    @classmethod
+    def from_bitwidth(cls, bitwidth, signed=True):
+        name = ('int%d' if signed else 'uint%d') % bitwidth
+        return globals()[name]
+
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 
@@ -123,6 +128,16 @@ class Phantom(Dummy):
     """
 
 
+class Undefined(Dummy):
+    """
+    A type that is left imprecise.  This is used as a temporaray placeholder
+    during type inference in the hope that the type can be later refined.
+    """
+
+    def is_precise(self):
+        return False
+
+
 class Opaque(Dummy):
     """
     A type that is a opaque pointer.
@@ -134,6 +149,9 @@ class PyObject(Dummy):
     A generic CPython object.
     """
 
+    def is_precise(self):
+        return False
+
 
 class RawPointer(Dummy):
     """
@@ -143,6 +161,8 @@ class RawPointer(Dummy):
 
 class Kind(Type):
     def __init__(self, of):
+        if not isinstance(of, type) or not issubclass(of, Type):
+            raise TypeError("expected a Type subclass, got %r" % (of,))
         self.of = of
         super(Kind, self).__init__("kind(%s)" % of)
 
@@ -201,20 +221,49 @@ class Function(Callable, Opaque):
     def get_call_type(self, context, args, kws):
         return self.template(context).apply(args, kws)
 
+    def get_call_signatures(self):
+        sigs = getattr(self.template, 'cases', [])
+        return sigs, hasattr(self.template, 'generic')
+
+
+class NamedTupleClass(Callable, Opaque):
+    """
+    Type class for namedtuple classes.
+    """
+
+    def __init__(self, instance_class):
+        self.instance_class = instance_class
+        name = "class(%s)" % (instance_class)
+        super(NamedTupleClass, self).__init__(name, param=True)
+
+    def get_call_type(self, context, args, kws):
+        # Overriden by the __call__ constructor resolution in typing.collections
+        return None
+
+    def get_call_signatures(self):
+        return (), True
+
+    @property
+    def key(self):
+        return self.instance_class
+
 
 class NumberClass(Callable, DTypeSpec, Opaque):
     """
     Type class for number classes (e.g. "np.float64").
     """
 
-    def __init__(self, instance_type, template):
+    def __init__(self, instance_type):
         self.instance_type = instance_type
-        self.template = template
-        name = "type(%s)" % (instance_type,)
-        super(NumberClass, self).__init__(name)
+        name = "class(%s)" % (instance_type,)
+        super(NumberClass, self).__init__(name, param=True)
 
     def get_call_type(self, context, args, kws):
-        return self.template(context).apply(args, kws)
+        # Overriden by the __call__ constructor resolution in typing.builtins
+        return None
+
+    def get_call_signatures(self):
+        return (), True
 
     @property
     def key(self):
@@ -284,6 +333,10 @@ class Dispatcher(WeakType, Callable, Dummy):
         sig = template(context).apply(args, kws)
         sig.pysig = self.pysig
         return sig
+
+    def get_call_signatures(self):
+        sigs = self.overloaded.nopython_signatures
+        return sigs, True
 
     @property
     def overloaded(self):
@@ -385,18 +438,13 @@ class BoundFunction(Function):
                       dict(this=this))
         super(BoundFunction, self).__init__(newcls)
 
-    @property
-    def key(self):
-        return self.template.key, self.this
-
-
-class Method(Function):
-    def __init__(self, template, this):
-        self.this = this
-        # Create a derived template with an attribute *this*
-        newcls = type(template.__name__ + '.' + str(this), (template,),
-                      dict(this=this))
-        super(Method, self).__init__(newcls)
+    def unify(self, typingctx, other):
+        if (isinstance(other, BoundFunction) and
+            self.template.key == other.template.key):
+            this = typingctx.unify_pairs(self.this, other.this)
+            if this != pyobject:
+                # XXX is it right that both template instances are distinct?
+                return BoundFunction(self.template, this)
 
     @property
     def key(self):
@@ -417,6 +465,13 @@ class Pair(Type):
     @property
     def key(self):
         return self.first_type, self.second_type
+
+    def unify(self, typingctx, other):
+        if isinstance(other, Pair):
+            first = typingctx.unify_pairs(self.first_type, other.first_type)
+            second = typingctx.unify_pairs(self.second_type, other.second_type)
+            if first != pyobject and second != pyobject:
+                return Pair(first, second)
 
 
 class SimpleIterableType(IterableType):
@@ -470,7 +525,7 @@ class Generator(SimpleIteratorType):
         return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
 
 
-class NumpyFlatType(SimpleIteratorType):
+class NumpyFlatType(SimpleIteratorType, Sequence):
     """
     Type class for `ndarray.flat()` objects.
     """
@@ -478,6 +533,7 @@ class NumpyFlatType(SimpleIteratorType):
     def __init__(self, arrty):
         self.array_type = arrty
         yield_type = arrty.dtype
+        self.dtype = yield_type
         name = "array.flat({arrayty})".format(arrayty=arrty)
         super(NumpyFlatType, self).__init__(name, yield_type)
 
@@ -601,7 +657,9 @@ class Record(Type):
 
     @property
     def key(self):
-        return (self.size, self.aligned, self.dtype)
+        # Numpy dtype equality doesn't always succeed, use the descr instead
+        # (https://github.com/numpy/numpy/issues/5715)
+        return (self.descr, self.size, self.aligned)
 
     def __len__(self):
         return len(self.fields)
@@ -640,6 +698,7 @@ class Buffer(IterableType):
     """
     mutable = True
     slice_is_copy = False
+    aligned = True
 
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
@@ -660,11 +719,10 @@ class Buffer(IterableType):
                 type_name = "readonly %s" % type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Buffer, self).__init__(name, param=True)
-        self._iterator_type = ArrayIterator(self)
 
     @property
     def iterator_type(self):
-        return self._iterator_type
+        return ArrayIterator(self)
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
@@ -727,11 +785,19 @@ class Array(Buffer):
     Type class for Numpy arrays.
     """
 
-    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None,
+                 aligned=True):
         if readonly:
             self.mutable = False
+        if (not aligned or
+            (isinstance(dtype, Record) and not dtype.aligned)):
+            self.aligned = False
         if name is None:
-            type_name = "array" if self.mutable else "readonly array"
+            type_name = "array"
+            if not self.mutable:
+                type_name = "readonly " + type_name
+            if not self.aligned:
+                type_name = "unaligned " + type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Array, self).__init__(dtype, ndim, layout, name=name)
 
@@ -744,11 +810,12 @@ class Array(Buffer):
             layout = self.layout
         if readonly is None:
             readonly = not self.mutable
-        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly)
+        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
+                     aligned=self.aligned)
 
     @property
     def key(self):
-        return self.dtype, self.ndim, self.layout, self.mutable
+        return self.dtype, self.ndim, self.layout, self.mutable, self.aligned
 
     def unify(self, typingctx, other):
         """
@@ -761,8 +828,9 @@ class Array(Buffer):
             else:
                 layout = 'A'
             readonly = not (self.mutable and other.mutable)
+            aligned = self.aligned and other.aligned
             return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
-                         readonly=readonly)
+                         readonly=readonly, aligned=aligned)
 
     def can_convert_to(self, typingctx, other):
         """
@@ -771,7 +839,8 @@ class Array(Buffer):
         if (isinstance(other, Array) and other.ndim == self.ndim
             and other.dtype == self.dtype):
             if (other.layout in ('A', self.layout)
-                and (self.mutable or not other.mutable)):
+                and (self.mutable or not other.mutable)
+                and (self.aligned or not other.aligned)):
                 return Conversion.safe
 
 
@@ -854,19 +923,39 @@ class BaseTuple(Type):
     The base class for all tuple types (with a known size).
     """
 
+    @classmethod
+    def from_types(cls, tys, pyclass=None):
+        """
+        Instantiate the right tuple type for the given element types.
+        """
+        homogenous = False
+        if tys:
+            first = tys[0]
+            for ty in tys[1:]:
+                if ty != first:
+                    break
+            else:
+                homogenous = True
 
-class UniTuple(IterableType, BaseTuple):
+        if pyclass is not None and pyclass is not tuple:
+            # A subclass => is it a namedtuple?
+            assert issubclass(pyclass, tuple)
+            if hasattr(pyclass, "_asdict"):
+                if homogenous:
+                    return NamedUniTuple(first, len(tys), pyclass)
+                else:
+                    return NamedTuple(tys, pyclass)
+        if homogenous:
+            return UniTuple(first, len(tys))
+        else:
+            return Tuple(tys)
 
-    def __init__(self, dtype, count):
-        self.dtype = dtype
-        self.count = count
-        name = "(%s x %d)" % (dtype, count)
-        super(UniTuple, self).__init__(name, param=True)
-        self._iterator_type = UniTupleIter(self)
+
+class _HomogenousTuple(Sequence, BaseTuple):
 
     @property
     def iterator_type(self):
-        return self._iterator_type
+        return UniTupleIter(self)
 
     def getitem(self, ind):
         return self.dtype, intp
@@ -884,12 +973,24 @@ class UniTuple(IterableType, BaseTuple):
         return self.count
 
     @property
-    def key(self):
-        return self.dtype, self.count
-
-    @property
     def types(self):
         return (self.dtype,) * self.count
+
+
+class UniTuple(_HomogenousTuple):
+    """
+    Type class for homogenous tuples.
+    """
+
+    def __init__(self, dtype, count):
+        self.dtype = dtype
+        self.count = count
+        name = "(%s x %d)" % (dtype, count)
+        super(UniTuple, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.dtype, self.count
 
     def unify(self, typingctx, other):
         """
@@ -921,13 +1022,7 @@ class UniTupleIter(SimpleIteratorType):
         return self.unituple
 
 
-class Tuple(BaseTuple):
-
-    def __init__(self, types):
-        self.types = tuple(types)
-        self.count = len(self.types)
-        name = "(%s)" % ', '.join(str(i) for i in self.types)
-        super(Tuple, self).__init__(name, param=True)
+class _HeterogenousTuple(BaseTuple):
 
     def __getitem__(self, i):
         """
@@ -939,12 +1034,21 @@ class Tuple(BaseTuple):
         # Beware: this makes Tuple(()) false-ish
         return len(self.types)
 
+    def __iter__(self):
+        return iter(self.types)
+
+
+class Tuple(_HeterogenousTuple):
+
+    def __init__(self, types):
+        self.types = tuple(types)
+        self.count = len(self.types)
+        name = "(%s)" % ', '.join(str(i) for i in self.types)
+        super(Tuple, self).__init__(name, param=True)
+
     @property
     def key(self):
         return self.types
-
-    def __iter__(self):
-        return iter(self.types)
 
     def unify(self, typingctx, other):
         """
@@ -968,6 +1072,125 @@ class Tuple(BaseTuple):
             if any(kind is None for kind in kinds):
                 return
             return max(kinds)
+
+
+class BaseNamedTuple(BaseTuple):
+    pass
+
+
+class NamedUniTuple(_HomogenousTuple, BaseNamedTuple):
+
+    def __init__(self, dtype, count, cls):
+        self.dtype = dtype
+        self.count = count
+        self.fields = tuple(cls._fields)
+        self.instance_class = cls
+        name = "%s(%s x %d)" % (cls.__name__, dtype, count)
+        super(NamedUniTuple, self).__init__(name, param=True)
+        self._iterator_type = UniTupleIter(self)
+
+    @property
+    def key(self):
+        return self.instance_class, self.dtype, self.count
+
+
+class NamedTuple(_HeterogenousTuple, BaseNamedTuple):
+
+    def __init__(self, types, cls):
+        self.types = tuple(types)
+        self.count = len(self.types)
+        self.fields = tuple(cls._fields)
+        self.instance_class = cls
+        name = "%s(%s)" % (cls.__name__, ', '.join(str(i) for i in self.types))
+        super(NamedTuple, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.instance_class, self.types
+
+
+class List(MutableSequence):
+    """
+    Type class for arbitrary-sized homogenous lists.
+    """
+    mutable = True
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        name = "list(%s)" % (self.dtype,)
+        super(List, self).__init__(name=name, param=True)
+
+    def unify(self, typingctx, other):
+        if isinstance(other, List):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            if dtype != pyobject:
+                return List(dtype=dtype)
+
+    @property
+    def key(self):
+        return self.dtype
+
+    @property
+    def iterator_type(self):
+        return ListIter(self)
+
+    def is_precise(self):
+        return self.dtype.is_precise()
+
+
+class ListIter(SimpleIteratorType):
+    """
+    Type class for list iterators.
+    """
+
+    def __init__(self, list_type):
+        self.list_type = list_type
+        yield_type = list_type.dtype
+        name = 'iter(%s)' % list_type
+        super(ListIter, self).__init__(name, yield_type)
+
+    # XXX This is a common pattern.  Should it be factored out somewhere?
+    def unify(self, typingctx, other):
+        if isinstance(other, ListIter):
+            list_type = typingctx.unify_pairs(self.list_type, other.list_type)
+            if list_type != pyobject:
+                return ListIter(list_type)
+
+    @property
+    def key(self):
+        return self.list_type
+
+
+class ListPayload(Type):
+    """
+    Internal type class for the dynamically-allocated payload of a list.
+    """
+
+    def __init__(self, list_type):
+        self.list_type = list_type
+        name = 'payload(%s)' % list_type
+        super(ListPayload, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.list_type
+
+
+class MemInfoPointer(Type):
+    """
+    Pointer to a Numba "meminfo" (i.e. the information for a managed
+    piece of memory).
+    """
+    mutable = True
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        name = "memory-managed *%s" % dtype
+        super(MemInfoPointer, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.dtype
 
 
 class CPointer(Type):
@@ -1077,7 +1300,7 @@ class NoneType(Opaque):
         return Optional(other)
 
 
-class ExceptionType(Callable, Phantom):
+class ExceptionClass(Callable, Phantom):
     """
     The type of exception classes (not instances).
     """
@@ -1086,12 +1309,15 @@ class ExceptionType(Callable, Phantom):
         assert issubclass(exc_class, BaseException)
         name = "%s" % (exc_class.__name__)
         self.exc_class = exc_class
-        super(ExceptionType, self).__init__(name, param=True)
+        super(ExceptionClass, self).__init__(name, param=True)
 
     def get_call_type(self, context, args, kws):
+        return self.get_call_signatures()[0][0]
+
+    def get_call_signatures(self):
         from . import typing
         return_type = ExceptionInstance(self.exc_class)
-        return typing.signature(return_type)
+        return [typing.signature(return_type)], False
 
     @property
     def key(self):
@@ -1154,21 +1380,18 @@ def is_int_tuple(x):
     else:
         return False
 
-
 # Short names
 
 pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
 none = NoneType('none')
 Any = Phantom('any')
+undefined = Undefined('undefined')
 string = Opaque('str')
 
 # No operation is defined on voidptr
 # Can only pass it around
 voidptr = RawPointer('void*')
-
-# For NRT GC
-meminfo_pointer = Opaque("MemInfo*")
 
 boolean = bool_ = Boolean('bool')
 

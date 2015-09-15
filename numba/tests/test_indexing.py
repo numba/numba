@@ -1,5 +1,8 @@
 from __future__ import print_function
 
+import decimal
+import itertools
+
 import numpy as np
 
 import numba.unittest_support as unittest
@@ -8,13 +11,12 @@ from numba import types, utils, njit, errors
 from numba.tests import usecases
 from .support import TestCase
 
-import decimal
-
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
 Noflags = Flags()
+Noflags.set("nrt")
 
 
 def slicing_1d_usecase(a, start, stop, step):
@@ -56,22 +58,12 @@ def slicing_1d_usecase6(a, stop):
     return total
 
 def slicing_2d_usecase(a, start1, stop1, step1, start2, stop2, step2):
+    # The index is a homogenous tuple of slices
     return a[start1:stop1:step1, start2:stop2:step2]
 
-def slicing_2d_usecase2(a, start1, stop1, step1, start2, stop2, step2):
-    b = a[start1:stop1:step1, start2:stop2:step2]
-    total = 0
-    for i in range(b.shape[0]):
-        for j in range(b.shape[1]):
-            total += b[i, j] * (i + j + 1)
-    return total
-
 def slicing_2d_usecase3(a, start1, stop1, step1, index):
-    b = a[start1:stop1:step1, index]
-    total = 0
-    for i in range(b.shape[0]):
-        total += b[i] * (i + 1)
-    return total
+    # The index is a heterogenous tuple
+    return a[start1:stop1:step1, index]
 
 def slicing_3d_usecase(a, index0, start1, index2):
     b = a[index0, start1:, index2]
@@ -127,6 +119,12 @@ def slicing_1d_usecase_set(a, b, start, stop, step):
     a[start:stop:step] = b
     return a
 
+def slicing_1d_usecase_add(a, b, start, stop):
+    # NOTE: uses the ROT_FOUR opcode on Python 2, only on the [start:stop]
+    # with inplace operator form.
+    a[start:stop] += b
+    return a
+
 def slicing_2d_usecase_set(a, b, start, stop, step, start2, stop2, step2):
     a[start:stop:step,start2:stop2:step2] = b
     return a
@@ -142,18 +140,20 @@ class TestIndexing(TestCase):
         cfunc = cr.entry_point
 
         a = np.arange(10, dtype='i4')
-        self.assertTrue((pyfunc(a, 0, 10, 1) == cfunc(a, 0, 10, 1)).all())
-        self.assertTrue((pyfunc(a, 2, 3, 1) == cfunc(a, 2, 3, 1)).all())
-        self.assertTrue((pyfunc(a, 10, 0, 1) == cfunc(a, 10, 0, 1)).all())
-        self.assertTrue((pyfunc(a, 0, 10, -1) == cfunc(a, 0, 10, -1)).all())
-        self.assertTrue((pyfunc(a, 0, 10, 2) == cfunc(a, 0, 10, 2)).all())
+        for indices in [(0, 10, 1),
+                        (2, 3, 1),
+                        (10, 0, 1),
+                        (0, 10, -1),
+                        (0, 10, 2),
+                        (9, 0, -1),
+                        (-5, -2, 1),
+                        (0, -1, 1),
+                        ]:
+            expected = pyfunc(a, *indices)
+            self.assertPreciseEqual(cfunc(a, *indices), expected)
 
     def test_1d_slicing_npm(self):
-        """
-        Return of arbitrary array is not supported yet
-        """
-        with self.assertTypingError():
-            self.test_1d_slicing(flags=Noflags)
+        self.test_1d_slicing(flags=Noflags)
 
     def test_1d_slicing2(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase2
@@ -286,6 +286,9 @@ class TestIndexing(TestCase):
         self.test_1d_slicing5(flags=Noflags)
 
     def test_2d_slicing(self, flags=enable_pyobj_flags):
+        """
+        arr_2d[a:b:c]
+        """
         pyfunc = slicing_1d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         argtys = (arraytype, types.int32, types.int32, types.int32)
@@ -299,31 +302,16 @@ class TestIndexing(TestCase):
         self.assertTrue((pyfunc(a, 0, 10, -1) == cfunc(a, 0, 10, -1)).all())
         self.assertTrue((pyfunc(a, 0, 10, 2) == cfunc(a, 0, 10, 2)).all())
 
-        pyfunc = slicing_2d_usecase
-        arraytype = types.Array(types.int32, 2, 'C')
-        argtys = (arraytype, types.int32, types.int32, types.int32,
-                  types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
-
-        self.assertTrue((pyfunc(a, 0, 10, 1, 0, 10, 1) ==
-                         cfunc(a, 0, 10, 1, 0, 10, 1)).all())
-        self.assertTrue((pyfunc(a, 2, 3, 1, 2, 3, 1) ==
-                         cfunc(a, 2, 3, 1, 2, 3, 1)).all())
-        self.assertTrue((pyfunc(a, 10, 0, 1, 10, 0, 1) ==
-                         cfunc(a, 10, 0, 1, 10, 0, 1)).all())
-        self.assertTrue((pyfunc(a, 0, 10, -1, 0, 10, -1) ==
-                         cfunc(a, 0, 10, -1, 0, 10, -1)).all())
-        self.assertTrue((pyfunc(a, 0, 10, 2, 0, 10, 2) ==
-                         cfunc(a, 0, 10, 2, 0, 10, 2)).all())
-
     def test_2d_slicing_npm(self):
         with self.assertTypingError():
             self.test_2d_slicing(flags=Noflags)
 
     def test_2d_slicing2(self, flags=enable_pyobj_flags):
+        """
+        arr_2d[a:b:c, d:e:f]
+        """
         # C layout
-        pyfunc = slicing_2d_usecase2
+        pyfunc = slicing_2d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         argtys = (arraytype, types.int32, types.int32, types.int32,
                   types.int32, types.int32, types.int32)
@@ -332,15 +320,21 @@ class TestIndexing(TestCase):
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
 
-        args = [
-            (0, 10, 1, 0, 10, 1),
-            (2, 3, 1, 2, 3, 1),
-            (10, 0, 1, 10, 0, 1),
-            (0, 10, -1, 0, 10, -1),
-            (0, 10, 2, 0, 10, 2),
-        ]
+        indices = [(0, 10, 1),
+                   (2, 3, 1),
+                   (10, 0, 1),
+                   (0, 10, -1),
+                   (0, 10, 2),
+                   (10, 0, -1),
+                   (9, 0, -2),
+                   (-5, -2, 1),
+                   (0, -1, 1),
+                   ]
+        args = [tup1 + tup2
+                for (tup1, tup2) in itertools.product(indices, indices)]
         for arg in args:
-            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+            expected = pyfunc(a, *arg)
+            self.assertPreciseEqual(cfunc(a, *arg), expected)
 
         # Any layout
         arraytype = types.Array(types.int32, 2, 'A')
@@ -352,12 +346,16 @@ class TestIndexing(TestCase):
         a = np.arange(400, dtype='i4').reshape(20, 20)[::2, ::2]
 
         for arg in args:
-            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+            expected = pyfunc(a, *arg)
+            self.assertPreciseEqual(cfunc(a, *arg), expected)
 
     def test_2d_slicing2_npm(self):
         self.test_2d_slicing2(flags=Noflags)
 
     def test_2d_slicing3(self, flags=enable_pyobj_flags):
+        """
+        arr_2d[a:b:c, d]
+        """
         # C layout
         pyfunc = slicing_2d_usecase3
         arraytype = types.Array(types.int32, 2, 'C')
@@ -370,13 +368,15 @@ class TestIndexing(TestCase):
 
         args = [
             (0, 10, 1, 0),
-            (2, 3, 1, 2),
-            (10, 0, 1, 9),
-            (0, 10, -1, 0),
-            (0, 10, 2, 4),
+            (2, 3, 1, 1),
+            (10, 0, -1, 8),
+            (9, 0, -2, 4),
+            (0, 10, 2, 3),
+            (0, -1, 3, 1),
         ]
         for arg in args:
-            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+            expected = pyfunc(a, *arg)
+            self.assertPreciseEqual(cfunc(a, *arg), expected)
 
         # Any layout
         arraytype = types.Array(types.int32, 2, 'A')
@@ -388,7 +388,8 @@ class TestIndexing(TestCase):
         a = np.arange(400, dtype='i4').reshape(20, 20)[::2, ::2]
 
         for arg in args:
-            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+            expected = pyfunc(a, *arg)
+            self.assertPreciseEqual(cfunc(a, *arg), expected)
 
     def test_2d_slicing3_npm(self):
         self.test_2d_slicing3(flags=Noflags)
@@ -508,8 +509,7 @@ class TestIndexing(TestCase):
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
 
     def test_integer_indexing_1d_for_2d_npm(self):
-        with self.assertTypingError():
-            self.test_integer_indexing_1d_for_2d(flags=Noflags)
+        self.test_integer_indexing_1d_for_2d(flags=Noflags)
 
     def test_2d_integer_indexing(self, flags=enable_pyobj_flags,
                                  pyfunc=integer_indexing_2d_usecase):
@@ -699,6 +699,19 @@ class TestIndexing(TestCase):
             cleft = cfunc(np.zeros_like(arg), arg[slice(*test)], *test)
             self.assertTrue((pyleft == cleft).all())
 
+    def test_1d_slicing_add(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase_add
+        arraytype = types.Array(types.int32, 1, 'C')
+        argtys = (arraytype, arraytype, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        arg = np.arange(10, dtype='i4')
+        for test in ((0, 10), (2, 5)):
+            pyleft = pyfunc(np.zeros_like(arg), arg[slice(*test)], *test)
+            cleft = cfunc(np.zeros_like(arg), arg[slice(*test)], *test)
+            self.assertTrue((pyleft == cleft).all())
+
     def test_1d_slicing_set_npm(self):
         """
         TypingError: Cannot resolve setitem: array(int32, 1d, C)[slice3_type] = ...
@@ -706,6 +719,10 @@ class TestIndexing(TestCase):
         """
         with self.assertTypingError():
             self.test_1d_slicing_set(flags=Noflags)
+
+    def test_1d_slicing_add_npm(self):
+        with self.assertTypingError():
+            self.test_1d_slicing_add(flags=Noflags)
 
     def test_2d_slicing_set(self, flags=enable_pyobj_flags):
         pyfunc = slicing_2d_usecase_set

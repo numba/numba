@@ -127,12 +127,10 @@ class TestFromDtype(TestCase):
               size=8, aligned=True)
 
         dtype = np.dtype([('m', np.int32), ('n', 'S5')])
-        # A heuristic is used on Numpy 1.6
-        aligned = False if np.__version__ >= '1.7' else True
         check(dtype,
               fields={'m': (types.int32, 0),
                       'n': (types.CharSeq(5), 4)},
-              size=9, aligned=aligned)
+              size=9, aligned=False)
 
 
 class ValueTypingTestBase(object):

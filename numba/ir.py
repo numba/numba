@@ -138,9 +138,10 @@ class Expr(Inst):
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
 
     @classmethod
-    def inplace_binop(cls, fn, lhs, rhs, loc):
+    def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
         op = 'inplace_binop'
-        return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
+        return cls(op=op, loc=loc, fn=fn, immutable_fn=immutable_fn,
+                   lhs=lhs, rhs=rhs)
 
     @classmethod
     def unary(cls, fn, value, loc):
@@ -242,6 +243,10 @@ class Expr(Inst):
 
 
 class SetItem(Stmt):
+    """
+    target[index] = value
+    """
+    
     def __init__(self, target, index, value, loc):
         self.target = target
         self.index = index
@@ -250,6 +255,20 @@ class SetItem(Stmt):
 
     def __repr__(self):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
+
+
+class DelItem(Stmt):
+    """
+    del target[index]
+    """
+
+    def __init__(self, target, index, loc):
+        self.target = target
+        self.index = index
+        self.loc = loc
+
+    def __repr__(self):
+        return 'del %s[%s]' % (self.target, self.index)
 
 
 class SetAttr(Stmt):

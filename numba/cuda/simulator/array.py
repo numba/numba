@@ -133,6 +133,6 @@ def device_array_like(ary, stream=0):
 # Fake devicearray.auto_device
 class devicearray(object):
     @staticmethod
-    def auto_device(ary):
-        return to_device(ary)
+    def auto_device(ary, stream=0, copy=True):
+        return to_device(ary, stream, copy), False
 

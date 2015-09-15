@@ -72,14 +72,12 @@ class Numpy_rules_ufunc(AbstractTemplate):
             layout = 'C'
             layouts = [x.layout if isinstance(x, types.Array) else ''
                        for x in args]
-            if 'C' not in layouts:
-                if 'F' in layouts:
-                    layout = 'F'
-                elif 'A' in layouts:
-                    # See also _empty_nd_impl() in numba.targets.arrayobj.
-                    raise NotImplementedError(
-                        "Don't know how to create implicit output array "
-                        "with 'A' layout.")
+
+            # Prefer C contig if any array is C contig.
+            # Next, prefer F contig.
+            # Defaults to C contig if not layouts are C/F.
+            if 'C' not in layouts and 'F' in layouts:
+                layout = 'F'
 
         return base_types, explicit_outputs, ndims, layout
 
@@ -180,7 +178,7 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
             builtin(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
                          dict(key=op)))
 
-    def generic(self, *args, **kws):
+    def generic(self, args, kws):
         '''Overloads and calls base class generic() method, returning
         None if a TypingError occurred.
 
@@ -190,8 +188,7 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         (particularly user-defined operators).
         '''
         try:
-            sig = super(NumpyRulesArrayOperator, self).generic(
-                *args, **kws)
+            sig = super(NumpyRulesArrayOperator, self).generic(args, kws)
             # Stay out of the timedelta64 range and domain; already
             # handled elsewhere.
             if sig is not None:
@@ -214,6 +211,12 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
         '-': "negative",
         '~': "invert",
     }
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1 and isinstance(args[0], types.Array):
+            return super(NumpyRulesUnaryArrayOperator, self).generic(args, kws)
+
 
 
 # list of unary ufuncs to register
@@ -350,23 +353,14 @@ np_types.add(numpy.uintc)
 np_types.add(numpy.uintp)
 
 
-def register_casters(register_global):
+def register_number_classes(register_global):
     for np_type in np_types:
         nb_type = getattr(types, np_type.__name__)
 
-        class Caster(AbstractTemplate):
-            key = np_type
-            restype = nb_type
+        register_global(np_type, types.NumberClass(nb_type))
 
-            def generic(self, args, kws):
-                assert not kws
-                [a] = args
-                if a in types.number_domain:
-                    return signature(self.restype, a)
 
-        register_global(np_type, types.NumberClass(nb_type, Caster))
-
-register_casters(builtin_global)
+register_number_classes(builtin_global)
 
 
 # -----------------------------------------------------------------------------
@@ -620,6 +614,20 @@ class NdFromBuffer(CallableTemplate):
 builtin_global(numpy.frombuffer, types.Function(NdFromBuffer))
 
 
+@builtin
+class NdSort(CallableTemplate):
+    key = numpy.sort
+
+    def generic(self):
+        def typer(a):
+            if isinstance(a, types.Array) and a.ndim == 1:
+                return a
+
+        return typer
+
+builtin_global(numpy.sort, types.Function(NdSort))
+
+
 # -----------------------------------------------------------------------------
 # Miscellaneous functions
 
@@ -671,7 +679,7 @@ class Round(AbstractTemplate):
 
         arg = args[0]
         if len(args) == 1:
-            decimals = types.int32
+            decimals = types.intp
             out = None
         else:
             decimals = args[1]

@@ -59,6 +59,12 @@ def declare_string(builder, value):
     conv = insert_addrspace_conv(lmod, charty, nvvm.ADDRSPACE_CONSTANT)
     return builder.call(conv, [charptr])
 
+def declare_vprint(lmod):
+    voidptrty = lc.Type.pointer(lc.Type.int(8))
+    vprintfty = lc.Type.function(lc.Type.int(), [voidptrty, voidptrty])
+    vprintf = lmod.get_or_insert_function(vprintfty, "vprintf")
+    return vprintf
+
 # -----------------------------------------------------------------------------
 
 SREG_MAPPING = {

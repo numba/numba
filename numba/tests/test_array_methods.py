@@ -77,6 +77,9 @@ def make_array_view(newtype):
         return arr.view(newtype)
     return array_view
 
+def array_sliced_view(arr, ):
+    return arr[0:4].view(np.float32)[0]
+
 def np_frombuffer(b):
     """
     np.frombuffer() on a Python-allocated buffer.
@@ -96,6 +99,9 @@ def np_frombuffer_allocated(shape):
 def np_frombuffer_allocated_dtype(shape):
     arr = np.ones(shape, dtype=np.int32)
     return np.frombuffer(arr, dtype=np.complex64)
+
+def identity_usecase(a, b):
+    return (a is b), (a is not b)
 
 
 class TestArrayMethodsCustom(MemoryLeak, TestCase):
@@ -280,6 +286,22 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
         check_err(arr, dt1)
         check_err(arr, dt2)
 
+    def test_array_sliced_view(self):
+        """
+        Test .view() on A layout array but has contiguous innermost dimension.
+        """
+        pyfunc = array_sliced_view
+        cres = self.ccache.compile(pyfunc, (types.uint8[:],))
+        cfunc = cres.entry_point
+
+        orig = np.array([1.5, 2], dtype=np.float32)
+        byteary = orig.view(np.uint8)
+
+        expect = pyfunc(byteary)
+        got = cfunc(byteary)
+
+        self.assertEqual(expect, got)
+
     @unittest.skipIf(sys.version_info < (2, 7),
                      "buffer protocol not supported on Python 2.6")
     def check_np_frombuffer(self, pyfunc):
@@ -408,6 +430,25 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_np_frombuffer_allocated(self):
         self.check_np_frombuffer_allocated(np_frombuffer_allocated_dtype)
+
+
+class TestArrayComparisons(TestCase):
+
+    def test_identity(self):
+        def check(a, b, expected):
+            cres = compile_isolated(pyfunc, (typeof(a), typeof(b)))
+            self.assertPreciseEqual(cres.entry_point(a, b),
+                                    (expected, not expected))
+
+        pyfunc = identity_usecase
+
+        arr = np.zeros(10, dtype=np.int32).reshape((2, 5))
+        check(arr, arr, True)
+        check(arr, arr[:], True)
+        check(arr, arr.copy(), False)
+        check(arr, arr.view('uint32'), False)
+        check(arr, arr.T, False)
+        check(arr, arr[:-1], False)
 
 
 if __name__ == '__main__':

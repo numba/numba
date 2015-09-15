@@ -1101,33 +1101,74 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
             result = cfunc(x, y)
             np.testing.assert_array_equal(expected, result)
 
-    def test_implicit_output_layout(self):
+    def test_implicit_output_layout_binary(self):
         def pyfunc(a0, a1):
             return np.add(a0, a1)
+
+        # C layout
         X = np.linspace(0, 1, 20).reshape(4, 5)
+        # F layout
         Y = np.array(X, order='F')
+        # A layout
+        Z = X.reshape(5, 4).T[0]
+
         Xty = typeof(X)
         assert X.flags.c_contiguous and Xty.layout == 'C'
         Yty = typeof(Y)
         assert Y.flags.f_contiguous and Yty.layout == 'F'
+        Zty = typeof(Z)
+        assert Zty.layout == 'A'
+        assert not Z.flags.c_contiguous
+        assert not Z.flags.f_contiguous
 
-        cr0 = self.cache.compile(pyfunc, (Xty, Yty), flags=enable_nrt_flags)
-        expected0 = np.add(X, Y)
-        result0 = cr0.entry_point(X, Y)
-        self.assertEqual(expected0.flags.c_contiguous,
-                         result0.flags.c_contiguous)
-        self.assertEqual(expected0.flags.f_contiguous,
-                         result0.flags.f_contiguous)
-        np.testing.assert_array_equal(expected0, result0)
+        testcases = list(itertools.permutations([X, Y, Z], 2))
+        testcases += [(X, X)]
+        testcases += [(Y, Y)]
+        testcases += [(Z, Z)]
 
-        cr1 = self.cache.compile(pyfunc, (Yty, Yty), flags=enable_nrt_flags)
-        expected1 = np.add(Y, Y)
-        result1 = cr1.entry_point(Y, Y)
-        self.assertEqual(expected1.flags.c_contiguous,
-                         result1.flags.c_contiguous)
-        self.assertEqual(expected1.flags.f_contiguous,
-                         result1.flags.f_contiguous)
-        np.testing.assert_array_equal(expected1, result1)
+        for arg0, arg1 in testcases:
+            cr = self.cache.compile(pyfunc, (typeof(arg0), typeof(arg1)),
+                                    flags=enable_nrt_flags)
+            expected = pyfunc(arg0, arg1)
+            result = cr.entry_point(arg0, arg1)
+
+            self.assertEqual(expected.flags.c_contiguous,
+                             result.flags.c_contiguous)
+            self.assertEqual(expected.flags.f_contiguous,
+                             result.flags.f_contiguous)
+            np.testing.assert_array_equal(expected, result)
+
+    def test_implicit_output_layout_unary(self):
+        def pyfunc(a0):
+            return np.sqrt(a0)
+
+        # C layout
+        X = np.linspace(0, 1, 20).reshape(4, 5)
+        # F layout
+        Y = np.array(X, order='F')
+        # A layout
+        Z = X.reshape(5, 4).T[0]
+
+        Xty = typeof(X)
+        assert X.flags.c_contiguous and Xty.layout == 'C'
+        Yty = typeof(Y)
+        assert Y.flags.f_contiguous and Yty.layout == 'F'
+        Zty = typeof(Z)
+        assert Zty.layout == 'A'
+        assert not Z.flags.c_contiguous
+        assert not Z.flags.f_contiguous
+
+        for arg0 in [X, Y, Z]:
+            cr = self.cache.compile(pyfunc, (typeof(arg0),),
+                                    flags=enable_nrt_flags)
+            expected = pyfunc(arg0)
+            result = cr.entry_point(arg0)
+
+            self.assertEqual(expected.flags.c_contiguous,
+                             result.flags.c_contiguous)
+            self.assertEqual(expected.flags.f_contiguous,
+                             result.flags.f_contiguous)
+            np.testing.assert_array_equal(expected, result)
 
     # ____________________________________________________________
     # Array operators
@@ -1371,6 +1412,7 @@ class _TestLoopTypes(TestCase):
     _ufuncs = all_ufuncs[:]
     # Have their own test classes
     _ufuncs.remove(np.left_shift)
+    _ufuncs.remove(np.right_shift)
     _ufuncs.remove(np.reciprocal)
     _ufuncs.remove(np.power)
     _compile_flags = enable_pyobj_flags

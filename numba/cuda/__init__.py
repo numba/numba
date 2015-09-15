@@ -1,5 +1,4 @@
 from __future__ import print_function, absolute_import, division
-
 from numba import config
 
 if config.ENABLE_CUDASIM:
@@ -7,7 +6,6 @@ if config.ENABLE_CUDASIM:
 else:
     from .device_init import *
     from .device_init import _auto_device
-
 
 def test():
     if not is_available():

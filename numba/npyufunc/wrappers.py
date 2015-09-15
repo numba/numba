@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
+
 from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
                                   ICMP_EQ, Constant)
 
@@ -68,13 +69,16 @@ def build_slow_loop_body(context, func, builder, arrays, out, offsets,
 
 
 def build_obj_loop_body(context, func, builder, arrays, out, offsets,
-                        store_offset, signature, pyapi, env):
+                        store_offset, signature, pyapi, envptr, env):
+    env_body = context.get_env_body(builder, envptr)
+    env_manager = pyapi.get_env_manager(env, env_body, envptr)
+
     def load():
         # Load
         elems = [ary.load_direct(builder.load(off))
                  for off, ary in zip(offsets, arrays)]
         # Box
-        elems = [pyapi.from_native_value(v, t)
+        elems = [pyapi.from_native_value(v, t, env_manager)
                  for v, t in zip(elems, signature.args)]
         return elems
 
@@ -96,7 +100,7 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
 
     return _build_ufunc_loop_body_objmode(load, store, context, func, builder,
                                           arrays, out, offsets, store_offset,
-                                          signature, env)
+                                          signature, envptr)
 
 
 def build_fast_loop_body(context, func, builder, arrays, out, offsets,
@@ -113,7 +117,7 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
                                   out, offsets, store_offset, signature)
 
 
-def build_ufunc_wrapper(library, context, func, signature, objmode, env):
+def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env):
     """
     Wrap the scalar function with a loop that iterates over the arguments
     """
@@ -181,7 +185,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
             slowloop = build_obj_loop_body(context, func, builder,
                                            arrays, out, offsets,
                                            store_offset, signature,
-                                           pyapi, env)
+                                           pyapi, envptr, env)
         pyapi.gil_release(gil)
         builder.ret_void()
 
@@ -191,11 +195,11 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
                                                        is_strided):
 
             with is_unit_strided:
-                with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
+                with cgutils.for_range(builder, loopcount, intp=intp_t) as loop:
                     fastloop = build_fast_loop_body(context, func, builder,
                                                     arrays, out, offsets,
                                                     store_offset, signature,
-                                                    ind)
+                                                    loop.index)
                 builder.ret_void()
 
             with is_strided:
@@ -334,8 +338,8 @@ class _GufuncWrapper(object):
         self.gen_prologue(builder)
 
         # Loop
-        with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
-            args = [a.get_array_at_offset(ind) for a in arrays]
+        with cgutils.for_range(builder, loopcount, intp=intp_t) as loop:
+            args = [a.get_array_at_offset(loop.index) for a in arrays]
             innercall, error = self.gen_loop_body(builder, func, args)
             # If error, escape
             cgutils.cbranch_or_continue(builder, error, bbreturn)

@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import sys
+import weakref
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
@@ -33,6 +34,7 @@ class CodeLibrary(object):
     """
 
     _finalized = False
+    _object_caching_enabled = False
 
     def __init__(self, codegen, name):
         self._codegen = codegen
@@ -40,6 +42,9 @@ class CodeLibrary(object):
         self._linking_libraries = set()
         self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
+        self._final_module.name = self._name
+        # Remember this on the module, for the object cache hooks
+        self._final_module.__library = weakref.proxy(self)
         self._shared_module = None
 
     @property
@@ -87,18 +92,30 @@ class CodeLibrary(object):
         into another library.  Exported functions are made "linkonce_odr"
         to allow for multiple definitions, inlining, and removal of
         unused exports.
+
         See discussion in https://github.com/numba/numba/pull/890
         """
         if self._shared_module is not None:
             return self._shared_module
         mod = self._final_module
         to_fix = []
+        nfuncs = 0
         for fn in mod.functions:
+            nfuncs += 1
             if not fn.is_declaration and fn.linkage == ll.Linkage.external:
                 to_fix.append(fn.name)
+        if nfuncs == 0:
+            # This is an issue which can occur if loading a module
+            # from an object file and trying to link with it, so detect it
+            # here to make debugging easier.
+            raise RuntimeError("library unfit for linking: "
+                               "no available functions in %s"
+                               % (self,))
         if to_fix:
             mod = mod.clone()
             for name in to_fix:
+                # NOTE: this will mark the symbol WEAK if serialized
+                # to an ELF file
                 mod.get_function(name).linkage = 'linkonce_odr'
         self._shared_module = mod
         return mod
@@ -126,6 +143,7 @@ class CodeLibrary(object):
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
         ll_module = ll.parse_assembly(str(ir_module))
+        ll_module.name = ir_module.name
         ll_module.verify()
         self.add_llvm_module(ll_module)
 
@@ -159,6 +177,12 @@ class CodeLibrary(object):
         self._optimize_final_module()
 
         self._final_module.verify()
+        self._finalize_final_module()
+
+    def _finalize_final_module(self):
+        """
+        Make the underlying LLVM module ready to use.
+        """
         # It seems add_module() must be done only here and not before
         # linking in other modules, otherwise get_pointer_to_function()
         # could fail.
@@ -193,6 +217,117 @@ class CodeLibrary(object):
         Get the human-readable assembly.
         """
         return str(self._codegen._tm.emit_assembly(self._final_module))
+
+    #
+    # Object cache hooks and serialization
+    #
+
+    def enable_object_caching(self):
+        self._object_caching_enabled = True
+        self._compiled_object = None
+        self._compiled = False
+
+    def _get_compiled_object(self):
+        if not self._object_caching_enabled:
+            raise ValueError("object caching not enabled in %s" % (self,))
+        if self._compiled_object is None:
+            raise RuntimeError("no compiled object yet for %s" % (self,))
+        return self._compiled_object
+
+    def _set_compiled_object(self, value):
+        if not self._object_caching_enabled:
+            raise ValueError("object caching not enabled in %s" % (self,))
+        if self._compiled:
+            raise ValueError("library already compiled: %s" % (self,))
+        self._compiled_object = value
+
+    @classmethod
+    def _dump_elf(cls, buf):
+        """
+        Dump the symbol table of an ELF file.
+        Needs pyelftools (https://github.com/eliben/pyelftools)
+        """
+        from elftools.elf.elffile import ELFFile
+        from elftools.elf import descriptions
+        from io import BytesIO
+        f = ELFFile(BytesIO(buf))
+        print("ELF file:")
+        for sec in f.iter_sections():
+            if sec['sh_type'] == 'SHT_SYMTAB':
+                symbols = sorted(sec.iter_symbols(), key=lambda sym: sym.name)
+                print("    symbols:")
+                for sym in symbols:
+                    if not sym.name:
+                        continue
+                    print("    - %r: size=%d, value=0x%x, type=%s, bind=%s"
+                          % (sym.name.decode(),
+                             sym['st_size'],
+                             sym['st_value'],
+                             descriptions.describe_symbol_type(sym['st_info']['type']),
+                             descriptions.describe_symbol_bind(sym['st_info']['bind']),
+                             ))
+        print()
+
+    @classmethod
+    def _object_compiled_hook(cls, ll_module, buf):
+        """
+        `ll_module` was compiled into object code `buf`.
+        """
+        try:
+            self = ll_module.__library
+        except AttributeError:
+            return
+        if self._object_caching_enabled:
+            self._compiled = True
+            self._compiled_object = buf
+
+    @classmethod
+    def _object_getbuffer_hook(cls, ll_module):
+        """
+        Return a cached object code for `ll_module`.
+        """
+        try:
+            self = ll_module.__library
+        except AttributeError:
+            return
+        if self._object_caching_enabled and self._compiled_object:
+            buf = self._compiled_object
+            self._compiled_object = None
+            return buf
+
+    def serialize_using_bitcode(self):
+        """
+        Serialize this library using its bitcode as the cached representation.
+        """
+        self._ensure_finalized()
+        return (self._name, 'bitcode', self._final_module.as_bitcode())
+
+    def serialize_using_object_code(self):
+        """
+        Serialize this library using its object code as the cached
+        representation.
+        """
+        self._ensure_finalized()
+        ll_module = self._final_module
+        return (self._name, 'object', self._get_compiled_object())
+
+    @classmethod
+    def _unserialize(cls, codegen, state):
+        name, kind, data = state
+        self = codegen.create_library(name)
+        assert isinstance(self, cls)
+        if kind == 'bitcode':
+            # No need to re-run optimizations, just make the module ready
+            self._final_module = ll.parse_bitcode(data)
+            self._finalize_final_module()
+            return self
+        elif kind == 'object':
+            self.enable_object_caching()
+            self._set_compiled_object(data)
+            self._finalize_final_module()
+            return self
+        else:
+            raise ValueError("unsupported serialization kind %r" % (kind,))
 
 
 class AOTCodeLibrary(CodeLibrary):
@@ -230,8 +365,7 @@ class JITCodeLibrary(CodeLibrary):
         This function implicitly calls .finalize().
         """
         self._ensure_finalized()
-        func = self.get_function(name)
-        return self._codegen._engine.get_pointer_to_function(func)
+        return self._codegen._engine.get_function_address(name)
 
     def _finalize_specific(self):
         self._codegen._engine.finalize_object()
@@ -244,6 +378,7 @@ class BaseCPUCodegen(object):
         self._data_layout = None
         self._llvm_module = ll.parse_assembly(
             str(self._create_empty_module(module_name)))
+        self._llvm_module.name = "global_codegen_module"
         self._init(self._llvm_module)
 
     def _init(self, llvm_module):
@@ -262,6 +397,9 @@ class BaseCPUCodegen(object):
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
         self._mpm = self._module_pass_manager()
+
+        self._engine.set_object_cache(self._library_class._object_compiled_hook,
+                                      self._library_class._object_getbuffer_hook)
 
     def _create_empty_module(self, name):
         ir_module = lc.Module.new(name)
@@ -291,6 +429,9 @@ class BaseCPUCodegen(object):
         instance.
         """
         return self._library_class(self, name)
+
+    def unserialize_library(self, serialized):
+        return self._library_class._unserialize(self, serialized)
 
     def _module_pass_manager(self):
         pm = ll.create_module_pass_manager()
@@ -323,6 +464,13 @@ class BaseCPUCodegen(object):
         pmb = lp.create_pass_manager_builder(
             opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
         return pmb
+
+    def magic_tuple(self):
+        """
+        Return a tuple unambiguously describing the codegen behaviour.
+        """
+        return (self._llvm_module.triple, ll.get_host_cpu_name(),
+                config.ENABLE_AVX)
 
 
 class AOTCPUCodegen(BaseCPUCodegen):
