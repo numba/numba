@@ -681,28 +681,13 @@ class BaseContext(object):
             dst.imag = self.cast(builder, src.imag, srcty, dstty)
             return dst._getvalue()
 
-        elif (isinstance(toty, types.UniTuple) and
-                  isinstance(fromty, types.UniTuple) and
-                      len(fromty) == len(toty)):
-            olditems = cgutils.unpack_tuple(builder, val, len(fromty))
-            items = [self.cast(builder, i, fromty.dtype, toty.dtype)
-                     for i in olditems]
-            tup = self.get_constant_undef(toty)
-            for idx, val in enumerate(items):
-                tup = builder.insert_value(tup, val, idx)
-            return tup
-
         elif (isinstance(fromty, (types.UniTuple, types.Tuple)) and
-                  isinstance(toty, (types.UniTuple, types.Tuple)) and
-                      len(toty) == len(fromty)):
-
+              isinstance(toty, (types.UniTuple, types.Tuple)) and
+              len(toty) == len(fromty)):
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
             items = [self.cast(builder, i, f, t)
                      for i, f, t in zip(olditems, fromty, toty)]
-            tup = self.get_constant_undef(toty)
-            for idx, val in enumerate(items):
-                tup = builder.insert_value(tup, val, idx)
-            return tup
+            return cgutils.make_anonymous_struct(builder, items)
 
         elif toty == types.boolean:
             return self.is_true(builder, fromty, val)
@@ -735,6 +720,13 @@ class BaseContext(object):
             # Type inference should have prevented illegal array casting.
             assert toty.layout == 'A'
             return val
+
+        elif (isinstance(fromty, types.RangeType) and
+              isinstance(toty, types.RangeType)):
+            olditems = cgutils.unpack_tuple(builder, val, 3)
+            items = [self.cast(builder, v, fromty.dtype, toty.dtype)
+                     for v in olditems]
+            return cgutils.make_anonymous_struct(builder, items)
 
         elif fromty in types.integer_domain and toty == types.voidptr:
             return builder.inttoptr(val, self.get_value_type(toty))

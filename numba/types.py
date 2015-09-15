@@ -497,11 +497,32 @@ class SimpleIteratorType(IteratorType):
 
 
 class RangeType(SimpleIterableType):
-    pass
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        name = "range_state_%s" % (dtype,)
+        super(SimpleIterableType, self).__init__(name, param=True)
+        self._iterator_type = RangeIteratorType(self.dtype)
+
+    def unify(self, typingctx, other):
+        if isinstance(other, RangeType):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            if dtype != pyobject:
+                return RangeType(dtype)
 
 
 class RangeIteratorType(SimpleIteratorType):
-    pass
+
+    def __init__(self, dtype):
+        name = "range_iter_%s" % (dtype,)
+        super(SimpleIteratorType, self).__init__(name, param=True)
+        self._yield_type = dtype
+
+    def unify(self, typingctx, other):
+        if isinstance(other, RangeIteratorType):
+            dtype = typingctx.unify_pairs(self.yield_type, other.yield_type)
+            if dtype != pyobject:
+                return RangeIteratorType(dtype)
 
 
 class Generator(SimpleIteratorType):
@@ -1389,13 +1410,12 @@ print_type = Phantom('print')
 print_item_type = Phantom('print-item')
 sign_type = Phantom('sign')
 
-range_iter32_type = RangeIteratorType('range_iter32', int32)
-range_iter64_type = RangeIteratorType('range_iter64', int64)
-unsigned_range_iter64_type = RangeIteratorType('unsigned_range_iter64', uint64)
-range_state32_type = RangeType('range_state32', range_iter32_type)
-range_state64_type = RangeType('range_state64', range_iter64_type)
-unsigned_range_state64_type = RangeType('unsigned_range_state64',
-                                        unsigned_range_iter64_type)
+range_iter32_type = RangeIteratorType(int32)
+range_iter64_type = RangeIteratorType(int64)
+unsigned_range_iter64_type = RangeIteratorType(uint64)
+range_state32_type = RangeType(int32)
+range_state64_type = RangeType(int64)
+unsigned_range_state64_type = RangeType(uint64)
 
 # slice2_type = Type('slice2_type')
 slice3_type = Slice3Type('slice3_type')
