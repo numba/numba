@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 import itertools
 
 from numba import types, intrinsics
-from numba.utils import PYVERSION, RANGE_ITER_OBJECTS
+from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, operator_map
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
                                     builtin_attr, signature, bound_function,
@@ -379,6 +379,24 @@ class TupleLe(TupleCompare):
 @builtin
 class TupleLt(TupleCompare):
     key = '<'
+
+
+# Register default implementations of binary inplace operators for
+# immutable types.
+
+class InplaceImmutable(AbstractTemplate):
+    def generic(self, args, kws):
+        lhs, rhs = args
+        if not lhs.mutable:
+            return self.context.resolve_function_type(self.key[:-1], args, kws)
+        # Inplace ops on mutable arguments must be typed explicitly
+
+for _binop, _inp, op in operator_map:
+    if _inp:
+        template = type('InplaceImmutable_%s' % _binop,
+                        (InplaceImmutable,),
+                        dict(key=op + '='))
+        builtin(template)
 
 
 class CmpOpIdentity(AbstractTemplate):
