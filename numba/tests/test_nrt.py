@@ -8,9 +8,13 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import njit
+from numba.compiler import compile_isolated, Flags, types
 from numba.runtime import rtsys
 from numba.config import PYVERSION
-from .support import MemoryLeakMixin
+from .support import MemoryLeakMixin, TestCase
+
+enable_nrt_flags = Flags()
+enable_nrt_flags.set("nrt")
 
 
 class Dummy(object):
@@ -230,7 +234,7 @@ class TestTracemalloc(unittest.TestCase):
         self.assertLess(stat.size, N * 0.01)
 
 
-class TestNRTIssue(MemoryLeakMixin, unittest.TestCase):
+class TestNRTIssue(MemoryLeakMixin, TestCase):
     def test_issue_with_refct_op_pruning(self):
         """
         GitHub Issue #1244 https://github.com/numba/numba/issues/1244
@@ -273,6 +277,23 @@ class TestNRTIssue(MemoryLeakMixin, unittest.TestCase):
         expected = normalize_vectors.py_func(num_vectors, test_vectors)
 
         np.testing.assert_almost_equal(expected, got)
+
+    def test_incref_after_cast(self):
+        # Issue #1427: when casting a value before returning it, the
+        # cast result should be incref'ed, not the original value.
+        def f():
+            return 0.0, np.zeros(1, dtype=np.int32)
+
+        # Note the return type isn't the same as the tuple type above:
+        # the first element is a complex rather than a float.
+        cres = compile_isolated(f, (),
+                                types.Tuple((types.complex128,
+                                             types.Array(types.int32, 1, 'C')
+                                             ))
+                                )
+        z, arr = cres.entry_point()
+        self.assertPreciseEqual(z, 0j)
+        self.assertPreciseEqual(arr, np.zeros(1, dtype=np.int32))
 
 
 if __name__ == '__main__':

@@ -755,7 +755,7 @@ class Lower(BaseLower):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             castval = self.context.cast(self.builder, val, ty, resty)
-            self.incref(resty, val)
+            self.incref(resty, castval)
             return castval
 
         elif expr.op in self.context.special_ops:
