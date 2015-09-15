@@ -1346,18 +1346,20 @@ class Slice3Type(Type):
 
 
 class ClassType(Opaque):
-    def __init__(self, instance):
-        self.instance = instance
-        super(ClassType, self).__init__("class.{0}".format(instance.name))
+    def __init__(self, class_def):
+        self.class_def = class_def
+        name = "class.{0}#{1}".format(class_def, id(class_def))
+        super(ClassType, self).__init__(name)
 
 
 class ClassInstanceType(Type):
-    def __init__(self, classname, struct, methods):
-        self.classname = classname
+    def __init__(self, class_type, struct, methods):
+        self.class_type = class_type
         self.struct = struct
+        parameters = tuple((k, v) for k, v in self.struct.items())
         self.methods = methods
-        super(ClassInstanceType, self).__init__("jitclass.{0}".format(
-            classname))
+        super(ClassInstanceType, self).__init__("jitclass.{0}!{1}".format(
+            self.class_type.name, parameters))
 
     def get_data_type(self):
         return ClassDataType(self)
