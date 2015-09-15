@@ -175,7 +175,7 @@ class InplaceAddList(AbstractTemplate):
             a, b = args
             if isinstance(a, types.List) and isinstance(b, types.List):
                 if self.context.can_convert(b.dtype, a.dtype):
-                    return signature(a, b, a)
+                    return signature(a, a, b)
 
 
 @builtin
