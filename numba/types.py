@@ -518,6 +518,12 @@ class RangeIteratorType(SimpleIteratorType):
         super(SimpleIteratorType, self).__init__(name, param=True)
         self._yield_type = dtype
 
+    def unify(self, typingctx, other):
+        if isinstance(other, RangeIteratorType):
+            dtype = typingctx.unify_pairs(self.yield_type, other.yield_type)
+            if dtype != pyobject:
+                return RangeIteratorType(dtype)
+
 
 class Generator(SimpleIteratorType):
     """
