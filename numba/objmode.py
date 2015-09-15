@@ -247,6 +247,11 @@ class PyLower(BaseLower):
         elif expr.op == 'build_map':
             res = self.pyapi.dict_new(expr.size)
             self.check_error(res)
+            for k, v in expr.items:
+                key = self.loadvar(k.name)
+                value = self.loadvar(v.name)
+                ok = self.pyapi.dict_setitem(res, key, value)
+                self.check_int_status(ok)
             return res
         elif expr.op == 'build_set':
             items = [self.loadvar(it.name) for it in expr.items]

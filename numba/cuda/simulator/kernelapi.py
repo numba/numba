@@ -3,11 +3,15 @@ Implements the cuda module as called from within an executing kernel
 (@cuda.jit-decorated function).
 '''
 
-import numpy as np
+from contextlib import contextmanager
+import sys
 import threading
 import traceback
-from contextlib import contextmanager
+
+import numpy as np
+
 from numba import types, numpy_support
+
 
 class Dim3(object):
     '''
@@ -82,7 +86,10 @@ class FakeCUDAShared(object):
             return np.frombuffer(self._dynshared.data, dtype=dtype, count=count)
 
         # Otherwise, identify allocations by source file and line number
-        caller = traceback.extract_stack()[-2][0:2]
+        # We pass the reference frame explicitly to work around
+        # http://bugs.python.org/issue25108
+        stack = traceback.extract_stack(sys._getframe())
+        caller = stack[-2][0:2]
         res = self._allocations.get(caller)
         if res is None:
             res = np.empty(shape, dtype)
