@@ -96,6 +96,11 @@ operator_map = [
 if not IS_PY3:
     operator_map.append(('div', 'idiv', '/?'))
 
+# Map of known in-place operators to their corresponding copying operators
+inplace_map = dict((op + '=', op)
+                   for (_bin, _inp, op) in operator_map
+                   if _inp)
+
 
 _shutting_down = False
 

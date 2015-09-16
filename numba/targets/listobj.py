@@ -149,6 +149,10 @@ class ListInstance(_ListPayloadMixin):
         self._itemsize = get_itemsize(context, list_type)
 
     @property
+    def dtype(self):
+        return self._ty.dtype
+
+    @property
     def _payload(self):
         # This cannot be cached as it can be reallocated
         return get_list_payload(self._context, self._builder, self._ty, self._list)
@@ -532,9 +536,11 @@ def list_add(context, builder, sig, args):
 
     with cgutils.for_range(builder, a_size) as loop:
         value = a.getitem(loop.index)
+        value = context.cast(builder, value, a.dtype, dest.dtype)
         dest.setitem(loop.index, value)
     with cgutils.for_range(builder, b_size) as loop:
         value = b.getitem(loop.index)
+        value = context.cast(builder, value, b.dtype, dest.dtype)
         dest.setitem(builder.add(loop.index, a_size), value)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
@@ -542,7 +548,7 @@ def list_add(context, builder, sig, args):
 @builtin
 @implement("+=", types.Kind(types.List), types.Kind(types.List))
 def list_add_inplace(context, builder, sig, args):
-    assert sig.args[0].dtype == sig.args[1].dtype
+    assert sig.args[0].dtype == sig.return_type.dtype
     dest = _list_extend_list(context, builder, sig, args)
 
     return impl_ret_borrowed(context, builder, sig.return_type, dest.value)
@@ -743,6 +749,7 @@ def _list_extend_list(context, builder, sig, args):
 
     with cgutils.for_range(builder, src_size) as loop:
         value = src.getitem(loop.index)
+        value = context.cast(builder, value, src.dtype, dest.dtype)
         dest.setitem(builder.add(loop.index, dest_size), value)
 
     return dest
@@ -750,8 +757,8 @@ def _list_extend_list(context, builder, sig, args):
 @builtin
 @implement("list.extend", types.Kind(types.List), types.Kind(types.IterableType))
 def list_extend(context, builder, sig, args):
-    if isinstance(sig.args[1], types.List) and sig.args[0].dtype == sig.args[1].dtype:
-        # Specialize for same-type list operands, for speed
+    if isinstance(sig.args[1], types.List):
+        # Specialize for list operands, for speed.
         _list_extend_list(context, builder, sig, args)
         return context.get_dummy_value()
 
