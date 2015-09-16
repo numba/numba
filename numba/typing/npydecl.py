@@ -331,12 +331,12 @@ class Numpy_method_redirection(AbstractTemplate):
 # Function to glue attributes onto the numpy-esque object
 def _numpy_redirect(fname):
     numpy_function = getattr(numpy, fname)
-    cls = type("Numpy_reduce_{0}".format(fname), (Numpy_method_redirection,),
+    cls = type("Numpy_redirect_{0}".format(fname), (Numpy_method_redirection,),
                dict(key=numpy_function, method_name=fname))
     builtin_global(numpy_function, types.Function(cls))
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'median', 'var', 'std',
-             'cumsum', 'cumprod', 'argmin', 'argmax']:
+             'cumsum', 'cumprod', 'argmin', 'argmax', 'nonzero']:
     _numpy_redirect(func)
 
 

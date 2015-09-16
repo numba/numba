@@ -468,6 +468,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_array_nonzero(self):
         self.check_nonzero(array_nonzero)
 
+    def test_np_nonzero(self):
+        self.check_nonzero(np_nonzero)
+
 
 class TestArrayComparisons(TestCase):
 
