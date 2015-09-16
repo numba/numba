@@ -8,7 +8,7 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from .imputils import (builtin, builtin_attr, implement, impl_attribute,
-                       impl_attribute_generic, iternext_impl, struct_factory,
+                       impl_attribute_generic, iternext_impl,
                        impl_ret_borrowed, impl_ret_untracked)
 from . import optional
 from .. import typing, types, cgutils, utils, intrinsics

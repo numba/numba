@@ -10,9 +10,8 @@ from llvmlite import ir
 from numba import types, cgutils, typing
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
-                                    iternext_impl, struct_factory,
-                                    impl_ret_borrowed, impl_ret_new_ref,
-                                    impl_ret_untracked)
+                                    iternext_impl, impl_ret_borrowed,
+                                    impl_ret_new_ref, impl_ret_untracked)
 from numba.utils import cached_property
 from . import quicksort, slicing
 
@@ -335,7 +334,6 @@ def list_len(context, builder, sig, args):
     return inst.size
 
 
-@struct_factory(types.ListIter)
 def make_listiter_cls(iterator_type):
     """
     Return the Structure representation of the given *iterator_type* (an
