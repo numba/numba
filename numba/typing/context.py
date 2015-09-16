@@ -11,7 +11,7 @@ from .typeof import typeof, Purpose
 
 # Initialize declarations
 from . import (
-    builtins, cmathdecl, listdecl, mathdecl, npdatetime, npydecl,
+    builtins, arraydecl, cmathdecl, listdecl, mathdecl, npdatetime, npydecl,
     operatordecl, randomdecl)
 from numba import utils
 from . import ctypes_utils, cffi_utils, bufproto
