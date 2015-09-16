@@ -286,6 +286,15 @@ def identity_usecase(n):
     c = a[:]
     return (a is b), (a is not b), (a is c), (a is not c)
 
+def bool_list_usecase():
+    # Exercise getitem, setitem, iteration with bool values (issue #1373)
+    l = [False]
+    l[0] = True
+    x = False
+    for v in l:
+        x = x ^ v
+    return l, x
+
 
 class TestLists(MemoryLeakMixin, TestCase):
 
@@ -645,6 +654,12 @@ class TestLists(MemoryLeakMixin, TestCase):
         pyfunc = identity_usecase
         cfunc = jit(nopython=True)(pyfunc)
         self.assertPreciseEqual(cfunc(3), pyfunc(3))
+
+    def test_bool_list(self):
+        # Check lists of bools compile and run successfully
+        pyfunc = bool_list_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(), pyfunc())
 
 
 if __name__ == '__main__':

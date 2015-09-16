@@ -6,8 +6,7 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from numba import npdatetime, types, cgutils
-from numba.targets.imputils import (builtin, implement, type_factory,
-                                    impl_ret_untracked)
+from numba.targets.imputils import builtin, implement, impl_ret_untracked
 
 
 if not npdatetime.NPDATETIME_SUPPORTED:
@@ -19,15 +18,6 @@ DATETIME64 = TIMEDELTA64 = Type.int(64)
 NAT = Constant.int(TIMEDELTA64, npdatetime.NAT)
 
 TIMEDELTA_BINOP_SIG = (types.Kind(types.NPTimedelta),) * 2
-
-
-@type_factory(types.NPDatetime)
-def llvm_datetime_type(context, tp):
-    return DATETIME64
-
-@type_factory(types.NPTimedelta)
-def llvm_timedelta_type(context, tp):
-    return TIMEDELTA64
 
 
 def scale_by_constant(builder, val, factor):
