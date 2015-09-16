@@ -76,7 +76,7 @@ class TestCudaMatMul(unittest.TestCase):
         tcpu = e - s
 
         # Check result
-        np.testing.assert_allclose(C, Cans)
+        np.testing.assert_allclose(C, Cans, rtol=1e-5)
 
 
 if __name__ == '__main__':
