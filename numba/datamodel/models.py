@@ -560,6 +560,9 @@ class StructModel(CompositeModel):
             pos = self.get_field_position(pos)
         return self._members[pos]
 
+    def get_model(self, pos):
+        return self._models[pos]
+
     def traverse(self, builder, value):
         out = [(self.get_type(k), self.get(builder, value, k))
                 for k in self._fields]

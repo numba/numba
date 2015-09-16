@@ -121,12 +121,13 @@ class TestUnify(unittest.TestCase):
     def assert_unify(self, aty, bty, expected):
         ctx = typing.Context()
         template = "{0}, {1} -> {2} != {3}"
-        unified = ctx.unify_types(aty, bty)
-        self.assertEqual(unified, expected,
-                         msg=template.format(aty, bty, unified, expected))
-        unified = ctx.unify_types(bty, aty)
-        self.assertEqual(unified, expected,
-                         msg=template.format(bty, aty, unified, expected))
+        for unify_func in ctx.unify_types, ctx.unify_pairs:
+            unified = unify_func(aty, bty)
+            self.assertEqual(unified, expected,
+                             msg=template.format(aty, bty, unified, expected))
+            unified = unify_func(bty, aty)
+            self.assertEqual(unified, expected,
+                             msg=template.format(bty, aty, unified, expected))
 
     def assert_unify_failure(self, aty, bty):
         self.assert_unify(aty, bty, types.pyobject)
@@ -141,6 +142,16 @@ class TestUnify(unittest.TestCase):
             except KeyError:
                 expected = self.int_unify[key[::-1]]
             self.assert_unify(aty, bty, getattr(types, expected))
+
+    def test_bool(self):
+        aty = types.boolean
+        for bty in types.integer_domain:
+            self.assert_unify(aty, bty, bty)
+        # Not sure about this one, but it respects transitivity
+        cty = types.float64
+        self.assert_unify(aty, cty, cty)
+        for cty in types.real_domain:
+            self.assert_unify(aty, cty, cty)
 
     def unify_number_pair_test(self, n):
         """
