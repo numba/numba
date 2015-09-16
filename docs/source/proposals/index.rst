@@ -28,3 +28,4 @@ Other proposals
    :maxdepth: 1
 
    extension-points.rst
+   jit-classes.rst
