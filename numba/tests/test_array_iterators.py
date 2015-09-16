@@ -200,8 +200,8 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
             # Use np.copy() to keep the layout
             expected = np.copy(arr)
             got = np.copy(arr)
-            pyfunc(expected, ind, 42)
-            cr.entry_point(got, ind, 42)
+            pyfunc(expected, ind, 123)
+            cr.entry_point(got, ind, 123)
             self.assertPreciseEqual(got, expected)
 
         arr = np.arange(24).reshape(4, 2, 3)
