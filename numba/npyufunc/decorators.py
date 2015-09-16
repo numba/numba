@@ -5,6 +5,7 @@ from . import _internal, dufunc
 from .ufuncbuilder import UFuncBuilder, GUFuncBuilder
 from .parallel import ParallelUFuncBuilder
 
+from numba.cuda.vectorizers import CUDAVectorize, CUDAGUFuncVectorize 
 from numba.targets.registry import TargetRegistry
 
 

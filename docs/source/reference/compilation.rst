@@ -143,7 +143,7 @@ JIT functions
 Vectorized functions (ufuncs and DUFuncs)
 -----------------------------------------
 
-.. decorator:: numba.vectorize(*, signatures=[], identity=None, nopython=True, forceobj=False, locals={})
+.. decorator:: numba.vectorize(*, signatures=[], identity=None, nopython=True, target='cpu', forceobj=False, locals={})
 
    Compile the decorated function and wrap it either as a `Numpy
    ufunc`_ or a Numba :class:`~numba.DUFunc`.  The optional
@@ -182,8 +182,19 @@ Vectorized functions (ufuncs and DUFuncs)
       @vectorize(["float32(float32)", "float64(float64)"])
       def f(x): ...
 
+   *target* is a string for backend target; Available values are "cpu", "parallel", and "cuda".
+   To use a multithreaded version, change the target to "parallel"::
 
-.. decorator:: numba.guvectorize(signatures, layout, *, identity=None, nopython=True, forceobj=False, locals={})
+      @vectorize(["float64(float64)", "float32(float32)"], target='parallel')
+      def f(x): ...
+
+   For the CUDA target, use "cuda"::
+
+      @vectorize(["float64(float64)", "float32(float32)"], target='cuda')
+      def f(x): ...
+
+
+.. decorator:: numba.guvectorize(signatures, layout, *, identity=None, nopython=True, target='cpu', forceobj=False, locals={})
 
    Generalized version of :func:`numba.vectorize`.  While
    :func:`numba.vectorize` will produce a simple ufunc whose core
