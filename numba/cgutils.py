@@ -502,9 +502,17 @@ def for_range_slice_generic(builder, start, stop, step):
 
 @contextmanager
 def loop_nest(builder, shape, intp):
-    with _loop_nest(builder, shape, intp) as indices:
-        assert len(indices) == len(shape)
-        yield indices
+    """
+    Generate a loop nest walking a N-dimensional array.
+    Yields a tuple of N indices for use in the inner loop body.
+    """
+    if not shape:
+        # 0-d array
+        yield ()
+    else:
+        with _loop_nest(builder, shape, intp) as indices:
+            assert len(indices) == len(shape)
+            yield indices
 
 
 @contextmanager
