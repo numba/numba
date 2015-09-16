@@ -703,4 +703,29 @@ class Round(AbstractTemplate):
 builtin_global(numpy.round, types.Function(Round))
 builtin_global(numpy.around, types.Function(Round))
 
+
+@builtin
+class Where(AbstractTemplate):
+    key = numpy.where
+
+    def generic(self, args, kws):
+        assert not kws
+
+        if len(args) == 1:
+            # np.where(cond) is the same as np.nonzero(cond)
+            ary = args[0]
+            ndim = max(ary.ndim, 1)
+            retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
+            return signature(retty, ary)
+
+        elif len(args) == 3:
+            cond, x, y = args
+            if (cond.ndim == x.ndim == y.ndim and
+                x.dtype == y.dtype):
+                retty = types.Array(x.dtype, x.ndim, x.layout)
+                return signature(retty, *args)
+
+builtin_global(numpy.where, types.Function(Where))
+
+
 builtin_global(numpy, types.Module(numpy))

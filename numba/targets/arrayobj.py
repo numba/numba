@@ -1164,6 +1164,7 @@ def array_round(context, builder, sig, args):
 @builtin
 @implement(numpy.nonzero, types.Kind(types.Array))
 @implement("array.nonzero", types.Kind(types.Array))
+@implement(numpy.where, types.Kind(types.Array))
 def array_nonzero(context, builder, sig, args):
     aryty = sig.args[0]
     # Return type is a N-tuple of 1D C-contiguous arrays
@@ -1217,6 +1218,39 @@ def array_nonzero(context, builder, sig, args):
 
     tup = context.make_tuple(builder, sig.return_type, outs)
     return impl_ret_new_ref(context, builder, sig.return_type, tup)
+
+@builtin
+@implement(numpy.where, types.Kind(types.Array),
+           types.Kind(types.Array), types.Kind(types.Array))
+def array_where(context, builder, sig, args):
+    layouts = set(a.layout for a in sig.args)
+    if layouts == set('C'):
+        # Faster implementation for C-contiguous arrays
+        def where_impl(cond, x, y):
+            shape = cond.shape
+            if x.shape != shape or y.shape != shape:
+                raise ValueError("all inputs should have the same shape")
+            res = numpy.empty_like(x)
+            cf = cond.flat
+            xf = x.flat
+            yf = y.flat
+            rf = res.flat
+            for i in range(cond.size):
+                rf[i] = xf[i] if cf[i] else yf[i]
+            return res
+    else:
+
+        def where_impl(cond, x, y):
+            shape = cond.shape
+            if x.shape != shape or y.shape != shape:
+                raise ValueError("all inputs should have the same shape")
+            res = numpy.empty_like(x)
+            for idx, c in numpy.ndenumerate(cond):
+                res[idx] = x[idx] if c else y[idx]
+            return res
+
+    res = context.compile_internal(builder, where_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 #-------------------------------------------------------------------------------
@@ -1607,6 +1641,10 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 ptr = builder.gep(arr.data, [index])
                 return builder.load(ptr)
 
+            def setitem(self, context, builder, arrty, arr, index, value):
+                ptr = builder.gep(arr.data, [index])
+                builder.store(value, ptr)
+
         return CContiguousFlatIter
 
     else:
@@ -1716,7 +1754,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
                 builder.position_at_end(bbend)
 
-            def getitem(self, context, builder, arrty, arr, index):
+            def _ptr_for_index(self, context, builder, arrty, arr, index):
                 ndim = arrty.ndim
                 shapes = cgutils.unpack_tuple(builder, arr.shape, count=ndim)
                 strides = cgutils.unpack_tuple(builder, arr.strides, count=ndim)
@@ -1730,7 +1768,15 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
                 ptr = cgutils.get_item_pointer2(builder, arr.data, shapes,
                                                 strides, arrty.layout, indices)
+                return ptr
+
+            def getitem(self, context, builder, arrty, arr, index):
+                ptr = self._ptr_for_index(context, builder, arrty, arr, index)
                 return builder.load(ptr)
+
+            def setitem(self, context, builder, arrty, arr, index, value):
+                ptr = self._ptr_for_index(context, builder, arrty, arr, index)
+                builder.store(value, ptr)
 
         return FlatIter
 
@@ -1785,6 +1831,24 @@ def iternext_numpy_getitem(context, builder, sig, args):
 
     res = flatiter.getitem(context, builder, arrty, arr, index)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+@builtin
+@implement('setitem', types.Kind(types.NumpyFlatType), types.Kind(types.Integer),
+           types.Any)
+def iternext_numpy_getitem(context, builder, sig, args):
+    flatiterty = sig.args[0]
+    flatiter, index, value = args
+
+    flatitercls = make_array_flat_cls(flatiterty)
+    flatiter = flatitercls(context, builder, value=flatiter)
+
+    arrty = flatiterty.array_type
+    arrcls = context.make_array(arrty)
+    arr = arrcls(context, builder, value=builder.load(flatiter.array))
+
+    res = flatiter.setitem(context, builder, arrty, arr, index, value)
+    return context.get_dummy_value()
 
 
 @builtin

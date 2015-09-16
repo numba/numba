@@ -109,6 +109,12 @@ def array_nonzero(a):
 def np_nonzero(a):
     return np.nonzero(a)
 
+def np_where_1(c):
+    return np.where(c)
+
+def np_where_3(c, x, y):
+    return np.where(c, x, y)
+
 
 class TestArrayMethodsCustom(MemoryLeak, TestCase):
     """
@@ -470,6 +476,39 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_np_nonzero(self):
         self.check_nonzero(np_nonzero)
+
+    def test_np_where_1(self):
+        self.check_nonzero(np_where_1)
+
+    def test_np_where_3(self):
+        pyfunc = np_where_3
+        def fac(N):
+            np.random.seed(42)
+            arr = np.random.random(N)
+            arr[arr < 0.3] = 0.0
+            arr[arr > 0.7] = float('nan')
+            return arr
+
+        def check_arr(arr):
+            x = np.zeros_like(arr, dtype=np.float64)
+            y = np.copy(x)
+            x.fill(4)
+            y.fill(9)
+            cres = compile_isolated(pyfunc, (typeof(arr), typeof(x), typeof(y)))
+            expected = pyfunc(arr, x, y)
+            self.assertPreciseEqual(cres.entry_point(arr, x, y), expected)
+
+        arr = fac(24)
+        check_arr(arr)
+        check_arr(arr.reshape((3, 8)))
+        check_arr(arr.reshape((3, 8)).T)
+        check_arr(arr.reshape((3, 8))[::2])
+        check_arr(arr.reshape((2, 3, 4)))
+        check_arr(arr.reshape((2, 3, 4)).T)
+        check_arr(arr.reshape((2, 3, 4))[::2])
+        for v in (0.0, 1.5, float('nan')):
+            arr = np.array([v]).reshape(())
+            check_arr(arr)
 
 
 class TestArrayComparisons(TestCase):
