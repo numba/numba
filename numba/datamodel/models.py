@@ -554,13 +554,20 @@ class StructModel(CompositeModel):
         ----
         pos: int or str
             field index or field name
-
         """
         if isinstance(pos, str):
             pos = self.get_field_position(pos)
         return self._members[pos]
 
     def get_model(self, pos):
+        """
+        Get the datamodel of a field given the position or the fieldname.
+
+        Args
+        ----
+        pos: int or str
+            field index or field name
+        """
         return self._models[pos]
 
     def traverse(self, builder, value):

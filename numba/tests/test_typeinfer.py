@@ -148,8 +148,6 @@ class TestUnify(unittest.TestCase):
         for bty in types.integer_domain:
             self.assert_unify(aty, bty, bty)
         # Not sure about this one, but it respects transitivity
-        cty = types.float64
-        self.assert_unify(aty, cty, cty)
         for cty in types.real_domain:
             self.assert_unify(aty, cty, cty)
 
