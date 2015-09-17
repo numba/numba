@@ -1,8 +1,9 @@
 GPU Reduction
 ==============
 
-Writing a reduction algorithm for CUDA GPU can be tricky.
-Numba provides a ``@reduce`` decorator for converting simple binary operation into a reduction kernel.
+Writing a reduction algorithm for CUDA GPU can be tricky.  Numba provides a
+``@reduce`` decorator for converting simple binary operation into a reduction
+kernel.
 
 ``@reduce``
 ------------
@@ -25,12 +26,12 @@ User can also use a lambda function::
 
     sum_reduce = cuda.reduce(lambda a, b: a + b)
 
-The decorated function **must not use CUDA specific features** because it is also used for host-side execution for the final round of reduction.
-
 class Reduce
 -------------
 
-The ``reduce`` decorator creates an instance of the ``Reduce`` class.  (Currently, ``reduce`` is an alias to ``Reduce``, but this behavior is not guaranteed.)
+The ``reduce`` decorator creates an instance of the ``Reduce`` class.
+(Currently, ``reduce`` is an alias to ``Reduce``, but this behavior is not
+guaranteed.)
 
 .. autoclass:: numba.cuda.Reduce
-   :members:
+   :members: __init__, __call__

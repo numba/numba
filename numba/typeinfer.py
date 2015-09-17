@@ -781,10 +781,7 @@ class TypeInferer(object):
         elif expr.op == 'binop':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
         elif expr.op == 'inplace_binop':
-            # We assume type constraints for inplace operators to be the
-            # same as for normal operators.  This may have to be refined in
-            # the future.
-            self.typeof_intrinsic_call(inst, target, expr.immutable_fn,
+            self.typeof_intrinsic_call(inst, target, expr.fn,
                                        expr.lhs, expr.rhs)
         elif expr.op == 'unary':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.value)

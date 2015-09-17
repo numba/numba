@@ -1,15 +1,13 @@
 from numba.six.moves import reduce as pyreduce
 
 def Reduce(func):
-    def reduce_wrapper(seq, init=None):
-        # Numba's CUDA reduce allows an empty sequence to be reduced with no
-        # initializer but functools.reduce does not.
-        if len(seq) == 0 and init == None:
-            init = 0
-        if init is not None:
-            return pyreduce(func, seq, init)
+    def reduce_wrapper(seq, res=None, init=0):
+        r = pyreduce(func, seq, init)
+        if res is not None:
+            res[0] = r
+            return None
         else:
-            return pyreduce(func, seq)
+            return r
     return reduce_wrapper
 
 reduce = Reduce

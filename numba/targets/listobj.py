@@ -10,9 +10,8 @@ from llvmlite import ir
 from numba import types, cgutils, typing
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
-                                    iternext_impl, struct_factory,
-                                    impl_ret_borrowed, impl_ret_new_ref,
-                                    impl_ret_untracked)
+                                    iternext_impl, impl_ret_borrowed,
+                                    impl_ret_new_ref, impl_ret_untracked)
 from numba.utils import cached_property
 from . import quicksort, slicing
 
@@ -30,7 +29,10 @@ def make_payload_cls(list_type):
     Return the Structure representation of the given *list_type*'s payload
     (an instance of types.List).
     """
-    return cgutils.create_struct_proxy(types.ListPayload(list_type))
+    # Note the payload is stored durably in memory, so we consider it
+    # data and not value.
+    return cgutils.create_struct_proxy(types.ListPayload(list_type),
+                                       kind='data')
 
 
 def get_list_payload(context, builder, list_type, value):
@@ -75,16 +77,19 @@ class _ListPayloadMixin(object):
 
     def getitem(self, idx):
         ptr = self._gep(idx)
-        return self._builder.load(ptr)
+        data_item = self._builder.load(ptr)
+        return self._datamodel.from_data(self._builder, data_item)
 
     def setitem(self, idx, val):
         ptr = self._gep(idx)
-        self._builder.store(val, ptr)
+        data_item = self._datamodel.as_data(self._builder, val)
+        self._builder.store(data_item, ptr)
 
     def inititem(self, idx, val):
         ptr = self._gep(idx)
-        self._builder.store(val, ptr)
-    
+        data_item = self._datamodel.as_data(self._builder, val)
+        self._builder.store(data_item, ptr)
+
     def fix_index(self, idx):
         """
         Fix negative indices by adding the size to them.  Positive
@@ -147,6 +152,11 @@ class ListInstance(_ListPayloadMixin):
         self._ty = list_type
         self._list = make_list_cls(list_type)(context, builder, list_val)
         self._itemsize = get_itemsize(context, list_type)
+        self._datamodel = context.data_model_manager[list_type.dtype]
+
+    @property
+    def dtype(self):
+        return self._ty.dtype
 
     @property
     def _payload(self):
@@ -261,6 +271,7 @@ class ListIterInstance(_ListPayloadMixin):
         self._builder = builder
         self._ty = iter_type
         self._iter = make_listiter_cls(iter_type)(context, builder, iter_val)
+        self._datamodel = context.data_model_manager[iter_type.yield_type]
 
     @classmethod
     def from_list(cls, context, builder, iter_type, list_val):
@@ -329,7 +340,6 @@ def list_len(context, builder, sig, args):
     return inst.size
 
 
-@struct_factory(types.ListIter)
 def make_listiter_cls(iterator_type):
     """
     Return the Structure representation of the given *iterator_type* (an
@@ -532,9 +542,11 @@ def list_add(context, builder, sig, args):
 
     with cgutils.for_range(builder, a_size) as loop:
         value = a.getitem(loop.index)
+        value = context.cast(builder, value, a.dtype, dest.dtype)
         dest.setitem(loop.index, value)
     with cgutils.for_range(builder, b_size) as loop:
         value = b.getitem(loop.index)
+        value = context.cast(builder, value, b.dtype, dest.dtype)
         dest.setitem(builder.add(loop.index, a_size), value)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
@@ -542,7 +554,7 @@ def list_add(context, builder, sig, args):
 @builtin
 @implement("+=", types.Kind(types.List), types.Kind(types.List))
 def list_add_inplace(context, builder, sig, args):
-    assert sig.args[0].dtype == sig.args[1].dtype
+    assert sig.args[0].dtype == sig.return_type.dtype
     dest = _list_extend_list(context, builder, sig, args)
 
     return impl_ret_borrowed(context, builder, sig.return_type, dest.value)
@@ -743,6 +755,7 @@ def _list_extend_list(context, builder, sig, args):
 
     with cgutils.for_range(builder, src_size) as loop:
         value = src.getitem(loop.index)
+        value = context.cast(builder, value, src.dtype, dest.dtype)
         dest.setitem(builder.add(loop.index, dest_size), value)
 
     return dest
@@ -750,8 +763,8 @@ def _list_extend_list(context, builder, sig, args):
 @builtin
 @implement("list.extend", types.Kind(types.List), types.Kind(types.IterableType))
 def list_extend(context, builder, sig, args):
-    if isinstance(sig.args[1], types.List) and sig.args[0].dtype == sig.args[1].dtype:
-        # Specialize for same-type list operands, for speed
+    if isinstance(sig.args[1], types.List):
+        # Specialize for list operands, for speed.
         _list_extend_list(context, builder, sig, args)
         return context.get_dummy_value()
 

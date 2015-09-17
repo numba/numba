@@ -6,10 +6,9 @@ import llvmlite.llvmpy.core as lc
 
 from numba import types, cgutils
 from numba.targets.imputils import (builtin, implement, iterator_impl,
-                                    struct_factory, impl_ret_untracked)
+                                    impl_ret_untracked)
 
 
-@struct_factory(types.RangeIteratorType)
 def make_range_iterator(typ):
     """
     Return the Structure representation of the given *typ* (an

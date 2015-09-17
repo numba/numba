@@ -15,7 +15,6 @@ from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     builtin_registry, impl_attribute,
-                                    type_registry,
                                     impl_ret_borrowed)
 from . import (
     arrayobj, builtins, iterators, rangeobj, optional, slicing, tupleobj)
@@ -296,13 +295,6 @@ class BaseContext(object):
         The return value is a llvmlite.ir.Type object, or None if the type
         is an opaque pointer (???).
         """
-        try:
-            fac = type_registry.match(ty)
-        except KeyError:
-            pass
-        else:
-            return fac(self, ty)
-
         return self.data_model_manager[ty].get_data_type()
 
     def get_value_type(self, ty):

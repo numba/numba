@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function
 
 import numpy
-from .. import types
+from .. import types, utils
 from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
                         Registry, signature)
 
@@ -203,6 +203,29 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         return sig
 
 
+_binop_map = NumpyRulesArrayOperator._op_map
+
+class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
+    _op_map = dict((inp, _binop_map[binop])
+                   for (inp, binop) in utils.inplace_map.items()
+                   if binop in _binop_map)
+
+    def generic(self, args, kws):
+        # Type the inplace operator as if an explicit output was passed,
+        # to handle type resolution correctly.
+        # (for example int8[:] += int16[:] should use an int8[:] output,
+        #  not int16[:])
+        lhs, rhs = args
+        if not isinstance(lhs, types.Array):
+            return
+        args = args + (lhs,)
+        sig = super(NumpyRulesInplaceArrayOperator, self).generic(args, kws)
+        # Strip off the fake explicit output
+        assert len(sig.args) == 3
+        real_sig = signature(sig.return_type, *sig.args[:2])
+        return real_sig
+
+
 class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
     _op_map = {
         # Positive is a special case since there is no Numpy ufunc
@@ -216,7 +239,6 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
         assert not kws
         if len(args) == 1 and isinstance(args[0], types.Array):
             return super(NumpyRulesUnaryArrayOperator, self).generic(args, kws)
-
 
 
 # list of unary ufuncs to register
@@ -298,6 +320,7 @@ supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 
 NumpyRulesUnaryArrayOperator.install_operations()
 NumpyRulesArrayOperator.install_operations()
+NumpyRulesInplaceArrayOperator.install_operations()
 
 supported_array_operators = set(
     NumpyRulesUnaryArrayOperator._op_map.keys()).union(

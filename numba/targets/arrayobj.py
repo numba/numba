@@ -16,9 +16,8 @@ from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
-                                    iternext_impl, struct_factory,
-                                    impl_ret_borrowed, impl_ret_new_ref,
-                                    impl_ret_untracked)
+                                    iternext_impl, impl_ret_borrowed,
+                                    impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
 from . import quicksort, slicing
 
@@ -182,7 +181,6 @@ def update_array_info(aryty, array):
                                           get_itemsize(context, aryty))
 
 
-@struct_factory(types.ArrayIterator)
 def make_arrayiter_cls(iterator_type):
     """
     Return the Structure representation of the given *iterator_type* (an
@@ -1458,7 +1456,6 @@ def array_is(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # builtin `numpy.flat` implementation
 
-@struct_factory(types.NumpyFlatType)
 def make_array_flat_cls(flatiterty):
     """
     Return the Structure representation of the given *flatiterty* (an
@@ -1467,7 +1464,6 @@ def make_array_flat_cls(flatiterty):
     return _make_flattening_iter_cls(flatiterty, 'flat')
 
 
-@struct_factory(types.NumpyNdEnumerateType)
 def make_array_ndenumerate_cls(nditerty):
     """
     Return the Structure representation of the given *nditerty* (an
@@ -1507,7 +1503,6 @@ def _increment_indices_array(context, builder, arrty, arr, indices, end_flag=Non
     _increment_indices(context, builder, arrty.ndim, shape, indices, end_flag)
 
 
-@struct_factory(types.NumpyNdIndexType)
 def make_ndindex_cls(nditerty):
     """
     Return the Structure representation of the given *nditerty* (an

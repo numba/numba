@@ -101,6 +101,35 @@ reduction, accumulation or broadcasting.  Using the example above::
    `Standard features of ufuncs <http://docs.scipy.org/doc/numpy/reference/ufuncs.html#ufunc>`_ (NumPy documentation).
 
 
+The :func:`~numba.vectorize` decorator supports multiple ufunc targets:
+
+=================       ===============================================================
+Target                    Description
+=================       ===============================================================
+cpu                     Single-threaded CPU
+
+
+parallel                Multi-core CPU
+
+
+cuda                    CUDA GPU
+
+                        .. NOTE:: This creates an *ufunc-like* object.  
+			  See `documentation for CUDA ufunc <../cuda/ufunc.html>`_ for detail.
+=================       ===============================================================
+
+A general guideline is to choose different targets for different data sizes
+and algorithms.
+The "cpu" target works well for small data sizes (approx. less than 1KB) and low 
+compute intensity algorithms. It has the least amount of overhead.
+The "parallel" target works well for medium data sizes (approx. less than 1MB).
+Threading adds a small delay.
+The "cuda" target works well for big data sizes (approx. greater than 1MB) and
+high compute intensity algorithms.  Transfering memory to and from the GPU adds
+significant overhead.
+
+
+
 The ``@guvectorize`` decorator
 ==============================
 
