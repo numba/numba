@@ -103,6 +103,18 @@ def np_frombuffer_allocated_dtype(shape):
 def identity_usecase(a, b):
     return (a is b), (a is not b)
 
+def array_nonzero(a):
+    return a.nonzero()
+
+def np_nonzero(a):
+    return np.nonzero(a)
+
+def np_where_1(c):
+    return np.where(c)
+
+def np_where_3(c, x, y):
+    return np.where(c, x, y)
+
 
 class TestArrayMethodsCustom(MemoryLeak, TestCase):
     """
@@ -386,11 +398,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_around_scalar(self):
         self.check_round_scalar(np_around_unary, np_around_binary)
 
-    def check_layout_dependent_func(self, pyfunc):
+    def check_layout_dependent_func(self, pyfunc, fac=np.arange):
         def check_arr(arr):
             cres = compile_isolated(pyfunc, (typeof(arr),))
             self.assertPreciseEqual(cres.entry_point(arr), pyfunc(arr))
-        arr = np.arange(24)
+        arr = fac(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
         check_arr(arr.reshape((3, 8)).T)
@@ -431,6 +443,77 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_np_frombuffer_allocated(self):
         self.check_np_frombuffer_allocated(np_frombuffer_allocated_dtype)
 
+    def check_nonzero(self, pyfunc):
+        def fac(N):
+            np.random.seed(42)
+            arr = np.random.random(N)
+            arr[arr < 0.3] = 0.0
+            arr[arr > 0.7] = float('nan')
+            return arr
+
+        def check_arr(arr):
+            cres = compile_isolated(pyfunc, (typeof(arr),))
+            expected = pyfunc(arr)
+            # NOTE: Numpy 1.9 returns readonly arrays for multidimensional
+            # arrays.  Workaround this by copying the results.
+            expected = [a.copy() for a in expected]
+            self.assertPreciseEqual(cres.entry_point(arr), expected)
+
+        arr = fac(24)
+        check_arr(arr)
+        check_arr(arr.reshape((3, 8)))
+        check_arr(arr.reshape((3, 8)).T)
+        check_arr(arr.reshape((3, 8))[::2])
+        check_arr(arr.reshape((2, 3, 4)))
+        check_arr(arr.reshape((2, 3, 4)).T)
+        check_arr(arr.reshape((2, 3, 4))[::2])
+        for v in (0.0, 1.5, float('nan')):
+            arr = np.array([v]).reshape(())
+            check_arr(arr)
+
+    def test_array_nonzero(self):
+        self.check_nonzero(array_nonzero)
+
+    def test_np_nonzero(self):
+        self.check_nonzero(np_nonzero)
+
+    def test_np_where_1(self):
+        self.check_nonzero(np_where_1)
+
+    def test_np_where_3(self):
+        pyfunc = np_where_3
+        def fac(N):
+            np.random.seed(42)
+            arr = np.random.random(N)
+            arr[arr < 0.3] = 0.0
+            arr[arr > 0.7] = float('nan')
+            return arr
+
+        def check_arr(arr):
+            x = np.zeros_like(arr, dtype=np.float64)
+            y = np.copy(x)
+            x.fill(4)
+            y.fill(9)
+            cres = compile_isolated(pyfunc, (typeof(arr), typeof(x), typeof(y)))
+            expected = pyfunc(arr, x, y)
+            got = cres.entry_point(arr, x, y)
+            # Contiguity of result varies accross Numpy versions, only
+            # check contents.
+            self.assertEqual(got.dtype, expected.dtype)
+            np.testing.assert_array_equal(got, expected)
+
+        arr = fac(24)
+        check_arr(arr)
+        check_arr(arr.reshape((3, 8)))
+        check_arr(arr.reshape((3, 8)).T)
+        check_arr(arr.reshape((3, 8))[::2])
+        check_arr(arr.reshape((2, 3, 4)))
+        check_arr(arr.reshape((2, 3, 4)).T)
+        check_arr(arr.reshape((2, 3, 4))[::2])
+        for v in (0.0, 1.5, float('nan')):
+            arr = np.array([v]).reshape(())
+            check_arr(arr)
+
 
 class TestArrayComparisons(TestCase):
 
@@ -449,6 +532,8 @@ class TestArrayComparisons(TestCase):
         check(arr, arr.view('uint32'), False)
         check(arr, arr.T, False)
         check(arr, arr[:-1], False)
+
+    # Other comparison operators ('==', etc.) are tested in test_ufuncs
 
 
 if __name__ == '__main__':
