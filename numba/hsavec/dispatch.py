@@ -1,7 +1,9 @@
 from __future__ import absolute_import, division, print_function
+
 import numpy as np
-from numba.cuda.deviceufunc import (UFuncMechanism, GenerializedUFunc,
-                                    GUFuncCallSteps)
+
+from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
+                                        GUFuncCallSteps)
 
 
 class HsaUFuncDispatcher(object):
@@ -97,4 +99,3 @@ class HSAGenerializedUFunc(GenerializedUFunc):
     def _broadcast_scalar_input(self, ary, shape):
         return np.lib.stride_tricks.as_strided(ary, shape=(shape,),
                                                strides=(0,))
-

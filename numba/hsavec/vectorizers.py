@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import
 
 from numba import hsa
-from numba.cuda import deviceufunc
+from numba.npyufunc import deviceufunc
 
 from . import dispatch
 
