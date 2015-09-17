@@ -5,7 +5,7 @@ def _initialize_ufunc():
     from numba.npyufunc import Vectorize
 
     def init_vectorize():
-        from numba.hsavec.vectorizers import HsaVectorize
+        from numba.hsa.vectorizers import HsaVectorize
 
         return HsaVectorize
 
@@ -16,7 +16,7 @@ def _initialize_gufunc():
     from numba.npyufunc import GUVectorize
 
     def init_guvectorize():
-        from numba.hsavec.vectorizers import HsaGUFuncVectorize
+        from numba.hsa.vectorizers import HsaGUFuncVectorize
 
         return HsaGUFuncVectorize
 

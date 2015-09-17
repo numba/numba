@@ -4,8 +4,8 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import vectorize
-from numba.hsavec.vectorizers import HsaVectorize
-from numba.hsavec.dispatch import HsaUFuncDispatcher
+from numba.hsa.vectorizers import HsaVectorize
+from numba.hsa.dispatch import HsaUFuncDispatcher
 
 
 def ufunc_add_core(a, b):

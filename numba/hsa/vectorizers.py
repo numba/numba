@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import
 from numba import hsa
 from numba.npyufunc import deviceufunc
 
-from . import dispatch
+from numba.hsa import dispatch
 
 vectorizer_stager_source = '''
 def __vectorized_{name}({args}, __out__):

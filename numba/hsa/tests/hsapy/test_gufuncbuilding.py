@@ -3,8 +3,8 @@ from __future__ import print_function, absolute_import
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba.hsavec.vectorizers import HsaGUFuncVectorize
-from numba.hsavec.dispatch import HSAGenerializedUFunc
+from numba.hsa.vectorizers import HsaGUFuncVectorize
+from numba.hsa.dispatch import HSAGenerializedUFunc
 from numba import guvectorize
 
 
