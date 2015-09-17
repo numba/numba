@@ -78,7 +78,7 @@ Methods
 Methods are regular function that can be bounded to an instance.
 They can be compiled as regular function by numba.
 The operation ``getattr(instance, name)`` (getting an attribute ``name`` from
-``instance``) performs the bounding if the attribute is a method.
+``instance``) binds the instance to the requested method at runtime.
 
 
 The special ``__init__`` method is also handled like regular functions.
@@ -113,8 +113,7 @@ as well as the ordering; for instance::
 
 Allowing user to supply an ordered dictionary will provide the name, ordering
 and types of the attributes.  However, this statically typed semantic is not as
-flexible as the Python semantic which behaves like a generic (or C++ template)
-class.
+flexible as the Python semantic which behaves like a generic class.
 
 Inferring the type of attributes is difficult.  In a previous attempt to
 implement JIT classes, the ``__init__`` method is specialized to capture
@@ -195,12 +194,6 @@ Typing function as static method
 
 .. code-block:: python
 
-    def spec(x, y):
-        dct = OrderedDict()
-        dct['x'] = x
-        dct['y'] = y
-        return dct
-
     @jit(immutable=False)
     class Vec(object):
         @staticmethod
@@ -219,4 +212,9 @@ Typing function as static method
             self.y += dy
 
 
+
+Usage from the Interpreter
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+(todo: to the interpreter, jit-classes are like C-extension-type)
 
