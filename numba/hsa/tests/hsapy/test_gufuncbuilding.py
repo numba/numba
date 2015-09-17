@@ -126,7 +126,7 @@ class TestGUFuncBuilding(unittest.TestCase):
                 self.assertTrue(exp == out[j, i], (exp, out[j, i]))
 
 
-class TestGUFuncDecor(object):
+class TestGUFuncDecor(unittest.TestCase):
     def test_gufunc_decorator(self):
         @guvectorize(["void(float32, float32[:], float32[:], float32[:])"],
                      '(),(t),(t)->(t)', target='hsa')
