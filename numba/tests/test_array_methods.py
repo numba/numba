@@ -496,7 +496,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             y.fill(9)
             cres = compile_isolated(pyfunc, (typeof(arr), typeof(x), typeof(y)))
             expected = pyfunc(arr, x, y)
-            self.assertPreciseEqual(cres.entry_point(arr, x, y), expected)
+            got = cres.entry_point(arr, x, y)
+            # Contiguity of result varies accross Numpy versions, only
+            # check contents.
+            self.assertEqual(got.dtype, expected.dtype)
+            np.testing.assert_array_equal(got, expected)
 
         arr = fac(24)
         check_arr(arr)
