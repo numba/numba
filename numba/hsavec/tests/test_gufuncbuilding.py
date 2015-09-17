@@ -4,6 +4,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.hsavec.vectorizers import HsaGUFuncVectorize
+from numba.hsavec.dispatch import HSAGenerializedUFunc
 from numba import guvectorize
 
 
@@ -18,7 +19,7 @@ class TestGUFuncBuilding(unittest.TestCase):
         ufbldr.add("(float32[:], float32[:], float32[:])")
         ufbldr.add("(intp[:], intp[:], intp[:])")
         ufunc = ufbldr.build_ufunc()
-        print(ufunc)
+        self.assertIsInstance(ufunc, HSAGenerializedUFunc)
 
         # Test integer version
         A = np.arange(100, dtype=np.intp)

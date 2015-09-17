@@ -18,7 +18,7 @@ class TestUFuncBuilding(unittest.TestCase):
         ufbldr.add("float32(float32, float32)")
         ufbldr.add("intp(intp, intp)")
         ufunc = ufbldr.build_ufunc()
-        print(ufunc)
+        self.assertIsInstance(ufunc, HsaUFuncDispatcher)
 
         # Test integer version
         A = np.arange(100, dtype=np.intp)
