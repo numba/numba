@@ -73,6 +73,12 @@ class Hsa_mem_fence(ConcreteTemplate):
     cases = [signature(types.void, types.uint32)]
 
 
+@intrinsic
+class Hsa_wavebarrier(ConcreteTemplate):
+    key = hsa.wavebarrier
+    cases = [signature(types.void)]
+
+
 # hsa.shared submodule -------------------------------------------------------
 
 class Hsa_shared_array(MacroTemplate):
@@ -143,6 +149,9 @@ class HsaModuleTemplate(AttributeTemplate):
 
     def resolve_mem_fence(self, mod):
         return types.Function(Hsa_mem_fence)
+
+    def resolve_wavebarrier(self, mod):
+        return types.Function(Hsa_wavebarrier)
 
     def resolve_shared(self, mod):
         return types.Module(hsa.shared)

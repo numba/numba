@@ -162,6 +162,17 @@ def mem_fence_impl(context, builder, sig, args):
 
 
 @register
+@implement(stubs.wavebarrier)
+def wavebarrier_impl(context, builder, sig, args):
+    assert not args
+    fnty = Type.function(Type.void(), [])
+    fn = builder.module.get_or_insert_function(fnty, name="__hsail_wavebarrier")
+    fn.calling_convention = target.CC_SPIR_FUNC
+    builder.call(fn, [])
+    return _void_value
+
+
+@register
 @implement(stubs.atomic.add, types.Kind(types.Array), types.intp, types.Any)
 @implement(stubs.atomic.add, types.Kind(types.Array),
            types.Kind(types.UniTuple), types.Any)

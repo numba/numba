@@ -13,6 +13,7 @@ from .stubs import (
     barrier,
     mem_fence,
     shared,
+    wavebarrier,
 )
 
 from .decorators import (

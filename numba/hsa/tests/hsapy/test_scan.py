@@ -65,25 +65,32 @@ def warp_scan(tid, temp, inclusive):
     ----
     Assume all threads are in lockstep
     """
+    hsa.wavebarrier()
     lane = tid & (_WARPSIZE - 1)
     if lane >= 1:
         temp[tid] += temp[tid - 1]
 
+    hsa.wavebarrier()
     if lane >= 2:
         temp[tid] += temp[tid - 2]
 
+    hsa.wavebarrier()
     if lane >= 4:
         temp[tid] += temp[tid - 4]
 
+    hsa.wavebarrier()
     if lane >= 8:
         temp[tid] += temp[tid - 8]
 
+    hsa.wavebarrier()
     if lane >= 16:
         temp[tid] += temp[tid - 16]
 
+    hsa.wavebarrier()
     if lane >= 32:
         temp[tid] += temp[tid - 32]
 
+    hsa.wavebarrier()
     if inclusive:
         return temp[tid]
     else:

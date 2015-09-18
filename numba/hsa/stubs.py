@@ -85,6 +85,11 @@ def mem_fence(*args, **kargs):
     raise _stub_error
 
 
+def wavebarrier():
+    """
+    HSAIL wavebarrier
+    """
+    raise _stub_error
 
 
 class Stub(object):
