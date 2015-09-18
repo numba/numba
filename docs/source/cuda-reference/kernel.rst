@@ -159,7 +159,7 @@ are guaranteed to not move across the memory fences by optimization passes.
 
 .. function:: numba.cuda.threadfence
 
-   A memory fence at thread block level
+   A memory fence at device level (within the GPU).
 
 .. function:: numba.cuda.threadfence_block
 
@@ -167,4 +167,4 @@ are guaranteed to not move across the memory fences by optimization passes.
 
 .. function:: numba.cuda.threadfence_system
 
-   A memory fence at thread system level.
+   A memory fence at system level (across GPUs)
