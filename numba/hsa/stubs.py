@@ -54,6 +54,16 @@ def get_work_dim(*args, **kargs):
 def barrier(*args, **kargs):
     """
     OpenCL barrier()
+
+    Example:
+
+        # workgroup barrier + local memory fence
+        hsa.barrier(hsa.CLK_LOCAL_MEM_FENCE)
+        # workgroup barrier + global memory fence
+        hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
+        # workgroup barrier + global memory fence
+        hsa.barrier()
+
     """
     raise NotImplementedError("This is a stub.")
 
@@ -61,6 +71,13 @@ def barrier(*args, **kargs):
 def mem_fence(*args, **kargs):
     """
     OpenCL mem_fence()
+
+    Example:
+
+        # local memory fence
+        hsa.mem_fence(hsa.CLK_LOCAL_MEM_FENCE)
+        # global memory fence
+        hsa.mem_fence(hsa.CLK_GLOBAL_MEM_FENCE)
     """
     raise NotImplementedError("This is a stub.")
 
