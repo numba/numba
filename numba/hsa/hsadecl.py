@@ -63,7 +63,8 @@ class Hsa_get_local_size(ConcreteTemplate):
 @intrinsic
 class Hsa_barrier(ConcreteTemplate):
     key = hsa.barrier
-    cases = [signature(types.void, types.uint32)]
+    cases = [signature(types.void, types.uint32),
+             signature(types.void)]
 
 
 @intrinsic

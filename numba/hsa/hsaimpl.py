@@ -14,6 +14,7 @@ from numba.itanium_mangler import mangle_c, mangle, mangle_type
 from . import target
 from . import stubs
 from . import hlc
+from . import enums
 
 registry = Registry()
 register = registry.register
@@ -131,10 +132,21 @@ def get_local_size_impl(context, builder, sig, args):
 
 @register
 @implement(stubs.barrier, types.uint32)
-def barrier_impl(context, builder, sig, args):
+def barrier_one_arg_impl(context, builder, sig, args):
     [flags] = args
     barrier = _declare_function(context, builder, 'barrier', sig,
                                 ['unsigned int'])
+    builder.call(barrier, [flags])
+    return _void_value
+
+@register
+@implement(stubs.barrier)
+def barrier_no_arg_impl(context, builder, sig, args):
+    assert not args
+    sig = types.void(types.uint32)
+    barrier = _declare_function(context, builder, 'barrier', sig,
+                                ['unsigned int'])
+    flags = context.get_constant(types.uint32, enums.CLK_GLOBAL_MEM_FENCE)
     builder.call(barrier, [flags])
     return _void_value
 

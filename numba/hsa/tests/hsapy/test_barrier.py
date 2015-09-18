@@ -26,6 +26,27 @@ class TestBarrier(unittest.TestCase):
         # The computation is correct?
         np.testing.assert_allclose(orig * 2, arr)
 
+    def test_no_arg_barrier_support(self):
+        @hsa.jit("void(float32[::1])")
+        def twice(A):
+            i = hsa.get_global_id(0)
+            d = A[i]
+            # no argument defaults to global mem fence
+            # which is the same for local in hsail
+            hsa.barrier()
+            A[i] = d * 2
+
+        N = 256
+        arr = np.random.random(N).astype(np.float32)
+        orig = arr.copy()
+
+        twice[2, 128](arr)
+
+        # Assembly contains barrier instruction?
+        self.assertIn("barrier;", twice.assembly)
+        # The computation is correct?
+        np.testing.assert_allclose(orig * 2, arr)
+
     def test_local_memory(self):
         blocksize = 10
 
