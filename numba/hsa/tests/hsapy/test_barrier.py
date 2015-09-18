@@ -12,7 +12,7 @@ class TestBarrier(unittest.TestCase):
         def twice(A):
             i = hsa.get_global_id(0)
             d = A[i]
-            hsa.barrier(1)  # local mem fence
+            hsa.barrier(hsa.CLK_LOCAL_MEM_FENCE)  # local mem fence
             A[i] = d * 2
 
         N = 256
@@ -37,7 +37,7 @@ class TestBarrier(unittest.TestCase):
             # preload
             sm[i] = A[i]
             # barrier
-            hsa.barrier(1)  # local mem fence
+            hsa.barrier(hsa.CLK_LOCAL_MEM_FENCE)  # local mem fence
             # write
             A[i] += sm[blocksize - 1 - i]
 

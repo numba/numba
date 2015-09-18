@@ -19,7 +19,7 @@ def device_scan_generic(tid, data):
     offset = 1
     d = n // 2
     while d > 0:
-        hsa.barrier(1)
+        hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
         if tid < d:
             ai = offset * (2 * tid + 1) - 1
             bi = offset * (2 * tid + 2) - 1
@@ -28,9 +28,9 @@ def device_scan_generic(tid, data):
         offset *= 2
         d //= 2
 
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
     prefixsum = data[n - 1]
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
     if tid == 0:
         data[n - 1] = 0
 
@@ -39,7 +39,7 @@ def device_scan_generic(tid, data):
     offset = n
     while d < n:
         offset //= 2
-        hsa.barrier(1)
+        hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
         if tid < d:
             ai = offset * (2 * tid + 1) - 1
             bi = offset * (2 * tid + 2) - 1
@@ -50,7 +50,7 @@ def device_scan_generic(tid, data):
 
         d *= 2
 
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
     return prefixsum
 
 
@@ -106,26 +106,26 @@ def device_scan(tid, data, temp, inclusive):
 
     # Preload
     temp[tid] = data
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
 
     # Scan warps in parallel
     warp_scan_res = warp_scan(tid, temp, inclusive)
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
 
     # Get parital result
     if lane == (_WARPSIZE - 1):
         temp[warpid] = temp[tid]
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
 
     # Scan the partial results
     if warpid == 0:
         warp_scan(tid, temp, True)
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
 
     # Accumlate scanned partial results
     if warpid > 0:
         warp_scan_res += temp[warpid - 1]
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
 
     # Output
     if tid == temp.size - 1:
@@ -135,11 +135,11 @@ def device_scan(tid, data, temp, inclusive):
         else:
             temp[0] = warp_scan_res + data
 
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
 
     # Load prefixsum
     prefixsum = temp[0]
-    hsa.barrier(1)
+    hsa.barrier(hsa.CLK_GLOBAL_MEM_FENCE)
 
     return warp_scan_res, prefixsum
 
