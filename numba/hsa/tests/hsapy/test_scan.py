@@ -151,6 +151,14 @@ def device_scan(tid, data, temp, inclusive):
     return warp_scan_res, prefixsum
 
 
+@hsa.jit(device=True)
+def shuffle_up(val):
+    tid = hsa.get_local_id(0)
+    hsa.wavebarrier()
+    res = hsa.activelanepermute_wavewidth(val, tid - 1, 0, False)
+    return res
+
+
 class TestScan(unittest.TestCase):
     def test_single_block(self):
 
@@ -317,6 +325,24 @@ class TestShuffleScan(unittest.TestCase):
             out = np.zeros_like(inp)
             foo[1, 64](inp, mask, out)
             np.testing.assert_equal(inp[mask], out)
+
+    def test_shuffle_up(self):
+        @hsa.jit
+        def foo(inp, out):
+            gid = hsa.get_global_id(0)
+            out[gid] = shuffle_up(inp[gid])
+
+        inp = np.arange(128, dtype=np.intp)
+        out = np.zeros_like(inp)
+        foo[1, 128](inp, out)
+
+        inp = inp.reshape(2, 64)
+        out = out.reshape(inp.shape)
+
+        for i in range(out.shape[0]):
+            np.testing.assert_equal(inp[0, :-1], out[0, 1:])
+            np.testing.assert_equal(inp[0, -1], out[0, 0])
+
 
 
 if __name__ == '__main__':
