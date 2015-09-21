@@ -152,11 +152,50 @@ def device_scan(tid, data, temp, inclusive):
 
 
 @hsa.jit(device=True)
-def shuffle_up(val):
+def shuffle_up(val, width):
     tid = hsa.get_local_id(0)
     hsa.wavebarrier()
-    res = hsa.activelanepermute_wavewidth(val, tid - 1, 0, False)
+    res = hsa.activelanepermute_wavewidth(val, tid - width, 0, False)
     return res
+
+
+@hsa.jit(device=True)
+def shuf_wave_inclusive_scan(val):
+    tid = hsa.get_local_id(0)
+    lane = tid & (_WARPSIZE - 1)
+
+    hsa.wavebarrier()
+    shuf = shuffle_up(val, 1)
+    if lane >= 1:
+        val += shuf
+
+    hsa.wavebarrier()
+    shuf = shuffle_up(val, 2)
+    if lane >= 2:
+        val += shuf
+
+    hsa.wavebarrier()
+    shuf = shuffle_up(val, 4)
+    if lane >= 4:
+        val += shuf
+
+    hsa.wavebarrier()
+    shuf = shuffle_up(val, 8)
+    if lane >= 8:
+        val += shuf
+
+    hsa.wavebarrier()
+    shuf = shuffle_up(val, 16)
+    if lane >= 16:
+        val += shuf
+
+    hsa.wavebarrier()
+    shuf = shuffle_up(val, 32)
+    if lane >= 32:
+        val += shuf
+
+    hsa.wavebarrier()
+    return val
 
 
 class TestScan(unittest.TestCase):
@@ -330,7 +369,7 @@ class TestShuffleScan(unittest.TestCase):
         @hsa.jit
         def foo(inp, out):
             gid = hsa.get_global_id(0)
-            out[gid] = shuffle_up(inp[gid])
+            out[gid] = shuffle_up(inp[gid], 1)
 
         inp = np.arange(128, dtype=np.intp)
         out = np.zeros_like(inp)
@@ -343,6 +382,16 @@ class TestShuffleScan(unittest.TestCase):
             np.testing.assert_equal(inp[0, :-1], out[0, 1:])
             np.testing.assert_equal(inp[0, -1], out[0, 0])
 
+    def test_shuf_wave_inclusive_scan(self):
+        @hsa.jit
+        def foo(inp, out):
+            gid = hsa.get_global_id(0)
+            out[gid] = shuf_wave_inclusive_scan(inp[gid])
+
+        inp = np.arange(64, dtype=np.intp)
+        out = np.zeros_like(inp)
+        foo[1, 64](inp, out)
+        np.testing.assert_equal(out, inp.cumsum())
 
 
 if __name__ == '__main__':
