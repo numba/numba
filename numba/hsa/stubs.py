@@ -92,6 +92,14 @@ def wavebarrier():
     raise _stub_error
 
 
+def activelanepermute_wavewidth(src, laneid, identity, useidentity):
+    """
+    HSAIL activelanepermute_wavewidth_*
+    """
+    raise _stub_error
+
+
+
 class Stub(object):
     """A stub object to represent special objects which is meaningless
     outside the context of HSA-python.

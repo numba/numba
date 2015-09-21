@@ -303,5 +303,21 @@ class TestFasterScan(unittest.TestCase):
             self.assertEqual(0, data[0])
 
 
+class TestShuffleScan(unittest.TestCase):
+    def test_shuffle(self):
+        @hsa.jit
+        def foo(inp, mask, out):
+            tid = hsa.get_local_id(0)
+            out[tid] = hsa.activelanepermute_wavewidth(inp[tid], mask[tid], 0,
+                                                       False)
+
+        inp = np.arange(64, dtype=np.intp)
+        for i in range(10):
+            mask = np.random.randint(0, inp.size, inp.size).astype(np.uint32)
+            out = np.zeros_like(inp)
+            foo[1, 64](inp, mask, out)
+            np.testing.assert_equal(inp[mask], out)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -78,6 +78,19 @@ class Hsa_wavebarrier(ConcreteTemplate):
     key = hsa.wavebarrier
     cases = [signature(types.void)]
 
+@intrinsic
+class Hsa_activelanepermute_wavewidth(ConcreteTemplate):
+    key = hsa.activelanepermute_wavewidth
+    # parameter: src, laneid, identity, useidentity
+    cases = [signature(types.uint64,
+                       types.uint64, types.uint32, types.uint64, types.bool_),
+             signature(types.int64,
+                       types.int64, types.uint32, types.int64, types.bool_),
+             signature(types.uint32,
+                       types.uint32, types.uint32, types.uint32, types.bool_),
+             signature(types.int32,
+                       types.int32, types.uint32, types.int32, types.bool_),]
+
 
 # hsa.shared submodule -------------------------------------------------------
 
@@ -152,6 +165,9 @@ class HsaModuleTemplate(AttributeTemplate):
 
     def resolve_wavebarrier(self, mod):
         return types.Function(Hsa_wavebarrier)
+
+    def resolve_activelanepermute_wavewidth(self, mod):
+        return types.Function(Hsa_activelanepermute_wavewidth)
 
     def resolve_shared(self, mod):
         return types.Module(hsa.shared)

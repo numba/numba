@@ -14,6 +14,7 @@ from .stubs import (
     mem_fence,
     shared,
     wavebarrier,
+    activelanepermute_wavewidth,
 )
 
 from .decorators import (

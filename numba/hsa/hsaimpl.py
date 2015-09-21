@@ -171,6 +171,24 @@ def wavebarrier_impl(context, builder, sig, args):
     builder.call(fn, [])
     return _void_value
 
+@register
+@implement(stubs.activelanepermute_wavewidth,
+           types.Any, types.uint32, types.Any, types.bool_)
+def activelanepermute_wavewidth_impl(context, builder, sig, args):
+    [src, laneid, identity, use_ident] = args
+
+    elem_type = sig.args[0]
+    bitwidth = elem_type.bitwidth
+    intbitwidth = Type.int(bitwidth)
+    i32 = Type.int(32)
+    i1 = Type.int(1)
+    name = "__hsail_activelanepermute_wavewidth_b{0}".format(bitwidth)
+
+    fnty = Type.function(intbitwidth, [intbitwidth, i32, intbitwidth, i1])
+    fn = builder.module.get_or_insert_function(fnty, name=name)
+    fn.calling_convention = target.CC_SPIR_FUNC
+    return builder.call(fn, [src, laneid, identity, use_ident])
+
 
 @register
 @implement(stubs.atomic.add, types.Kind(types.Array), types.intp, types.Any)
