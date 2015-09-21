@@ -198,6 +198,45 @@ def shuf_wave_inclusive_scan(val):
     return val
 
 
+@hsa.jit(device=True)
+def shuf_device_inclusive_scan(data, temp):
+    """
+    Args
+    ----
+    data: scalar
+        input for tid
+    temp: shared memory for temporary work, requires at least
+    threadcount/wavesize storage
+    """
+    tid = hsa.get_local_id(0)
+    lane = tid & (_WARPSIZE - 1)
+    warpid = tid >> 6
+
+    # Scan warps in parallel
+    warp_scan_res = shuf_wave_inclusive_scan(data)
+
+    hsa.barrier()
+
+    # Store partial sum into shared memory
+    if lane == (_WARPSIZE - 1):
+        temp[warpid] = warp_scan_res
+
+    hsa.barrier()
+
+    # Scan the partial sum by first wave
+    if warpid == 0:
+        shuf_wave_inclusive_scan(temp[lane])
+
+    hsa.barrier()
+
+    # Get block sum for each wave
+    blocksum = 0    # first wave is 0
+    if warpid > 0:
+        blocksum = temp[warpid - 1]
+
+    return warp_scan_res + blocksum
+
+
 class TestScan(unittest.TestCase):
     def test_single_block(self):
 
@@ -393,6 +432,18 @@ class TestShuffleScan(unittest.TestCase):
         foo[1, 64](inp, out)
         np.testing.assert_equal(out, inp.cumsum())
 
+    def test_shuf_device_inclusive_scan(self):
+        @hsa.jit
+        def foo(inp, out):
+            gid = hsa.get_global_id(0)
+            temp = hsa.shared.array(2, dtype=intp)
+            out[gid] = shuf_device_inclusive_scan(inp[gid], temp)
+
+        inp = np.arange(128, dtype=np.intp)
+        out = np.zeros_like(inp)
+
+        foo[1, inp.size](inp, out)
+        np.testing.assert_equal(out, np.cumsum(inp))
 
 if __name__ == '__main__':
     unittest.main()
