@@ -234,8 +234,10 @@ class BaseContext(object):
         Register type *gty* for value *gv*.  Only a weak reference
         to *gv* is kept, if possible.
         """
-        def on_disposal(wr):
-            self._globals.pop(wr)
+        def on_disposal(wr, pop=self._globals.pop):
+            # pop() is pre-looked up to avoid a crash late at shutdown on 3.5
+            # (https://bugs.python.org/issue25217)
+            pop(wr)
         try:
             gv = weakref.ref(gv, on_disposal)
         except TypeError:
