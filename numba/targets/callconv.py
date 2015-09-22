@@ -111,7 +111,9 @@ class BaseCallConv(object):
         bbend = builder.function.append_basic_block()
 
         with builder.if_then(status.is_user_exc):
-            # Serialized user exception
+            # Unserialize user exception.
+            # Make sure another error may not interfere.
+            api.err_clear()
             exc = api.unserialize(status.excinfoptr)
             with cgutils.if_likely(builder,
                                    cgutils.is_not_null(builder, exc)):
@@ -123,7 +125,7 @@ class BaseCallConv(object):
             builder.branch(bbend)
 
         with builder.if_then(status.is_python_exc):
-            # Error already raised
+            # Error already raised => nothing to do
             builder.branch(bbend)
 
         api.err_set_string("PyExc_SystemError",
