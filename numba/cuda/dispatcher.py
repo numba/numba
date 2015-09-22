@@ -1,12 +1,15 @@
 from __future__ import absolute_import, print_function
+
+import numpy as np
+
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba import cuda
 from numba.cuda import jit, autojit
 from numba.cuda.cudadrv import devicearray
-from numba.cuda.deviceufunc import (UFuncMechanism, GenerializedUFunc,
-                                    GUFuncCallSteps)
-import numpy as np
+from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
+                                        GUFuncCallSteps)
+
 
 class CUDATargetOptions(TargetOptions):
     OPTIONS = {}

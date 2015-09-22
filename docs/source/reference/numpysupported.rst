@@ -118,6 +118,7 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.max`
 * :meth:`~numpy.ndarray.mean`
 * :meth:`~numpy.ndarray.min`
+* :meth:`~numpy.ndarray.nonzero`
 * :meth:`~numpy.ndarray.prod`
 * :meth:`~numpy.ndarray.std`
 * :meth:`~numpy.ndarray.sum`
@@ -162,6 +163,7 @@ The following top-level functions are supported:
 * :func:`numpy.ones_like`
 * :func:`numpy.round_`
 * :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.where`
 * :func:`numpy.zeros`
 * :func:`numpy.zeros_like`
 

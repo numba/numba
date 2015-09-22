@@ -546,7 +546,7 @@ class Generator(SimpleIteratorType):
         return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
 
 
-class NumpyFlatType(SimpleIteratorType, Sequence):
+class NumpyFlatType(SimpleIteratorType, MutableSequence):
     """
     Type class for `ndarray.flat()` objects.
     """

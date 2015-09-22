@@ -159,6 +159,15 @@ class ArrayAttribute(AttributeTemplate):
         retty = ary.copy(layout="C")
         return signature(retty)
 
+    @bound_function("array.nonzero")
+    def resolve_nonzero(self, ary, args, kws):
+        assert not args
+        assert not kws
+        # 0-dim arrays return one result array
+        ndim = max(ary.ndim, 1)
+        retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
+        return signature(retty)
+
     @bound_function("array.reshape")
     def resolve_reshape(self, ary, args, kws):
         assert not kws

@@ -354,12 +354,12 @@ class Numpy_method_redirection(AbstractTemplate):
 # Function to glue attributes onto the numpy-esque object
 def _numpy_redirect(fname):
     numpy_function = getattr(numpy, fname)
-    cls = type("Numpy_reduce_{0}".format(fname), (Numpy_method_redirection,),
+    cls = type("Numpy_redirect_{0}".format(fname), (Numpy_method_redirection,),
                dict(key=numpy_function, method_name=fname))
     builtin_global(numpy_function, types.Function(cls))
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'median', 'var', 'std',
-             'cumsum', 'cumprod', 'argmin', 'argmax']:
+             'cumsum', 'cumprod', 'argmin', 'argmax', 'nonzero']:
     _numpy_redirect(func)
 
 
@@ -725,5 +725,30 @@ class Round(AbstractTemplate):
 
 builtin_global(numpy.round, types.Function(Round))
 builtin_global(numpy.around, types.Function(Round))
+
+
+@builtin
+class Where(AbstractTemplate):
+    key = numpy.where
+
+    def generic(self, args, kws):
+        assert not kws
+
+        if len(args) == 1:
+            # np.where(cond) is the same as np.nonzero(cond)
+            ary = args[0]
+            ndim = max(ary.ndim, 1)
+            retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
+            return signature(retty, ary)
+
+        elif len(args) == 3:
+            cond, x, y = args
+            if (cond.ndim == x.ndim == y.ndim and
+                x.dtype == y.dtype):
+                retty = types.Array(x.dtype, x.ndim, x.layout)
+                return signature(retty, *args)
+
+builtin_global(numpy.where, types.Function(Where))
+
 
 builtin_global(numpy, types.Module(numpy))
