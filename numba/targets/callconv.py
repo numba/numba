@@ -104,6 +104,34 @@ class BaseCallConv(object):
     def _get_call_helper(self, builder):
         return builder.__call_helper
 
+    def raise_error(self, builder, api, status):
+        """
+        Given a non-ok *status*, raise the corresponding Python exception.
+        """
+        bbend = builder.function.append_basic_block()
+
+        with builder.if_then(status.is_user_exc):
+            # Serialized user exception
+            exc = api.unserialize(status.excinfoptr)
+            with cgutils.if_likely(builder,
+                                   cgutils.is_not_null(builder, exc)):
+                api.raise_object(exc)  # steals ref
+            builder.branch(bbend)
+
+        with builder.if_then(status.is_stop_iteration):
+            api.err_set_none("PyExc_StopIteration")
+            builder.branch(bbend)
+
+        with builder.if_then(status.is_python_exc):
+            # Error already raised
+            builder.branch(bbend)
+
+        api.err_set_string("PyExc_SystemError",
+                           "unknown error when calling native function")
+        builder.branch(bbend)
+
+        builder.position_at_end(bbend)
+
 
 class MinimalCallConv(BaseCallConv):
     """
