@@ -45,14 +45,6 @@ class MyException(Exception):
     pass
 
 
-def raise_inner():
-    raise MyException("I'm here")
-
-def uerror(x):
-    if x == 2:
-        raise_inner()
-    return x + 1
-
 def guerror(a, b, c):
     raise MyException
 
