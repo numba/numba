@@ -48,6 +48,9 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
     with pyapi.err_push(keep_new=True):
         status, retval = context.call_conv.call_function(builder, func, types.pyobject,
                                                          _objargs, elems, env=env)
+        # Release owned reference to arguments
+        for elem in elems:
+            pyapi.decref(elem)
     # NOTE: if an error occurred, it will be caught by the Numpy machinery
 
     # Store
