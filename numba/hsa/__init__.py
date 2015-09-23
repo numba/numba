@@ -5,7 +5,7 @@ from __future__ import print_function, absolute_import, division
 
 from .api import *
 from .stubs import atomic
-
+from . import initialize
 
 def is_available():
     """Returns a boolean to indicate the availability of a HSA runtime.

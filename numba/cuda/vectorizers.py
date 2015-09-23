@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import
 
 from numba import cuda
-from . import deviceufunc
+from numba.npyufunc import deviceufunc
 from . import dispatcher
 
 vectorizer_stager_source = '''
