@@ -693,11 +693,21 @@ class TestIndexing(TestCase):
         cr = compile_isolated(pyfunc, argtys, flags=flags)
         cfunc = cr.entry_point
 
-        arg = np.arange(10, dtype='i4')
-        for test in ((0, 10, 1), (2,3,1), (10,0,1), (0,10,-1), (0,10,2)):
-            pyleft = pyfunc(np.zeros_like(arg), arg[slice(*test)], *test)
-            cleft = cfunc(np.zeros_like(arg), arg[slice(*test)], *test)
-            self.assertTrue((pyleft == cleft).all())
+        N = 10
+        arg = np.arange(N, dtype='i4') + 40
+        bounds = [0, 2, N - 2, N, N + 1, N + 3,
+                  -2, -N + 2, -N, -N - 1, -N - 3]
+        for start, stop in itertools.product(bounds, bounds):
+            for step in (1, 2, -1, -2):
+                args = start, stop, step
+                index = slice(*args)
+                pyleft = pyfunc(np.zeros_like(arg), arg[index], *args)
+                cleft = cfunc(np.zeros_like(arg), arg[index], *args)
+                self.assertPreciseEqual(pyleft, cleft)
+
+        # Mismatching input size and slice length
+        with self.assertRaises(ValueError):
+            cfunc(np.zeros_like(arg), arg, 0, 0, 1)
 
     def test_1d_slicing_add(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase_add
@@ -713,16 +723,10 @@ class TestIndexing(TestCase):
             self.assertTrue((pyleft == cleft).all())
 
     def test_1d_slicing_set_npm(self):
-        """
-        TypingError: Cannot resolve setitem: array(int32, 1d, C)[slice3_type] = ...
-        setitem on slices not yet supported.
-        """
-        with self.assertTypingError():
-            self.test_1d_slicing_set(flags=Noflags)
+        self.test_1d_slicing_set(flags=Noflags)
 
     def test_1d_slicing_add_npm(self):
-        with self.assertTypingError():
-            self.test_1d_slicing_add(flags=Noflags)
+        self.test_1d_slicing_add(flags=Noflags)
 
     def test_2d_slicing_set(self, flags=enable_pyobj_flags):
         pyfunc = slicing_2d_usecase_set

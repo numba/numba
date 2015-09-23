@@ -214,6 +214,9 @@ def getiter_array(context, builder, sig, args):
 
 
 def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
+    """
+    Look up and return an element from a 1D array.
+    """
     ptr = cgutils.get_item_pointer(builder, arrayty, array, [idx],
                                    wraparound=wraparound)
     return load_item(context, builder, arrayty, ptr)
@@ -430,75 +433,47 @@ def setitem_array_tuple(context, builder, sig, args):
 def setitem_array1d_slice(context, builder, sig, args):
     aryty, idxty, valty = sig.args
     ary, idx, val = args
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
+
+    ary = make_array(aryty)(context, builder, ary)
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
+
     slicestruct = slicing.Slice(context, builder, value=idx)
+    cgutils.guard_invalid_slice(context, builder, slicestruct)
+    slicing.fix_slice(builder, slicestruct, shapes[0])
 
-    # the logic here follows that of Python's Objects/sliceobject.c
-    # in particular PySlice_GetIndicesEx function
-    ZERO = Constant.int(slicestruct.step.type, 0)
-    NEG_ONE = Constant.int(slicestruct.start.type, -1)
+    if isinstance(valty, types.Buffer):
+        # Input is an array => it must have the right size
+        # (for N-D assignment, we would check the entire shape)
+        valary = make_array(valty)(context, builder, val)
 
-    b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
-    # bail if step is 0
-    with builder.if_then(b_step_eq_zero):
-        context.call_conv.return_user_exc(builder, ValueError,
-                                          ("slice step cannot be zero",))
+        input_len = valary.nitems
+        slice_len = slicing.get_slice_length(builder, slicestruct)
+        with builder.if_then(builder.icmp_signed('!=', slice_len, input_len),
+                             likely=False):
+            msg = "cannot assign slice from input of different size"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-    # adjust for negative indices for start
-    start = cgutils.alloca_once_value(builder, slicestruct.start)
-    b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
-    with builder.if_then(b_start_lt_zero):
-        add = builder.add(builder.load(start), shapes[0])
-        builder.store(add, start)
+        def getitem(idx):
+            return _getitem_array1d(context, builder, valty, valary, idx,
+                                    wraparound=False)
+    else:
+        # Input is a scalar => broadcast it over the output slice
+        def getitem(idx):
+            return val
 
-    b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
-    with builder.if_then(b_start_lt_zero):
-        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
-        cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
-        builder.store(cond, start)
-
-    b_start_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(start), shapes[0])
-    ONE = Constant.int(shapes[0].type, 1)
-    with builder.if_then(b_start_geq_len):
-        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
-        cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
-        builder.store(cond, start)
-
-    # adjust stop for negative value
-    stop = cgutils.alloca_once_value(builder, slicestruct.stop)
-    b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
-    with builder.if_then(b_stop_lt_zero):
-        add = builder.add(builder.load(stop), shapes[0])
-        builder.store(add, stop)
-
-    b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
-    with builder.if_then(b_stop_lt_zero):
-        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
-        cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
-        builder.store(cond, start)
-
-    b_stop_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(stop), shapes[0])
-    ONE = Constant.int(shapes[0].type, 1)
-    with builder.if_then(b_stop_geq_len):
-        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
-        cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
-        builder.store(cond, stop)
-
-    with cgutils.for_range_slice_generic(builder, builder.load(start),
-                                         builder.load(stop),
+    with cgutils.for_range_slice_generic(builder, slicestruct.start,
+                                         slicestruct.stop,
                                          slicestruct.step) as (pos_range, neg_range):
-        with pos_range as (loop_idx1, _):
+        with pos_range as (loop_idx, loop_count):
             ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                [loop_idx1],
-                                wraparound=True)
-            store_item(context, builder, aryty, val, ptr)
-        with neg_range as (loop_idx2, _):
+                                           [loop_idx], wraparound=False)
+            item = getitem(loop_count)
+            store_item(context, builder, aryty, item, ptr)
+        with neg_range as (loop_idx, loop_count):
             ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                [loop_idx2],
-                                wraparound=True)
-            store_item(context, builder, aryty, val, ptr)
+                                           [loop_idx], wraparound=False)
+            item = getitem(loop_count)
+            store_item(context, builder, aryty, item, ptr)
 
 
 @builtin
