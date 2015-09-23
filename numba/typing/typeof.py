@@ -107,7 +107,7 @@ def _typeof_none(val, c):
     return types.none
 
 @typeof_impl.register(type(Ellipsis))
-def _typeof_none(val, c):
+def _typeof_ellipsis(val, c):
     return types.ellipsis
 
 @typeof_impl.register(tuple)

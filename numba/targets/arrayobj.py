@@ -117,7 +117,7 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     Helper function for populating array structures.
     This avoids forgetting to set fields.
 
-    *shape* and *strides* get be Python tuples or LLVM arrays.
+    *shape* and *strides* can be Python tuples or LLVM arrays.
     """
     context = array._context
     builder = array._builder
@@ -260,7 +260,7 @@ def iternext_array(context, builder, sig, args, result):
 
 def basic_indexing(context, builder, aryty, ary, index_types, indices):
     """
-    Perform basic indexing on the given indexing.
+    Perform basic indexing on the given array.
     A (data pointer, shapes, strides) tuple is returned describing
     the corresponding view.
     """
@@ -420,9 +420,7 @@ def setitem_array1d(context, builder, sig, args):
     """
     aryty, idxty, valty = sig.args
     ary, idx, val = args
-
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
+    ary = make_array(aryty)(context, builder, ary)
 
     ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
                                    wraparound=idxty.signed)
