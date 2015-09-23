@@ -145,6 +145,10 @@ class ValueTypingTestBase(object):
         f = func
         # Standard Python types get inferred by numpy
         self.assertIn(f(1), (types.int32, types.int64))
+        self.assertIn(f(2**31 - 1), (types.int32, types.int64))
+        self.assertIn(f(-2**31), (types.int32, types.int64))
+        self.assertIs(f(2**63 - 1), types.int64)
+        self.assertIs(f(-2**63), types.int64)
         self.assertIs(f(1.0), types.float64)
         self.assertIs(f(1.0j), types.complex128)
         self.assertIs(f(True), types.bool_)

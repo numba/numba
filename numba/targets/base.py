@@ -155,6 +155,9 @@ class BaseContext(object):
     # PYCC
     aot_mode = False
 
+    # Error model for various operations (only FP exceptions currently)
+    error_model = None
+
     def __init__(self, typing_context):
         _load_global_helpers()
         self.address_size = utils.MACHINE_BITS
