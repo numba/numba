@@ -82,15 +82,8 @@ class Hsa_wavebarrier(ConcreteTemplate):
 class Hsa_activelanepermute_wavewidth(ConcreteTemplate):
     key = hsa.activelanepermute_wavewidth
     # parameter: src, laneid, identity, useidentity
-    cases = [signature(types.uint64,
-                       types.uint64, types.uint32, types.uint64, types.bool_),
-             signature(types.int64,
-                       types.int64, types.uint32, types.int64, types.bool_),
-             signature(types.uint32,
-                       types.uint32, types.uint32, types.uint32, types.bool_),
-             signature(types.int32,
-                       types.int32, types.uint32, types.int32, types.bool_),]
-
+    cases = [signature(ty, ty, types.uint32, ty, types.bool_)
+             for ty in (types.integer_domain|types.real_domain)]
 
 # hsa.shared submodule -------------------------------------------------------
 

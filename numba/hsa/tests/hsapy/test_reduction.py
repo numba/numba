@@ -53,6 +53,21 @@ class TestReduction(unittest.TestCase):
     def test_wave_reduce_int32(self):
         self.template_wave_reduce_int(np.int32)
 
+    def template_wave_reduce_real(self, dtype):
+        numblk = 2
+        inp = np.linspace(0, 1, numblk * WAVESIZE).astype(dtype)
+        out = np.zeros_like(inp)
+        kernel_warp_reduce[numblk, WAVESIZE](inp, out)
+
+        np.testing.assert_allclose(out[:WAVESIZE], inp[:WAVESIZE].sum())
+        np.testing.assert_allclose(out[WAVESIZE:], inp[WAVESIZE:].sum())
+
+    def test_wave_reduce_float64(self):
+        self.template_wave_reduce_real(np.float64)
+
+    def test_wave_reduce_float32(self):
+        self.template_wave_reduce_real(np.float32)
+
 
 if __name__ == '__main__':
     unittest.main()
