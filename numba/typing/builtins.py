@@ -429,27 +429,6 @@ def normalize_1d_index(index):
     elif isinstance(index, types.Integer):
         return types.intp if index.signed else types.uintp
 
-def normalize_nd_index(index):
-    """
-    Normalize the *index* type (an integer, slice or tuple thereof) for
-    indexing a N-D sequence.
-    """
-    if isinstance(index, types.UniTuple):
-        if index.dtype in types.integer_domain:
-            idxtype = types.intp if index.dtype.signed else types.uintp
-            return types.UniTuple(idxtype, len(index))
-        elif index.dtype == types.slice3_type:
-            return index
-
-    elif isinstance(index, types.Tuple):
-        for ty in index:
-            if (ty not in types.integer_domain and ty != types.slice3_type):
-                raise TypeError('Type %s of index %s is unsupported for indexing'
-                                 % (ty, index))
-        return index
-
-    return normalize_1d_index(index)
-
 
 @builtin
 class GetItemCPointer(AbstractTemplate):

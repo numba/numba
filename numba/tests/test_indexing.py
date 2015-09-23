@@ -7,7 +7,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils, njit, errors
+from numba import types, utils, njit, errors, typeof
 from numba.tests import usecases
 from .support import TestCase
 
@@ -95,8 +95,14 @@ def integer_indexing_2d_usecase(a, i1, i2):
 def integer_indexing_2d_usecase2(a, i1, i2):
     return a[i1][i2]
 
-def ellipse_usecase(a):
-    return a[...,0]
+def ellipsis_usecase1(a, i, j):
+    return a[i:j, ...]
+
+def ellipsis_usecase2(a, i, j):
+    return a[..., i:j]
+
+def ellipsis_usecase3(a, i, j):
+    return a[i, ..., j]
 
 def none_index_usecase(a):
     return a[None]
@@ -593,19 +599,39 @@ class TestIndexing(TestCase):
         arraytype = types.Array(types.int32, 2, 'A')
         check(a, arraytype)
 
-    def test_ellipse(self, flags=enable_pyobj_flags):
-        pyfunc = ellipse_usecase
-        arraytype = types.Array(types.int32, 2, 'C')
-        # TODO should be enable to handle this in NoPython mode
-        cr = compile_isolated(pyfunc, (arraytype,), flags=flags)
-        cfunc = cr.entry_point
+    def check_ellipsis(self, pyfunc, flags):
+        def compile_func(arr):
+            cr = compile_isolated(pyfunc, (typeof(arr), types.intp, types.intp),
+                                  flags=flags)
+            return cr.entry_point
 
-        a = np.arange(100, dtype='i4').reshape(10, 10)
-        self.assertTrue((pyfunc(a) == cfunc(a)).all())
+        def run(a):
+            bounds = (0, 1, 2, -1, -2)
+            cfunc = compile_func(a)
+            for i, j in itertools.product(bounds, bounds):
+                x = cfunc(a, i, j)
+                self.assertPreciseEqual(pyfunc(a, i, j), cfunc(a, i, j))
 
-    def test_ellipse_npm(self):
-        with self.assertTypingError():
-            self.test_ellipse(flags=Noflags)
+        run(np.arange(16, dtype='i4').reshape(4, 4))
+        run(np.arange(27, dtype='i4').reshape(3, 3, 3))
+
+    def test_ellipsis1(self, flags=enable_pyobj_flags):
+        self.check_ellipsis(ellipsis_usecase1, flags)
+
+    def test_ellipsis1_npm(self):
+        self.test_ellipsis1(flags=Noflags)
+
+    def test_ellipsis2(self, flags=enable_pyobj_flags):
+        self.check_ellipsis(ellipsis_usecase2, flags)
+
+    def test_ellipsis2_npm(self):
+        self.test_ellipsis2(flags=Noflags)
+
+    def test_ellipsis3(self, flags=enable_pyobj_flags):
+        self.check_ellipsis(ellipsis_usecase3, flags)
+
+    def test_ellipsis3_npm(self):
+        self.test_ellipsis3(flags=Noflags)
 
     def test_none_index(self, flags=enable_pyobj_flags):
         pyfunc = none_index_usecase

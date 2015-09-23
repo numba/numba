@@ -159,8 +159,8 @@ class _StructProxy(object):
                                                     value,
                                                     ptr.type.pointee.addrspace)
             else:
-                raise TypeError("Invalid store {value.type} {"
-                                "ptr.type.pointee} in "
+                raise TypeError("Invalid store of {value.type} to "
+                                "{ptr.type.pointee} in "
                                 "{self._datamodel}".format(value=value,
                                                            ptr=ptr,
                                                            self=self))

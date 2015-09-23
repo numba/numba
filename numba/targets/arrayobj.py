@@ -116,6 +116,8 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     """
     Helper function for populating array structures.
     This avoids forgetting to set fields.
+
+    *shape* and *strides* get be Python tuples or LLVM arrays.
     """
     context = array._context
     builder = array._builder
@@ -125,6 +127,12 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     if meminfo is None:
         meminfo = Constant.null(context.get_value_type(
             datamodel.get_type('meminfo')))
+
+    intp_t = context.get_value_type(types.intp)
+    if isinstance(shape, (tuple, list)):
+        shape = cgutils.pack_array(builder, shape, intp_t)
+    if isinstance(strides, (tuple, list)):
+        strides = cgutils.pack_array(builder, strides, intp_t)
 
     attrs = dict(shape=shape,
                  strides=strides,
@@ -256,7 +264,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
     A (data pointer, shapes, strides) tuple is returned describing
     the corresponding view.
     """
-    assert len(indices) <= aryty.ndim
+    zero = context.get_constant(types.intp, 0)
 
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
     strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
@@ -265,7 +273,18 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
     output_shapes = []
     output_strides = []
 
-    for ax, (indexval, idxty) in enumerate(zip(indices, index_types)):
+    ax = 0
+    for indexval, idxty in zip(indices, index_types):
+        if idxty is types.ellipsis:
+            # Fill up missing dimensions at the middle
+            n_missing = aryty.ndim - len(indices) + 1
+            for i in range(n_missing):
+                output_indices.append(zero)
+                output_shapes.append(shapes[ax])
+                output_strides.append(strides[ax])
+                ax += 1
+            continue
+        # Regular index value
         if idxty == types.slice3_type:
             slice = slicing.Slice(context, builder, value=indexval)
             cgutils.guard_invalid_slice(context, builder, slice)
@@ -275,17 +294,21 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
             st = slicing.fix_stride(builder, slice, strides[ax])
             output_shapes.append(sh)
             output_strides.append(st)
-        else:
-            assert isinstance(idxty, types.Integer)
+        elif isinstance(idxty, types.Integer):
             ind = context.cast(builder, indexval, idxty, types.intp)
             if idxty.signed:
                 ind = slicing.fix_index(builder, ind, shapes[ax])
             output_indices.append(ind)
+        else:
+            raise AssertionError("unexpected index type: %s" % (idxty,))
+        ax += 1
 
     # Fill up missing dimensions at the end
-    for i in range(len(indices), aryty.ndim):
-        output_shapes.append(shapes[i])
-        output_strides.append(strides[i])
+    assert ax <= aryty.ndim
+    while ax < aryty.ndim:
+        output_shapes.append(shapes[ax])
+        output_strides.append(strides[ax])
+        ax += 1
 
     dataptr = cgutils.get_item_pointer(builder, aryty, ary,
                                        output_indices,
@@ -301,8 +324,8 @@ def make_view(context, builder, aryty, ary, return_type,
     retary = make_array(return_type)(context, builder)
     populate_array(retary,
                    data=data,
-                   shape=cgutils.pack_array(builder, shapes),
-                   strides=cgutils.pack_array(builder, strides),
+                   shape=shapes,
+                   strides=strides,
                    itemsize=ary.itemsize,
                    meminfo=ary.meminfo,
                    parent=ary.parent)
@@ -341,7 +364,6 @@ def getitem_arraynd_intp(context, builder, sig, args):
         result = load_item(context, builder, aryty, dataptr)
     elif ndim > 1:
         # Return a subview over the array
-        assert shapes
         out_ary = make_view(context, builder, aryty, ary, sig.return_type,
                             dataptr, shapes, strides)
         result = out_ary._getvalue()
@@ -378,7 +400,6 @@ def getitem_array_tuple(context, builder, sig, args):
     ndim = aryty.ndim
     if isinstance(sig.return_type, types.Array):
         # Generic array slicing
-        assert shapes
         res = make_view(context, builder, aryty, ary, sig.return_type,
                         dataptr, shapes, strides)
         res = res._getvalue()
@@ -394,6 +415,9 @@ def getitem_array_tuple(context, builder, sig, args):
 @implement('setitem', types.Kind(types.Buffer), types.Kind(types.Integer),
            types.Any)
 def setitem_array1d(context, builder, sig, args):
+    """
+    array[a] = scalar
+    """
     aryty, idxty, valty = sig.args
     ary, idx, val = args
 
@@ -411,23 +435,21 @@ def setitem_array1d(context, builder, sig, args):
 @builtin
 @implement('setitem', types.Kind(types.Buffer), types.Kind(types.BaseTuple),
            types.Any)
-def setitem_array_unituple(context, builder, sig, args):
+def setitem_array_tuple(context, builder, sig, args):
     """
     array[a,..,b] = scalar
     """
-    aryty, idxty, valty = sig.args
-    ary, idx, val = args
+    aryty, tupty, valty = sig.args
+    ary, tup, val = args
+    ary = make_array(aryty)(context, builder, ary)
 
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
+    index_types = tupty.types
+    indices = cgutils.unpack_tuple(builder, tup, count=len(tupty))
+    dataptr, shapes, strides = \
+        basic_indexing(context, builder, aryty, ary, index_types, indices)
 
-    # TODO: other than layout
-    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(idxty, indices)]
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=idxty.dtype.signed)
-    store_item(context, builder, aryty, val, ptr)
+    assert not shapes
+    store_item(context, builder, aryty, val, dataptr)
 
 
 @builtin
