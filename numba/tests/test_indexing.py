@@ -303,8 +303,7 @@ class TestIndexing(TestCase):
         self.assertTrue((pyfunc(a, 0, 10, 2) == cfunc(a, 0, 10, 2)).all())
 
     def test_2d_slicing_npm(self):
-        with self.assertTypingError():
-            self.test_2d_slicing(flags=Noflags)
+        self.test_2d_slicing(flags=Noflags)
 
     def test_2d_slicing2(self, flags=enable_pyobj_flags):
         """
