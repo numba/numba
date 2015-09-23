@@ -66,17 +66,6 @@ class TestStoreSlice(unittest.TestCase):
             cres.entry_point(a, 3, 6, 0, 88)
         self.assertEqual(str(cm.exception), "slice step cannot be zero")
 
-    def test_array_assign_slice_error(self):
-        """Ensure that we have a meaning error message"""
-        def pyfunc(inp, out):
-            out[:] = out
-
-        with self.assertRaises(errors.TypingError) as cm:
-            cres = compile_isolated(pyfunc, (types.int64[:], types.int64[:]))
-
-        # Test the error message
-        errmsg = "Storing array into array slice is not supported, yet"
-        self.assertIn(errmsg, str(cm.exception))
 
 if __name__ == '__main__':
     unittest.main()

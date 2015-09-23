@@ -87,13 +87,13 @@ class SetItemBuffer(AbstractTemplate):
             out = get_array_index_type(ary, idx)
             if out is not None:
                 ary, idx, res = out
-                # Allow for broadcasting.
                 if isinstance(res, types.Array):
+                    if res.ndim > 1:
+                        raise NotImplementedError(
+                            "Cannot store slice on array of more than one dimension")
+                    # Allow for broadcasting.
                     if not isinstance(val, types.Array):
                         res = res.dtype
-                    else:
-                        raise TypeError("Storing array into array slice is not "
-                                        "supported, yet")
                 return signature(types.none, ary, idx, res)
 
 
