@@ -100,6 +100,8 @@ class TestFancyIndexing(TestCase):
 
         self.check_getitem_indices(arr, indices)
 
+    # TODO: write tests with a non-tuple index
+
 
 if __name__ == '__main__':
     unittest.main()
