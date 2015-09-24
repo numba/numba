@@ -540,6 +540,20 @@ class NumberAttribute(AttributeTemplate):
         return signature(ty)
 
 
+@builtin_attr
+class SliceAttribute(AttributeTemplate):
+    key = types.slice3_type
+
+    def resolve_start(self, ty):
+        return types.intp
+
+    def resolve_stop(self, ty):
+        return types.intp
+
+    def resolve_step(self, ty):
+        return types.intp
+
+
 #-------------------------------------------------------------------------------
 
 
@@ -568,6 +582,7 @@ def register_number_classes(register_global):
 
 
 register_number_classes(builtin_global)
+
 
 #------------------------------------------------------------------------------
 

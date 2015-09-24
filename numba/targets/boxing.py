@@ -274,6 +274,20 @@ def unbox_optional(c, typ, obj):
                        cleanup=cleanup)
 
 
+@unbox(types.Slice3Type)
+def unbox_slice(c, typ, obj):
+    """
+    """
+    from . import slicing
+    ok, start, stop, step = \
+        c.pyapi.slice_as_ints(obj, slicing.get_defaults(c.context))
+    slice3 = slicing.Slice(c.context, c.builder)
+    slice3.start = start
+    slice3.stop = stop
+    slice3.step = step
+    return NativeValue(slice3._getvalue(), is_error=c.builder.not_(ok))
+
+
 #
 # Collections
 #

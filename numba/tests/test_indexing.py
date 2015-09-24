@@ -8,7 +8,6 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils, njit, errors, typeof
-from numba.tests import usecases
 from .support import TestCase
 
 
@@ -106,12 +105,6 @@ def ellipsis_usecase3(a, i, j):
 
 def none_index_usecase(a):
     return a[None]
-
-def fancy_index_usecase(a, index):
-    return a[index]
-
-def boolean_indexing_usecase(a, mask):
-    return a[mask]
 
 def empty_tuple_usecase(a):
     return a[()]
@@ -646,42 +639,6 @@ class TestIndexing(TestCase):
     def test_none_index_npm(self):
         with self.assertTypingError():
             self.test_none_index(flags=Noflags)
-
-    def test_fancy_index(self, flags=enable_pyobj_flags):
-        pyfunc = fancy_index_usecase
-        arraytype = types.Array(types.int32, 2, 'C')
-        indextype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, indextype), flags=flags)
-        cfunc = cr.entry_point
-
-        a = np.arange(100, dtype='i4').reshape(10, 10)
-        index = np.array([], dtype='i4')
-        self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
-        index = np.array([0], dtype='i4')
-        self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
-        index = np.array([1,2], dtype='i4')
-        self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
-        index = np.array([-1], dtype='i4')
-        self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
-
-    def test_fancy_index_npm(self):
-        with self.assertTypingError():
-            self.test_fancy_index(flags=Noflags)
-
-    def test_boolean_indexing(self, flags=enable_pyobj_flags):
-        pyfunc = boolean_indexing_usecase
-        arraytype = types.Array(types.int32, 2, 'C')
-        masktype = types.Array(types.boolean, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, masktype), flags=flags)
-        cfunc = cr.entry_point
-
-        a = np.arange(100, dtype='i4').reshape(10, 10)
-        mask = np.array([True, False, True])
-        self.assertTrue((pyfunc(a, mask) == cfunc(a, mask)).all())
-
-    def test_boolean_indexing_npm(self):
-        with self.assertTypingError():
-            self.test_boolean_indexing(flags=Noflags)
 
     def test_empty_tuple_indexing(self, flags=enable_pyobj_flags):
         pyfunc = empty_tuple_usecase

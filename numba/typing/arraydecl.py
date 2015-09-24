@@ -30,6 +30,7 @@ def get_array_index_type(ary, idx):
     right_indices = []
     ellipsis_met = False
     advanced = False
+    has_integer = False
 
     if not isinstance(idx, types.BaseTuple):
         idx = [idx]
@@ -45,10 +46,14 @@ def get_array_index_type(ary, idx):
             ty = types.intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
             ndim -= 1
+            has_integer = True
         elif (isinstance(ty, types.Array)
               and ty.ndim == 1
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
-            if advanced:
+            if advanced or has_integer:
+                # We don't support the complicated combination of
+                # advanced indices (and integers are considered part
+                # of them by Numpy).
                 raise NotImplementedError("only one advanced index supported")
             advanced = True
         else:
