@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import namedtuple
 import itertools
 
 from numba import types, intrinsics
@@ -8,6 +9,9 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
                                     builtin_attr, signature, bound_function,
                                     make_callable_template)
+
+
+Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
 
 def get_array_index_type(ary, idx):
@@ -25,6 +29,7 @@ def get_array_index_type(ary, idx):
     left_indices = []
     right_indices = []
     ellipsis_met = False
+    advanced = False
 
     if not isinstance(idx, types.BaseTuple):
         idx = [idx]
@@ -40,10 +45,20 @@ def get_array_index_type(ary, idx):
             ty = types.intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
             ndim -= 1
+        elif (isinstance(ty, types.Array)
+              and ty.ndim == 1
+              and isinstance(ty.dtype, (types.Integer, types.Boolean))):
+            if advanced:
+                raise NotImplementedError("only one advanced index supported")
+            advanced = True
         else:
             raise TypeError("unsupported array index type %s in %s"
                             % (ty, idx))
         (right_indices if ellipsis_met else left_indices).append(ty)
+
+    # Only Numpy arrays support advanced indexing
+    if advanced and not isinstance(ary, types.Array):
+        return
 
     # Check indices and result dimensionality
     all_indices = left_indices + right_indices
@@ -57,6 +72,11 @@ def get_array_index_type(ary, idx):
         # Full integer indexing => scalar result
         # (note if ellipsis is present, a 0-d view is returned instead)
         res = ary.dtype
+
+    elif advanced:
+        # Result is a copy
+        res = ary.copy(ndim=ndim, layout='C', readonly=False)
+
     else:
         # Result is a view
         if ary.slice_is_copy:
@@ -103,7 +123,7 @@ def get_array_index_type(ary, idx):
     else:
         idx, = all_indices
 
-    return ary, idx, res
+    return Indexing(idx, res, advanced)
 
 
 @builtin
@@ -115,8 +135,7 @@ class GetItemBuffer(AbstractTemplate):
         [ary, idx] = args
         out = get_array_index_type(ary, idx)
         if out is not None:
-            ary, idx, res = out
-            return signature(res, ary, idx)
+            return signature(out.result, ary, out.index)
 
 @builtin
 class SetItemBuffer(AbstractTemplate):
@@ -130,8 +149,9 @@ class SetItemBuffer(AbstractTemplate):
                 raise TypeError("Cannot modify value of type %s" %(ary,))
 
             out = get_array_index_type(ary, idx)
-            if out is not None:
-                ary, idx, res = out
+            if out is not None and not out.advanced:
+                idx = out.index
+                res = out.result
                 if isinstance(res, types.Array):
                     if res.ndim > 1:
                         raise NotImplementedError(
