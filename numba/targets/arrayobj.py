@@ -433,94 +433,42 @@ def getitem_array_tuple(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.Buffer), types.Kind(types.Integer), types.Any)
-def setitem_array_integer(context, builder, sig, args):
+@implement('setitem', types.Kind(types.Buffer), types.Kind(types.Integer),
+           types.Any)
+@implement('setitem', types.Kind(types.Buffer), types.Kind(types.BaseTuple),
+           types.Any)
+@implement('setitem', types.Kind(types.Buffer), types.slice3_type,
+           types.Any)
+def setitem_array(context, builder, sig, args):
     """
     array[a] = scalar_or_array
+    array[a,..,b] = scalar_or_array
     """
     aryty, idxty, valty = sig.args
     ary, idx, val = args
 
-    if isinstance(valty, types.Buffer):
-        # Generic array to array indexed assignment
-        return fancy_setslice(context, builder, sig, args,
-                              (idxty,), (idx,))
+    if isinstance(idxty, types.BaseTuple):
+        index_types = idxty.types
+        indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+    else:
+        index_types = (idxty,)
+        indices = (idx,)
 
-    # Source is a scalar => store it at the given location
     ary = make_array(aryty)(context, builder, ary)
 
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
-                                   wraparound=idxty.signed)
-
-    val = context.cast(builder, val, valty, aryty.dtype)
-    store_item(context, builder, aryty, val, ptr)
-
-
-@builtin
-@implement('setitem', types.Kind(types.Buffer), types.Kind(types.BaseTuple),
-           types.Any)
-def setitem_array_tuple(context, builder, sig, args):
-    """
-    array[a,..,b] = scalar_or_array
-    """
-    aryty, tupty, valty = sig.args
-    ary, tup, val = args
-
-    index_types = tupty.types
-    indices = cgutils.unpack_tuple(builder, tup, count=len(tupty))
-
-    if isinstance(valty, types.Buffer):
-        # Generic array to array indexed assignment
-        return fancy_setslice(context, builder, sig, args,
-                              index_types, indices)
-
-    # Source is a scalar => store it at the given location
-    ary = make_array(aryty)(context, builder, ary)
-
+    # First try basic indexing to see if a single array location is denoted.
     dataptr, shapes, strides = \
         basic_indexing(context, builder, aryty, ary, index_types, indices)
 
-    assert not shapes
+    if shapes:
+        # Index describes a non-trivial view => use generic slice assignment
+        # (NOTE: this also handles scalar broadcasting)
+        return fancy_setslice(context, builder, sig, args,
+                              index_types, indices)
+
+    # Store source value the given location
     val = context.cast(builder, val, valty, aryty.dtype)
     store_item(context, builder, aryty, val, dataptr)
-
-
-@builtin
-@implement('setitem', types.Kind(types.Buffer), types.slice3_type,
-           types.Any)
-def setitem_array1d_slice(context, builder, sig, args):
-    aryty, idxty, valty = sig.args
-    ary, idx, val = args
-
-    if isinstance(valty, types.Buffer):
-        # Generic array to array indexed assignment
-        return fancy_setslice(context, builder, sig, args,
-                              (idxty,), (idx,))
-
-    ary = make_array(aryty)(context, builder, ary)
-    shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
-
-    # Input is a scalar => broadcast it over the output slice
-    slicestruct = slicing.Slice(context, builder, value=idx)
-    cgutils.guard_invalid_slice(context, builder, slicestruct)
-    slicing.fix_slice(builder, slicestruct, shapes[0])
-
-    def getitem(idx):
-        return val
-
-    with cgutils.for_range_slice_generic(builder, slicestruct.start,
-                                         slicestruct.stop,
-                                         slicestruct.step) as (pos_range, neg_range):
-        with pos_range as (loop_idx, loop_count):
-            ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                           [loop_idx], wraparound=False)
-            item = getitem(loop_count)
-            store_item(context, builder, aryty, item, ptr)
-        with neg_range as (loop_idx, loop_count):
-            ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                           [loop_idx], wraparound=False)
-            item = getitem(loop_count)
-            store_item(context, builder, aryty, item, ptr)
 
 
 @builtin
@@ -987,52 +935,64 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     basic as well as fancy indexing, since there's no functional difference
     between the two for indexed assignment.
     """
-    # XXX handle scalar broadcasting
     aryty, _, srcty = sig.args
     ary, _, src = args
 
     ary = make_array(aryty)(context, builder, ary)
-    src = make_array(srcty)(context, builder, src)
-
     dest_shapes = cgutils.unpack_tuple(builder, ary.shape)
     dest_strides = cgutils.unpack_tuple(builder, ary.strides)
     dest_data = ary.data
-
-    src_shapes = cgutils.unpack_tuple(builder, src.shape)
-    src_strides = cgutils.unpack_tuple(builder, src.strides)
-    src_data = src.data
 
     indexer = FancyIndexer(context, builder, aryty, ary,
                            index_types, indices)
     indexer.prepare()
 
-    # Check shapes are equal
-    index_shape = indexer.get_shape()
-    shape_error = cgutils.false_bit
-    assert len(index_shape) == len(src_shapes)
+    if isinstance(srcty, types.Buffer):
+        # Source is an array
+        src = make_array(srcty)(context, builder, src)
+        src_shapes = cgutils.unpack_tuple(builder, src.shape)
+        src_strides = cgutils.unpack_tuple(builder, src.strides)
+        src_data = src.data
+        src_dtype = srcty.dtype
 
-    for u, v in zip(src_shapes, index_shape):
-        shape_error = builder.or_(shape_error,
-                                  builder.icmp_signed('!=', u, v))
+        # Check shapes are equal
+        index_shape = indexer.get_shape()
+        shape_error = cgutils.false_bit
+        assert len(index_shape) == len(src_shapes)
 
-    with builder.if_then(shape_error, likely=False):
-        msg = "cannot assign slice from input of different size"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        for u, v in zip(src_shapes, index_shape):
+            shape_error = builder.or_(shape_error,
+                                      builder.icmp_signed('!=', u, v))
+
+        with builder.if_then(shape_error, likely=False):
+            msg = "cannot assign slice from input of different size"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+        def src_getitem(source_indices):
+            assert len(source_indices) == srcty.ndim
+            src_ptr = cgutils.get_item_pointer2(builder, src_data,
+                                                src_shapes, src_strides,
+                                                srcty.layout, source_indices,
+                                                wraparound=False)
+            return builder.load(src_ptr)
+
+    else:
+        # Source is a scalar (broadcast or not, depending on destination
+        # shape).
+        src_dtype = srcty
+
+        def src_getitem(source_indices):
+            return src
 
     # Loop on destination and copy from source to destination
     dest_indices, counts = indexer.begin_loops()
 
     # Source is iterated in natural order
     source_indices = tuple(c for c in counts if c is not None)
-    assert len(source_indices) == srcty.ndim
+    val = src_getitem(source_indices)
 
-    src_ptr = cgutils.get_item_pointer2(builder, src_data,
-                                        src_shapes, src_strides,
-                                        srcty.layout, source_indices,
-                                        wraparound=False)
-    val = builder.load(src_ptr)
     # Cast to the destination dtype (cross-dtype slice assignement is allowed)
-    val = context.cast(builder, val, srcty.dtype, aryty.dtype)
+    val = context.cast(builder, val, src_dtype, aryty.dtype)
 
     # No need to check for wraparound, as the indexers all ensure
     # a positive index is returned.
