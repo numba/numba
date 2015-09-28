@@ -729,15 +729,10 @@ class TestIndexing(TestCase):
         for test in tests:
             pyleft = pyfunc(np.zeros_like(arg), arg[slice(*test[0:3]), slice(*test[3:6])], *test)
             cleft = cfunc(np.zeros_like(arg), arg[slice(*test[0:3]), slice(*test[3:6])], *test)
-            self.assertTrue((pyleft == cleft).all())
+            self.assertPreciseEqual(cleft, pyleft)
 
     def test_2d_slicing_set_npm(self):
-        """
-        TypingError: TypingError: Cannot resolve setitem: array(int32, 2d, C)[(slice3_type x 2)] = array(int32, 2d, C)
-        setitem on slices not yet supported.
-        """
-        with self.assertTypingError():
-            self.test_2d_slicing_set(flags=Noflags)
+        self.test_2d_slicing_set(flags=Noflags)
 
     def test_setitem(self):
         arr = np.arange(5)

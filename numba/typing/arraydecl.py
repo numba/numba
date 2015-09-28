@@ -149,22 +149,35 @@ class SetItemBuffer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args
-        if isinstance(ary, types.Buffer):
-            if not ary.mutable:
-                raise TypeError("Cannot modify value of type %s" %(ary,))
+        if not isinstance(ary, types.Buffer):
+            return
+        if not ary.mutable:
+            raise TypeError("Cannot modify value of type %s" %(ary,))
+        out = get_array_index_type(ary, idx)
+        if out is None:
+            return
 
-            out = get_array_index_type(ary, idx)
-            if out is not None and not out.advanced:
-                idx = out.index
-                res = out.result
-                if isinstance(res, types.Array):
-                    if res.ndim > 1:
-                        raise NotImplementedError(
-                            "Cannot store slice on array of more than one dimension")
-                    # Allow for broadcasting.
-                    if not isinstance(val, types.Array):
-                        res = res.dtype
-                return signature(types.none, ary, idx, res)
+        idx = out.index
+        res = out.result
+        if isinstance(res, types.Array):
+            # Indexing produces an array
+            if not isinstance(val, types.Array):
+                # Allow for scalar broadcasting
+                res = res.dtype
+            elif (val.ndim == res.ndim and
+                  self.context.can_convert(val.dtype, res.dtype)):
+                # Allow for assignement of compatible-dtype array
+                res = res.copy(dtype=val.dtype)
+            else:
+                # Unexpected dimensionality of assignment source
+                # (array broadcasting is unsupported)
+                return
+        elif not isinstance(val, types.Array):
+            # Single item assignment
+            res = val
+        else:
+            return
+        return signature(types.none, ary, idx, res)
 
 
 def normalize_shape(shape):
