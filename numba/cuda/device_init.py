@@ -12,7 +12,7 @@ from .decorators import jit, autojit, declare_device
 from .api import *
 from .api import _auto_device
 
-from . import reduction
+from .kernels import reduction
 reduce = Reduce = reduction.Reduce
 
 
