@@ -15,6 +15,13 @@ def getitem_usecase(a, b):
 
 class TestFancyIndexing(TestCase):
 
+    def generate_advanced_indices(self, N, many=True):
+        choices = [np.int16([0, N - 1, -2])]
+        if many:
+            choices += [np.uint16([0, 1, N - 1]),
+                        np.bool_([0, 1, 1, 0])]
+        return choices
+
     def generate_basic_index_tuples(self, N, maxdim, many=True):
         """
         Generate basic index tuples with 0 to *maxdim* items.
@@ -44,10 +51,7 @@ class TestFancyIndexing(TestCase):
         """
         # (Note Numba doesn't support advanced indices with more than
         #  one advanced index array at the moment)
-        choices = [np.int16([0, N - 1, -2])]
-        if many:
-            choices += [np.uint16([0, 1, N - 1]),
-                        np.bool_([0, 1, 1, 0])]
+        choices = list(self.generate_advanced_indices(N, many=many))
         for i in range(maxdim + 1):
             for tup in self.generate_basic_index_tuples(N, maxdim - 1, many):
                 for adv in choices:
@@ -83,6 +87,7 @@ class TestFancyIndexing(TestCase):
                 np.testing.assert_equal(arr, orig)
 
     def test_getitem_tuple(self):
+        # Test many variations of advanced indexing with a tuple index
         N = 4
         ndim = 3
         arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
@@ -100,7 +105,13 @@ class TestFancyIndexing(TestCase):
 
         self.check_getitem_indices(arr, indices)
 
-    # TODO: write tests with a non-tuple index
+    def test_getitem_array(self):
+        # Test advanced indexing with a single array index
+        N = 4
+        ndim = 3
+        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
+        indices = self.generate_advanced_indices(N)
+        self.check_getitem_indices(arr, indices)
 
 
 if __name__ == '__main__':
