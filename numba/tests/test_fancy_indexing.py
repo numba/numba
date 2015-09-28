@@ -12,6 +12,9 @@ from .support import TestCase
 def getitem_usecase(a, b):
     return a[b]
 
+def setitem_usecase(a, idx, b):
+    a[idx] = b
+
 
 class TestFancyIndexing(TestCase):
 
@@ -78,6 +81,8 @@ class TestFancyIndexing(TestCase):
             # but basic indexing, and shouldn't be tested here.
             assert expected.base is not orig_base
             got = cfunc(arr, index)
+            # Note Numba may not return the same array strides and
+            # contiguity as Numpy
             self.assertEqual(got.shape, expected.shape)
             self.assertEqual(got.dtype, expected.dtype)
             np.testing.assert_equal(got, expected)
@@ -112,6 +117,48 @@ class TestFancyIndexing(TestCase):
         arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
         indices = self.generate_advanced_indices(N)
         self.check_getitem_indices(arr, indices)
+
+    def check_setitem_indices(self, arr, indices):
+        pyfunc = setitem_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for index in indices:
+            src = arr[index]
+            expected = np.zeros_like(arr)
+            got = np.zeros_like(arr)
+            pyfunc(expected, index, src)
+            cfunc(got, index, src)
+            # Note Numba may not return the same array strides and
+            # contiguity as Numpy
+            self.assertEqual(got.shape, expected.shape)
+            self.assertEqual(got.dtype, expected.dtype)
+            np.testing.assert_equal(got, expected)
+
+    def test_setitem_tuple(self):
+        # Test many variations of advanced indexing with a tuple index
+        N = 4
+        ndim = 3
+        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
+        indices = self.generate_advanced_index_tuples(N, ndim)
+        self.check_setitem_indices(arr, indices)
+
+    def test_setitem_tuple_and_ellipsis(self):
+        # Same, but also insert an ellipsis at a random point
+        N = 4
+        ndim = 3
+        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
+        indices = self.generate_advanced_index_tuples_with_ellipsis(N, ndim,
+                                                                    many=False)
+
+        self.check_setitem_indices(arr, indices)
+
+    def test_setitem_array(self):
+        # Test advanced indexing with a single array index
+        N = 4
+        ndim = 3
+        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32) + 10
+        indices = self.generate_advanced_indices(N)
+        self.check_setitem_indices(arr, indices)
 
 
 if __name__ == '__main__':

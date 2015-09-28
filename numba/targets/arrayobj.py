@@ -314,7 +314,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
                                     shapes[ax])
             output_indices.append(ind)
         else:
-            raise AssertionError("unexpected index type: %s" % (idxty,))
+            raise NotImplementedError("unexpected index type: %s" % (idxty,))
         ax += 1
 
     # Fill up missing dimensions at the end
@@ -433,12 +433,7 @@ def getitem_array_tuple(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.Buffer), types.Kind(types.Integer),
-           types.Any)
-@implement('setitem', types.Kind(types.Buffer), types.Kind(types.BaseTuple),
-           types.Any)
-@implement('setitem', types.Kind(types.Buffer), types.slice3_type,
-           types.Any)
+@implement('setitem', types.Kind(types.Buffer), types.Any, types.Any)
 def setitem_array(context, builder, sig, args):
     """
     array[a] = scalar_or_array
@@ -457,10 +452,15 @@ def setitem_array(context, builder, sig, args):
     ary = make_array(aryty)(context, builder, ary)
 
     # First try basic indexing to see if a single array location is denoted.
-    dataptr, shapes, strides = \
-        basic_indexing(context, builder, aryty, ary, index_types, indices)
+    try:
+        dataptr, shapes, strides = \
+            basic_indexing(context, builder, aryty, ary, index_types, indices)
+    except NotImplementedError:
+        use_fancy_indexing = True
+    else:
+        use_fancy_indexing = bool(shapes)
 
-    if shapes:
+    if use_fancy_indexing:
         # Index describes a non-trivial view => use generic slice assignment
         # (NOTE: this also handles scalar broadcasting)
         return fancy_setslice(context, builder, sig, args,

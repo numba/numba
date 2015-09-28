@@ -687,7 +687,7 @@ class TestSetItem(TestCase):
         # Note heterogenous types for the source and destination arrays
         # (int16[:] -> int32[:])
         dest_type = types.Array(types.int32, 1, 'C')
-        src_type = types.Array(types.int16, 1, 'C')
+        src_type = types.Array(types.int16, 1, 'A')
         argtys = (dest_type, src_type, types.int32, types.int32, types.int32)
         cr = compile_isolated(pyfunc, argtys, flags=flags)
         cfunc = cr.entry_point
@@ -761,7 +761,7 @@ class TestSetItem(TestCase):
         2d to 2d slice assignment
         """
         pyfunc = slicing_2d_usecase_set
-        arraytype = types.Array(types.int32, 2, 'C')
+        arraytype = types.Array(types.int32, 2, 'A')
         argtys = (arraytype, arraytype, types.int32, types.int32, types.int32,
                   types.int32, types.int32, types.int32)
         cr = compile_isolated(pyfunc, argtys, flags=flags)

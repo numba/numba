@@ -162,12 +162,12 @@ class SetItemBuffer(AbstractTemplate):
         if isinstance(res, types.Array):
             # Indexing produces an array
             if not isinstance(val, types.Array):
-                # Allow for scalar broadcasting
+                # Allow scalar broadcasting
                 res = res.dtype
             elif (val.ndim == res.ndim and
                   self.context.can_convert(val.dtype, res.dtype)):
-                # Allow for assignement of compatible-dtype array
-                res = res.copy(dtype=val.dtype)
+                # Allow assignement of same-dimensionality compatible-dtype array
+                res = val
             else:
                 # Unexpected dimensionality of assignment source
                 # (array broadcasting is unsupported)
