@@ -669,27 +669,59 @@ class TestIndexing(TestCase):
         self.assertTrue((udt == control).all())
 
     def test_1d_slicing_set(self, flags=enable_pyobj_flags):
+        """
+        1d to 1d slice assignment
+        """
         pyfunc = slicing_1d_usecase_set
-        arraytype = types.Array(types.int32, 1, 'C')
-        argtys = (arraytype, arraytype, types.int32, types.int32, types.int32)
+        # Note heterogenous types for the source and destination arrays
+        # (int16[:] -> int32[:])
+        dest_type = types.Array(types.int32, 1, 'C')
+        src_type = types.Array(types.int16, 1, 'C')
+        argtys = (dest_type, src_type, types.int32, types.int32, types.int32)
         cr = compile_isolated(pyfunc, argtys, flags=flags)
         cfunc = cr.entry_point
 
         N = 10
-        arg = np.arange(N, dtype='i4') + 40
+        arg = np.arange(N, dtype='i2') + 40
         bounds = [0, 2, N - 2, N, N + 1, N + 3,
                   -2, -N + 2, -N, -N - 1, -N - 3]
+        def make_dest():
+            return np.zeros_like(arg, dtype='i4')
         for start, stop in itertools.product(bounds, bounds):
             for step in (1, 2, -1, -2):
                 args = start, stop, step
                 index = slice(*args)
-                pyleft = pyfunc(np.zeros_like(arg), arg[index], *args)
-                cleft = cfunc(np.zeros_like(arg), arg[index], *args)
+                pyleft = pyfunc(make_dest(), arg[index], *args)
+                cleft = cfunc(make_dest(), arg[index], *args)
                 self.assertPreciseEqual(pyleft, cleft)
 
         # Mismatching input size and slice length
         with self.assertRaises(ValueError):
             cfunc(np.zeros_like(arg), arg, 0, 0, 1)
+
+    def test_1d_slicing_broadcast(self, flags=enable_pyobj_flags):
+        """
+        scalar to 1d slice assignment
+        """
+        pyfunc = slicing_1d_usecase_set
+        arraytype = types.Array(types.int32, 1, 'C')
+        # Note heterogenous types for the source scalar and the destination
+        # array (int16 -> int32[:])
+        argtys = (arraytype, types.int16, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        N = 10
+        arg = np.arange(N, dtype='i4')
+        val = 42
+        bounds = [0, 2, N - 2, N, N + 1, N + 3,
+                  -2, -N + 2, -N, -N - 1, -N - 3]
+        for start, stop in itertools.product(bounds, bounds):
+            for step in (1, 2, -1, -2):
+                args = val, start, stop, step
+                pyleft = pyfunc(arg.copy(), *args)
+                cleft = cfunc(arg.copy(), *args)
+                self.assertPreciseEqual(pyleft, cleft)
 
     def test_1d_slicing_add(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase_add
@@ -707,10 +739,16 @@ class TestIndexing(TestCase):
     def test_1d_slicing_set_npm(self):
         self.test_1d_slicing_set(flags=Noflags)
 
+    def test_1d_slicing_broadcast_npm(self):
+        self.test_1d_slicing_broadcast(flags=Noflags)
+
     def test_1d_slicing_add_npm(self):
         self.test_1d_slicing_add(flags=Noflags)
 
     def test_2d_slicing_set(self, flags=enable_pyobj_flags):
+        """
+        2d to 2d slice assignment
+        """
         pyfunc = slicing_2d_usecase_set
         arraytype = types.Array(types.int32, 2, 'C')
         argtys = (arraytype, arraytype, types.int32, types.int32, types.int32,
@@ -731,13 +769,47 @@ class TestIndexing(TestCase):
             cleft = cfunc(np.zeros_like(arg), arg[slice(*test[0:3]), slice(*test[3:6])], *test)
             self.assertPreciseEqual(cleft, pyleft)
 
+    def test_2d_slicing_broadcast(self, flags=enable_pyobj_flags):
+        """
+        scalar to 2d slice assignment
+        """
+        pyfunc = slicing_2d_usecase_set
+        arraytype = types.Array(types.int32, 2, 'C')
+        # Note heterogenous types for the source scalar and the destination
+        # array (int16 -> int32[:])
+        argtys = (arraytype, types.int16, types.int32, types.int32, types.int32,
+                  types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        arg = np.arange(10*10, dtype='i4').reshape(10,10)
+        val = 42
+        tests = [
+            (0, 10, 1, 0, 10, 1),
+            (2, 3, 1, 2, 3, 1),
+            (10, 0, 1, 10, 0, 1),
+            (0, 10, -1, 0, 10, -1),
+            (0, 10, 2, 0, 10, 2),
+        ]
+        for test in tests:
+            pyleft = pyfunc(arg.copy(), val, *test)
+            cleft = cfunc(arg.copy(), val, *test)
+            self.assertPreciseEqual(cleft, pyleft)
+
     def test_2d_slicing_set_npm(self):
         self.test_2d_slicing_set(flags=Noflags)
+
+    def test_2d_slicing_broadcast_npm(self):
+        self.test_2d_slicing_broadcast(flags=Noflags)
 
     def test_setitem(self):
         arr = np.arange(5)
         setitem_usecase(arr, 1, 42)
-        self.assertEqual(list(arr), [0, 42, 2, 3, 4])
+        self.assertEqual(arr.tolist(), [0, 42, 2, 3, 4])
+        # Broadcasting
+        arr = np.arange(9).reshape(3, 3)
+        setitem_usecase(arr, 1, 42)
+        self.assertEqual(arr.tolist(), [[0, 1, 2], [42, 42, 42], [6, 7, 8]])
 
     def test_setitem_readonly(self):
         arr = np.arange(5)
