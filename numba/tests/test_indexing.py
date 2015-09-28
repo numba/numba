@@ -129,7 +129,11 @@ def slicing_2d_usecase_set(a, b, start, stop, step, start2, stop2, step2):
     return a
 
 
-class TestIndexing(TestCase):
+class TestGetItem(TestCase):
+    """
+    Test basic indexed load from an array (returning a view or a scalar).
+    Note fancy indexing is tested in test_fancy_indexing.
+    """
 
     def test_1d_slicing(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase
@@ -651,6 +655,13 @@ class TestIndexing(TestCase):
 
     def test_empty_tuple_indexing_npm(self):
         self.test_empty_tuple_indexing(flags=Noflags)
+
+
+class TestSetItem(TestCase):
+    """
+    Test basic indexed store into an array.
+    Note fancy indexing is tested in test_fancy_indexing.
+    """
 
     def test_conversion_setitem(self, flags=enable_pyobj_flags):
         """ this used to work, and was used in one of the tutorials """
