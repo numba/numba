@@ -1039,6 +1039,12 @@ def number_not_impl(context, builder, sig, args):
 
 
 @builtin
+@implement(bool, types.boolean)
+def bool_as_bool(context, builder, sig, args):
+    [val] = args
+    return val
+
+@builtin
 @implement(bool, types.Kind(types.Integer))
 def int_as_bool(context, builder, sig, args):
     [val] = args
