@@ -172,7 +172,13 @@ class ListInstance(_ListPayloadMixin):
         return self._list.meminfo
 
     @classmethod
-    def allocate(cls, context, builder, list_type, nitems):
+    def allocate_ex(cls, context, builder, list_type, nitems):
+        """
+        Allocate a ListInstance with its storage.
+        Return a (ok, instance) tuple where *ok* is a LLVM boolean and
+        *instance* is a ListInstance object (the object's contents are
+        only valid when *ok* is true).
+        """
         intp_t = context.get_value_type(types.intp)
 
         if isinstance(nitems, int):
@@ -182,23 +188,41 @@ class ListInstance(_ListPayloadMixin):
         payload_size = context.get_abi_sizeof(payload_type)
 
         itemsize = get_itemsize(context, list_type)
-        
+
+        ok = cgutils.alloca_once_value(builder, cgutils.true_bit)
+        self = cls(context, builder, list_type, None)
+
         # Total allocation size = <payload header size> + nitems * itemsize
         allocsize, ovf = cgutils.muladd_with_overflow(builder, nitems,
                                                       ir.Constant(intp_t, itemsize),
                                                       ir.Constant(intp_t, payload_size))
         with builder.if_then(ovf, likely=False):
+            builder.store(cgutils.false_bit, ok)
+
+        with builder.if_then(builder.load(ok), likely=True):
+            meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
+            with builder.if_else(cgutils.is_null(builder, meminfo),
+                                 likely=False) as (if_error, if_ok):
+                with if_error:
+                    builder.store(cgutils.false_bit, ok)
+                with if_ok:
+                    self._list.meminfo = meminfo
+                    self._payload.allocated = nitems
+                    self._payload.size = ir.Constant(intp_t, 0)  # for safety
+        return builder.load(ok), self
+
+    @classmethod
+    def allocate(cls, context, builder, list_type, nitems):
+        """
+        Allocate a ListInstance with its storage.  Same as allocate_ex(),
+        but return an initialized *instance*.  If allocation failed,
+        control is transferred to the caller using the target's current
+        call convention.
+        """
+        ok, self = cls.allocate_ex(context, builder, list_type, nitems)
+        with builder.if_then(builder.not_(ok), likely=False):
             context.call_conv.return_user_exc(builder, MemoryError,
                                               ("cannot allocate list",))
-
-        meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
-        cgutils.guard_memory_error(context, builder, meminfo,
-                                   "cannot allocate list")
-
-        self = cls(context, builder, list_type, None)
-        self._list.meminfo = meminfo
-        self._payload.allocated = nitems
-        self._payload.size = ir.Constant(intp_t, 0)  # for safety
         return self
 
     def resize(self, new_size):

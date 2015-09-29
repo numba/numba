@@ -113,6 +113,14 @@ def _typeof_tuple(val, c):
         return
     return types.BaseTuple.from_types(tys, type(val))
 
+@typeof_impl.register(list)
+def _typeof_list(val, c):
+    if len(val) == 0:
+        raise ValueError("Cannot type empty list")
+    # XXX reflected
+    ty = typeof_impl(val[0], c)
+    return types.List(ty)
+
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):
     tp = numpy_support.from_dtype(val)

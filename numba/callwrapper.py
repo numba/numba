@@ -37,17 +37,20 @@ class _ArgManager(object):
         # Write the cleanup block for this argument
         cleanupblk = self.builder.append_basic_block("arg%d.err" % self.arg_count)
         with self.builder.goto_block(cleanupblk):
-            # NRT cleanup
+            # Native value cleanup
+            if native.cleanup is not None:
+                native.cleanup()
+                self.cleanups.append(native.cleanup)
 
+            # NRT cleanup
+            # (happens after the native value cleanup as the latter
+            #  may need the native value)
             if self.context.enable_nrt:
                 def nrt_cleanup():
                     self.context.nrt_decref(self.builder, ty, native.value)
                 nrt_cleanup()
                 self.cleanups.append(nrt_cleanup)
 
-            if native.cleanup is not None:
-                native.cleanup()
-                self.cleanups.append(native.cleanup)
             # Go to next cleanup block
             self.builder.branch(self.nextblk)
 

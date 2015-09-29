@@ -424,16 +424,51 @@ def box_list(c, typ, val):
 
 @unbox(types.List)
 def unbox_list(c, typ, obj):
-    # Since a wrapper is always compiled even for an inner function,
-    # we have to define this to be able to pass lists from one Numba
-    # function to another.
-    # This code should nevertheless never be executed at runtime.
-    c.pyapi.err_set_string("PyExc_RuntimeError",
-                           "cannot unbox list objects")
+    size = c.pyapi.list_size(obj)
+    ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
+    with c.builder.if_then(ok, likely=True):
+        list.size = size
+        with cgutils.for_range(c.builder, size) as loop:
+            itemobj = c.pyapi.list_getitem(obj, loop.index)
+            # XXX error checking
+            native = c.unbox(typ.dtype, itemobj)
+            list.setitem(loop.index, native.value)
 
-    # Just return a zero-initialized list value for successful codegen.
-    value = ir.Constant(c.context.get_value_type(typ), None)
-    return NativeValue(value, is_error=cgutils.true_bit)
+    def cleanup():
+        """
+        Reflect the native list's contents into the original list
+        """
+        new_size = list.size
+        diff = c.builder.sub(new_size, size)
+        diff_gt_0 = c.builder.icmp_signed('>=', diff,
+                                          ir.Constant(diff.type, 0))
+        with c.builder.if_else(diff_gt_0) as (if_grow, if_shrink):
+            # XXX no error checking below
+            with if_grow:
+                # First overwrite existing items
+                with cgutils.for_range(c.builder, size) as loop:
+                    item = list.getitem(loop.index)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_setitem(obj, loop.index, itemobj)
+                # Then add missing items
+                with cgutils.for_range(c.builder, diff) as loop:
+                    idx = c.builder.add(size, loop.index)
+                    item = list.getitem(idx)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_append(obj, itemobj)
+                    c.pyapi.decref(itemobj)
+
+            with if_shrink:
+                # First delete list tail
+                c.pyapi.list_setslice(obj, new_size, size, None)
+                # Then overwrite remaining items
+                with cgutils.for_range(c.builder, new_size) as loop:
+                    item = list.getitem(loop.index)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_setitem(obj, loop.index, itemobj)
+
+    return NativeValue(list.value, is_error=c.builder.not_(ok),
+                       cleanup=cleanup)
 
 
 #

@@ -615,9 +615,6 @@ class TestLists(MemoryLeakMixin, TestCase):
             return inner(l)
 
         self.assertPreciseEqual(outer(5), (5, 4))
-        # Cannot call the inner function directly
-        with self.assertRaises(TypeError):
-            inner([42])
 
     def _test_compare(self, pyfunc):
         def eq(args):

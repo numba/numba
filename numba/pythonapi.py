@@ -44,26 +44,29 @@ _unboxers = _Registry()
 box = _boxers.register
 unbox = _unboxers.register
 
-class _BoxContext(namedtuple("_BoxContext",
-                  ("context", "builder", "pyapi", "env_manager"))):
+class _BoxUnboxContext(namedtuple("_BoxUnboxContext",
+                       ("context", "builder", "pyapi", "env_manager"))):
     """
-    The facilities required by boxing implementations.
+    The facilities required by (un)boxing implementations.
     """
     __slots__ = ()
 
     def box(self, typ, val):
         return self.pyapi.from_native_value(val, typ, self.env_manager)
 
-
-class _UnboxContext(namedtuple("_UnboxContext",
-                    ("context", "builder", "pyapi"))):
-    """
-    The facilities required by unboxing implementations.
-    """
-    __slots__ = ()
-
     def unbox(self, typ, obj):
         return self.pyapi.to_native_value(obj, typ)
+
+
+#class _UnboxContext(namedtuple("_UnboxContext",
+                    #("context", "builder", "pyapi"))):
+    #"""
+    #The facilities required by unboxing implementations.
+    #"""
+    #__slots__ = ()
+
+    #def unbox(self, typ, obj):
+        #return self.pyapi.to_native_value(obj, typ)
 
 
 class NativeValue(object):
@@ -72,10 +75,11 @@ class NativeValue(object):
     recording whether the conversion was successful and how to cleanup.
     """
 
-    def __init__(self, value, is_error=None, cleanup=None):
+    def __init__(self, value, is_error=None, cleanup=None, reflect=None):
         self.value = value
         self.is_error = is_error if is_error is not None else cgutils.false_bit
         self.cleanup = cleanup
+        self.reflect = reflect
 
 
 class EnvironmentManager(object):
@@ -598,14 +602,24 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyList_New")
         return self.builder.call(fn, [szval])
 
-    def list_setitem(self, seq, idx, val):
+    def list_size(self, lst):
+        fnty = Type.function(self.py_ssize_t, [self.pyobj])
+        fn = self._get_function(fnty, name="PyList_Size")
+        return self.builder.call(fn, [lst])
+
+    def list_append(self, lst, val):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyList_Append")
+        return self.builder.call(fn, [lst, val])
+
+    def list_setitem(self, lst, idx, val):
         """
         Warning: Steals reference to ``val``
         """
         fnty = Type.function(Type.int(), [self.pyobj, self.py_ssize_t,
                                           self.pyobj])
         fn = self._get_function(fnty, name="PyList_SetItem")
-        return self.builder.call(fn, [seq, idx, val])
+        return self.builder.call(fn, [lst, idx, val])
 
     def list_getitem(self, lst, idx):
         """
@@ -616,6 +630,15 @@ class PythonAPI(object):
         if isinstance(idx, int):
             idx = self.context.get_constant(types.intp, idx)
         return self.builder.call(fn, [lst, idx])
+
+    def list_setslice(self, lst, start, stop, obj):
+        if obj is None:
+            obj = self.get_null_object()
+        fnty = Type.function(Type.int(), [self.pyobj, self.py_ssize_t,
+                                          self.py_ssize_t, self.pyobj])
+        fn = self._get_function(fnty, name="PyList_SetSlice")
+        return self.builder.call(fn, (lst, start, stop, obj))
+
 
     #
     # Concrete tuple API
@@ -1071,14 +1094,12 @@ class PythonAPI(object):
     def c_api_error(self):
         return cgutils.is_not_null(self.builder, self.err_occurred())
 
-    def to_native_value(self, obj, typ):
-        builder = self.builder
-
+    def to_native_value(self, obj, typ, env_manager=None):
         impl = _unboxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
-        c = _UnboxContext(self.context, self.builder, self)
+        c = _BoxUnboxContext(self.context, self.builder, self, env_manager)
         return impl(c, typ, obj)
 
     def from_native_return(self, val, typ, env_manager):
@@ -1093,7 +1114,7 @@ class PythonAPI(object):
         if impl is None:
             raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
 
-        c = _BoxContext(self.context, self.builder, self, env_manager)
+        c = _BoxUnboxContext(self.context, self.builder, self, env_manager)
         return impl(c, typ, val)
 
     def to_native_generator(self, obj, typ):
