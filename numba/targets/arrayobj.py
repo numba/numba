@@ -902,7 +902,7 @@ def fancy_getitem(context, builder, sig, args,
     # a positive index is returned.
     ptr = cgutils.get_item_pointer2(builder, data, shapes, strides,
                                     aryty.layout, indices, wraparound=False)
-    val = builder.load(ptr)
+    val = load_item(context, builder, aryty, ptr)
 
     # Since the destination is C-contiguous, no need for multi-dimensional
     # indexing.
@@ -974,7 +974,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                                 src_shapes, src_strides,
                                                 srcty.layout, source_indices,
                                                 wraparound=False)
-            return builder.load(src_ptr)
+            return load_item(context, builder, srcty, src_ptr)
 
     else:
         # Source is a scalar (broadcast or not, depending on destination
@@ -1000,7 +1000,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                          dest_shapes, dest_strides,
                                          aryty.layout, dest_indices,
                                          wraparound=False)
-    builder.store(val, dest_ptr)
+    store_item(context, builder, aryty, val, dest_ptr)
 
     indexer.end_loops()
 
