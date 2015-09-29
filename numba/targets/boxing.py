@@ -276,6 +276,7 @@ def unbox_optional(c, typ, obj):
 @unbox(types.Slice3Type)
 def unbox_slice(c, typ, obj):
     """
+    Convert object *obj* to a native slice structure.
     """
     from . import slicing
     ok, start, stop, step = \
