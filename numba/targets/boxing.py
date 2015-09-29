@@ -113,7 +113,6 @@ def unbox_complex(c, typ, obj):
 
 
 @box(types.NoneType)
-@box(types.EllipsisType)
 def box_none(c, typ, val):
     return c.pyapi.make_none()
 
