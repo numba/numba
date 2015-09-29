@@ -619,6 +619,10 @@ class ListPayloadModel(StructModel):
         members = [
             ('size', types.intp),
             ('allocated', types.intp),
+            # The two following members are used only for reflected lists
+            # but always present to enable trivial casting
+            ('parent', types.pyobject),
+            ('dirty', types.boolean),
             # Actually an inlined var-sized array
             ('data', fe_type.list_type.dtype),
         ]

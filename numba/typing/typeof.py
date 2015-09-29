@@ -117,9 +117,8 @@ def _typeof_tuple(val, c):
 def _typeof_list(val, c):
     if len(val) == 0:
         raise ValueError("Cannot type empty list")
-    # XXX reflected
     ty = typeof_impl(val[0], c)
-    return types.List(ty)
+    return types.List(ty, reflected=True)
 
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):

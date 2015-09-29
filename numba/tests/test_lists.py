@@ -295,16 +295,25 @@ def bool_list_usecase():
         x = x ^ v
     return l, x
 
+def reflect_simple(l, ll):
+    x = l.pop()
+    y = l.pop()
+    l[0] = 42.
+    l.extend(ll)
+    return l, x, y
+
+def reflect_conditional(l, ll):
+    # `l` may or may not actually reflect a Python list
+    if ll[0]:
+        l = [11., 22., 33., 44.]
+    x = l.pop()
+    y = l.pop()
+    l[0] = 42.
+    l.extend(ll)
+    return l, x, y
+
 
 class TestLists(MemoryLeakMixin, TestCase):
-
-    def test_identity_func(self):
-        pyfunc = identity_func
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l), pyfunc(l))
 
     def test_create_list(self):
         pyfunc = create_list
@@ -657,6 +666,32 @@ class TestLists(MemoryLeakMixin, TestCase):
         pyfunc = bool_list_usecase
         cfunc = jit(nopython=True)(pyfunc)
         self.assertPreciseEqual(cfunc(), pyfunc())
+
+
+class TestListReflection(MemoryLeakMixin, TestCase):
+    """
+    Test reflection of native Numba lists on Python list objects.
+    """
+
+    def check_reflection(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        samples = [([1., 2., 3., 4.], [0.]),
+                   ([1., 2., 3., 4.], [5., 6., 7., 8., 9.]),
+                   ]
+        for dest, src in samples:
+            expected = list(dest)
+            got = list(dest)
+            pyres = pyfunc(expected, src)
+            cres = cfunc(got, src)
+            self.assertPreciseEqual(cres, pyres)
+            self.assertPreciseEqual(expected, got)
+            self.assertEqual(pyres[0] is expected, cres[0] is got)
+
+    def test_reflect_simple(self):
+        self.check_reflection(reflect_simple)
+
+    def test_reflect_conditional(self):
+        self.check_reflection(reflect_conditional)
 
 
 if __name__ == '__main__':

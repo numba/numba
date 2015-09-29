@@ -405,25 +405,38 @@ def box_list(c, typ, val):
     Convert native list *val* to a list object.
     """
     list = listobj.ListInstance(c.context, c.builder, typ, val)
+    obj = list.parent
+    res = cgutils.alloca_once_value(c.builder, obj)
+    with c.builder.if_else(cgutils.is_not_null(c.builder, obj)) as (has_parent, otherwise):
+        with has_parent:
+            # List is actually reflected => return the original object
+            # (note not all list instances whose *type* is reflected are
+            #  actually reflected; see numba.tests.test_lists for an example)
+            c.pyapi.incref(obj)
 
-    nitems = list.size
-    obj = c.pyapi.list_new(nitems)
+        with otherwise:
+            # Build a new Python list
+            nitems = list.size
+            obj = c.pyapi.list_new(nitems)
+            with c.builder.if_then(cgutils.is_not_null(c.builder, obj),
+                                   likely=True):
+                with cgutils.for_range(c.builder, nitems) as loop:
+                    item = list.getitem(loop.index)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_setitem(obj, loop.index, itemobj)
 
-    with c.builder.if_then(cgutils.is_not_null(c.builder, obj),
-                           likely=True):
-        with cgutils.for_range(c.builder, nitems) as loop:
-            item = list.getitem(loop.index)
-            itemobj = c.box(typ.dtype, item)
-            c.pyapi.list_setitem(obj, loop.index, itemobj)
+            c.builder.store(obj, res)
 
     # Steal NRT ref
     c.context.nrt_decref(c.builder, typ, val)
-
-    return obj
+    return c.builder.load(res)
 
 
 @unbox(types.List)
 def unbox_list(c, typ, obj):
+    """
+    Convert list *obj* to a native list.
+    """
     size = c.pyapi.list_size(obj)
     ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
     with c.builder.if_then(ok, likely=True):
@@ -433,39 +446,46 @@ def unbox_list(c, typ, obj):
             # XXX error checking
             native = c.unbox(typ.dtype, itemobj)
             list.setitem(loop.index, native.value)
+        if typ.reflected:
+            c.pyapi.incref(obj)
+            list.parent = obj
 
     def cleanup():
         """
-        Reflect the native list's contents into the original list
+        Reflect the native list's contents into the Python original
         """
-        new_size = list.size
-        diff = c.builder.sub(new_size, size)
-        diff_gt_0 = c.builder.icmp_signed('>=', diff,
-                                          ir.Constant(diff.type, 0))
-        with c.builder.if_else(diff_gt_0) as (if_grow, if_shrink):
-            # XXX no error checking below
-            with if_grow:
-                # First overwrite existing items
-                with cgutils.for_range(c.builder, size) as loop:
-                    item = list.getitem(loop.index)
-                    itemobj = c.box(typ.dtype, item)
-                    c.pyapi.list_setitem(obj, loop.index, itemobj)
-                # Then add missing items
-                with cgutils.for_range(c.builder, diff) as loop:
-                    idx = c.builder.add(size, loop.index)
-                    item = list.getitem(idx)
-                    itemobj = c.box(typ.dtype, item)
-                    c.pyapi.list_append(obj, itemobj)
-                    c.pyapi.decref(itemobj)
+        if not typ.reflected:
+            return
+        with c.builder.if_then(list.dirty, likely=False):
+            new_size = list.size
+            diff = c.builder.sub(new_size, size)
+            diff_gt_0 = c.builder.icmp_signed('>=', diff,
+                                              ir.Constant(diff.type, 0))
+            with c.builder.if_else(diff_gt_0) as (if_grow, if_shrink):
+                # XXX no error checking below
+                with if_grow:
+                    # First overwrite existing items
+                    with cgutils.for_range(c.builder, size) as loop:
+                        item = list.getitem(loop.index)
+                        itemobj = c.box(typ.dtype, item)
+                        c.pyapi.list_setitem(obj, loop.index, itemobj)
+                    # Then add missing items
+                    with cgutils.for_range(c.builder, diff) as loop:
+                        idx = c.builder.add(size, loop.index)
+                        item = list.getitem(idx)
+                        itemobj = c.box(typ.dtype, item)
+                        c.pyapi.list_append(obj, itemobj)
+                        c.pyapi.decref(itemobj)
 
-            with if_shrink:
-                # First delete list tail
-                c.pyapi.list_setslice(obj, new_size, size, None)
-                # Then overwrite remaining items
-                with cgutils.for_range(c.builder, new_size) as loop:
-                    item = list.getitem(loop.index)
-                    itemobj = c.box(typ.dtype, item)
-                    c.pyapi.list_setitem(obj, loop.index, itemobj)
+                with if_shrink:
+                    # First delete list tail
+                    c.pyapi.list_setslice(obj, new_size, size, None)
+                    # Then overwrite remaining items
+                    with cgutils.for_range(c.builder, new_size) as loop:
+                        item = list.getitem(loop.index)
+                        itemobj = c.box(typ.dtype, item)
+                        c.pyapi.list_setitem(obj, loop.index, itemobj)
+        c.pyapi.decref(obj)
 
     return NativeValue(list.value, is_error=c.builder.not_(ok),
                        cleanup=cleanup)

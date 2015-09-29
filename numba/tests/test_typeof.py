@@ -167,6 +167,10 @@ class TestTypeof(ValueTypingTestBase, TestCase):
                                       types.Tuple((types.float64, types.intp))))
                          )
 
+    def test_lists(self):
+        v = [1.0] * 100
+        self.assertEqual(typeof(v), types.List(types.float64, reflected=True))
+
     def test_namedtuple(self):
         v = Point(1, 2)
         tp_point = typeof(v)
