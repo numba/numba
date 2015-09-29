@@ -14,7 +14,7 @@ from llvmlite.llvmpy import core as lc
 
 from . import builtins, ufunc_db, arrayobj
 from .imputils import implement, Registry, impl_ret_new_ref
-from .. import typing, types, cgutils, numpy_support
+from .. import typing, types, cgutils, numpy_support, utils
 from ..config import PYVERSION
 from ..numpy_support import ufunc_find_matching_loop
 from ..typing import npydecl
@@ -441,11 +441,24 @@ def register_binary_operator_kernel(operator, kernel):
     def lower_binary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
+
+    def lower_inplace_operator(context, builder, sig, args):
+        # The visible signature is (A, B) -> A
+        # The implementation's signature (with explicit output)
+        # is (A, B, A) -> A
+        args = args + (args[0],)
+        sig = typing.signature(sig.return_type, *sig.args + (sig.args[0],))
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
+                                  explicit_output=True)
+
     _any = types.Any
     _arr_kind = types.Kind(types.Array)
-    register(implement(operator, _arr_kind, _arr_kind)(lower_binary_operator))
-    register(implement(operator, _any, _arr_kind)(lower_binary_operator))
-    register(implement(operator, _arr_kind, _any)(lower_binary_operator))
+    formal_sigs = [(_arr_kind, _arr_kind), (_any, _arr_kind), (_arr_kind, _any)]
+    for sig in formal_sigs:
+        register(implement(operator, *sig)(lower_binary_operator))
+        inplace = operator + '='
+        if inplace in utils.inplace_map:
+            register(implement(inplace, *sig)(lower_inplace_operator))
 
 
 ################################################################################

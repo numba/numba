@@ -1,3 +1,43 @@
+
+Version 0.21.0
+--------------
+
+This release introduces support for AMD's Heterogeneous System Architecture,
+which allows memory to be shared directly between the CPU and the GPU.
+Other major enhancements are support for lists and the introduction of
+an opt-in compilation cache.
+
+Improvements:
+
+* PR #1391: Implement print() for CUDA code
+* PR #1366: Implement integer typing enhancement proposal (NBEP 1)
+* PR #1380: Support the one-argument type() builtin
+* PR #1375: Allow boolean evaluation of lists and tuples
+* PR #1371: Support array.view() in CUDA mode
+* PR #1369: Support named tuples in nopython mode
+* PR #1250: Implement numpy.median().
+* PR #1289: Make dispatching faster when calling a JIT-compiled function
+  from regular Python
+* Issue #1226: Improve performance of integer power
+* PR #1321: Document features supported with CUDA
+* PR #1345: HSA support
+* PR #1343: Support lists in nopython mode
+* PR #1356: Make Numba-allocated memory visible to tracemalloc
+* PR #1363: Add an environment variable NUMBA_DEBUG_TYPEINFER
+* PR #1051: Add an opt-in, per-function compilation cache
+
+Fixes:
+
+* Issue #1372: Some array expressions would fail rewriting when involved
+  the same variable more than once, or a unary operator
+* Issue #1385: Allow CUDA local arrays to be declared anywhere in a function
+* Issue #1285: Support datetime64 and timedelta64 in Numpy reduction functions
+* Issue #1332: Handle the EXTENDED_ARG opcode.
+* PR #1329: Handle the ``in`` operator in object mode
+* Issue #1322: Fix augmented slice assignment on Python 2
+* PR #1357: Fix slicing with some negative bounds or step values.
+
+
 Version 0.20.0
 --------------
 
@@ -12,7 +52,7 @@ Improvements:
 * PR #1200: Migrate cgutils to llvmlite
 * PR #1190: Support more array methods: .transpose(), .T, .copy(), .reshape(), .view()
 * PR #1214: Simplify setup.py and avoid manual maintenance
-* PR #1217: Support datatime64 and timedelta64 constants
+* PR #1217: Support datetime64 and timedelta64 constants
 * PR #1236: Reload environment variables when compiling
 * PR #1225: Various speed improvements in generated code
 * PR #1252: Support cmath module in CUDA

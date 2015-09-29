@@ -87,16 +87,25 @@ def _make_binary_ufunc_op_usecase(ufunc_op):
     return fn
 
 
+def _make_inplace_ufunc_op_usecase(ufunc_op):
+    ldict = {}
+    exec("def fn(x,y):\n    x{0}y".format(ufunc_op), globals(), ldict)
+    fn = ldict["fn"]
+    fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
+    return fn
+
+
 def _as_dtype_value(tyargs, args):
     """Convert python values into numpy scalar objects.
     """
     return [np.dtype(str(ty)).type(val) for ty, val in zip(tyargs, args)]
 
 
-class TestUFuncs(MemoryLeakMixin, TestCase):
+
+class BaseUFuncTest(MemoryLeakMixin):
 
     def setUp(self):
-        super(TestUFuncs, self).setUp()
+        super(BaseUFuncTest, self).setUp()
         self.inputs = [
             (np.uint32(0), types.uint32),
             (np.uint32(1), types.uint32),
@@ -148,6 +157,9 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
             else:
                 output_type = types.Array(ty, 1, 'C')
         return output_type
+
+
+class TestUFuncs(BaseUFuncTest, TestCase):
 
     def unary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
@@ -231,27 +243,6 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
                                                expected.dtype, expected)
                         self.fail(msg)
 
-    def unary_op_test(self, operator, flags=enable_nrt_flags,
-                      skip_inputs=[], additional_inputs=[],
-                      int_output_type=None, float_output_type=None):
-        operator_func = _make_unary_ufunc_op_usecase(operator)
-        inputs = list(self.inputs)
-        inputs.extend(additional_inputs)
-        pyfunc = operator_func
-        for input_tuple in inputs:
-            input_operand, input_type = input_tuple
-
-            if ((input_type in skip_inputs) or
-                (not isinstance(input_type, types.Array))):
-                continue
-
-            cr = self.cache.compile(pyfunc, (input_type,),
-                                    flags=flags)
-            cfunc = cr.entry_point
-            expected = pyfunc(input_operand)
-            result = cfunc(input_operand)
-            np.testing.assert_array_almost_equal(expected, result)
-
     def binary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None,
@@ -293,55 +284,6 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
             cfunc(input_operand, input_operand, result)
             pyfunc(input_operand, input_operand, expected)
             np.testing.assert_array_almost_equal(expected, result)
-
-    def binary_op_test(self, operator, flags=enable_nrt_flags,
-                       skip_inputs=[], additional_inputs=[],
-                       int_output_type=None, float_output_type=None,
-                       positive_rhs=False):
-        operator_func = _make_binary_ufunc_op_usecase(operator)
-        inputs = list(self.inputs)
-        inputs.extend(additional_inputs)
-        pyfunc = operator_func
-        for input_tuple in inputs:
-            input_operand1, input_type = input_tuple
-            input_dtype = numpy_support.as_dtype(
-                getattr(input_type, "dtype", input_type))
-            input_type1 = input_type
-
-            if input_type in skip_inputs:
-                continue
-
-            if positive_rhs:
-                zero = np.zeros(1, dtype=input_dtype)[0]
-            # If we only use two scalars, the code generator will not
-            # select the ufunctionalized operator, so we mix it up.
-            if isinstance(input_type, types.Array):
-                input_operand0 = input_operand1
-                input_type0 = input_type
-                if positive_rhs and np.any(input_operand1 < zero):
-                    continue
-            else:
-                input_operand0 = (np.random.random(10) * 100).astype(
-                    input_dtype)
-                input_type0 = typeof(input_operand0)
-                if positive_rhs and input_operand1 < zero:
-                    continue
-
-            cr = self.cache.compile(pyfunc, (input_type0, input_type1),
-                                    flags=flags)
-            cfunc = cr.entry_point
-            expected = pyfunc(input_operand0, input_operand1)
-            result = cfunc(input_operand0, input_operand1)
-            np.testing.assert_array_almost_equal(expected, result)
-
-    def binary_int_op_test(self, *args, **kws):
-        if 'skip_inputs' not in kws:
-            kws['skip_inputs'] = []
-        kws['skip_inputs'].extend([
-            types.float32, types.float64,
-            types.Array(types.float32, 1, 'C'),
-            types.Array(types.float64, 1, 'C')])
-        return self.binary_op_test(*args, **kws)
 
     def unary_int_ufunc_test(self, name=None, flags=enable_pyobj_flags):
         self.unary_ufunc_test(name, flags=flags,
@@ -1111,36 +1053,195 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
             result = cfunc(x, y)
             np.testing.assert_array_equal(expected, result)
 
-    def test_implicit_output_layout(self):
+    def test_implicit_output_layout_binary(self):
         def pyfunc(a0, a1):
             return np.add(a0, a1)
+
+        # C layout
         X = np.linspace(0, 1, 20).reshape(4, 5)
+        # F layout
         Y = np.array(X, order='F')
+        # A layout
+        Z = X.reshape(5, 4).T[0]
+
         Xty = typeof(X)
         assert X.flags.c_contiguous and Xty.layout == 'C'
         Yty = typeof(Y)
         assert Y.flags.f_contiguous and Yty.layout == 'F'
+        Zty = typeof(Z)
+        assert Zty.layout == 'A'
+        assert not Z.flags.c_contiguous
+        assert not Z.flags.f_contiguous
 
-        cr0 = self.cache.compile(pyfunc, (Xty, Yty), flags=enable_nrt_flags)
-        expected0 = np.add(X, Y)
-        result0 = cr0.entry_point(X, Y)
-        self.assertEqual(expected0.flags.c_contiguous,
-                         result0.flags.c_contiguous)
-        self.assertEqual(expected0.flags.f_contiguous,
-                         result0.flags.f_contiguous)
-        np.testing.assert_array_equal(expected0, result0)
+        testcases = list(itertools.permutations([X, Y, Z], 2))
+        testcases += [(X, X)]
+        testcases += [(Y, Y)]
+        testcases += [(Z, Z)]
 
-        cr1 = self.cache.compile(pyfunc, (Yty, Yty), flags=enable_nrt_flags)
-        expected1 = np.add(Y, Y)
-        result1 = cr1.entry_point(Y, Y)
-        self.assertEqual(expected1.flags.c_contiguous,
-                         result1.flags.c_contiguous)
-        self.assertEqual(expected1.flags.f_contiguous,
-                         result1.flags.f_contiguous)
-        np.testing.assert_array_equal(expected1, result1)
+        for arg0, arg1 in testcases:
+            cr = self.cache.compile(pyfunc, (typeof(arg0), typeof(arg1)),
+                                    flags=enable_nrt_flags)
+            expected = pyfunc(arg0, arg1)
+            result = cr.entry_point(arg0, arg1)
+
+            self.assertEqual(expected.flags.c_contiguous,
+                             result.flags.c_contiguous)
+            self.assertEqual(expected.flags.f_contiguous,
+                             result.flags.f_contiguous)
+            np.testing.assert_array_equal(expected, result)
+
+    def test_implicit_output_layout_unary(self):
+        def pyfunc(a0):
+            return np.sqrt(a0)
+
+        # C layout
+        X = np.linspace(0, 1, 20).reshape(4, 5)
+        # F layout
+        Y = np.array(X, order='F')
+        # A layout
+        Z = X.reshape(5, 4).T[0]
+
+        Xty = typeof(X)
+        assert X.flags.c_contiguous and Xty.layout == 'C'
+        Yty = typeof(Y)
+        assert Y.flags.f_contiguous and Yty.layout == 'F'
+        Zty = typeof(Z)
+        assert Zty.layout == 'A'
+        assert not Z.flags.c_contiguous
+        assert not Z.flags.f_contiguous
+
+        for arg0 in [X, Y, Z]:
+            cr = self.cache.compile(pyfunc, (typeof(arg0),),
+                                    flags=enable_nrt_flags)
+            expected = pyfunc(arg0)
+            result = cr.entry_point(arg0)
+
+            self.assertEqual(expected.flags.c_contiguous,
+                             result.flags.c_contiguous)
+            self.assertEqual(expected.flags.f_contiguous,
+                             result.flags.f_contiguous)
+            np.testing.assert_array_equal(expected, result)
+
+
+
+class TestArrayOperators(BaseUFuncTest, TestCase):
+
+    def unary_op_test(self, operator, flags=enable_nrt_flags,
+                      skip_inputs=[], additional_inputs=[],
+                      int_output_type=None, float_output_type=None):
+        operator_func = _make_unary_ufunc_op_usecase(operator)
+        inputs = list(self.inputs)
+        inputs.extend(additional_inputs)
+        pyfunc = operator_func
+        for input_tuple in inputs:
+            input_operand, input_type = input_tuple
+
+            if ((input_type in skip_inputs) or
+                (not isinstance(input_type, types.Array))):
+                continue
+
+            cr = self.cache.compile(pyfunc, (input_type,),
+                                    flags=flags)
+            cfunc = cr.entry_point
+            expected = pyfunc(input_operand)
+            result = cfunc(input_operand)
+            np.testing.assert_array_almost_equal(expected, result)
+
+    def binary_op_test(self, operator, flags=enable_nrt_flags,
+                       skip_inputs=[], additional_inputs=[],
+                       int_output_type=None, float_output_type=None,
+                       positive_rhs=False):
+        operator_func = _make_binary_ufunc_op_usecase(operator)
+        inputs = list(self.inputs)
+        inputs.extend(additional_inputs)
+        pyfunc = operator_func
+        for input_tuple in inputs:
+            input_operand1, input_type = input_tuple
+            input_dtype = numpy_support.as_dtype(
+                getattr(input_type, "dtype", input_type))
+            input_type1 = input_type
+
+            if input_type in skip_inputs:
+                continue
+
+            if positive_rhs:
+                zero = np.zeros(1, dtype=input_dtype)[0]
+            # If we only use two scalars, the code generator will not
+            # select the ufunctionalized operator, so we mix it up.
+            if isinstance(input_type, types.Array):
+                input_operand0 = input_operand1
+                input_type0 = input_type
+                if positive_rhs and np.any(input_operand1 < zero):
+                    continue
+            else:
+                input_operand0 = (np.random.random(10) * 100).astype(
+                    input_dtype)
+                input_type0 = typeof(input_operand0)
+                if positive_rhs and input_operand1 < zero:
+                    continue
+
+            cr = self.cache.compile(pyfunc, (input_type0, input_type1),
+                                    flags=flags)
+            cfunc = cr.entry_point
+            expected = pyfunc(input_operand0, input_operand1)
+            result = cfunc(input_operand0, input_operand1)
+            np.testing.assert_array_almost_equal(expected, result)
+
+    def binary_int_op_test(self, *args, **kws):
+        if 'skip_inputs' not in kws:
+            kws['skip_inputs'] = []
+        kws['skip_inputs'].extend([
+            types.float32, types.float64,
+            types.Array(types.float32, 1, 'C'),
+            types.Array(types.float64, 1, 'C')])
+        return self.binary_op_test(*args, **kws)
+
+    def _make_arrays(self, dtypes):
+        for dtype in dtypes:
+            yield np.linspace(0, 5, 3).astype(dtype)
+            yield np.linspace(1, 6, 3).astype(dtype)
+
+    def inplace_op_test(self, operator, lhs_values, rhs_values,
+                        lhs_dtypes, rhs_dtypes):
+        operator_func = _make_inplace_ufunc_op_usecase(operator)
+        pyfunc = operator_func
+
+        # The left operand can only be an array, while the right operand
+        # can be either an array or a scalar
+        lhs_inputs = [np.array(lhs_values, dtype=dtype)
+                      for dtype in lhs_dtypes]
+
+        rhs_arrays = [np.array(rhs_values, dtype=dtype)
+                      for dtype in rhs_dtypes]
+        rhs_scalars = [dtype(v) for v in rhs_values for dtype in rhs_dtypes]
+        rhs_inputs = rhs_arrays + rhs_scalars
+
+        for lhs, rhs in itertools.product(lhs_inputs, rhs_inputs):
+            lhs_type = typeof(lhs)
+            rhs_type = typeof(rhs)
+            cr = self.cache.compile(pyfunc, (lhs_type, rhs_type),
+                                    flags=no_pyobj_flags)
+            cfunc = cr.entry_point
+            expected = lhs.copy()
+            pyfunc(expected, rhs)
+            got = lhs.copy()
+            cfunc(got, rhs)
+            self.assertPreciseEqual(got, expected)
+
+    def inplace_float_op_test(self, operator, lhs_values, rhs_values):
+        # Also accept integer inputs for the right operand (they should
+        # be converted to float).
+        return self.inplace_op_test(operator, lhs_values, rhs_values,
+                                    (np.float32, np.float64),
+                                    (np.float32, np.float64, np.int64))
+
+    def inplace_int_op_test(self, operator, lhs_values, rhs_values):
+        return self.inplace_op_test(operator, lhs_values, rhs_values,
+                                    (np.int16, np.int32, np.int64),
+                                    (np.int16, np.uint32))
 
     # ____________________________________________________________
-    # Array operators
+    # Unary operators
 
     def test_unary_positive_array_op(self):
         self.unary_op_test('+')
@@ -1153,6 +1254,70 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
             types.float32, types.float64,
             types.Array(types.float32, 1, 'C'),
             types.Array(types.float64, 1, 'C')])
+
+    # ____________________________________________________________
+    # Inplace operators
+
+    def test_inplace_add(self):
+        self.inplace_float_op_test('+=', [-1, 1.5, 3], [-5, 0, 2.5])
+
+    def test_inplace_sub(self):
+        self.inplace_float_op_test('-=', [-1, 1.5, 3], [-5, 0, 2.5])
+
+    def test_inplace_mul(self):
+        self.inplace_float_op_test('*=', [-1, 1.5, 3], [-5, 0, 2.5])
+
+    def test_inplace_floordiv(self):
+        self.inplace_float_op_test('//=', [-1, 1.5, 3], [-5, 0, 2.5])
+
+    def test_inplace_div(self):
+        self.inplace_float_op_test('/=', [-1, 1.5, 3], [-5, 0, 2.5])
+
+    def test_inplace_remainder(self):
+        self.inplace_float_op_test('%=', [-1, 1.5, 3], [-5, 2, 2.5])
+
+    def test_inplace_pow(self):
+        self.inplace_float_op_test('**=', [-1, 1.5, 3], [-5, 2, 2.5])
+
+    def test_inplace_and(self):
+        self.inplace_int_op_test('&=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+
+    def test_inplace_or(self):
+        self.inplace_int_op_test('|=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+
+    def test_inplace_xor(self):
+        self.inplace_int_op_test('^=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+
+    def test_inplace_lshift(self):
+        self.inplace_int_op_test('<<=', [0, 5, -10, -51], [0, 1, 4, 14])
+
+    def test_inplace_rshift(self):
+        self.inplace_int_op_test('>>=', [0, 5, -10, -51], [0, 1, 4, 14])
+
+    def test_unary_positive_array_op(self):
+        '''
+        Verify that the unary positive operator copies values, and doesn't
+        just alias to the input array (mirrors normal Numpy/Python
+        interaction behavior).
+        '''
+        # Test originally from @gmarkall
+        def f(a1):
+            a2 = +a1
+            a1[0] = 3
+            a2[1] = 4
+            return a2
+
+        a1 = np.zeros(10)
+        a2 = f(a1)
+        self.assertTrue(a1[0] != a2[0] and a1[1] != a2[1])
+        a3 = np.zeros(10)
+        a4 = njit(f)(a3)
+        self.assertTrue(a3[0] != a4[0] and a3[1] != a4[1])
+        np.testing.assert_array_equal(a1, a3)
+        np.testing.assert_array_equal(a2, a4)
+
+    # ____________________________________________________________
+    # Binary operators
 
     def test_add_array_op(self):
         self.binary_op_test('+')
@@ -1210,28 +1375,6 @@ class TestUFuncs(MemoryLeakMixin, TestCase):
 
     def test_not_equal_array_op(self):
         self.binary_op_test('!=')
-
-    def test_unary_positive_array_op(self):
-        '''
-        Verify that the unary positive operator copies values, and doesn't
-        just alias to the input array (mirrors normal Numpy/Python
-        interaction behavior).
-        '''
-        # Test originally from @gmarkall
-        def f(a1):
-            a2 = +a1
-            a1[0] = 3
-            a2[1] = 4
-            return a2
-
-        a1 = np.zeros(10)
-        a2 = f(a1)
-        self.assertTrue(a1[0] != a2[0] and a1[1] != a2[1])
-        a3 = np.zeros(10)
-        a4 = njit(f)(a3)
-        self.assertTrue(a3[0] != a4[0] and a3[1] != a4[1])
-        np.testing.assert_array_equal(a1, a3)
-        np.testing.assert_array_equal(a2, a4)
 
 
 class TestScalarUFuncs(TestCase):
@@ -1381,6 +1524,7 @@ class _TestLoopTypes(TestCase):
     _ufuncs = all_ufuncs[:]
     # Have their own test classes
     _ufuncs.remove(np.left_shift)
+    _ufuncs.remove(np.right_shift)
     _ufuncs.remove(np.reciprocal)
     _ufuncs.remove(np.power)
     _compile_flags = enable_pyobj_flags

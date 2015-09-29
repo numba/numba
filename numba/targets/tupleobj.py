@@ -6,7 +6,7 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 
 from .imputils import (builtin, builtin_attr, implement, impl_attribute,
-                       impl_attribute_generic, iternext_impl, struct_factory,
+                       impl_attribute_generic, iternext_impl,
                        impl_ret_borrowed, impl_ret_untracked)
 from .. import typing, types, cgutils
 
@@ -118,7 +118,6 @@ def namedtuple_getattr(context, builder, typ, value, attr):
 #------------------------------------------------------------------------------
 # Tuple iterators
 
-@struct_factory(types.UniTupleIter)
 def make_unituple_iter(tupiter):
     """
     Return the Structure representation of the given *tupiter* (an

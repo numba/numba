@@ -15,7 +15,6 @@ from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     builtin_registry, impl_attribute,
-                                    type_registry,
                                     impl_ret_borrowed)
 from . import (
     arrayobj, builtins, iterators, rangeobj, optional, slicing, tupleobj)
@@ -296,29 +295,28 @@ class BaseContext(object):
         The return value is a llvmlite.ir.Type object, or None if the type
         is an opaque pointer (???).
         """
-        try:
-            fac = type_registry.match(ty)
-        except KeyError:
-            pass
-        else:
-            return fac(self, ty)
-
         return self.data_model_manager[ty].get_data_type()
 
     def get_value_type(self, ty):
         return self.data_model_manager[ty].get_value_type()
 
-    def pack_value(self, builder, ty, value, ptr):
-        """Pack data for array storage
+    def pack_value(self, builder, ty, value, ptr, align=None):
+        """
+        Pack value into the array storage at *ptr*.
+        If *align* is given, it is the guaranteed alignment for *ptr*
+        (by default, the standard ABI alignment).
         """
         dataval = self.data_model_manager[ty].as_data(builder, value)
-        builder.store(dataval, ptr)
+        builder.store(dataval, ptr, align=align)
 
-    def unpack_value(self, builder, ty, ptr):
-        """Unpack data from array storage
+    def unpack_value(self, builder, ty, ptr, align=None):
+        """
+        Unpack value from the array storage at *ptr*.
+        If *align* is given, it is the guaranteed alignment for *ptr*
+        (by default, the standard ABI alignment).
         """
         dm = self.data_model_manager[ty]
-        return dm.load_from_data_pointer(builder, ptr)
+        return dm.load_from_data_pointer(builder, ptr, align)
 
     def is_struct_type(self, ty):
         return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
@@ -426,7 +424,8 @@ class BaseContext(object):
                 dptr = cgutils.get_record_member(builder, target, offset,
                                                  self.get_data_type(elemty))
                 val = context.cast(builder, val, valty, elemty)
-                self.pack_value(builder, elemty, val, dptr)
+                align = None if typ.aligned else 1
+                self.pack_value(builder, elemty, val, dptr, align=align)
 
             return _wrap_impl(imp, self, sig)
 
@@ -513,8 +512,9 @@ class BaseContext(object):
                 @impl_attribute(typ, attr, elemty)
                 def imp(context, builder, typ, val):
                     dptr = cgutils.get_record_member(builder, val, offset,
-                                                     self.get_data_type(elemty))
-                    res = self.unpack_value(builder, elemty, dptr)
+                                                     context.get_data_type(elemty))
+                    align = None if typ.aligned else 1
+                    res = self.unpack_value(builder, elemty, dptr, align)
                     return impl_ret_borrowed(context, builder, typ, res)
             return imp
 
@@ -673,28 +673,13 @@ class BaseContext(object):
             dst.imag = self.cast(builder, src.imag, srcty, dstty)
             return dst._getvalue()
 
-        elif (isinstance(toty, types.UniTuple) and
-                  isinstance(fromty, types.UniTuple) and
-                      len(fromty) == len(toty)):
-            olditems = cgutils.unpack_tuple(builder, val, len(fromty))
-            items = [self.cast(builder, i, fromty.dtype, toty.dtype)
-                     for i in olditems]
-            tup = self.get_constant_undef(toty)
-            for idx, val in enumerate(items):
-                tup = builder.insert_value(tup, val, idx)
-            return tup
-
         elif (isinstance(fromty, (types.UniTuple, types.Tuple)) and
-                  isinstance(toty, (types.UniTuple, types.Tuple)) and
-                      len(toty) == len(fromty)):
-
+              isinstance(toty, (types.UniTuple, types.Tuple)) and
+              len(toty) == len(fromty)):
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
             items = [self.cast(builder, i, f, t)
                      for i, f, t in zip(olditems, fromty, toty)]
-            tup = self.get_constant_undef(toty)
-            for idx, val in enumerate(items):
-                tup = builder.insert_value(tup, val, idx)
-            return tup
+            return cgutils.make_anonymous_struct(builder, items)
 
         elif toty == types.boolean:
             return self.is_true(builder, fromty, val)
@@ -727,6 +712,13 @@ class BaseContext(object):
             # Type inference should have prevented illegal array casting.
             assert toty.layout == 'A'
             return val
+
+        elif (isinstance(fromty, types.RangeType) and
+              isinstance(toty, types.RangeType)):
+            olditems = cgutils.unpack_tuple(builder, val, 3)
+            items = [self.cast(builder, v, fromty.dtype, toty.dtype)
+                     for v in olditems]
+            return cgutils.make_anonymous_struct(builder, items)
 
         elif fromty in types.integer_domain and toty == types.voidptr:
             return builder.inttoptr(val, self.get_value_type(toty))
@@ -765,6 +757,9 @@ class BaseContext(object):
         return optval._getvalue()
 
     def is_true(self, builder, typ, val):
+        """
+        Return the truth value of a value of the given Numba type.
+        """
         impl = self.get_function(bool, typing.signature(types.boolean, typ))
         return impl(builder, (val,))
 

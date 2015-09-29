@@ -1,21 +1,13 @@
 from __future__ import print_function, absolute_import, division
+
 import sys
-from contextlib import contextmanager
+
 import numpy
+
 from numba import numpy_support, types
 from numba.compiler import compile_isolated
 from numba import unittest_support as unittest
-from numba.io_support import StringIO
-
-
-@contextmanager
-def swap_stdout():
-    old_stdout = sys.stdout
-    sys.stdout = StringIO()
-    try:
-        yield
-    finally:
-        sys.stdout = old_stdout
+from .support import captured_stdout
 
 
 def usecase1(arr1, arr2):
@@ -71,9 +63,16 @@ def usecase5(x, N):
 
 
 class TestRecordUsecase(unittest.TestCase):
+
+    def setUp(self):
+        fields = [('f1', '<f8'), ('s1', '|S3'), ('f2', '<f8')]
+        self.unaligned_dtype = numpy.dtype(fields)
+        self.aligned_dtype = numpy.dtype(fields, align=True)
+
     def test_usecase1(self):
         pyfunc = usecase1
 
+        # This is an unaligned dtype
         mystruct_dt = numpy.dtype([('p', numpy.float64),
                            ('row', numpy.float64),
                            ('col', numpy.float64)])
@@ -105,42 +104,45 @@ class TestRecordUsecase(unittest.TestCase):
         self.assertTrue(numpy.all(expect1 == got1))
         self.assertTrue(numpy.all(expect2 == got2))
 
-    def _setup_usecase2to5(self):
-        dtype = numpy.dtype([('f1', '<f8'), ('s1', '|S3'), ('f2', '<f8')])
+    def _setup_usecase2to5(self, dtype):
         N = 5
         a = numpy.recarray(N, dtype=dtype)
         a.f1 = numpy.arange(N)
         a.f2 = numpy.arange(2, N + 2)
         a.s1 = numpy.array(['abc'] * a.shape[0], dtype='|S3')
-        return a, dtype, N
+        return a
 
-    def _test_usecase2to5(self, pyfunc):
-        array, dtype, N = self._setup_usecase2to5()
+    def _test_usecase2to5(self, pyfunc, dtype):
+        array = self._setup_usecase2to5(dtype)
         record_type = numpy_support.from_dtype(dtype)
         cres = compile_isolated(pyfunc, (record_type[:], types.intp))
         cfunc = cres.entry_point
 
-        with swap_stdout():
-            pyfunc(array, N)
+        with captured_stdout():
+            pyfunc(array, len(array))
             expect = sys.stdout.getvalue()
 
-        with swap_stdout():
-            cfunc(array, N)
+        with captured_stdout():
+            cfunc(array, len(array))
             got = sys.stdout.getvalue()
 
         self.assertEqual(expect, got)
 
     def test_usecase2(self):
-        self._test_usecase2to5(usecase2)
+        self._test_usecase2to5(usecase2, self.unaligned_dtype)
+        self._test_usecase2to5(usecase2, self.aligned_dtype)
 
     def test_usecase3(self):
-        self._test_usecase2to5(usecase3)
+        self._test_usecase2to5(usecase3, self.unaligned_dtype)
+        self._test_usecase2to5(usecase3, self.aligned_dtype)
 
     def test_usecase4(self):
-        self._test_usecase2to5(usecase4)
+        self._test_usecase2to5(usecase4, self.unaligned_dtype)
+        self._test_usecase2to5(usecase4, self.aligned_dtype)
 
     def test_usecase5(self):
-        self._test_usecase2to5(usecase5)
+        self._test_usecase2to5(usecase5, self.unaligned_dtype)
+        self._test_usecase2to5(usecase5, self.aligned_dtype)
 
 
 if __name__ == '__main__':

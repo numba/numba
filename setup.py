@@ -94,6 +94,12 @@ ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
                                         "numba/npyufunc/_internal.h",
                                         "numba/_pymodule.h"])
 
+ext_npyufunc_workqueue = Extension(
+    name='numba.npyufunc.workqueue',
+    sources=['numba/npyufunc/workqueue.c'],
+    depends=['numba/npyufunc/workqueue.h'])
+
+
 ext_mviewbuf = Extension(name='numba.mviewbuf',
                          sources=['numba/mviewbuf.c'])
 
@@ -105,7 +111,8 @@ ext_nrt_python = Extension(name='numba.runtime._nrt_python',
                            include_dirs=["numba"] + npymath_info['include_dirs'])
 
 ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
-               ext_helperlib, ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf,
+               ext_helperlib, ext_typeconv,
+               ext_npyufunc_ufunc, ext_npyufunc_workqueue, ext_mviewbuf,
                ext_nrt_python]
 
 

@@ -170,9 +170,9 @@ class Expr(Inst):
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
-    def build_map(cls, size, loc):
+    def build_map(cls, items, size, loc):
         op = 'build_map'
-        return cls(op=op, loc=loc, size=size)
+        return cls(op=op, loc=loc, items=items, size=size)
 
     @classmethod
     def pair_first(cls, value, loc):

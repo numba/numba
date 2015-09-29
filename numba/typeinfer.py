@@ -4,12 +4,12 @@ The algorithm guarantees monotonic growth of type-sets for each variable.
 
 Steps:
     1. seed initial types
-    2. build constrains
-    3. propagate constrains
+    2. build constraints
+    3. propagate constraints
     4. unify types
 
-Constrain propagation is precise and does not regret (no backtracing).
-Constrains push types forward following the dataflow.
+Constraint propagation is precise and does not regret (no backtracing).
+Constraints push types forward following the dataflow.
 """
 
 from __future__ import print_function, division, absolute_import
@@ -87,17 +87,17 @@ class TypeVar(object):
         return 1 if self.type is not None else 0
 
 
-class ConstrainNetwork(object):
+class ConstraintNetwork(object):
     """
-    TODO: It is possible to optimize constrain propagation to consider only
+    TODO: It is possible to optimize constraint propagation to consider only
           dirty type variables.
     """
 
     def __init__(self):
-        self.constrains = []
+        self.constraints = []
 
-    def append(self, constrain):
-        self.constrains.append(constrain)
+    def append(self, constraint):
+        self.constraints.append(constraint)
 
     def propagate(self, typeinfer):
         """
@@ -106,24 +106,24 @@ class ConstrainNetwork(object):
         due to lack of information (e.g. imprecise types such as List(undefined)).
         """
         errors = []
-        for constrain in self.constrains:
+        for constraint in self.constraints:
             try:
-                constrain(typeinfer)
+                constraint(typeinfer)
             except TypingError as e:
                 errors.append(e)
             except Exception:
                 msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
-                e = TypingError(msg.format(con=constrain,
+                e = TypingError(msg.format(con=constraint,
                                            err=traceback.format_exc(),
                                            sep='--%<' +'-' * 65),
-                                loc=constrain.loc)
+                                loc=constraint.loc)
                 errors.append(e)
         return errors
 
 
 class Propagate(object):
     """
-    A simple constrain for direct propagation of types for assignments.
+    A simple constraint for direct propagation of types for assignments.
     """
 
     def __init__(self, dst, src, loc):
@@ -142,7 +142,7 @@ class Propagate(object):
         typeinfer.add_type(self.src, target_type, unless_locked=True)
 
 
-class BuildTupleConstrain(object):
+class BuildTupleConstraint(object):
     def __init__(self, target, items, loc):
         self.target = target
         self.items = items
@@ -161,7 +161,7 @@ class BuildTupleConstrain(object):
             typeinfer.add_type(self.target, tup)
 
 
-class BuildListConstrain(object):
+class BuildListConstraint(object):
     def __init__(self, target, items, loc):
         self.target = target
         self.items = items
@@ -179,7 +179,7 @@ class BuildListConstrain(object):
                 typeinfer.add_type(self.target, types.List(unified))
 
 
-class ExhaustIterConstrain(object):
+class ExhaustIterConstraint(object):
     def __init__(self, target, count, iterator, loc):
         self.target = target
         self.count = count
@@ -203,7 +203,7 @@ class ExhaustIterConstrain(object):
                 typeinfer.add_type(self.target, tup)
 
 
-class PairFirstConstrain(object):
+class PairFirstConstraint(object):
     def __init__(self, target, pair, loc):
         self.target = target
         self.pair = pair
@@ -219,7 +219,7 @@ class PairFirstConstrain(object):
             typeinfer.add_type(self.target, tp.first_type)
 
 
-class PairSecondConstrain(object):
+class PairSecondConstraint(object):
     def __init__(self, target, pair, loc):
         self.target = target
         self.pair = pair
@@ -235,7 +235,7 @@ class PairSecondConstrain(object):
             typeinfer.add_type(self.target, tp.second_type)
 
 
-class StaticGetItemConstrain(object):
+class StaticGetItemConstraint(object):
     def __init__(self, target, value, index, loc):
         self.target = target
         self.value = value
@@ -250,8 +250,8 @@ class StaticGetItemConstrain(object):
                 typeinfer.add_type(self.target, tp.types[self.index])
 
 
-class CallConstrain(object):
-    """Constrain for calling functions.
+class CallConstraint(object):
+    """Constraint for calling functions.
     Perform case analysis foreach combinations of argument types.
     """
     signature = None
@@ -319,12 +319,12 @@ class CallConstrain(object):
         return self.signature
 
 
-class IntrinsicCallConstrain(CallConstrain):
+class IntrinsicCallConstraint(CallConstraint):
     def __call__(self, typeinfer):
         self.resolve(typeinfer, typeinfer.typevars, fnty=self.func)
 
 
-class GetAttrConstrain(object):
+class GetAttrConstraint(object):
     def __init__(self, target, attr, value, loc, inst):
         self.target = target
         self.attr = attr
@@ -359,7 +359,7 @@ class GetAttrConstrain(object):
             value=self.value, attr=self.attr)
 
 
-class SetItemConstrain(object):
+class SetItemConstraint(object):
     def __init__(self, target, index, value, loc):
         self.target = target
         self.index = index
@@ -379,7 +379,7 @@ class SetItemConstrain(object):
                                   (ty, it, vt), loc=self.loc)
 
 
-class DelItemConstrain(object):
+class DelItemConstraint(object):
     def __init__(self, target, index, loc):
         self.target = target
         self.index = index
@@ -396,7 +396,7 @@ class DelItemConstrain(object):
                                   (ty, it), loc=self.loc)
 
 
-class SetAttrConstrain(object):
+class SetAttrConstraint(object):
     def __init__(self, target, attr, value, loc):
         self.target = target
         self.attr = attr
@@ -445,7 +445,7 @@ class TypeInferer(object):
         self.py_func = interp.bytecode.func
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
-        self.constrains = ConstrainNetwork()
+        self.constraints = ConstraintNetwork()
 
         # { index: mangled name }
         self.arg_names = {}
@@ -488,7 +488,7 @@ class TypeInferer(object):
             if isinstance(inst, ir.Return):
                 self.lock_type(inst.value.name, typ)
 
-    def build_constrain(self):
+    def build_constraint(self):
         for blk in utils.itervalues(self.blocks):
             for inst in blk.body:
                 self.constrain_statement(inst)
@@ -503,7 +503,7 @@ class TypeInferer(object):
             oldtoken = newtoken
             # Errors can appear when the type set is incomplete; only
             # raise them when there is no progress anymore.
-            errors = self.constrains.propagate(self)
+            errors = self.constraints.propagate(self)
             newtoken = self.get_state_token()
             self.debug.propagate_finished()
         if errors:
@@ -582,8 +582,8 @@ class TypeInferer(object):
         """
         # XXX why can't this be done on the fly?
         calltypes = utils.UniqueDict()
-        for call, constrain in self.intrcalls:
-            calltypes[call] = constrain.get_call_signature()
+        for call, constraint in self.intrcalls:
+            calltypes[call] = constraint.get_call_signature()
 
         for call, args, kws, vararg in self.usercalls:
             if isinstance(call.func, ir.Intrinsic):
@@ -663,21 +663,21 @@ class TypeInferer(object):
             raise NotImplementedError(inst)
 
     def typeof_setitem(self, inst):
-        constrain = SetItemConstrain(target=inst.target, index=inst.index,
-                                     value=inst.value, loc=inst.loc)
-        self.constrains.append(constrain)
+        constraint = SetItemConstraint(target=inst.target, index=inst.index,
+                                       value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
         self.setitemcalls.append(inst)
 
     def typeof_delitem(self, inst):
-        constrain = DelItemConstrain(target=inst.target, index=inst.index,
-                                     loc=inst.loc)
-        self.constrains.append(constrain)
+        constraint = DelItemConstraint(target=inst.target, index=inst.index,
+                                       loc=inst.loc)
+        self.constraints.append(constraint)
         self.delitemcalls.append(inst)
 
     def typeof_setattr(self, inst):
-        constrain = SetAttrConstrain(target=inst.target, attr=inst.attr,
-                                     value=inst.value, loc=inst.loc)
-        self.constrains.append(constrain)
+        constraint = SetAttrConstraint(target=inst.target, attr=inst.attr,
+                                       value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
         self.setattrcalls.append(inst)
 
     def typeof_assign(self, inst):
@@ -685,8 +685,8 @@ class TypeInferer(object):
         if isinstance(value, ir.Const):
             self.typeof_const(inst, inst.target, value.value)
         elif isinstance(value, ir.Var):
-            self.constrains.append(Propagate(dst=inst.target.name,
-                                             src=value.name, loc=inst.loc))
+            self.constraints.append(Propagate(dst=inst.target.name,
+                                              src=value.name, loc=inst.loc))
         elif isinstance(value, (ir.Global, ir.FreeVar)):
             self.typeof_global(inst, inst.target, value)
         elif isinstance(value, ir.Arg):
@@ -712,9 +712,9 @@ class TypeInferer(object):
 
     def typeof_arg(self, inst, target, arg):
         src_name = self._mangle_arg_name(arg.name)
-        self.constrains.append(Propagate(dst=target.name,
-                                         src=src_name,
-                                         loc=inst.loc))
+        self.constraints.append(Propagate(dst=target.name,
+                                          src=src_name,
+                                          loc=inst.loc))
 
     def typeof_const(self, inst, target, const):
         self.lock_type(target.name, self.resolve_value_type(inst, const))
@@ -766,67 +766,64 @@ class TypeInferer(object):
         elif expr.op in ('getiter', 'iternext'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'exhaust_iter':
-            constrain = ExhaustIterConstrain(target.name, count=expr.count,
-                                             iterator=expr.value,
-                                             loc=expr.loc)
-            self.constrains.append(constrain)
+            constraint = ExhaustIterConstraint(target.name, count=expr.count,
+                                               iterator=expr.value,
+                                               loc=expr.loc)
+            self.constraints.append(constraint)
         elif expr.op == 'pair_first':
-            constrain = PairFirstConstrain(target.name, pair=expr.value,
-                                           loc=expr.loc)
-            self.constrains.append(constrain)
+            constraint = PairFirstConstraint(target.name, pair=expr.value,
+                                             loc=expr.loc)
+            self.constraints.append(constraint)
         elif expr.op == 'pair_second':
-            constrain = PairSecondConstrain(target.name, pair=expr.value,
-                                            loc=expr.loc)
-            self.constrains.append(constrain)
+            constraint = PairSecondConstraint(target.name, pair=expr.value,
+                                              loc=expr.loc)
+            self.constraints.append(constraint)
         elif expr.op == 'binop':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
         elif expr.op == 'inplace_binop':
-            # We assume type constraints for inplace operators to be the
-            # same as for normal operators.  This may have to be refined in
-            # the future.
-            self.typeof_intrinsic_call(inst, target, expr.immutable_fn,
+            self.typeof_intrinsic_call(inst, target, expr.fn,
                                        expr.lhs, expr.rhs)
         elif expr.op == 'unary':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.value)
         elif expr.op == 'static_getitem':
-            constrain = StaticGetItemConstrain(target.name, value=expr.value,
-                                               index=expr.index,
-                                               loc=expr.loc)
-            self.constrains.append(constrain)
+            constraint = StaticGetItemConstraint(target.name, value=expr.value,
+                                                 index=expr.index,
+                                                 loc=expr.loc)
+            self.constraints.append(constraint)
         elif expr.op == 'getitem':
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value,
                                        expr.index)
         elif expr.op == 'getattr':
-            constrain = GetAttrConstrain(target.name, attr=expr.attr,
-                                         value=expr.value, loc=inst.loc,
-                                         inst=inst)
-            self.constrains.append(constrain)
+            constraint = GetAttrConstraint(target.name, attr=expr.attr,
+                                           value=expr.value, loc=inst.loc,
+                                           inst=inst)
+            self.constraints.append(constraint)
         elif expr.op == 'build_tuple':
-            constrain = BuildTupleConstrain(target.name, items=expr.items,
-                                            loc=inst.loc)
-            self.constrains.append(constrain)
+            constraint = BuildTupleConstraint(target.name, items=expr.items,
+                                              loc=inst.loc)
+            self.constraints.append(constraint)
         elif expr.op == 'build_list':
-            constrain = BuildListConstrain(target.name, items=expr.items,
-                                           loc=inst.loc)
-            self.constrains.append(constrain)
+            constraint = BuildListConstraint(target.name, items=expr.items,
+                                             loc=inst.loc)
+            self.constraints.append(constraint)
         elif expr.op == 'cast':
-            self.constrains.append(Propagate(dst=target.name,
-                                             src=expr.value.name,
-                                             loc=inst.loc))
+            self.constraints.append(Propagate(dst=target.name,
+                                              src=expr.value.name,
+                                              loc=inst.loc))
         else:
             raise NotImplementedError(type(expr), expr)
 
     def typeof_call(self, inst, target, call):
-        constrain = CallConstrain(target.name, call.func.name, call.args,
-                                  call.kws, call.vararg, loc=inst.loc)
-        self.constrains.append(constrain)
+        constraint = CallConstraint(target.name, call.func.name, call.args,
+                                    call.kws, call.vararg, loc=inst.loc)
+        self.constraints.append(constraint)
         self.usercalls.append((inst.value, call.args, call.kws, call.vararg))
 
     def typeof_intrinsic_call(self, inst, target, func, *args):
-        constrain = IntrinsicCallConstrain(target.name, func, args,
-                                           kws=(), vararg=None, loc=inst.loc)
-        self.constrains.append(constrain)
-        self.intrcalls.append((inst.value, constrain))
+        constraint = IntrinsicCallConstraint(target.name, func, args,
+                                             kws=(), vararg=None, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.intrcalls.append((inst.value, constraint))
 
 
 class NullDebug(object):

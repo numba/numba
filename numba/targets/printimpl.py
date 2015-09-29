@@ -19,8 +19,10 @@ register = registry.register
 def int_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
-    szval = context.cast(builder, x, sig.args[0], types.intp)
-    intobj = py.long_from_ssize_t(szval)
+    if sig.args[0].signed:
+        intobj = py.long_from_signed_int(x)
+    else:
+        intobj = py.long_from_unsigned_int(x)
     py.print_object(intobj)
     py.decref(intobj)
     res = context.get_dummy_value()
@@ -65,10 +67,9 @@ def print_varargs(context, builder, sig, args):
         signature = typing.signature(types.none, argtype)
         imp = context.get_function(types.print_item_type, signature)
         imp(builder, [argval])
-        if i == len(args) - 1:
-            py.print_string('\n')
-        else:
+        if i < len(args) - 1:
             py.print_string(' ')
+    py.print_string('\n')
 
     res = context.get_dummy_value()
     return impl_ret_untracked(context, builder, sig.return_type, res)

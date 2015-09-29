@@ -7,9 +7,8 @@ from llvmlite import ir
 from numba import cgutils, types, typing
 from .imputils import (builtin, builtin_attr, implement,
                        impl_attribute, impl_attribute_generic,
-                       iternext_impl, struct_factory,
-                       impl_ret_borrowed, impl_ret_new_ref,
-                       impl_ret_untracked)
+                       iternext_impl, impl_ret_borrowed,
+                       impl_ret_new_ref, impl_ret_untracked)
 
 
 def fix_index(builder, idx, size):

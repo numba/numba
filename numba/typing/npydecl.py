@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function
 
 import numpy
-from .. import types
+from .. import types, utils
 from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
                         Registry, signature)
 
@@ -72,14 +72,12 @@ class Numpy_rules_ufunc(AbstractTemplate):
             layout = 'C'
             layouts = [x.layout if isinstance(x, types.Array) else ''
                        for x in args]
-            if 'C' not in layouts:
-                if 'F' in layouts:
-                    layout = 'F'
-                elif 'A' in layouts:
-                    # See also _empty_nd_impl() in numba.targets.arrayobj.
-                    raise NotImplementedError(
-                        "Don't know how to create implicit output array "
-                        "with 'A' layout.")
+
+            # Prefer C contig if any array is C contig.
+            # Next, prefer F contig.
+            # Defaults to C contig if not layouts are C/F.
+            if 'C' not in layouts and 'F' in layouts:
+                layout = 'F'
 
         return base_types, explicit_outputs, ndims, layout
 
@@ -205,6 +203,29 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         return sig
 
 
+_binop_map = NumpyRulesArrayOperator._op_map
+
+class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
+    _op_map = dict((inp, _binop_map[binop])
+                   for (inp, binop) in utils.inplace_map.items()
+                   if binop in _binop_map)
+
+    def generic(self, args, kws):
+        # Type the inplace operator as if an explicit output was passed,
+        # to handle type resolution correctly.
+        # (for example int8[:] += int16[:] should use an int8[:] output,
+        #  not int16[:])
+        lhs, rhs = args
+        if not isinstance(lhs, types.Array):
+            return
+        args = args + (lhs,)
+        sig = super(NumpyRulesInplaceArrayOperator, self).generic(args, kws)
+        # Strip off the fake explicit output
+        assert len(sig.args) == 3
+        real_sig = signature(sig.return_type, *sig.args[:2])
+        return real_sig
+
+
 class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
     _op_map = {
         # Positive is a special case since there is no Numpy ufunc
@@ -218,7 +239,6 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
         assert not kws
         if len(args) == 1 and isinstance(args[0], types.Array):
             return super(NumpyRulesUnaryArrayOperator, self).generic(args, kws)
-
 
 
 # list of unary ufuncs to register
@@ -300,6 +320,7 @@ supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 
 NumpyRulesUnaryArrayOperator.install_operations()
 NumpyRulesArrayOperator.install_operations()
+NumpyRulesInplaceArrayOperator.install_operations()
 
 supported_array_operators = set(
     NumpyRulesUnaryArrayOperator._op_map.keys()).union(
@@ -333,12 +354,12 @@ class Numpy_method_redirection(AbstractTemplate):
 # Function to glue attributes onto the numpy-esque object
 def _numpy_redirect(fname):
     numpy_function = getattr(numpy, fname)
-    cls = type("Numpy_reduce_{0}".format(fname), (Numpy_method_redirection,),
+    cls = type("Numpy_redirect_{0}".format(fname), (Numpy_method_redirection,),
                dict(key=numpy_function, method_name=fname))
     builtin_global(numpy_function, types.Function(cls))
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'median', 'var', 'std',
-             'cumsum', 'cumprod', 'argmin', 'argmax']:
+             'cumsum', 'cumprod', 'argmin', 'argmax', 'nonzero']:
     _numpy_redirect(func)
 
 
@@ -616,6 +637,20 @@ class NdFromBuffer(CallableTemplate):
 builtin_global(numpy.frombuffer, types.Function(NdFromBuffer))
 
 
+@builtin
+class NdSort(CallableTemplate):
+    key = numpy.sort
+
+    def generic(self):
+        def typer(a):
+            if isinstance(a, types.Array) and a.ndim == 1:
+                return a
+
+        return typer
+
+builtin_global(numpy.sort, types.Function(NdSort))
+
+
 # -----------------------------------------------------------------------------
 # Miscellaneous functions
 
@@ -690,5 +725,30 @@ class Round(AbstractTemplate):
 
 builtin_global(numpy.round, types.Function(Round))
 builtin_global(numpy.around, types.Function(Round))
+
+
+@builtin
+class Where(AbstractTemplate):
+    key = numpy.where
+
+    def generic(self, args, kws):
+        assert not kws
+
+        if len(args) == 1:
+            # np.where(cond) is the same as np.nonzero(cond)
+            ary = args[0]
+            ndim = max(ary.ndim, 1)
+            retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
+            return signature(retty, ary)
+
+        elif len(args) == 3:
+            cond, x, y = args
+            if (cond.ndim == x.ndim == y.ndim and
+                x.dtype == y.dtype):
+                retty = types.Array(x.dtype, x.ndim, x.layout)
+                return signature(retty, *args)
+
+builtin_global(numpy.where, types.Function(Where))
+
 
 builtin_global(numpy, types.Module(numpy))

@@ -90,6 +90,22 @@ class Cuda_syncthreads(ConcreteTemplate):
 
 
 @intrinsic
+class Cuda_threadfence_device(ConcreteTemplate):
+    key = cuda.threadfence
+    cases = [signature(types.none)]
+
+@intrinsic
+class Cuda_threadfence_block(ConcreteTemplate):
+    key = cuda.threadfence_block
+    cases = [signature(types.none)]
+
+@intrinsic
+class Cuda_threadfence_system(ConcreteTemplate):
+    key = cuda.threadfence_system
+    cases = [signature(types.none)]
+
+
+@intrinsic
 class Cuda_atomic_add(AbstractTemplate):
     key = cuda.atomic.add
 
@@ -240,6 +256,15 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_syncthreads(self, mod):
         return types.Function(Cuda_syncthreads)
+
+    def resolve_threadfence(self, mod):
+        return types.Function(Cuda_threadfence_device)
+
+    def resolve_threadfence_block(self, mod):
+        return types.Function(Cuda_threadfence_block)
+
+    def resolve_threadfence_system(self, mod):
+        return types.Function(Cuda_threadfence_system)
 
     def resolve_atomic(self, mod):
         return types.Module(cuda.atomic)

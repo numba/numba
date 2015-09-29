@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 from pprint import pprint
+import sys
 import warnings
 
 from numba import utils
@@ -168,7 +169,14 @@ class DataFlowAnalysis(object):
 
     def op_BUILD_MAP(self, info, inst):
         dct = info.make_temp()
-        info.append(inst, size=inst.arg, res=dct)
+        count = inst.arg
+        items = []
+        if sys.version_info >= (3, 5):
+            # In 3.5+, BUILD_MAP takes <count> pairs from the stack
+            for i in range(count):
+                v, k = info.pop(), info.pop()
+                items.append((k, v))
+        info.append(inst, items=items[::-1], size=count, res=dct)
         info.push(dct)
 
     def op_BUILD_SET(self, info, inst):

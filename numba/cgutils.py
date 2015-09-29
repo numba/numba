@@ -52,24 +52,29 @@ def make_bytearray(buf):
     n = len(b)
     return ir.Constant(ir.ArrayType(ir.IntType(8), n), b)
 
+
 _struct_proxy_cache = {}
 
-
-def create_struct_proxy(fe_type):
+def create_struct_proxy(fe_type, kind='value'):
     """
     Returns a specialized StructProxy subclass for the given fe_type.
     """
-    res = _struct_proxy_cache.get(fe_type)
+    cache_key = (fe_type, kind)
+    res = _struct_proxy_cache.get(cache_key)
     if res is None:
-        clsname = StructProxy.__name__ + '_' + str(fe_type)
-        bases = (StructProxy,)
+        base = {'value': ValueStructProxy,
+                'data': DataStructProxy,
+                }[kind]
+        clsname = base.__name__ + '_' + str(fe_type)
+        bases = (base,)
         clsmembers = dict(_fe_type=fe_type)
         res = type(clsname, bases, clsmembers)
-        _struct_proxy_cache[fe_type] = res
+
+        _struct_proxy_cache[cache_key] = res
     return res
 
 
-class StructProxy(object):
+class _StructProxy(object):
     """
     Creates a `Structure` like interface that is constructed with information
     from DataModel instance.  FE type must have a data model that is a
@@ -81,13 +86,12 @@ class StructProxy(object):
     def __init__(self, context, builder, value=None, ref=None):
         from numba import datamodel   # Avoid circular import
         self._context = context
-        self._dmm = self._context.data_model_manager
-        self._datamodel = self._dmm[self._fe_type]
+        self._datamodel = self._context.data_model_manager[self._fe_type]
         if not isinstance(self._datamodel, datamodel.StructModel):
             raise TypeError("Not a structure model: {0}".format(self._datamodel))
         self._builder = builder
 
-        self._be_type = self._datamodel.get_value_type()
+        self._be_type = self._get_be_type(self._datamodel)
         assert not is_pointer(self._be_type)
 
         if ref is not None:
@@ -100,6 +104,15 @@ class StructProxy(object):
             self._value = alloca_once(self._builder, self._be_type, zfill=True)
             if value is not None:
                 self._builder.store(value, self._value)
+
+    def _get_be_type(self, datamodel):
+        raise NotImplementedError
+
+    def _cast_member_to_value(self, index, val):
+        raise NotImplementedError
+
+    def _cast_member_from_value(self, index, val):
+        raise NotImplementedError
 
     def _get_ptr_by_index(self, index):
         return gep_inbounds(self._builder, self._value, 0, index)
@@ -122,15 +135,15 @@ class StructProxy(object):
         Store the LLVM *value* into the named *field*.
         """
         if field.startswith('_'):
-            return super(StructProxy, self).__setattr__(field, value)
+            return super(_StructProxy, self).__setattr__(field, value)
         self[self._datamodel.get_field_position(field)] = value
 
     def __getitem__(self, index):
         """
         Load the LLVM value of the field at *index*.
         """
-
-        return self._builder.load(self._get_ptr_by_index(index))
+        member_val = self._builder.load(self._get_ptr_by_index(index))
+        return self._cast_member_to_value(index, member_val)
 
     def __setitem__(self, index, value):
         """
@@ -151,7 +164,8 @@ class StructProxy(object):
                                 "{self._datamodel}".format(value=value,
                                                            ptr=ptr,
                                                            self=self))
-        self._builder.store(value, ptr)
+        member_val = self._cast_member_from_value(index, value)
+        self._builder.store(member_val, ptr)
 
     def __len__(self):
         """
@@ -176,6 +190,37 @@ class StructProxy(object):
         assert not is_pointer(value.type)
         assert value.type == self._type, (value.type, self._type)
         self._builder.store(value, self._value)
+
+
+class ValueStructProxy(_StructProxy):
+    """
+    Create a StructProxy suitable for accessing regular values
+    (e.g. LLVM values or alloca slots).
+    """
+    def _get_be_type(self, datamodel):
+        return datamodel.get_value_type()
+
+    def _cast_member_to_value(self, index, val):
+        return val
+
+    def _cast_member_from_value(self, index, val):
+        return val
+
+
+class DataStructProxy(_StructProxy):
+    """
+    Create a StructProxy suitable for accessing data persisted in memory.
+    """
+    def _get_be_type(self, datamodel):
+        return datamodel.get_data_type()
+
+    def _cast_member_to_value(self, index, val):
+        model = self._datamodel.get_model(index)
+        return model.from_data(self._builder, val)
+
+    def _cast_member_from_value(self, index, val):
+        model = self._datamodel.get_model(index)
+        return model.as_data(self._builder, val)
 
 
 class Structure(object):
@@ -502,9 +547,17 @@ def for_range_slice_generic(builder, start, stop, step):
 
 @contextmanager
 def loop_nest(builder, shape, intp):
-    with _loop_nest(builder, shape, intp) as indices:
-        assert len(indices) == len(shape)
-        yield indices
+    """
+    Generate a loop nest walking a N-dimensional array.
+    Yields a tuple of N indices for use in the inner loop body.
+    """
+    if not shape:
+        # 0-d array
+        yield ()
+    else:
+        with _loop_nest(builder, shape, intp) as indices:
+            assert len(indices) == len(shape)
+            yield indices
 
 
 @contextmanager

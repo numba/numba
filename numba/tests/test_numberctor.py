@@ -136,7 +136,12 @@ class TestNumberCtor(TestCase):
             np_converter = lambda x: np_type(np.int64(x))
         else:
             np_converter = np_type
+        dtype = np.dtype(np_type)
         for val in values:
+            if dtype.kind == 'u' and isinstance(val, float) and val < 0.0:
+                # Converting negative float to unsigned int yields undefined
+                # behaviour (and concretely different on ARM vs. x86)
+                continue
             expected = np_converter(val)
             got = cfunc(val)
             self.assertPreciseEqual(got, expected,

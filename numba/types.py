@@ -497,11 +497,32 @@ class SimpleIteratorType(IteratorType):
 
 
 class RangeType(SimpleIterableType):
-    pass
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        name = "range_state_%s" % (dtype,)
+        super(SimpleIterableType, self).__init__(name, param=True)
+        self._iterator_type = RangeIteratorType(self.dtype)
+
+    def unify(self, typingctx, other):
+        if isinstance(other, RangeType):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            if dtype != pyobject:
+                return RangeType(dtype)
 
 
 class RangeIteratorType(SimpleIteratorType):
-    pass
+
+    def __init__(self, dtype):
+        name = "range_iter_%s" % (dtype,)
+        super(SimpleIteratorType, self).__init__(name, param=True)
+        self._yield_type = dtype
+
+    def unify(self, typingctx, other):
+        if isinstance(other, RangeIteratorType):
+            dtype = typingctx.unify_pairs(self.yield_type, other.yield_type)
+            if dtype != pyobject:
+                return RangeIteratorType(dtype)
 
 
 class Generator(SimpleIteratorType):
@@ -525,7 +546,7 @@ class Generator(SimpleIteratorType):
         return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
 
 
-class NumpyFlatType(SimpleIteratorType, Sequence):
+class NumpyFlatType(SimpleIteratorType, MutableSequence):
     """
     Type class for `ndarray.flat()` objects.
     """
@@ -698,6 +719,7 @@ class Buffer(IterableType):
     """
     mutable = True
     slice_is_copy = False
+    aligned = True
 
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
@@ -784,11 +806,19 @@ class Array(Buffer):
     Type class for Numpy arrays.
     """
 
-    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None,
+                 aligned=True):
         if readonly:
             self.mutable = False
+        if (not aligned or
+            (isinstance(dtype, Record) and not dtype.aligned)):
+            self.aligned = False
         if name is None:
-            type_name = "array" if self.mutable else "readonly array"
+            type_name = "array"
+            if not self.mutable:
+                type_name = "readonly " + type_name
+            if not self.aligned:
+                type_name = "unaligned " + type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
         super(Array, self).__init__(dtype, ndim, layout, name=name)
 
@@ -801,11 +831,12 @@ class Array(Buffer):
             layout = self.layout
         if readonly is None:
             readonly = not self.mutable
-        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly)
+        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
+                     aligned=self.aligned)
 
     @property
     def key(self):
-        return self.dtype, self.ndim, self.layout, self.mutable
+        return self.dtype, self.ndim, self.layout, self.mutable, self.aligned
 
     def unify(self, typingctx, other):
         """
@@ -818,8 +849,9 @@ class Array(Buffer):
             else:
                 layout = 'A'
             readonly = not (self.mutable and other.mutable)
+            aligned = self.aligned and other.aligned
             return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
-                         readonly=readonly)
+                         readonly=readonly, aligned=aligned)
 
     def can_convert_to(self, typingctx, other):
         """
@@ -828,7 +860,8 @@ class Array(Buffer):
         if (isinstance(other, Array) and other.ndim == self.ndim
             and other.dtype == self.dtype):
             if (other.layout in ('A', self.layout)
-                and (self.mutable or not other.mutable)):
+                and (self.mutable or not other.mutable)
+                and (self.aligned or not other.aligned)):
                 return Conversion.safe
 
 
@@ -1377,13 +1410,12 @@ print_type = Phantom('print')
 print_item_type = Phantom('print-item')
 sign_type = Phantom('sign')
 
-range_iter32_type = RangeIteratorType('range_iter32', int32)
-range_iter64_type = RangeIteratorType('range_iter64', int64)
-unsigned_range_iter64_type = RangeIteratorType('unsigned_range_iter64', uint64)
-range_state32_type = RangeType('range_state32', range_iter32_type)
-range_state64_type = RangeType('range_state64', range_iter64_type)
-unsigned_range_state64_type = RangeType('unsigned_range_state64',
-                                        unsigned_range_iter64_type)
+range_iter32_type = RangeIteratorType(int32)
+range_iter64_type = RangeIteratorType(int64)
+unsigned_range_iter64_type = RangeIteratorType(uint64)
+range_state32_type = RangeType(int32)
+range_state64_type = RangeType(int64)
+unsigned_range_state64_type = RangeType(uint64)
 
 # slice2_type = Type('slice2_type')
 slice3_type = Slice3Type('slice3_type')

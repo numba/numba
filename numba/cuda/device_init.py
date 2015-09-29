@@ -2,7 +2,9 @@ from __future__ import print_function, absolute_import, division
 
 # Re export
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
-                    shared, local, const, grid, gridsize, atomic)
+                    shared, local, const, grid, gridsize, atomic,
+                    threadfence_block, threadfence_system,
+                    threadfence)
 from .cudadrv.error import CudaSupportError
 from .cudadrv import nvvm
 from . import initialize
@@ -11,6 +13,9 @@ from .errors import KernelRuntimeError
 from .decorators import jit, autojit, declare_device
 from .api import *
 from .api import _auto_device
+
+from . import reduction
+reduce = Reduce = reduction.Reduce
 
 
 def is_available():

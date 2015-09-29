@@ -18,23 +18,6 @@ class OpaqueModuleRef(Structure):
 
 moduleref_ptr = POINTER(OpaqueModuleRef)
 
-try:
-    hlc = CDLL(os.path.join(sys.prefix, 'lib', 'libHLC.so'))
-except OSError:
-    raise ImportError("libHLC.so cannot be found.  Please install the libhlc "
-                      "package by: conda install -c numba libhlc")
-
-else:
-    hlc.HLC_ParseModule.restype = moduleref_ptr
-    hlc.HLC_ModuleEmitBRIG.restype = c_size_t
-    hlc.HLC_Initialize()
-    utils.finalize(hlc, hlc.HLC_Finalize)
-
-    hlc.HLC_SetCommandLineOption.argtypes = [
-        c_int,
-        c_void_p,
-    ]
-
 
 def set_option(*opt):
     """
@@ -58,42 +41,65 @@ class HLC(object):
     """
     LibHLC wrapper interface
     """
+    hlc = None
+
+    def __init__(self):
+        # Lazily load the libHLC library
+        if self.hlc is None:
+            try:
+                hlc = CDLL(os.path.join(sys.prefix, 'lib', 'libHLC.so'))
+            except OSError:
+                raise ImportError("libHLC.so cannot be found.  Please install the libhlc "
+                                  "package by: conda install -c numba libhlc")
+
+            else:
+                hlc.HLC_ParseModule.restype = moduleref_ptr
+                hlc.HLC_ModuleEmitBRIG.restype = c_size_t
+                hlc.HLC_Initialize()
+                utils.finalize(hlc, hlc.HLC_Finalize)
+
+                hlc.HLC_SetCommandLineOption.argtypes = [
+                    c_int,
+                    c_void_p,
+                ]
+
+                type(self).hlc = hlc
 
     def parse_assembly(self, ir):
         if isinstance(ir, str):
             ir = ir.encode("latin1")
         buf = create_string_buffer(ir)
-        mod = hlc.HLC_ParseModule(buf)
+        mod = self.hlc.HLC_ParseModule(buf)
         if not mod:
             raise Error("Failed to parse assembly")
         return mod
 
     def parse_bitcode(self, bitcode):
         buf = create_string_buffer(bitcode, len(bitcode))
-        mod = hlc.HLC_ParseBitcode(buf, c_size_t(len(bitcode)))
+        mod = self.hlc.HLC_ParseBitcode(buf, c_size_t(len(bitcode)))
         if not mod:
             raise Error("Failed to parse bitcode")
         return mod
 
     def optimize(self, mod, opt=3, size=0, verify=1):
-        if not hlc.HLC_ModuleOptimize(mod, int(opt), int(size), int(verify)):
+        if not self.hlc.HLC_ModuleOptimize(mod, int(opt), int(size), int(verify)):
             raise Error("Failed to optimize module")
 
     def link(self, dst, src):
-        if not hlc.HLC_ModuleLinkIn(dst, src):
+        if not self.hlc.HLC_ModuleLinkIn(dst, src):
             raise Error("Failed to link modules")
 
     def to_hsail(self, mod, opt=3):
         buf = c_char_p(0)
-        if not hlc.HLC_ModuleEmitHSAIL(mod, int(opt), byref(buf)):
+        if not self.hlc.HLC_ModuleEmitHSAIL(mod, int(opt), byref(buf)):
             raise Error("Failed to emit HSAIL")
         ret = buf.value.decode("latin1")
-        hlc.HLC_DisposeString(buf)
+        self.hlc.HLC_DisposeString(buf)
         return ret
 
     def to_brig(self, mod, opt=3):
         bufptr = c_void_p(0)
-        size = hlc.HLC_ModuleEmitBRIG(mod, int(opt), byref(bufptr))
+        size = self.hlc.HLC_ModuleEmitBRIG(mod, int(opt), byref(bufptr))
         if not size:
             raise Error("Failed to emit BRIG")
         buf = (c_byte * size).from_address(bufptr.value)
@@ -103,18 +109,18 @@ class HLC(object):
             ret = bytes(buf)
         else:
             ret = bytes(buffer(buf))
-        hlc.HLC_DisposeString(buf)
+        self.hlc.HLC_DisposeString(buf)
         return ret
 
     def to_string(self, mod):
         buf = c_char_p(0)
-        hlc.HLC_ModulePrint(mod, byref(buf))
+        self.hlc.HLC_ModulePrint(mod, byref(buf))
         ret = buf.value.decode("latin1")
-        hlc.HLC_DisposeString(buf)
+        self.hlc.HLC_DisposeString(buf)
         return ret
 
     def destroy_module(self, mod):
-        hlc.HLC_ModuleDestroy(mod)
+        self.hlc.HLC_ModuleDestroy(mod)
 
 
 class Module(object):

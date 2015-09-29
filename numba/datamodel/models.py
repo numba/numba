@@ -77,12 +77,12 @@ class DataModel(object):
     def from_return(self, builder, value):
         raise NotImplementedError
 
-    def load_from_data_pointer(self, builder, ptr):
+    def load_from_data_pointer(self, builder, ptr, align=None):
         """
         Load value from a pointer to data.
         This is the default implementation, sufficient for most purposes.
         """
-        return self.from_data(builder, builder.load(ptr))
+        return self.from_data(builder, builder.load(ptr, align=align))
 
     def traverse(self, builder, value):
         """
@@ -281,7 +281,7 @@ class EphemeralPointerModel(PointerModel):
     def from_data(self, builder, value):
         raise NotImplementedError("use load_from_data_pointer() instead")
 
-    def load_from_data_pointer(self, builder, ptr):
+    def load_from_data_pointer(self, builder, ptr, align=None):
         return builder.bitcast(ptr, self.get_value_type())
 
 
@@ -299,7 +299,7 @@ class EphemeralArrayModel(PointerModel):
     def from_data(self, builder, value):
         raise NotImplementedError("use load_from_data_pointer() instead")
 
-    def load_from_data_pointer(self, builder, ptr):
+    def load_from_data_pointer(self, builder, ptr, align=None):
         return builder.bitcast(ptr, self.get_value_type())
 
 
@@ -461,11 +461,11 @@ class StructModel(CompositeModel):
                 for i in range(len(self._members))]
         return self._from("from_data", builder, vals)
 
-    def load_from_data_pointer(self, builder, ptr):
+    def load_from_data_pointer(self, builder, ptr, align=None):
         values = []
         for i, model in enumerate(self._models):
             elem_ptr = cgutils.gep_inbounds(builder, ptr, 0, i)
-            val = model.load_from_data_pointer(builder, elem_ptr)
+            val = model.load_from_data_pointer(builder, elem_ptr, align)
             values.append(val)
 
         struct = ir.Constant(self.get_value_type(), ir.Undefined)
@@ -554,11 +554,21 @@ class StructModel(CompositeModel):
         ----
         pos: int or str
             field index or field name
-
         """
         if isinstance(pos, str):
             pos = self.get_field_position(pos)
         return self._members[pos]
+
+    def get_model(self, pos):
+        """
+        Get the datamodel of a field given the position or the fieldname.
+
+        Args
+        ----
+        pos: int or str
+            field index or field name
+        """
+        return self._models[pos]
 
     def traverse(self, builder, value):
         out = [(self.get_type(k), self.get(builder, value, k))
@@ -738,7 +748,7 @@ class RecordModel(CompositeModel):
     def from_return(self, builder, value):
         return value
 
-    def load_from_data_pointer(self, builder, ptr):
+    def load_from_data_pointer(self, builder, ptr, align=None):
         return builder.bitcast(ptr, self.get_value_type())
 
 

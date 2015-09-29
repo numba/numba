@@ -226,10 +226,27 @@ def list_add(m, n):
     res.append(42)   # check result is a copy
     return a, b, res
 
+def list_add_heterogenous():
+    a = [1]
+    b = [2.0]
+    c = a + b
+    d = b + a
+    # check result is a copy
+    a.append(3)
+    b.append(4.0)
+    return a, b, c, d
+
 def list_add_inplace(m, n):
     a = list(range(0, m))
     b = list(range(100, 100 + n))
     a += b
+    return a, b
+
+def list_add_inplace_heterogenous():
+    a = [1]
+    b = [2.0]
+    a += b
+    b += a
     return a, b
 
 def list_mul(n, v):
@@ -268,6 +285,15 @@ def identity_usecase(n):
     b = a
     c = a[:]
     return (a is b), (a is not b), (a is c), (a is not c)
+
+def bool_list_usecase():
+    # Exercise getitem, setitem, iteration with bool values (issue #1373)
+    l = [False]
+    l[0] = True
+    x = False
+    for v in l:
+        x = x ^ v
+    return l, x
 
 
 class TestLists(MemoryLeakMixin, TestCase):
@@ -529,8 +555,20 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_add(self):
         self.check_add(list_add)
 
+    def test_add_heterogenous(self):
+        pyfunc = list_add_heterogenous
+        cfunc = jit(nopython=True)(pyfunc)
+        expected = pyfunc()
+        self.assertEqual(cfunc(), expected)
+
     def test_add_inplace(self):
         self.check_add(list_add_inplace)
+
+    def test_add_inplace_heterogenous(self):
+        pyfunc = list_add_inplace_heterogenous
+        cfunc = jit(nopython=True)(pyfunc)
+        expected = pyfunc()
+        self.assertEqual(cfunc(), expected)
 
     def check_mul(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -616,6 +654,12 @@ class TestLists(MemoryLeakMixin, TestCase):
         pyfunc = identity_usecase
         cfunc = jit(nopython=True)(pyfunc)
         self.assertPreciseEqual(cfunc(3), pyfunc(3))
+
+    def test_bool_list(self):
+        # Check lists of bools compile and run successfully
+        pyfunc = bool_list_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(), pyfunc())
 
 
 if __name__ == '__main__':

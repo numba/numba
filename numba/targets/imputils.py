@@ -236,65 +236,6 @@ builtin = builtin_registry.register
 builtin_attr = builtin_registry.register_attr
 
 
-class _StructRegistry(object):
-    """
-    A registry of factories of cgutils.Structure classes.
-    """
-
-    def __init__(self):
-        self.impls = {}
-
-    def register(self, type_class):
-        """
-        Register a Structure factory function for the given *type_class*
-        (i.e. a subclass of numba.types.Type).
-        """
-        assert issubclass(type_class, types.Type)
-        def decorator(func):
-            self.impls[type_class] = func
-            return func
-        return decorator
-
-    def match(self, typ):
-        """
-        Return the Structure factory function for the given Numba type
-        instance *typ*.
-        """
-        return self.impls[typ.__class__]
-
-
-struct_registry = _StructRegistry()
-struct_factory = struct_registry.register
-
-
-class _TypeRegistry(object):
-
-    def __init__(self):
-        self.factories = {}
-
-    def register(self, type_class):
-        """
-        Register a LLVM type factory function for the given *type_class*
-        (i.e. a subclass of numba.types.Type).
-        """
-        assert issubclass(type_class, types.Type)
-        def decorator(func):
-            self.factories[type_class] = func
-            return func
-        return decorator
-
-    def match(self, typ):
-        """
-        Return the LLVM type factory function for the given Numba type
-        instance *typ*.
-        """
-        return self.factories[typ.__class__]
-
-
-type_registry = _TypeRegistry()
-type_factory = type_registry.register
-
-
 def impl_ret_new_ref(ctx, builder, retty, ret):
     """
     The implementation returns a new reference.

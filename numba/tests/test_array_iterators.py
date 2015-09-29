@@ -24,8 +24,11 @@ def array_flat(arr, out):
     for i, v in enumerate(arr.flat):
         out[i] = v
 
-def array_flat_index(arr, ind):
+def array_flat_getitem(arr, ind):
     return arr.flat[ind]
+
+def array_flat_setitem(arr, ind, val):
+    arr.flat[ind] = val
 
 def array_flat_sum(arr):
     s = 0
@@ -167,13 +170,39 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arrty = types.Array(types.int32, 2, layout='A')
         self.check_array_flat_sum(arr, arrty)
 
-    def test_array_flat_indexing(self):
+    def test_array_flat_getitem(self):
         # Test indexing of array.flat object
-        pyfunc = array_flat_index
+        pyfunc = array_flat_getitem
         def check(arr, ind):
             cr = self.ccache.compile(pyfunc, (typeof(arr), typeof(ind)))
             expected = pyfunc(arr, ind)
             self.assertEqual(cr.entry_point(arr, ind), expected)
+
+        arr = np.arange(24).reshape(4, 2, 3)
+        for i in range(arr.size):
+            check(arr, i)
+        arr = arr.T
+        for i in range(arr.size):
+            check(arr, i)
+        arr = arr[::2]
+        for i in range(arr.size):
+            check(arr, i)
+        arr = np.array([42]).reshape(())
+        for i in range(arr.size):
+            check(arr, i)
+
+    def test_array_flat_setitem(self):
+        # Test indexing of array.flat object
+        pyfunc = array_flat_setitem
+        def check(arr, ind):
+            arrty = typeof(arr)
+            cr = self.ccache.compile(pyfunc, (arrty, typeof(ind), arrty.dtype))
+            # Use np.copy() to keep the layout
+            expected = np.copy(arr)
+            got = np.copy(arr)
+            pyfunc(expected, ind, 123)
+            cr.entry_point(got, ind, 123)
+            self.assertPreciseEqual(got, expected)
 
         arr = np.arange(24).reshape(4, 2, 3)
         for i in range(arr.size):

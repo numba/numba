@@ -1355,12 +1355,29 @@ class TestMixedInts(TestCase):
             tp = self.get_numpy_unsigned_upcast(a, b)
             return opfunc(tp(a), tp(b))
 
-        samples = [x for x in self.int_samples if x >= 0]
+        samples = self.int_samples
 
-        self.run_binary(pyfunc, control_signed,
-                        samples, self.signed_pairs)
-        self.run_binary(pyfunc, control_unsigned,
-                        samples, self.unsigned_pairs)
+        def check(xt, yt, control_func):
+            cr = compile_isolated(pyfunc, (xt, yt), flags=Noflags)
+            cfunc = cr.entry_point
+            for x in samples:
+                # Avoid shifting by more than the shiftand's bitwidth, as
+                # we would hit undefined behaviour.
+                maxshift = xt.bitwidth - 1
+                for y in (0, 1, 3, 5, maxshift - 1, maxshift):
+                    # Get Numpy typed scalars for the given types and values
+                    x = self.get_typed_int(xt, x)
+                    y = self.get_typed_int(yt, y)
+                    expected = control_func(x, y)
+                    got = cfunc(x, y)
+                    msg = ("mismatch for (%r, %r) with types %s"
+                           % (x, y, (xt, yt)))
+                    self.assertPreciseEqual(got, expected, msg=msg)
+
+        for xt, yt in self.signed_pairs:
+            check(xt, yt, control_signed)
+        for xt, yt in self.unsigned_pairs:
+            check(xt, yt, control_unsigned)
 
     def test_lshift(self):
         self.run_shift_binop(self.op.bitshift_left_usecase, 'lshift')
