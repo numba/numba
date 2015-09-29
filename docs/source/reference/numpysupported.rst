@@ -69,13 +69,17 @@ Array types
 of any of the scalar types above are supported, regardless of the shape
 or layout.
 
-Operations
-----------
+Array access
+------------
 
-Arrays support iteration and full indexing (i.e. indexing that yields scalar
-values).  Partial indexing by a single integer is supported, but other kinds of
-partial indexing (for example indexing a 3-d array with a 2-tuple) are not
-supported.
+Arrays support normal iteration.  Full basic indexing and slicing is
+supported.  A subset of advanced indexing is also supported: only one
+advanced index is allowed, and it has to be a one-dimensional array
+(it can be combined with an arbitrary number of basic indices as well).
+
+.. seealso::
+   `Numpy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
+   reference.
 
 Attributes
 ----------
