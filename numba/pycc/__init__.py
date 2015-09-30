@@ -9,14 +9,17 @@ import subprocess
 import tempfile
 import sys
 
-from .compiler import Compiler, find_shared_ending, find_args, find_linker
+from .compiler import Compiler
+from .platform import Toolchain, find_shared_ending, find_pyext_ending
 
 
 def get_ending(args):
     if args.llvm:
         return ".bc"
-    if args.olibs:
+    elif args.olibs:
         return ".o"
+    elif args.python:
+        return find_pyext_ending()
     else:
         return find_shared_ending()
 
@@ -34,8 +37,6 @@ def main(args=None):
     group.add_argument("--llvm", action="store_true",
                        help="Emit llvm instead of native code")
 
-    parser.add_argument("--linker", nargs=1, help="Path to linker (default is platform dependent)")
-    parser.add_argument("--linker-args", help="Arguments to pass to linker (be sure to use quotes)")
     parser.add_argument('--header', action="store_true",
                         help="Emit C header file with function signatures")
     parser.add_argument('--python', action='store_true',
@@ -75,9 +76,14 @@ def main(args=None):
         else:
             logger.debug('emit shared library')
             logger.debug('write to temporary object file %s', tempfile.gettempdir())
+
+            toolchain = Toolchain(debug=args.debug)
             temp_obj = (tempfile.gettempdir() + os.sep +
                         os.path.basename(args.output) + '.o')
             compiler.write_native_object(temp_obj, wrap=args.python)
-            cmdargs = (find_linker(),) + find_args() + ('-o', args.output, temp_obj)
-            subprocess.check_call(cmdargs)
+            libraries = toolchain.get_python_libraries()
+            toolchain.link_shared(args.output, [temp_obj],
+                                  toolchain.get_python_libraries(),
+                                  toolchain.get_python_library_dirs(),
+                                  export_symbols=compiler.dll_exports)
             os.remove(temp_obj)

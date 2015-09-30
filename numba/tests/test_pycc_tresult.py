@@ -1,10 +1,14 @@
 from __future__ import print_function
+
+import errno
 import os
+import shutil
 import tempfile
 import sys
 from ctypes import *
+
 from numba import unittest_support as unittest
-from numba.pycc import find_shared_ending, main
+from numba.pycc import find_shared_ending, find_pyext_ending, main
 
 base_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -18,8 +22,17 @@ def unset_macosx_deployment_target():
         del os.environ['MACOSX_DEPLOYMENT_TARGET']
 
 
-@unittest.skipIf(sys.platform.startswith("win32"), "Skip win32 test for now")
 class TestPYCC(unittest.TestCase):
+
+    def setUp(self):
+        # Note we use a permanent test directory as we can't delete
+        # a DLL that's in use under Windows.
+        self.tmpdir = os.path.join(tempfile.gettempdir(), "test_pycc")
+        try:
+            os.mkdir(self.tmpdir)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
 
     def test_pycc_ctypes_lib(self):
         """
@@ -28,16 +41,13 @@ class TestPYCC(unittest.TestCase):
         unset_macosx_deployment_target()
 
         modulename = os.path.join(base_path, 'compile_with_pycc')
-        cdll_modulename = modulename + find_shared_ending()
+        cdll_modulename = 'test_dll' + find_shared_ending()
+        cdll_path = os.path.join(self.tmpdir, cdll_modulename)
+        if os.path.exists(cdll_path):
+            os.unlink(cdll_path)
 
-        def _cleanup():
-            if os.path.exists(cdll_modulename):
-                os.unlink(cdll_modulename)
-        _cleanup()
-        self.addCleanup(_cleanup)
-
-        main(args=[modulename + '.py'])
-        lib = CDLL(cdll_modulename)
+        main(args=['-o', cdll_path, modulename + '.py'])
+        lib = CDLL(cdll_path)
         lib.mult.argtypes = [POINTER(c_double), c_void_p, c_void_p,
                              c_double, c_double]
         lib.mult.restype = c_int
@@ -61,31 +71,26 @@ class TestPYCC(unittest.TestCase):
         unset_macosx_deployment_target()
 
         modulename = os.path.join(base_path, 'compile_with_pycc')
-        tmpdir = tempfile.gettempdir()
-        out_modulename = (os.path.join(tmpdir, 'compiled_with_pycc')
-                          + find_shared_ending())
-
-        def _cleanup():
-            if os.path.exists(out_modulename):
-                os.unlink(out_modulename)
-        _cleanup()
-        self.addCleanup(_cleanup)
+        out_modulename = (os.path.join(self.tmpdir, 'test_pyext')
+                          + find_pyext_ending())
+        if os.path.exists(out_modulename):
+            os.unlink(out_modulename)
 
         main(args=['--python', '-o', out_modulename, modulename + '.py'])
 
-        sys.path.append(tmpdir)
+        sys.path.append(self.tmpdir)
         try:
             import compiled_with_pycc as lib
-            try:
-                res = lib.mult(123, 321)
-                assert res == 123 * 321
-
-                res = lib.multf(987, 321)
-                assert res == 987 * 321
-            finally:
-                del lib
         finally:
-            sys.path.remove(tmpdir)
+            sys.path.remove(self.tmpdir)
+        try:
+            res = lib.mult(123, 321)
+            assert res == 123 * 321
+
+            res = lib.multf(987, 321)
+            assert res == 987 * 321
+        finally:
+            del lib
 
     def test_pycc_bitcode(self):
         """
@@ -94,13 +99,9 @@ class TestPYCC(unittest.TestCase):
         unset_macosx_deployment_target()
 
         modulename = os.path.join(base_path, 'compile_with_pycc')
-        bitcode_modulename = modulename + '.bc'
-
-        def _cleanup():
-            if os.path.exists(bitcode_modulename):
-                os.unlink(bitcode_modulename)
-        _cleanup()
-        self.addCleanup(_cleanup)
+        bitcode_modulename = os.path.join(self.tmpdir, 'test_bitcode.bc')
+        if os.path.exists(bitcode_modulename):
+            os.unlink(bitcode_modulename)
 
         main(args=['--llvm', '-o', bitcode_modulename, modulename + '.py'])
 
