@@ -278,6 +278,8 @@ class CompilerPy2(_Compiler):
 
         builder.ret_void()
 
+        self.dll_exports.append(mod_init_fn.name)
+
 
 class CompilerPy3(_Compiler):
 
