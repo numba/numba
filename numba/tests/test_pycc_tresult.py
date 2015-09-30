@@ -27,6 +27,8 @@ class TestPYCC(unittest.TestCase):
     def setUp(self):
         # Note we use a permanent test directory as we can't delete
         # a DLL that's in use under Windows.
+        # (this is a bit fragile if stale files can influence the result
+        #  of future test runs...)
         self.tmpdir = os.path.join(tempfile.gettempdir(), "test_pycc")
         try:
             os.mkdir(self.tmpdir)
@@ -40,13 +42,13 @@ class TestPYCC(unittest.TestCase):
         """
         unset_macosx_deployment_target()
 
-        modulename = os.path.join(base_path, 'compile_with_pycc')
+        source = os.path.join(base_path, 'compile_with_pycc.py')
         cdll_modulename = 'test_dll' + find_shared_ending()
         cdll_path = os.path.join(self.tmpdir, cdll_modulename)
         if os.path.exists(cdll_path):
             os.unlink(cdll_path)
 
-        main(args=['-o', cdll_path, modulename + '.py'])
+        main(args=['-o', cdll_path, source])
         lib = CDLL(cdll_path)
         lib.mult.argtypes = [POINTER(c_double), c_void_p, c_void_p,
                              c_double, c_double]
@@ -70,17 +72,18 @@ class TestPYCC(unittest.TestCase):
         """
         unset_macosx_deployment_target()
 
-        modulename = os.path.join(base_path, 'compile_with_pycc')
-        out_modulename = (os.path.join(self.tmpdir, 'test_pyext')
-                          + find_pyext_ending())
+        source = os.path.join(base_path, 'compile_with_pycc.py')
+        modulename = 'pycc_test_pyext'
+        out_modulename = os.path.join(self.tmpdir,
+                                      modulename + find_pyext_ending())
         if os.path.exists(out_modulename):
             os.unlink(out_modulename)
 
-        main(args=['--python', '-o', out_modulename, modulename + '.py'])
+        main(args=['--python', '-o', out_modulename, source])
 
         sys.path.append(self.tmpdir)
         try:
-            import compiled_with_pycc as lib
+            lib = __import__(modulename)
         finally:
             sys.path.remove(self.tmpdir)
         try:
