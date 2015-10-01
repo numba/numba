@@ -103,12 +103,12 @@ def load_item(context, builder, arrayty, ptr):
     return context.unpack_value(builder, arrayty.dtype, ptr,
                                 align=align)
 
-def store_item(context, builder, arrayty, ptr, val):
+def store_item(context, builder, arrayty, val, ptr):
     """
     Store the item at the given array pointer.
     """
     align = None if arrayty.aligned else 1
-    return context.pack_value(builder, arrayty.dtype, ptr, val,  align=align)
+    return context.pack_value(builder, arrayty.dtype, val, ptr, align=align)
 
 
 def populate_array(array, data, shape, strides, itemsize, meminfo,
@@ -1184,7 +1184,8 @@ def array_nonzero(context, builder, sig, args):
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
         ptr = cgutils.get_item_pointer2(builder, data, shape, strides,
                                         layout, indices)
-        nz = context.is_true(builder, aryty.dtype, builder.load(ptr))
+        val = load_item(context, builder, aryty, ptr)
+        nz = context.is_true(builder, aryty.dtype, val)
         with builder.if_then(nz):
             builder.store(builder.add(builder.load(count), one), count)
 
@@ -1200,7 +1201,8 @@ def array_nonzero(context, builder, sig, args):
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
         ptr = cgutils.get_item_pointer2(builder, data, shape, strides,
                                         layout, indices)
-        nz = context.is_true(builder, aryty.dtype, builder.load(ptr))
+        val = load_item(context, builder, aryty, ptr)
+        nz = context.is_true(builder, aryty.dtype, val)
         with builder.if_then(nz):
             # Store element indices in output arrays
             if not indices:
@@ -1211,7 +1213,7 @@ def array_nonzero(context, builder, sig, args):
                 ptr = cgutils.get_item_pointer2(builder, out_datas[i],
                                                 out_shape, (),
                                                 'C', [cur])
-                builder.store(indices[i], ptr)
+                store_item(context, builder, outaryty, indices[i], ptr)
             builder.store(builder.add(cur, one), index)
 
     tup = context.make_tuple(builder, sig.return_type, outs)
