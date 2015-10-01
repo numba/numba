@@ -1,11 +1,13 @@
 from __future__ import print_function
 
 import sys
+
 import numba.unittest_support as unittest
 from numba import jit, testing
+from .support import TestCase
 
 
-class TestClosure(unittest.TestCase):
+class TestClosure(TestCase):
 
     def run_jit_closure_variable(self, **jitargs):
         Y = 10
@@ -80,10 +82,8 @@ class TestClosure(unittest.TestCase):
         c_do_math = jit('intp(intp)', **jitargs)(do_math)
         c_do_math.disable_compile()
 
-        old_refcts = sys.getrefcount(c_do_math), sys.getrefcount(c_mult_10)
-        self.assertEqual(c_do_math(1), 50)
-        self.assertEqual(old_refcts,
-                         (sys.getrefcount(c_do_math), sys.getrefcount(c_mult_10)))
+        with self.assertRefCount(c_do_math, c_mult_10):
+            self.assertEqual(c_do_math(1), 50)
 
     def test_jit_inner_function(self):
         self.run_jit_inner_function(forceobj=True)
