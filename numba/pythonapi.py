@@ -1135,10 +1135,14 @@ class PythonAPI(object):
         return impl(c, typ, val)
 
     def reflect_native_value(self, typ, val, env_manager=None):
+        """
+        Reflect the native value onto its Python original, if any.
+        An error bit (as an LLVM value) is returned.
+        """
         impl = _reflectors.lookup(typ.__class__)
         if impl is None:
             # Reflection isn't needed for most types
-            return
+            return cgutils.false_bit
 
         is_error = cgutils.alloca_once_value(self.builder, cgutils.false_bit)
         c = _ReflectContext(self.context, self.builder, self, env_manager,

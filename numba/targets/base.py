@@ -715,6 +715,7 @@ class BaseContext(object):
 
         elif (isinstance(fromty, types.List) and
               isinstance(toty, types.List)):
+            # Casting from non-reflected to reflected
             assert fromty.dtype == toty.dtype
             return val
 
