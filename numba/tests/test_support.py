@@ -279,6 +279,21 @@ class TestAssertPreciseEqual(TestCase):
         self.ne(a, d)
 
 
+class TestMisc(TestCase):
+
+    def test_assertRefCount(self):
+        # Use floats to avoid integer interning
+        x = 55.
+        y = 66.
+        l = []
+        with self.assertRefCount(x, y):
+            pass
+        with self.assertRaises(AssertionError) as cm:
+            # y gains a reference
+            with self.assertRefCount(x, y):
+                l.append(y)
+        self.assertIn("66", str(cm.exception))
+
+
 if __name__ == '__main__':
     unittest.main()
-

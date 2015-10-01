@@ -312,6 +312,10 @@ def reflect_conditional(l, ll):
     l.extend(ll)
     return l, x, y
 
+def reflect_exception(l):
+    l.append(42)
+    raise ZeroDivisionError
+
 
 class TestLists(MemoryLeakMixin, TestCase):
 
@@ -682,16 +686,31 @@ class TestListReflection(MemoryLeakMixin, TestCase):
             expected = list(dest)
             got = list(dest)
             pyres = pyfunc(expected, src)
-            cres = cfunc(got, src)
-            self.assertPreciseEqual(cres, pyres)
-            self.assertPreciseEqual(expected, got)
-            self.assertEqual(pyres[0] is expected, cres[0] is got)
+            with self.assertRefCount(got, src):
+                cres = cfunc(got, src)
+                self.assertPreciseEqual(cres, pyres)
+                self.assertPreciseEqual(expected, got)
+                self.assertEqual(pyres[0] is expected, cres[0] is got)
+                del pyres, cres
 
     def test_reflect_simple(self):
         self.check_reflection(reflect_simple)
 
     def test_reflect_conditional(self):
         self.check_reflection(reflect_conditional)
+
+    def test_reflect_exception(self):
+        """
+        When the function exits with an exception, lists should still be
+        reflected.
+        """
+        pyfunc = reflect_exception
+        cfunc = jit(nopython=True)(pyfunc)
+        l = [1, 2, 3]
+        with self.assertRefCount(l):
+            with self.assertRaises(ZeroDivisionError):
+                cfunc(l)
+            self.assertPreciseEqual(l, [1, 2, 3, 42])
 
 
 if __name__ == '__main__':

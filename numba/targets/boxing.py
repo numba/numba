@@ -272,7 +272,7 @@ def unbox_optional(c, typ, obj):
 # Collections
 #
 
-# NOTE: those functions are supposed to steal any NRT references in
+# NOTE: boxing functions are supposed to steal any NRT references in
 # the given native value.
 
 @box(types.Array)
@@ -447,15 +447,9 @@ def unbox_list(c, typ, obj):
             native = c.unbox(typ.dtype, itemobj)
             list.setitem(loop.index, native.value)
         if typ.reflected:
-            c.pyapi.incref(obj)
             list.parent = obj
 
-    def cleanup():
-        if typ.reflected:
-            c.pyapi.decref(obj)
-
-    return NativeValue(list.value, is_error=c.builder.not_(ok),
-                       cleanup=cleanup)
+    return NativeValue(list.value, is_error=c.builder.not_(ok))
 
 
 @reflect(types.List)
@@ -466,8 +460,8 @@ def reflect_list(c, typ, val):
     if not typ.reflected:
         return
     list = listobj.ListInstance(c.context, c.builder, typ, val)
-    obj = list.parent
     with c.builder.if_then(list.dirty, likely=False):
+        obj = list.parent
         size = c.pyapi.list_size(obj)
         new_size = list.size
         diff = c.builder.sub(new_size, size)

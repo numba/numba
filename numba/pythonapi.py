@@ -76,6 +76,7 @@ class _ReflectContext(namedtuple("_ReflectContext",
     """
     __slots__ = ()
 
+    # XXX the error bit is currently unused by consumers (e.g. PyCallWrapper)
     def set_error(self):
         self.builder.store(self.is_error, cgutils.true_bit)
 
@@ -1142,7 +1143,8 @@ class PythonAPI(object):
         is_error = cgutils.alloca_once_value(self.builder, cgutils.false_bit)
         c = _ReflectContext(self.context, self.builder, self, env_manager,
                             is_error)
-        return impl(c, typ, val)
+        impl(c, typ, val)
+        return self.builder.load(c.is_error)
 
     def to_native_generator(self, obj, typ):
         """
