@@ -54,7 +54,7 @@ class _BoxContext(namedtuple("_BoxContext",
     __slots__ = ()
 
     def box(self, typ, val):
-        return self.pyapi.from_native_value(val, typ, self.env_manager)
+        return self.pyapi.from_native_value(typ, val, self.env_manager)
 
 
 class _UnboxContext(namedtuple("_UnboxContext",
@@ -65,7 +65,7 @@ class _UnboxContext(namedtuple("_UnboxContext",
     __slots__ = ()
 
     def unbox(self, typ, obj):
-        return self.pyapi.to_native_value(obj, typ)
+        return self.pyapi.to_native_value(typ, obj)
 
 
 class _ReflectContext(namedtuple("_ReflectContext",
@@ -80,10 +80,10 @@ class _ReflectContext(namedtuple("_ReflectContext",
         self.builder.store(self.is_error, cgutils.true_bit)
 
     def box(self, typ, val):
-        return self.pyapi.from_native_value(val, typ, self.env_manager)
+        return self.pyapi.from_native_value(typ, val, self.env_manager)
 
     def reflect(self, typ, val):
-        return self.pyapi.reflect_native_value(val, typ, self.env_manager)
+        return self.pyapi.reflect_native_value(typ, val, self.env_manager)
 
 
 class NativeValue(object):
@@ -806,10 +806,10 @@ class PythonAPI(object):
             return self.builder.call(fn, (lhs, rhs, lopid))
         elif opstr == 'is':
             bitflag = self.builder.icmp(lc.ICMP_EQ, lhs, rhs)
-            return self.from_native_value(bitflag, types.boolean)
+            return self.from_native_value(types.boolean, bitflag)
         elif opstr == 'is not':
             bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
-            return self.from_native_value(bitflag, types.boolean)
+            return self.from_native_value(types.boolean, bitflag)
         elif opstr == 'in':
             fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
             fn = self._get_function(fnty, name="PySequence_Contains")
@@ -1110,7 +1110,7 @@ class PythonAPI(object):
     def c_api_error(self):
         return cgutils.is_not_null(self.builder, self.err_occurred())
 
-    def to_native_value(self, obj, typ):
+    def to_native_value(self, typ, obj):
         impl = _unboxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert %s to native value" % (typ,))
@@ -1118,14 +1118,14 @@ class PythonAPI(object):
         c = _UnboxContext(self.context, self.builder, self)
         return impl(c, typ, obj)
 
-    def from_native_return(self, val, typ, env_manager):
+    def from_native_return(self, typ, val, env_manager):
         assert not isinstance(typ, types.Optional), "callconv should have " \
                                                     "prevented the return of " \
                                                     "optional value"
-        out = self.from_native_value(val, typ, env_manager)
+        out = self.from_native_value(typ, val, env_manager)
         return out
 
-    def from_native_value(self, val, typ, env_manager=None):
+    def from_native_value(self, typ, val, env_manager=None):
         impl = _boxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
@@ -1133,7 +1133,7 @@ class PythonAPI(object):
         c = _BoxContext(self.context, self.builder, self, env_manager)
         return impl(c, typ, val)
 
-    def reflect_native_value(self, val, typ, env_manager=None):
+    def reflect_native_value(self, typ, val, env_manager=None):
         impl = _reflectors.lookup(typ.__class__)
         if impl is None:
             # Reflection isn't needed for most types

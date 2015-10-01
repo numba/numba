@@ -29,7 +29,7 @@ class _ArgManager(object):
             arg2.err -> arg1.err -> arg0.err -> arg.end (returns)
         """
         # Unbox argument
-        native = self.api.to_native_value(obj, ty)
+        native = self.api.to_native_value(ty, obj)
 
         # If an error occurred, go to the cleanup block for the previous argument.
         with cgutils.if_unlikely(self.builder, native.is_error):
@@ -38,7 +38,7 @@ class _ArgManager(object):
         # Define the cleanup function for the argument
         def cleanup_arg():
             # Native value reflection
-            self.api.reflect_native_value(native.value, ty, self.env_manager)
+            self.api.reflect_native_value(ty, native.value, self.env_manager)
 
             # Native value cleanup
             if native.cleanup is not None:
@@ -167,7 +167,7 @@ class PyCallWrapper(object):
                 api.return_none()
 
             retty = self._simplified_return_type()
-            obj = api.from_native_return(retval, retty, env_manager)
+            obj = api.from_native_return(retty, retval, env_manager)
             builder.ret(obj)
 
         with builder.if_then(builder.not_(status.is_python_exc)):
