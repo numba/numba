@@ -40,33 +40,50 @@ class _Registry(object):
 # Registries of boxing / unboxing implementations
 _boxers = _Registry()
 _unboxers = _Registry()
+_reflectors = _Registry()
 
 box = _boxers.register
 unbox = _unboxers.register
+reflect = _reflectors.register
 
-class _BoxUnboxContext(namedtuple("_BoxUnboxContext",
-                       ("context", "builder", "pyapi", "env_manager"))):
+class _BoxContext(namedtuple("_BoxContext",
+                  ("context", "builder", "pyapi", "env_manager"))):
     """
-    The facilities required by (un)boxing implementations.
+    The facilities required by boxing implementations.
     """
     __slots__ = ()
 
     def box(self, typ, val):
         return self.pyapi.from_native_value(val, typ, self.env_manager)
 
+
+class _UnboxContext(namedtuple("_UnboxContext",
+                    ("context", "builder", "pyapi"))):
+    """
+    The facilities required by unboxing implementations.
+    """
+    __slots__ = ()
+
     def unbox(self, typ, obj):
         return self.pyapi.to_native_value(obj, typ)
 
 
-#class _UnboxContext(namedtuple("_UnboxContext",
-                    #("context", "builder", "pyapi"))):
-    #"""
-    #The facilities required by unboxing implementations.
-    #"""
-    #__slots__ = ()
+class _ReflectContext(namedtuple("_ReflectContext",
+                      ("context", "builder", "pyapi", "env_manager",
+                       "is_error"))):
+    """
+    The facilities required by reflection implementations.
+    """
+    __slots__ = ()
 
-    #def unbox(self, typ, obj):
-        #return self.pyapi.to_native_value(obj, typ)
+    def set_error(self):
+        self.builder.store(self.is_error, cgutils.true_bit)
+
+    def box(self, typ, val):
+        return self.pyapi.from_native_value(val, typ, self.env_manager)
+
+    def reflect(self, typ, val):
+        return self.pyapi.reflect_native_value(val, typ, self.env_manager)
 
 
 class NativeValue(object):
@@ -75,11 +92,10 @@ class NativeValue(object):
     recording whether the conversion was successful and how to cleanup.
     """
 
-    def __init__(self, value, is_error=None, cleanup=None, reflect=None):
+    def __init__(self, value, is_error=None, cleanup=None):
         self.value = value
         self.is_error = is_error if is_error is not None else cgutils.false_bit
         self.cleanup = cleanup
-        self.reflect = reflect
 
 
 class EnvironmentManager(object):
@@ -1094,12 +1110,12 @@ class PythonAPI(object):
     def c_api_error(self):
         return cgutils.is_not_null(self.builder, self.err_occurred())
 
-    def to_native_value(self, obj, typ, env_manager=None):
+    def to_native_value(self, obj, typ):
         impl = _unboxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
-        c = _BoxUnboxContext(self.context, self.builder, self, env_manager)
+        c = _UnboxContext(self.context, self.builder, self)
         return impl(c, typ, obj)
 
     def from_native_return(self, val, typ, env_manager):
@@ -1114,7 +1130,18 @@ class PythonAPI(object):
         if impl is None:
             raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
 
-        c = _BoxUnboxContext(self.context, self.builder, self, env_manager)
+        c = _BoxContext(self.context, self.builder, self, env_manager)
+        return impl(c, typ, val)
+
+    def reflect_native_value(self, val, typ, env_manager=None):
+        impl = _reflectors.lookup(typ.__class__)
+        if impl is None:
+            # Reflection isn't needed for most types
+            return
+
+        is_error = cgutils.alloca_once_value(self.builder, cgutils.false_bit)
+        c = _ReflectContext(self.context, self.builder, self, env_manager,
+                            is_error)
         return impl(c, typ, val)
 
     def to_native_generator(self, obj, typ):

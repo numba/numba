@@ -5,7 +5,7 @@ Boxing and unboxing of native Numba values to / from CPython objects.
 from llvmlite import ir
 
 from .. import cgutils, numpy_support, types
-from ..pythonapi import box, unbox, NativeValue
+from ..pythonapi import box, unbox, reflect, NativeValue
 
 from . import listobj
 
@@ -451,44 +451,52 @@ def unbox_list(c, typ, obj):
             list.parent = obj
 
     def cleanup():
-        """
-        Reflect the native list's contents into the Python original
-        """
-        if not typ.reflected:
-            return
-        with c.builder.if_then(list.dirty, likely=False):
-            new_size = list.size
-            diff = c.builder.sub(new_size, size)
-            diff_gt_0 = c.builder.icmp_signed('>=', diff,
-                                              ir.Constant(diff.type, 0))
-            with c.builder.if_else(diff_gt_0) as (if_grow, if_shrink):
-                # XXX no error checking below
-                with if_grow:
-                    # First overwrite existing items
-                    with cgutils.for_range(c.builder, size) as loop:
-                        item = list.getitem(loop.index)
-                        itemobj = c.box(typ.dtype, item)
-                        c.pyapi.list_setitem(obj, loop.index, itemobj)
-                    # Then add missing items
-                    with cgutils.for_range(c.builder, diff) as loop:
-                        idx = c.builder.add(size, loop.index)
-                        item = list.getitem(idx)
-                        itemobj = c.box(typ.dtype, item)
-                        c.pyapi.list_append(obj, itemobj)
-                        c.pyapi.decref(itemobj)
-
-                with if_shrink:
-                    # First delete list tail
-                    c.pyapi.list_setslice(obj, new_size, size, None)
-                    # Then overwrite remaining items
-                    with cgutils.for_range(c.builder, new_size) as loop:
-                        item = list.getitem(loop.index)
-                        itemobj = c.box(typ.dtype, item)
-                        c.pyapi.list_setitem(obj, loop.index, itemobj)
-        c.pyapi.decref(obj)
+        if typ.reflected:
+            c.pyapi.decref(obj)
 
     return NativeValue(list.value, is_error=c.builder.not_(ok),
                        cleanup=cleanup)
+
+
+@reflect(types.List)
+def reflect_list(c, typ, val):
+    """
+    Reflect the native list's contents into the Python object.
+    """
+    if not typ.reflected:
+        return
+    list = listobj.ListInstance(c.context, c.builder, typ, val)
+    obj = list.parent
+    with c.builder.if_then(list.dirty, likely=False):
+        size = c.pyapi.list_size(obj)
+        new_size = list.size
+        diff = c.builder.sub(new_size, size)
+        diff_gt_0 = c.builder.icmp_signed('>=', diff,
+                                          ir.Constant(diff.type, 0))
+        with c.builder.if_else(diff_gt_0) as (if_grow, if_shrink):
+            # XXX no error checking below
+            with if_grow:
+                # First overwrite existing items
+                with cgutils.for_range(c.builder, size) as loop:
+                    item = list.getitem(loop.index)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_setitem(obj, loop.index, itemobj)
+                # Then add missing items
+                with cgutils.for_range(c.builder, diff) as loop:
+                    idx = c.builder.add(size, loop.index)
+                    item = list.getitem(idx)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_append(obj, itemobj)
+                    c.pyapi.decref(itemobj)
+
+            with if_shrink:
+                # First delete list tail
+                c.pyapi.list_setslice(obj, new_size, size, None)
+                # Then overwrite remaining items
+                with cgutils.for_range(c.builder, new_size) as loop:
+                    item = list.getitem(loop.index)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_setitem(obj, loop.index, itemobj)
 
 
 #
