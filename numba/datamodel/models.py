@@ -619,9 +619,7 @@ class ListPayloadModel(StructModel):
         members = [
             ('size', types.intp),
             ('allocated', types.intp),
-            # The two following members are used only for reflected lists
-            # but always present to enable trivial casting
-            ('parent', types.pyobject),
+            # This member is only used only for reflected lists
             ('dirty', types.boolean),
             # Actually an inlined var-sized array
             ('data', fe_type.list_type.dtype),
@@ -636,6 +634,8 @@ class ListModel(StructModel):
         members = [
             # The meminfo data points to a ListPayload
             ('meminfo', types.MemInfoPointer(payload_type)),
+            # This member is only used only for reflected lists
+            ('parent', types.pyobject),
         ]
         super(ListModel, self).__init__(dmm, fe_type, members)
 

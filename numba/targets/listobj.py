@@ -69,14 +69,6 @@ class _ListPayloadMixin(object):
         return self._payload.dirty
 
     @property
-    def parent(self):
-        return self._payload.parent
-
-    @parent.setter
-    def parent(self, value):
-        self._payload.parent = value
-
-    @property
     def data(self):
         return self._payload._get_ptr_by_name('data')
 
@@ -166,6 +158,14 @@ class ListInstance(_ListPayloadMixin):
         return get_list_payload(self._context, self._builder, self._ty, self._list)
 
     @property
+    def parent(self):
+        return self._list.parent
+
+    @parent.setter
+    def parent(self, value):
+        self._list.parent = value
+
+    @property
     def value(self):
         return self._list._getvalue()
 
@@ -224,9 +224,9 @@ class ListInstance(_ListPayloadMixin):
                     builder.store(cgutils.false_bit, ok)
                 with if_ok:
                     self._list.meminfo = meminfo
+                    self._list.parent = context.get_constant_null(types.pyobject)
                     self._payload.allocated = nitems
                     self._payload.size = ir.Constant(intp_t, 0)  # for safety
-                    self._payload.parent = context.get_constant_null(types.pyobject)
                     self._set_dirty(False)
 
         return builder.load(ok), self
