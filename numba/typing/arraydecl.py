@@ -32,6 +32,9 @@ def get_array_index_type(ary, idx):
     # Walk indices
     for ty in idx:
         if ty is types.ellipsis:
+            if ellipsis_met:
+                raise TypeError("only one ellipsis allowed in array index "
+                                "(got %s)" % (idx,))
             ellipsis_met = True
         elif ty is types.slice3_type:
             pass
