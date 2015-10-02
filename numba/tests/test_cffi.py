@@ -6,6 +6,7 @@ from numba.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase
 from numba.tests.cffi_usecases import *
 
+import numpy as np
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -73,6 +74,17 @@ class TestCFFI(TestCase):
         pyfunc = use_user_defined_symbols
         cfunc = jit(nopython=True)(pyfunc)
         self.assertEqual(pyfunc(), cfunc())
+
+    def test_pass_numpy_array_float32(self):
+        x = np.arange(10).astype(np.float32)
+        cfunc = jit(nopython=True)(vector_sin_float32)
+        np.testing.assert_equal(np.sin(x), cfunc(x))
+
+    def test_pass_numpy_array_float64(self):
+        x = np.arange(10).astype(np.float64)
+        cfunc = jit(nopython=True)(vector_sin_float64)
+        np.testing.assert_equal(np.sin(x), cfunc(x))
+
 
 if __name__ == '__main__':
     unittest.main()

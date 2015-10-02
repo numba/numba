@@ -40,8 +40,11 @@ def typeof_impl(val, c):
 
     # cffi is handled here as it does not expose a public base class
     # for exported functions.
-    if cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
-        return cffi_utils.make_function_type(val)
+    if cffi_utils.SUPPORTED:
+        if cffi_utils.is_cffi_func(val):
+            return cffi_utils.make_function_type(val)
+        if cffi_utils.is_ffi_module(val):
+            return cffi_utils.ffi_module
 
     return getattr(val, "_numba_type_", None)
 

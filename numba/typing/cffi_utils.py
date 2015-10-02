@@ -20,7 +20,17 @@ except ImportError:
 SUPPORTED = ffi is not None
 _ool_func_types = {}
 _ool_func_ptr = {}
+_ffi_modules = set()
 
+
+ffi_module = types.Module(cffi.FFI)
+
+def is_ffi_module(obj):
+    # Compiled FFI modules have a member, ffi, which is an instance of
+    # CompiledFFI, which behaves similarly to an instance of cffi.FFI. In
+    # order to simplify handling a CompiledFFI object, we treat them as
+    # if they're cffi.FFI instances for typing and lowering purposes.
+    return obj in _ffi_modules or isinstance(obj, cffi.FFI)
 
 def is_cffi_func(obj):
     """Check whether the obj is a CFFI function"""
@@ -72,10 +82,11 @@ def _type_map():
             ffi.typeof('uint64_t') :            types.ulonglong,
             ffi.typeof('float') :               types.float_,
             ffi.typeof('double') :              types.double,
-            # ffi.typeof('long double') :         longdouble,
             ffi.typeof('char *') :              types.voidptr,
             ffi.typeof('void *') :              types.voidptr,
             ffi.typeof('uint8_t *') :           types.CPointer(types.uint8),
+            ffi.typeof('float *') :             types.CPointer(types.float32),
+            ffi.typeof('double *') :            types.CPointer(types.float64),
             ffi.typeof('ssize_t') :             types.intp,
             ffi.typeof('size_t') :              types.uintp,
             ffi.typeof('void') :                types.void,
@@ -127,6 +138,30 @@ class ExternCFunction(types.ExternalFunction):
         signature = templates.signature(self.restype, *self.argtypes)
         super(ExternCFunction, self).__init__(symbol, signature)
 
+
+registry = templates.Registry()
+
+@registry.register
+class FFI_from_buffer(templates.AbstractTemplate):
+    key = cffi.FFI.from_buffer
+
+    def generic(self, args, kws):
+        if kws or (len(args) != 1):
+            return
+        [ary] = args
+        if not (isinstance(ary, types.Array) or ary.layout in ('C', 'F')):
+            return
+        ptr = types.CPointer(ary.dtype)
+        return templates.signature(ptr, ary)
+
+@registry.register_attr
+class FFIAttribute(templates.AttributeTemplate):
+    key = ffi_module
+
+    def resolve_from_buffer(self, ffi):
+        return types.Function(FFI_from_buffer)
+
+
 def register_module(mod):
     """
     Add typing for all functions in an out-of-line CFFI module to the typemap
@@ -137,3 +172,4 @@ def register_module(mod):
             _ool_func_types[f] = mod.ffi.typeof(f)
             addr = mod.ffi.addressof(mod.lib, f.__name__)
             _ool_func_ptr[f] = int(mod.ffi.cast("uintptr_t", addr))
+        _ffi_modules.add(mod.ffi)
