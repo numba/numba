@@ -11,8 +11,8 @@
 #include <math.h>
 
 
-/* Missing math function on windows */
-#ifdef _WIN32
+/* Missing math function on windows prior to VS2015 */
+#if defined(_WIN32) && _MSC_VER < 1900
     /* undef windows macros for the following */
     #undef ldexpf
     #undef frexpf
@@ -26,7 +26,7 @@
     float frexpf(float x, int *exp) {
         return (float)frexp(x, exp);
     }
-#endif /* WIN32 */
+#endif /* WIN32 and _MSC_VER < 1900 */
 
 /* signbit is actually a macro, two versions will be exported as to let the
    macro do whatever magic it does for floats and for doubles */

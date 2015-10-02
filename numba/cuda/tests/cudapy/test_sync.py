@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda, int32, float32
 from numba.cuda.testing import unittest
+from numba.config import ENABLE_CUDASIM
 
 
 def useless_sync(ary):
@@ -37,6 +38,24 @@ def dyn_shared_memory(ary):
     ary[i] = sm[i]
 
 
+def use_threadfence(ary):
+    ary[0] += 123
+    cuda.threadfence()
+    ary[0] += 321
+
+
+def use_threadfence_block(ary):
+    ary[0] += 123
+    cuda.threadfence_block()
+    ary[0] += 321
+
+
+def use_threadfence_system(ary):
+    ary[0] += 123
+    cuda.threadfence_system()
+    ary[0] += 321
+
+
 class TestCudaSync(unittest.TestCase):
     def test_useless_sync(self):
         compiled = cuda.jit("void(int32[::1])")(useless_sync)
@@ -70,6 +89,33 @@ class TestCudaSync(unittest.TestCase):
         ary = np.empty(shape, dtype=np.float32)
         compiled[1, shape, 0, ary.size * 4](ary)
         self.assertTrue(np.all(ary == 2 * np.arange(ary.size, dtype=np.int32)))
+
+    def test_threadfence_codegen(self):
+        # Does not test runtime behavior, just the code generation.
+        compiled = cuda.jit("void(int32[:])")(use_threadfence)
+        ary = np.zeros(10, dtype=np.int32)
+        compiled[1, 1](ary)
+        self.assertEqual(123 + 321, ary[0])
+        if not ENABLE_CUDASIM:
+            self.assertIn("membar.gl;", compiled.ptx)
+
+    def test_threadfence_block_codegen(self):
+        # Does not test runtime behavior, just the code generation.
+        compiled = cuda.jit("void(int32[:])")(use_threadfence_block)
+        ary = np.zeros(10, dtype=np.int32)
+        compiled[1, 1](ary)
+        self.assertEqual(123 + 321, ary[0])
+        if not ENABLE_CUDASIM:
+            self.assertIn("membar.cta;", compiled.ptx)
+
+    def test_threadfence_system_codegen(self):
+        # Does not test runtime behavior, just the code generation.
+        compiled = cuda.jit("void(int32[:])")(use_threadfence_system)
+        ary = np.zeros(10, dtype=np.int32)
+        compiled[1, 1](ary)
+        self.assertEqual(123 + 321, ary[0])
+        if not ENABLE_CUDASIM:
+            self.assertIn("membar.sys;", compiled.ptx)
 
 
 if __name__ == '__main__':
