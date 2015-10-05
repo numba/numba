@@ -171,7 +171,7 @@ class TestCC(BasePYCCTest):
             res = lib.multf(987, 321)
             self.assertPreciseEqual(res, 987.0 * 321.0)
             res = lib.square(5)
-            self.assertPreciseEqual(res, 10)
+            self.assertPreciseEqual(res, 25)
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ _two = 2
 # the script in a proper module.
 @cc.export('square', 'i8(i8)')
 def square(u):
-    return u * _two
+    return u ** _two
 
 # Fails because it needs _helperlib
 #@cc.export('power', 'i8(i8, i8)')
