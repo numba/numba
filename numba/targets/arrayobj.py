@@ -103,12 +103,12 @@ def load_item(context, builder, arrayty, ptr):
     return context.unpack_value(builder, arrayty.dtype, ptr,
                                 align=align)
 
-def store_item(context, builder, arrayty, ptr, val):
+def store_item(context, builder, arrayty, val, ptr):
     """
     Store the item at the given array pointer.
     """
     align = None if arrayty.aligned else 1
-    return context.pack_value(builder, arrayty.dtype, ptr, val,  align=align)
+    return context.pack_value(builder, arrayty.dtype, val, ptr, align=align)
 
 
 def fix_integer_index(context, builder, idxty, idx, size):
@@ -1678,7 +1678,8 @@ def array_nonzero(context, builder, sig, args):
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
         ptr = cgutils.get_item_pointer2(builder, data, shape, strides,
                                         layout, indices)
-        nz = context.is_true(builder, aryty.dtype, builder.load(ptr))
+        val = load_item(context, builder, aryty, ptr)
+        nz = context.is_true(builder, aryty.dtype, val)
         with builder.if_then(nz):
             builder.store(builder.add(builder.load(count), one), count)
 
@@ -1694,7 +1695,8 @@ def array_nonzero(context, builder, sig, args):
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
         ptr = cgutils.get_item_pointer2(builder, data, shape, strides,
                                         layout, indices)
-        nz = context.is_true(builder, aryty.dtype, builder.load(ptr))
+        val = load_item(context, builder, aryty, ptr)
+        nz = context.is_true(builder, aryty.dtype, val)
         with builder.if_then(nz):
             # Store element indices in output arrays
             if not indices:
@@ -1705,7 +1707,7 @@ def array_nonzero(context, builder, sig, args):
                 ptr = cgutils.get_item_pointer2(builder, out_datas[i],
                                                 out_shape, (),
                                                 'C', [cur])
-                builder.store(indices[i], ptr)
+                store_item(context, builder, outaryty, indices[i], ptr)
             builder.store(builder.add(cur, one), index)
 
     tup = context.make_tuple(builder, sig.return_type, outs)
@@ -2128,11 +2130,11 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
             def getitem(self, context, builder, arrty, arr, index):
                 ptr = builder.gep(arr.data, [index])
-                return builder.load(ptr)
+                return load_item(context, builder, arrty, ptr)
 
             def setitem(self, context, builder, arrty, arr, index, value):
                 ptr = builder.gep(arr.data, [index])
-                builder.store(value, ptr)
+                store_item(context, builder, arrty, value, ptr)
 
         return CContiguousFlatIter
 
@@ -2261,11 +2263,11 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
             def getitem(self, context, builder, arrty, arr, index):
                 ptr = self._ptr_for_index(context, builder, arrty, arr, index)
-                return builder.load(ptr)
+                return load_item(context, builder, arrty, ptr)
 
             def setitem(self, context, builder, arrty, arr, index, value):
                 ptr = self._ptr_for_index(context, builder, arrty, arr, index)
-                builder.store(value, ptr)
+                store_item(context, builder, arrty, value, ptr)
 
         return FlatIter
 

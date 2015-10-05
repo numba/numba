@@ -655,7 +655,7 @@ class Bool(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [arg] = args
-        if arg in types.number_domain:
+        if isinstance(arg, (types.Boolean, types.Number)):
             return signature(types.boolean, arg)
         # XXX typing for bool cannot be polymorphic because of the
         # types.Function thing, so we redirect to the "is_true"
@@ -671,16 +671,9 @@ class Int(AbstractTemplate):
 
         [arg] = args
 
-        if arg not in types.number_domain:
-            raise TypeError("int() only support for numbers")
-
-        if arg in types.complex_domain:
-            raise TypeError("int() does not support complex")
-
-        if arg in types.integer_domain:
+        if isinstance(arg, types.Integer):
             return signature(arg, arg)
-
-        if arg in types.real_domain:
+        if isinstance(arg, (types.Float, types.Boolean)):
             return signature(types.intp, arg)
 
 

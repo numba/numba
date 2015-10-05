@@ -126,7 +126,7 @@ def gridsize_expand(ndim):
     """
     Return the absolute size (or shape) in threads of the entire grid of
     blocks. *ndim* should correspond to the number of dimensions declared when
-    instantiating the kernel. 
+    instantiating the kernel.
 
     Computation of the first integer is as follows::
 
@@ -165,7 +165,32 @@ class syncthreads(Stub):
     '''
     _description_ = '<syncthread()>'
 
-#-------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------
+# memory fences
+
+class threadfence_block(Stub):
+    '''
+    A memory fence at thread block level
+    '''
+    _description_ = '<threadfence_block()>'
+
+
+class threadfence_system(Stub):
+    '''
+    A memory fence at system level: across devices
+    '''
+    _description_ = '<threadfence_system()>'
+
+
+class threadfence(Stub):
+    '''
+    A memory fence at device level
+    '''
+    _description_ = '<threadfence()>'
+
+
+# -------------------------------------------------------------------------------
 # shared
 
 def _legalize_shape(shape):
