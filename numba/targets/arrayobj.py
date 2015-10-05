@@ -1634,11 +1634,11 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
             def getitem(self, context, builder, arrty, arr, index):
                 ptr = builder.gep(arr.data, [index])
-                return builder.load(ptr)
+                return load_item(context, builder, arrty, ptr)
 
             def setitem(self, context, builder, arrty, arr, index, value):
                 ptr = builder.gep(arr.data, [index])
-                builder.store(value, ptr)
+                store_item(context, builder, arrty, value, ptr)
 
         return CContiguousFlatIter
 
@@ -1767,11 +1767,11 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
             def getitem(self, context, builder, arrty, arr, index):
                 ptr = self._ptr_for_index(context, builder, arrty, arr, index)
-                return builder.load(ptr)
+                return load_item(context, builder, arrty, ptr)
 
             def setitem(self, context, builder, arrty, arr, index, value):
                 ptr = self._ptr_for_index(context, builder, arrty, arr, index)
-                builder.store(value, ptr)
+                store_item(context, builder, arrty, value, ptr)
 
         return FlatIter
 
