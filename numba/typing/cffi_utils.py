@@ -5,6 +5,7 @@ obtaining the pointer and numba signature.
 """
 from __future__ import print_function, division, absolute_import
 
+from types import BuiltinFunctionType
 import ctypes
 
 from numba import types
@@ -17,6 +18,8 @@ except ImportError:
     ffi = None
 
 SUPPORTED = ffi is not None
+_ool_func_types = {}
+_ool_func_ptr = {}
 
 
 def is_cffi_func(obj):
@@ -24,13 +27,18 @@ def is_cffi_func(obj):
     try:
         return ffi.typeof(obj).kind == 'function'
     except TypeError:
-        return False
+        try:
+            return obj in _ool_func_types
+        except:
+            return False
 
 def get_pointer(cffi_func):
     """
     Get a pointer to the underlying function for a CFFI function as an
     integer.
     """
+    if cffi_func in _ool_func_ptr:
+        return _ool_func_ptr[cffi_func]
     return int(ffi.cast("uintptr_t", cffi_func))
 
 
@@ -101,7 +109,7 @@ def make_function_type(cffi_func):
     """
     Return a Numba type for the given CFFI function pointer.
     """
-    cffi_type = ffi.typeof(cffi_func)
+    cffi_type = _ool_func_types.get(cffi_func) or ffi.typeof(cffi_func)
     sig = map_type(cffi_type)
     return types.ExternalFunctionPointer(sig, get_pointer=get_pointer)
 
@@ -118,3 +126,14 @@ class ExternCFunction(types.ExternalFunction):
         self.argtypes = [type_map[arg.build_backend_type(ffi, None)] for arg in rft.args]
         signature = templates.signature(self.restype, *self.argtypes)
         super(ExternCFunction, self).__init__(symbol, signature)
+
+def register_module(mod):
+    """
+    Add typing for all functions in an out-of-line CFFI module to the typemap
+    """
+    for f in dir(mod.lib):
+        f = getattr(mod.lib, f)
+        if isinstance(f, BuiltinFunctionType):
+            _ool_func_types[f] = mod.ffi.typeof(f)
+            addr = mod.ffi.addressof(mod.lib, f.__name__)
+            _ool_func_ptr[f] = int(mod.ffi.cast("uintptr_t", addr))
