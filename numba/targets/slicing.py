@@ -111,6 +111,14 @@ def fix_stride(builder, slice, stride):
     return builder.mul(slice.step, stride)
 
 
+def get_defaults(context):
+    """
+    Get the default values for a slice's three members.
+    """
+    maxint = (1 << (context.address_size - 1)) - 1
+    return (0, maxint, 1)
+
+
 #---------------------------------------------------------------------------
 # The slice structure
 
@@ -141,3 +149,22 @@ def slice_constructor_impl(context, builder, sig, args):
 
     res = slice3._getvalue()
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@builtin_attr
+@impl_attribute(types.slice3_type, "start")
+def slice_start_impl(context, builder, typ, value):
+    slice3 = Slice(context, builder, value)
+    return slice3.start
+
+@builtin_attr
+@impl_attribute(types.slice3_type, "stop")
+def slice_stop_impl(context, builder, typ, value):
+    slice3 = Slice(context, builder, value)
+    return slice3.stop
+
+@builtin_attr
+@impl_attribute(types.slice3_type, "step")
+def slice_step_impl(context, builder, typ, value):
+    slice3 = Slice(context, builder, value)
+    return slice3.step

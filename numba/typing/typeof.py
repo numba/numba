@@ -117,6 +117,10 @@ def _typeof_tuple(val, c):
         return
     return types.BaseTuple.from_types(tys, type(val))
 
+@typeof_impl.register(slice)
+def _typeof_slice(val, c):
+    return types.slice3_type
+
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):
     tp = numpy_support.from_dtype(val)

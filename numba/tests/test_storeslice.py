@@ -12,7 +12,7 @@ def setitem_slice(a, start, stop, step, scalar):
 
 
 def usecase(obs, nPoints):
-    center = nPoints / 2
+    center = nPoints // 2
     obs[0:center] = np.arange(center)
     obs[center] = 321
     obs[(center + 1):] = np.arange(nPoints - center - 1)
@@ -26,7 +26,7 @@ class TestStoreSlice(unittest.TestCase):
         obs_expected = obs_got.copy()
 
         flags = Flags()
-        flags.set("enable_pyobject")
+        flags.set("nrt")
         cres = compile_isolated(usecase, (types.float64[:], types.intp),
                                 flags=flags)
         cres.entry_point(obs_got, n)

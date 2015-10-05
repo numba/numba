@@ -585,6 +585,9 @@ def pack_array(builder, values, ty=None):
 
 
 def unpack_tuple(builder, tup, count=None):
+    """
+    Unpack an array or structure of values, return a Python tuple.
+    """
     if count is None:
         # Assuming *tup* is an aggregate
         count = len(tup.type.elements)

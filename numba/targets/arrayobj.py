@@ -8,9 +8,9 @@ from __future__ import print_function, absolute_import, division
 import math
 
 import llvmlite.llvmpy.core as lc
+from llvmlite.llvmpy.core import Constant
 
 import numpy
-from llvmlite.llvmpy.core import Constant
 from numba import types, cgutils, typing
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
@@ -109,6 +109,18 @@ def store_item(context, builder, arrayty, val, ptr):
     """
     align = None if arrayty.aligned else 1
     return context.pack_value(builder, arrayty.dtype, val, ptr, align=align)
+
+
+def fix_integer_index(context, builder, idxty, idx, size):
+    """
+    Fix the integer index' type and value for the given dimension size.
+    """
+    if idxty.signed:
+        ind = context.cast(builder, idx, idxty, types.intp)
+        ind = slicing.fix_index(builder, ind, size)
+    else:
+        ind = context.cast(builder, idx, idxty, types.uintp)
+    return ind
 
 
 def populate_array(array, data, shape, strides, itemsize, meminfo,
@@ -258,6 +270,9 @@ def iternext_array(context, builder, sig, args, result):
         builder.store(nindex, iterobj.index)
 
 
+#-------------------------------------------------------------------------------
+# Basic indexing (with integers and slices only)
+
 def basic_indexing(context, builder, aryty, ary, index_types, indices):
     """
     Perform basic indexing on the given array.
@@ -295,12 +310,11 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
             output_shapes.append(sh)
             output_strides.append(st)
         elif isinstance(idxty, types.Integer):
-            ind = context.cast(builder, indexval, idxty, types.intp)
-            if idxty.signed:
-                ind = slicing.fix_index(builder, ind, shapes[ax])
+            ind = fix_integer_index(context, builder, idxty, indexval,
+                                    shapes[ax])
             output_indices.append(ind)
         else:
-            raise AssertionError("unexpected index type: %s" % (idxty,))
+            raise NotImplementedError("unexpected index type: %s" % (idxty,))
         ax += 1
 
     # Fill up missing dimensions at the end
@@ -310,6 +324,8 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
         output_strides.append(strides[ax])
         ax += 1
 
+    # No need to check wraparound, as negative indices were already
+    # fixed in the loop above.
     dataptr = cgutils.get_item_pointer(builder, aryty, ary,
                                        output_indices,
                                        wraparound=False)
@@ -394,6 +410,11 @@ def getitem_array_tuple(context, builder, sig, args):
 
     index_types = tupty.types
     indices = cgutils.unpack_tuple(builder, tup, count=len(tupty))
+
+    if any(isinstance(ty, types.Array) for ty in index_types):
+        return fancy_getitem(context, builder, sig, args,
+                             aryty, ary, index_types, indices)
+
     dataptr, shapes, strides = \
         basic_indexing(context, builder, aryty, ary, index_types, indices)
 
@@ -412,91 +433,42 @@ def getitem_array_tuple(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.Buffer), types.Kind(types.Integer),
-           types.Any)
-def setitem_array1d(context, builder, sig, args):
+@implement('setitem', types.Kind(types.Buffer), types.Any, types.Any)
+def setitem_array(context, builder, sig, args):
     """
-    array[a] = scalar
+    array[a] = scalar_or_array
+    array[a,..,b] = scalar_or_array
     """
     aryty, idxty, valty = sig.args
     ary, idx, val = args
-    ary = make_array(aryty)(context, builder, ary)
 
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
-                                   wraparound=idxty.signed)
-
-    val = context.cast(builder, val, valty, aryty.dtype)
-
-    store_item(context, builder, aryty, val, ptr)
-
-
-@builtin
-@implement('setitem', types.Kind(types.Buffer), types.Kind(types.BaseTuple),
-           types.Any)
-def setitem_array_tuple(context, builder, sig, args):
-    """
-    array[a,..,b] = scalar
-    """
-    aryty, tupty, valty = sig.args
-    ary, tup, val = args
-    ary = make_array(aryty)(context, builder, ary)
-
-    index_types = tupty.types
-    indices = cgutils.unpack_tuple(builder, tup, count=len(tupty))
-    dataptr, shapes, strides = \
-        basic_indexing(context, builder, aryty, ary, index_types, indices)
-
-    assert not shapes
-    store_item(context, builder, aryty, val, dataptr)
-
-
-@builtin
-@implement('setitem', types.Kind(types.Buffer), types.slice3_type,
-           types.Any)
-def setitem_array1d_slice(context, builder, sig, args):
-    aryty, idxty, valty = sig.args
-    ary, idx, val = args
-
-    ary = make_array(aryty)(context, builder, ary)
-    shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
-
-    slicestruct = slicing.Slice(context, builder, value=idx)
-    cgutils.guard_invalid_slice(context, builder, slicestruct)
-    slicing.fix_slice(builder, slicestruct, shapes[0])
-
-    if isinstance(valty, types.Buffer):
-        # Input is an array => it must have the right size
-        # (for N-D assignment, we would check the entire shape)
-        valary = make_array(valty)(context, builder, val)
-
-        input_len = valary.nitems
-        slice_len = slicing.get_slice_length(builder, slicestruct)
-        with builder.if_then(builder.icmp_signed('!=', slice_len, input_len),
-                             likely=False):
-            msg = "cannot assign slice from input of different size"
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
-
-        def getitem(idx):
-            return _getitem_array1d(context, builder, valty, valary, idx,
-                                    wraparound=False)
+    if isinstance(idxty, types.BaseTuple):
+        index_types = idxty.types
+        indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
     else:
-        # Input is a scalar => broadcast it over the output slice
-        def getitem(idx):
-            return val
+        index_types = (idxty,)
+        indices = (idx,)
 
-    with cgutils.for_range_slice_generic(builder, slicestruct.start,
-                                         slicestruct.stop,
-                                         slicestruct.step) as (pos_range, neg_range):
-        with pos_range as (loop_idx, loop_count):
-            ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                           [loop_idx], wraparound=False)
-            item = getitem(loop_count)
-            store_item(context, builder, aryty, item, ptr)
-        with neg_range as (loop_idx, loop_count):
-            ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                           [loop_idx], wraparound=False)
-            item = getitem(loop_count)
-            store_item(context, builder, aryty, item, ptr)
+    ary = make_array(aryty)(context, builder, ary)
+
+    # First try basic indexing to see if a single array location is denoted.
+    try:
+        dataptr, shapes, strides = \
+            basic_indexing(context, builder, aryty, ary, index_types, indices)
+    except NotImplementedError:
+        use_fancy_indexing = True
+    else:
+        use_fancy_indexing = bool(shapes)
+
+    if use_fancy_indexing:
+        # Index describes a non-trivial view => use generic slice assignment
+        # (NOTE: this also handles scalar broadcasting)
+        return fancy_setslice(context, builder, sig, args,
+                              index_types, indices)
+
+    # Store source value the given location
+    val = context.cast(builder, val, valty, aryty.dtype)
+    store_item(context, builder, aryty, val, dataptr)
 
 
 @builtin
@@ -509,6 +481,530 @@ def array_len(context, builder, sig, args):
     shapeary = ary.shape
     res = builder.extract_value(shapeary, 0)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+#-------------------------------------------------------------------------------
+# Advanced / fancy indexing
+
+
+class Indexer(object):
+    """
+    Generic indexer interface, for generating indices over a fancy indexed
+    array on a single dimension.
+    """
+
+    def prepare(self):
+        """
+        Prepare the indexer by initializing any required variables, basic
+        blocks...
+        """
+        raise NotImplementedError
+
+    def get_size(self):
+        """
+        Return this dimension's size as an integer.
+        """
+        raise NotImplementedError
+
+    def get_shape(self):
+        """
+        Return this dimension's shape as a tuple.
+        """
+        raise NotImplementedError
+
+    def loop_head(self):
+        """
+        Start indexation loop.  Return a (index, count) tuple.
+        *index* is an integer LLVM value representing the index over this
+        dimension.
+        *count* is either an integer LLVM value representing the current
+        iteration count, or None if this dimension should be omitted from
+        the indexation result.
+        """
+        raise NotImplementedError
+
+    def loop_tail(self):
+        """
+        Finish indexation loop.
+        """
+        raise NotImplementedError
+
+
+class EntireIndexer(Indexer):
+    """
+    Compute indices along an entire array dimension.
+    """
+
+    def __init__(self, context, builder, aryty, ary, dim):
+        self.context = context
+        self.builder = builder
+        self.aryty = aryty
+        self.ary = ary
+        self.dim = dim
+        self.ll_intp = self.context.get_value_type(types.intp)
+
+    def prepare(self):
+        builder = self.builder
+        self.size = builder.extract_value(self.ary.shape, self.dim)
+        self.index = cgutils.alloca_once(builder, self.ll_intp)
+        self.bb_start = builder.append_basic_block()
+        self.bb_end = builder.append_basic_block()
+
+    def get_size(self):
+        return self.size
+
+    def get_shape(self):
+        return (self.size,)
+
+    def loop_head(self):
+        builder = self.builder
+        # Initialize loop variable
+        self.builder.store(Constant.int(self.ll_intp, 0), self.index)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_start)
+        cur_index = builder.load(self.index)
+        with builder.if_then(builder.icmp_signed('>=', cur_index, self.size),
+                             likely=False):
+            builder.branch(self.bb_end)
+        return cur_index, cur_index
+
+    def loop_tail(self):
+        builder = self.builder
+        next_index = builder.add(builder.load(self.index),
+                                 self.context.get_constant(types.intp, 1))
+        builder.store(next_index, self.index)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_end)
+
+
+class IntegerIndexer(Indexer):
+    """
+    Compute indices from a single integer.
+    """
+
+    def __init__(self, context, builder, idx):
+        self.context = context
+        self.builder = builder
+        self.idx = idx
+        self.ll_intp = self.context.get_value_type(types.intp)
+
+    def prepare(self):
+        pass
+
+    def get_size(self):
+        return Constant.int(self.ll_intp, 1)
+
+    def get_shape(self):
+        return ()
+
+    def loop_head(self):
+        return self.idx, None
+
+    def loop_tail(self):
+        pass
+
+
+class IntegerArrayIndexer(Indexer):
+    """
+    Compute indices from an array of integer indices.
+    """
+
+    def __init__(self, context, builder, idxty, idxary, size):
+        self.context = context
+        self.builder = builder
+        self.idxty = idxty
+        self.idxary = idxary
+        self.size = size
+        assert idxty.ndim == 1
+        self.ll_intp = self.context.get_value_type(types.intp)
+
+    def prepare(self):
+        builder = self.builder
+        self.idx_size = cgutils.unpack_tuple(builder, self.idxary.shape)[0]
+        self.idx_index = cgutils.alloca_once(builder, self.ll_intp)
+        self.bb_start = builder.append_basic_block()
+        self.bb_end = builder.append_basic_block()
+
+    def get_size(self):
+        return self.idx_size
+
+    def get_shape(self):
+        return (self.idx_size,)
+
+    def loop_head(self):
+        builder = self.builder
+        # Initialize loop variable
+        self.builder.store(Constant.int(self.ll_intp, 0), self.idx_index)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_start)
+        cur_index = builder.load(self.idx_index)
+        with builder.if_then(builder.icmp_signed('>=', cur_index, self.idx_size),
+                             likely=False):
+            builder.branch(self.bb_end)
+        # Load the actual index from the array of indices
+        index = _getitem_array1d(self.context, builder,
+                                 self.idxty, self.idxary,
+                                 cur_index, wraparound=False)
+        index = fix_integer_index(self.context, builder,
+                                  self.idxty.dtype, index, self.size)
+        return index, cur_index
+
+    def loop_tail(self):
+        builder = self.builder
+        next_index = builder.add(builder.load(self.idx_index),
+                                 Constant.int(self.ll_intp, 1))
+        builder.store(next_index, self.idx_index)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_end)
+
+
+class BooleanArrayIndexer(Indexer):
+    """
+    Compute indices from an array of boolean predicates.
+    """
+
+    def __init__(self, context, builder, idxty, idxary):
+        self.context = context
+        self.builder = builder
+        self.idxty = idxty
+        self.idxary = idxary
+        assert idxty.ndim == 1
+        self.ll_intp = self.context.get_value_type(types.intp)
+        self.zero = Constant.int(self.ll_intp, 0)
+        self.one = Constant.int(self.ll_intp, 1)
+
+    def prepare(self):
+        builder = self.builder
+        self.size = cgutils.unpack_tuple(builder, self.idxary.shape)[0]
+        self.idx_index = cgutils.alloca_once(builder, self.ll_intp)
+        self.count = cgutils.alloca_once(builder, self.ll_intp)
+        self.bb_start = builder.append_basic_block()
+        self.bb_tail = builder.append_basic_block()
+        self.bb_end = builder.append_basic_block()
+
+    def get_size(self):
+        builder = self.builder
+        count = cgutils.alloca_once_value(builder, self.zero)
+        # Sum all true values
+        with cgutils.for_range(builder, self.size) as loop:
+            c = builder.load(count)
+            pred = _getitem_array1d(self.context, builder,
+                                    self.idxty, self.idxary,
+                                    loop.index, wraparound=False)
+            c = builder.add(c, builder.zext(pred, c.type))
+            builder.store(c, count)
+
+        return builder.load(count)
+
+    def get_shape(self):
+        return (self.get_size(),)
+
+    def loop_head(self):
+        builder = self.builder
+        # Initialize loop variable
+        self.builder.store(self.zero, self.idx_index)
+        self.builder.store(self.zero, self.count)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_start)
+        cur_index = builder.load(self.idx_index)
+        cur_count = builder.load(self.count)
+        with builder.if_then(builder.icmp_signed('>=', cur_index, self.size),
+                             likely=False):
+            builder.branch(self.bb_end)
+        # Load the predicate and branch if false
+        pred = _getitem_array1d(self.context, builder,
+                                self.idxty, self.idxary,
+                                cur_index, wraparound=False)
+        with builder.if_then(builder.not_(pred)):
+            builder.branch(self.bb_tail)
+        # Increment the count for next iteration
+        next_count = builder.add(cur_count, self.one)
+        builder.store(next_count, self.count)
+        return cur_index, cur_count
+
+    def loop_tail(self):
+        builder = self.builder
+        builder.branch(self.bb_tail)
+        builder.position_at_end(self.bb_tail)
+        next_index = builder.add(builder.load(self.idx_index), self.one)
+        builder.store(next_index, self.idx_index)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_end)
+
+
+class SliceIndexer(Indexer):
+    """
+    Compute indices along a slice.
+    """
+
+    def __init__(self, context, builder, aryty, ary, dim, slice):
+        self.context = context
+        self.builder = builder
+        self.aryty = aryty
+        self.ary = ary
+        self.dim = dim
+        self.slice = slice
+        self.ll_intp = self.context.get_value_type(types.intp)
+        self.zero = Constant.int(self.ll_intp, 0)
+        self.one = Constant.int(self.ll_intp, 1)
+
+    def prepare(self):
+        builder = self.builder
+        # Fix slice for the dimension's size
+        self.dim_size = builder.extract_value(self.ary.shape, self.dim)
+        cgutils.guard_invalid_slice(self.context, builder, self.slice)
+        slicing.fix_slice(builder, self.slice, self.dim_size)
+        self.is_step_negative = cgutils.is_neg_int(builder, self.slice.step)
+        # Create loop entities
+        self.index = cgutils.alloca_once(builder, self.ll_intp)
+        self.count = cgutils.alloca_once(builder, self.ll_intp)
+        self.bb_start = builder.append_basic_block()
+        self.bb_end = builder.append_basic_block()
+
+    def get_size(self):
+        return slicing.get_slice_length(self.builder, self.slice)
+
+    def get_shape(self):
+        return (self.get_size(),)
+
+    def loop_head(self):
+        builder = self.builder
+        # Initialize loop variable
+        self.builder.store(self.slice.start, self.index)
+        self.builder.store(self.zero, self.count)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_start)
+        cur_index = builder.load(self.index)
+        cur_count = builder.load(self.count)
+        is_finished = builder.select(self.is_step_negative,
+                                     builder.icmp_signed('<=', cur_index,
+                                                         self.slice.stop),
+                                     builder.icmp_signed('>=', cur_index,
+                                                         self.slice.stop))
+        with builder.if_then(is_finished, likely=False):
+            builder.branch(self.bb_end)
+        return cur_index, cur_count
+
+    def loop_tail(self):
+        builder = self.builder
+        next_index = builder.add(builder.load(self.index), self.slice.step)
+        builder.store(next_index, self.index)
+        next_count = builder.add(builder.load(self.count), self.one)
+        builder.store(next_count, self.count)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_end)
+
+
+class FancyIndexer(object):
+    """
+    Perform fancy indexing on the given array.
+    """
+
+    def __init__(self, context, builder, aryty, ary, index_types, indices):
+        self.context = context
+        self.builder = builder
+        self.aryty = ary
+        self.shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
+        self.strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
+
+        indexers = []
+
+        ax = 0
+        for indexval, idxty in zip(indices, index_types):
+            if idxty is types.ellipsis:
+                # Fill up missing dimensions at the middle
+                n_missing = aryty.ndim - len(indices) + 1
+                for i in range(n_missing):
+                    indexer = EntireIndexer(context, builder, aryty, ary, ax)
+                    indexers.append(indexer)
+                    ax += 1
+                continue
+
+            # Regular index value
+            if idxty == types.slice3_type:
+                slice = slicing.Slice(context, builder, value=indexval)
+                indexer = SliceIndexer(context, builder, aryty, ary, ax, slice)
+                indexers.append(indexer)
+            elif isinstance(idxty, types.Integer):
+                ind = fix_integer_index(context, builder, idxty, indexval,
+                                        self.shapes[ax])
+                indexer = IntegerIndexer(context, builder, ind)
+                indexers.append(indexer)
+            elif isinstance(idxty, types.Array):
+                idxary = make_array(idxty)(context, builder, indexval)
+                if isinstance(idxty.dtype, types.Integer):
+                    indexer = IntegerArrayIndexer(context, builder,
+                                                  idxty, idxary,
+                                                  self.shapes[ax])
+                elif isinstance(idxty.dtype, types.Boolean):
+                    indexer = BooleanArrayIndexer(context, builder,
+                                                  idxty, idxary)
+                else:
+                    assert 0
+                indexers.append(indexer)
+            else:
+                raise AssertionError("unexpected index type: %s" % (idxty,))
+            ax += 1
+
+        # Fill up missing dimensions at the end
+        assert ax <= aryty.ndim, (ax, aryty.ndim)
+        while ax < aryty.ndim:
+            indexer = EntireIndexer(context, builder, aryty, ary, ax)
+            indexers.append(indexer)
+            ax += 1
+
+        assert len(indexers) == aryty.ndim, (len(indexers), aryty.ndim)
+        self.indexers = indexers
+
+    def prepare(self):
+        for i in self.indexers:
+            i.prepare()
+
+    def get_shape(self):
+        """
+        Get the resulting shape as Python tuple.
+        """
+        return sum([i.get_shape() for i in self.indexers], ())
+
+    def begin_loops(self):
+        indices, counts = zip(*(i.loop_head() for i in self.indexers))
+        return indices, counts
+
+    def end_loops(self):
+        for i in reversed(self.indexers):
+            i.loop_tail()
+
+
+def fancy_getitem(context, builder, sig, args,
+                  aryty, ary, index_types, indices):
+
+    shapes = cgutils.unpack_tuple(builder, ary.shape)
+    strides = cgutils.unpack_tuple(builder, ary.strides)
+    data = ary.data
+
+    indexer = FancyIndexer(context, builder, aryty, ary,
+                           index_types, indices)
+    indexer.prepare()
+
+    # Construct output array
+    out_ty = sig.return_type
+    out_shapes = indexer.get_shape()
+
+    out = _empty_nd_impl(context, builder, out_ty, out_shapes)
+    out_data = out.data
+    out_idx = cgutils.alloca_once_value(builder,
+                                        context.get_constant(types.intp, 0))
+
+    # Loop on source and copy to destination
+    indices, _ = indexer.begin_loops()
+
+    # No need to check for wraparound, as the indexers all ensure
+    # a positive index is returned.
+    ptr = cgutils.get_item_pointer2(builder, data, shapes, strides,
+                                    aryty.layout, indices, wraparound=False)
+    val = load_item(context, builder, aryty, ptr)
+
+    # Since the destination is C-contiguous, no need for multi-dimensional
+    # indexing.
+    cur = builder.load(out_idx)
+    ptr = builder.gep(out_data, [cur])
+    store_item(context, builder, out_ty, val, ptr)
+    next_idx = builder.add(cur, context.get_constant(types.intp, 1))
+    builder.store(next_idx, out_idx)
+
+    indexer.end_loops()
+
+    return impl_ret_borrowed(context, builder, out_ty, out._getvalue())
+
+
+@builtin
+@implement('getitem', types.Kind(types.Buffer), types.Kind(types.Array))
+def fancy_getitem_array(context, builder, sig, args):
+    aryty, idxty = sig.args
+    ary, idx = args
+    ary = make_array(aryty)(context, builder, ary)
+    out_ty = sig.return_type
+
+    return fancy_getitem(context, builder, sig, args,
+                         aryty, ary, (idxty,), (idx,))
+
+
+def fancy_setslice(context, builder, sig, args, index_types, indices):
+    """
+    Implement slice assignment for arrays.  This implementation works for
+    basic as well as fancy indexing, since there's no functional difference
+    between the two for indexed assignment.
+    """
+    aryty, _, srcty = sig.args
+    ary, _, src = args
+
+    ary = make_array(aryty)(context, builder, ary)
+    dest_shapes = cgutils.unpack_tuple(builder, ary.shape)
+    dest_strides = cgutils.unpack_tuple(builder, ary.strides)
+    dest_data = ary.data
+
+    indexer = FancyIndexer(context, builder, aryty, ary,
+                           index_types, indices)
+    indexer.prepare()
+
+    if isinstance(srcty, types.Buffer):
+        # Source is an array
+        src = make_array(srcty)(context, builder, src)
+        src_shapes = cgutils.unpack_tuple(builder, src.shape)
+        src_strides = cgutils.unpack_tuple(builder, src.strides)
+        src_data = src.data
+        src_dtype = srcty.dtype
+
+        # Check shapes are equal
+        index_shape = indexer.get_shape()
+        shape_error = cgutils.false_bit
+        assert len(index_shape) == len(src_shapes)
+
+        for u, v in zip(src_shapes, index_shape):
+            shape_error = builder.or_(shape_error,
+                                      builder.icmp_signed('!=', u, v))
+
+        with builder.if_then(shape_error, likely=False):
+            msg = "cannot assign slice from input of different size"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+        def src_getitem(source_indices):
+            assert len(source_indices) == srcty.ndim
+            src_ptr = cgutils.get_item_pointer2(builder, src_data,
+                                                src_shapes, src_strides,
+                                                srcty.layout, source_indices,
+                                                wraparound=False)
+            return load_item(context, builder, srcty, src_ptr)
+
+    else:
+        # Source is a scalar (broadcast or not, depending on destination
+        # shape).
+        src_dtype = srcty
+
+        def src_getitem(source_indices):
+            return src
+
+    # Loop on destination and copy from source to destination
+    dest_indices, counts = indexer.begin_loops()
+
+    # Source is iterated in natural order
+    source_indices = tuple(c for c in counts if c is not None)
+    val = src_getitem(source_indices)
+
+    # Cast to the destination dtype (cross-dtype slice assignement is allowed)
+    val = context.cast(builder, val, src_dtype, aryty.dtype)
+
+    # No need to check for wraparound, as the indexers all ensure
+    # a positive index is returned.
+    dest_ptr = cgutils.get_item_pointer2(builder, dest_data,
+                                         dest_shapes, dest_strides,
+                                         aryty.layout, dest_indices,
+                                         wraparound=False)
+    store_item(context, builder, aryty, val, dest_ptr)
+
+    indexer.end_loops()
+
+    return context.get_dummy_value()
 
 
 #-------------------------------------------------------------------------------
