@@ -154,6 +154,10 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         ty = typeof(None)
         self.assertEqual(ty, types.none)
 
+    def test_ellipsis(self):
+        ty = typeof(Ellipsis)
+        self.assertEqual(ty, types.ellipsis)
+
     def test_str(self):
         ty = typeof("abc")
         self.assertEqual(ty, types.string)

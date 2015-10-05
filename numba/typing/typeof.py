@@ -106,6 +106,10 @@ def _typeof_str(val, c):
 def _typeof_none(val, c):
     return types.none
 
+@typeof_impl.register(type(Ellipsis))
+def _typeof_ellipsis(val, c):
+    return types.ellipsis
+
 @typeof_impl.register(tuple)
 def _typeof_tuple(val, c):
     tys = [typeof_impl(v, c) for v in val]

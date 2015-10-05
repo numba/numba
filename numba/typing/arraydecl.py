@@ -4,7 +4,6 @@ import itertools
 
 from numba import types, intrinsics
 from numba.utils import PYVERSION
-from .builtins import normalize_nd_index
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
                                     builtin_attr, signature, bound_function,
@@ -21,42 +20,91 @@ def get_array_index_type(ary, idx):
     if not isinstance(ary, types.Buffer):
         return
 
-    idx = normalize_nd_index(idx)
-    if idx is None:
-        return
+    ndim = ary.ndim
 
-    if idx == types.slice3_type:
-        res = ary.copy(layout='A')
-    elif isinstance(idx, (types.UniTuple, types.Tuple)):
-        if ary.ndim > len(idx):
-            return
-        elif ary.ndim < len(idx):
-            return
-        elif any(i == types.slice3_type for i in idx):
-            ndim = ary.ndim
-            for i in idx:
-                if i != types.slice3_type:
-                    ndim -= 1
-            res = ary.copy(ndim=ndim, layout='A')
-        else:
-            res = ary.dtype
-    elif isinstance(idx, types.Integer):
-        if ary.ndim == 1:
-            res = ary.dtype
-        elif not ary.slice_is_copy and ary.ndim > 1:
-            # Left-index into a F-contiguous array gives a non-contiguous view
-            layout = 'C' if ary.layout == 'C' else 'A'
-            res = ary.copy(ndim=ary.ndim - 1, layout=layout)
-        else:
-            return
+    left_indices = []
+    right_indices = []
+    ellipsis_met = False
 
+    if not isinstance(idx, types.BaseTuple):
+        idx = [idx]
+
+    # Walk indices
+    for ty in idx:
+        if ty is types.ellipsis:
+            if ellipsis_met:
+                raise TypeError("only one ellipsis allowed in array index "
+                                "(got %s)" % (idx,))
+            ellipsis_met = True
+        elif ty is types.slice3_type:
+            pass
+        elif isinstance(ty, types.Integer):
+            # Normalize integer index
+            ty = types.intp if ty.signed else types.uintp
+            # Integer indexing removes the given dimension
+            ndim -= 1
+        else:
+            raise TypeError("unsupported array index type %s in %s"
+                            % (ty, idx))
+        (right_indices if ellipsis_met else left_indices).append(ty)
+
+    # Check indices and result dimensionality
+    all_indices = left_indices + right_indices
+    n_indices = len(all_indices) - ellipsis_met
+    if n_indices > ary.ndim:
+        raise TypeError("cannot index %s with %d indices: %s"
+                        % (ary, n_indices, idx))
+    if (n_indices == ary.ndim
+        and all(isinstance(ty, types.Integer) for ty in all_indices)
+        and not ellipsis_met):
+        # Full integer indexing => scalar result
+        # (note if ellipsis is present, a 0-d view is returned instead)
+        res = ary.dtype
     else:
-        raise Exception("unreachable: index type of %s" % idx)
+        # Result is a view
+        if ary.slice_is_copy:
+            # Avoid view semantics when the original type creates a copy
+            # when slicing.
+            return
 
-    if isinstance(res, types.Buffer) and res.slice_is_copy:
-        # Avoid view semantics when the original type creates a copy
-        # when slicing.
-        return
+        # Infer layout
+        layout = ary.layout
+        if layout == 'C':
+            # Integer indexing on the left keeps the array C-contiguous
+            if len(left_indices) + len(right_indices) == ary.ndim:
+                # If all indices are there, ellipsis's place is indifferent
+                left_indices = left_indices + right_indices
+                right_indices = []
+            if right_indices:
+                layout = 'A'
+            else:
+                for ty in left_indices:
+                    if ty is not types.ellipsis and not isinstance(ty, types.Integer):
+                        # Slicing cannot guarantee to keep the array contiguous
+                        layout = 'A'
+                        break
+        elif layout == 'F':
+            # Integer indexing on the right keeps the array F-contiguous
+            if len(left_indices) + len(right_indices) == ary.ndim:
+                # If all indices are there, ellipsis's place is indifferent
+                right_indices = left_indices + right_indices
+                left_indices = []
+            if left_indices:
+                layout = 'A'
+            else:
+                for ty in right_indices:
+                    if ty is not types.ellipsis and not isinstance(ty, types.Integer):
+                        # Slicing cannot guarantee to keep the array contiguous
+                        layout = 'A'
+                        break
+
+        res = ary.copy(ndim=ndim, layout=layout)
+
+    # Re-wrap indices
+    if isinstance(idx, types.BaseTuple):
+        idx = types.BaseTuple.from_types(all_indices)
+    else:
+        idx, = all_indices
 
     return ary, idx, res
 
@@ -87,13 +135,13 @@ class SetItemBuffer(AbstractTemplate):
             out = get_array_index_type(ary, idx)
             if out is not None:
                 ary, idx, res = out
-                # Allow for broadcasting.
                 if isinstance(res, types.Array):
+                    if res.ndim > 1:
+                        raise NotImplementedError(
+                            "Cannot store slice on array of more than one dimension")
+                    # Allow for broadcasting.
                     if not isinstance(val, types.Array):
                         res = res.dtype
-                    else:
-                        raise TypeError("Storing array into array slice is not "
-                                        "supported, yet")
                 return signature(types.none, ary, idx, res)
 
 

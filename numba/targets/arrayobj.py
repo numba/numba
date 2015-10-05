@@ -116,6 +116,8 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     """
     Helper function for populating array structures.
     This avoids forgetting to set fields.
+
+    *shape* and *strides* can be Python tuples or LLVM arrays.
     """
     context = array._context
     builder = array._builder
@@ -125,6 +127,12 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     if meminfo is None:
         meminfo = Constant.null(context.get_value_type(
             datamodel.get_type('meminfo')))
+
+    intp_t = context.get_value_type(types.intp)
+    if isinstance(shape, (tuple, list)):
+        shape = cgutils.pack_array(builder, shape, intp_t)
+    if isinstance(strides, (tuple, list)):
+        strides = cgutils.pack_array(builder, strides, intp_t)
 
     attrs = dict(shape=shape,
                  strides=strides,
@@ -214,6 +222,9 @@ def getiter_array(context, builder, sig, args):
 
 
 def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
+    """
+    Look up and return an element from a 1D array.
+    """
     ptr = cgutils.get_item_pointer(builder, arrayty, array, [idx],
                                    wraparound=wraparound)
     return load_item(context, builder, arrayty, ptr)
@@ -246,47 +257,15 @@ def iternext_array(context, builder, sig, args, result):
         nindex = builder.add(index, context.get_constant(types.intp, 1))
         builder.store(nindex, iterobj.index)
 
-@builtin
-@implement('getitem', types.Kind(types.Buffer), types.Kind(types.Integer))
-def getitem_arraynd_intp(context, builder, sig, args):
-    aryty, idxty = sig.args
-    ary, idx = args
-    arystty = make_array(aryty)
-    adapted_ary = arystty(context, builder, ary)
-    ndim = aryty.ndim
-    if ndim == 1:
-        # Return a value
-        result = _getitem_array1d(context, builder, aryty, adapted_ary, idx,
-                                  wraparound=idxty.signed)
-    elif ndim > 1:
-        # Return a subview over the array
-        out_ary_ty = make_array(aryty.copy(ndim = ndim - 1))
-        out_ary = out_ary_ty(context, builder)
-        in_shapes = cgutils.unpack_tuple(builder, adapted_ary.shape, count=ndim)
-        in_strides = cgutils.unpack_tuple(builder, adapted_ary.strides,
-                                          count=ndim)
-        data_p = cgutils.get_item_pointer2(builder, adapted_ary.data, in_shapes,
-                                           in_strides, aryty.layout, [idx],
-                                           wraparound=idxty.signed)
-        populate_array(out_ary,
-                       data=data_p,
-                       shape=cgutils.pack_array(builder, in_shapes[1:]),
-                       strides=cgutils.pack_array(builder, in_strides[1:]),
-                       itemsize=adapted_ary.itemsize,
-                       meminfo=adapted_ary.meminfo,
-                       parent=adapted_ary.parent,)
 
-        result = out_ary._getvalue()
-    else:
-        raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
-    return impl_ret_borrowed(context, builder, sig.return_type, result)
-
-
-def _getitem_array_generic(context, builder, return_type, aryty, ary,
-                           index_types, indices):
+def basic_indexing(context, builder, aryty, ary, index_types, indices):
     """
-    Return the result of indexing *ary* with the given *indices*.
+    Perform basic indexing on the given array.
+    A (data pointer, shapes, strides) tuple is returned describing
+    the corresponding view.
     """
+    zero = context.get_constant(types.intp, 0)
+
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
     strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
 
@@ -294,34 +273,103 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
     output_shapes = []
     output_strides = []
 
-    for ax, (indexval, idxty) in enumerate(zip(indices, index_types)):
+    ax = 0
+    for indexval, idxty in zip(indices, index_types):
+        if idxty is types.ellipsis:
+            # Fill up missing dimensions at the middle
+            n_missing = aryty.ndim - len(indices) + 1
+            for i in range(n_missing):
+                output_indices.append(zero)
+                output_shapes.append(shapes[ax])
+                output_strides.append(strides[ax])
+                ax += 1
+            continue
+        # Regular index value
         if idxty == types.slice3_type:
             slice = slicing.Slice(context, builder, value=indexval)
+            cgutils.guard_invalid_slice(context, builder, slice)
             slicing.fix_slice(builder, slice, shapes[ax])
             output_indices.append(slice.start)
             sh = slicing.get_slice_length(builder, slice)
             st = slicing.fix_stride(builder, slice, strides[ax])
             output_shapes.append(sh)
             output_strides.append(st)
-        else:
-            assert isinstance(idxty, types.Integer)
+        elif isinstance(idxty, types.Integer):
             ind = context.cast(builder, indexval, idxty, types.intp)
-            ind = slicing.fix_index(builder, ind, shapes[ax])
+            if idxty.signed:
+                ind = slicing.fix_index(builder, ind, shapes[ax])
             output_indices.append(ind)
+        else:
+            raise AssertionError("unexpected index type: %s" % (idxty,))
+        ax += 1
+
+    # Fill up missing dimensions at the end
+    assert ax <= aryty.ndim
+    while ax < aryty.ndim:
+        output_shapes.append(shapes[ax])
+        output_strides.append(strides[ax])
+        ax += 1
 
     dataptr = cgutils.get_item_pointer(builder, aryty, ary,
                                        output_indices,
                                        wraparound=False)
-    # Build array
+    return (dataptr, output_shapes, output_strides)
+
+
+def make_view(context, builder, aryty, ary, return_type,
+              data, shapes, strides):
+    """
+    Build a view over the given array with the given parameters.
+    """
     retary = make_array(return_type)(context, builder)
     populate_array(retary,
-                   data=dataptr,
-                   shape=cgutils.pack_array(builder, output_shapes),
-                   strides=cgutils.pack_array(builder, output_strides),
+                   data=data,
+                   shape=shapes,
+                   strides=strides,
                    itemsize=ary.itemsize,
                    meminfo=ary.meminfo,
                    parent=ary.parent)
+    return retary
+
+
+def _getitem_array_generic(context, builder, return_type, aryty, ary,
+                           index_types, indices):
+    """
+    Return the result of indexing *ary* with the given *indices*.
+    """
+    assert isinstance(return_type, types.Buffer)
+    dataptr, view_shapes, view_strides = \
+        basic_indexing(context, builder, aryty, ary, index_types, indices)
+
+    # Build array view
+    retary = make_view(context, builder, aryty, ary, return_type,
+                       dataptr, view_shapes, view_strides)
     return retary._getvalue()
+
+
+@builtin
+@implement('getitem', types.Kind(types.Buffer), types.Kind(types.Integer))
+def getitem_arraynd_intp(context, builder, sig, args):
+    aryty, idxty = sig.args
+    ary, idx = args
+    ary = make_array(aryty)(context, builder, ary)
+
+    dataptr, shapes, strides = \
+        basic_indexing(context, builder, aryty, ary, (idxty,), (idx,))
+
+    ndim = aryty.ndim
+    if ndim == 1:
+        # Return a value
+        assert not shapes
+        result = load_item(context, builder, aryty, dataptr)
+    elif ndim > 1:
+        # Return a subview over the array
+        out_ary = make_view(context, builder, aryty, ary, sig.return_type,
+                            dataptr, shapes, strides)
+        result = out_ary._getvalue()
+    else:
+        raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
+    return impl_ret_borrowed(context, builder, sig.return_type, result)
 
 
 @builtin
@@ -329,10 +377,6 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
 def getitem_array1d_slice(context, builder, sig, args):
     aryty, idxty = sig.args
     ary, idx = args
-
-    if aryty.ndim != 1:
-        # TODO
-        raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
 
     ary = make_array(aryty)(context, builder, value=ary)
 
@@ -346,25 +390,23 @@ def getitem_array1d_slice(context, builder, sig, args):
 def getitem_array_tuple(context, builder, sig, args):
     aryty, tupty = sig.args
     ary, tup = args
+    ary = make_array(aryty)(context, builder, ary)
 
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
+    index_types = tupty.types
+    indices = cgutils.unpack_tuple(builder, tup, count=len(tupty))
+    dataptr, shapes, strides = \
+        basic_indexing(context, builder, aryty, ary, index_types, indices)
 
     ndim = aryty.ndim
     if isinstance(sig.return_type, types.Array):
         # Generic array slicing
-        tup_items = cgutils.unpack_tuple(builder, tup, ndim)
-        res = _getitem_array_generic(context, builder, sig.return_type,
-                                     aryty, ary, tupty, tup_items)
+        res = make_view(context, builder, aryty, ary, sig.return_type,
+                        dataptr, shapes, strides)
+        res = res._getvalue()
     else:
         # Plain indexing (returning a scalar)
-        indices = cgutils.unpack_tuple(builder, tup, count=len(tupty))
-        indices = [context.cast(builder, i, t, types.intp)
-                   for t, i in zip(tupty, indices)]
-        ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=True)
-
-        res = load_item(context, builder, aryty, ptr)
+        assert not shapes
+        res = load_item(context, builder, aryty, dataptr)
 
     return impl_ret_borrowed(context, builder ,sig.return_type, res)
 
@@ -373,11 +415,12 @@ def getitem_array_tuple(context, builder, sig, args):
 @implement('setitem', types.Kind(types.Buffer), types.Kind(types.Integer),
            types.Any)
 def setitem_array1d(context, builder, sig, args):
+    """
+    array[a] = scalar
+    """
     aryty, idxty, valty = sig.args
     ary, idx, val = args
-
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
+    ary = make_array(aryty)(context, builder, ary)
 
     ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
                                    wraparound=idxty.signed)
@@ -388,117 +431,72 @@ def setitem_array1d(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.Buffer),
-           types.Kind(types.UniTuple), types.Any)
-def setitem_array_unituple(context, builder, sig, args):
-    aryty, idxty, valty = sig.args
-    ary, idx, val = args
-
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
-
-    # TODO: other than layout
-    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(idxty, indices)]
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=idxty.dtype.signed)
-    store_item(context, builder, aryty, val, ptr)
-
-
-@builtin
-@implement('setitem', types.Kind(types.Buffer),
-           types.Kind(types.Tuple), types.Any)
+@implement('setitem', types.Kind(types.Buffer), types.Kind(types.BaseTuple),
+           types.Any)
 def setitem_array_tuple(context, builder, sig, args):
-    aryty, idxty, valty = sig.args
-    ary, idx, val = args
+    """
+    array[a,..,b] = scalar
+    """
+    aryty, tupty, valty = sig.args
+    ary, tup, val = args
+    ary = make_array(aryty)(context, builder, ary)
 
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
+    index_types = tupty.types
+    indices = cgutils.unpack_tuple(builder, tup, count=len(tupty))
+    dataptr, shapes, strides = \
+        basic_indexing(context, builder, aryty, ary, index_types, indices)
 
-    # TODO: other than layout
-    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(idxty, indices)]
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
-    store_item(context, builder, aryty, val, ptr)
+    assert not shapes
+    store_item(context, builder, aryty, val, dataptr)
+
 
 @builtin
-@implement('setitem', types.Kind(types.Buffer),
-           types.slice3_type, types.Any)
+@implement('setitem', types.Kind(types.Buffer), types.slice3_type,
+           types.Any)
 def setitem_array1d_slice(context, builder, sig, args):
     aryty, idxty, valty = sig.args
     ary, idx, val = args
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
+
+    ary = make_array(aryty)(context, builder, ary)
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
+
     slicestruct = slicing.Slice(context, builder, value=idx)
+    cgutils.guard_invalid_slice(context, builder, slicestruct)
+    slicing.fix_slice(builder, slicestruct, shapes[0])
 
-    # the logic here follows that of Python's Objects/sliceobject.c
-    # in particular PySlice_GetIndicesEx function
-    ZERO = Constant.int(slicestruct.step.type, 0)
-    NEG_ONE = Constant.int(slicestruct.start.type, -1)
+    if isinstance(valty, types.Buffer):
+        # Input is an array => it must have the right size
+        # (for N-D assignment, we would check the entire shape)
+        valary = make_array(valty)(context, builder, val)
 
-    b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
-    # bail if step is 0
-    with builder.if_then(b_step_eq_zero):
-        context.call_conv.return_user_exc(builder, ValueError,
-                                          ("slice step cannot be zero",))
+        input_len = valary.nitems
+        slice_len = slicing.get_slice_length(builder, slicestruct)
+        with builder.if_then(builder.icmp_signed('!=', slice_len, input_len),
+                             likely=False):
+            msg = "cannot assign slice from input of different size"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-    # adjust for negative indices for start
-    start = cgutils.alloca_once_value(builder, slicestruct.start)
-    b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
-    with builder.if_then(b_start_lt_zero):
-        add = builder.add(builder.load(start), shapes[0])
-        builder.store(add, start)
+        def getitem(idx):
+            return _getitem_array1d(context, builder, valty, valary, idx,
+                                    wraparound=False)
+    else:
+        # Input is a scalar => broadcast it over the output slice
+        def getitem(idx):
+            return val
 
-    b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
-    with builder.if_then(b_start_lt_zero):
-        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
-        cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
-        builder.store(cond, start)
-
-    b_start_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(start), shapes[0])
-    ONE = Constant.int(shapes[0].type, 1)
-    with builder.if_then(b_start_geq_len):
-        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
-        cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
-        builder.store(cond, start)
-
-    # adjust stop for negative value
-    stop = cgutils.alloca_once_value(builder, slicestruct.stop)
-    b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
-    with builder.if_then(b_stop_lt_zero):
-        add = builder.add(builder.load(stop), shapes[0])
-        builder.store(add, stop)
-
-    b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
-    with builder.if_then(b_stop_lt_zero):
-        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
-        cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
-        builder.store(cond, start)
-
-    b_stop_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(stop), shapes[0])
-    ONE = Constant.int(shapes[0].type, 1)
-    with builder.if_then(b_stop_geq_len):
-        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
-        cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
-        builder.store(cond, stop)
-
-    with cgutils.for_range_slice_generic(builder, builder.load(start),
-                                         builder.load(stop),
+    with cgutils.for_range_slice_generic(builder, slicestruct.start,
+                                         slicestruct.stop,
                                          slicestruct.step) as (pos_range, neg_range):
-        with pos_range as (loop_idx1, _):
+        with pos_range as (loop_idx, loop_count):
             ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                [loop_idx1],
-                                wraparound=True)
-            store_item(context, builder, aryty, val, ptr)
-        with neg_range as (loop_idx2, _):
+                                           [loop_idx], wraparound=False)
+            item = getitem(loop_count)
+            store_item(context, builder, aryty, item, ptr)
+        with neg_range as (loop_idx, loop_count):
             ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                [loop_idx2],
-                                wraparound=True)
-            store_item(context, builder, aryty, val, ptr)
+                                           [loop_idx], wraparound=False)
+            item = getitem(loop_count)
+            store_item(context, builder, aryty, item, ptr)
 
 
 @builtin
