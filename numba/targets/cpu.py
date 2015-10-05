@@ -61,10 +61,11 @@ class CPUContext(BaseContext):
     def target_data(self):
         return self._internal_codegen.target_data
 
-    def aot_codegen(self, name):
-        return codegen.AOTCPUCodegen(name)
+    def with_aot_codegen(self, name):
+        return self.subtarget(_internal_codegen=codegen.AOTCPUCodegen(name),
+                              aot_mode=True)
 
-    def jit_codegen(self):
+    def codegen(self):
         return self._internal_codegen
 
     @cached_property

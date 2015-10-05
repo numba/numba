@@ -119,14 +119,16 @@ class _Compiler(object):
         self.exported_function_types = {}
 
         typing_ctx = CPUTarget.typing_context
-        target_ctx = CPUTarget.target_context.subtarget(aot_mode=True)
+        target_ctx = CPUTarget.target_context.with_aot_codegen(self.module_name)
 
-        codegen = target_ctx.aot_codegen(self.module_name)
+        codegen = target_ctx.codegen()
         library = codegen.create_library(self.module_name)
 
         # Generate IR for all exported functions
         flags = Flags()
         flags.set("no_compile")
+        if not self.export_python_wrap:
+            flags.set("no_cpython_wrapper")
 
         for entry in self.export_entries:
             cres = compile_extra(typing_ctx, target_ctx, entry.function,

@@ -79,7 +79,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
     @classmethod
     def _rebuild(cls, target_context, libdata, fndesc, env,
                  signature, objectmode, interpmode, lifted, typeann):
-        library = target_context.jit_codegen().unserialize_library(libdata)
+        library = target_context.codegen().unserialize_library(libdata)
         cfunc = target_context.get_executable(library, fndesc, env)
         cr = cls(target_context=target_context,
                  typing_context=target_context.typing_context,
@@ -528,7 +528,7 @@ class Pipeline(object):
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
         if self.library is None:
-            codegen = self.targetctx.jit_codegen()
+            codegen = self.targetctx.codegen()
             self.library = codegen.create_library(self.bc.func_qualname)
             # Enable object caching upfront, so that the library can
             # be later serialized.

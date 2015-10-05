@@ -532,7 +532,7 @@ class FunctionCache(object):
         if not self._enabled:
             return
         overloads = self._load_index()
-        key = self._index_key(sig, target_context.jit_codegen())
+        key = self._index_key(sig, target_context.codegen())
         data_name = overloads.get(key)
         if data_name is None:
             return

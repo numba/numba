@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import contextlib
 import errno
 import imp
 import os
@@ -40,19 +41,15 @@ class BasePYCCTest(TestCase):
             if e.errno != errno.EEXIST:
                 raise
 
+    @contextlib.contextmanager
     def check_c_ext(self, extdir, name):
         sys.path.append(extdir)
         try:
             lib = __import__(name)
+            yield lib
         finally:
             sys.path.remove(extdir)
-        try:
-            res = lib.multi(123, 321)
-            self.assertPreciseEqual(res, 123 * 321)
-            res = lib.multf(987, 321)
-            self.assertPreciseEqual(res, 987.0 * 321.0)
-        finally:
-            del lib
+            sys.modules.pop(name, None)
 
 
 class TestLegacyAPI(BasePYCCTest):
@@ -108,7 +105,11 @@ class TestLegacyAPI(BasePYCCTest):
 
         main(args=['--debug', '--python', '-o', out_modulename, source])
 
-        self.check_c_ext(self.tmpdir, modulename)
+        with self.check_c_ext(self.tmpdir, modulename) as lib:
+            res = lib.multi(123, 321)
+            self.assertPreciseEqual(res, 123 * 321)
+            res = lib.multf(987, 321)
+            self.assertPreciseEqual(res, 987.0 * 321.0)
 
     def test_pycc_bitcode(self):
         """
@@ -160,7 +161,13 @@ class TestCC(BasePYCCTest):
         cc.output_dir = self.tmpdir
         cc.compile()
 
-        self.check_c_ext(self.tmpdir, cc.name)
+        with self.check_c_ext(self.tmpdir, cc.name) as lib:
+            res = lib.multi(123, 321)
+            self.assertPreciseEqual(res, 123 * 321)
+            res = lib.multf(987, 321)
+            self.assertPreciseEqual(res, 987.0 * 321.0)
+            res = lib.square(4)
+            self.assertPreciseEqual(res, 16)
 
 
 if __name__ == "__main__":
