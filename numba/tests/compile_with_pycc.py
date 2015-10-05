@@ -22,7 +22,7 @@ def square(u):
 # Fails because it needs _helperlib
 #@cc.export('power', 'i8(i8, i8)')
 def power(u, v):
-    return u ** 2
+    return u ** v
 
 
 # Legacy API
