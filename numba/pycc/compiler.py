@@ -13,7 +13,6 @@ import llvmlite.binding as ll
 from numba import cgutils
 from numba.utils import IS_PY3
 from . import llvm_types as lt
-from .decorators import registry as export_registry
 from numba.compiler import compile_extra, Flags
 from numba.targets.registry import CPUTarget
 
@@ -64,6 +63,20 @@ def get_header():
     """ % hasattr(numpy, 'complex256'))
 
 
+class ExportEntry(object):
+    """
+    A simple record for exporting symbols.
+    """
+
+    def __init__(self, symbol, signature, function):
+        self.symbol = symbol
+        self.signature = signature
+        self.function = function
+
+    def __repr__(self):
+        return "ExportEntry(%r, %r)" % (self.symbol, self.signature)
+
+
 class _Compiler(object):
     """A base class to compile Python modules to a single shared library or
     extension module.
@@ -88,17 +101,11 @@ class _Compiler(object):
 
     method_def_ptr = lc.Type.pointer(method_def_ty)
 
-    def __init__(self, inputs, module_name='numba_exported'):
-        self.inputs = inputs
+    def __init__(self, export_entries, module_name):
         self.module_name = module_name
         self.export_python_wrap = False
         self.dll_exports = []
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, traceback):
-        del self.exported_signatures[:]
+        self.export_entries = export_entries
 
     def _emit_python_wrapper(self, llvm_module):
         """Emit generated Python wrapper and extension module code.
@@ -108,10 +115,7 @@ class _Compiler(object):
     def _cull_exports(self):
         """Read all the exported functions/modules in the translator
         environment, and join them into a single LLVM module.
-
-        Resets the export environment afterwards.
         """
-        self.exported_signatures = export_registry
         self.exported_function_types = {}
 
         typing_ctx = CPUTarget.typing_context
@@ -124,7 +128,7 @@ class _Compiler(object):
         flags = Flags()
         flags.set("no_compile")
 
-        for entry in self.exported_signatures:
+        for entry in self.export_entries:
             cres = compile_extra(typing_ctx, target_ctx, entry.function,
                                  entry.signature.args,
                                  entry.signature.return_type, flags,
@@ -153,21 +157,14 @@ class _Compiler(object):
 
         return library
 
-    def _process_inputs(self, wrap=False, **kws):
-        for ifile in self.inputs:
-            with open(ifile) as fin:
-                exec(compile(fin.read(), ifile, 'exec'))
-
+    def write_llvm_bitcode(self, output, wrap=False, **kws):
         self.export_python_wrap = wrap
-
-    def write_llvm_bitcode(self, output, **kws):
-        self._process_inputs(**kws)
         library = self._cull_exports()
         with open(output, 'wb') as fout:
             fout.write(library.emit_bitcode())
 
-    def write_native_object(self, output, **kws):
-        self._process_inputs(**kws)
+    def write_native_object(self, output, wrap=False, **kws):
+        self.export_python_wrap = wrap
         library = self._cull_exports()
         with open(output, 'wb') as fout:
             fout.write(library.emit_native_object())
@@ -184,7 +181,7 @@ class _Compiler(object):
         with open(fname + '.h', 'w') as fout:
             fout.write(get_header())
             fout.write("\n/* Prototypes */\n")
-            for export_entry in export_registry:
+            for export_entry in self.export_entries:
                 name = export_entry.symbol
                 restype = self.emit_type(export_entry.signature.return_type)
                 args = ", ".join(self.emit_type(argtype)
@@ -197,7 +194,7 @@ class _Compiler(object):
         :returns: a pointer to the PyMethodDef array.
         """
         method_defs = []
-        for entry in self.exported_signatures:
+        for entry in self.export_entries:
             name = entry.symbol
             fnty = self.exported_function_types[entry]
             lfunc = llvm_module.add_function(fnty, name=name)

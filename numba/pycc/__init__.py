@@ -9,8 +9,10 @@ import subprocess
 import tempfile
 import sys
 
+from .cc import CC
 from .compiler import Compiler
 from .platform import Toolchain, find_shared_ending, find_pyext_ending
+from . import decorators
 
 
 def get_ending(args):
@@ -66,24 +68,27 @@ def main(args=None):
         sys.exit(1)
 
     logger.debug('inputs --> %s', args.inputs)
-    with Compiler(args.inputs, module_name=module_name) as compiler:
-        if args.llvm:
-            logger.debug('emit llvm')
-            compiler.write_llvm_bitcode(args.output, wrap=args.python)
-        elif args.olibs:
-            logger.debug('emit object file')
-            compiler.write_native_object(args.output, wrap=args.python)
-        else:
-            logger.debug('emit shared library')
-            logger.debug('write to temporary object file %s', tempfile.gettempdir())
+    decorators.process_input_files(args.inputs)
 
-            toolchain = Toolchain(debug=args.debug)
-            temp_obj = (tempfile.gettempdir() + os.sep +
-                        os.path.basename(args.output) + '.o')
-            compiler.write_native_object(temp_obj, wrap=args.python)
-            libraries = toolchain.get_python_libraries()
-            toolchain.link_shared(args.output, [temp_obj],
-                                  toolchain.get_python_libraries(),
-                                  toolchain.get_python_library_dirs(),
-                                  export_symbols=compiler.dll_exports)
-            os.remove(temp_obj)
+    compiler = Compiler(decorators.export_registry, module_name=module_name)
+    if args.llvm:
+        logger.debug('emit llvm')
+        compiler.write_llvm_bitcode(args.output, wrap=args.python)
+    elif args.olibs:
+        logger.debug('emit object file')
+        compiler.write_native_object(args.output, wrap=args.python)
+    else:
+        logger.debug('emit shared library')
+        logger.debug('write to temporary object file %s', tempfile.gettempdir())
+
+        toolchain = Toolchain()
+        toolchain.debug = args.debug
+        temp_obj = (tempfile.gettempdir() + os.sep +
+                    os.path.basename(args.output) + '.o')
+        compiler.write_native_object(temp_obj, wrap=args.python)
+        libraries = toolchain.get_python_libraries()
+        toolchain.link_shared(args.output, [temp_obj],
+                              toolchain.get_python_libraries(),
+                              toolchain.get_python_library_dirs(),
+                              export_symbols=compiler.dll_exports)
+        os.remove(temp_obj)
