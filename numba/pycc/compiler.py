@@ -77,12 +77,11 @@ class ExportEntry(object):
         return "ExportEntry(%r, %r)" % (self.symbol, self.signature)
 
 
-class _Compiler(object):
+class _ModuleCompiler(object):
     """A base class to compile Python modules to a single shared library or
     extension module.
 
-    :param inputs: input file(s).
-    :type inputs: iterable
+    :param export_entries: a list of ExportEntry instances.
     :param module_name: the name of the exported module.
     """
 
@@ -223,7 +222,7 @@ class _Compiler(object):
         return method_array_ptr
 
 
-class CompilerPy2(_Compiler):
+class ModuleCompilerPy2(_ModuleCompiler):
 
     @property
     def module_create_definition(self):
@@ -280,7 +279,7 @@ class CompilerPy2(_Compiler):
         self.dll_exports.append(mod_init_fn.name)
 
 
-class CompilerPy3(_Compiler):
+class ModuleCompilerPy3(_ModuleCompiler):
 
     _ptr_fun = lambda ret, *args: lc.Type.pointer(lc.Type.function(ret, args))
 
@@ -334,7 +333,7 @@ class CompilerPy3(_Compiler):
                                     _char_star,
                                     _char_star,
                                     lt._llvm_py_ssize_t,
-                                    _Compiler.method_def_ptr,
+                                    _ModuleCompiler.method_def_ptr,
                                     inquiry_ty,
                                     traverseproc_ty,
                                     inquiry_ty,
@@ -422,5 +421,4 @@ class CompilerPy3(_Compiler):
         self.dll_exports.append(mod_init_fn.name)
 
 
-Compiler = CompilerPy3 if IS_PY3 else CompilerPy2
-
+ModuleCompiler = ModuleCompilerPy3 if IS_PY3 else ModuleCompilerPy2

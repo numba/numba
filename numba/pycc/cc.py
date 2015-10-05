@@ -6,7 +6,7 @@ import os
 import sys
 
 from numba import sigutils
-from .compiler import Compiler, ExportEntry
+from .compiler import ModuleCompiler, ExportEntry
 from .platform import Toolchain
 
 
@@ -85,7 +85,7 @@ class CC(object):
                       key=lambda entry: entry.symbol)
 
     def compile(self):
-        compiler = Compiler(self._export_entries, self._basename)
+        compiler = ModuleCompiler(self._export_entries, self._basename)
         # First compile object file
         temp_obj = os.path.join(self._output_dir,
                                 os.path.splitext(self._output_file)[0] + '.o')
