@@ -41,6 +41,12 @@ class BasePYCCTest(TestCase):
             if e.errno != errno.EEXIST:
                 raise
 
+    def tearDown(self):
+        # Since we're executing the module-under-test several times
+        # from the same process, we must clear the exports registry
+        # between invocations.
+        clear_export_registry()
+
     @contextlib.contextmanager
     def check_c_ext(self, extdir, name):
         sys.path.append(extdir)
@@ -53,12 +59,6 @@ class BasePYCCTest(TestCase):
 
 
 class TestLegacyAPI(BasePYCCTest):
-
-    def tearDown(self):
-        # Since we're using the "command line" several times from the
-        # same process, we must clear the exports registry between
-        # invocations.
-        clear_export_registry()
 
     def test_pycc_ctypes_lib(self):
         """
