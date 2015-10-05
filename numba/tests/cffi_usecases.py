@@ -8,6 +8,14 @@ if cffi_support.SUPPORTED:
     defs = """
     double sin(double x);
     double cos(double x);
+    int foo(int a, int b, int c);
+    """
+
+    source = """
+    static int foo(int a, int b, int c)
+    {
+        return a + b * c;
+    }
     """
 
     # Create inline module
@@ -21,7 +29,7 @@ if cffi_support.SUPPORTED:
     # Compile out-of-line module and load it
 
     ffi_ool = FFI()
-    ffi.set_source('cffi_usecases_ool', defs)
+    ffi.set_source('cffi_usecases_ool', source)
     ffi.cdef(defs, override=True)
     ffi.compile()
 
@@ -29,7 +37,7 @@ if cffi_support.SUPPORTED:
     cffi_support.register_module(cffi_usecases_ool)
     cffi_sin_ool = cffi_usecases_ool.lib.sin
     cffi_cos_ool = cffi_usecases_ool.lib.cos
-
+    cffi_foo = cffi_usecases_ool.lib.foo
 
 def use_cffi_sin(x):
     return cffi_sin(x) * 2
@@ -48,3 +56,6 @@ def use_func_pointer(fa, fb, x):
         return fa(x)
     else:
         return fb(x)
+
+def use_user_defined_symbols():
+    return cffi_foo(1, 2, 3)

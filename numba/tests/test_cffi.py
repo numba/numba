@@ -69,6 +69,10 @@ class TestCFFI(TestCase):
         # A single specialization was compiled for all calls
         self.assertEqual(len(cfunc.overloads), 1, cfunc.overloads)
 
+    def test_user_defined_sybols(self):
+        pyfunc = use_user_defined_symbols
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertEqual(pyfunc(), cfunc())
 
 if __name__ == '__main__':
     unittest.main()

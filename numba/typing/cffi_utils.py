@@ -19,6 +19,7 @@ except ImportError:
 
 SUPPORTED = ffi is not None
 _ool_func_types = {}
+_ool_func_ptr = {}
 
 
 def is_cffi_func(obj):
@@ -36,12 +37,8 @@ def get_pointer(cffi_func):
     Get a pointer to the underlying function for a CFFI function as an
     integer.
     """
-    if cffi_func in _ool_func_types:
-        # We have no record of the function's address in an OOL module, so we
-        # resort to looking up the function by name in the interpreter's
-        # symbol table using ctypes
-        cfunc = getattr(ctypes.pythonapi, cffi_func.__name__)
-        return ctypes.cast(cfunc, ctypes.c_void_p).value
+    if cffi_func in _ool_func_ptr:
+        return _ool_func_ptr[cffi_func]
     return int(ffi.cast("uintptr_t", cffi_func))
 
 
@@ -138,3 +135,5 @@ def register_module(mod):
         f = getattr(mod.lib, f)
         if isinstance(f, BuiltinFunctionType):
             _ool_func_types[f] = mod.ffi.typeof(f)
+            addr = mod.ffi.addressof(mod.lib, f.__name__)
+            _ool_func_ptr[f] = int(mod.ffi.cast("uintptr_t", addr))
