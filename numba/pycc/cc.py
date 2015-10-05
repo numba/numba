@@ -13,6 +13,10 @@ from .platform import Toolchain
 class CC(object):
 
     def __init__(self, basename, source_module=None):
+        if '.' in basename:
+            raise ValueError("basename should be a simple module name, not "
+                             "qualified name")
+
         self._basename = basename
         self._exported_functions = {}
         # Resolve source module name and directory
@@ -84,7 +88,7 @@ class CC(object):
         compiler = Compiler(self._export_entries, self._basename)
         # First compile object file
         temp_obj = os.path.join(self._output_dir,
-                                self._basename + '.o')
+                                os.path.splitext(self._output_file)[0] + '.o')
         output_obj = os.path.join(self._output_dir, self._output_file)
         compiler.write_native_object(temp_obj, wrap=True)
 

@@ -146,14 +146,18 @@ class TestCC(BasePYCCTest):
         cc = self._test_module.cc
         self.assertEqual(cc.name, 'pycc_test_output')
 
+        # Inferred output directory
         d = self._test_module.cc.output_dir
         self.assertTrue(os.path.isdir(d), d)
 
+        # Inferred output filename
         f = self._test_module.cc.output_file
         self.assertFalse(os.path.exists(f), f)
-        self.assertIn('pycc_test_output.', os.path.basename(f))
+        self.assertTrue(os.path.basename(f).startswith('pycc_test_output.'), f)
         if sys.platform == 'linux':
             self.assertTrue(f.endswith('.so'), f)
+        if sys.version_info >= (3,):
+            self.assertIn('.cpython', f)
 
     def test_compile(self):
         cc = self._test_module.cc
