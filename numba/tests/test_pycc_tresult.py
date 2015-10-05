@@ -40,6 +40,20 @@ class BasePYCCTest(TestCase):
             if e.errno != errno.EEXIST:
                 raise
 
+    def check_c_ext(self, extdir, name):
+        sys.path.append(extdir)
+        try:
+            lib = __import__(name)
+        finally:
+            sys.path.remove(extdir)
+        try:
+            res = lib.multi(123, 321)
+            self.assertPreciseEqual(res, 123 * 321)
+            res = lib.multf(987, 321)
+            self.assertPreciseEqual(res, 987.0 * 321.0)
+        finally:
+            del lib
+
 
 class TestLegacyAPI(BasePYCCTest):
 
@@ -94,19 +108,7 @@ class TestLegacyAPI(BasePYCCTest):
 
         main(args=['--debug', '--python', '-o', out_modulename, source])
 
-        sys.path.append(self.tmpdir)
-        try:
-            lib = __import__(modulename)
-        finally:
-            sys.path.remove(self.tmpdir)
-        try:
-            res = lib.mult(123, 321)
-            assert res == 123 * 321
-
-            res = lib.multf(987, 321)
-            assert res == 987 * 321
-        finally:
-            del lib
+        self.check_c_ext(self.tmpdir, modulename)
 
     def test_pycc_bitcode(self):
         """
@@ -158,15 +160,7 @@ class TestCC(BasePYCCTest):
         cc.output_dir = self.tmpdir
         cc.compile()
 
-        sys.path.append(self.tmpdir)
-        try:
-            lib = __import__(cc.name)
-            res = lib.multi(123, 321)
-            self.assertPreciseEqual(res, 123 * 321)
-            res = lib.multf(987, 321)
-            self.assertPreciseEqual(res, 987.0 * 321.0)
-        finally:
-            sys.path.remove(self.tmpdir)
+        self.check_c_ext(self.tmpdir, cc.name)
 
 
 if __name__ == "__main__":
