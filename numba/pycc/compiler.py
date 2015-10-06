@@ -139,7 +139,7 @@ class _ModuleCompiler(object):
         if self.use_nrt:
             flags.set("nrt")
             # Compile NRT helpers
-            nrt_module = atomicops.create_nrt_module(target_ctx)
+            nrt_module, _ = atomicops.create_nrt_module(target_ctx)
             library.add_ir_module(nrt_module)
 
         for entry in self.export_entries:

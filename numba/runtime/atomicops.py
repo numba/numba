@@ -137,6 +137,10 @@ def _define_atomic_cas(module, ordering):
 
 
 def create_nrt_module(ctx):
+    """
+    Create an IR module defining the LLVM NRT functions.
+    A (IR module, library) tuple is returned.
+    """
     codegen = ctx.codegen()
     library = codegen.create_library("nrt")
 
@@ -151,27 +155,14 @@ def create_nrt_module(ctx):
     _define_nrt_incref(ir_mod, atomic_inc)
     _define_nrt_decref(ir_mod, atomic_dec)
 
-    return ir_mod
-
+    return ir_mod, library
 
 def compile_nrt_functions(ctx):
     """
     Compile all LLVM NRT functions and return a library containing them.
     The library is created using the given target context.
     """
-    codegen = ctx.codegen()
-    library = codegen.create_library("nrt")
-
-    # Implement LLVM module with atomic ops
-    ir_mod = library.create_ir_module("nrt_module")
-
-    atomic_inc = _define_atomic_inc_dec(ir_mod, "add", ordering='monotonic')
-    atomic_dec = _define_atomic_inc_dec(ir_mod, "sub", ordering='monotonic')
-    _define_atomic_cas(ir_mod, ordering='monotonic')
-
-    _define_nrt_meminfo_data(ir_mod)
-    _define_nrt_incref(ir_mod, atomic_inc)
-    _define_nrt_decref(ir_mod, atomic_dec)
+    ir_mod, library = create_nrt_module(ctx)
 
     library.add_ir_module(ir_mod)
     library.finalize()

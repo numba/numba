@@ -51,7 +51,7 @@ PYCC_INIT_FUNCTION(PyObject *module)
         Py_FatalError("Failed initializing numpy C API");
 #if PYCC_USE_NRT
     NRT_MemSys_init();
-    NRT_MemSys_set_atomic_inc_dec((atomic_inc_dec_func) &nrt_atomic_add,
-                                  (atomic_inc_dec_func) &nrt_atomic_sub);
+    NRT_MemSys_set_atomic_inc_dec((NRT_atomic_inc_dec_func) &nrt_atomic_add,
+                                  (NRT_atomic_inc_dec_func) &nrt_atomic_sub);
 #endif
 }
