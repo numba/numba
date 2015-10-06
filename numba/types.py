@@ -972,6 +972,29 @@ class BaseTuple(Type):
             return Tuple(tys)
 
 
+class BaseAnonymousTuple(BaseTuple):
+    """
+    Mixin for non-named tuples.
+    """
+
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this tuple to another one.  Note named tuples are rejected.
+        """
+        if not isinstance(other, BaseAnonymousTuple):
+            return
+        if len(self) != len(other):
+            return
+        if len(self) == 0:
+            return Conversion.safe
+        if isinstance(other, BaseTuple):
+            kinds = [typingctx.can_convert(ta, tb)
+                     for ta, tb in zip(self, other)]
+            if any(kind is None for kind in kinds):
+                return
+            return max(kinds)
+
+
 class _HomogenousTuple(Sequence, BaseTuple):
 
     @property
@@ -998,7 +1021,7 @@ class _HomogenousTuple(Sequence, BaseTuple):
         return (self.dtype,) * self.count
 
 
-class UniTuple(_HomogenousTuple):
+class UniTuple(BaseAnonymousTuple, _HomogenousTuple):
     """
     Type class for homogenous tuples.
     """
@@ -1021,13 +1044,6 @@ class UniTuple(_HomogenousTuple):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
             if dtype != pyobject:
                 return UniTuple(dtype=dtype, count=self.count)
-
-    def can_convert_to(self, typingctx, other):
-        """
-        Convert this UniTuple to another one.
-        """
-        if isinstance(other, UniTuple) and len(self) == len(other):
-            return typingctx.can_convert(self.dtype, other.dtype)
 
 
 class UniTupleIter(SimpleIteratorType):
@@ -1059,7 +1075,7 @@ class _HeterogenousTuple(BaseTuple):
         return iter(self.types)
 
 
-class Tuple(_HeterogenousTuple):
+class Tuple(BaseAnonymousTuple, _HeterogenousTuple):
 
     def __init__(self, types):
         self.types = tuple(types)
@@ -1082,17 +1098,6 @@ class Tuple(_HeterogenousTuple):
 
             if all(t != pyobject for t in unified):
                 return Tuple(unified)
-
-    def can_convert_to(self, typingctx, other):
-        """
-        Convert this Tuple to another UniTuple or Tuple.
-        """
-        if isinstance(other, BaseTuple) and len(self) == len(other):
-            kinds = [typingctx.can_convert(ta, tb)
-                     for ta, tb in zip(self, other)]
-            if any(kind is None for kind in kinds):
-                return
-            return max(kinds)
 
 
 class BaseNamedTuple(BaseTuple):
@@ -1312,13 +1317,23 @@ class Optional(Type):
 
 
 class NoneType(Opaque):
-    def unify(self, typingctx, other):
-        """Turns anything to a Optional type
-        """
-        if isinstance(other, Optional):
-            return other
+    """
+    The type for None.
+    """
 
+    def unify(self, typingctx, other):
+        """
+        Turn anything to a Optional type;
+        """
+        if isinstance(other, (Optional, NoneType)):
+            return other
         return Optional(other)
+
+
+class EllipsisType(Opaque):
+    """
+    The type for the Ellipsis singleton.
+    """
 
 
 class ExceptionClass(Callable, Phantom):
@@ -1371,6 +1386,7 @@ class Slice3Type(Type):
 pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
 none = NoneType('none')
+ellipsis = EllipsisType('...')
 Any = Phantom('any')
 undefined = Undefined('undefined')
 string = Opaque('str')

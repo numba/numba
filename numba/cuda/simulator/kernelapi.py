@@ -161,6 +161,18 @@ class FakeCUDAModule(object):
     def syncthreads(self):
         threading.current_thread().syncthreads()
 
+    def threadfence(self):
+        # No-op
+        pass
+
+    def threadfence_block(self):
+        # No-op
+        pass
+
+    def threadfence_system(self):
+        # No-op
+        pass
+
     def grid(self, n):
         bdim = self.blockDim
         bid = self.blockIdx
