@@ -197,6 +197,7 @@ class PrimitiveModel(DataModel):
 @register_default(types.PyObject)
 @register_default(types.RawPointer)
 @register_default(types.NoneType)
+@register_default(types.EllipsisType)
 @register_default(types.Function)
 @register_default(types.Type)
 @register_default(types.Object)

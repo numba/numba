@@ -106,12 +106,20 @@ def _typeof_str(val, c):
 def _typeof_none(val, c):
     return types.none
 
+@typeof_impl.register(type(Ellipsis))
+def _typeof_ellipsis(val, c):
+    return types.ellipsis
+
 @typeof_impl.register(tuple)
 def _typeof_tuple(val, c):
     tys = [typeof_impl(v, c) for v in val]
     if any(ty is None for ty in tys):
         return
     return types.BaseTuple.from_types(tys, type(val))
+
+@typeof_impl.register(slice)
+def _typeof_slice(val, c):
+    return types.slice3_type
 
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):

@@ -64,6 +64,9 @@ class Slice(ConcreteTemplate):
         signature(types.slice3_type, types.intp, types.none),
         signature(types.slice3_type, types.intp, types.intp),
         signature(types.slice3_type, types.intp, types.intp, types.intp),
+        signature(types.slice3_type, types.none, types.intp, types.intp),
+        signature(types.slice3_type, types.intp, types.none, types.intp),
+        signature(types.slice3_type, types.none, types.none, types.intp),
     ]
 
 
@@ -426,27 +429,6 @@ def normalize_1d_index(index):
     elif isinstance(index, types.Integer):
         return types.intp if index.signed else types.uintp
 
-def normalize_nd_index(index):
-    """
-    Normalize the *index* type (an integer, slice or tuple thereof) for
-    indexing a N-D sequence.
-    """
-    if isinstance(index, types.UniTuple):
-        if index.dtype in types.integer_domain:
-            idxtype = types.intp if index.dtype.signed else types.uintp
-            return types.UniTuple(idxtype, len(index))
-        elif index.dtype == types.slice3_type:
-            return index
-
-    elif isinstance(index, types.Tuple):
-        for ty in index:
-            if (ty not in types.integer_domain and ty != types.slice3_type):
-                raise TypeError('Type %s of index %s is unsupported for indexing'
-                                 % (ty, index))
-        return index
-
-    return normalize_1d_index(index)
-
 
 @builtin
 class GetItemCPointer(AbstractTemplate):
@@ -558,6 +540,20 @@ class NumberAttribute(AttributeTemplate):
         return signature(ty)
 
 
+@builtin_attr
+class SliceAttribute(AttributeTemplate):
+    key = types.slice3_type
+
+    def resolve_start(self, ty):
+        return types.intp
+
+    def resolve_stop(self, ty):
+        return types.intp
+
+    def resolve_step(self, ty):
+        return types.intp
+
+
 #-------------------------------------------------------------------------------
 
 
@@ -586,6 +582,7 @@ def register_number_classes(register_global):
 
 
 register_number_classes(builtin_global)
+
 
 #------------------------------------------------------------------------------
 
@@ -658,7 +655,7 @@ class Bool(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [arg] = args
-        if arg in types.number_domain:
+        if isinstance(arg, (types.Boolean, types.Number)):
             return signature(types.boolean, arg)
         # XXX typing for bool cannot be polymorphic because of the
         # types.Function thing, so we redirect to the "is_true"
@@ -674,16 +671,9 @@ class Int(AbstractTemplate):
 
         [arg] = args
 
-        if arg not in types.number_domain:
-            raise TypeError("int() only support for numbers")
-
-        if arg in types.complex_domain:
-            raise TypeError("int() does not support complex")
-
-        if arg in types.integer_domain:
+        if isinstance(arg, types.Integer):
             return signature(arg, arg)
-
-        if arg in types.real_domain:
+        if isinstance(arg, (types.Float, types.Boolean)):
             return signature(types.intp, arg)
 
 
