@@ -1507,7 +1507,7 @@ Define bridge for all math functions
 #define MATH_BINARY(F, R, A, B) \
     NUMBA_EXPORT_FUNC(R) numba_##F(A a, B b) { return F(a, b); }
 
-#include "mathnames.inc"
+#include "mathnames.h"
 
 #undef MATH_UNARY
 #undef MATH_BINARY

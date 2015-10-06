@@ -75,7 +75,7 @@ build_c_helpers_dict(void)
 
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
-    #include "mathnames.inc"
+    #include "mathnames.h"
 #undef MATH_UNARY
 #undef MATH_BINARY
 
