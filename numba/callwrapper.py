@@ -161,7 +161,7 @@ class PyCallWrapper(object):
         self.debug_print(builder, "# callwrapper: emit_cleanup end")
 
         # Determine return status
-        with cgutils.if_likely(builder, status.is_ok):
+        with builder.if_then(status.is_ok, likely=True):
             # Ok => return boxed Python value
             with builder.if_then(status.is_none):
                 api.return_none()
@@ -170,11 +170,8 @@ class PyCallWrapper(object):
             obj = api.from_native_return(retty, retval, env_manager)
             builder.ret(obj)
 
-        with builder.if_then(builder.not_(status.is_python_exc)):
-            # User exception raised
-            self.make_exception_switch(api, builder, status)
-
         # Error out
+        self.context.call_conv.raise_error(builder, api, status)
         builder.ret(api.get_null_object())
 
     def get_env(self, api, builder, closure):
@@ -188,29 +185,6 @@ class PyCallWrapper(object):
             api.emit_environment_sentry(envptr, return_pyobject=True)
             env_manager = api.get_env_manager(self.env, env_body, envptr)
         return envptr, env_manager
-
-    def make_exception_switch(self, api, builder, status):
-        """
-        Handle user exceptions.  Unserialize the exception info and raise it.
-        """
-        code = status.code
-        # Handle user exceptions
-        with builder.if_then(status.is_user_exc):
-            exc = api.unserialize(status.excinfoptr)
-            with cgutils.if_likely(builder,
-                                   cgutils.is_not_null(builder, exc)):
-                api.raise_object(exc)  # steals ref
-            builder.ret(api.get_null_object())
-
-        with builder.if_then(status.is_stop_iteration):
-            api.err_set_none("PyExc_StopIteration")
-            builder.ret(api.get_null_object())
-
-        msg = "unknown error in native function: %s" % self.fndesc.mangled_name
-        api.err_set_string("PyExc_SystemError", msg)
-
-    def make_const_string(self, string):
-        return self.context.insert_const_string(self.module, string)
 
     def _simplified_return_type(self):
         """

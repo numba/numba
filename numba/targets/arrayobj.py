@@ -914,7 +914,7 @@ def fancy_getitem(context, builder, sig, args,
 
     indexer.end_loops()
 
-    return impl_ret_borrowed(context, builder, out_ty, out._getvalue())
+    return impl_ret_new_ref(context, builder, out_ty, out._getvalue())
 
 
 @builtin

@@ -8,7 +8,7 @@ from numba import types, cgutils
 
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
-                           offsets, store_offset, signature):
+                           offsets, store_offset, signature, pyapi):
     elems = load()
 
     # Compute
@@ -16,9 +16,14 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
                                                      signature.return_type,
                                                      signature.args, elems)
 
-    # Ignoring error status and store result
     # Store
-    store(retval)
+    with builder.if_else(status.is_ok, likely=True) as (if_ok, if_error):
+        with if_ok:
+            store(retval)
+        with if_error:
+            gil = pyapi.gil_ensure()
+            context.call_conv.raise_error(builder, pyapi, status)
+            pyapi.gil_release(gil)
 
     # increment indices
     for off, ary in zip(offsets, arrays):
@@ -32,15 +37,22 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
 
 def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
                                    arrays, out, offsets, store_offset,
-                                   signature, env):
+                                   signature, env, pyapi):
     elems = load()
 
     # Compute
     _objargs = [types.pyobject] * len(signature.args)
-    status, retval = context.call_conv.call_function(builder, func, types.pyobject,
-                                                     _objargs, elems, env=env)
+    # We need to push the error indicator to avoid it messing with
+    # the ufunc's execution.  We restore it unless the ufunc raised
+    # a new error.
+    with pyapi.err_push(keep_new=True):
+        status, retval = context.call_conv.call_function(builder, func, types.pyobject,
+                                                         _objargs, elems, env=env)
+        # Release owned reference to arguments
+        for elem in elems:
+            pyapi.decref(elem)
+    # NOTE: if an error occurred, it will be caught by the Numpy machinery
 
-    # Ignoring error status and store result
     # Store
     store(retval)
 
@@ -55,7 +67,7 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
 
 
 def build_slow_loop_body(context, func, builder, arrays, out, offsets,
-                         store_offset, signature):
+                         store_offset, signature, pyapi):
     def load():
         elems = [ary.load_direct(builder.load(off))
                  for off, ary in zip(offsets, arrays)]
@@ -65,7 +77,7 @@ def build_slow_loop_body(context, func, builder, arrays, out, offsets,
         out.store_direct(retval, builder.load(store_offset))
 
     return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
-                                  out, offsets, store_offset, signature)
+                                  out, offsets, store_offset, signature, pyapi)
 
 
 def build_obj_loop_body(context, func, builder, arrays, out, offsets,
@@ -83,28 +95,25 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
         return elems
 
     def store(retval):
-        is_error = cgutils.is_null(builder, retval)
-        with builder.if_else(is_error) as (if_error, if_ok):
-            with if_error:
-                msg = context.insert_const_string(pyapi.module,
-                                                  "object mode ufunc")
-                msgobj = pyapi.string_from_string(msg)
-                pyapi.err_write_unraisable(msgobj)
-                pyapi.decref(msgobj)
-            with if_ok:
-                # Unbox
-                native = pyapi.to_native_value(signature.return_type, retval)
-                assert native.cleanup is None
-                # Store
-                out.store_direct(native.value, builder.load(store_offset))
+        is_ok = cgutils.is_not_null(builder, retval)
+        # If an error is raised by the object mode ufunc, it will
+        # simply get caught by the Numpy ufunc machinery.
+        with builder.if_then(is_ok, likely=True):
+            # Unbox
+            native = pyapi.to_native_value(signature.return_type, retval)
+            assert native.cleanup is None
+            # Store
+            out.store_direct(native.value, builder.load(store_offset))
+            # Release owned reference
+            pyapi.decref(retval)
 
     return _build_ufunc_loop_body_objmode(load, store, context, func, builder,
                                           arrays, out, offsets, store_offset,
-                                          signature, envptr)
+                                          signature, envptr, pyapi)
 
 
 def build_fast_loop_body(context, func, builder, arrays, out, offsets,
-                         store_offset, signature, ind):
+                         store_offset, signature, ind, pyapi):
     def load():
         elems = [ary.load_aligned(ind)
                  for ary in arrays]
@@ -114,7 +123,7 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
         out.store_aligned(retval, ind)
 
     return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
-                                  out, offsets, store_offset, signature)
+                                  out, offsets, store_offset, signature, pyapi)
 
 
 def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env):
@@ -177,9 +186,9 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env)
     for ary in arrays:
         unit_strided = builder.and_(unit_strided, ary.is_unit_strided)
 
+    pyapi = context.get_python_api(builder)
     if objmode:
         # General loop
-        pyapi = context.get_python_api(builder)
         gil = pyapi.gil_ensure()
         with cgutils.for_range(builder, loopcount, intp=intp_t):
             slowloop = build_obj_loop_body(context, func, builder,
@@ -190,30 +199,24 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env)
         builder.ret_void()
 
     else:
-
-        with builder.if_else(unit_strided) as (is_unit_strided,
-                                                       is_strided):
-
+        with builder.if_else(unit_strided) as (is_unit_strided, is_strided):
             with is_unit_strided:
                 with cgutils.for_range(builder, loopcount, intp=intp_t) as loop:
                     fastloop = build_fast_loop_body(context, func, builder,
                                                     arrays, out, offsets,
                                                     store_offset, signature,
-                                                    loop.index)
-                builder.ret_void()
+                                                    loop.index, pyapi)
 
             with is_strided:
                 # General loop
                 with cgutils.for_range(builder, loopcount, intp=intp_t):
                     slowloop = build_slow_loop_body(context, func, builder,
                                                     arrays, out, offsets,
-                                                    store_offset, signature)
-
-                builder.ret_void()
+                                                    store_offset, signature,
+                                                    pyapi)
 
         builder.ret_void()
     del builder
-
 
     # Run optimizer
     library.add_ir_module(wrapper_module)
@@ -301,6 +304,7 @@ class _GufuncWrapper(object):
 
         builder = Builder.new(wrapper.append_basic_block("entry"))
         loopcount = builder.load(arg_dims, name="loopcount")
+        pyapi = self.context.get_python_api(builder)
 
         # Unpack shapes
         unique_syms = set()
@@ -335,12 +339,12 @@ class _GufuncWrapper(object):
         bbreturn = builder.append_basic_block('.return')
 
         # Prologue
-        self.gen_prologue(builder)
+        self.gen_prologue(builder, pyapi)
 
         # Loop
         with cgutils.for_range(builder, loopcount, intp=intp_t) as loop:
             args = [a.get_array_at_offset(loop.index) for a in arrays]
-            innercall, error = self.gen_loop_body(builder, func, args)
+            innercall, error = self.gen_loop_body(builder, pyapi, func, args)
             # If error, escape
             cgutils.cbranch_or_continue(builder, error, bbreturn)
 
@@ -348,7 +352,7 @@ class _GufuncWrapper(object):
         builder.position_at_end(bbreturn)
 
         # Epilogue
-        self.gen_epilogue(builder)
+        self.gen_epilogue(builder, pyapi)
 
         builder.ret_void()
 
@@ -360,41 +364,45 @@ class _GufuncWrapper(object):
 
         return wrapper, self.env
 
-    def gen_loop_body(self, builder, func, args):
+    def gen_loop_body(self, builder, pyapi, func, args):
         status, retval = self.call_conv.call_function(builder, func,
                                                       self.signature.return_type,
                                                       self.signature.args, args)
 
+        with builder.if_then(status.is_error, likely=False):
+            gil = pyapi.gil_ensure()
+            self.context.call_conv.raise_error(builder, pyapi, status)
+            pyapi.gil_release(gil)
+
         return status.code, status.is_error
 
-    def gen_prologue(self, builder):
+    def gen_prologue(self, builder, pyapi):
         pass        # Do nothing
 
-    def gen_epilogue(self, builder):
+    def gen_epilogue(self, builder, pyapi):
         pass        # Do nothing
 
 
 class _GufuncObjectWrapper(_GufuncWrapper):
-    def gen_loop_body(self, builder, func, args):
+    def gen_loop_body(self, builder, pyapi, func, args):
         innercall, error = _prepare_call_to_object_mode(self.context,
-                                                        builder, func,
+                                                        builder, pyapi, func,
                                                         self.signature,
                                                         args, env=self.envptr)
         return innercall, error
 
-    def gen_prologue(self, builder):
+    def gen_prologue(self, builder, pyapi):
         #  Get an environment object for the function
         ll_intp = self.context.get_value_type(types.intp)
         ll_pyobj = self.context.get_value_type(types.pyobject)
         self.envptr = Constant.int(ll_intp, id(self.env)).inttoptr(ll_pyobj)
 
         # Acquire the GIL
-        self.pyapi = self.context.get_python_api(builder)
-        self.gil = self.pyapi.gil_ensure()
+        self.gil = pyapi.gil_ensure()
 
-    def gen_epilogue(self, builder):
+    def gen_epilogue(self, builder, pyapi):
         # Release GIL
-        self.pyapi.gil_release(self.gil)
+        pyapi.gil_release(self.gil)
 
 
 def build_gufunc_wrapper(library, context, func, signature, sin, sout, fndesc,
@@ -406,13 +414,11 @@ def build_gufunc_wrapper(library, context, func, signature, sin, sout, fndesc,
                    env).build()
 
 
-def _prepare_call_to_object_mode(context, builder, func, signature, args,
-                                 env):
+def _prepare_call_to_object_mode(context, builder, pyapi, func,
+                                 signature, args, env):
     mod = builder.module
 
     bb_core_return = builder.append_basic_block('ufunc.core.return')
-
-    pyapi = context.get_python_api(builder)
 
     # Call to
     # PyObject* ndarray_new(int nd,

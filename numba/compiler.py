@@ -11,7 +11,7 @@ import traceback
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
                    lowering, objmode, irpasses, utils, config,
                    types, ir, looplifting, macro, types, rewrites)
-from numba.targets import cpu
+from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
 
 
@@ -19,24 +19,25 @@ class Flags(utils.ConfigOptions):
     # These options are all false by default, but the defaults are
     # different with the @jit decorator (see targets.options.TargetOptions).
 
-    OPTIONS = frozenset([
+    OPTIONS = {
         # Enable loop-lifting
-        'enable_looplift',
+        'enable_looplift': False,
         # Enable pyobject mode (in general)
-        'enable_pyobject',
+        'enable_pyobject': False,
         # Enable pyobject mode inside lifted loops
-        'enable_pyobject_looplift',
+        'enable_pyobject_looplift': False,
         # Force pyobject mode inside the whole function
-        'force_pyobject',
+        'force_pyobject': False,
         # Release GIL inside the native function
-        'release_gil',
-        'no_compile',
-        'boundcheck',
-        'forceinline',
-        'no_cpython_wrapper',
-        'nrt',
-        'no_rewrites',
-    ])
+        'release_gil': False,
+        'no_compile': False,
+        'boundcheck': False,
+        'forceinline': False,
+        'no_cpython_wrapper': False,
+        'nrt': False,
+        'no_rewrites': False,
+        'error_model': 'python',
+    }
 
 
 DEFAULT_FLAGS = Flags()
@@ -275,6 +276,8 @@ class Pipeline(object):
             subtargetoptions['enable_boundcheck'] = True
         if flags.nrt:
             subtargetoptions['enable_nrt'] = True
+        error_model = callconv.error_models[flags.error_model](targetctx.call_conv)
+        subtargetoptions['error_model'] = error_model
 
         self.targetctx = targetctx.subtarget(**subtargetoptions)
         self.library = library

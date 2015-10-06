@@ -738,6 +738,14 @@ def guard_memory_error(context, builder, pointer, msg=None):
     with builder.if_then(is_null(builder, pointer), likely=False):
         context.call_conv.return_user_exc(builder, MemoryError, exc_args)
 
+@contextmanager
+def if_zero(builder, value, likely=False):
+    """
+    Execute the given block if the scalar value is zero.
+    """
+    with builder.if_then(is_scalar_zero(builder, value), likely=likely):
+        yield
+
 
 guard_zero = guard_null
 
