@@ -59,6 +59,15 @@ class Toolchain(object):
     def compile_objects(self, sources, output_dir,
                         include_dirs=(), depends=(), macros=()):
         """
+        Compile the given source files into a separate object file each,
+        all beneath the *output_dir*.  A list of paths to object files
+        is returned.
+
+        *macros* has the same format as in distutils: a list of 1- or 2-tuples.
+        If a 1-tuple (name,), the given name is considered undefined by
+        the C preprocessor.
+        If a 2-tuple (name, value), the given name is expanded into the
+        given value by the C preprocessor.
         """
         objects = self._compiler.compile(sources,
                                          output_dir=output_dir,
@@ -99,10 +108,13 @@ class Toolchain(object):
 
     def get_python_include_dirs(self):
         """
+        Get the include directories necessary to compile against the Python
+        and Numpy C APIs.
         """
         return list(self._py_include_dirs) + self._math_info['include_dirs']
 
     def get_ext_filename(self, ext_name):
         """
+        Given a C extension's module name, return its intended filename.
         """
         return self._build_ext.get_ext_filename(ext_name)
