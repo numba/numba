@@ -4,7 +4,6 @@ from __future__ import print_function, division, absolute_import
 import logging
 import os
 import sys
-import functools
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.ee as le
@@ -21,43 +20,12 @@ from numba.targets.registry import CPUTarget
 
 logger = logging.getLogger(__name__)
 
-__all__ = ['which', 'find_linker', 'find_args', 'find_shared_ending', 'Compiler']
+__all__ = ['Compiler']
 
 NULL = lc.Constant.null(lt._void_star)
 ZERO = lc.Constant.int(lt._int32, 0)
 ONE = lc.Constant.int(lt._int32, 1)
 METH_VARARGS_AND_KEYWORDS = lc.Constant.int(lt._int32, 1|2)
-
-
-def which(program):
-    def is_exe(fpath):
-        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
-
-    fpath, fname = os.path.split(program)
-    if fpath:
-        if is_exe(program):
-            return program
-    else:
-        for path in os.environ["PATH"].split(os.pathsep):
-            exe_file = os.path.join(path, fname)
-            if is_exe(exe_file):
-                return exe_file
-    return None
-
-_configs = {
-    'win': ("link.exe", ("/dll",), '.dll'),
-    'dar': ("libtool", ("-dynamic", "-undefined", "dynamic_lookup"), '.so'),
-    'default': ("ld", ("-shared",), ".so")
-}
-
-
-def get_configs(arg):
-    return _configs.get(sys.platform[:3], _configs['default'])[arg]
-
-
-find_linker = functools.partial(get_configs, 0)
-find_args = functools.partial(get_configs, 1)
-find_shared_ending = functools.partial(get_configs, 2)
 
 
 def get_header():
@@ -124,6 +92,7 @@ class _Compiler(object):
         self.inputs = inputs
         self.module_name = module_name
         self.export_python_wrap = False
+        self.dll_exports = []
 
     def __enter__(self):
         return self
@@ -165,7 +134,6 @@ class _Compiler(object):
             llvm_func = cres.library.get_function(func_name)
 
             if self.export_python_wrap:
-                # XXX: unsupported (necessary?)
                 llvm_func.linkage = lc.LINKAGE_INTERNAL
                 wrappername = cres.fndesc.llvm_cpython_wrapper_name
                 wrapper = cres.library.get_function(wrappername)
@@ -175,8 +143,8 @@ class _Compiler(object):
                     cres.fndesc.restype, cres.fndesc.argtypes)
                 self.exported_function_types[entry] = fnty
             else:
-                llvm_func.linkage = lc.LINKAGE_EXTERNAL
                 llvm_func.name = entry.symbol
+                self.dll_exports.append(entry.symbol)
 
         if self.export_python_wrap:
             wrapper_module = library.create_ir_module("wrapper")
@@ -309,6 +277,8 @@ class CompilerPy2(_Compiler):
                             lc.Constant.int(lt._int32, sys.api_version)))
 
         builder.ret_void()
+
+        self.dll_exports.append(mod_init_fn.name)
 
 
 class CompilerPy3(_Compiler):
@@ -449,6 +419,8 @@ class CompilerPy3(_Compiler):
             builder.ret(NULL.bitcast(mod_init_fn.type.pointee.return_type))
 
         builder.ret(mod)
+
+        self.dll_exports.append(mod_init_fn.name)
 
 
 Compiler = CompilerPy3 if IS_PY3 else CompilerPy2

@@ -214,6 +214,9 @@ class TestUnify(unittest.TestCase):
         aty = types.UniTuple(i32, 2)
         bty = types.Tuple((i16, i64))
         self.assert_unify(aty, bty, types.Tuple((i32, i64)))
+        aty = types.UniTuple(i64, 0)
+        bty = types.Tuple(())
+        self.assert_unify(aty, bty, bty)
         # (Tuple, Tuple) -> Tuple
         aty = types.Tuple((i8, i16, i32))
         bty = types.Tuple((i32, i16, i8))
@@ -328,6 +331,7 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
         self.check_number_compatibility(ctx.can_convert)
 
     def test_tuple(self):
+        # UniTuple -> UniTuple
         aty = types.UniTuple(i32, 3)
         bty = types.UniTuple(i64, 3)
         self.assert_can_convert(aty, aty, Conversion.exact)
@@ -335,9 +339,23 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
         aty = types.UniTuple(i32, 3)
         bty = types.UniTuple(f64, 3)
         self.assert_can_convert(aty, bty, Conversion.safe)
+        # Tuple -> Tuple
         aty = types.Tuple((i32, i32))
         bty = types.Tuple((i32, i64))
         self.assert_can_convert(aty, bty, Conversion.promote)
+        # UniTuple <-> Tuple
+        aty = types.UniTuple(i32, 2)
+        bty = types.Tuple((i32, i64))
+        self.assert_can_convert(aty, bty, Conversion.promote)
+        self.assert_can_convert(bty, aty, Conversion.unsafe)
+        # Empty tuples
+        aty = types.UniTuple(i64, 0)
+        bty = types.UniTuple(i32, 0)
+        cty = types.Tuple(())
+        self.assert_can_convert(aty, bty, Conversion.safe)
+        self.assert_can_convert(bty, aty, Conversion.safe)
+        self.assert_can_convert(aty, cty, Conversion.safe)
+        self.assert_can_convert(cty, aty, Conversion.safe)
         # Failures
         aty = types.UniTuple(i64, 3)
         bty = types.UniTuple(types.none, 3)

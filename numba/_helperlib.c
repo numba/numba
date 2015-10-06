@@ -1347,6 +1347,33 @@ void Numba_gil_release(PyGILState_STATE *state) {
     PyGILState_Release(*state);
 }
 
+static int
+Numba_unpack_slice(PyObject *obj,
+                   Py_ssize_t *start, Py_ssize_t *stop, Py_ssize_t *step)
+{
+    PySliceObject *slice = (PySliceObject *) obj;
+    if (!PySlice_Check(obj)) {
+        PyErr_Format(PyExc_TypeError,
+                     "Expected a slice object, got '%s'",
+                     Py_TYPE(slice)->tp_name);
+        return -1;
+    }
+#define FETCH_MEMBER(NAME)                                      \
+    if (slice->NAME != Py_None) {                               \
+        Py_ssize_t v = PyNumber_AsSsize_t(slice->NAME,          \
+                                          PyExc_OverflowError); \
+        if (v == -1 && PyErr_Occurred())                        \
+            return -1;                                          \
+        *NAME = v;                                              \
+    }
+    FETCH_MEMBER(start)
+    FETCH_MEMBER(stop)
+    FETCH_MEMBER(step)
+    return 0;
+
+#undef FETCH_MEMBER
+}
+
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
    This *consumes* a reference count to its argument. */
 static int
@@ -1533,6 +1560,7 @@ build_c_helpers_dict(void)
     declmethod(fptouif);
     declmethod(gil_ensure);
     declmethod(gil_release);
+    declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(unpickle);
     declmethod(rnd_shuffle);

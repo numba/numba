@@ -2,8 +2,11 @@
 Implement slices and various slice computations.
 """
 
+import itertools
+
 from llvmlite import ir
 
+from numba.six.moves import zip_longest
 from numba import cgutils, types, typing
 from .imputils import (builtin, builtin_attr, implement,
                        impl_attribute, impl_attribute_generic,
@@ -108,6 +111,14 @@ def fix_stride(builder, slice, stride):
     return builder.mul(slice.step, stride)
 
 
+def get_defaults(context):
+    """
+    Get the default values for a slice's three members.
+    """
+    maxint = (1 << (context.address_size - 1)) - 1
+    return (0, maxint, 1)
+
+
 #---------------------------------------------------------------------------
 # The slice structure
 
@@ -118,9 +129,18 @@ class Slice(cgutils.Structure):
 
 
 @builtin
-@implement(types.slice_type, types.intp, types.intp, types.intp)
-def slice3_impl(context, builder, sig, args):
-    start, stop, step = args
+@implement(types.slice_type, types.VarArg(types.Any))
+def slice_constructor_impl(context, builder, sig, args):
+    maxint = (1 << (context.address_size - 1)) - 1
+
+    slice_args = []
+    for ty, val, default in zip_longest(sig.args, args, (0, maxint, 1)):
+        if ty in (types.none, None):
+            # Omitted or None
+            slice_args.append(context.get_constant(types.intp, default))
+        else:
+            slice_args.append(val)
+    start, stop, step = slice_args
 
     slice3 = Slice(context, builder)
     slice3.start = start
@@ -131,67 +151,20 @@ def slice3_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(types.slice_type, types.intp, types.intp)
-def slice2_impl(context, builder, sig, args):
-    start, stop = args
+@builtin_attr
+@impl_attribute(types.slice3_type, "start")
+def slice_start_impl(context, builder, typ, value):
+    slice3 = Slice(context, builder, value)
+    return slice3.start
 
-    slice3 = Slice(context, builder)
-    slice3.start = start
-    slice3.stop = stop
-    slice3.step = context.get_constant(types.intp, 1)
+@builtin_attr
+@impl_attribute(types.slice3_type, "stop")
+def slice_stop_impl(context, builder, typ, value):
+    slice3 = Slice(context, builder, value)
+    return slice3.stop
 
-    res = slice3._getvalue()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@builtin
-@implement(types.slice_type, types.intp, types.none)
-def slice1_start_impl(context, builder, sig, args):
-    start, stop = args
-
-    slice3 = Slice(context, builder)
-    slice3.start = start
-    maxint = (1 << (context.address_size - 1)) - 1
-    slice3.stop = context.get_constant(types.intp, maxint)
-    slice3.step = context.get_constant(types.intp, 1)
-
-    res = slice3._getvalue()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@builtin
-@implement(types.slice_type, types.none, types.intp)
-def slice1_stop_impl(context, builder, sig, args):
-    start, stop = args
-
-    slice3 = Slice(context, builder)
-    slice3.start = context.get_constant(types.intp, 0)
-    slice3.stop = stop
-    slice3.step = context.get_constant(types.intp, 1)
-
-    res = slice3._getvalue()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@builtin
-@implement(types.slice_type)
-def slice0_empty_impl(context, builder, sig, args):
-    assert not args
-
-    slice3 = Slice(context, builder)
-    slice3.start = context.get_constant(types.intp, 0)
-    maxint = (1 << (context.address_size - 1)) - 1
-    slice3.stop = context.get_constant(types.intp, maxint)
-    slice3.step = context.get_constant(types.intp, 1)
-
-    res = slice3._getvalue()
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@builtin
-@implement(types.slice_type, types.none, types.none)
-def slice0_none_none_impl(context, builder, sig, args):
-    assert len(args) == 2
-    newsig = typing.signature(types.slice_type)
-    return slice0_empty_impl(context, builder, newsig, ())
+@builtin_attr
+@impl_attribute(types.slice3_type, "step")
+def slice_step_impl(context, builder, typ, value):
+    slice3 = Slice(context, builder, value)
+    return slice3.step
