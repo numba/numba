@@ -103,7 +103,8 @@ as well as all methods and operations.
    the function returns.
 
 .. warning::
-   Passing the same list as different arguments may give unexpected results.
+   Passing the same list as different arguments may give unexpected results
+   if the JIT-compiled function mutates the list.
 
 .. warning::
    List sorting currently uses a quicksort algorithm, which has different
