@@ -316,6 +316,10 @@ def reflect_exception(l):
     l.append(42)
     raise ZeroDivisionError
 
+def reflect_dual(l, ll):
+    l.append(ll.pop())
+    return l is ll
+
 
 class TestLists(MemoryLeakMixin, TestCase):
 
@@ -711,6 +715,21 @@ class TestListReflection(MemoryLeakMixin, TestCase):
             with self.assertRaises(ZeroDivisionError):
                 cfunc(l)
             self.assertPreciseEqual(l, [1, 2, 3, 42])
+
+    def test_reflect_same_list(self):
+        """
+        When the same list object is reflected twice, behaviour should
+        be consistent.
+        """
+        pyfunc = reflect_dual
+        cfunc = jit(nopython=True)(pyfunc)
+        pylist = [1, 2, 3]
+        clist = pylist[:]
+        expected = pyfunc(pylist, pylist)
+        got = cfunc(clist, clist)
+        self.assertPreciseEqual(expected, got)
+        self.assertPreciseEqual(pylist, clist)
+        self.assertPreciseEqual(sys.getrefcount(pylist), sys.getrefcount(clist))
 
 
 if __name__ == '__main__':

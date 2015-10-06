@@ -456,20 +456,55 @@ def box_list(c, typ, val):
 def unbox_list(c, typ, obj):
     """
     Convert list *obj* to a native list.
+
+    If list was previously unboxed, we reuse the existing native list
+    to ensure consistency.
     """
     size = c.pyapi.list_size(obj)
-    ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
-    with c.builder.if_then(ok, likely=True):
-        list.size = size
-        with cgutils.for_range(c.builder, size) as loop:
-            itemobj = c.pyapi.list_getitem(obj, loop.index)
-            # XXX error checking
-            native = c.unbox(typ.dtype, itemobj)
-            list.setitem(loop.index, native.value)
-        if typ.reflected:
-            list.parent = obj
 
-    return NativeValue(list.value, is_error=c.builder.not_(ok))
+    errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+    listptr = cgutils.alloca_once(c.builder, c.context.get_value_type(typ))
+
+    # Use pointer-stuffing hack to see if the list was previously unboxed,
+    # if so, re-use the meminfo.
+    ptr = c.pyapi.list_get_private_data(obj)
+
+    with c.builder.if_else(cgutils.is_not_null(c.builder, ptr)) \
+        as (has_meminfo, otherwise):
+
+        with has_meminfo:
+            # List was previously unboxed => reuse meminfo
+            list = listobj.ListInstance.from_meminfo(c.context, c.builder, typ, ptr)
+            list.size = size
+            if typ.reflected:
+                list.parent = obj
+            c.builder.store(list.value, listptr)
+
+        with otherwise:
+            # Allocate a new native list
+            ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
+            with c.builder.if_then(ok, likely=True):
+                list.size = size
+                with cgutils.for_range(c.builder, size) as loop:
+                    itemobj = c.pyapi.list_getitem(obj, loop.index)
+                    # XXX error checking
+                    native = c.unbox(typ.dtype, itemobj)
+                    list.setitem(loop.index, native.value)
+                if typ.reflected:
+                    list.parent = obj
+                # Stuff meminfo pointer into the Python object for
+                # later reuse.
+                c.pyapi.list_set_private_data(obj, list.meminfo)
+                c.builder.store(list.value, listptr)
+            c.builder.store(c.builder.not_(ok), errorptr)
+
+    def cleanup():
+        # Clean up the stuffed pointer, as the meminfo is now invalid.
+        c.pyapi.list_reset_private_data(obj)
+
+    return NativeValue(c.builder.load(listptr),
+                       is_error=c.builder.load(errorptr),
+                       cleanup=cleanup)
 
 
 @reflect(types.List)

@@ -1347,6 +1347,50 @@ void Numba_gil_release(PyGILState_STATE *state) {
     PyGILState_Release(*state);
 }
 
+/* Pointer-stuffing functions for tagging a Python list object with an
+ * arbitrary pointer.
+ * Note a similar hack is used by Python itself, since
+ * "list.sort() temporarily sets allocated to -1 to detect mutations".
+ */
+
+static void
+Numba_set_list_private_data(PyListObject *listobj, void *ptr)
+{
+    /* Since ptr is dynamically allocated, it is at least
+     * 4- or 8-byte-aligned, meaning we can shift it by a couple bits
+     * to the right without losing information.
+     */
+    if ((size_t) ptr & 1) {
+        /* Should never happen */
+        Py_FatalError("Numba_set_list_private_data got an unaligned pointer");
+    }
+    /* Make the pointer distinguishable by forcing it into a negative
+     * number (obj->allocated is normally positive, except when sorting
+     * where it's changed to -1).
+     */
+    listobj->allocated = - (Py_ssize_t) ((size_t) ptr >> 1);
+}
+
+static void *
+Numba_get_list_private_data(PyListObject *listobj)
+{
+    if (listobj->allocated < -1) {
+        /* A Numba pointer is stuffed in the list, return it */
+        return (void *) ((size_t) -listobj->allocated << 1);
+    }
+    return NULL;
+}
+
+static void
+Numba_reset_list_private_data(PyListObject *listobj)
+{
+    /* Pretend there is no over-allocation; this should be always correct,
+     * if not optimal.
+     */
+    if (listobj->allocated < -1)
+        listobj->allocated = PyList_GET_SIZE(listobj);
+}
+
 static int
 Numba_unpack_slice(PyObject *obj,
                    Py_ssize_t *start, Py_ssize_t *stop, Py_ssize_t *step)
@@ -1560,6 +1604,9 @@ build_c_helpers_dict(void)
     declmethod(fptouif);
     declmethod(gil_ensure);
     declmethod(gil_release);
+    declmethod(get_list_private_data);
+    declmethod(set_list_private_data);
+    declmethod(reset_list_private_data);
     declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(unpickle);

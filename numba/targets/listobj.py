@@ -245,6 +245,20 @@ class ListInstance(_ListPayloadMixin):
                                               ("cannot allocate list",))
         return self
 
+    @classmethod
+    def from_meminfo(cls, context, builder, list_type, meminfo):
+        """
+        Allocate a new list instance pointing to an existing payload
+        (a meminfo pointer).
+        Note the parent field has to be filled by the caller.
+        """
+        self = cls(context, builder, list_type, None)
+        self._list.meminfo = meminfo
+        self._list.parent = context.get_constant_null(types.pyobject)
+        context.nrt_incref(builder, list_type, self.value)
+        # Payload is part of the meminfo, no need to touch it
+        return self
+
     def resize(self, new_size):
         """
         Ensure the list is properly sized for the new size.
