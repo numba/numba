@@ -161,6 +161,7 @@ setup(name='numba',
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
         "numba.annotations": ["*.html"],
         "numba.hsa.tests.hsadrv": ["*.brig"],
+        # C files are needed by pycc
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],
       },

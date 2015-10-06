@@ -3,7 +3,9 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 import logging
 import os
+import shutil
 import sys
+import tempfile
 
 from numba import sigutils
 from .compiler import ModuleCompiler, ExportEntry
@@ -87,17 +89,17 @@ class CC(object):
         return sorted(self._exported_functions.values(),
                       key=lambda entry: entry.symbol)
 
-    def _compile_mixins(self, compiler):
+    def _compile_mixins(self, build_dir):
         here = os.path.dirname(__file__)
         sources = [os.path.join(here, f) for f in self._mixin_sources]
         include_dirs = self._toolchain.get_python_include_dirs()
         # Inject macro definitions required by modulemixin.c
         macros = [
-            ('PYCC_INIT_FUNCTION', self._init_function)
+            ('PYCC_INIT_FUNCTION', self._init_function),
             ]
         # XXX distutils creates a whole subtree inside output_dir,
         # e.g. /tmp/test_pycc/home/antoine/numba/numba/pycc/modulemixin.o
-        objects = self._toolchain.compile_objects(sources, self._output_dir,
+        objects = self._toolchain.compile_objects(sources, build_dir,
                                                   include_dirs=include_dirs,
                                                   macros=macros)
         return objects
@@ -106,14 +108,16 @@ class CC(object):
         compiler = ModuleCompiler(self._export_entries, self._basename)
         compiler.external_init_function = self._init_function
 
+        build_dir = tempfile.mkdtemp(prefix='pycc-build-%s-' % self._basename)
+
         # Compile object file
-        temp_obj = os.path.join(self._output_dir,
+        temp_obj = os.path.join(build_dir,
                                 os.path.splitext(self._output_file)[0] + '.o')
         compiler.write_native_object(temp_obj, wrap=True)
         objects = [temp_obj]
 
         # Compile mixins
-        objects += self._compile_mixins(compiler)
+        objects += self._compile_mixins(build_dir)
 
         # Then create shared library
         output_dll = os.path.join(self._output_dir, self._output_file)
@@ -122,5 +126,5 @@ class CC(object):
         self._toolchain.link_shared(output_dll, objects,
                                     libraries, library_dirs,
                                     export_symbols=compiler.dll_exports)
-        for f in objects:
-            os.remove(f)
+
+        shutil.rmtree(build_dir)
