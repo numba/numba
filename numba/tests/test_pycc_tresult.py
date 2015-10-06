@@ -146,7 +146,7 @@ class TestCC(BasePYCCTest):
 
     def test_cc_properties(self):
         cc = self._test_module.cc
-        self.assertEqual(cc.name, 'pycc_test_output')
+        self.assertEqual(cc.name, 'pycc_test_simple')
 
         # Inferred output directory
         d = self._test_module.cc.output_dir
@@ -155,7 +155,7 @@ class TestCC(BasePYCCTest):
         # Inferred output filename
         f = self._test_module.cc.output_file
         self.assertFalse(os.path.exists(f), f)
-        self.assertTrue(os.path.basename(f).startswith('pycc_test_output.'), f)
+        self.assertTrue(os.path.basename(f).startswith('pycc_test_simple.'), f)
         if sys.platform == 'linux':
             self.assertTrue(f.endswith('.so'), f)
         if sys.version_info >= (3,):
@@ -174,10 +174,19 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, 987.0 * 321.0)
             res = lib.square(5)
             self.assertPreciseEqual(res, 25)
+
+    def test_compile_helperlib(self):
+        cc = self._test_module.cc_helperlib
+        cc.debug = True
+        cc.output_dir = self.tmpdir
+        cc.compile()
+
+        with self.check_c_ext(self.tmpdir, cc.name) as lib:
             res = lib.power(2, 7)
             self.assertPreciseEqual(res, 128)
-            #res = lib.sqrt(-1)
-            #self.assertPreciseEqual(res, 1j)
+            for val in (-1, -1 + 0j, np.complex128(-1)):
+                res = lib.sqrt(val)
+                self.assertPreciseEqual(res, 1j)
             res = lib.random(42)
             expected = np.random.RandomState(42).random_sample()
             self.assertPreciseEqual(res, expected)

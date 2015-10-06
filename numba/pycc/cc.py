@@ -20,6 +20,7 @@ class CC(object):
                              "qualified name")
 
         self._basename = basename
+        self._init_function = 'pycc_init_' + basename
         self._exported_functions = {}
         # Resolve source module name and directory
         f = sys._getframe(1)
@@ -86,25 +87,33 @@ class CC(object):
         return sorted(self._exported_functions.values(),
                       key=lambda entry: entry.symbol)
 
-    def _compile_mixins(self):
+    def _compile_mixins(self, compiler):
         here = os.path.dirname(__file__)
         sources = [os.path.join(here, f) for f in self._mixin_sources]
         include_dirs = self._toolchain.get_python_include_dirs()
+        # Inject macro definitions required by modulemixin.c
+        macros = [
+            ('PYCC_INIT_FUNCTION', self._init_function)
+            ]
         # XXX distutils creates a whole subtree inside output_dir,
         # e.g. /tmp/test_pycc/home/antoine/numba/numba/pycc/modulemixin.o
         objects = self._toolchain.compile_objects(sources, self._output_dir,
-                                                  include_dirs=include_dirs)
+                                                  include_dirs=include_dirs,
+                                                  macros=macros)
         return objects
 
     def compile(self):
         compiler = ModuleCompiler(self._export_entries, self._basename)
+        compiler.external_init_function = self._init_function
 
-        # First compile object file
+        # Compile object file
         temp_obj = os.path.join(self._output_dir,
                                 os.path.splitext(self._output_file)[0] + '.o')
         compiler.write_native_object(temp_obj, wrap=True)
         objects = [temp_obj]
-        objects += self._compile_mixins()
+
+        # Compile mixins
+        objects += self._compile_mixins(compiler)
 
         # Then create shared library
         output_dll = os.path.join(self._output_dir, self._output_file)

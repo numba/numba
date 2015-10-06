@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 
+from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.ee as le
 import llvmlite.llvmpy.passes as lp
@@ -105,6 +106,8 @@ class _ModuleCompiler(object):
         self.export_python_wrap = False
         self.dll_exports = []
         self.export_entries = export_entries
+        # Used by the CC API but not the legacy API
+        self.external_init_function = None
 
     def _mangle_method_symbol(self, func_name):
         return "._pycc_method_%s" % (func_name,)
@@ -225,6 +228,15 @@ class _ModuleCompiler(object):
         method_array_ptr = lc.Constant.gep(method_array, [ZERO, ZERO])
         return method_array_ptr
 
+    def _emit_module_init_code(self, llvm_module, builder, modobj):
+        """
+        Emit call to external init function, if any.
+        """
+        if self.external_init_function:
+            fnty = ir.FunctionType(ir.VoidType(), [modobj.type])
+            fn = llvm_module.add_function(fnty, self.external_init_function)
+            builder.call(fn, [modobj])
+
 
 class ModuleCompilerPy2(_ModuleCompiler):
 
@@ -277,6 +289,8 @@ class ModuleCompilerPy2(_ModuleCompiler):
                             NULL,
                             lc.Constant.null(lt._pyobject_head_p),
                             lc.Constant.int(lt._int32, sys.api_version)))
+
+        self._emit_module_init_code(builder)
 
         builder.ret_void()
 
@@ -422,6 +436,8 @@ class ModuleCompilerPy3(_ModuleCompiler):
         #  with an assertion in pydebug mode)
         with builder.if_then(cgutils.is_null(builder, mod)):
             builder.ret(NULL.bitcast(mod_init_fn.type.pointee.return_type))
+
+        self._emit_module_init_code(llvm_module, builder, mod)
 
         builder.ret(mod)
 

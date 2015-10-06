@@ -6,9 +6,11 @@ from numba import exportmany, export
 from numba.pycc import CC
 
 
+#
 # New API
+#
 
-cc = CC('pycc_test_output')
+cc = CC('pycc_test_simple')
 
 @cc.export('multf', 'f4(f4, f4)')
 @cc.export('multi', 'i4(i4, i4)')
@@ -24,23 +26,27 @@ def square(u):
     return u ** _two
 
 # These ones need helperlib
-@cc.export('power', 'i8(i8, i8)')
+cc_helperlib = CC('pycc_test_helperlib')
+
+@cc_helperlib.export('power', 'i8(i8, i8)')
 def power(u, v):
     return u ** v
 
-@cc.export('sqrt', 'c16(c16)')
+@cc_helperlib.export('sqrt', 'c16(c16)')
 def sqrt(u):
     return cmath.sqrt(u)
 
 # This one clashes with libc random() unless pycc takes measures
 # to disambiguate implementation names.
-@cc.export('random', 'f8(i4)')
+@cc_helperlib.export('random', 'f8(i4)')
 def random_impl(seed):
     np.random.seed(seed)
     return np.random.random()
 
 
+#
 # Legacy API
+#
 
 exportmany(['multf f4(f4,f4)', 'multi i4(i4,i4)'])(mult)
 # Needs to link to helperlib to due with complex arguments

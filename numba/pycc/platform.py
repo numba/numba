@@ -57,13 +57,14 @@ class Toolchain(object):
         log.set_threshold(log.INFO if value else log.WARN)
 
     def compile_objects(self, sources, output_dir,
-                        include_dirs=(), depends=()):
+                        include_dirs=(), depends=(), macros=()):
         """
         """
         objects = self._compiler.compile(sources,
                                          output_dir=output_dir,
                                          include_dirs=include_dirs,
-                                         depends=depends)
+                                         depends=depends,
+                                         macros=macros or [])
         return objects
 
     def link_shared(self, output, objects, libraries=(),

@@ -193,6 +193,9 @@ class BaseContext(object):
             if not hasattr(obj, k):
                 raise NameError("unknown option {0!r}".format(k))
             setattr(obj, k, v)
+        if obj.codegen() is not self.codegen():
+            # We can't share functions accross different codegens
+            self.cached_internal_func.clear()
         return obj
 
     def install_registry(self, registry):
