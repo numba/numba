@@ -40,8 +40,7 @@ def sqrt(u):
 def sqrt(arr):
     return arr.size
 
-# This one clashes with libc random() unless pycc takes measures
-# to disambiguate implementation names.
+# This one clashes with libc random() unless pycc is careful with naming.
 @cc_helperlib.export('random', 'f8(i4)')
 def random_impl(seed):
     np.random.seed(seed)

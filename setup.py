@@ -161,9 +161,10 @@ setup(name='numba',
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
         "numba.annotations": ["*.html"],
         "numba.hsa.tests.hsadrv": ["*.brig"],
-        # C files are needed by pycc
+        # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],
+        "numba.runtime": ["*.c", "*.h"],
       },
       scripts=["numba/pycc/pycc", "bin/numba"],
       author="Continuum Analytics, Inc.",
