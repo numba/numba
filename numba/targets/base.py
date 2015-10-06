@@ -195,7 +195,7 @@ class BaseContext(object):
             setattr(obj, k, v)
         if obj.codegen() is not self.codegen():
             # We can't share functions accross different codegens
-            self.cached_internal_func.clear()
+            self.cached_internal_func = {}
         return obj
 
     def install_registry(self, registry):
