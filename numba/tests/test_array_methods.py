@@ -459,6 +459,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             expected = [a.copy() for a in expected]
             self.assertPreciseEqual(cres.entry_point(arr), expected)
 
+        arr = np.int16([1, 0, -1, 0])
+        check_arr(arr)
+        arr = np.bool_([1, 0, 1])
+        check_arr(arr)
+
         arr = fac(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
@@ -501,6 +506,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             # check contents.
             self.assertEqual(got.dtype, expected.dtype)
             np.testing.assert_array_equal(got, expected)
+
+        arr = np.int16([1, 0, -1, 0])
+        check_arr(arr)
+        arr = np.bool_([1, 0, 1])
+        check_arr(arr)
 
         arr = fac(24)
         check_arr(arr)

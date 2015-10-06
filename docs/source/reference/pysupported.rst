@@ -395,4 +395,13 @@ functions, using the following C types:
 * :c:type:`size_t`
 * :c:type:`void`
 
+Out-of-line cffi modules must be registered with Numba prior to the use of any
+of their functions from within Numba-compiled functions:
+
+.. function:: numba.cffi_support.register_module(mod)
+
+   Register the cffi out-of-line module ``mod`` with Numba.
+
+Inline cffi modules require no registration.
+
 .. _cffi: https://cffi.readthedocs.org/

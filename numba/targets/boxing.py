@@ -116,6 +116,11 @@ def unbox_complex(c, typ, obj):
 def box_none(c, typ, val):
     return c.pyapi.make_none()
 
+@unbox(types.NoneType)
+@unbox(types.EllipsisType)
+def unbox_none(c, typ, val):
+    return NativeValue(c.context.get_dummy_value())
+
 
 @box(types.NPDatetime)
 def box_npdatetime(c, typ, val):
@@ -266,6 +271,21 @@ def unbox_optional(c, typ, obj):
     ret = c.builder.load(retptr)
     return NativeValue(ret, is_error=c.builder.load(errptr),
                        cleanup=cleanup)
+
+
+@unbox(types.Slice3Type)
+def unbox_slice(c, typ, obj):
+    """
+    Convert object *obj* to a native slice structure.
+    """
+    from . import slicing
+    ok, start, stop, step = \
+        c.pyapi.slice_as_ints(obj, slicing.get_defaults(c.context))
+    slice3 = slicing.Slice(c.context, c.builder)
+    slice3.start = start
+    slice3.stop = stop
+    slice3.step = step
+    return NativeValue(slice3._getvalue(), is_error=c.builder.not_(ok))
 
 
 #

@@ -600,6 +600,29 @@ class PythonAPI(object):
         return self.builder.call(fn, [cobj])
 
     #
+    # Concrete slice API
+    #
+
+    def slice_as_ints(self, obj, defaults):
+        """
+        Read the members of a slice of integers.
+        Returns a (ok, start, stop, step) tuple where ok is a boolean and
+        the following members are pointer-sized ints.
+        """
+        defaults = [ir.Constant(self.py_ssize_t, v) for v in defaults]
+        pstart = cgutils.alloca_once_value(self.builder, defaults[0])
+        pstop = cgutils.alloca_once_value(self.builder, defaults[1])
+        pstep = cgutils.alloca_once_value(self.builder, defaults[2])
+        fnty = Type.function(Type.int(),
+                             [self.pyobj] + [self.py_ssize_t.as_pointer()] * 3)
+        fn = self._get_function(fnty, name="numba_unpack_slice")
+        res = self.builder.call(fn, (obj, pstart, pstop, pstep))
+        start = self.builder.load(pstart)
+        stop = self.builder.load(pstop)
+        step = self.builder.load(pstep)
+        return cgutils.is_null(self.builder, res), start, stop, step
+
+    #
     # List and sequence APIs
     #
 

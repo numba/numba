@@ -9,6 +9,10 @@ from numba import jit, types
 from .support import TestCase
 
 
+def dobool(a):
+    return bool(a)
+
+
 def doint(a):
     return int(a)
 
@@ -42,18 +46,23 @@ def converter(tp):
 
 
 class TestNumberCtor(TestCase):
-    def test_int(self):
-        pyfunc = doint
 
+    def check_int_constructor(self, pyfunc):
         x_types = [
-            types.int32, types.int64, types.float32, types.float64
+            types.boolean, types.int32, types.int64, types.float32, types.float64
         ]
-        x_values = [1, 1000, 12.2, 23.4]
+        x_values = [1, 0, 1000, 12.2, 23.4]
 
         for ty, x in zip(x_types, x_values):
             cres = compile_isolated(pyfunc, [ty])
             cfunc = cres.entry_point
             self.assertPreciseEqual(pyfunc(x), cfunc(x))
+
+    def test_bool(self):
+        self.check_int_constructor(dobool)
+
+    def test_int(self):
+        self.check_int_constructor(doint)
 
     def test_float(self):
         pyfunc = dofloat

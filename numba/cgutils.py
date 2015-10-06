@@ -160,8 +160,8 @@ class _StructProxy(object):
                                                     value,
                                                     ptr.type.pointee.addrspace)
             else:
-                raise TypeError("Invalid store {value.type} {"
-                                "ptr.type.pointee} in "
+                raise TypeError("Invalid store of {value.type} to "
+                                "{ptr.type.pointee} in "
                                 "{self._datamodel}".format(value=value,
                                                            ptr=ptr,
                                                            self=self))
@@ -585,6 +585,9 @@ def pack_array(builder, values, ty=None):
 
 
 def unpack_tuple(builder, tup, count=None):
+    """
+    Unpack an array or structure of values, return a Python tuple.
+    """
     if count is None:
         # Assuming *tup* is an aggregate
         count = len(tup.type.elements)
