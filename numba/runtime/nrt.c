@@ -376,3 +376,14 @@ void NRT_Free(void *ptr) {
     TheMSys.allocator.free(ptr);
     TheMSys.atomic_inc(&TheMSys.stats_free);
 }
+
+/*
+ * Debugging printf function used internally
+ */
+void nrt_debug_print(char *fmt, ...) {
+   va_list args;
+
+   va_start(args, fmt);
+   vfprintf(stderr, fmt, args);
+   va_end(args);
+}

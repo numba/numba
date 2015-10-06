@@ -192,6 +192,11 @@ class TestCC(BasePYCCTest):
             res = lib.size(np.float64([0] * 3))
             self.assertPreciseEqual(res, 3)
 
+    def test_compile_nrt(self):
+        with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
+            # Sanity check
+            self.assertPreciseEqual(lib.zero_scalar(1), 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1075,7 +1075,8 @@ class BaseContext(object):
         from numba.runtime.atomicops import meminfo_data_ty
 
         mod = builder.module
-        fn = mod.get_or_insert_function(meminfo_data_ty, name="NRT_MemInfo_data")
+        fn = mod.get_or_insert_function(meminfo_data_ty,
+                                        name="NRT_MemInfo_data_fast")
         return builder.call(fn, [meminfo])
 
     def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):

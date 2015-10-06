@@ -16,6 +16,7 @@ from numba.utils import IS_PY3
 from . import llvm_types as lt
 from numba.compiler import compile_extra, Flags
 from numba.targets.registry import CPUTarget
+from numba.runtime import atomicops
 
 
 logger = logging.getLogger(__name__)
@@ -101,13 +102,14 @@ class _ModuleCompiler(object):
 
     method_def_ptr = lc.Type.pointer(method_def_ty)
 
-    def __init__(self, export_entries, module_name):
+    def __init__(self, export_entries, module_name, use_nrt=False):
         self.module_name = module_name
         self.export_python_wrap = False
         self.dll_exports = []
         self.export_entries = export_entries
         # Used by the CC API but not the legacy API
         self.external_init_function = None
+        self.use_nrt = use_nrt
 
     def _mangle_method_symbol(self, func_name):
         return "._pycc_method_%s" % (func_name,)
@@ -134,6 +136,11 @@ class _ModuleCompiler(object):
         flags.set("no_compile")
         if not self.export_python_wrap:
             flags.set("no_cpython_wrapper")
+        if self.use_nrt:
+            flags.set("nrt")
+            # Compile NRT helpers
+            nrt_module = atomicops.create_nrt_module(target_ctx)
+            library.add_ir_module(nrt_module)
 
         for entry in self.export_entries:
             cres = compile_extra(typing_ctx, target_ctx, entry.function,

@@ -10,24 +10,11 @@ All functions described here are threadsafe.
 #if 0
 #   define NRT_Debug(X) X
 #else
-#   define NRT_Debug(X)
+#   define NRT_Debug(X) if (0) { X; }
 #endif
 
-/*
- * Debugging printf function used internally
- */
-static
-void nrt_debug_print(char *fmt, ...) {
-
-   va_list args;
-
-   va_start(args, fmt);
-   vfprintf(stderr, fmt, args);
-   va_end(args);
-}
-
-
 /* TypeDefs */
+/* XXX add nrt_ prefixes */
 typedef void (*dtor_function)(void *ptr, void *info);
 typedef size_t (*atomic_inc_dec_func)(size_t *ptr);
 typedef int (*atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
@@ -189,3 +176,7 @@ void NRT_Free(void *ptr);
  */
 void *NRT_Reallocate(void *ptr, size_t size);
 
+/*
+ * Debugging printf function used internally
+ */
+void nrt_debug_print(char *fmt, ...);

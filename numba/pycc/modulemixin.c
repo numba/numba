@@ -10,6 +10,7 @@
 #define NUMBA_EXPORT_DATA(_vartype) _vartype
 
 #include "../_helperlib.c"
+#include "../runtime/nrt.h"
 
 /* NOTE: import_array() is macro, not a function.  It returns NULL on
    failure on py3, but nothing on py2. */
@@ -41,9 +42,16 @@ init_numpy(void) {
 #error PYCC_INIT_FUNCTION must be defined
 #endif
 
+extern void *nrt_atomic_add, *nrt_atomic_sub;
+
 void
 PYCC_INIT_FUNCTION(PyObject *module)
 {
     if (!init_numpy())
         Py_FatalError("Failed initializing numpy C API");
+#if PYCC_USE_NRT
+    NRT_MemSys_init();
+    NRT_MemSys_set_atomic_inc_dec((atomic_inc_dec_func) &nrt_atomic_add,
+                                  (atomic_inc_dec_func) &nrt_atomic_sub);
+#endif
 }

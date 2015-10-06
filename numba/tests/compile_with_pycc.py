@@ -48,9 +48,15 @@ def random_impl(seed):
     return np.random.random()
 
 # These ones need NRT
-#cc_nrt = CC('pycc_test_nrt')
+cc_nrt = CC('pycc_test_nrt')
+cc_nrt.use_nrt = True
 
-#@cc_nrt.export('empty_scalar', 'f8(i4)')
+@cc_nrt.export('zero_scalar', 'f8(i4)')
+def zero_scalar(n):
+    arr = np.zeros(n)
+    return arr[-1]
+
+#@cc_nrt.export('zeros', 'f8(i4)')
 #def empty_scalar(n):
     #arr = np.empty(n)
     #return arr[-1]

@@ -13,6 +13,8 @@ from .platform import Toolchain
 
 
 class CC(object):
+    # NOTE: using ccache can speed up repetitive builds
+    # (especially for the mixin modules)
 
     _mixin_sources = ['modulemixin.c', '../_math_c99.c']
 
@@ -42,6 +44,7 @@ class CC(object):
         # By default, output in directory of caller module
         self._output_dir = source_dir
         self._output_file = self._toolchain.get_ext_filename(basename)
+        self._use_nrt = False
 
     @property
     def name(self):
@@ -62,6 +65,14 @@ class CC(object):
     @output_dir.setter
     def output_dir(self, value):
         self._output_dir = value
+
+    @property
+    def use_nrt(self):
+        return self._use_nrt
+
+    @use_nrt.setter
+    def use_nrt(self, value):
+        self._use_nrt = value
 
     @property
     def debug(self):
@@ -91,11 +102,15 @@ class CC(object):
 
     def _compile_mixins(self, build_dir):
         here = os.path.dirname(__file__)
-        sources = [os.path.join(here, f) for f in self._mixin_sources]
+        mixin_sources = self._mixin_sources[:]
+        if self._use_nrt:
+            mixin_sources.append('../runtime/nrt.c')
+        sources = [os.path.join(here, f) for f in mixin_sources]
         include_dirs = self._toolchain.get_python_include_dirs()
         # Inject macro definitions required by modulemixin.c
         macros = [
             ('PYCC_INIT_FUNCTION', self._init_function),
+            ('PYCC_USE_NRT', int(self._use_nrt)),
             ]
         # XXX distutils creates a whole subtree inside output_dir,
         # e.g. /tmp/test_pycc/home/antoine/numba/numba/pycc/modulemixin.o
@@ -105,7 +120,8 @@ class CC(object):
         return objects
 
     def compile(self):
-        compiler = ModuleCompiler(self._export_entries, self._basename)
+        compiler = ModuleCompiler(self._export_entries, self._basename,
+                                  self._use_nrt)
         compiler.external_init_function = self._init_function
 
         build_dir = tempfile.mkdtemp(prefix='pycc-build-%s-' % self._basename)
