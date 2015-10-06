@@ -547,6 +547,9 @@ def reflect_list(c, typ, val):
                     itemobj = c.box(typ.dtype, item)
                     c.pyapi.list_setitem(obj, loop.index, itemobj)
 
+        # Mark the list clean, in case it is reflected twice
+        list.set_dirty(False)
+
 
 #
 # Other types

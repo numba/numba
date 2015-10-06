@@ -173,7 +173,7 @@ class ListInstance(_ListPayloadMixin):
     def meminfo(self):
         return self._list.meminfo
 
-    def _set_dirty(self, val):
+    def set_dirty(self, val):
         if self._ty.reflected:
             self._payload.dirty = cgutils.true_bit if val else cgutils.false_bit
 
@@ -181,7 +181,7 @@ class ListInstance(_ListPayloadMixin):
         ptr = self._gep(idx)
         data_item = self._datamodel.as_data(self._builder, val)
         self._builder.store(data_item, ptr)
-        self._set_dirty(True)
+        self.set_dirty(True)
 
     def inititem(self, idx, val):
         ptr = self._gep(idx)
@@ -227,7 +227,7 @@ class ListInstance(_ListPayloadMixin):
                     self._list.parent = context.get_constant_null(types.pyobject)
                     self._payload.allocated = nitems
                     self._payload.size = ir.Constant(intp_t, 0)  # for safety
-                    self._set_dirty(False)
+                    self._payload.dirty = cgutils.false_bit
 
         return builder.load(ok), self
 
@@ -311,7 +311,7 @@ class ListInstance(_ListPayloadMixin):
             _payload_realloc(new_allocated)
 
         self._payload.size = new_size
-        self._set_dirty(True)
+        self.set_dirty(True)
 
     def move(self, dest_idx, src_idx, count):
         """
@@ -321,7 +321,7 @@ class ListInstance(_ListPayloadMixin):
         src_ptr = self._gep(src_idx)
         cgutils.memmove(self._builder, dest_ptr, src_ptr,
                         count, itemsize=self._itemsize)
-        self._set_dirty(True)
+        self.set_dirty(True)
 
 
 class ListIterInstance(_ListPayloadMixin):
