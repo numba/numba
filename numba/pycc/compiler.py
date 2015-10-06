@@ -106,6 +106,9 @@ class _ModuleCompiler(object):
         self.dll_exports = []
         self.export_entries = export_entries
 
+    def _mangle_method_symbol(self, func_name):
+        return "._pycc_method_%s" % (func_name,)
+
     def _emit_python_wrapper(self, llvm_module):
         """Emit generated Python wrapper and extension module code.
         """
@@ -142,7 +145,7 @@ class _ModuleCompiler(object):
                 llvm_func.linkage = lc.LINKAGE_INTERNAL
                 wrappername = cres.fndesc.llvm_cpython_wrapper_name
                 wrapper = cres.library.get_function(wrappername)
-                wrapper.name = entry.symbol
+                wrapper.name = self._mangle_method_symbol(entry.symbol)
                 wrapper.linkage = lc.LINKAGE_EXTERNAL
                 fnty = cres.target_context.call_conv.get_function_type(
                     cres.fndesc.restype, cres.fndesc.argtypes)
@@ -197,8 +200,9 @@ class _ModuleCompiler(object):
         method_defs = []
         for entry in self.export_entries:
             name = entry.symbol
+            llvm_func_name = self._mangle_method_symbol(name)
             fnty = self.exported_function_types[entry]
-            lfunc = llvm_module.add_function(fnty, name=name)
+            lfunc = llvm_module.add_function(fnty, name=llvm_func_name)
 
             method_name_init = lc.Constant.stringz(name)
             method_name = llvm_module.add_global_variable(
@@ -341,7 +345,9 @@ class ModuleCompilerPy3(_ModuleCompiler):
 
     @property
     def module_create_definition(self):
-        """Return the signature and name of the function to initialize the module
+        """
+        Return the signature and name of the Python C API function to
+        initialize the module.
         """
         signature = lc.Type.function(lt._pyobject_head_p,
                                      (lc.Type.pointer(self.module_def_ty),
@@ -355,7 +361,8 @@ class ModuleCompilerPy3(_ModuleCompiler):
 
     @property
     def module_init_definition(self):
-        """Return the name and signature of the module
+        """
+        Return the name and signature of the module's initialization function.
         """
         signature = lc.Type.function(lt._pyobject_head_p, ())
 

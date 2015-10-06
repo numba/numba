@@ -1,3 +1,7 @@
+import cmath
+
+import numpy as np
+
 from numba import exportmany, export
 from numba.pycc import CC
 
@@ -19,10 +23,21 @@ _two = 2
 def square(u):
     return u ** _two
 
-# Fails because it needs _helperlib
-#@cc.export('power', 'i8(i8, i8)')
+# These ones need helperlib
+@cc.export('power', 'i8(i8, i8)')
 def power(u, v):
     return u ** v
+
+@cc.export('sqrt', 'c16(c16)')
+def sqrt(u):
+    return cmath.sqrt(u)
+
+# This one clashes with libc random() unless pycc takes measures
+# to disambiguate implementation names.
+@cc.export('random', 'f8(i4)')
+def random_impl(seed):
+    np.random.seed(seed)
+    return np.random.random()
 
 
 # Legacy API

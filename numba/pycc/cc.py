@@ -12,6 +12,8 @@ from .platform import Toolchain
 
 class CC(object):
 
+    _mixin_sources = ['modulemixin.c', '../_math_c99.c']
+
     def __init__(self, basename, source_module=None):
         if '.' in basename:
             raise ValueError("basename should be a simple module name, not "
@@ -84,18 +86,32 @@ class CC(object):
         return sorted(self._exported_functions.values(),
                       key=lambda entry: entry.symbol)
 
+    def _compile_mixins(self):
+        here = os.path.dirname(__file__)
+        sources = [os.path.join(here, f) for f in self._mixin_sources]
+        include_dirs = self._toolchain.get_python_include_dirs()
+        # XXX distutils creates a whole subtree inside output_dir,
+        # e.g. /tmp/test_pycc/home/antoine/numba/numba/pycc/modulemixin.o
+        objects = self._toolchain.compile_objects(sources, self._output_dir,
+                                                  include_dirs=include_dirs)
+        return objects
+
     def compile(self):
         compiler = ModuleCompiler(self._export_entries, self._basename)
+
         # First compile object file
         temp_obj = os.path.join(self._output_dir,
                                 os.path.splitext(self._output_file)[0] + '.o')
-        output_obj = os.path.join(self._output_dir, self._output_file)
         compiler.write_native_object(temp_obj, wrap=True)
+        objects = [temp_obj]
+        objects += self._compile_mixins()
 
         # Then create shared library
+        output_dll = os.path.join(self._output_dir, self._output_file)
         libraries = self._toolchain.get_python_libraries()
         library_dirs = self._toolchain.get_python_library_dirs()
-        self._toolchain.link_shared(output_obj, [temp_obj],
+        self._toolchain.link_shared(output_dll, objects,
                                     libraries, library_dirs,
                                     export_symbols=compiler.dll_exports)
-        os.remove(temp_obj)
+        for f in objects:
+            os.remove(f)

@@ -6,6 +6,8 @@ from distutils.dist import Distribution
 from distutils.sysconfig import customize_compiler
 from distutils import log
 
+import numpy.distutils.misc_util as np_misc
+
 import functools
 import os
 import subprocess
@@ -40,6 +42,8 @@ class Toolchain(object):
         self._build_ext = build_ext(Distribution())
         self._build_ext.finalize_options()
         self._py_lib_dirs = self._build_ext.library_dirs
+        self._py_include_dirs = self._build_ext.include_dirs
+        self._math_info = np_misc.get_info('npymath')
 
     @property
     def debug(self):
@@ -48,7 +52,19 @@ class Toolchain(object):
     @debug.setter
     def debug(self, value):
         self._debug = value
-        log.set_threshold(log.DEBUG if value else log.WARN)
+        # DEBUG will let Numpy spew many messages, so stick to INFO
+        # to print commands executed by distutils
+        log.set_threshold(log.INFO if value else log.WARN)
+
+    def compile_objects(self, sources, output_dir,
+                        include_dirs=(), depends=()):
+        """
+        """
+        objects = self._compiler.compile(sources,
+                                         output_dir=output_dir,
+                                         include_dirs=include_dirs,
+                                         depends=depends)
+        return objects
 
     def link_shared(self, output, objects, libraries=(),
                     library_dirs=(), export_symbols=()):
@@ -72,16 +88,20 @@ class Toolchain(object):
             # as the MSVC compiler would implicitly do.
             # (XXX msvcrtd in pydebug mode?)
             libs = libs + ['msvcrt']
-        return libs
+        return libs + self._math_info['libraries']
 
     def get_python_library_dirs(self):
         """
         Get the library directories necessary to link with Python.
         """
-        return list(self._py_lib_dirs)
+        return list(self._py_lib_dirs) + self._math_info['library_dirs']
+
+    def get_python_include_dirs(self):
+        """
+        """
+        return list(self._py_include_dirs) + self._math_info['include_dirs']
 
     def get_ext_filename(self, ext_name):
         """
         """
         return self._build_ext.get_ext_filename(ext_name)
-

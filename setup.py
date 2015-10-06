@@ -74,11 +74,12 @@ ext_dispatcher = Extension(name="numba._dispatcher",
 
 ext_helperlib = Extension(name="numba._helperlib",
                           include_dirs=[numpy.get_include()],
-                          sources=["numba/_helperlib.c", "numba/_math_c99.c"],
+                          sources=["numba/_helpermod.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS,
                           extra_link_args=install_name_tool_fixer,
                           depends=["numba/_pymodule.h",
                                    "numba/_math_c99.h",
+                                   "numba/_helperlib.c",
                                    "numba/mathnames.inc"])
 
 ext_typeconv = Extension(name="numba.typeconv._typeconv",

@@ -9,6 +9,8 @@ import tempfile
 import sys
 from ctypes import *
 
+import numpy as np
+
 from numba import unittest_support as unittest
 from numba.pycc import find_shared_ending, find_pyext_ending, main
 from numba.pycc.decorators import clear_export_registry
@@ -172,6 +174,13 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, 987.0 * 321.0)
             res = lib.square(5)
             self.assertPreciseEqual(res, 25)
+            res = lib.power(2, 7)
+            self.assertPreciseEqual(res, 128)
+            #res = lib.sqrt(-1)
+            #self.assertPreciseEqual(res, 1j)
+            res = lib.random(42)
+            expected = np.random.RandomState(42).random_sample()
+            self.assertPreciseEqual(res, expected)
 
 
 if __name__ == "__main__":
