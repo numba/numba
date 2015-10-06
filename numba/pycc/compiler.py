@@ -290,7 +290,7 @@ class ModuleCompilerPy2(_ModuleCompiler):
                             lc.Constant.null(lt._pyobject_head_p),
                             lc.Constant.int(lt._int32, sys.api_version)))
 
-        self._emit_module_init_code(builder)
+        self._emit_module_init_code(llvm_module, builder, mod)
 
         builder.ret_void()
 
