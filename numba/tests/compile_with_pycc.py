@@ -36,6 +36,10 @@ def power(u, v):
 def sqrt(u):
     return cmath.sqrt(u)
 
+@cc_helperlib.export('size', 'i8(f8[:])')
+def sqrt(arr):
+    return arr.size
+
 # This one clashes with libc random() unless pycc takes measures
 # to disambiguate implementation names.
 @cc_helperlib.export('random', 'f8(i4)')

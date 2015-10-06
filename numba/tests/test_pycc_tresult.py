@@ -190,6 +190,8 @@ class TestCC(BasePYCCTest):
             res = lib.random(42)
             expected = np.random.RandomState(42).random_sample()
             self.assertPreciseEqual(res, expected)
+            res = lib.size(np.float64([0] * 3))
+            self.assertPreciseEqual(res, 3)
 
 
 if __name__ == "__main__":
