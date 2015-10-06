@@ -144,6 +144,15 @@ class TestCC(BasePYCCTest):
         self._test_module = compile_with_pycc
         imp.reload(self._test_module)
 
+    @contextlib.contextmanager
+    def check_cc_compiled(self, cc):
+        cc.debug = True
+        cc.output_dir = self.tmpdir
+        cc.compile()
+
+        with self.check_c_ext(self.tmpdir, cc.name) as lib:
+            yield lib
+
     def test_cc_properties(self):
         cc = self._test_module.cc
         self.assertEqual(cc.name, 'pycc_test_simple')
@@ -162,12 +171,7 @@ class TestCC(BasePYCCTest):
             self.assertIn('.cpython', f)
 
     def test_compile(self):
-        cc = self._test_module.cc
-        cc.debug = True
-        cc.output_dir = self.tmpdir
-        cc.compile()
-
-        with self.check_c_ext(self.tmpdir, cc.name) as lib:
+        with self.check_cc_compiled(self._test_module.cc) as lib:
             res = lib.multi(123, 321)
             self.assertPreciseEqual(res, 123 * 321)
             res = lib.multf(987, 321)
@@ -176,12 +180,7 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, 25)
 
     def test_compile_helperlib(self):
-        cc = self._test_module.cc_helperlib
-        cc.debug = True
-        cc.output_dir = self.tmpdir
-        cc.compile()
-
-        with self.check_c_ext(self.tmpdir, cc.name) as lib:
+        with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
             res = lib.power(2, 7)
             self.assertPreciseEqual(res, 128)
             for val in (-1, -1 + 0j, np.complex128(-1)):
