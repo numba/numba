@@ -6,7 +6,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import types, jit, typeof
-from .support import TestCase
+from .support import MemoryLeakMixin, TestCase
 
 
 def getitem_usecase(a, b):
@@ -16,7 +16,7 @@ def setitem_usecase(a, idx, b):
     a[idx] = b
 
 
-class TestFancyIndexing(TestCase):
+class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
     def generate_advanced_indices(self, N, many=True):
         choices = [np.int16([0, N - 1, -2])]
