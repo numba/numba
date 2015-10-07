@@ -391,9 +391,15 @@ functions, using the following C types:
 * :c:type:`char *`
 * :c:type:`void *`
 * :c:type:`uint8_t *`
+* :c:type:`float *`
+* :c:type:`double *`
 * :c:type:`ssize_t`
 * :c:type:`size_t`
 * :c:type:`void`
+
+The ``from_buffer`` method of ``cffi.FFI`` and ``CompiledFFI`` objects is
+supported for passing NumPy arrays of ``float32`` and ``float64`` values to C
+function parameters of type ``float *`` and ``double *`` respectively.
 
 Out-of-line cffi modules must be registered with Numba prior to the use of any
 of their functions from within Numba-compiled functions:

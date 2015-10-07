@@ -12,8 +12,8 @@ from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
 from numba.targets import (
-    callconv, codegen, externals, intrinsics, listobj, cmathimpl, mathimpl,
-    npyimpl, operatorimpl, printimpl, randomimpl)
+    callconv, cffiimpl, codegen, externals, intrinsics, listobj, cmathimpl,
+    mathimpl, npyimpl, operatorimpl, printimpl, randomimpl)
 from .options import TargetOptions
 from numba.runtime import rtsys
 
@@ -48,6 +48,7 @@ class CPUContext(BaseContext):
 
         # Add target specific implementations
         self.install_registry(cmathimpl.registry)
+        self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
         self.install_registry(npyimpl.registry)
         self.install_registry(operatorimpl.registry)
