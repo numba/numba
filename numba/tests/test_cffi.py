@@ -75,15 +75,16 @@ class TestCFFI(TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         self.assertEqual(pyfunc(), cfunc())
 
+    def _test_pass_numpy_array(self, pyfunc, dtype):
+        x = np.arange(10).astype(dtype)
+        cfunc = jit(nopython=True)(pyfunc)
+        np.testing.assert_equal(pyfunc(x), cfunc(x))
+
     def test_pass_numpy_array_float32(self):
-        x = np.arange(10).astype(np.float32)
-        cfunc = jit(nopython=True)(vector_sin_float32)
-        np.testing.assert_equal(np.sin(x), cfunc(x))
+        self._test_pass_numpy_array(vector_sin_float32, np.float32)
 
     def test_pass_numpy_array_float64(self):
-        x = np.arange(10).astype(np.float64)
-        cfunc = jit(nopython=True)(vector_sin_float64)
-        np.testing.assert_equal(np.sin(x), cfunc(x))
+        self._test_pass_numpy_array(vector_sin_float64, np.float64)
 
 
 if __name__ == '__main__':
