@@ -20,18 +20,16 @@ except ImportError:
 SUPPORTED = ffi is not None
 _ool_func_types = {}
 _ool_func_ptr = {}
-_ffi_modules = set()
+_ffi_instances = set()
 
 
-ffi_module = types.Module(cffi.FFI)
-
-def is_ffi_module(obj):
+def is_ffi_instance(obj):
     # Compiled FFI modules have a member, ffi, which is an instance of
     # CompiledFFI, which behaves similarly to an instance of cffi.FFI. In
     # order to simplify handling a CompiledFFI object, we treat them as
     # if they're cffi.FFI instances for typing and lowering purposes.
     try:
-        return obj in _ffi_modules or isinstance(obj, cffi.FFI)
+        return obj in _ffi_instances or isinstance(obj, cffi.FFI)
     except TypeError: # Unhashable type possible
         return False
 
@@ -146,23 +144,23 @@ registry = templates.Registry()
 
 @registry.register
 class FFI_from_buffer(templates.AbstractTemplate):
-    key = cffi.FFI.from_buffer
+    key = 'ffi.from_buffer'
 
     def generic(self, args, kws):
         if kws or (len(args) != 1):
             return
         [ary] = args
-        if not (isinstance(ary, types.Array) or ary.layout in ('C', 'F')):
+        if not (isinstance(ary, types.Array) and ary.layout in ('C', 'F')):
             return
         ptr = types.CPointer(ary.dtype)
         return templates.signature(ptr, ary)
 
 @registry.register_attr
 class FFIAttribute(templates.AttributeTemplate):
-    key = ffi_module
+    key = types.ffi
 
     def resolve_from_buffer(self, ffi):
-        return types.Function(FFI_from_buffer)
+        return types.BoundFunction(FFI_from_buffer, types.ffi)
 
 
 def register_module(mod):
@@ -175,4 +173,4 @@ def register_module(mod):
             _ool_func_types[f] = mod.ffi.typeof(f)
             addr = mod.ffi.addressof(mod.lib, f.__name__)
             _ool_func_ptr[f] = int(mod.ffi.cast("uintptr_t", addr))
-        _ffi_modules.add(mod.ffi)
+        _ffi_instances.add(mod.ffi)

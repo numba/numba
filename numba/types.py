@@ -1385,6 +1385,7 @@ class Slice3Type(Type):
 
 pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
+ffi = Opaque('ffi')
 none = NoneType('none')
 ellipsis = EllipsisType('...')
 Any = Phantom('any')
@@ -1562,4 +1563,5 @@ c8
 c16
 optional
 ffi_forced_object
+ffi
 '''.split()
