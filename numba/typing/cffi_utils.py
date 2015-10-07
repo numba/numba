@@ -30,7 +30,10 @@ def is_ffi_module(obj):
     # CompiledFFI, which behaves similarly to an instance of cffi.FFI. In
     # order to simplify handling a CompiledFFI object, we treat them as
     # if they're cffi.FFI instances for typing and lowering purposes.
-    return obj in _ffi_modules or isinstance(obj, cffi.FFI)
+    try:
+        return obj in _ffi_modules or isinstance(obj, cffi.FFI)
+    except TypeError: # Unhashable type possible
+        return False
 
 def is_cffi_func(obj):
     """Check whether the obj is a CFFI function"""
