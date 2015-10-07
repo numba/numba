@@ -33,7 +33,17 @@ else:
         msg = "Failed to enable faulthandler due to:\n{err}"
         warnings.warn(msg.format(err=e))
 
+class TestLister(object):
+    def __init__(self):
+        pass
 
+    def run(self, test):
+        result = runner.TextTestResult(sys.stderr, True, 1)
+        self._test_list = _flatten_suite(test)
+        for t in self._test_list:
+            print(t.id())
+        return result
+        
 # "unittest.main" is really the TestProgram class!
 # (defined in a module named itself "unittest.main"...)
 
@@ -49,7 +59,8 @@ class NumbaTestProgram(unittest.main):
     refleak = False
     profile = False
     multiprocess = False
-
+    list = False
+    
     def __init__(self, *args, **kwargs):
         # Disable interpreter fallback if we are running the test suite
         if config.COMPATIBILITY_MODE:
@@ -82,12 +93,18 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('-m', '--multiprocess', dest='multiprocess',
                             action='store_true',
                             help='Parallelize tests')
+        parser.add_argument('-l', '--list', dest='list',
+                            action='store_true',
+                            help='List tests without running them')
         parser.add_argument('--profile', dest='profile',
                             action='store_true',
                             help='Profile the test run')
         return parser
 
     def parseArgs(self, argv):
+        if '-l' in argv:
+            argv.remove('-l')
+            self.list = True
         if PYVERSION < (3, 4) and '-m' in argv:
             # We want '-m' to work on all versions, emulate this option.
             argv.remove('-m')
@@ -105,6 +122,9 @@ class NumbaTestProgram(unittest.main):
             if not hasattr(sys, "gettotalrefcount"):
                 warnings.warn("detecting reference leaks requires a debug build "
                               "of Python, only memory leaks will be detected")
+
+        elif self.list:
+            self.testRunner = TestLister()
 
         elif self.testRunner is None:
             self.testRunner = unittest.TextTestRunner
