@@ -173,6 +173,9 @@ class _ModuleCompiler(object):
         # (+ LLVM-defined NRT helpers).
         library.finalize()
         for fn in library.get_defined_functions():
+            # TODO should set visibility "hidden" instead to remove the
+            # NRT special case
+            # (https://github.com/numba/llvmlite/issues/101)
             if fn.name not in self.dll_exports and not fn.name.startswith("nrt_"):
                 fn.linkage = "private"
 
