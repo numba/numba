@@ -169,6 +169,13 @@ class _ModuleCompiler(object):
             self._emit_python_wrapper(wrapper_module)
             library.add_ir_module(wrapper_module)
 
+        # Hide all functions in the DLL except those explicitly exported
+        # (+ LLVM-defined NRT helpers).
+        library.finalize()
+        for fn in library.get_defined_functions():
+            if fn.name not in self.dll_exports and not fn.name.startswith("nrt_"):
+                fn.linkage = "private"
+
         return library
 
     def write_llvm_bitcode(self, output, wrap=False, **kws):

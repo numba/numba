@@ -203,6 +203,16 @@ class CodeLibrary(object):
             if asm:
                 dump("ASSEMBLY %s" % self._name, self.get_asm_str())
 
+    def get_defined_functions(self):
+        """
+        Get all functions defined in the library.  The library must have
+        been finalized.
+        """
+        mod = self._final_module
+        for fn in mod.functions:
+            if not fn.is_declaration:
+                yield fn
+
     def get_function(self, name):
         return self._final_module.get_function(name)
 
