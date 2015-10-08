@@ -5,6 +5,7 @@ import errno
 import imp
 import os
 import shutil
+import subprocess
 import tempfile
 import sys
 from ctypes import *
@@ -146,12 +147,22 @@ class TestCC(BasePYCCTest):
 
     @contextlib.contextmanager
     def check_cc_compiled(self, cc):
-        cc.debug = True
+        #cc.debug = True
         cc.output_dir = self.tmpdir
         cc.compile()
 
         with self.check_c_ext(self.tmpdir, cc.name) as lib:
             yield lib
+
+    def check_cc_compiled_in_subprocess(self, lib, code):
+        prolog = """if 1:
+            import sys
+            sys.path.insert(0, %(path)r)
+            import %(name)s as lib
+            """ % {'name': lib.__name__,
+                   'path': os.path.dirname(lib.__file__)}
+        code = prolog.strip(' ') + code
+        subprocess.check_call([sys.executable, '-c', code])
 
     def test_cc_properties(self):
         cc = self._test_module.cc
@@ -192,10 +203,24 @@ class TestCC(BasePYCCTest):
             res = lib.size(np.float64([0] * 3))
             self.assertPreciseEqual(res, 3)
 
+            code = """if 1:
+                res = lib.power(2, 7)
+                assert res == 128
+                res = lib.random(42)
+                assert res == %(expected)s
+                """ % {'expected': expected}
+            self.check_cc_compiled_in_subprocess(lib, code)
+
     def test_compile_nrt(self):
         with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
             # Sanity check
             self.assertPreciseEqual(lib.zero_scalar(1), 0.0)
+
+            code = """if 1:
+                res = lib.zero_scalar(1)
+                assert res == 0.0
+                """
+            self.check_cc_compiled_in_subprocess(lib, code)
 
 
 if __name__ == "__main__":
