@@ -109,7 +109,7 @@ class CC(object):
         include_dirs = self._toolchain.get_python_include_dirs()
         # Inject macro definitions required by modulemixin.c
         macros = [
-            ('PYCC_INIT_FUNCTION', self._init_function),
+            ('PYCC_MODULE_NAME', self._basename),
             ('PYCC_USE_NRT', int(self._use_nrt)),
             ]
         # XXX distutils creates a whole subtree inside output_dir,

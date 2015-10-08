@@ -38,14 +38,19 @@ init_numpy(void) {
     #endif
 }
 
-#ifndef PYCC_INIT_FUNCTION
-#error PYCC_INIT_FUNCTION must be defined
+#ifndef PYCC_MODULE_NAME
+#error PYCC_MODULE_NAME must be defined
 #endif
+
+/* Preprocessor trick: need to use two levels of macros otherwise
+   PYCC_MODULE_NAME would not get expanded */
+#define _PYCC_INIT(name) pycc_init_##name
+#define PYCC_INIT(name) _PYCC_INIT(name)
 
 extern void *nrt_atomic_add, *nrt_atomic_sub;
 
 void
-PYCC_INIT_FUNCTION(PyObject *module)
+PYCC_INIT(PYCC_MODULE_NAME) (PyObject *module)
 {
     if (!init_numpy())
         Py_FatalError("Failed initializing numpy C API");
