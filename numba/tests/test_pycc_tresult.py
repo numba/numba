@@ -204,10 +204,11 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, 3)
 
             code = """if 1:
+                from numpy.testing import assert_equal, assert_allclose
                 res = lib.power(2, 7)
                 assert res == 128
                 res = lib.random(42)
-                assert res == %(expected)s
+                assert_allclose(res, %(expected)s)
                 """ % {'expected': expected}
             self.check_cc_compiled_in_subprocess(lib, code)
 
