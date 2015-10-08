@@ -11,7 +11,7 @@ import multiprocessing
 import sys
 import time
 import warnings
-from unittest import result, runner, signals
+from unittest import result, runner, signals, suite
 
 from numba.utils import PYVERSION, StringIO
 from numba import config
@@ -33,6 +33,10 @@ else:
         msg = "Failed to enable faulthandler due to:\n{err}"
         warnings.warn(msg.format(err=e))
 
+def load_tests(loader, tests, pattern):
+    suite = loader.discover("numba.tests")
+    return suite
+
 class TestLister(object):
     def __init__(self):
         pass
@@ -44,6 +48,11 @@ class TestLister(object):
             print(t.id())
         return result
         
+class SerialSuite(suite.TestSuite):
+    """A simple marker to make sure tests in this suite are run serially."""
+    
+    pass
+
 # "unittest.main" is really the TestProgram class!
 # (defined in a module named itself "unittest.main"...)
 
@@ -52,6 +61,8 @@ class NumbaTestProgram(unittest.main):
     A TestProgram subclass adding the following options:
     * a -R option to enable reference leak detection
     * a --profile option to enable profiling of the test run
+    * a -m option for parallel execution
+    * a -l option to (only) list tests
 
     Currently the options are only added in 3.4+.
     """
@@ -67,19 +78,11 @@ class NumbaTestProgram(unittest.main):
             warnings.warn("Unset INTERPRETER_FALLBACK")
             config.COMPATIBILITY_MODE = False
 
-        self.discovered_suite = kwargs.pop('suite', None)
         # HACK to force unittest not to change warning display options
         # (so that NumbaWarnings don't appear all over the place)
         sys.warnoptions.append(':x')
         self.nomultiproc = kwargs.pop('nomultiproc', False)
         super(NumbaTestProgram, self).__init__(*args, **kwargs)
-
-
-    def createTests(self):
-        if self.discovered_suite is not None:
-            self.test = self.discovered_suite
-        else:
-            super(NumbaTestProgram, self).createTests()
 
     def _getParentArgParser(self):
         # NOTE: this hook only exists on Python 3.4+. The options won't be
@@ -110,11 +113,43 @@ class NumbaTestProgram(unittest.main):
             argv.remove('-m')
             self.multiprocess = True
         super(NumbaTestProgram, self).parseArgs(argv)
+        # in Python 2.7, the 'discover' option isn't implicit.
+        # So if no test names were provided and 'self.test' is empty,
+        # we assume discovery hasn't been done yet.
+        if (not getattr(self, 'testNames', None) and
+            not self.test or (isinstance(self.test, suite.BaseTestSuite) and
+                              not self.test.countTestCases())):
+            self._do_discovery([])
+            
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
             # running with '-q'.
             self.buffer = True
+            
+    def _do_discovery(self, argv, Loader=None):
+        """The discovery process is complicated by the fact that:
 
+        * different test suites live under different directories
+        * some test suites may not be available (CUDA)
+        * some tests may have to be run serially, even in the presence of the '-m' flag."""
+
+        from numba import cuda
+        join = os.path.join
+        loader = unittest.TestLoader() if Loader is None else Loader()
+        topdir = os.path.abspath(join(os.path.dirname(__file__), '../..'))
+        base_tests = loader.discover(join(topdir, 'numba/tests'), 'test*.py', topdir)
+        cuda_tests = [loader.discover(join(topdir, 'numba/cuda/tests/nocuda'), 'test*.py', topdir)]
+        if cuda.is_available():
+            gpus = cuda.list_devices()
+            if gpus and gpus[0].compute_capability >= (2, 0):
+                cuda_tests.append(loader.discover(join(topdir, 'numba/cuda/tests/cudadrv'), 'test*.py', topdir))
+                cuda_tests.append(loader.discover(join(topdir, 'numba/cuda/tests/cudapy'), 'test*.py', topdir))
+            else:
+                print("skipped CUDA tests because GPU CC < 2.0")
+        else:
+            print("skipped CUDA tests")
+        self.test = suite.TestSuite(tests=(base_tests, SerialSuite(cuda_tests)))
+        
     def runTests(self):
         if self.refleak:
             self.testRunner = RefleakTestRunner
@@ -284,7 +319,6 @@ def _flatten_suite(test):
     else:
         return [test]
 
-
 class ParallelTestResult(runner.TextTestResult):
     """
     A TestResult able to inject results from other results.
@@ -392,6 +426,21 @@ class _MinimalRunner(object):
                 del test.__dict__[name]
 
 
+def _split_nonparallel_tests(test):
+    """split test suite into parallel and serial tests."""
+    ptests = []
+    stests = []
+    if isinstance(test, SerialSuite):
+        stests.extend(_flatten_suite(test))
+    elif isinstance(test, unittest.TestSuite):
+        for t in test:
+            p, s = _split_nonparallel_tests(t)
+            ptests.extend(p)
+            stests.extend(s)
+    else:
+        ptests = [test]
+    return ptests, stests
+
 class ParallelTestRunner(runner.TextTestRunner):
     """
     A test runner which delegates the actual running to a pool of child
@@ -414,16 +463,18 @@ class ParallelTestRunner(runner.TextTestRunner):
         pool = multiprocessing.Pool()
 
         try:
-            self._inner(result, pool, child_runner)
-            return result
+            self._run_parallel_tests(result, pool, child_runner)
         finally:
             # Kill the still active workers
             pool.terminate()
             pool.join()
+        stests = SerialSuite(self._stests)
+        stests.run(result)
+        return result
 
-    def _inner(self, result, pool, child_runner):
-        remaining_ids = set(t.id() for t in self._test_list)
-        it = pool.imap_unordered(child_runner, self._test_list)
+    def _run_parallel_tests(self, result, pool, child_runner):
+        remaining_ids = set(t.id() for t in self._ptests)
+        it = pool.imap_unordered(child_runner, self._ptests)
         while True:
             try:
                 child_result = it.__next__(self.timeout)
@@ -442,7 +493,7 @@ class ParallelTestRunner(runner.TextTestRunner):
                 return
 
     def run(self, test):
-        self._test_list = _flatten_suite(test)
+        self._ptests, self._stests = _split_nonparallel_tests(test)
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
