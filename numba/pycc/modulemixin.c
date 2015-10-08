@@ -4,10 +4,14 @@
  * functions.
  */
 
-#include <Python.h>
+#include "../_numba_common.h"
+#include "../_pymodule.h"
 
-#define NUMBA_EXPORT_FUNC(_rettype) _rettype
-#define NUMBA_EXPORT_DATA(_vartype) _vartype
+/* Define all runtime-required symbols in this C module, but do not
+   export them outside the shared library if possible. */
+
+#define NUMBA_EXPORT_FUNC(_rettype) VISIBILITY_HIDDEN _rettype
+#define NUMBA_EXPORT_DATA(_vartype) VISIBILITY_HIDDEN _vartype
 
 #include "../_helperlib.c"
 #include "../runtime/nrt.h"

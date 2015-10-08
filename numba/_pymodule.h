@@ -53,4 +53,3 @@
 #endif
 
 #endif /* NUMBA_PY_MODULE_H_ */
-
