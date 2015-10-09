@@ -4,8 +4,11 @@ Assorted utilities for use in tests.
 
 import cmath
 import contextlib
+import errno
 import math
+import os
 import sys
+import tempfile
 
 import numpy as np
 
@@ -337,6 +340,20 @@ def tweak_code(func, codestring=None, consts=None):
                       co.co_lnotab)
     func.__code__ = new_code
 
+def static_temp_directory(dirname):
+    """
+    Create a directory in the temp dir with a given name. Statically-named
+    temp dirs created using this function are needed because we can't delete a
+    DLL under Windows (this is a bit fragile if stale files can influence the
+    result of future test runs).
+    """
+    tmpdir = os.path.join(tempfile.gettempdir(), dirname)
+    try:
+        os.mkdir(tmpdir)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+    return tmpdir
 
 # From CPython
 

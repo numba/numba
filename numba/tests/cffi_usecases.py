@@ -1,6 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
 from numba import cffi_support
+from numba.tests.support import static_temp_directory
+import sys
 import numpy as np
 
 
@@ -51,9 +53,12 @@ if cffi_support.SUPPORTED:
     ffi_ool = FFI()
     ffi.set_source('cffi_usecases_ool', source)
     ffi.cdef(defs, override=True)
-    ffi.compile()
-
+    tmpdir = static_temp_directory('test_cffi')
+    ffi.compile(tmpdir=tmpdir)
+    sys.path.append(tmpdir)
     import cffi_usecases_ool
+    sys.path.remove(tmpdir)
+
     cffi_support.register_module(cffi_usecases_ool)
     cffi_sin_ool = cffi_usecases_ool.lib.sin
     cffi_cos_ool = cffi_usecases_ool.lib.cos
