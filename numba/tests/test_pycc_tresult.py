@@ -1,11 +1,8 @@
 from __future__ import print_function
 
 import contextlib
-import errno
 import imp
 import os
-import shutil
-import tempfile
 import sys
 from ctypes import *
 
@@ -14,6 +11,7 @@ from numba.pycc import find_shared_ending, find_pyext_ending, main
 from numba.pycc.decorators import clear_export_registry
 from .support import TestCase
 
+from numba.tests.support import static_temp_directory
 
 base_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -30,16 +28,7 @@ def unset_macosx_deployment_target():
 class BasePYCCTest(TestCase):
 
     def setUp(self):
-        # Note we use a permanent test directory as we can't delete
-        # a DLL that's in use under Windows.
-        # (this is a bit fragile if stale files can influence the result
-        #  of future test runs...)
-        self.tmpdir = os.path.join(tempfile.gettempdir(), "test_pycc")
-        try:
-            os.mkdir(self.tmpdir)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
+        self.tmpdir = static_temp_directory('test_pycc')
 
     def tearDown(self):
         # Since we're executing the module-under-test several times

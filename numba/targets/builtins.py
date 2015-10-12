@@ -123,13 +123,26 @@ def int_floordiv_impl(context, builder, sig, args):
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
-    cgutils.guard_zero(context, builder, b,
-                       (ZeroDivisionError, "integer division by zero"))
-    if sig.return_type.signed:
-        res, _ = int_divmod(context, builder, a, b)
-    else:
-        res = builder.udiv(a, b)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    res = cgutils.alloca_once(builder, a.type)
+
+    with builder.if_else(cgutils.is_scalar_zero(builder, b), likely=False
+                         ) as (if_zero, if_non_zero):
+        with if_zero:
+            if not context.error_model.fp_zero_division(
+                builder, ("integer division by zero",)):
+                # No exception raised => return 0
+                # XXX We should also set the FPU exception status, but
+                # there's no easy way to do that from LLVM.
+                builder.store(b, res)
+        with if_non_zero:
+            if sig.return_type.signed:
+                quot, _ = int_divmod(context, builder, a, b)
+            else:
+                quot = builder.udiv(a, b)
+            builder.store(quot, res)
+
+    return impl_ret_untracked(context, builder, sig.return_type,
+                              builder.load(res))
 
 
 @builtin
@@ -139,8 +152,8 @@ def int_truediv_impl(context, builder, sig, args):
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
-    cgutils.guard_zero(context, builder, b,
-                       (ZeroDivisionError, "division by zero"))
+    with cgutils.if_zero(builder, b):
+        context.error_model.fp_zero_division(builder, ("division by zero",))
     res = builder.fdiv(a, b)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -152,13 +165,26 @@ def int_rem_impl(context, builder, sig, args):
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
-    cgutils.guard_zero(context, builder, b,
-                       (ZeroDivisionError, "integer modulo by zero"))
-    if sig.return_type.signed:
-        _, res = int_divmod(context, builder, a, b)
-    else:
-        res = builder.urem(a, b)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    res = cgutils.alloca_once(builder, a.type)
+
+    with builder.if_else(cgutils.is_scalar_zero(builder, b), likely=False
+                         ) as (if_zero, if_non_zero):
+        with if_zero:
+            if not context.error_model.fp_zero_division(
+                builder, ("modulo by zero",)):
+                # No exception raised => return 0
+                # XXX We should also set the FPU exception status, but
+                # there's no easy way to do that from LLVM.
+                builder.store(b, res)
+        with if_non_zero:
+            if sig.return_type.signed:
+                _, rem = int_divmod(context, builder, a, b)
+            else:
+                rem = builder.urem(a, b)
+            builder.store(rem, res)
+
+    return impl_ret_untracked(context, builder, sig.return_type,
+                              builder.load(res))
 
 
 def int_power_impl(context, builder, sig, args):
@@ -167,6 +193,10 @@ def int_power_impl(context, builder, sig, args):
     """
     is_integer = isinstance(sig.args[0], types.Integer)
     tp = sig.return_type
+    zerodiv_return = False
+    if is_integer and not context.error_model.raise_on_fp_zero_division:
+        # If not raising, return 0x8000... when computing 0 ** <negative number>
+        zerodiv_return = -1 << (tp.bitwidth - 1)
 
     def int_power(a, b):
         # Ensure computations are done with a large enough width
@@ -179,7 +209,10 @@ def int_power_impl(context, builder, sig, args):
                 raise OverflowError
             if is_integer:
                 if a == 0:
-                    raise ZeroDivisionError("0 cannot be raised to a negative power")
+                    if zerodiv_return:
+                        return zerodiv_return
+                    else:
+                        raise ZeroDivisionError("0 cannot be raised to a negative power")
                 if a != 1 and a != -1:
                     return 0
         else:
@@ -494,8 +527,8 @@ def real_mul_impl(context, builder, sig, args):
 
 
 def real_div_impl(context, builder, sig, args):
-    cgutils.guard_zero(context, builder, args[1],
-                       (ZeroDivisionError, "division by zero"))
+    with cgutils.if_zero(builder, args[1]):
+        context.error_model.fp_zero_division(builder, ("division by zero",))
     res = builder.fdiv(*args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -633,18 +666,40 @@ def real_divmod_func_body(context, builder, vx, wx):
 
 def real_mod_impl(context, builder, sig, args):
     x, y = args
-    cgutils.guard_zero(context, builder, args[1],
-                       (ZeroDivisionError, "modulo by zero"))
-    _, rem = real_divmod(context, builder, x, y)
-    return impl_ret_untracked(context, builder, sig.return_type, rem)
+    res = cgutils.alloca_once(builder, x.type)
+    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
+                         ) as (if_zero, if_non_zero):
+        with if_zero:
+            if not context.error_model.fp_zero_division(
+                builder, ("modulo by zero",)):
+                # No exception raised => compute the nan result,
+                # and set the FP exception word for Numpy warnings.
+                rem = builder.frem(x, y)
+                builder.store(rem, res)
+        with if_non_zero:
+            _, rem = real_divmod(context, builder, x, y)
+            builder.store(rem, res)
+    return impl_ret_untracked(context, builder, sig.return_type,
+                              builder.load(res))
 
 
 def real_floordiv_impl(context, builder, sig, args):
     x, y = args
-    cgutils.guard_zero(context, builder, args[1],
-                       (ZeroDivisionError, "division by zero"))
-    quot, _ = real_divmod(context, builder, x, y)
-    return impl_ret_untracked(context, builder, sig.return_type, quot)
+    res = cgutils.alloca_once(builder, x.type)
+    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
+                         ) as (if_zero, if_non_zero):
+        with if_zero:
+            if not context.error_model.fp_zero_division(
+                builder, ("division by zero",)):
+                # No exception raised => compute the +/-inf or nan result,
+                # and set the FP exception word for Numpy warnings.
+                quot = builder.fdiv(x, y)
+                builder.store(quot, res)
+        with if_non_zero:
+            quot, _ = real_divmod(context, builder, x, y)
+            builder.store(quot, res)
+    return impl_ret_untracked(context, builder, sig.return_type,
+                              builder.load(res))
 
 
 def real_power_impl(context, builder, sig, args):

@@ -48,6 +48,9 @@ def _fill_ufunc_db(ufunc_db):
     # imports if done at global scope when importing the numba
     # module.
     from . import builtins, npyfuncs, cmathimpl
+    from numba import numpy_support
+
+    v = numpy_support.version
 
     ufunc_db[np.negative] = {
         '?->?': builtins.bool_invert_impl,
@@ -393,18 +396,22 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_cos_impl,
     }
 
+    tan_impl = cmathimpl.tan_impl if v >= (1, 10) else npyfuncs.np_complex_tan_impl
+
     ufunc_db[np.tan] = {
         'f->f': npyfuncs.np_real_tan_impl,
         'd->d': npyfuncs.np_real_tan_impl,
-        'F->F': npyfuncs.np_complex_tan_impl,
-        'D->D': npyfuncs.np_complex_tan_impl,
+        'F->F': tan_impl,
+        'D->D': tan_impl,
     }
+
+    arcsin_impl = cmathimpl.asin_impl if v >= (1, 10) else npyfuncs.np_complex_asin_impl
 
     ufunc_db[np.arcsin] = {
         'f->f': npyfuncs.np_real_asin_impl,
         'd->d': npyfuncs.np_real_asin_impl,
-        'F->F': npyfuncs.np_complex_asin_impl,
-        'D->D': npyfuncs.np_complex_asin_impl,
+        'F->F': arcsin_impl,
+        'D->D': arcsin_impl,
     }
 
     ufunc_db[np.arccos] = {
@@ -414,11 +421,13 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': cmathimpl.acos_impl,
     }
 
+    arctan_impl = cmathimpl.atan_impl if v >= (1, 10) else npyfuncs.np_complex_atan_impl
+
     ufunc_db[np.arctan] = {
         'f->f': npyfuncs.np_real_atan_impl,
         'd->d': npyfuncs.np_real_atan_impl,
-        'F->F': npyfuncs.np_complex_atan_impl,
-        'D->D': npyfuncs.np_complex_atan_impl,
+        'F->F': arctan_impl,
+        'D->D': arctan_impl,
     }
 
     ufunc_db[np.arctan2] = {
@@ -452,11 +461,13 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_tanh_impl,
     }
 
+    arcsinh_impl = cmathimpl.asinh_impl if v >= (1, 10) else npyfuncs.np_complex_asinh_impl
+
     ufunc_db[np.arcsinh] = {
         'f->f': npyfuncs.np_real_asinh_impl,
         'd->d': npyfuncs.np_real_asinh_impl,
-        'F->F': npyfuncs.np_complex_asinh_impl,
-        'D->D': npyfuncs.np_complex_asinh_impl,
+        'F->F': arcsinh_impl,
+        'D->D': arcsinh_impl,
     }
 
     ufunc_db[np.arccosh] = {
@@ -466,11 +477,13 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_acosh_impl,
     }
 
+    arctanh_impl = cmathimpl.atanh_impl if v >= (1, 10) else npyfuncs.np_complex_atanh_impl
+
     ufunc_db[np.arctanh] = {
         'f->f': npyfuncs.np_real_atanh_impl,
         'd->d': npyfuncs.np_real_atanh_impl,
-        'F->F': npyfuncs.np_complex_atanh_impl,
-        'D->D': npyfuncs.np_complex_atanh_impl,
+        'F->F': arctanh_impl,
+        'D->D': arctanh_impl,
     }
 
     ufunc_db[np.deg2rad] = {

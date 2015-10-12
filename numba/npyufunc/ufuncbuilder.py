@@ -48,6 +48,7 @@ class UFuncDispatcher(object):
         self.targetdescr.options.parse_as_flags(flags, topt)
         flags.set("no_compile")
         flags.set("no_cpython_wrapper")
+        flags.set("error_model", "numpy")
         # Disable loop lifting
         # The feature requires a real python function
         flags.unset("enable_looplift")

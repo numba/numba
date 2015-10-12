@@ -123,42 +123,42 @@ def shutting_down(globals=globals):
 
 
 class ConfigOptions(object):
-    OPTIONS = ()
+    OPTIONS = {}
 
     def __init__(self):
-        self._enabled = set()
+        self._values = self.OPTIONS.copy()
 
-    def set(self, name):
+    def set(self, name, value=True):
         if name not in self.OPTIONS:
             raise NameError("Invalid flag: %s" % name)
-        self._enabled.add(name)
+        self._values[name] = value
 
     def unset(self, name):
-        if name not in self.OPTIONS:
-            raise NameError("Invalid flag: %s" % name)
-        self._enabled.discard(name)
+        self.set(name, False)
 
     def __getattr__(self, name):
         if name not in self.OPTIONS:
             raise NameError("Invalid flag: %s" % name)
-        return name in self._enabled
+        return self._values[name]
 
     def __repr__(self):
-        return "Flags(%s)" % ', '.join(str(x) for x in self._enabled)
+        return "Flags(%s)" % ', '.join('%s=%s' % (k, v)
+                                       for k, v in self._values.items()
+                                       if v is not False)
 
     def copy(self):
         copy = type(self)()
-        copy._enabled = set(self._enabled)
+        copy._values = self._values.copy()
         return copy
 
     def __eq__(self, other):
-        return isinstance(other, ConfigOptions) and other._enabled == self._enabled
+        return isinstance(other, ConfigOptions) and other._values == self._values
 
     def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
-        return hash(tuple(sorted(self._enabled)))
+        return hash(tuple(sorted(self._values.items())))
 
 
 class SortedMap(collections.Mapping):
@@ -279,7 +279,10 @@ def bit_length(intval):
     Return the number of bits necessary to represent integer `intval`.
     """
     assert isinstance(intval, INT_TYPES)
-    return len(bin(abs(intval))) - 2
+    if intval >= 0:
+        return len(bin(intval)) - 2
+    else:
+        return len(bin(-intval - 1)) - 2
 
 
 class BenchmarkResult(object):
