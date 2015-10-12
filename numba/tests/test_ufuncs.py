@@ -1587,6 +1587,10 @@ class _TestLoopTypes(TestCase):
 
         self._check_ufunc_with_dtypes(fn, ufunc, letter_types)
 
+    ulps = {('arccos', 'F'): 2,
+            ('tanh', 'F'): 2,
+            }
+
     def _check_ufunc_with_dtypes(self, fn, ufunc, dtypes):
         arg_dty = [np.dtype(t) for t in dtypes]
         arg_nbty = [types.Array(from_dtype(t), 1, 'C') for t in arg_dty]
@@ -1605,12 +1609,15 @@ class _TestLoopTypes(TestCase):
         # Check each array (including inputs, to ensure they weren't
         # mutated).
         for c_arg, py_arg in zip(c_args, py_args):
-            prec = 'single' if c_arg.dtype.char in 'fF' else 'exact'
-            prec = 'double' if c_arg.dtype.char in 'dD' else prec
+            typechar = c_arg.dtype.char
+            ulps = self.ulps.get((ufunc.__name__, typechar), 1)
+            prec = 'single' if typechar in 'fF' else 'exact'
+            prec = 'double' if typechar in 'dD' else prec
             msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
                              "args: {2}", "expected {3}", "got {4}"])
             msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
-            self.assertPreciseEqual(py_arg, c_arg, prec=prec, msg=msg)
+            self.assertPreciseEqual(py_arg, c_arg, prec=prec, msg=msg,
+                                    ulps=ulps)
 
     @classmethod
     def _check_ufunc_loops(cls, ufunc):
