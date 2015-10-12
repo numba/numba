@@ -165,15 +165,10 @@ class PyCallWrapper(object):
         builder.ret(api.get_null_object())
 
     def get_env(self, api, builder, closure):
-        if self.context.aot_mode:
-            # TODO: need to fix this properly for AOT compilation.
-            envptr = None
-            env_manager = None
-        else:
-            envptr = self.context.get_env_from_closure(builder, closure)
-            env_body = self.context.get_env_body(builder, envptr)
-            api.emit_environment_sentry(envptr, return_pyobject=True)
-            env_manager = api.get_env_manager(self.env, env_body, envptr)
+        envptr = self.context.get_env_from_closure(builder, closure)
+        env_body = self.context.get_env_body(builder, envptr)
+        api.emit_environment_sentry(envptr, return_pyobject=True)
+        env_manager = api.get_env_manager(self.env, env_body, envptr)
         return envptr, env_manager
 
     def _simplified_return_type(self):

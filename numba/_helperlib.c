@@ -1468,7 +1468,7 @@ raise_error:
 }
 
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_unpickle(const char *data, Py_ssize_t n)
+numba_unpickle(const char *data, int n)
 {
     PyObject *buf, *obj;
     static PyObject *loads;
