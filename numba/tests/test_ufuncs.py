@@ -1534,6 +1534,10 @@ class _TestLoopTypes(TestCase):
     if is_on_numpy_16:
         _skip_types += 'Mm'
 
+    _ulps = {('arccos', 'F'): 2,
+             ('tanh', 'F'): 2,
+             }
+
     def _arg_for_type(self, a_letter_type, index=0):
         """return a suitable array argument for testing the letter type"""
         if a_letter_type in 'bhilq':
@@ -1587,10 +1591,6 @@ class _TestLoopTypes(TestCase):
 
         self._check_ufunc_with_dtypes(fn, ufunc, letter_types)
 
-    ulps = {('arccos', 'F'): 2,
-            ('tanh', 'F'): 2,
-            }
-
     def _check_ufunc_with_dtypes(self, fn, ufunc, dtypes):
         arg_dty = [np.dtype(t) for t in dtypes]
         arg_nbty = [types.Array(from_dtype(t), 1, 'C') for t in arg_dty]
@@ -1610,7 +1610,7 @@ class _TestLoopTypes(TestCase):
         # mutated).
         for c_arg, py_arg in zip(c_args, py_args):
             typechar = c_arg.dtype.char
-            ulps = self.ulps.get((ufunc.__name__, typechar), 1)
+            ulps = self._ulps.get((ufunc.__name__, typechar), 1)
             prec = 'single' if typechar in 'fF' else 'exact'
             prec = 'double' if typechar in 'dD' else prec
             msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
