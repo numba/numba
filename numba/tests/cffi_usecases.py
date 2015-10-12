@@ -56,15 +56,16 @@ if cffi_support.SUPPORTED:
     tmpdir = static_temp_directory('test_cffi')
     ffi.compile(tmpdir=tmpdir)
     sys.path.append(tmpdir)
-    import cffi_usecases_ool
-    sys.path.remove(tmpdir)
-
-    cffi_support.register_module(cffi_usecases_ool)
-    cffi_sin_ool = cffi_usecases_ool.lib.sin
-    cffi_cos_ool = cffi_usecases_ool.lib.cos
-    cffi_foo = cffi_usecases_ool.lib.foo
-    vsSin = cffi_usecases_ool.lib.vsSin
-    vdSin = cffi_usecases_ool.lib.vdSin
+    try:
+        import cffi_usecases_ool
+        cffi_support.register_module(cffi_usecases_ool)
+        cffi_sin_ool = cffi_usecases_ool.lib.sin
+        cffi_cos_ool = cffi_usecases_ool.lib.cos
+        cffi_foo = cffi_usecases_ool.lib.foo
+        vsSin = cffi_usecases_ool.lib.vsSin
+        vdSin = cffi_usecases_ool.lib.vdSin
+    finally:
+        sys.path.remove(tmpdir)
 
 
 def use_cffi_sin(x):
