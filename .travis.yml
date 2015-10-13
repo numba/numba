@@ -13,7 +13,7 @@ matrix:
       env: NUMPY="numpy=1.9"
     - python: 3.5-dev
       # TODO: change this to 1.10 when we're ok
-      env: NUMPY="numpy=1.9"
+      env: NUMPY="numpy=1.10"
 
 branches:
   only:

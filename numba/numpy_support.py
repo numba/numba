@@ -12,6 +12,11 @@ from .targets import ufunc_db
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
 
+# Starting from Numpy 1.10, ufuncs accept argument conversion according
+# to the "same_kind" rule (used to be "unsafe").
+strict_ufunc_typing = version >= (1, 10)
+
+
 FROM_DTYPE = {
     numpy.dtype('bool'): types.boolean,
     numpy.dtype('int8'): types.int8,
@@ -236,6 +241,10 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         np_input_types = [as_dtype(x) for x in input_types]
     except NotImplementedError:
         return None
+    try:
+        np_output_types = [as_dtype(x) for x in output_types]
+    except NotImplementedError:
+        return None
 
     def choose_types(numba_types, ufunc_letters):
         """
@@ -254,13 +263,16 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     # In NumPy, the loops are evaluated from first to last. The first one
     # that is viable is the one used. One loop is viable if it is possible
     # to cast every input operand to the one expected by the ufunc.
-    # Note that the output is not considered in this logic.
+    # Also under NumPy 1.10+ the output must be able to be cast back
+    # to a close enough type ("same_kind").
+
     for candidate in ufunc.types:
         ufunc_inputs = candidate[:ufunc.nin]
         ufunc_outputs = candidate[-ufunc.nout:]
         if 'O' in ufunc_inputs:
             # Skip object arrays
             continue
+        found = True
         # Skip if any input or output argument is mismatching
         for outer, inner in zip(np_input_types, ufunc_inputs):
             # (outer is a dtype instance, inner is a type char)
@@ -269,10 +281,19 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 # precise typing (i.e. the units); therefore we look for
                 # an exact match.
                 if outer.char != inner:
+                    found = False
                     break
-            elif not numpy.can_cast(outer, inner, 'safe'):
+            elif not numpy.can_cast(outer.char, inner, 'safe'):
+                found = False
                 break
-        else:
+        if found and strict_ufunc_typing:
+            # Can we cast the inner result to the outer result type?
+            for outer, inner in zip(np_output_types, ufunc_outputs):
+                if (outer.char not in 'mM' and not
+                    numpy.can_cast(inner, outer.char, 'same_kind')):
+                    found = False
+                    break
+        if found:
             # Found: determine the Numba types for the loop's inputs and
             # outputs.
             inputs = choose_types(input_types, ufunc_inputs)
