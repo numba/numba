@@ -3,8 +3,10 @@ from __future__ import print_function
 import contextlib
 import imp
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from ctypes import *
 
 import numpy as np
@@ -216,6 +218,51 @@ class TestCC(BasePYCCTest):
                 assert list(res) == [0, 0, 0]
                 """
             self.check_cc_compiled_in_subprocess(lib, code)
+
+
+class TestDistutilsSupport(TestCase):
+
+    def setUp(self):
+        # Copy the test project into a temp directory to avoid
+        # keeping any build leftovers in the source tree
+        self.tmpdir = tempfile.mkdtemp(prefix='test_pycc_distutils-')
+        source_dir = os.path.join(base_path, 'pycc_distutils_usecase')
+        self.usecase_dir = os.path.join(self.tmpdir, 'work')
+        shutil.copytree(source_dir, self.usecase_dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_setup_py(self):
+        # Compute PYTHONPATH to ensure the child processes see this Numba
+        import numba
+        numba_path = os.path.dirname(os.path.dirname(numba.__file__))
+        env = dict(os.environ)
+        if env.get('PYTHONPATH', ''):
+            env['PYTHONPATH'] = numba_path + os.pathsep + env['PYTHONPATH']
+        else:
+            env['PYTHONPATH'] = numba_path
+
+        def run_python(args):
+            p = subprocess.Popen([sys.executable] + args,
+                                 cwd=self.usecase_dir,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 env=env)
+            out, err = p.communicate()
+            rc = p.wait()
+            if rc != 0:
+                self.fail("setup.py failed with the following output:\n"
+                          + err.decode('utf-8', 'ignore'))
+
+        run_python(["setup.py", "build_ext", "--inplace"])
+        code = """if 1:
+            import pycc_compiled_module as lib
+            assert lib.get_const() == 42
+            res = lib.ones(3)
+            assert list(res) == [1.0, 1.0, 1.0]
+            """
+        run_python(["-c", code])
 
 
 if __name__ == "__main__":

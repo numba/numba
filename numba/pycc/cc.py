@@ -1,7 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
-import logging
+from distutils import dir_util, log
+from distutils.command import build_ext
+from distutils.extension import Extension
 import os
 import shutil
 import sys
@@ -46,13 +48,13 @@ class CC(object):
             source_module = source_module.__name__
         else:
             dct = sys.modules[source_module].__dict__
-        source_dir = os.path.dirname(dct.get('__file__', ''))
 
+        self._source_path = dct.get('__file__', '')
         self._source_module = source_module
         self._toolchain = Toolchain()
         self._debug = False
         # By default, output in directory of caller module
-        self._output_dir = source_dir
+        self._output_dir = os.path.dirname(self._source_path)
         self._output_file = self._toolchain.get_ext_filename(basename)
         self._use_nrt = False
 
@@ -110,22 +112,38 @@ class CC(object):
         return sorted(self._exported_functions.values(),
                       key=lambda entry: entry.symbol)
 
-    def _compile_mixins(self, build_dir):
+    def _get_mixin_sources(self):
         here = os.path.dirname(__file__)
         mixin_sources = self._mixin_sources[:]
         if self._use_nrt:
             mixin_sources.append('../runtime/nrt.c')
-        sources = [os.path.join(here, f) for f in mixin_sources]
-        include_dirs = self._toolchain.get_python_include_dirs()
-        # Inject macro definitions required by modulemixin.c
-        macros = [
+        return [os.path.join(here, f) for f in mixin_sources]
+
+    def _get_mixin_defines(self):
+        # Macro definitions required by modulemixin.c
+        return [
             ('PYCC_MODULE_NAME', self._basename),
             ('PYCC_USE_NRT', int(self._use_nrt)),
             ]
 
+    def _get_extra_cflags(self):
         extra_cflags = self._extra_cflags.get(sys.platform, [])
         if not extra_cflags:
             extra_cflags = self._extra_cflags.get(os.name, [])
+        return extra_cflags
+
+    def _get_extra_ldflags(self):
+        extra_ldflags = self._extra_ldflags.get(sys.platform, [])
+        if not extra_ldflags:
+            extra_ldflags = self._extra_ldflags.get(os.name, [])
+        return extra_ldflags
+
+    def _compile_mixins(self, build_dir):
+        sources = self._get_mixin_sources()
+        macros = self._get_mixin_defines()
+        include_dirs = self._toolchain.get_python_include_dirs()
+
+        extra_cflags = self._get_extra_cflags()
         # XXX distutils creates a whole subtree inside build_dir,
         # e.g. /tmp/test_pycc/home/antoine/numba/numba/pycc/modulemixin.o
         objects = self._toolchain.compile_objects(sources, build_dir,
@@ -134,33 +152,86 @@ class CC(object):
                                                   extra_cflags=extra_cflags)
         return objects
 
-    def compile(self):
+    def _compile_object_files(self, build_dir):
         compiler = ModuleCompiler(self._export_entries, self._basename,
                                   self._use_nrt)
         compiler.external_init_function = self._init_function
-
-        build_dir = tempfile.mkdtemp(prefix='pycc-build-%s-' % self._basename)
-
-        # Compile object file
         temp_obj = os.path.join(build_dir,
                                 os.path.splitext(self._output_file)[0] + '.o')
         compiler.write_native_object(temp_obj, wrap=True)
-        objects = [temp_obj]
+        return [temp_obj], compiler.dll_exports
+
+    def compile(self):
+        build_dir = tempfile.mkdtemp(prefix='pycc-build-%s-' % self._basename)
+
+        # Compile object file
+        objects, dll_exports = self._compile_object_files(build_dir)
 
         # Compile mixins
         objects += self._compile_mixins(build_dir)
 
         # Then create shared library
-        extra_ldflags = self._extra_ldflags.get(sys.platform, [])
-        if not extra_ldflags:
-            extra_ldflags = self._extra_ldflags.get(os.name, [])
-
+        extra_ldflags = self._get_extra_ldflags()
         output_dll = os.path.join(self._output_dir, self._output_file)
         libraries = self._toolchain.get_python_libraries()
         library_dirs = self._toolchain.get_python_library_dirs()
         self._toolchain.link_shared(output_dll, objects,
                                     libraries, library_dirs,
-                                    export_symbols=compiler.dll_exports,
+                                    export_symbols=dll_exports,
                                     extra_ldflags=extra_ldflags)
 
         shutil.rmtree(build_dir)
+
+    def distutils_extension(self, **kwargs):
+        macros = kwargs.pop('macros', []) + self._get_mixin_defines()
+        extra_compile_args = kwargs.pop('extra_compile_args', []) \
+                             + self._get_extra_cflags()
+        extra_link_args = kwargs.pop('extra_link_args', []) \
+                          + self._get_extra_ldflags()
+        depends = kwargs.pop('depends', []) + [self._source_path]
+        ext = _CCExtension(name=self._basename,
+                           sources=self._get_mixin_sources(),
+                           depends=depends,
+                           define_macros=macros,
+                           extra_compile_args=extra_compile_args,
+                           extra_link_args=extra_link_args,
+                           **kwargs)
+        ext.monkey_patch_distutils()
+        ext._cc = self
+        return ext
+
+
+class _CCExtension(Extension):
+    _cc = None
+    _distutils_monkey_patched = False
+
+    def _prepare_object_files(self, build_ext):
+        cc = self._cc
+        log.info("generating LLVM code for '%s'", self.name)
+        dir_util.mkpath(build_ext.build_temp)
+        objects, _ = cc._compile_object_files(build_ext.build_temp)
+        # Add generated object files for linking
+        self.extra_objects = objects
+
+    @classmethod
+    def monkey_patch_distutils(cls):
+        """
+        Monkey-patch distutils with our own build_ext class knowing
+        about pycc-compiled extensions modules.
+        """
+        if cls._distutils_monkey_patched:
+            return
+
+        _orig_build_ext = build_ext.build_ext
+
+        class _CC_build_ext(_orig_build_ext):
+
+            def build_extension(self, ext):
+                if isinstance(ext, _CCExtension):
+                    ext._prepare_object_files(self)
+
+                _orig_build_ext.build_extension(self, ext)
+
+        build_ext.build_ext = _CC_build_ext
+
+        cls._distutils_monkey_patched = True
