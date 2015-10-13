@@ -139,7 +139,7 @@ class TestCC(BasePYCCTest):
 
     @contextlib.contextmanager
     def check_cc_compiled(self, cc):
-        cc.debug = True
+        #cc.debug = True
         cc.output_dir = self.tmpdir
         cc.compile()
 
@@ -252,8 +252,10 @@ class TestDistutilsSupport(TestCase):
             out, err = p.communicate()
             rc = p.wait()
             if rc != 0:
-                self.fail("setup.py failed with the following output:\n"
-                          + err.decode('utf-8', 'ignore'))
+                out = " stdout ".center(50, "-") + "\n" + out.decode('utf-8', 'ignore')
+                err = " stderr ".center(50, "-") + "\n" + err.decode('utf-8', 'ignore')
+                self.fail("setup.py failed with the following output:\n%s\n%s"
+                          % (out, err))
 
         run_python(["setup.py", "build_ext", "--inplace"])
         code = """if 1:
