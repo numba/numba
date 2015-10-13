@@ -86,6 +86,7 @@ class TestLegacyAPI(BasePYCCTest):
         """
         Test creating a CPython extension module using pycc.
         """
+        self.skipTest("lack of environment can make the extension crash")
         unset_macosx_deployment_target()
 
         source = os.path.join(base_path, 'compile_with_pycc.py')
