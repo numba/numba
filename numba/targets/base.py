@@ -152,9 +152,6 @@ class BaseContext(object):
     # NRT
     enable_nrt = False
 
-    # PYCC
-    aot_mode = False
-
     # Error model for various operations (only FP exceptions currently)
     error_model = None
 
