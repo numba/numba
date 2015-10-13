@@ -247,15 +247,13 @@ class TestDistutilsSupport(TestCase):
             p = subprocess.Popen([sys.executable] + args,
                                  cwd=self.usecase_dir,
                                  stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,
                                  env=env)
-            out, err = p.communicate()
+            out, _ = p.communicate()
             rc = p.wait()
             if rc != 0:
-                out = " stdout ".center(50, "-") + "\n" + out.decode('utf-8', 'ignore')
-                err = " stderr ".center(50, "-") + "\n" + err.decode('utf-8', 'ignore')
-                self.fail("setup.py failed with the following output:\n%s\n%s"
-                          % (out, err))
+                self.fail("python failed with the following output:\n%s"
+                          % out.decode('utf-8', 'ignore'))
 
         run_python(["setup.py", "build_ext", "--inplace"])
         code = """if 1:
