@@ -55,7 +55,7 @@ def zero_scalar(n):
     arr = np.zeros(n)
     return arr[-1]
 
-# Fails because it needs an environment
+# This one needs an environment
 @cc_nrt.export('zeros', 'f8[:](i4)')
 def zeros(n):
     return np.zeros(n)
