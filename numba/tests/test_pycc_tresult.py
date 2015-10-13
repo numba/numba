@@ -145,8 +145,8 @@ class TestCC(BasePYCCTest):
         self.assertTrue(os.path.basename(f).startswith('pycc_test_output.'), f)
         if sys.platform == 'linux':
             self.assertTrue(f.endswith('.so'), f)
-        if sys.version_info >= (3,):
-            self.assertIn('.cpython', f)
+            if sys.version_info >= (3,):
+                self.assertIn('.cpython', f)
 
     def test_compile(self):
         cc = self._test_module.cc
