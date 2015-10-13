@@ -184,15 +184,25 @@ class CC(object):
 
     def distutils_extension(self, **kwargs):
         macros = kwargs.pop('macros', []) + self._get_mixin_defines()
-        extra_compile_args = kwargs.pop('extra_compile_args', []) \
-                             + self._get_extra_cflags()
-        extra_link_args = kwargs.pop('extra_link_args', []) \
-                          + self._get_extra_ldflags()
         depends = kwargs.pop('depends', []) + [self._source_path]
+        extra_compile_args = (kwargs.pop('extra_compile_args', [])
+                              + self._get_extra_cflags())
+        extra_link_args = (kwargs.pop('extra_link_args', [])
+                           + self._get_extra_ldflags())
+        include_dirs = (kwargs.pop('include_dirs', [])
+                        + self._toolchain.get_python_include_dirs())
+        libraries = (kwargs.pop('libraries', [])
+                     + self._toolchain.get_python_libraries())
+        library_dirs = (kwargs.pop('library_dirs', [])
+                        + self._toolchain.get_python_library_dirs())
+
         ext = _CCExtension(name=self._basename,
                            sources=self._get_mixin_sources(),
                            depends=depends,
                            define_macros=macros,
+                           include_dirs=include_dirs,
+                           libraries=libraries,
+                           library_dirs=library_dirs,
                            extra_compile_args=extra_compile_args,
                            extra_link_args=extra_link_args,
                            **kwargs)
