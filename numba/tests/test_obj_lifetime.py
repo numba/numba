@@ -318,27 +318,26 @@ class TestObjLifetime(TestCase):
         cfunc = self.compile(genfunc)
         # Exhaust the generator
         rec = RefRecorder()
-        old_refcnt = sys.getrefcount(rec)
-        gen = cfunc(rec)
-        next(gen)
-        self.assertTrue(rec.alive)
-        list(gen)
-        self.assertFalse(rec.alive)
-        self.assertEqual(sys.getrefcount(rec), old_refcnt)
+        with self.assertRefCount(rec):
+            gen = cfunc(rec)
+            next(gen)
+            self.assertTrue(rec.alive)
+            list(gen)
+            self.assertFalse(rec.alive)
         # Instantiate the generator but never iterate
         rec = RefRecorder()
-        gen = cfunc(rec)
-        del gen
-        self.assertFalse(rec.alive)
-        self.assertEqual(sys.getrefcount(rec), old_refcnt)
+        with self.assertRefCount(rec):
+            gen = cfunc(rec)
+            del gen
+            self.assertFalse(rec.alive)
         # Stop iterating before exhaustion
         rec = RefRecorder()
-        gen = cfunc(rec)
-        next(gen)
-        self.assertTrue(rec.alive)
-        del gen
-        self.assertFalse(rec.alive)
-        self.assertEqual(sys.getrefcount(rec), old_refcnt)
+        with self.assertRefCount(rec):
+            gen = cfunc(rec)
+            next(gen)
+            self.assertTrue(rec.alive)
+            del gen
+            self.assertFalse(rec.alive)
 
     def test_generator1(self):
         self.exercise_generator(generator_usecase1)
@@ -351,22 +350,19 @@ class TestObjLifetime(TestCase):
         self.assertEqual(rec.recorded, ['0', '1', '2'])
 
     def test_raising1(self):
-        old_refcnt = sys.getrefcount(do_raise)
-        rec = self.compile_and_record(raising_usecase1, raises=MyError)
-        self.assertFalse(rec.alive)
-        self.assertEqual(sys.getrefcount(do_raise), old_refcnt)
+        with self.assertRefCount(do_raise):
+            rec = self.compile_and_record(raising_usecase1, raises=MyError)
+            self.assertFalse(rec.alive)
 
     def test_raising2(self):
-        old_refcnt = sys.getrefcount(do_raise)
-        rec = self.compile_and_record(raising_usecase2, raises=MyError)
-        self.assertFalse(rec.alive)
-        self.assertEqual(sys.getrefcount(do_raise), old_refcnt)
+        with self.assertRefCount(do_raise):
+            rec = self.compile_and_record(raising_usecase2, raises=MyError)
+            self.assertFalse(rec.alive)
 
     def test_raising3(self):
-        old_refcnt = sys.getrefcount(MyError)
-        rec = self.compile_and_record(raising_usecase3, raises=MyError)
-        self.assertFalse(rec.alive)
-        self.assertEqual(sys.getrefcount(MyError), old_refcnt)
+        with self.assertRefCount(MyError):
+            rec = self.compile_and_record(raising_usecase3, raises=MyError)
+            self.assertFalse(rec.alive)
 
 
 if __name__ == "__main__":

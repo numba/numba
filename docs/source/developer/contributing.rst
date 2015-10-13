@@ -111,23 +111,29 @@ Numba is validated using a test suite comprised of various kind of tests
 (unit tests, functional tests). The test suite is written using the
 standard :py:mod:`unittest` framework.
 
-The various test modules are inside the ``numba/tests`` directory. There
-are two entry points to run the test suite:
+The tests can be executed using the `runtests.py` script. It accepts various
+options to influence test running and reporting. Pass ``-h``
+or ``--help`` to get a glimpse at those options. Examples:
 
-* if you want to run the whole test suite (which will take a couple of
-  minutes), call the ``runtests.py`` script; in particular, the ``-m`` flag
-  will parallelize the test suite into several processes::
+* to list all available tests::
 
-  $ python runtests.py -m
+    $ runtests.py -l
 
-* if you want to run an individual test module, invoke it as a python
-  module, for example::
+* to list tests from a specific (sub-)suite::
 
-  $ python -m numba.tests.test_closure
+    $ runtests.py -l numba.tests.test_usecases
 
-Both the global test runner ``runtests.py`` and individual modules allow you
-to pass various options to influence test running and report.  Pass ``-h``
-or ``--help`` to get a glimpse at those options.
+* to run those tests::
+
+    $ runtests.py numba.tests.test_usecases
+
+* to run all tests in parallel, using multiple sub-processes::
+
+    $ runtests.py -m
+    
+* For a detailed list of all options::
+
+    $ runtests.py -h
 
 
 Development rules

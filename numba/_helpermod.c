@@ -69,6 +69,9 @@ build_c_helpers_dict(void)
     declmethod(rnd_init);
     declmethod(poisson_ptrs);
     declmethod(attempt_nocopy_reshape);
+    declmethod(get_list_private_data);
+    declmethod(set_list_private_data);
+    declmethod(reset_list_private_data);
 
     declpointer(py_random_state);
     declpointer(np_random_state);
