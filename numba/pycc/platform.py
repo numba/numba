@@ -57,7 +57,8 @@ class Toolchain(object):
         log.set_threshold(log.INFO if value else log.WARN)
 
     def compile_objects(self, sources, output_dir,
-                        include_dirs=(), depends=(), macros=()):
+                        include_dirs=(), depends=(), macros=(),
+                        extra_cflags=None):
         """
         Compile the given source files into a separate object file each,
         all beneath the *output_dir*.  A list of paths to object files
@@ -73,11 +74,13 @@ class Toolchain(object):
                                          output_dir=output_dir,
                                          include_dirs=include_dirs,
                                          depends=depends,
-                                         macros=macros or [])
+                                         macros=macros or [],
+                                         extra_preargs=extra_cflags)
         return objects
 
     def link_shared(self, output, objects, libraries=(),
-                    library_dirs=(), export_symbols=()):
+                    library_dirs=(), export_symbols=(),
+                    extra_ldflags=None):
         """
         Create a shared library *output* linking the given *objects*
         and *libraries* (all strings).
@@ -86,7 +89,8 @@ class Toolchain(object):
         self._compiler.link(CCompiler.SHARED_OBJECT, objects,
                             output_filename, output_dir,
                             libraries, library_dirs,
-                            export_symbols=export_symbols)
+                            export_symbols=export_symbols,
+                            extra_preargs=extra_ldflags)
 
     def get_python_libraries(self):
         """

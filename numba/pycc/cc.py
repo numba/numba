@@ -18,6 +18,16 @@ class CC(object):
 
     _mixin_sources = ['modulemixin.c', '../_math_c99.c']
 
+    # -flto strips all unused helper functions, which 1) makes the
+    # produced output much smaller and 2) can make the linking step faster
+    _extra_cflags = {
+        'posix': ['-flto'],
+        }
+
+    _extra_ldflags = {
+        'posix': ['-flto'],
+        }
+
     def __init__(self, basename, source_module=None):
         if '.' in basename:
             raise ValueError("basename should be a simple module name, not "
@@ -112,11 +122,16 @@ class CC(object):
             ('PYCC_MODULE_NAME', self._basename),
             ('PYCC_USE_NRT', int(self._use_nrt)),
             ]
-        # XXX distutils creates a whole subtree inside output_dir,
+
+        extra_cflags = self._extra_cflags.get(sys.platform, [])
+        if not extra_cflags:
+            extra_cflags = self._extra_cflags.get(os.name, [])
+        # XXX distutils creates a whole subtree inside build_dir,
         # e.g. /tmp/test_pycc/home/antoine/numba/numba/pycc/modulemixin.o
         objects = self._toolchain.compile_objects(sources, build_dir,
                                                   include_dirs=include_dirs,
-                                                  macros=macros)
+                                                  macros=macros,
+                                                  extra_cflags=extra_cflags)
         return objects
 
     def compile(self):
@@ -136,11 +151,16 @@ class CC(object):
         objects += self._compile_mixins(build_dir)
 
         # Then create shared library
+        extra_ldflags = self._extra_ldflags.get(sys.platform, [])
+        if not extra_ldflags:
+            extra_ldflags = self._extra_ldflags.get(os.name, [])
+
         output_dll = os.path.join(self._output_dir, self._output_file)
         libraries = self._toolchain.get_python_libraries()
         library_dirs = self._toolchain.get_python_library_dirs()
         self._toolchain.link_shared(output_dll, objects,
                                     libraries, library_dirs,
-                                    export_symbols=compiler.dll_exports)
+                                    export_symbols=compiler.dll_exports,
+                                    extra_ldflags=extra_ldflags)
 
         shutil.rmtree(build_dir)
