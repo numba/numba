@@ -65,6 +65,10 @@ class _ListPayloadMixin(object):
         self._payload.size = value
 
     @property
+    def dirty(self):
+        return self._payload.dirty
+
+    @property
     def data(self):
         return self._payload._get_ptr_by_name('data')
 
@@ -79,16 +83,6 @@ class _ListPayloadMixin(object):
         ptr = self._gep(idx)
         data_item = self._builder.load(ptr)
         return self._datamodel.from_data(self._builder, data_item)
-
-    def setitem(self, idx, val):
-        ptr = self._gep(idx)
-        data_item = self._datamodel.as_data(self._builder, val)
-        self._builder.store(data_item, ptr)
-
-    def inititem(self, idx, val):
-        ptr = self._gep(idx)
-        data_item = self._datamodel.as_data(self._builder, val)
-        self._builder.store(data_item, ptr)
 
     def fix_index(self, idx):
         """
@@ -164,6 +158,14 @@ class ListInstance(_ListPayloadMixin):
         return get_list_payload(self._context, self._builder, self._ty, self._list)
 
     @property
+    def parent(self):
+        return self._list.parent
+
+    @parent.setter
+    def parent(self, value):
+        self._list.parent = value
+
+    @property
     def value(self):
         return self._list._getvalue()
 
@@ -171,8 +173,29 @@ class ListInstance(_ListPayloadMixin):
     def meminfo(self):
         return self._list.meminfo
 
+    def set_dirty(self, val):
+        if self._ty.reflected:
+            self._payload.dirty = cgutils.true_bit if val else cgutils.false_bit
+
+    def setitem(self, idx, val):
+        ptr = self._gep(idx)
+        data_item = self._datamodel.as_data(self._builder, val)
+        self._builder.store(data_item, ptr)
+        self.set_dirty(True)
+
+    def inititem(self, idx, val):
+        ptr = self._gep(idx)
+        data_item = self._datamodel.as_data(self._builder, val)
+        self._builder.store(data_item, ptr)
+
     @classmethod
-    def allocate(cls, context, builder, list_type, nitems):
+    def allocate_ex(cls, context, builder, list_type, nitems):
+        """
+        Allocate a ListInstance with its storage.
+        Return a (ok, instance) tuple where *ok* is a LLVM boolean and
+        *instance* is a ListInstance object (the object's contents are
+        only valid when *ok* is true).
+        """
         intp_t = context.get_value_type(types.intp)
 
         if isinstance(nitems, int):
@@ -182,23 +205,58 @@ class ListInstance(_ListPayloadMixin):
         payload_size = context.get_abi_sizeof(payload_type)
 
         itemsize = get_itemsize(context, list_type)
-        
+
+        ok = cgutils.alloca_once_value(builder, cgutils.true_bit)
+        self = cls(context, builder, list_type, None)
+
         # Total allocation size = <payload header size> + nitems * itemsize
         allocsize, ovf = cgutils.muladd_with_overflow(builder, nitems,
                                                       ir.Constant(intp_t, itemsize),
                                                       ir.Constant(intp_t, payload_size))
         with builder.if_then(ovf, likely=False):
+            builder.store(cgutils.false_bit, ok)
+
+        with builder.if_then(builder.load(ok), likely=True):
+            meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
+            with builder.if_else(cgutils.is_null(builder, meminfo),
+                                 likely=False) as (if_error, if_ok):
+                with if_error:
+                    builder.store(cgutils.false_bit, ok)
+                with if_ok:
+                    self._list.meminfo = meminfo
+                    self._list.parent = context.get_constant_null(types.pyobject)
+                    self._payload.allocated = nitems
+                    self._payload.size = ir.Constant(intp_t, 0)  # for safety
+                    self._payload.dirty = cgutils.false_bit
+
+        return builder.load(ok), self
+
+    @classmethod
+    def allocate(cls, context, builder, list_type, nitems):
+        """
+        Allocate a ListInstance with its storage.  Same as allocate_ex(),
+        but return an initialized *instance*.  If allocation failed,
+        control is transferred to the caller using the target's current
+        call convention.
+        """
+        ok, self = cls.allocate_ex(context, builder, list_type, nitems)
+        with builder.if_then(builder.not_(ok), likely=False):
             context.call_conv.return_user_exc(builder, MemoryError,
                                               ("cannot allocate list",))
+        return self
 
-        meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
-        cgutils.guard_memory_error(context, builder, meminfo,
-                                   "cannot allocate list")
-
+    @classmethod
+    def from_meminfo(cls, context, builder, list_type, meminfo):
+        """
+        Allocate a new list instance pointing to an existing payload
+        (a meminfo pointer).
+        Note the parent field has to be filled by the caller.
+        """
         self = cls(context, builder, list_type, None)
         self._list.meminfo = meminfo
-        self._payload.allocated = nitems
-        self._payload.size = ir.Constant(intp_t, 0)  # for safety
+        self._list.parent = context.get_constant_null(types.pyobject)
+        context.nrt_incref(builder, list_type, self.value)
+        # Payload is part of the meminfo, no need to touch it
         return self
 
     def resize(self, new_size):
@@ -253,6 +311,7 @@ class ListInstance(_ListPayloadMixin):
             _payload_realloc(new_allocated)
 
         self._payload.size = new_size
+        self.set_dirty(True)
 
     def move(self, dest_idx, src_idx, count):
         """
@@ -262,6 +321,7 @@ class ListInstance(_ListPayloadMixin):
         src_ptr = self._gep(src_idx)
         cgutils.memmove(self._builder, dest_ptr, src_ptr,
                         count, itemsize=self._itemsize)
+        self.set_dirty(True)
 
 
 class ListIterInstance(_ListPayloadMixin):

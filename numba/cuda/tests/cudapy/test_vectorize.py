@@ -5,6 +5,7 @@ from numba import cuda, int32, float32, float64
 from timeit import default_timer as time
 from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import CUDATestCase
 from numba import config
 
 sig = [int32(int32, int32),
@@ -17,25 +18,31 @@ if config.ENABLE_CUDASIM:
     target='cpu'
 
 
-@vectorize(sig, target=target)
-def vector_add(a, b):
-    return a + b
-
-
-cuda_ufunc = vector_add
-
 test_dtypes = np.float32, np.int32
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestCUDAVectorize(unittest.TestCase):
+class TestCUDAVectorize(CUDATestCase):
+
     def test_scalar(self):
+
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+
         a = 1.2
         b = 2.3
         c = vector_add(a, b)
         self.assertEqual(c, a + b)
 
     def test_1d(self):
+
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+
+        cuda_ufunc = vector_add
+
         # build python ufunc
         np_ufunc = np.add
 
@@ -67,6 +74,13 @@ class TestCUDAVectorize(unittest.TestCase):
         test(np.int32)
 
     def test_1d_async(self):
+
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+
+        cuda_ufunc = vector_add
+
         # build python ufunc
         np_ufunc = np.add
 
@@ -102,6 +116,13 @@ class TestCUDAVectorize(unittest.TestCase):
         test(np.int32)
 
     def test_nd(self):
+
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+
+        cuda_ufunc = vector_add
+
         def test(dtype, order, nd, size=4):
             data = np.random.random((size,) * nd).astype(dtype)
             data[data != data] = 2.4
@@ -128,6 +149,10 @@ class TestCUDAVectorize(unittest.TestCase):
         self.reduce_test2(2 ** 10 + 1)
 
     def test_output_arg(self):
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+
         A = np.arange(10, dtype=np.float32)
         B = np.arange(10, dtype=np.float32)
         C = np.empty_like(A)
@@ -135,12 +160,24 @@ class TestCUDAVectorize(unittest.TestCase):
         self.assertTrue(np.allclose(A + B, C))
 
     def reduce_test(self, n):
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+
+        cuda_ufunc = vector_add
         x = np.arange(n, dtype=np.int32)
         gold = np.add.reduce(x)
         result = cuda_ufunc.reduce(x)
         self.assertEqual(result, gold)
 
     def reduce_test2(self, n):
+
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+
+        cuda_ufunc = vector_add
+
         x = np.arange(n, dtype=np.int32)
         gold = np.add.reduce(x)
         stream = cuda.stream()
@@ -149,6 +186,12 @@ class TestCUDAVectorize(unittest.TestCase):
         self.assertEqual(result, gold)
 
     def test_auto_transfer(self):
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+
+        cuda_ufunc = vector_add
+
         n = 10
         x = np.arange(n, dtype=np.int32)
         dx = cuda.to_device(x)
@@ -156,6 +199,12 @@ class TestCUDAVectorize(unittest.TestCase):
         np.testing.assert_equal(y, x + x)
 
     def test_ufunc_output_ravel(self):
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+
+        cuda_ufunc = vector_add
+
         n = 10
         x = np.arange(n, dtype=np.int32).reshape(2, 5)
         dx = cuda.to_device(x)

@@ -93,6 +93,21 @@ class TestCase(unittest.TestCase):
         with self.assertRaises(_accepted_errors) as cm:
             yield cm
 
+    @contextlib.contextmanager
+    def assertRefCount(self, *objects):
+        """
+        A context manager that asserts the given objects have the
+        same reference counts before and after executing the
+        enclosed blocks.
+        """
+        old_refcounts = [sys.getrefcount(x) for x in objects]
+        yield
+        new_refcounts = [sys.getrefcount(x) for x in objects]
+        for old, new, obj in zip(old_refcounts, new_refcounts, objects):
+            if old != new:
+                self.fail("Refcount changed from %d to %d for object: %r"
+                          % (old, new, obj))
+
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]

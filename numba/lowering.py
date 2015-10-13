@@ -540,7 +540,7 @@ class Lower(BaseLower):
                     # Adjust argument values to pyobjects
                     if exptyp == types.ffi_forced_object:
                         self.incref(gottyp, aval)
-                        obj = self.pyapi.from_native_value(aval, gottyp,
+                        obj = self.pyapi.from_native_value(gottyp, aval,
                                                            self.env_manager)
                         newargvals.append(obj)
                         pyvals.append(obj)

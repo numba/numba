@@ -90,7 +90,7 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
         elems = [ary.load_direct(builder.load(off))
                  for off, ary in zip(offsets, arrays)]
         # Box
-        elems = [pyapi.from_native_value(v, t, env_manager)
+        elems = [pyapi.from_native_value(t, v, env_manager)
                  for v, t in zip(elems, signature.args)]
         return elems
 
@@ -100,7 +100,7 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
         # simply get caught by the Numpy ufunc machinery.
         with builder.if_then(is_ok, likely=True):
             # Unbox
-            native = pyapi.to_native_value(retval, signature.return_type)
+            native = pyapi.to_native_value(signature.return_type, retval)
             assert native.cleanup is None
             # Store
             out.store_direct(native.value, builder.load(store_offset))

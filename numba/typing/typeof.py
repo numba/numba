@@ -120,6 +120,13 @@ def _typeof_tuple(val, c):
         return
     return types.BaseTuple.from_types(tys, type(val))
 
+@typeof_impl.register(list)
+def _typeof_list(val, c):
+    if len(val) == 0:
+        raise ValueError("Cannot type empty list")
+    ty = typeof_impl(val[0], c)
+    return types.List(ty, reflected=True)
+
 @typeof_impl.register(slice)
 def _typeof_slice(val, c):
     return types.slice3_type

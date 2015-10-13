@@ -1534,6 +1534,10 @@ class _TestLoopTypes(TestCase):
     if is_on_numpy_16:
         _skip_types += 'Mm'
 
+    _ulps = {('arccos', 'F'): 2,
+             ('tanh', 'F'): 2,
+             }
+
     def _arg_for_type(self, a_letter_type, index=0):
         """return a suitable array argument for testing the letter type"""
         if a_letter_type in 'bhilq':
@@ -1605,12 +1609,15 @@ class _TestLoopTypes(TestCase):
         # Check each array (including inputs, to ensure they weren't
         # mutated).
         for c_arg, py_arg in zip(c_args, py_args):
-            prec = 'single' if c_arg.dtype.char in 'fF' else 'exact'
-            prec = 'double' if c_arg.dtype.char in 'dD' else prec
+            typechar = c_arg.dtype.char
+            ulps = self._ulps.get((ufunc.__name__, typechar), 1)
+            prec = 'single' if typechar in 'fF' else 'exact'
+            prec = 'double' if typechar in 'dD' else prec
             msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
                              "args: {2}", "expected {3}", "got {4}"])
             msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
-            self.assertPreciseEqual(py_arg, c_arg, prec=prec, msg=msg)
+            self.assertPreciseEqual(py_arg, c_arg, prec=prec, msg=msg,
+                                    ulps=ulps)
 
     @classmethod
     def _check_ufunc_loops(cls, ufunc):
