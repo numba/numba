@@ -1141,20 +1141,30 @@ class List(MutableSequence):
     """
     mutable = True
 
-    def __init__(self, dtype):
+    def __init__(self, dtype, reflected=False):
         self.dtype = dtype
-        name = "list(%s)" % (self.dtype,)
+        self.reflected = reflected
+        cls_name = "reflected list" if reflected else "list"
+        name = "%s(%s)" % (cls_name, self.dtype)
         super(List, self).__init__(name=name, param=True)
+
+    def copy(self, dtype=None, reflected=None):
+        if dtype is None:
+            dtype = self.dtype
+        if reflected is None:
+            reflected = self.reflected
+        return List(dtype, reflected)
 
     def unify(self, typingctx, other):
         if isinstance(other, List):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            reflected = self.reflected or other.reflected
             if dtype != pyobject:
-                return List(dtype=dtype)
+                return List(dtype, reflected)
 
     @property
     def key(self):
-        return self.dtype
+        return self.dtype, self.reflected
 
     @property
     def iterator_type(self):

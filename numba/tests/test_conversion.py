@@ -10,6 +10,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, jit, numpy_support
+from .support import TestCase
 
 
 def identity(x):
@@ -25,7 +26,7 @@ def foobar(x, y, z):
     return x
 
 
-class TestConversion(unittest.TestCase):
+class TestConversion(TestCase):
     """
     Testing Python to Native conversion
     """
@@ -161,19 +162,17 @@ class TestConversion(unittest.TestCase):
         st1.row = np.arange(st1.size) + 1
         st1.col = np.arange(st1.size) + 1
 
-        old_refcnt_st1 = sys.getrefcount(st1)
+        with self.assertRefCount(st1):
+            test_fail_args = ((st1, -1, 1), (st1, 1, -1))
 
-        test_fail_args = ((st1, -1, 1), (st1, 1, -1))
+            # TypeError is for 2.6
+            exc_type = OverflowError if sys.version_info >= (2, 7) else TypeError
+            for a, b, c in test_fail_args:
+                with self.assertRaises(exc_type):
+                    cfunc(a, b, c)
 
-        # TypeError is for 2.6
-        exc_type = OverflowError if sys.version_info >= (2, 7) else TypeError
-        for a, b, c in test_fail_args:
-            with self.assertRaises(exc_type):
-                cfunc(a, b, c)
-
-        del test_fail_args, a, b, c
-        gc.collect()
-        self.assertEqual(sys.getrefcount(st1), old_refcnt_st1)
+            del test_fail_args, a, b, c
+            gc.collect()
 
     # test switch logic of callwraper.py:build_wrapper() with no function parameters
     def test_with_no_parameters(self):
@@ -191,27 +190,28 @@ class TestConversion(unittest.TestCase):
         # to PyLong_AsUnsignedLongLong
         exc_type = OverflowError if sys.version_info >= (2, 7) else TypeError
 
-        def _refcounts(obj):
-            refs = [sys.getrefcount(obj)]
+        def _objects(obj):
+            objs = [obj]
             if isinstance(obj, tuple):
-                refs += [_refcounts(v) for v in obj]
-            return refs
+                for v in obj:
+                    objs += _objects(v)
+            return objs
+
+        objects = _objects(obj)
 
         cres = compile_isolated(f, (typ, types.uint32))
-        old_refcnt = _refcounts(obj)
-        cres.entry_point(obj, 1)
-        self.assertEqual(_refcounts(obj), old_refcnt)
-        with self.assertRaises(exc_type):
-            cres.entry_point(obj, -1)
-        self.assertEqual(_refcounts(obj), old_refcnt)
+        with self.assertRefCount(*objects):
+            cres.entry_point(obj, 1)
+        with self.assertRefCount(*objects):
+            with self.assertRaises(exc_type):
+                cres.entry_point(obj, -1)
 
         cres = compile_isolated(f, (types.uint32, typ))
-        old_refcnt = _refcounts(obj)
-        cres.entry_point(1, obj)
-        self.assertEqual(_refcounts(obj), old_refcnt)
-        with self.assertRaises(exc_type):
-            cres.entry_point(-1, obj)
-        self.assertEqual(_refcounts(obj), old_refcnt)
+        with self.assertRefCount(*objects):
+            cres.entry_point(1, obj)
+        with self.assertRefCount(*objects):
+            with self.assertRaises(exc_type):
+                cres.entry_point(-1, obj)
 
     @unittest.skipUnless(sys.version_info >= (2, 7), "test uses memoryview")
     def test_cleanup_buffer(self):

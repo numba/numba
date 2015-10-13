@@ -98,12 +98,12 @@ Creating and returning lists from JIT-compiled functions is supported,
 as well as all methods and operations.
 
 .. note::
-   Passing lists from Python into JIT-compiled functions is unsupported,
-   as mutations done by Numba code would not be visible from the Python
-   interpreter.
+   When passing a list into a JIT-compiled function, any modifications
+   made to the list will not be visible by the Python interpreter until
+   the function returns.
 
 .. warning::
-   Sorting currently uses a quicksort algorithm, which has different
+   List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
 
 
