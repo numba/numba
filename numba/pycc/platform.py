@@ -37,6 +37,7 @@ class Toolchain(object):
 
     def __init__(self):
         self.debug = False
+        self._cleanup()
         self._compiler = new_compiler()
         customize_compiler(self._compiler)
         self._build_ext = build_ext(Distribution())
