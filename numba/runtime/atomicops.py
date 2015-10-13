@@ -141,7 +141,7 @@ def compile_nrt_functions(ctx):
     Compile all LLVM NRT functions and return a library containing them.
     The library is created using the given target context.
     """
-    codegen = ctx.jit_codegen()
+    codegen = ctx.codegen()
     library = codegen.create_library("nrt")
 
     # Implement LLVM module with atomic ops

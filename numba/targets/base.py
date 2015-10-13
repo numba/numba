@@ -829,7 +829,7 @@ class BaseContext(object):
         # Compile
         from numba import compiler
 
-        codegen = self.jit_codegen()
+        codegen = self.codegen()
         library = codegen.create_library(impl.__name__)
         flags = compiler.Flags()
         flags.set('no_compile')

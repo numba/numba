@@ -1,50 +1,59 @@
 from __future__ import print_function, absolute_import
-import re
+
 import inspect
+import os
+import re
+import warnings
+
 from numba import sigutils
+from .compiler import ExportEntry
 
 # Registry is okay to be a global because we are using pycc as a standalone
 # commandline tool.
-registry = []
+export_registry = []
 
 
 def export(prototype):
+    warnings.warn("export() is deprecated, use the numba.pycc.CC API instead",
+                  DeprecationWarning, stacklevel=2)
+
     sym, sig = parse_prototype(prototype)
 
     def wrappped(func):
-        module = inspect.getmodule(func).__name__
         signature = sigutils.parse_signature(sig)
-        entry = ExportEntry(symbol=sym, signature=signature, function=func,
-                            module=module)
-        registry.append(entry)
+        entry = ExportEntry(symbol=sym, signature=signature, function=func)
+        export_registry.append(entry)
 
     return wrappped
 
 
 def exportmany(prototypes):
+    warnings.warn("exportmany() is deprecated, use the numba.pycc.CC API instead",
+                  DeprecationWarning, stacklevel=2)
+
     def wrapped(func):
         for proto in prototypes:
             export(proto)(func)
     return wrapped
 
+
+def process_input_files(inputs):
+    """
+    Read input source files for execution of legacy @export / @exportmany
+    decorators.
+    """
+    for ifile in inputs:
+        with open(ifile) as fin:
+            exec(compile(fin.read(), ifile, 'exec'))
+
+
+def clear_export_registry():
+    export_registry[:] = []
+
+
 # --------------------------------- Internal ---------------------------------
 
 re_symbol = re.compile(r'[_a-z][_a-z0-9]*', re.I)
-
-
-class ExportEntry(object):
-    """
-    A simple record for exporting symbols.
-    """
-
-    def __init__(self, symbol, signature, function, module):
-        self.symbol = symbol
-        self.signature = signature
-        self.function = function
-        self.module = module
-
-    def __repr__(self):
-        return "ExportEntry('%s', '%s')" % (self.symbol, self.signature)
 
 
 def parse_prototype(text):

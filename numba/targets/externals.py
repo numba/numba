@@ -34,7 +34,7 @@ def compile_multi3(context):
     Compile the multi3() helper function used by LLVM
     for 128-bit multiplication on 32-bit platforms.
     """
-    codegen = context.jit_codegen()
+    codegen = context.codegen()
     library = codegen.create_library("multi3")
 
     ir_mod = library.create_ir_module("multi3")

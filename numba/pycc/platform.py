@@ -33,13 +33,22 @@ class _DummyExtension(object):
 
 class Toolchain(object):
 
-    def __init__(self, debug=False):
+    def __init__(self):
+        self.debug = False
         self._compiler = new_compiler()
-        log.set_threshold(log.DEBUG if debug else log.INFO)
         customize_compiler(self._compiler)
         self._build_ext = build_ext(Distribution())
         self._build_ext.finalize_options()
         self._py_lib_dirs = self._build_ext.library_dirs
+
+    @property
+    def debug(self):
+        return self._debug
+
+    @debug.setter
+    def debug(self, value):
+        self._debug = value
+        log.set_threshold(log.DEBUG if value else log.WARN)
 
     def link_shared(self, output, objects, libraries=(),
                     library_dirs=(), export_symbols=()):
@@ -70,3 +79,9 @@ class Toolchain(object):
         Get the library directories necessary to link with Python.
         """
         return list(self._py_lib_dirs)
+
+    def get_ext_filename(self, ext_name):
+        """
+        """
+        return self._build_ext.get_ext_filename(ext_name)
+
