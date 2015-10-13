@@ -56,6 +56,11 @@ class Toolchain(object):
         # to print commands executed by distutils
         log.set_threshold(log.INFO if value else log.WARN)
 
+    def _cleanup(self):
+        # Clean up temporary directory left by Numpy's distutils
+        # (otherwise it may be left over if run with multiprocessing)
+        np_misc.clean_up_temporary_directory()
+
     def compile_objects(self, sources, output_dir,
                         include_dirs=(), depends=(), macros=(),
                         extra_cflags=None):
@@ -76,6 +81,7 @@ class Toolchain(object):
                                          depends=depends,
                                          macros=macros or [],
                                          extra_preargs=extra_cflags)
+        self._cleanup()
         return objects
 
     def link_shared(self, output, objects, libraries=(),
@@ -91,6 +97,7 @@ class Toolchain(object):
                             libraries, library_dirs,
                             export_symbols=export_symbols,
                             extra_preargs=extra_ldflags)
+        self._cleanup()
 
     def get_python_libraries(self):
         """
