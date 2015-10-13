@@ -3,8 +3,6 @@ include README.rst setup.py runtests.py versioneer.py CHANGE_LOG AUTHORS LICENSE
 recursive-include numba *.c *.cpp *.h *.hpp *.inc
 recursive-include docs *.ipynb *.txt *.py Makefile *.rst
 recursive-include examples *.py
-# Include test files even if they aren't part of a package
-recursive-include numba/tests *.py
 
 prune docs/_build
 prune docs/gh-pages
