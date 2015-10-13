@@ -640,12 +640,12 @@ class TestOperators(TestCase):
                           'complex_array': 'run_binop_array_complex',
                           })
 
+    # NOTE: truediv doesn't handle int arrays in Numpy 1.10+
     generate_binop_tests(locals(),
                          ('div', 'idiv', 'truediv', 'itruediv'),
                          {'ints': 'run_binop_ints',
                           'floats': 'run_binop_floats',
                           'complex': 'run_binop_complex',
-                          'ints_array': 'run_binop_array_ints',
                           'floats_array': 'run_binop_array_floats',
                           'complex_array': 'run_binop_array_complex',
                           })
