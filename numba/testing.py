@@ -29,12 +29,10 @@ def discover_tests(startdir):
     return suite
 
 
-def run_tests(suite, xmloutput=None, verbosity=1, nomultiproc=False):
+def run_tests(xmloutput=None, verbosity=1, nomultiproc=False):
     """
     args
     ----
-    - suite [TestSuite]
-        A suite of all tests to run
     - xmloutput [str or None]
         Path of XML output directory (optional)
     - verbosity [int]
@@ -49,49 +47,15 @@ def run_tests(suite, xmloutput=None, verbosity=1, nomultiproc=False):
         runner = xmlrunner.XMLTestRunner(output=xmloutput)
     else:
         runner = None
-    prog = NumbaTestProgram(suite=suite, testRunner=runner, exit=False,
+    prog = NumbaTestProgram(module=None,
+                            testRunner=runner, exit=False,
                             verbosity=verbosity,
                             nomultiproc=nomultiproc)
     return prog.result
 
 
 def test(**kwargs):
-    """
-    Run all tests under ``numba.tests``.
-
-    kwargs
-    ------
-    - descriptions
-    - verbosity
-    - buffer
-    - failfast
-    - xmloutput [str]
-        Path of XML output directory
-    """
-    from numba import cuda
-
-    suite = discover_tests("numba.tests")
-    ok = run_tests(suite, **kwargs).wasSuccessful()
-    if not ok:
-        return ok
-
-    # Test no cuda tests
-    from numba.cuda.tests.nocuda.runtests import test as nocuda_test
-    ok = nocuda_test()
-
-    # Test CUDA
-    if ok:
-        if cuda.is_available():
-            gpus = cuda.list_devices()
-            if gpus and gpus[0].compute_capability >= (2, 0):
-                print("== Run CUDA tests ==")
-                ok = cuda.test()
-            else:
-                print("== Skipped CUDA tests because GPU CC < 2.0 ==")
-        else:
-            print("== Skipped CUDA tests ==")
-
-    return ok
+    return run_tests(**kwargs).wasSuccessful()
 
 
 if __name__ == "__main__":

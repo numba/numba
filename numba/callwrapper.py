@@ -10,10 +10,11 @@ class _ArgManager(object):
     """
     A utility class to handle argument unboxing and cleanup
     """
-    def __init__(self, context, builder, api, endblk, nargs):
+    def __init__(self, context, builder, api, env_manager, endblk, nargs):
         self.context = context
         self.builder = builder
         self.api = api
+        self.env_manager = env_manager
         self.arg_count = 0  # how many function arguments have been processed
         self.cleanups = []
         self.nextblk = endblk
@@ -28,26 +29,33 @@ class _ArgManager(object):
             arg2.err -> arg1.err -> arg0.err -> arg.end (returns)
         """
         # Unbox argument
-        native = self.api.to_native_value(self.builder.load(obj), ty)
+        native = self.api.to_native_value(ty, obj)
 
         # If an error occurred, go to the cleanup block for the previous argument.
         with cgutils.if_unlikely(self.builder, native.is_error):
             self.builder.branch(self.nextblk)
 
-        # Write the cleanup block for this argument
-        cleanupblk = self.builder.append_basic_block("arg%d.err" % self.arg_count)
-        with self.builder.goto_block(cleanupblk):
-            # NRT cleanup
+        # Define the cleanup function for the argument
+        def cleanup_arg():
+            # Native value reflection
+            self.api.reflect_native_value(ty, native.value, self.env_manager)
 
-            if self.context.enable_nrt:
-                def nrt_cleanup():
-                    self.context.nrt_decref(self.builder, ty, native.value)
-                nrt_cleanup()
-                self.cleanups.append(nrt_cleanup)
-
+            # Native value cleanup
             if native.cleanup is not None:
                 native.cleanup()
-                self.cleanups.append(native.cleanup)
+
+            # NRT cleanup
+            # (happens after the native value cleanup as the latter
+            #  may need the native value)
+            if self.context.enable_nrt:
+                self.context.nrt_decref(self.builder, ty, native.value)
+
+        self.cleanups.append(cleanup_arg)
+
+        # Write the on-error cleanup block for this argument
+        cleanupblk = self.builder.append_basic_block("arg%d.err" % self.arg_count)
+        with self.builder.goto_block(cleanupblk):
+            cleanup_arg()
             # Go to next cleanup block
             self.builder.branch(self.nextblk)
 
@@ -56,7 +64,8 @@ class _ArgManager(object):
         return native.value
 
     def emit_cleanup(self):
-        """Emit the cleanup code after we are done with the arguments
+        """
+        Emit the cleanup code after returning from the wrapped function.
         """
         for dtor in self.cleanups:
             dtor()
@@ -129,18 +138,19 @@ class PyCallWrapper(object):
         with builder.goto_block(endblk):
             builder.ret(api.get_null_object())
 
-        cleanup_manager = _ArgManager(self.context, builder, api, endblk, nargs)
+        # Extract the Environment object from the Closure
+        envptr, env_manager = self.get_env(api, builder, closure)
+
+        cleanup_manager = _ArgManager(self.context, builder, api,
+                                      env_manager, endblk, nargs)
 
         innerargs = []
         for obj, ty in zip(objs, self.fndesc.argtypes):
-            val = cleanup_manager.add_arg(obj, ty)
+            val = cleanup_manager.add_arg(builder.load(obj), ty)
             innerargs.append(val)
 
         if self.release_gil:
             cleanup_manager = _GilManager(builder, api, cleanup_manager)
-
-        # Extract the Environment object from the Closure
-        envptr, env_manager = self.get_env(api, builder, closure)
 
         status, retval = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
@@ -157,7 +167,7 @@ class PyCallWrapper(object):
                 api.return_none()
 
             retty = self._simplified_return_type()
-            obj = api.from_native_return(retval, retty, env_manager)
+            obj = api.from_native_return(retty, retval, env_manager)
             builder.ret(obj)
 
         # Error out

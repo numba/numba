@@ -127,8 +127,12 @@ class TestRecordDtype(unittest.TestCase):
 
         for i in range(self.sample1d.size):
             got = self.sample1d.copy()
-            expect = np.recarray(got.shape, got.dtype)
-            expect[:] = got
+
+            if numpy_support.version <= (1, 9):
+                expect = np.recarray(got.shape, got.dtype)
+                expect[:] = got
+            else:
+                expect = got.copy()
 
             cfunc(got, i, value)
             pyfunc(expect, i, value)

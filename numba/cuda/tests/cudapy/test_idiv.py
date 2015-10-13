@@ -4,22 +4,15 @@ from numba import cuda, float32, float64, int32
 from numba.cuda.testing import unittest
 
 
-@cuda.jit(argtypes=[float32[:, :], int32, int32])
-def div(grid, l_x, l_y):
-    for x in range(l_x):
-        for y in range(l_y):
-            grid[x, y] /= 2.0
-
-
-@cuda.jit(argtypes=[float64[:, :], int32, int32])
-def div_double(grid, l_x, l_y):
-    for x in range(l_x):
-        for y in range(l_y):
-            grid[x, y] /= 2.0
-
-
 class TestCudaIDiv(unittest.TestCase):
     def test_inplace_div(self):
+
+        @cuda.jit(argtypes=[float32[:, :], int32, int32])
+        def div(grid, l_x, l_y):
+            for x in range(l_x):
+                for y in range(l_y):
+                    grid[x, y] /= 2.0
+
         x = np.ones((2, 2), dtype=np.float32)
         grid = cuda.to_device(x)
         div(grid, 2, 2)
@@ -28,6 +21,13 @@ class TestCudaIDiv(unittest.TestCase):
 
 
     def test_inplace_div_double(self):
+
+        @cuda.jit(argtypes=[float64[:, :], int32, int32])
+        def div_double(grid, l_x, l_y):
+            for x in range(l_x):
+                for y in range(l_y):
+                    grid[x, y] /= 2.0
+
         x = np.ones((2, 2), dtype=np.float64)
         grid = cuda.to_device(x)
         div_double(grid, 2, 2)
