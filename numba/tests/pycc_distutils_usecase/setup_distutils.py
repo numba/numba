@@ -1,4 +1,4 @@
-from setuptools import setup
+from distutils.core import setup
 
 from source_module import cc
 
