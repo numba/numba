@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from distutils.ccompiler import CCompiler, new_compiler
 from distutils.command.build_ext import build_ext
-from distutils.dist import Distribution
 from distutils.sysconfig import customize_compiler
 from distutils import log
 
@@ -36,6 +35,8 @@ class _DummyExtension(object):
 class Toolchain(object):
 
     def __init__(self):
+        # Need to import it here since setuptools may monkeypatch it
+        from distutils.dist import Distribution
         self.debug = False
         self._cleanup()
         self._compiler = new_compiler()

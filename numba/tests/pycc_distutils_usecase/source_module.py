@@ -1,12 +1,9 @@
-import cmath
-
 import numpy as np
 
 from numba.pycc import CC
 
 
 cc = CC('pycc_compiled_module')
-cc.use_nrt = True
 
 _const = 42
 

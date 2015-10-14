@@ -10,6 +10,10 @@ import tempfile
 from ctypes import *
 
 import numpy as np
+try:
+    import setuptools
+except ImportError:
+    setuptools = None
 
 from numba import unittest_support as unittest
 from numba.pycc import find_shared_ending, find_pyext_ending, main
@@ -233,7 +237,7 @@ class TestDistutilsSupport(TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmpdir)
 
-    def test_setup_py(self):
+    def check_setup_py(self, setup_py_file):
         # Compute PYTHONPATH to ensure the child processes see this Numba
         import numba
         numba_path = os.path.dirname(os.path.dirname(numba.__file__))
@@ -255,7 +259,7 @@ class TestDistutilsSupport(TestCase):
                 self.fail("python failed with the following output:\n%s"
                           % out.decode('utf-8', 'ignore'))
 
-        run_python(["setup.py", "build_ext", "--inplace"])
+        run_python([setup_py_file, "build_ext", "--inplace"])
         code = """if 1:
             import pycc_compiled_module as lib
             assert lib.get_const() == 42
@@ -263,6 +267,13 @@ class TestDistutilsSupport(TestCase):
             assert list(res) == [1.0, 1.0, 1.0]
             """
         run_python(["-c", code])
+
+    def test_setup_py_distutils(self):
+        self.check_setup_py("setup_distutils.py")
+
+    @unittest.skipIf(setuptools is None, "test needs setuptools")
+    def test_setup_py_setuptools(self):
+        self.check_setup_py("setup_setuptools.py")
 
 
 if __name__ == "__main__":
