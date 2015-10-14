@@ -15,6 +15,11 @@ from .platform import Toolchain
 
 
 class CC(object):
+    """
+    An ahead-of-time compiler to create extension modules that don't
+    depend on Numba.
+    """
+
     # NOTE: using ccache can speed up repetitive builds
     # (especially for the mixin modules)
 
@@ -56,14 +61,20 @@ class CC(object):
         # By default, output in directory of caller module
         self._output_dir = os.path.dirname(self._source_path)
         self._output_file = self._toolchain.get_ext_filename(basename)
-        self._use_nrt = False
+        self._use_nrt = True
 
     @property
     def name(self):
+        """
+        The name of the extension module to create.
+        """
         return self._basename
 
     @property
     def output_file(self):
+        """
+        The specific output file (a DLL) that will be generated.
+        """
         return self._output_file
 
     @output_file.setter
@@ -72,6 +83,9 @@ class CC(object):
 
     @property
     def output_dir(self):
+        """
+        The directory the output file will be put in.
+        """
         return self._output_dir
 
     @output_dir.setter
@@ -88,6 +102,9 @@ class CC(object):
 
     @property
     def debug(self):
+        """
+        Whether to display detailed information when compiling.
+        """
         return self._debug
 
     @debug.setter
@@ -96,6 +113,9 @@ class CC(object):
         self._toolchain.debug = value
 
     def export(self, exported_name, sig):
+        """
+        Mark a function for exporting in the extension module.
+        """
         sig = sigutils.parse_signature(sig)
         if exported_name in self._exported_functions:
             raise KeyError("duplicated export symbol %s" % (exported_name))
@@ -162,6 +182,9 @@ class CC(object):
         return [temp_obj], compiler.dll_exports
 
     def compile(self):
+        """
+        Compile the extension module.
+        """
         build_dir = tempfile.mkdtemp(prefix='pycc-build-%s-' % self._basename)
 
         # Compile object file
@@ -183,6 +206,10 @@ class CC(object):
         shutil.rmtree(build_dir)
 
     def distutils_extension(self, **kwargs):
+        """
+        Create a distutils extension object that can be used in your
+        setup.py.
+        """
         macros = kwargs.pop('macros', []) + self._get_mixin_defines()
         depends = kwargs.pop('depends', []) + [self._source_path]
         extra_compile_args = (kwargs.pop('extra_compile_args', [])
@@ -212,6 +239,11 @@ class CC(object):
 
 
 class _CCExtension(Extension):
+    """
+    A Numba-specific Extension subclass to LLVM-compile pure Python code
+    to an extension module.
+    """
+
     _cc = None
     _distutils_monkey_patched = False
 
