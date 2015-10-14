@@ -332,7 +332,8 @@ class PythonAPI(object):
         """
         # A LLVM global variable is implicitly a pointer to the declared
         # type, so fix up by using pyobj.pointee.
-        return self.context.get_c_value(self.builder, self.pyobj.pointee, name)
+        return self.context.get_c_value(self.builder, self.pyobj.pointee, name,
+                                        dllimport=True)
 
     def raise_missing_global_error(self, name):
         msg = "global name '%s' is not defined" % name
