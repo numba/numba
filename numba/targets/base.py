@@ -1,6 +1,8 @@
 from __future__ import print_function
+
 from collections import namedtuple, defaultdict
 import copy
+import sys
 from types import MethodType
 
 import numpy
@@ -151,6 +153,9 @@ class BaseContext(object):
 
     # NRT
     enable_nrt = False
+
+    # PYCC
+    aot_mode = False
 
     # Error model for various operations (only FP exceptions currently)
     error_model = None
@@ -772,16 +777,20 @@ class BaseContext(object):
         impl = self.get_function(bool, typing.signature(types.boolean, typ))
         return impl(builder, (val,))
 
-    def get_c_value(self, builder, typ, name):
+    def get_c_value(self, builder, typ, name, dllimport=False):
         """
         Get a global value through its C-accessible *name*, with the given
         LLVM type.
+        If *dllimport* is true, the symbol will be marked as imported
+        from a DLL (necessary for AOT compilation under Windows).
         """
         module = builder.function.module
         try:
             gv = module.get_global_variable_named(name)
         except LLVMException:
             gv = module.add_global_variable(typ, name)
+            if dllimport and self.aot_mode and sys.platform == 'win32':
+                gv.storage_class = "dllimport"
         return gv
 
     def call_external_function(self, builder, callee, argtys, args):
