@@ -185,6 +185,9 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, 987.0 * 321.0)
             res = lib.square(5)
             self.assertPreciseEqual(res, 25)
+            self.assertIs(lib.get_none(), None)
+            with self.assertRaises(ZeroDivisionError):
+                lib.div(1, 0)
 
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:

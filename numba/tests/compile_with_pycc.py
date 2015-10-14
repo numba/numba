@@ -18,6 +18,15 @@ cc.use_nrt = False
 def mult(a, b):
     return a * b
 
+# Test imported C globals such as Py_None, PyExc_ZeroDivisionError
+@cc.export('get_none', 'none()')
+def get_none():
+    return None
+
+@cc.export('div', 'f8(f8, f8)')
+def div(x, y):
+    return x / y
+
 _two = 2
 
 # This one can't be compiled by the legacy API as it doesn't execute
