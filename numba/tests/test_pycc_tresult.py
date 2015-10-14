@@ -240,7 +240,8 @@ class TestDistutilsSupport(TestCase):
     def check_setup_py(self, setup_py_file):
         # Compute PYTHONPATH to ensure the child processes see this Numba
         import numba
-        numba_path = os.path.dirname(os.path.dirname(numba.__file__))
+        numba_path = os.path.abspath(os.path.dirname(
+                                     os.path.dirname(numba.__file__)))
         env = dict(os.environ)
         if env.get('PYTHONPATH', ''):
             env['PYTHONPATH'] = numba_path + os.pathsep + env['PYTHONPATH']
