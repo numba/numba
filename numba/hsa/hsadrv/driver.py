@@ -459,7 +459,7 @@ class Agent(HsaWrapper):
         group_segment_size = (ctypes.c_uint32(-1)
                               if group_segment_size is None
                               else group_segment_size)
-        hsa.hsa_queue_create(self._id, 2, queue_type, cb, data,
+        hsa.hsa_queue_create(self._id, size, queue_type, cb, data,
                              private_segment_size, group_segment_size,
                              ctypes.byref(result))
 
