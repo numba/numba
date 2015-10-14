@@ -270,6 +270,9 @@ class TestDistutilsSupport(TestCase):
         run_python(["-c", code])
 
     def test_setup_py_distutils(self):
+        if sys.version_info < (3,) and sys.platform == "win32":
+            # See e.g. https://stackoverflow.com/questions/28931875/problems-finding-vcvarsall-bat-when-using-distutils
+            self.skipTest("must use setuptools to build extensions for Python 2")
         self.check_setup_py("setup_distutils.py")
 
     @unittest.skipIf(setuptools is None, "test needs setuptools")
