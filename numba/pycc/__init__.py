@@ -28,7 +28,8 @@ def get_ending(args):
 
 def main(args=None):
     import argparse
-    parser = argparse.ArgumentParser(description="Compile Python modules to a single shared library")
+    parser = argparse.ArgumentParser(
+        description="DEPRECATED - Compile Python modules to a single shared library")
     parser.add_argument("inputs", nargs='+', help="Input file(s)")
     parser.add_argument("-o", nargs=1, dest="output",
                         help="Output file  (default is name of first input -- with new ending)")
@@ -52,6 +53,9 @@ def main(args=None):
     logger = logging.getLogger(__name__)
     if args.debug:
         logger.setLevel(logging.DEBUG)
+
+    logger.warn("The 'pycc' script is DEPRECATED; "
+                "please use the numba.pycc.CC API instead")
 
     if args.output:
         args.output = args.output[0]

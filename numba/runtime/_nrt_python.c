@@ -94,7 +94,7 @@ void pyobject_dtor(void *ptr, void* info) {
 
 
 static
-MemInfo* meminfo_new_from_pyobject(void *data, PyObject *ownerobj) {
+NRT_MemInfo *meminfo_new_from_pyobject(void *data, PyObject *ownerobj) {
     size_t dummy_size = 0;
     Py_INCREF(ownerobj);
     return NRT_MemInfo_new(data, dummy_size, pyobject_dtor, ownerobj);
@@ -104,13 +104,12 @@ MemInfo* meminfo_new_from_pyobject(void *data, PyObject *ownerobj) {
 /*
  * Create a new MemInfo with a owner PyObject
  */
-static
-PyObject*
+static PyObject *
 meminfo_new(PyObject *self, PyObject *args) {
     PyObject *addr_data_obj;
     void *addr_data;
     PyObject *ownerobj;
-    MemInfo *mi;
+    NRT_MemInfo *mi;
     if (!PyArg_ParseTuple(args, "OO", &addr_data_obj, &ownerobj)) {
         return NULL;
     }
@@ -123,10 +122,9 @@ meminfo_new(PyObject *self, PyObject *args) {
 /*
  * Create a new MemInfo with a new NRT allocation
  */
-static
-PyObject*
+static PyObject *
 meminfo_alloc(PyObject *self, PyObject *args) {
-    MemInfo *mi;
+    NRT_MemInfo *mi;
     Py_ssize_t size;
     if (!PyArg_ParseTuple(args, "n", &size)) {
         return NULL;
@@ -139,10 +137,9 @@ meminfo_alloc(PyObject *self, PyObject *args) {
  * Like meminfo_alloc but set memory to zero after allocation and before
  * deallocation.
  */
-static
-PyObject*
+static PyObject *
 meminfo_alloc_safe(PyObject *self, PyObject *args) {
-    MemInfo *mi;
+    NRT_MemInfo *mi;
     Py_ssize_t size;
     if (!PyArg_ParseTuple(args, "n", &size)) {
         return NULL;
@@ -153,7 +150,7 @@ meminfo_alloc_safe(PyObject *self, PyObject *args) {
 
 typedef struct {
     PyObject_HEAD
-    MemInfo *meminfo;
+    NRT_MemInfo *meminfo;
 } MemInfoObject;
 
 static
@@ -166,7 +163,7 @@ int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
     }
     raw_ptr = PyLong_AsVoidPtr(raw_ptr_obj);
     if(PyErr_Occurred()) return -1;
-    self->meminfo = (MemInfo*)raw_ptr;
+    self->meminfo = (NRT_MemInfo *)raw_ptr;
     assert (NRT_MemInfo_refcount(self->meminfo) > 0 && "0 refcount");
     return 0;
 }
@@ -177,7 +174,7 @@ int MemInfo_getbuffer(PyObject *exporter, Py_buffer *view, int flags) {
     int readonly = 0;
 
     MemInfoObject *miobj = (MemInfoObject*)exporter;
-    MemInfo *mi = miobj->meminfo;
+    NRT_MemInfo *mi = miobj->meminfo;
 
     buf = NRT_MemInfo_data(mi);
     len = NRT_MemInfo_size(mi);
@@ -188,7 +185,7 @@ Py_ssize_t MemInfo_rdwrbufferproc(PyObject *self, Py_ssize_t segment,
                                   void **ptrptr)
 {
     MemInfoObject *mio = (MemInfoObject *)self;
-    MemInfo *mi = mio->meminfo;
+    NRT_MemInfo *mi = mio->meminfo;
     if (segment != 0) {
         PyErr_SetString(PyExc_TypeError, "MemInfo only has 1 segment");
         return -1;
@@ -199,7 +196,7 @@ Py_ssize_t MemInfo_rdwrbufferproc(PyObject *self, Py_ssize_t segment,
 
 Py_ssize_t MemInfo_segcountproc(PyObject *self, Py_ssize_t *lenp) {
     MemInfoObject *mio = (MemInfoObject *)self;
-    MemInfo *mi = mio->meminfo;
+    NRT_MemInfo *mi = mio->meminfo;
     if (lenp) {
         *lenp = NRT_MemInfo_size(mi);
     }
@@ -510,14 +507,14 @@ NRT_adapt_buffer_from_python(Py_buffer *buf, arystruct_t *arystruct)
 }
 
 static void
-NRT_incref(MemInfo* mi) {
+NRT_incref(NRT_MemInfo* mi) {
     if (mi) {
         NRT_MemInfo_acquire(mi);
     }
 }
 
 static void
-NRT_decref(MemInfo* mi) {
+NRT_decref(NRT_MemInfo* mi) {
     if (mi) {
         NRT_MemInfo_release(mi);
     }

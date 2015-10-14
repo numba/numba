@@ -26,11 +26,11 @@ meminfo_data_ty = ir.FunctionType(_pointer_type, [_pointer_type])
 
 def _define_nrt_meminfo_data(module):
     """
-    Implement NRT_MemInfo_data in the module.  This allows inlined lookup
-    of the data pointer.
+    Implement NRT_MemInfo_data_fast in the module.  This allows LLVM
+    to inline lookup of the data pointer.
     """
     fn = module.get_or_insert_function(meminfo_data_ty,
-                                       name="NRT_MemInfo_data")
+                                       name="NRT_MemInfo_data_fast")
     builder = ir.IRBuilder(fn.append_basic_block())
     [ptr] = fn.args
     struct_ptr = builder.bitcast(ptr, _meminfo_struct_type.as_pointer())
@@ -109,7 +109,7 @@ def _define_atomic_inc_dec(module, op, ordering):
     return fn_atomic
 
 
-def _define_atomic_cmpxchg(module, ordering):
+def _define_atomic_cas(module, ordering):
     """Define a llvm function for atomic compare-and-swap.
     The generated function is a direct wrapper of the LLVM cmpxchg with the
     difference that the a int indicate success (1) or failure (0) is returned
@@ -136,10 +136,10 @@ def _define_atomic_cmpxchg(module, ordering):
     return fn_cas
 
 
-def compile_nrt_functions(ctx):
+def create_nrt_module(ctx):
     """
-    Compile all LLVM NRT functions and return a library containing them.
-    The library is created using the given target context.
+    Create an IR module defining the LLVM NRT functions.
+    A (IR module, library) tuple is returned.
     """
     codegen = ctx.codegen()
     library = codegen.create_library("nrt")
@@ -149,11 +149,20 @@ def compile_nrt_functions(ctx):
 
     atomic_inc = _define_atomic_inc_dec(ir_mod, "add", ordering='monotonic')
     atomic_dec = _define_atomic_inc_dec(ir_mod, "sub", ordering='monotonic')
-    _define_atomic_cmpxchg(ir_mod, ordering='monotonic')
+    _define_atomic_cas(ir_mod, ordering='monotonic')
 
     _define_nrt_meminfo_data(ir_mod)
     _define_nrt_incref(ir_mod, atomic_inc)
     _define_nrt_decref(ir_mod, atomic_dec)
+
+    return ir_mod, library
+
+def compile_nrt_functions(ctx):
+    """
+    Compile all LLVM NRT functions and return a library containing them.
+    The library is created using the given target context.
+    """
+    ir_mod, library = create_nrt_module(ctx)
 
     library.add_ir_module(ir_mod)
     library.finalize()

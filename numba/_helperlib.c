@@ -1,3 +1,9 @@
+/*
+ * Helper functions used by Numba at runtime.
+ * This C file is meant to be included after defining the
+ * NUMBA_EXPORT_FUNC() and NUMBA_EXPORT_DATA() macros.
+ */
+
 #include "_pymodule.h"
 #include <stdio.h>
 #include <math.h>
@@ -38,14 +44,14 @@ typedef struct {
     double gauss;
 } rnd_state_t;
 
-static rnd_state_t py_random_state;
-static rnd_state_t np_random_state;
+NUMBA_EXPORT_DATA(rnd_state_t) numba_py_random_state;
+NUMBA_EXPORT_DATA(rnd_state_t) numba_np_random_state;
 
 /* Some code portions below from CPython's _randommodule.c, some others
    from Numpy's and Jean-Sebastien Roy's randomkit.c. */
 
-static void
-Numba_rnd_shuffle(rnd_state_t *state)
+NUMBA_EXPORT_FUNC(void)
+numba_rnd_shuffle(rnd_state_t *state)
 {
     int i;
     unsigned int y;
@@ -66,8 +72,8 @@ Numba_rnd_shuffle(rnd_state_t *state)
 }
 
 /* Initialize mt[] with an integer seed */
-static void
-Numba_rnd_init(rnd_state_t *state, unsigned int seed)
+NUMBA_EXPORT_FUNC(void)
+numba_rnd_init(rnd_state_t *state, unsigned int seed)
 {
     unsigned int pos;
     seed &= 0xffffffffU;
@@ -89,7 +95,7 @@ rnd_init_by_array(rnd_state_t *state, unsigned int init_key[], size_t key_length
     size_t i, j, k;
     unsigned int *mt = state->mt;
 
-    Numba_rnd_init(state, 19650218U);
+    numba_rnd_init(state, 19650218U);
     i = 1; j = 0;
     k = (MT_N > key_length ? MT_N : key_length);
     for (; k; k--) {
@@ -115,8 +121,8 @@ rnd_init_by_array(rnd_state_t *state, unsigned int init_key[], size_t key_length
 }
 
 /* Random-initialize the given state (for use at startup) */
-static int
-_rnd_random_seed(rnd_state_t *state)
+NUMBA_EXPORT_FUNC(int)
+_numba_rnd_random_seed(rnd_state_t *state)
 {
     PyObject *timemod, *timeobj;
     double timeval;
@@ -143,7 +149,7 @@ _rnd_random_seed(rnd_state_t *state)
     rshift = sizeof(void *) > 4 ? 16 : 0;
     seed ^= (Py_uintptr_t) &timemod >> rshift;
     seed += (Py_uintptr_t) &PyObject_CallMethod >> rshift;
-    Numba_rnd_init(state, seed);
+    numba_rnd_init(state, seed);
     return 0;
 }
 
@@ -155,18 +161,18 @@ rnd_state_converter(PyObject *obj, rnd_state_t **state)
     return (*state != NULL || !PyErr_Occurred());
 }
 
-static PyObject *
-rnd_shuffle(PyObject *self, PyObject *arg)
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_rnd_shuffle(PyObject *self, PyObject *arg)
 {
     rnd_state_t *state;
     if (!rnd_state_converter(arg, &state))
         return NULL;
-    Numba_rnd_shuffle(state);
+    numba_rnd_shuffle(state);
     Py_RETURN_NONE;
 }
 
-static PyObject *
-rnd_set_state(PyObject *self, PyObject *args)
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_rnd_set_state(PyObject *self, PyObject *args)
 {
     int i, index;
     rnd_state_t *state;
@@ -195,8 +201,8 @@ rnd_set_state(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-static PyObject *
-rnd_get_state(PyObject *self, PyObject *arg)
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_rnd_get_state(PyObject *self, PyObject *arg)
 {
     PyObject *intlist;
     int i;
@@ -218,8 +224,8 @@ rnd_get_state(PyObject *self, PyObject *arg)
     return Py_BuildValue("iN", state->index, intlist);
 }
 
-static PyObject *
-rnd_seed_with_urandom(PyObject *self, PyObject *args)
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_rnd_seed_with_urandom(PyObject *self, PyObject *args)
 {
     rnd_state_t *state;
     Py_buffer buf;
@@ -249,8 +255,8 @@ rnd_seed_with_urandom(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-static PyObject *
-rnd_seed(PyObject *self, PyObject *args)
+NUMBA_EXPORT_FUNC(PyObject *)
+_numba_rnd_seed(PyObject *self, PyObject *args)
 {
     unsigned int seed;
     rnd_state_t *state;
@@ -258,9 +264,9 @@ rnd_seed(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O&I:rnd_seed",
                           rnd_state_converter, &state, &seed)) {
         PyErr_Clear();
-        return rnd_seed_with_urandom(self, args);
+        return _numba_rnd_seed_with_urandom(self, args);
     }
-    Numba_rnd_init(state, seed);
+    numba_rnd_init(state, seed);
     Py_RETURN_NONE;
 }
 
@@ -271,13 +277,13 @@ rnd_seed(PyObject *self, PyObject *args)
 #define M_PI 3.14159265358979323846264338328
 #endif
 
-static unsigned int
+NUMBA_EXPORT_FUNC(unsigned int)
 get_next_int32(rnd_state_t *state)
 {
     unsigned int y;
 
     if (state->index == MT_N) {
-        Numba_rnd_shuffle(state);
+        numba_rnd_shuffle(state);
         state->index = 0;
     }
     y = state->mt[state->index++];
@@ -289,7 +295,7 @@ get_next_int32(rnd_state_t *state)
     return y;
 }
 
-static double
+NUMBA_EXPORT_FUNC(double)
 get_next_double(rnd_state_t *state)
 {
     double a = get_next_int32(state) >> 5;
@@ -297,7 +303,7 @@ get_next_double(rnd_state_t *state)
     return (a * 67108864.0 + b) / 9007199254740992.0;
 }
 
-static double
+NUMBA_EXPORT_FUNC(double)
 loggam(double x)
 {
     double x0, x2, xp, gl, gl0;
@@ -340,8 +346,8 @@ loggam(double x)
 }
 
 
-static int64_t
-Numba_poisson_ptrs(rnd_state_t *state, double lam)
+NUMBA_EXPORT_FUNC(int64_t)
+numba_poisson_ptrs(rnd_state_t *state, double lam)
 {
     /* This method is invoked only if the parameter lambda of this
      * distribution is big enough ( >= 10 ). The algorithm used is
@@ -387,32 +393,32 @@ Numba_poisson_ptrs(rnd_state_t *state, double lam)
  */
 
 /* provide 64-bit division function to 32-bit platforms */
-static
-int64_t Numba_sdiv(int64_t a, int64_t b) {
+NUMBA_EXPORT_FUNC(int64_t)
+numba_sdiv(int64_t a, int64_t b) {
     return a / b;
 }
 
-static
-uint64_t Numba_udiv(uint64_t a, uint64_t b) {
+NUMBA_EXPORT_FUNC(uint64_t)
+numba_udiv(uint64_t a, uint64_t b) {
     return a / b;
 }
 
 /* provide 64-bit remainder function to 32-bit platforms */
-static
-int64_t Numba_srem(int64_t a, int64_t b) {
+NUMBA_EXPORT_FUNC(int64_t)
+numba_srem(int64_t a, int64_t b) {
     return a % b;
 }
 
-static
-uint64_t Numba_urem(uint64_t a, uint64_t b) {
+NUMBA_EXPORT_FUNC(uint64_t)
+numba_urem(uint64_t a, uint64_t b) {
     return a % b;
 }
 
 /* provide frexp and ldexp; these wrappers deal with special cases
  * (zero, nan, infinity) directly, to sidestep platform differences.
  */
-static
-double Numba_frexp(double x, int *exp)
+NUMBA_EXPORT_FUNC(double)
+numba_frexp(double x, int *exp)
 {
     if (!Py_IS_FINITE(x) || !x)
         *exp = 0;
@@ -421,8 +427,8 @@ double Numba_frexp(double x, int *exp)
     return x;
 }
 
-static
-float Numba_frexpf(float x, int *exp)
+NUMBA_EXPORT_FUNC(float)
+numba_frexpf(float x, int *exp)
 {
     if (Py_IS_NAN(x) || Py_IS_INFINITY(x) || !x)
         *exp = 0;
@@ -431,16 +437,16 @@ float Numba_frexpf(float x, int *exp)
     return x;
 }
 
-static
-double Numba_ldexp(double x, int exp)
+NUMBA_EXPORT_FUNC(double)
+numba_ldexp(double x, int exp)
 {
     if (Py_IS_FINITE(x) && x && exp)
         x = ldexp(x, exp);
     return x;
 }
 
-static
-float Numba_ldexpf(float x, int exp)
+NUMBA_EXPORT_FUNC(float)
+numba_ldexpf(float x, int exp)
 {
     if (Py_IS_FINITE(x) && x && exp)
         x = ldexpf(x, exp);
@@ -448,8 +454,8 @@ float Numba_ldexpf(float x, int exp)
 }
 
 /* provide complex power */
-static
-void Numba_cpow(Py_complex *a, Py_complex *b, Py_complex *c) {
+NUMBA_EXPORT_FUNC(void)
+numba_cpow(Py_complex *a, Py_complex *b, Py_complex *c) {
     *c = _Py_c_pow(*a, *b);
 }
 
@@ -623,8 +629,8 @@ lanczos_sum(double x)
     return num/den;
 }
 
-static double
-Numba_gamma(double x)
+NUMBA_EXPORT_FUNC(double)
+numba_gamma(double x)
 {
     double absx, r, y, z, sqrtpow;
 
@@ -719,10 +725,10 @@ Numba_gamma(double x)
     return r;
 }
 
-static float
-Numba_gammaf(float x)
+NUMBA_EXPORT_FUNC(float)
+numba_gammaf(float x)
 {
-    return (float) Numba_gamma(x);
+    return (float) numba_gamma(x);
 }
 
 /*
@@ -730,8 +736,8 @@ Numba_gammaf(float x)
    For large arguments, Lanczos' formula works extremely well here.
 */
 
-static double
-Numba_lgamma(double x)
+NUMBA_EXPORT_FUNC(double)
+numba_lgamma(double x)
 {
     double r, absx;
 
@@ -773,10 +779,10 @@ Numba_lgamma(double x)
     return r;
 }
 
-static float
-Numba_lgammaf(float x)
+NUMBA_EXPORT_FUNC(float)
+numba_lgammaf(float x)
 {
-    return (float) Numba_lgamma(x);
+    return (float) numba_lgamma(x);
 }
 
 /* provide erf() and erfc(); code borrowed from CPython */
@@ -893,8 +899,8 @@ m_erfc_contfrac(double x)
 
 /* Error function erf(x), for general x */
 
-static double
-Numba_erf(double x)
+NUMBA_EXPORT_FUNC(double)
+numba_erf(double x)
 {
     double absx, cf;
 
@@ -909,16 +915,16 @@ Numba_erf(double x)
     }
 }
 
-static float
-Numba_erff(float x)
+NUMBA_EXPORT_FUNC(float)
+numba_erff(float x)
 {
-    return (float) Numba_erf(x);
+    return (float) numba_erf(x);
 }
 
 /* Complementary error function erfc(x), for general x. */
 
-static double
-Numba_erfc(double x)
+NUMBA_EXPORT_FUNC(double)
+numba_erfc(double x)
 {
     double absx, cf;
 
@@ -933,15 +939,15 @@ Numba_erfc(double x)
     }
 }
 
-static float
-Numba_erfcf(float x)
+NUMBA_EXPORT_FUNC(float)
+numba_erfcf(float x)
 {
-    return (float) Numba_erfc(x);
+    return (float) numba_erfc(x);
 }
 
 
-static
-int Numba_complex_adaptor(PyObject* obj, Py_complex *out) {
+NUMBA_EXPORT_FUNC(int)
+numba_complex_adaptor(PyObject* obj, Py_complex *out) {
     PyObject* fobj;
     PyArray_Descr *dtype;
     double val[2];
@@ -986,8 +992,8 @@ typedef struct {
 /*
 Get data address of record data buffer
 */
-static
-void* Numba_extract_record_data(PyObject *recordobj, Py_buffer *pbuf) {
+NUMBA_EXPORT_FUNC(void *)
+numba_extract_record_data(PyObject *recordobj, Py_buffer *pbuf) {
     PyObject *attrdata;
     void *ptr;
 
@@ -1036,8 +1042,8 @@ void* Numba_extract_record_data(PyObject *recordobj, Py_buffer *pbuf) {
  * Return a record instance with dtype as the record type, and backed
  * by a copy of the memory area pointed to by (pdata, size).
  */
-static
-PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype) {
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_recreate_record(void *pdata, int size, PyObject *dtype) {
     PyObject *numpy = NULL;
     PyObject *numpy_record = NULL;
     PyObject *aryobj = NULL;
@@ -1070,8 +1076,8 @@ CLEANUP:
     return record;
 }
 
-static
-int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
+NUMBA_EXPORT_FUNC(int)
+numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     PyArrayObject *ndary;
     int i, ndim;
     npy_intp *p;
@@ -1098,15 +1104,15 @@ int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     return 0;
 }
 
-static int
-Numba_get_buffer(PyObject *obj, Py_buffer *buf)
+NUMBA_EXPORT_FUNC(int)
+numba_get_buffer(PyObject *obj, Py_buffer *buf)
 {
     /* Ask for shape and strides, but no suboffsets */
     return PyObject_GetBuffer(obj, buf, PyBUF_RECORDS_RO);
 }
 
-static void
-Numba_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
+NUMBA_EXPORT_FUNC(void)
+numba_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
 {
     int i;
     npy_intp *p;
@@ -1126,19 +1132,19 @@ Numba_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
     arystruct->meminfo = NULL;
 }
 
-static void
-Numba_release_buffer(Py_buffer *buf)
+NUMBA_EXPORT_FUNC(void)
+numba_release_buffer(Py_buffer *buf)
 {
     PyBuffer_Release(buf);
 }
 
-static
-PyObject* Numba_ndarray_new(int nd,
-                            npy_intp *dims,   /* shape */
-                            npy_intp *strides,
-                            void* data,
-                            int type_num,
-                            int itemsize)
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_ndarray_new(int nd,
+                  npy_intp *dims,   /* shape */
+                  npy_intp *strides,
+                  void* data,
+                  int type_num,
+                  int itemsize)
 {
     PyObject *ndary;
     int flags = NPY_ARRAY_BEHAVED;
@@ -1159,8 +1165,8 @@ PyObject* Numba_ndarray_new(int nd,
  * If no copy is needed, returns 1 and fills `npy_intp *newstrides`
  *     with appropriate strides
  */
-static int
-Numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *strides,
+NUMBA_EXPORT_FUNC(int)
+numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *strides,
                              npy_intp newnd, const npy_intp *newdims,
                              npy_intp *newstrides, npy_intp itemsize,
                              int is_f_order)
@@ -1277,8 +1283,8 @@ Numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
 /* We use separate functions for datetime64 and timedelta64, to ensure
  * proper type checking.
  */
-static npy_int64
-Numba_extract_np_datetime(PyObject *td)
+NUMBA_EXPORT_FUNC(npy_int64)
+numba_extract_np_datetime(PyObject *td)
 {
     if (!PyArray_IsScalar(td, Datetime)) {
         PyErr_SetString(PyExc_TypeError,
@@ -1288,8 +1294,8 @@ Numba_extract_np_datetime(PyObject *td)
     return PyArrayScalar_VAL(td, Timedelta);
 }
 
-static npy_int64
-Numba_extract_np_timedelta(PyObject *td)
+NUMBA_EXPORT_FUNC(npy_int64)
+numba_extract_np_timedelta(PyObject *td)
 {
     if (!PyArray_IsScalar(td, Timedelta)) {
         PyErr_SetString(PyExc_TypeError,
@@ -1299,8 +1305,8 @@ Numba_extract_np_timedelta(PyObject *td)
     return PyArrayScalar_VAL(td, Timedelta);
 }
 
-static PyObject *
-Numba_create_np_datetime(npy_int64 value, int unit_code)
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_create_np_datetime(npy_int64 value, int unit_code)
 {
     PyDatetimeScalarObject *obj = (PyDatetimeScalarObject *)
         PyArrayScalar_New(Datetime);
@@ -1312,8 +1318,8 @@ Numba_create_np_datetime(npy_int64 value, int unit_code)
     return (PyObject *) obj;
 }
 
-static PyObject *
-Numba_create_np_timedelta(npy_int64 value, int unit_code)
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_create_np_timedelta(npy_int64 value, int unit_code)
 {
     PyTimedeltaScalarObject *obj = (PyTimedeltaScalarObject *)
         PyArrayScalar_New(Timedelta);
@@ -1325,25 +1331,25 @@ Numba_create_np_timedelta(npy_int64 value, int unit_code)
     return (PyObject *) obj;
 }
 
-static
-uint64_t Numba_fptoui(double x) {
+NUMBA_EXPORT_FUNC(uint64_t)
+numba_fptoui(double x) {
     /* First cast to signed int of the full width to make sure sign extension
        happens (this can make a difference on some platforms...). */
     return (uint64_t) (int64_t) x;
 }
 
-static
-uint64_t Numba_fptouif(float x) {
+NUMBA_EXPORT_FUNC(uint64_t)
+numba_fptouif(float x) {
     return (uint64_t) (int64_t) x;
 }
 
-static
-void Numba_gil_ensure(PyGILState_STATE *state) {
+NUMBA_EXPORT_FUNC(void)
+numba_gil_ensure(PyGILState_STATE *state) {
     *state = PyGILState_Ensure();
 }
 
-static
-void Numba_gil_release(PyGILState_STATE *state) {
+NUMBA_EXPORT_FUNC(void)
+numba_gil_release(PyGILState_STATE *state) {
     PyGILState_Release(*state);
 }
 
@@ -1353,8 +1359,8 @@ void Numba_gil_release(PyGILState_STATE *state) {
  * "list.sort() temporarily sets allocated to -1 to detect mutations".
  */
 
-static void
-Numba_set_list_private_data(PyListObject *listobj, void *ptr)
+NUMBA_EXPORT_FUNC(void)
+numba_set_list_private_data(PyListObject *listobj, void *ptr)
 {
     /* Since ptr is dynamically allocated, it is at least
      * 4- or 8-byte-aligned, meaning we can shift it by a couple bits
@@ -1371,8 +1377,8 @@ Numba_set_list_private_data(PyListObject *listobj, void *ptr)
     listobj->allocated = - (Py_ssize_t) ((size_t) ptr >> 1);
 }
 
-static void *
-Numba_get_list_private_data(PyListObject *listobj)
+NUMBA_EXPORT_FUNC(void *)
+numba_get_list_private_data(PyListObject *listobj)
 {
     if (listobj->allocated < -1) {
         /* A Numba pointer is stuffed in the list, return it */
@@ -1381,8 +1387,8 @@ Numba_get_list_private_data(PyListObject *listobj)
     return NULL;
 }
 
-static void
-Numba_reset_list_private_data(PyListObject *listobj)
+NUMBA_EXPORT_FUNC(void)
+numba_reset_list_private_data(PyListObject *listobj)
 {
     /* Pretend there is no over-allocation; this should be always correct,
      * if not optimal.
@@ -1391,8 +1397,8 @@ Numba_reset_list_private_data(PyListObject *listobj)
         listobj->allocated = PyList_GET_SIZE(listobj);
 }
 
-static int
-Numba_unpack_slice(PyObject *obj,
+NUMBA_EXPORT_FUNC(int)
+numba_unpack_slice(PyObject *obj,
                    Py_ssize_t *start, Py_ssize_t *stop, Py_ssize_t *step)
 {
     PySliceObject *slice = (PySliceObject *) obj;
@@ -1420,8 +1426,8 @@ Numba_unpack_slice(PyObject *obj,
 
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
    This *consumes* a reference count to its argument. */
-static int
-Numba_do_raise(PyObject *exc)
+NUMBA_EXPORT_FUNC(int)
+numba_do_raise(PyObject *exc)
 {
     PyObject *type = NULL, *value = NULL;
 
@@ -1505,8 +1511,8 @@ raise_error:
     return 0;
 }
 
-static PyObject *
-Numba_unpickle(const char *data, Py_ssize_t n)
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_unpickle(const char *data, Py_ssize_t n)
 {
     PyObject *buf, *obj;
     static PyObject *loads;
@@ -1539,124 +1545,13 @@ Numba_unpickle(const char *data, Py_ssize_t n)
 /*
 Define bridge for all math functions
 */
-#define MATH_UNARY(F, R, A) static R Numba_##F(A a) { return F(a); }
-#define MATH_BINARY(F, R, A, B) static R Numba_##F(A a, B b) \
-                                       { return F(a, b); }
-    #include "mathnames.inc"
+
+#define MATH_UNARY(F, R, A) \
+    NUMBA_EXPORT_FUNC(R) numba_##F(A a) { return F(a); }
+#define MATH_BINARY(F, R, A, B) \
+    NUMBA_EXPORT_FUNC(R) numba_##F(A a, B b) { return F(a, b); }
+
+#include "mathnames.h"
+
 #undef MATH_UNARY
 #undef MATH_BINARY
-
-/*
-Expose all functions
-*/
-
-static PyObject *
-build_c_helpers_dict(void)
-{
-    PyObject *dct = PyDict_New();
-    if (dct == NULL)
-        goto error;
-
-#define _declpointer(name, value) do {                 \
-    PyObject *o = PyLong_FromVoidPtr(value);           \
-    if (o == NULL) goto error;                         \
-    if (PyDict_SetItemString(dct, name, o)) {          \
-        Py_DECREF(o);                                  \
-        goto error;                                    \
-    }                                                  \
-    Py_DECREF(o);                                      \
-} while (0)
-
-#define declmethod(func) _declpointer(#func, &Numba_##func)
-
-#define declpointer(ptr) _declpointer(#ptr, &ptr)
-
-    declmethod(sdiv);
-    declmethod(srem);
-    declmethod(udiv);
-    declmethod(urem);
-    declmethod(frexp);
-    declmethod(frexpf);
-    declmethod(ldexp);
-    declmethod(ldexpf);
-    declmethod(cpow);
-    declmethod(erf);
-    declmethod(erff);
-    declmethod(erfc);
-    declmethod(erfcf);
-    declmethod(gamma);
-    declmethod(gammaf);
-    declmethod(lgamma);
-    declmethod(lgammaf);
-    declmethod(complex_adaptor);
-    declmethod(adapt_ndarray);
-    declmethod(ndarray_new);
-    declmethod(extract_record_data);
-    declmethod(get_buffer);
-    declmethod(adapt_buffer);
-    declmethod(release_buffer);
-    declmethod(extract_np_datetime);
-    declmethod(create_np_datetime);
-    declmethod(extract_np_timedelta);
-    declmethod(create_np_timedelta);
-    declmethod(recreate_record);
-    declmethod(fptoui);
-    declmethod(fptouif);
-    declmethod(gil_ensure);
-    declmethod(gil_release);
-    declmethod(get_list_private_data);
-    declmethod(set_list_private_data);
-    declmethod(reset_list_private_data);
-    declmethod(unpack_slice);
-    declmethod(do_raise);
-    declmethod(unpickle);
-    declmethod(rnd_shuffle);
-    declmethod(rnd_init);
-    declmethod(poisson_ptrs);
-    declmethod(attempt_nocopy_reshape);
-
-    declpointer(py_random_state);
-    declpointer(np_random_state);
-
-#define MATH_UNARY(F, R, A) declmethod(F);
-#define MATH_BINARY(F, R, A, B) declmethod(F);
-    #include "mathnames.inc"
-#undef MATH_UNARY
-#undef MATH_BINARY
-
-#undef declmethod
-    return dct;
-error:
-    Py_XDECREF(dct);
-    return NULL;
-}
-
-static PyMethodDef ext_methods[] = {
-    { "rnd_get_state", (PyCFunction) rnd_get_state, METH_O, NULL },
-    { "rnd_seed", (PyCFunction) rnd_seed, METH_VARARGS, NULL },
-    { "rnd_set_state", (PyCFunction) rnd_set_state, METH_VARARGS, NULL },
-    { "rnd_shuffle", (PyCFunction) rnd_shuffle, METH_O, NULL },
-    { NULL },
-};
-
-
-MOD_INIT(_helperlib) {
-    PyObject *m;
-    MOD_DEF(m, "_helperlib", "No docs", ext_methods)
-    if (m == NULL)
-        return MOD_ERROR_VAL;
-
-    import_array();
-
-    PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
-    PyModule_AddIntConstant(m, "long_min", LONG_MIN);
-    PyModule_AddIntConstant(m, "long_max", LONG_MAX);
-    PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));
-    PyModule_AddIntConstant(m, "py_gil_state_size", sizeof(PyGILState_STATE));
-
-    if (_rnd_random_seed(&py_random_state) ||
-        _rnd_random_seed(&np_random_state))
-        return MOD_ERROR_VAL;
-
-    return MOD_SUCCESS_VAL(m);
-}

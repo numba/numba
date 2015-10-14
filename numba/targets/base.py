@@ -1,6 +1,8 @@
 from __future__ import print_function
+
 from collections import namedtuple, defaultdict
 import copy
+import sys
 from types import MethodType
 
 import numpy
@@ -196,6 +198,9 @@ class BaseContext(object):
             if not hasattr(obj, k):
                 raise NameError("unknown option {0!r}".format(k))
             setattr(obj, k, v)
+        if obj.codegen() is not self.codegen():
+            # We can't share functions accross different codegens
+            obj.cached_internal_func = {}
         return obj
 
     def install_registry(self, registry):
@@ -772,16 +777,20 @@ class BaseContext(object):
         impl = self.get_function(bool, typing.signature(types.boolean, typ))
         return impl(builder, (val,))
 
-    def get_c_value(self, builder, typ, name):
+    def get_c_value(self, builder, typ, name, dllimport=False):
         """
         Get a global value through its C-accessible *name*, with the given
         LLVM type.
+        If *dllimport* is true, the symbol will be marked as imported
+        from a DLL (necessary for AOT compilation under Windows).
         """
         module = builder.function.module
         try:
             gv = module.get_global_variable_named(name)
         except LLVMException:
             gv = module.add_global_variable(typ, name)
+            if dllimport and self.aot_mode and sys.platform == 'win32':
+                gv.storage_class = "dllimport"
         return gv
 
     def call_external_function(self, builder, callee, argtys, args):
@@ -1081,7 +1090,8 @@ class BaseContext(object):
         from numba.runtime.atomicops import meminfo_data_ty
 
         mod = builder.module
-        fn = mod.get_or_insert_function(meminfo_data_ty, name="NRT_MemInfo_data")
+        fn = mod.get_or_insert_function(meminfo_data_ty,
+                                        name="NRT_MemInfo_data_fast")
         return builder.call(fn, [meminfo])
 
     def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):

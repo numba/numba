@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 
+from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.ee as le
 import llvmlite.llvmpy.passes as lp
@@ -15,6 +16,7 @@ from numba.utils import IS_PY3
 from . import llvm_types as lt
 from numba.compiler import compile_extra, Flags
 from numba.targets.registry import CPUTarget
+from numba.runtime import atomicops
 
 
 logger = logging.getLogger(__name__)
@@ -100,11 +102,17 @@ class _ModuleCompiler(object):
 
     method_def_ptr = lc.Type.pointer(method_def_ty)
 
-    def __init__(self, export_entries, module_name):
+    def __init__(self, export_entries, module_name, use_nrt=False):
         self.module_name = module_name
         self.export_python_wrap = False
         self.dll_exports = []
         self.export_entries = export_entries
+        # Used by the CC API but not the legacy API
+        self.external_init_function = None
+        self.use_nrt = use_nrt
+
+    def _mangle_method_symbol(self, func_name):
+        return "._pycc_method_%s" % (func_name,)
 
     def _emit_python_wrapper(self, llvm_module):
         """Emit generated Python wrapper and extension module code.
@@ -128,6 +136,11 @@ class _ModuleCompiler(object):
         flags.set("no_compile")
         if not self.export_python_wrap:
             flags.set("no_cpython_wrapper")
+        if self.use_nrt:
+            flags.set("nrt")
+            # Compile NRT helpers
+            nrt_module, _ = atomicops.create_nrt_module(target_ctx)
+            library.add_ir_module(nrt_module)
 
         for entry in self.export_entries:
             cres = compile_extra(typing_ctx, target_ctx, entry.function,
@@ -142,7 +155,7 @@ class _ModuleCompiler(object):
                 llvm_func.linkage = lc.LINKAGE_INTERNAL
                 wrappername = cres.fndesc.llvm_cpython_wrapper_name
                 wrapper = cres.library.get_function(wrappername)
-                wrapper.name = entry.symbol
+                wrapper.name = self._mangle_method_symbol(entry.symbol)
                 wrapper.linkage = lc.LINKAGE_EXTERNAL
                 fnty = cres.target_context.call_conv.get_function_type(
                     cres.fndesc.restype, cres.fndesc.argtypes)
@@ -155,6 +168,12 @@ class _ModuleCompiler(object):
             wrapper_module = library.create_ir_module("wrapper")
             self._emit_python_wrapper(wrapper_module)
             library.add_ir_module(wrapper_module)
+
+        # Hide all functions in the DLL except those explicitly exported
+        library.finalize()
+        for fn in library.get_defined_functions():
+            if fn.name not in self.dll_exports:
+                fn.visibility = "hidden"
 
         return library
 
@@ -197,8 +216,9 @@ class _ModuleCompiler(object):
         method_defs = []
         for entry in self.export_entries:
             name = entry.symbol
+            llvm_func_name = self._mangle_method_symbol(name)
             fnty = self.exported_function_types[entry]
-            lfunc = llvm_module.add_function(fnty, name=name)
+            lfunc = llvm_module.add_function(fnty, name=llvm_func_name)
 
             method_name_init = lc.Constant.stringz(name)
             method_name = llvm_module.add_global_variable(
@@ -220,6 +240,15 @@ class _ModuleCompiler(object):
         method_array.linkage = lc.LINKAGE_INTERNAL
         method_array_ptr = lc.Constant.gep(method_array, [ZERO, ZERO])
         return method_array_ptr
+
+    def _emit_module_init_code(self, llvm_module, builder, modobj):
+        """
+        Emit call to external init function, if any.
+        """
+        if self.external_init_function:
+            fnty = ir.FunctionType(ir.VoidType(), [modobj.type])
+            fn = llvm_module.add_function(fnty, self.external_init_function)
+            builder.call(fn, [modobj])
 
 
 class ModuleCompilerPy2(_ModuleCompiler):
@@ -273,6 +302,8 @@ class ModuleCompilerPy2(_ModuleCompiler):
                             NULL,
                             lc.Constant.null(lt._pyobject_head_p),
                             lc.Constant.int(lt._int32, sys.api_version)))
+
+        self._emit_module_init_code(llvm_module, builder, mod)
 
         builder.ret_void()
 
@@ -341,7 +372,9 @@ class ModuleCompilerPy3(_ModuleCompiler):
 
     @property
     def module_create_definition(self):
-        """Return the signature and name of the function to initialize the module
+        """
+        Return the signature and name of the Python C API function to
+        initialize the module.
         """
         signature = lc.Type.function(lt._pyobject_head_p,
                                      (lc.Type.pointer(self.module_def_ty),
@@ -355,7 +388,8 @@ class ModuleCompilerPy3(_ModuleCompiler):
 
     @property
     def module_init_definition(self):
-        """Return the name and signature of the module
+        """
+        Return the name and signature of the module's initialization function.
         """
         signature = lc.Type.function(lt._pyobject_head_p, ())
 
@@ -415,6 +449,8 @@ class ModuleCompilerPy3(_ModuleCompiler):
         #  with an assertion in pydebug mode)
         with builder.if_then(cgutils.is_null(builder, mod)):
             builder.ret(NULL.bitcast(mod_init_fn.type.pointee.return_type))
+
+        self._emit_module_init_code(llvm_module, builder, mod)
 
         builder.ret(mod)
 

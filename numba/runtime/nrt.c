@@ -14,11 +14,11 @@ typedef int (*atomic_meminfo_cas_func)(void **ptr, void *cmp,
 
 /* NOTE: if changing the layout, please update numba.runtime.atomicops */
 struct MemInfo {
-    size_t         refct;
-    dtor_function  dtor;
-    void          *dtor_info;
-    void          *data;
-    size_t         size;    /* only used for NRT allocated memory */
+    size_t            refct;
+    NRT_dtor_function dtor;
+    void              *dtor_info;
+    void              *data;
+    size_t            size;    /* only used for NRT allocated memory */
 };
 
 
@@ -41,9 +41,9 @@ static void nrt_fatal_error(const char *msg)
  * Global resources.
  */
 
-struct MemSys{
+struct MemSys {
     /* Atomic increment and decrement function */
-    atomic_inc_dec_func atomic_inc, atomic_dec;
+    NRT_atomic_inc_dec_func atomic_inc, atomic_dec;
     /* Atomic CAS */
     atomic_meminfo_cas_func atomic_cas;
     /* Shutdown flag */
@@ -59,10 +59,10 @@ struct MemSys{
 };
 
 /* The Memory System object */
-static MemSys TheMSys;
+static NRT_MemSys TheMSys;
 
 void NRT_MemSys_init(void) {
-    memset(&TheMSys, 0, sizeof(MemSys));
+    memset(&TheMSys, 0, sizeof(NRT_MemSys));
     /* Bind to libc allocator */
     TheMSys.allocator.malloc = malloc;
     TheMSys.allocator.realloc = realloc;
@@ -95,15 +95,15 @@ void NRT_MemSys_set_allocator(NRT_malloc_func malloc_func,
     TheMSys.allocator.free = free_func;
 }
 
-void NRT_MemSys_set_atomic_inc_dec(atomic_inc_dec_func inc,
-                                   atomic_inc_dec_func dec)
+void NRT_MemSys_set_atomic_inc_dec(NRT_atomic_inc_dec_func inc,
+                                   NRT_atomic_inc_dec_func dec)
 {
     TheMSys.atomic_inc = inc;
     TheMSys.atomic_dec = dec;
 }
 
-void NRT_MemSys_set_atomic_cas(atomic_cas_func cas) {
-    TheMSys.atomic_cas = (atomic_meminfo_cas_func)cas;
+void NRT_MemSys_set_atomic_cas(NRT_atomic_cas_func cas) {
+    TheMSys.atomic_cas = (atomic_meminfo_cas_func) cas;
 }
 
 size_t NRT_MemSys_get_stats_alloc() {
@@ -168,8 +168,8 @@ void NRT_MemSys_set_atomic_cas_stub(void) {
  * The MemInfo structure.
  */
 
-void NRT_MemInfo_init(MemInfo *mi,void *data, size_t size, dtor_function dtor,
-                      void *dtor_info)
+void NRT_MemInfo_init(NRT_MemInfo *mi,void *data, size_t size,
+                      NRT_dtor_function dtor, void *dtor_info)
 {
     mi->refct = 1;  /* starts with 1 refct */
     mi->dtor = dtor;
@@ -180,15 +180,15 @@ void NRT_MemInfo_init(MemInfo *mi,void *data, size_t size, dtor_function dtor,
     TheMSys.atomic_inc(&TheMSys.stats_mi_alloc);
 }
 
-MemInfo* NRT_MemInfo_new(void *data, size_t size, dtor_function dtor,
-                         void *dtor_info)
+NRT_MemInfo *NRT_MemInfo_new(void *data, size_t size,
+                             NRT_dtor_function dtor, void *dtor_info)
 {
-    MemInfo * mi = NRT_Allocate(sizeof(MemInfo));
+    NRT_MemInfo *mi = NRT_Allocate(sizeof(NRT_MemInfo));
     NRT_MemInfo_init(mi, data, size, dtor, dtor_info);
     return mi;
 }
 
-size_t NRT_MemInfo_refcount(MemInfo *mi) {
+size_t NRT_MemInfo_refcount(NRT_MemInfo *mi) {
     /* Should never returns 0 for a valid MemInfo */
     if (mi && mi->data)
         return mi->refct;
@@ -206,24 +206,24 @@ void nrt_internal_dtor_safe(void *ptr, void *info) {
 }
 
 static
-void *nrt_allocate_meminfo_and_data(size_t size, MemInfo **mi_out) {
-    MemInfo *mi;
-    char *base = NRT_Allocate(sizeof(MemInfo) + size);
-    mi = (MemInfo *) base;
+void *nrt_allocate_meminfo_and_data(size_t size, NRT_MemInfo **mi_out) {
+    NRT_MemInfo *mi;
+    char *base = NRT_Allocate(sizeof(NRT_MemInfo) + size);
+    mi = (NRT_MemInfo *) base;
     *mi_out = mi;
-    return base + sizeof(MemInfo);
+    return base + sizeof(NRT_MemInfo);
 }
 
-MemInfo* NRT_MemInfo_alloc(size_t size) {
-    MemInfo *mi;
+NRT_MemInfo *NRT_MemInfo_alloc(size_t size) {
+    NRT_MemInfo *mi;
     void *data = nrt_allocate_meminfo_and_data(size, &mi);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc %p\n", data));
     NRT_MemInfo_init(mi, data, size, NULL, NULL);
     return mi;
 }
 
-MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
-    MemInfo *mi;
+NRT_MemInfo *NRT_MemInfo_alloc_safe(size_t size) {
+    NRT_MemInfo *mi;
     void *data = nrt_allocate_meminfo_and_data(size, &mi);
     /* Only fill up a couple cachelines with debug markers, to minimize
        overhead. */
@@ -234,8 +234,8 @@ MemInfo* NRT_MemInfo_alloc_safe(size_t size) {
 }
 
 static
-void* nrt_allocate_meminfo_and_data_align(size_t size, unsigned align,
-                                         MemInfo **mi)
+void *nrt_allocate_meminfo_and_data_align(size_t size, unsigned align,
+                                          NRT_MemInfo **mi)
 {
     size_t offset, intptr, remainder;
     char *base = nrt_allocate_meminfo_and_data(size + 2 * align, mi);
@@ -250,16 +250,16 @@ void* nrt_allocate_meminfo_and_data_align(size_t size, unsigned align,
     return base + offset;
 }
 
-MemInfo* NRT_MemInfo_alloc_aligned(size_t size, unsigned align) {
-    MemInfo *mi;
+NRT_MemInfo *NRT_MemInfo_alloc_aligned(size_t size, unsigned align) {
+    NRT_MemInfo *mi;
     void *data = nrt_allocate_meminfo_and_data_align(size, align, &mi);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_aligned %p\n", data));
     NRT_MemInfo_init(mi, data, size, NULL, NULL);
     return mi;
 }
 
-MemInfo* NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
-    MemInfo *mi;
+NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
+    NRT_MemInfo *mi;
     void *data = nrt_allocate_meminfo_and_data_align(size, align, &mi);
     /* Only fill up a couple cachelines with debug markers, to minimize
        overhead. */
@@ -270,19 +270,19 @@ MemInfo* NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
     return mi;
 }
 
-void NRT_MemInfo_destroy(MemInfo *mi) {
+void NRT_MemInfo_destroy(NRT_MemInfo *mi) {
     NRT_Free(mi);
     TheMSys.atomic_inc(&TheMSys.stats_mi_free);
 }
 
-void NRT_MemInfo_acquire(MemInfo *mi) {
+void NRT_MemInfo_acquire(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_acquire %p refct=%zu\n", mi,
                                                             mi->refct));
     assert(mi->refct > 0 && "RefCt cannot be zero");
     TheMSys.atomic_inc(&mi->refct);
 }
 
-void NRT_MemInfo_call_dtor(MemInfo *mi) {
+void NRT_MemInfo_call_dtor(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
     if (mi->dtor)
         /* We have a destructor */
@@ -291,7 +291,7 @@ void NRT_MemInfo_call_dtor(MemInfo *mi) {
     NRT_MemInfo_destroy(mi);
 }
 
-void NRT_MemInfo_release(MemInfo *mi) {
+void NRT_MemInfo_release(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_release %p refct=%zu\n", mi,
                                                             mi->refct));
     assert (mi->refct > 0 && "RefCt cannot be 0");
@@ -301,16 +301,16 @@ void NRT_MemInfo_release(MemInfo *mi) {
     }
 }
 
-void* NRT_MemInfo_data(MemInfo* mi) {
+void* NRT_MemInfo_data(NRT_MemInfo* mi) {
     return mi->data;
 }
 
-size_t NRT_MemInfo_size(MemInfo* mi) {
+size_t NRT_MemInfo_size(NRT_MemInfo* mi) {
     return mi->size;
 }
 
 
-void NRT_MemInfo_dump(MemInfo *mi, FILE *out) {
+void NRT_MemInfo_dump(NRT_MemInfo *mi, FILE *out) {
     fprintf(out, "MemInfo %p refcount %zu\n", mi, mi->refct);
 }
 
@@ -324,9 +324,9 @@ nrt_varsize_dtor(void *ptr, void *info) {
     NRT_Free(ptr);
 }
 
-MemInfo *NRT_MemInfo_varsize_alloc(size_t size)
+NRT_MemInfo *NRT_MemInfo_varsize_alloc(size_t size)
 {
-    MemInfo *mi;
+    NRT_MemInfo *mi;
     void *data = NRT_Allocate(size);
     if (data == NULL)
         return NULL;
@@ -337,7 +337,7 @@ MemInfo *NRT_MemInfo_varsize_alloc(size_t size)
     return mi;
 }
 
-void *NRT_MemInfo_varsize_realloc(MemInfo *mi, size_t size)
+void *NRT_MemInfo_varsize_realloc(NRT_MemInfo *mi, size_t size)
 {
     if (mi->dtor != nrt_varsize_dtor) {
         nrt_fatal_error("ERROR: NRT_MemInfo_varsize_realloc called "
@@ -375,4 +375,15 @@ void NRT_Free(void *ptr) {
     NRT_Debug(nrt_debug_print("NRT_Free %p\n", ptr));
     TheMSys.allocator.free(ptr);
     TheMSys.atomic_inc(&TheMSys.stats_free);
+}
+
+/*
+ * Debugging printf function used internally
+ */
+void nrt_debug_print(char *fmt, ...) {
+   va_list args;
+
+   va_start(args, fmt);
+   vfprintf(stderr, fmt, args);
+   va_end(args);
 }
