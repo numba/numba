@@ -196,6 +196,9 @@ class TestCC(BasePYCCTest):
             for val in (-1, -1 + 0j, np.complex128(-1)):
                 res = lib.sqrt(val)
                 self.assertPreciseEqual(res, 1j)
+            # Implicit seeding at startup should guarantee a non-pathological
+            # start state.
+            self.assertNotEqual(lib.random(-1), lib.random(-1))
             res = lib.random(42)
             expected = np.random.RandomState(42).random_sample()
             self.assertPreciseEqual(res, expected)

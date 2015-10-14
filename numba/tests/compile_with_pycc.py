@@ -54,7 +54,8 @@ def size(arr):
 # This one clashes with libc random() unless pycc is careful with naming.
 @cc_helperlib.export('random', 'f8(i4)')
 def random_impl(seed):
-    np.random.seed(seed)
+    if seed != -1:
+        np.random.seed(seed)
     return np.random.random()
 
 # These ones need NRT

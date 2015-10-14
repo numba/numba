@@ -125,6 +125,11 @@ PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
     if (init_dynfunc_module(module)) {
         goto error;
     }
+    /* Initialize random state with non-zero data to avoid pathological
+       behaviour. */
+    _numba_rnd_random_seed(&numba_py_random_state);
+    _numba_rnd_random_seed(&numba_np_random_state);
+
 #if PYCC_USE_NRT
     NRT_MemSys_init();
     NRT_MemSys_set_atomic_inc_dec((NRT_atomic_inc_dec_func) &nrt_atomic_add,
