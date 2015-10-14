@@ -37,7 +37,7 @@ def sqrt(u):
     return cmath.sqrt(u)
 
 @cc_helperlib.export('size', 'i8(f8[:])')
-def sqrt(arr):
+def size(arr):
     return arr.size
 
 # This one clashes with libc random() unless pycc is careful with naming.
