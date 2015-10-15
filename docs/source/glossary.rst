@@ -4,9 +4,20 @@ Glossary
 
 .. glossary::
 
+   ahead-of-time compilation
+   AOT compilation
+      Compilation of a function in a separate step before running the
+      program code.  This is the traditional kind of compilation known
+      in languages such as C, C++ or Fortran.
+
    compile-time constant
       An expression whose value Numba can infer and freeze at compile-time.
       Global variables and closure variables are compile-time constants.
+
+   just-in-time compilation
+   JIT compilation
+      Compilation of a function at execution time, as opposed to
+      :term:`ahead-of-time compilation`.
 
    JIT function
       Shorthand for "a function compiled with Numba using the
@@ -47,4 +58,5 @@ Glossary
 
    ufunc
       A NumPy `universal function <http://docs.scipy.org/doc/numpy/reference/ufuncs.html>`_.
-      Numba can create new compiled ufuncs with the `@vectorize` decorator.
+      Numba can create new compiled ufuncs with
+      the :ref:`@vectorize <vectorize>` decorator.

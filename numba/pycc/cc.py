@@ -178,6 +178,8 @@ class CC(object):
         compiler.external_init_function = self._init_function
         temp_obj = os.path.join(build_dir,
                                 os.path.splitext(self._output_file)[0] + '.o')
+        log.info("generating LLVM code for '%s' into %s",
+                 self._basename, temp_obj)
         compiler.write_native_object(temp_obj, wrap=True)
         return [temp_obj], compiler.dll_exports
 
@@ -249,7 +251,6 @@ class _CCExtension(Extension):
 
     def _prepare_object_files(self, build_ext):
         cc = self._cc
-        log.info("generating LLVM code for '%s'", self.name)
         dir_util.mkpath(build_ext.build_temp)
         objects, _ = cc._compile_object_files(build_ext.build_temp)
         # Add generated object files for linking
