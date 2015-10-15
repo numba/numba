@@ -20,7 +20,7 @@ Benefits
    Numba installed (but Numpy is required).
 
 #. There is no compilation overhead at runtime (but see the
-   :ref:`cache <jit-cache>` option), nor any overhead of importing
+   ``@jit`` :ref:`cache <jit-cache>` option), nor any overhead of importing
    Numba.
 
 .. seealso::
@@ -113,7 +113,7 @@ decorator.  You can read more about it in the :ref:`types <numba-types>`
 reference.
 
 Here is an example of exporting an implementation of the second-order
-centered difference::
+centered difference on a 1d array::
 
    @cc.export('centdiff_1d', 'f8[:](f8[:], f8)')
    def centdiff_1d(u, dx):
