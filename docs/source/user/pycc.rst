@@ -115,3 +115,16 @@ Signature syntax
 The syntax for exported signatures is the same as in the ``@jit``
 decorator.  You can read more about it in the :func:`numba.jit` reference.
 
+Here is an example of exporting an implementation of the second-order
+centered difference::
+
+   @cc.export('centdiff_1d', 'f8[:](f8[:], f8)')
+   def centdiff_1d(u, dx):
+       D = np.empty_like(u)
+       D[0] = 0
+       D[-1] = 0
+       for i in range(1, len(D) - 1):
+           D[i] = (u[i+1] - 2 * u[i] + u[i-1]) / dx**2
+       return D
+
+.. (example from http://nbviewer.ipython.org/gist/ketch/ae87a94f4ef0793d5d52)
