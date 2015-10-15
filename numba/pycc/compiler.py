@@ -245,6 +245,11 @@ class _ModuleCompiler(object):
         return method_array_ptr
 
     def _emit_environment_array(self, llvm_module, builder, pyapi):
+        """
+        Emit an array of env_def_t structures (see modulemixin.c)
+        storing the pickled environment constants for each of the
+        exported functions.
+        """
         env_defs = []
         for entry in self.export_entries:
             env = self.function_environments[entry]
