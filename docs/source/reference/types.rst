@@ -1,10 +1,10 @@
 .. _numba-types:
 
 ===========
-Numba Types
+Numba types
 ===========
 
-Basic Types
+Basic types
 ===========
 
 "Basic" Numba types can be expressed through simple expressions.  The
@@ -57,7 +57,7 @@ However, this is not enough to express all possibilities, such as a particular
 contiguity or a structured array.
 
 
-Advanced Types
+Advanced types
 ==============
 
 For more advanced declarations, you have to use constructors provided

@@ -37,13 +37,13 @@ class CC(object):
         'posix': ['-flto'],
         }
 
-    def __init__(self, basename, source_module=None):
-        if '.' in basename:
+    def __init__(self, extension_name, source_module=None):
+        if '.' in extension_name:
             raise ValueError("basename should be a simple module name, not "
                              "qualified name")
 
-        self._basename = basename
-        self._init_function = 'pycc_init_' + basename
+        self._basename = extension_name
+        self._init_function = 'pycc_init_' + extension_name
         self._exported_functions = {}
         # Resolve source module name and directory
         f = sys._getframe(1)
@@ -62,7 +62,7 @@ class CC(object):
         self._debug = False
         # By default, output in directory of caller module
         self._output_dir = os.path.dirname(self._source_path)
-        self._output_file = self._toolchain.get_ext_filename(basename)
+        self._output_file = self._toolchain.get_ext_filename(extension_name)
         self._use_nrt = True
 
     @property

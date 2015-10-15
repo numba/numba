@@ -1,5 +1,5 @@
-Compilation
-===========
+Just-in-Time compilation
+========================
 
 JIT functions
 -------------

@@ -79,10 +79,6 @@ The generated module has three functions: ``multf``, ``multi`` and ``square``.
 operate on double-precision floats (``f8``)::
 
    >>> import my_module
-   >>> dir(my_module)
-   ['__doc__', '__file__', '__loader__', '__name__', '__package__', '__spec__', 'multf', 'multi', 'square']
-   >>> my_module.__file__
-   '/home/antoine/workdir/my_module.cpython-34m.so'
    >>> my_module.multi(3, 4)
    12
    >>> my_module.square(1.414)
