@@ -97,6 +97,9 @@ class _EnvReloader(object):
         # Enable debugging of front-end operation (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
+        # Enable tracing support
+        TRACE = _readenv("NUMBA_TRACE", int, 0)
+
         # Enable debugging of type inference
         DEBUG_TYPEINFER = _readenv("NUMBA_DEBUG_TYPEINFER", int, 0)
 
@@ -162,7 +165,6 @@ class _EnvReloader(object):
 
         # Disable HSA support
         DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
-
         # Inject the configuration values into the module globals
         for name, value in locals().items():
             if name.isupper():

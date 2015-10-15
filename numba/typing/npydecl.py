@@ -434,7 +434,8 @@ class NdConstructorLike(CallableTemplate):
             else:
                 nb_dtype = _parse_dtype(dtype)
             if nb_dtype is not None:
-                return arr.copy(dtype=nb_dtype)
+                layout = arr.layout if arr.layout != 'A' else 'C'
+                return arr.copy(dtype=nb_dtype, layout=layout)
 
         return typer
 

@@ -26,7 +26,9 @@ class CC(object):
     _mixin_sources = ['modulemixin.c', '../_math_c99.c']
 
     # -flto strips all unused helper functions, which 1) makes the
-    # produced output much smaller and 2) can make the linking step faster
+    # produced output much smaller and 2) can make the linking step faster.
+    # (the Windows linker seems to do this by default, judging by the results)
+
     _extra_cflags = {
         'posix': ['-flto'],
         }
