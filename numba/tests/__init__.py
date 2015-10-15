@@ -46,6 +46,7 @@ class TestLister(object):
         self._test_list = _flatten_suite(test)
         for t in self._test_list:
             print(t.id())
+        print('%d tests found'%len(self._test_list))
         return result
         
 class SerialSuite(suite.TestSuite):
