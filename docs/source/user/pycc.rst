@@ -39,8 +39,8 @@ Limitations
    several different signatures under different names).
 
 #. AOT compilation produces generic code for your CPU's architectural family
-   (for example "x86-64"), while JIT compilation produces code tailored
-   to your particular CPU model.
+   (for example "x86-64"), while JIT compilation produces code optimized
+   for your particular CPU model.
 
 
 Usage
