@@ -59,7 +59,7 @@ class CC(object):
         self._source_path = dct.get('__file__', '')
         self._source_module = source_module
         self._toolchain = Toolchain()
-        self._debug = False
+        self._verbose = False
         # By default, output in directory of caller module
         self._output_dir = os.path.dirname(self._source_path)
         self._output_file = self._toolchain.get_ext_filename(extension_name)
@@ -103,16 +103,15 @@ class CC(object):
         self._use_nrt = value
 
     @property
-    def debug(self):
+    def verbose(self):
         """
         Whether to display detailed information when compiling.
         """
-        return self._debug
+        return self._verbose
 
-    @debug.setter
-    def debug(self, value):
-        self._debug = value
-        self._toolchain.debug = value
+    @verbose.setter
+    def verbose(self, value):
+        self._verbose = value
 
     def export(self, exported_name, sig):
         """
@@ -189,6 +188,7 @@ class CC(object):
         """
         Compile the extension module.
         """
+        self._toolchain.verbose = self.verbose
         build_dir = tempfile.mkdtemp(prefix='pycc-build-%s-' % self._basename)
 
         # Compile object file

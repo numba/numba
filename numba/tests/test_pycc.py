@@ -143,7 +143,7 @@ class TestCC(BasePYCCTest):
 
     @contextlib.contextmanager
     def check_cc_compiled(self, cc):
-        #cc.debug = True
+        #cc.verbose = True
         cc.output_dir = self.tmpdir
         cc.compile()
 

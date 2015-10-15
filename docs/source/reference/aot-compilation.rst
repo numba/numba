@@ -13,11 +13,6 @@ Ahead-of-Time compilation
 
    :class:`CC` instances have the following attributes and methods:
 
-   .. attribute:: debug
-
-      (read-write attribute) If true, print out information while
-      compiling the extension.  False by default.
-
    .. attribute:: name
 
       (read-only attribute) The name of the extension module to be generated.
@@ -33,6 +28,11 @@ Ahead-of-Time compilation
       (read-write attribute) The name of the file the extension module will
       be written to.  By default this follows the Python naming convention
       for the current platform.
+
+   .. attribute:: verbose
+
+      (read-write attribute) If true, print out information while
+      compiling the extension.  False by default.
 
    .. decorator:: export(exported_name, sig)
 

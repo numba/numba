@@ -55,7 +55,7 @@ Standalone example
 
    cc = CC('my_module')
    # Uncomment the following line to print out the compilation steps
-   #cc.debug = True
+   #cc.verbose = True
 
    @cc.export('multf', 'f8(f8, f8)')
    @cc.export('multi', 'i4(i4, i4)')
