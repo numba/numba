@@ -29,7 +29,7 @@ def discover_tests(startdir):
     return suite
 
 
-def run_tests(xmloutput=None, verbosity=1, nomultiproc=False):
+def run_tests(argv=None, xmloutput=None, verbosity=1, nomultiproc=False):
     """
     args
     ----
@@ -47,16 +47,18 @@ def run_tests(xmloutput=None, verbosity=1, nomultiproc=False):
         runner = xmlrunner.XMLTestRunner(output=xmloutput)
     else:
         runner = None
-    prog = NumbaTestProgram(module=None,
+    prog = NumbaTestProgram(argv=argv,
+                            module=None,
                             testRunner=runner, exit=False,
                             verbosity=verbosity,
                             nomultiproc=nomultiproc)
     return prog.result
 
 
-def test(**kwargs):
-    return run_tests(**kwargs).wasSuccessful()
+def test(*args, **kwargs):
+
+    return run_tests(argv=['<main>'] + list(args), **kwargs).wasSuccessful()
 
 
 if __name__ == "__main__":
-    sys.exit(0 if test() else 1)
+    sys.exit(0 if run_tests(sys.argv) else 1)
