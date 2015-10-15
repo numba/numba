@@ -647,14 +647,7 @@ class ConstructorLikeBaseTest(object):
             arr.fill(fill_value)
 
     def check_like(self, pyfunc, dtype):
-        orig = np.linspace(0, 5, 6).astype(dtype)
-        cfunc = nrtjit(pyfunc)
-
-        for shape in (6, (2, 3), (1, 2, 3), (3, 1, 2), ()):
-            if shape == ():
-                arr = orig[-1:].reshape(())
-            else:
-                arr = orig.reshape(shape)
+        def check_arr(arr):
             expected = pyfunc(arr)
             ret = cfunc(arr)
             self.assertEqual(ret.size, expected.size)
@@ -665,6 +658,19 @@ class ConstructorLikeBaseTest(object):
             self.mutate_array(ret)
             self.mutate_array(expected)
             np.testing.assert_equal(ret, expected)
+
+        orig = np.linspace(0, 5, 6).astype(dtype)
+        cfunc = nrtjit(pyfunc)
+
+        for shape in (6, (2, 3), (1, 2, 3), (3, 1, 2), ()):
+            if shape == ():
+                arr = orig[-1:].reshape(())
+            else:
+                arr = orig.reshape(shape)
+            check_arr(arr)
+            # Non-contiguous array
+            if arr.ndim > 0:
+                check_arr(arr[::2])
 
 
 class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
