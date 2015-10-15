@@ -109,7 +109,8 @@ Signature syntax
 ----------------
 
 The syntax for exported signatures is the same as in the ``@jit``
-decorator.  You can read more about it in the :func:`numba.jit` reference.
+decorator.  You can read more about it in the :ref:`types <numba-types>`
+reference.
 
 Here is an example of exporting an implementation of the second-order
 centered difference::

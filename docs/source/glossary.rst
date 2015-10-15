@@ -6,8 +6,10 @@ Glossary
 
    ahead-of-time compilation
    AOT compilation
+   AOT
       Compilation of a function in a separate step before running the
-      program code.  This is the traditional kind of compilation known
+      program code, producing an on-disk binary object which can be distributed
+      independently.  This is the traditional kind of compilation known
       in languages such as C, C++ or Fortran.
 
    compile-time constant
@@ -16,12 +18,13 @@ Glossary
 
    just-in-time compilation
    JIT compilation
+   JIT
       Compilation of a function at execution time, as opposed to
       :term:`ahead-of-time compilation`.
 
    JIT function
-      Shorthand for "a function compiled with Numba using the
-      :ref:`@jit <jit>` decorator."
+      Shorthand for "a function :term:`JIT-compiled <JIT>` with Numba using
+      the :ref:`@jit <jit>` decorator."
 
    loop-lifting
       See :term:`loop-jitting`.
