@@ -2,6 +2,10 @@
 All functions described here are threadsafe.
 */
 
+#ifndef NUMBA_NRT_H_
+#define NUMBA_NRT_H_
+
+
 #include <stdlib.h>
 #include <stdio.h>
 #include "../_numba_common.h"
@@ -206,3 +210,6 @@ VISIBILITY_HIDDEN void *NRT_Reallocate(void *ptr, size_t size);
  * Debugging printf function used internally
  */
 VISIBILITY_HIDDEN void nrt_debug_print(char *fmt, ...);
+
+
+#endif /* NUMBA_NRT_H_ */

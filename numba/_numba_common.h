@@ -1,3 +1,6 @@
+#ifndef NUMBA_COMMON_H_
+#define NUMBA_COMMON_H_
+
 /* __has_attribute() is a clang / gcc-5 macro */
 #ifndef __has_attribute
 #   define __has_attribute(x) 0
@@ -13,3 +16,5 @@
 #else
 #define VISIBILITY_HIDDEN
 #endif
+
+#endif /* NUMBA_COMMON_H_ */
