@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from distutils.ccompiler import CCompiler, new_compiler
 from distutils.command.build_ext import build_ext
-from distutils.dist import Distribution
 from distutils.sysconfig import customize_compiler
 from distutils import log
 
@@ -36,7 +35,9 @@ class _DummyExtension(object):
 class Toolchain(object):
 
     def __init__(self):
-        self.debug = False
+        # Need to import it here since setuptools may monkeypatch it
+        from distutils.dist import Distribution
+        self._verbose = False
         self._cleanup()
         self._compiler = new_compiler()
         customize_compiler(self._compiler)
@@ -47,12 +48,12 @@ class Toolchain(object):
         self._math_info = np_misc.get_info('npymath')
 
     @property
-    def debug(self):
-        return self._debug
+    def verbose(self):
+        return self._verbose
 
-    @debug.setter
-    def debug(self, value):
-        self._debug = value
+    @verbose.setter
+    def verbose(self, value):
+        self._verbose = value
         # DEBUG will let Numpy spew many messages, so stick to INFO
         # to print commands executed by distutils
         log.set_threshold(log.INFO if value else log.WARN)

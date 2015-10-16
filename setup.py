@@ -161,9 +161,12 @@ setup(name='numba',
         "Topic :: Software Development :: Compilers",
       ],
       package_data={
-        "numba.cuda.tests.cudadrv.data": ["*.ptx"],
+        # HTML templates for type annotations
         "numba.annotations": ["*.html"],
+        # Various test data
+        "numba.cuda.tests.cudadrv.data": ["*.ptx"],
         "numba.hsa.tests.hsadrv": ["*.brig"],
+        "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],

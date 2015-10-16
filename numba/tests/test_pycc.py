@@ -3,11 +3,17 @@ from __future__ import print_function
 import contextlib
 import imp
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from ctypes import *
 
 import numpy as np
+try:
+    import setuptools
+except ImportError:
+    setuptools = None
 
 from numba import unittest_support as unittest
 from numba.pycc import find_shared_ending, find_pyext_ending, main
@@ -137,7 +143,7 @@ class TestCC(BasePYCCTest):
 
     @contextlib.contextmanager
     def check_cc_compiled(self, cc):
-        #cc.debug = True
+        #cc.verbose = True
         cc.output_dir = self.tmpdir
         cc.compile()
 
@@ -179,6 +185,9 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, 987.0 * 321.0)
             res = lib.square(5)
             self.assertPreciseEqual(res, 25)
+            self.assertIs(lib.get_none(), None)
+            with self.assertRaises(ZeroDivisionError):
+                lib.div(1, 0)
 
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
@@ -187,6 +196,9 @@ class TestCC(BasePYCCTest):
             for val in (-1, -1 + 0j, np.complex128(-1)):
                 res = lib.sqrt(val)
                 self.assertPreciseEqual(res, 1j)
+            # Implicit seeding at startup should guarantee a non-pathological
+            # start state.
+            self.assertNotEqual(lib.random(-1), lib.random(-1))
             res = lib.random(42)
             expected = np.random.RandomState(42).random_sample()
             self.assertPreciseEqual(res, expected)
@@ -216,6 +228,62 @@ class TestCC(BasePYCCTest):
                 assert list(res) == [0, 0, 0]
                 """
             self.check_cc_compiled_in_subprocess(lib, code)
+
+
+class TestDistutilsSupport(TestCase):
+
+    def setUp(self):
+        # Copy the test project into a temp directory to avoid
+        # keeping any build leftovers in the source tree
+        self.tmpdir = tempfile.mkdtemp(prefix='test_pycc_distutils-')
+        source_dir = os.path.join(base_path, 'pycc_distutils_usecase')
+        self.usecase_dir = os.path.join(self.tmpdir, 'work')
+        shutil.copytree(source_dir, self.usecase_dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def check_setup_py(self, setup_py_file):
+        # Compute PYTHONPATH to ensure the child processes see this Numba
+        import numba
+        numba_path = os.path.abspath(os.path.dirname(
+                                     os.path.dirname(numba.__file__)))
+        env = dict(os.environ)
+        if env.get('PYTHONPATH', ''):
+            env['PYTHONPATH'] = numba_path + os.pathsep + env['PYTHONPATH']
+        else:
+            env['PYTHONPATH'] = numba_path
+
+        def run_python(args):
+            p = subprocess.Popen([sys.executable] + args,
+                                 cwd=self.usecase_dir,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,
+                                 env=env)
+            out, _ = p.communicate()
+            rc = p.wait()
+            if rc != 0:
+                self.fail("python failed with the following output:\n%s"
+                          % out.decode('utf-8', 'ignore'))
+
+        run_python([setup_py_file, "build_ext", "--inplace"])
+        code = """if 1:
+            import pycc_compiled_module as lib
+            assert lib.get_const() == 42
+            res = lib.ones(3)
+            assert list(res) == [1.0, 1.0, 1.0]
+            """
+        run_python(["-c", code])
+
+    def test_setup_py_distutils(self):
+        if sys.version_info < (3,) and sys.platform == "win32":
+            # See e.g. https://stackoverflow.com/questions/28931875/problems-finding-vcvarsall-bat-when-using-distutils
+            self.skipTest("must use setuptools to build extensions for Python 2")
+        self.check_setup_py("setup_distutils.py")
+
+    @unittest.skipIf(setuptools is None, "test needs setuptools")
+    def test_setup_py_setuptools(self):
+        self.check_setup_py("setup_setuptools.py")
 
 
 if __name__ == "__main__":

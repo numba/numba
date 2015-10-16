@@ -1041,13 +1041,12 @@ class PythonAPI(object):
         return self.builder.call(fn, [obj])
 
     def make_none(self):
-        obj = self.get_c_object("Py_None")
+        obj = self.borrow_none()
         self.incref(obj)
         return obj
 
     def borrow_none(self):
-        obj = self.get_c_object("Py_None")
-        return obj
+        return self.get_c_object("_Py_NoneStruct")
 
     def sys_write_stdout(self, fmt, *args):
         fnty = Type.function(Type.void(), [self.cstring], var_arg=True)

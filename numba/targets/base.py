@@ -111,7 +111,8 @@ def _load_global_helpers():
     """
     Execute once to install special symbols into the LLVM symbol table.
     """
-    ll.add_symbol("Py_None", id(None))
+    # This is Py_None's real C name
+    ll.add_symbol("_Py_NoneStruct", id(None))
 
     # Add C helper functions
     for c_helpers in (_helperlib.c_helpers, _dynfunc.c_helpers):

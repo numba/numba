@@ -168,6 +168,8 @@ When using ``nogil=True``, you'll have to be wary of the usual pitfalls
 of multi-threaded programming (consistency, synchronization, race conditions,
 etc.).
 
+.. _jit-cache:
+
 ``cache``
 ---------
 

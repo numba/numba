@@ -2,6 +2,7 @@
 Creating Numpy universal functions
 ==================================
 
+.. _vectorize:
 
 The ``@vectorize`` decorator
 ============================

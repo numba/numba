@@ -11,11 +11,21 @@ from numba.pycc import CC
 #
 
 cc = CC('pycc_test_simple')
+cc.use_nrt = False
 
 @cc.export('multf', 'f4(f4, f4)')
 @cc.export('multi', 'i4(i4, i4)')
 def mult(a, b):
     return a * b
+
+# Test imported C globals such as Py_None, PyExc_ZeroDivisionError
+@cc.export('get_none', 'none()')
+def get_none():
+    return None
+
+@cc.export('div', 'f8(f8, f8)')
+def div(x, y):
+    return x / y
 
 _two = 2
 
@@ -27,6 +37,7 @@ def square(u):
 
 # These ones need helperlib
 cc_helperlib = CC('pycc_test_helperlib')
+cc_helperlib.use_nrt = False
 
 @cc_helperlib.export('power', 'i8(i8, i8)')
 def power(u, v):
@@ -43,12 +54,12 @@ def size(arr):
 # This one clashes with libc random() unless pycc is careful with naming.
 @cc_helperlib.export('random', 'f8(i4)')
 def random_impl(seed):
-    np.random.seed(seed)
+    if seed != -1:
+        np.random.seed(seed)
     return np.random.random()
 
 # These ones need NRT
 cc_nrt = CC('pycc_test_nrt')
-cc_nrt.use_nrt = True
 
 @cc_nrt.export('zero_scalar', 'f8(i4)')
 def zero_scalar(n):
