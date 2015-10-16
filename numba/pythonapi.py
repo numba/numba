@@ -1162,6 +1162,24 @@ class PythonAPI(object):
         n = self.builder.extract_value(self.builder.load(structptr), 1)
         return self.builder.call(fn, (ptr, n))
 
+    def serialize_uncached(self, obj):
+        """
+        Same as serialize_object(), but don't create a global variable,
+        simply return a literal {i8* data, i32 length} structure.
+        """
+        # First make the array constant
+        data = pickle.dumps(obj, protocol=-1)
+        assert len(data) < 2**31
+        name = ".const.pickledata.%s" % (id(obj))
+        bdata = cgutils.make_bytearray(data)
+        arr = self.context.insert_unique_const(self.module, name, bdata)
+        # Then populate the structure constant
+        struct = ir.Constant.literal_struct([
+            arr.bitcast(self.voidptr),
+            ir.Constant(ir.IntType(32), arr.type.pointee.count),
+            ])
+        return struct
+
     def serialize_object(self, obj):
         """
         Serialize the given object in the bitcode, and return it
@@ -1171,16 +1189,7 @@ class PythonAPI(object):
         try:
             gv = self.module.__serialized[obj]
         except KeyError:
-            # First make the array constant
-            data = pickle.dumps(obj, protocol=-1)
-            name = ".const.pickledata.%s" % (id(obj))
-            bdata = cgutils.make_bytearray(data)
-            arr = self.context.insert_unique_const(self.module, name, bdata)
-            # Then populate the structure constant
-            struct = ir.Constant.literal_struct([
-                arr.bitcast(self.voidptr),
-                ir.Constant(ir.IntType(32), arr.type.pointee.count),
-                ])
+            struct = self.serialize_uncached(obj)
             name = ".const.picklebuf.%s" % (id(obj))
             gv = self.context.insert_unique_const(self.module, name, struct)
             # Make the id() (and hence the name) unique while populating the module.

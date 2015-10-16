@@ -86,6 +86,7 @@ class TestLegacyAPI(BasePYCCTest):
         """
         Test creating a CPython extension module using pycc.
         """
+        self.skipTest("lack of environment can make the extension crash")
         unset_macosx_deployment_target()
 
         source = os.path.join(base_path, 'compile_with_pycc.py')
@@ -205,10 +206,14 @@ class TestCC(BasePYCCTest):
         with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
             # Sanity check
             self.assertPreciseEqual(lib.zero_scalar(1), 0.0)
+            res = lib.zeros(3)
+            self.assertEqual(list(res), [0, 0, 0])
 
             code = """if 1:
                 res = lib.zero_scalar(1)
                 assert res == 0.0
+                res = lib.zeros(3)
+                assert list(res) == [0, 0, 0]
                 """
             self.check_cc_compiled_in_subprocess(lib, code)
 

@@ -102,6 +102,9 @@ class _ModuleCompiler(object):
 
     method_def_ptr = lc.Type.pointer(method_def_ty)
 
+    env_def_ty = lc.Type.struct((lt._void_star, lt._int32))
+    env_def_ptr = lc.Type.pointer(env_def_ty)
+
     def __init__(self, export_entries, module_name, use_nrt=False):
         self.module_name = module_name
         self.export_python_wrap = False
@@ -110,6 +113,9 @@ class _ModuleCompiler(object):
         # Used by the CC API but not the legacy API
         self.external_init_function = None
         self.use_nrt = use_nrt
+
+        self.typing_context = CPUTarget.typing_context
+        self.context = CPUTarget.target_context.with_aot_codegen(self.module_name)
 
     def _mangle_method_symbol(self, func_name):
         return "._pycc_method_%s" % (func_name,)
@@ -124,11 +130,9 @@ class _ModuleCompiler(object):
         environment, and join them into a single LLVM module.
         """
         self.exported_function_types = {}
+        self.function_environments = {}
 
-        typing_ctx = CPUTarget.typing_context
-        target_ctx = CPUTarget.target_context.with_aot_codegen(self.module_name)
-
-        codegen = target_ctx.codegen()
+        codegen = self.context.codegen()
         library = codegen.create_library(self.module_name)
 
         # Generate IR for all exported functions
@@ -139,11 +143,12 @@ class _ModuleCompiler(object):
         if self.use_nrt:
             flags.set("nrt")
             # Compile NRT helpers
-            nrt_module, _ = atomicops.create_nrt_module(target_ctx)
+            nrt_module, _ = atomicops.create_nrt_module(self.context)
             library.add_ir_module(nrt_module)
 
         for entry in self.export_entries:
-            cres = compile_extra(typing_ctx, target_ctx, entry.function,
+            cres = compile_extra(self.typing_context, self.context,
+                                 entry.function,
                                  entry.signature.args,
                                  entry.signature.return_type, flags,
                                  locals={}, library=library)
@@ -160,6 +165,7 @@ class _ModuleCompiler(object):
                 fnty = cres.target_context.call_conv.get_function_type(
                     cres.fndesc.restype, cres.fndesc.argtypes)
                 self.exported_function_types[entry] = fnty
+                self.function_environments[entry] = cres.environment
             else:
                 llvm_func.name = entry.symbol
                 self.dll_exports.append(entry.symbol)
@@ -209,7 +215,8 @@ class _ModuleCompiler(object):
                 fout.write("extern %s %s(%s);\n" % (restype, name, args))
 
     def _emit_method_array(self, llvm_module):
-        """Collect exported methods and emit a PyMethodDef array.
+        """
+        Collect exported methods and emit a PyMethodDef array.
 
         :returns: a pointer to the PyMethodDef array.
         """
@@ -220,13 +227,8 @@ class _ModuleCompiler(object):
             fnty = self.exported_function_types[entry]
             lfunc = llvm_module.add_function(fnty, name=llvm_func_name)
 
-            method_name_init = lc.Constant.stringz(name)
-            method_name = llvm_module.add_global_variable(
-                method_name_init.type, '.method_name')
-            method_name.initializer = method_name_init
-            method_name.linkage = lc.LINKAGE_INTERNAL
-            method_name.global_constant = True
-            method_def_const = lc.Constant.struct((lc.Constant.gep(method_name, [ZERO, ZERO]),
+            method_name = self.context.insert_const_string(llvm_module, name)
+            method_def_const = lc.Constant.struct((method_name,
                                                    lc.Constant.bitcast(lfunc, lt._void_star),
                                                    METH_VARARGS_AND_KEYWORDS,
                                                    NULL))
@@ -235,20 +237,44 @@ class _ModuleCompiler(object):
         sentinel = lc.Constant.struct([NULL, NULL, ZERO, NULL])
         method_defs.append(sentinel)
         method_array_init = lc.Constant.array(self.method_def_ty, method_defs)
-        method_array = llvm_module.add_global_variable(method_array_init.type, '.module_methods')
+        method_array = llvm_module.add_global_variable(method_array_init.type,
+                                                       '.module_methods')
         method_array.initializer = method_array_init
         method_array.linkage = lc.LINKAGE_INTERNAL
         method_array_ptr = lc.Constant.gep(method_array, [ZERO, ZERO])
         return method_array_ptr
 
-    def _emit_module_init_code(self, llvm_module, builder, modobj):
+    def _emit_environment_array(self, llvm_module, builder, pyapi):
         """
-        Emit call to external init function, if any.
+        Emit an array of env_def_t structures (see modulemixin.c)
+        storing the pickled environment constants for each of the
+        exported functions.
+        """
+        env_defs = []
+        for entry in self.export_entries:
+            env = self.function_environments[entry]
+            # Constants may be unhashable so avoid trying to cache them
+            env_def = pyapi.serialize_uncached(env.consts)
+            env_defs.append(env_def)
+        env_defs_init = lc.Constant.array(self.env_def_ty, env_defs)
+        gv = self.context.insert_unique_const(llvm_module,
+                                              '.module_environments',
+                                              env_defs_init)
+        return gv.gep([ZERO, ZERO])
+
+    def _emit_module_init_code(self, llvm_module, builder, modobj,
+                               method_array, env_array):
+        """
+        Emit call to "external" init function, if any.
         """
         if self.external_init_function:
-            fnty = ir.FunctionType(ir.VoidType(), [modobj.type])
+            fnty = ir.FunctionType(lt._int32,
+                                   [modobj.type, self.method_def_ptr,
+                                    self.env_def_ptr])
             fn = llvm_module.add_function(fnty, self.external_init_function)
-            builder.call(fn, [modobj])
+            return builder.call(fn, [modobj, method_array, env_array])
+        else:
+            return None
 
 
 class ModuleCompilerPy2(_ModuleCompiler):
@@ -285,25 +311,29 @@ class ModuleCompilerPy2(_ModuleCompiler):
         mod_init_fn = llvm_module.add_function(*self.module_init_definition)
         entry = mod_init_fn.append_basic_block('Entry')
         builder = lc.Builder.new(entry)
+        pyapi = self.context.get_python_api(builder)
 
         # Python C API module creation function.
         create_module_fn = llvm_module.add_function(*self.module_create_definition)
         create_module_fn.linkage = lc.LINKAGE_EXTERNAL
 
         # Define a constant string for the module name.
-        mod_name_init = lc.Constant.stringz(self.module_name)
-        mod_name_const = llvm_module.add_global_variable(mod_name_init.type, '.module_name')
-        mod_name_const.initializer = mod_name_init
-        mod_name_const.linkage = lc.LINKAGE_INTERNAL
+        mod_name_const = self.context.insert_const_string(llvm_module,
+                                                          self.module_name)
+
+        method_array = self._emit_method_array(llvm_module)
 
         mod = builder.call(create_module_fn,
-                           (lc.Constant.gep(mod_name_const, [ZERO, ZERO]),
-                            self._emit_method_array(llvm_module),
+                           (mod_name_const,
+                            method_array,
                             NULL,
                             lc.Constant.null(lt._pyobject_head_p),
                             lc.Constant.int(lt._int32, sys.api_version)))
 
-        self._emit_module_init_code(llvm_module, builder, mod)
+        env_array = self._emit_environment_array(llvm_module, builder, pyapi)
+        self._emit_module_init_code(llvm_module, builder, mod,
+                                    method_array, env_array)
+        # XXX No way to notify failure to caller...
 
         builder.ret_void()
 
@@ -402,10 +432,8 @@ class ModuleCompilerPy3(_ModuleCompiler):
         create_module_fn.linkage = lc.LINKAGE_EXTERNAL
 
         # Define a constant string for the module name.
-        mod_name_init = lc.Constant.stringz(self.module_name)
-        mod_name_const = llvm_module.add_global_variable(mod_name_init.type, '.module_name')
-        mod_name_const.initializer = mod_name_init
-        mod_name_const.linkage = lc.LINKAGE_INTERNAL
+        mod_name_const = self.context.insert_const_string(llvm_module,
+                                                          self.module_name)
 
         mod_def_base_init = lc.Constant.struct(
             (lt._pyobject_head_init,                        # PyObject_HEAD
@@ -414,16 +442,19 @@ class ModuleCompilerPy3(_ModuleCompiler):
              lc.Constant.null(lt._pyobject_head_p),         # m_copy
             )
         )
-        mod_def_base = llvm_module.add_global_variable(mod_def_base_init.type, '.module_def_base')
+        mod_def_base = llvm_module.add_global_variable(mod_def_base_init.type,
+                                                       '.module_def_base')
         mod_def_base.initializer = mod_def_base_init
         mod_def_base.linkage = lc.LINKAGE_INTERNAL
 
+        method_array = self._emit_method_array(llvm_module)
+
         mod_def_init = lc.Constant.struct(
             (mod_def_base_init,                              # m_base
-             lc.Constant.gep(mod_name_const, [ZERO, ZERO]),  # m_name
+             mod_name_const,                                 # m_name
              lc.Constant.null(self._char_star),              # m_doc
              lc.Constant.int(lt._llvm_py_ssize_t, -1),       # m_size
-             self._emit_method_array(llvm_module),           # m_methods
+             method_array,                                   # m_methods
              lc.Constant.null(self.inquiry_ty),              # m_reload
              lc.Constant.null(self.traverseproc_ty),         # m_traverse
              lc.Constant.null(self.inquiry_ty),              # m_clear
@@ -432,7 +463,8 @@ class ModuleCompilerPy3(_ModuleCompiler):
         )
 
         # Define a constant string for the module name.
-        mod_def = llvm_module.add_global_variable(mod_def_init.type, '.module_def')
+        mod_def = llvm_module.add_global_variable(mod_def_init.type,
+                                                  '.module_def')
         mod_def.initializer = mod_def_init
         mod_def.linkage = lc.LINKAGE_INTERNAL
 
@@ -440,6 +472,8 @@ class ModuleCompilerPy3(_ModuleCompiler):
         mod_init_fn = llvm_module.add_function(*self.module_init_definition)
         entry = mod_init_fn.append_basic_block('Entry')
         builder = lc.Builder.new(entry)
+        pyapi = self.context.get_python_api(builder)
+
         mod = builder.call(create_module_fn,
                            (mod_def,
                             lc.Constant.int(lt._int32, sys.api_version)))
@@ -450,7 +484,13 @@ class ModuleCompilerPy3(_ModuleCompiler):
         with builder.if_then(cgutils.is_null(builder, mod)):
             builder.ret(NULL.bitcast(mod_init_fn.type.pointee.return_type))
 
-        self._emit_module_init_code(llvm_module, builder, mod)
+        env_array = self._emit_environment_array(llvm_module, builder, pyapi)
+        ret = self._emit_module_init_code(llvm_module, builder, mod,
+                                          method_array, env_array)
+        if ret is not None:
+            with builder.if_then(cgutils.is_not_null(builder, ret)):
+                # Init function errored out
+                builder.ret(lc.Constant.null(mod.type))
 
         builder.ret(mod)
 
