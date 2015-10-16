@@ -17,7 +17,7 @@ requirements:
   build:
     - python
     - argparse        [py26]
-    - numpy
+    - numpy x.x
     # On channel https://binstar.org/numba/
     - llvmlite 0.8*
     - funcsigs       [py26 or py27]
@@ -25,7 +25,7 @@ requirements:
   run:
     - python
     - argparse        [py26]
-    - numpy
+    - numpy x.x
     # On channel https://binstar.org/numba/
     - llvmlite 0.8*
     - funcsigs       [py26 or py27]
