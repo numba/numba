@@ -73,6 +73,9 @@ typedef struct {
     int len;
 } env_def_t;
 
+/*
+ * Recreate an environment object from a env_def_t structure.
+ */
 static EnvironmentObject *
 recreate_environment(PyObject *module, env_def_t env)
 {
