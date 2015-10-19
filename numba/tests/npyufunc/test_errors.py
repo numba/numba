@@ -1,12 +1,14 @@
 from __future__ import absolute_import, print_function, division
 
 import contextlib
+import sys
 import warnings
 
 import numpy as np
 
 from numba import unittest_support as unittest
 from numba import vectorize, guvectorize
+from numba.numpy_support import version as np_version
 
 from ..support import TestCase
 
@@ -34,6 +36,11 @@ def remainder(a, b):
 
 def power(a, b):
     return a ** b
+
+# See https://github.com/numpy/numpy/pull/3691
+skipIfFPStatusBug = unittest.skipIf(
+    sys.platform == 'win32' and np_version < (1, 8) and sys.maxsize < 2 ** 32,
+    "test disabled because of FPU state handling issue on Numpy < 1.8")
 
 
 class TestExceptions(TestCase):
@@ -92,6 +99,7 @@ class TestFloatingPointExceptions(TestCase):
             self.assertEqual(w.category, category)
             self.assertIn(m, str(w.message))
 
+    @skipIfFPStatusBug
     def check_truediv_real(self, dtype):
         """
         Test 1 / 0 and 0 / 0.
@@ -111,6 +119,7 @@ class TestFloatingPointExceptions(TestCase):
     def test_truediv_integer(self):
         self.check_truediv_real(np.int32)
 
+    @skipIfFPStatusBug
     def check_divmod_float(self, pyfunc, values, messages):
         """
         Test 1 // 0 and 0 // 0.
@@ -153,6 +162,7 @@ class TestFloatingPointExceptions(TestCase):
     def test_remainder_int(self):
         self.check_divmod_int(remainder, [0, 0, 0, 1])
 
+    @skipIfFPStatusBug
     def test_power_float(self):
         """
         Test 0 ** -1 and 2 ** <big number>.
