@@ -128,11 +128,14 @@ class TestRecordDtype(unittest.TestCase):
         for i in range(self.sample1d.size):
             got = self.sample1d.copy()
 
+            # Force the argument to the pure Python function to be
+            # a recarray, as attribute access isn't supported on
+            # structured arrays.
             if numpy_support.version <= (1, 9):
                 expect = np.recarray(got.shape, got.dtype)
                 expect[:] = got
             else:
-                expect = got.copy()
+                expect = got.copy().view(np.recarray)
 
             cfunc(got, i, value)
             pyfunc(expect, i, value)
@@ -269,6 +272,7 @@ class TestRecordDtype(unittest.TestCase):
 
         np.testing.assert_equal(rec['j'], arr)
 
+
 @skip_on_cudasim('Attribute access of structured arrays not supported in simulator')
 class TestRecordDtypeWithStructArrays(TestRecordDtype):
     '''
@@ -279,6 +283,7 @@ class TestRecordDtypeWithStructArrays(TestRecordDtype):
         self.sample1d = np.zeros(3, dtype=recordtype)
         self.samplerec1darr = np.zeros(1, dtype=recordwitharray)[0]
         self.samplerec2darr = np.zeros(1, dtype=recordwith2darray)[0]
+
 
 if __name__ == '__main__':
     unittest.main()
