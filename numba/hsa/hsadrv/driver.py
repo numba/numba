@@ -641,8 +641,12 @@ class Queue(object):
                  signal=None):
         dims = len(workgroup_size)
         assert dims == len(grid_size)
-        assert dims <= 3
+        assert 0 < dims <= 3
         assert grid_size >= workgroup_size
+        if workgroup_size > tuple(self._agent.workgroup_max_dim)[:dims]:
+            msg = "workgroupsize is too big {0} > {1}"
+            raise HsaDriverError(msg.format(workgroup_size,
+                                tuple(self._agent.workgroup_max_dim)[:dims]))
         s = signal if signal is not None else hsa.create_signal(1)
 
         # Note: following vector_copy.c
