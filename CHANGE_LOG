@@ -40,11 +40,11 @@ Improvements:
 Fixes:
 
 * PR #1483: Allow np.empty_like() and friends on non-contiguous arrays
-* Issue #1471: Allow caching JITfunctions defined in IPython
+* Issue #1471: Allow caching JIT functions defined in IPython
 * PR #1457: Fix flat indexing of boolean arrays
 * PR #1421: Allow calling Numpy ufuncs, without an explicit output, on
   non-contiguous arrays
-* Issue #1411: Crash when unpacking a tuple containing a Numba-allocated array
+* Issue #1411: Fix crash when unpacking a tuple containing a Numba-allocated array
 * Issue #1394: Allow unifying range_state32 and range_state64
 * Issue #1373: Fix code generation error on lists of bools
 
