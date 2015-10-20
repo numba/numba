@@ -402,7 +402,9 @@ class Lower(BaseLower):
             return res
 
         elif isinstance(value, ir.Arg):
-            res = self.fnargs[value.index]
+            val = self.fnargs[value.index]
+            oty = self.typeof("arg." + value.name)
+            res = self.context.cast(self.builder, val, oty, ty)
             self.incref(ty, res)
             return res
 
