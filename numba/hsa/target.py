@@ -115,8 +115,11 @@ class HSATargetContext(BaseContext):
                         lty.addrspace)
             return lty, None
 
-        llargtys, changed = zip(*map(sub_gen_with_global,
-                                     arginfo.argument_types))
+        if len(arginfo.argument_types) > 0:
+            llargtys, changed = zip(*map(sub_gen_with_global,
+                                         arginfo.argument_types))
+        else:
+            llargtys = changed = ()
         wrapperfnty = lc.Type.function(lc.Type.void(), llargtys)
 
         wrapper_module = self.create_module("hsa.kernel.wrapper")

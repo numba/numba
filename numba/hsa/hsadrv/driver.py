@@ -676,7 +676,9 @@ class Queue(object):
         packet.completion_signal = s._id
 
         packet.kernel_object = symbol.kernel_object
-        packet.kernarg_address = ctypes.addressof(kernargs)
+
+        packet.kernarg_address = (0 if kernargs is None
+                                  else ctypes.addressof(kernargs))
 
         packet.private_segment_size = symbol.private_segment_size
         packet.group_segment_size = symbol.group_segment_size

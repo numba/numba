@@ -119,6 +119,14 @@ class TestSimple(unittest.TestCase):
         udt2[(1, 1), (2, 5)](out)
         np.testing.assert_equal(out, 2)
 
+    def test_empty_kernel(self):
+        @hsa.jit
+        def udt():
+            pass
+
+        udt[1, 1]()
+
+
 
 if __name__ == '__main__':
     unittest.main()
