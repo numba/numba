@@ -403,6 +403,8 @@ class Lower(BaseLower):
 
         elif isinstance(value, ir.Arg):
             val = self.fnargs[value.index]
+            # Cast from the argument type to the local variable type
+            # (note the "arg.FOO" convention as used in typeinfer)
             oty = self.typeof("arg." + value.name)
             res = self.context.cast(self.builder, val, oty, ty)
             self.incref(ty, res)
