@@ -2,6 +2,11 @@
 Version 0.22.0
 --------------
 
+This release features several highlights: Python 3.5 support, Numpy 1.10
+support, Ahead-of-Time compilation of extension modules, additional
+vectorization features that were previously only available with the
+proprietary extension NumbaPro, improvements in array indexing.
+
 Improvements:
 
 * PR #1480: Add distutils support for AOT compilation
