@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import defaultdict
 from distutils import dir_util, log
 from distutils.command import build_ext
 from distutils.extension import Extension
@@ -9,7 +8,7 @@ import shutil
 import sys
 import tempfile
 
-from numba import sigutils
+from numba import sigutils, typing
 from .compiler import ModuleCompiler, ExportEntry
 from .platform import Toolchain
 
@@ -119,7 +118,8 @@ class CC(object):
         """
         Mark a function for exporting in the extension module.
         """
-        sig = sigutils.parse_signature(sig)
+        fn_args, fn_retty = sigutils.normalize_signature(sig)
+        sig = typing.signature(fn_retty, *fn_args)
         if exported_name in self._exported_functions:
             raise KeyError("duplicated export symbol %s" % (exported_name))
 
