@@ -30,11 +30,13 @@ class CC(object):
     # (the Windows linker seems to do this by default, judging by the results)
 
     _extra_cflags = {
-        'posix': ['-flto'],
+        # Comment out due to odd behavior with GCC 4.9+ with LTO
+        # 'posix': ['-flto'],
         }
 
     _extra_ldflags = {
-        'posix': ['-flto'],
+        # Comment out due to odd behavior with GCC 4.9+ with LTO
+        # 'posix': ['-flto'],
         }
 
     def __init__(self, extension_name, source_module=None):
