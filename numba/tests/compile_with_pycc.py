@@ -3,6 +3,7 @@ import cmath
 import numpy as np
 
 from numba import exportmany, export
+from numba import float32
 from numba.pycc import CC
 
 
@@ -13,7 +14,7 @@ from numba.pycc import CC
 cc = CC('pycc_test_simple')
 cc.use_nrt = False
 
-@cc.export('multf', 'f4(f4, f4)')
+@cc.export('multf', (float32, float32))
 @cc.export('multi', 'i4(i4, i4)')
 def mult(a, b):
     return a * b

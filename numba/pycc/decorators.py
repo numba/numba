@@ -1,11 +1,10 @@
 from __future__ import print_function, absolute_import
 
-import inspect
-import os
+
 import re
 import warnings
 
-from numba import sigutils
+from numba import sigutils, typing
 from .compiler import ExportEntry
 
 # Registry is okay to be a global because we are using pycc as a standalone
@@ -20,7 +19,8 @@ def export(prototype):
     sym, sig = parse_prototype(prototype)
 
     def wrappped(func):
-        signature = sigutils.parse_signature(sig)
+        fn_argtys, fn_retty = sigutils.normalize_signature(sig)
+        signature = typing.signature(fn_retty, *fn_argtys)
         entry = ExportEntry(symbol=sym, signature=signature, function=func)
         export_registry.append(entry)
 
