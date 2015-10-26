@@ -119,9 +119,17 @@ class TestGUVectorizeScalar(unittest.TestCase):
     def test_scalar_input_core_type_error(self):
         with self.assertRaises(TypeError) as raises:
             @guvectorize(['int32[:], int32, int32[:]'], '(n),(n)->(n)')
-            def pyfunc(inp, n, out):
+            def pyfunc(a, b, c):
                 pass
-        self.assertEqual("scalar type int32 given for non scalar argument",
+        self.assertEqual("scalar type int32 given for non scalar argument #2",
+                         str(raises.exception))
+
+    def test_ndim_mismatch(self):
+        with self.assertRaises(TypeError) as raises:
+            @guvectorize(['int32[:], int32[:]'], '(m,n)->(n)')
+            def pyfunc(a, b):
+                pass
+        self.assertEqual("type and shape signature mismatch for arg #1",
                          str(raises.exception))
 
 
