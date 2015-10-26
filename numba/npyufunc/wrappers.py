@@ -513,11 +513,20 @@ class GUArrayArg(object):
 
         if isinstance(typ, types.Array):
             as_scalar = not syms
-            ndim = max(1, len(syms))
-            if ndim != typ.ndim:
-                raise TypeError("type and shape signature mismatch for arg #{"
-                                "0}".format(i + 1))
 
+            # number of symbol in the shape spec should match the dimension
+            # of the array type.
+            if len(syms) != typ.ndim:
+                if len(syms) == 0 and typ.ndim == 1:
+                    # This is an exception for handling scalar argument.
+                    # The type can be 1D array for scalar.
+                    # In the future, we may deprecate this exception.
+                    pass
+                else:
+                    raise TypeError("type and shape signature mismatch for arg "
+                                    "#{0}".format(i + 1))
+
+            ndim = typ.ndim
             shape = [sym_dim[s] for s in syms]
             strides = []
 
@@ -526,7 +535,6 @@ class GUArrayArg(object):
                                       [context.get_constant(types.intp,
                                                             step_offset + j)],
                                       name="step.ptr")
-
                 step = builder.load(stepptr)
                 strides.append(step)
 
@@ -556,6 +564,11 @@ class GUArrayArg(object):
 
 
 class _ScalarArgLoader(object):
+    """
+    Handle GFunc argument loading where a scalar type is used in the core
+    function.
+    """
+
     def __init__(self, dtype):
         self.dtype = dtype
 
@@ -567,6 +580,10 @@ class _ScalarArgLoader(object):
 
 
 class _ArrayArgLoader(object):
+    """
+    Handle GUFunc argument loading where an array is expected.
+    """
+
     def __init__(self, dtype, ndim, core_step, as_scalar, shape, strides):
         self.dtype = dtype
         self.ndim = ndim
@@ -606,7 +623,13 @@ class _ArrayArgLoader(object):
 
 
 class _ArrayAsScalarArgLoader(_ArrayArgLoader):
+    """
+    Handle GUFunc argument loading where the shape signature specifies
+    a scalar "()" but a 1D array is used for the type of the core function.
+    """
+
     def _shape_and_strides(self, context, builder):
+        # Set shape and strides for a 1D size 1 array
         one = context.get_constant(types.intp, 1)
         zero = context.get_constant(types.intp, 0)
         shape = cgutils.pack_array(builder, [one])
