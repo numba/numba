@@ -89,6 +89,41 @@ class TestGUVectorizeScalar(unittest.TestCase):
         # verify result
         self.assertTrue(np.all(inp * 2 == out))
 
+    def test_scalar_input_core_type(self):
+        def pyfunc(inp, n, out):
+            for i in range(inp.size):
+                out[i] = n * (inp[i] + 1)
+
+        my_gufunc = guvectorize(['int32[:], int32, int32[:]'],
+                                '(n),()->(n)')(pyfunc)
+
+        # test single core loop execution
+        arr = np.arange(10).astype(np.int32)
+        got = my_gufunc(arr, 2)
+
+        expected = np.zeros_like(got)
+        pyfunc(arr, 2, expected)
+
+        np.testing.assert_equal(got, expected)
+
+        # test multiple core loop execution
+        arr = np.arange(20).astype(np.int32).reshape(10, 2)
+        got = my_gufunc(arr, 2)
+
+        expected = np.zeros_like(got)
+        for ax in range(expected.shape[0]):
+            pyfunc(arr[ax], 2, expected[ax])
+
+        np.testing.assert_equal(got, expected)
+
+    def test_scalar_input_core_type_error(self):
+        with self.assertRaises(TypeError) as raises:
+            @guvectorize(['int32[:], int32, int32[:]'], '(n),(n)->(n)')
+            def pyfunc(inp, n, out):
+                pass
+        self.assertEqual("scalar type int32 given for non scalar argument",
+                         str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

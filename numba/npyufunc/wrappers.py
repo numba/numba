@@ -508,8 +508,10 @@ class GUArrayArg(object):
 
         if isinstance(typ, types.Array):
             self.dtype = typ.dtype
+            self._is_core_scalar = False
         else:
             self.dtype = typ
+            self._is_core_scalar = True
 
         self.syms = syms
         self.as_scalar = not syms
@@ -520,8 +522,12 @@ class GUArrayArg(object):
         self.core_step = builder.load(core_step_ptr)
 
         if self.as_scalar:
-            self.ndim = 1
+            if not self._is_core_scalar:
+                self.ndim = 1
         else:
+            if self._is_core_scalar:
+                raise TypeError("scalar type {0} given for non scalar "
+                                "argument".format(typ))
             self.ndim = len(syms)
             self.shape = []
             self.strides = []
@@ -547,32 +553,39 @@ class GUArrayArg(object):
         context = self.context
         builder = self.builder
 
-        arytyp = types.Array(dtype=self.dtype, ndim=self.ndim, layout="A")
-        arycls = context.make_array(arytyp)
-
-        array = arycls(context, builder)
-        offseted_data = cgutils.pointer_add(self.builder,
-                                            self.data,
-                                            self.builder.mul(self.core_step,
-                                                             ind))
-        if not self.as_scalar:
-            shape = cgutils.pack_array(builder, self.shape)
-            strides = cgutils.pack_array(builder, self.strides)
+        if self._is_core_scalar:
+            # Core function receive a scalar type
+            dptr = builder.bitcast(self.data,
+                            context.get_data_type(self.dtype).as_pointer())
+            return builder.load(dptr)
         else:
-            one = context.get_constant(types.intp, 1)
-            zero = context.get_constant(types.intp, 0)
-            shape = cgutils.pack_array(builder, [one])
-            strides = cgutils.pack_array(builder, [zero])
+            # Core function does not receive a scalar type
+            arytyp = types.Array(dtype=self.dtype, ndim=self.ndim, layout="A")
+            arycls = context.make_array(arytyp)
 
-        itemsize = context.get_abi_sizeof(context.get_data_type(self.dtype))
-        context.populate_array(array,
-                               data=builder.bitcast(offseted_data,
-                                                    array.data.type),
-                               shape=shape,
-                               strides=strides,
-                               itemsize=context.get_constant(types.intp,
-                                                             itemsize),
-                               meminfo=None)
+            array = arycls(context, builder)
+            offseted_data = cgutils.pointer_add(self.builder,
+                                                self.data,
+                                                self.builder.mul(self.core_step,
+                                                                 ind))
+            if not self.as_scalar:
+                shape = cgutils.pack_array(builder, self.shape)
+                strides = cgutils.pack_array(builder, self.strides)
+            else:
+                one = context.get_constant(types.intp, 1)
+                zero = context.get_constant(types.intp, 0)
+                shape = cgutils.pack_array(builder, [one])
+                strides = cgutils.pack_array(builder, [zero])
 
-        return array._getvalue()
+            itemsize = context.get_abi_sizeof(context.get_data_type(self.dtype))
+            context.populate_array(array,
+                                   data=builder.bitcast(offseted_data,
+                                                        array.data.type),
+                                   shape=shape,
+                                   strides=strides,
+                                   itemsize=context.get_constant(types.intp,
+                                                                 itemsize),
+                                   meminfo=None)
+
+            return array._getvalue()
 
