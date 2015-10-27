@@ -330,10 +330,9 @@ class _GufuncWrapper(object):
         step_offset = len(self.sin) + len(self.sout)
         for i, (typ, sym) in enumerate(zip(self.signature.args,
                                            self.sin + self.sout)):
-            ary = GUArrayArg(self.context, builder, arg_args, arg_dims,
+            ary = GUArrayArg(self.context, builder, arg_args,
                              arg_steps, i, step_offset, typ, sym, sym_dim)
-            if not ary.as_scalar:
-                step_offset += ary.ndim
+            step_offset += len(sym)
             arrays.append(ary)
 
         bbreturn = builder.append_basic_block('.return')
@@ -500,69 +499,110 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
 
 
 class GUArrayArg(object):
-    def __init__(self, context, builder, args, dims, steps, i, step_offset,
+    def __init__(self, context, builder, args, steps, i, step_offset,
                  typ, syms, sym_dim):
 
         self.context = context
         self.builder = builder
 
-        if isinstance(typ, types.Array):
-            self.dtype = typ.dtype
-        else:
-            self.dtype = typ
-
-        self.syms = syms
-        self.as_scalar = not syms
-
         offset = context.get_constant(types.intp, i)
 
-        core_step_ptr = builder.gep(steps, [offset], name="core.step.ptr")
-        self.core_step = builder.load(core_step_ptr)
+        data = builder.load(builder.gep(args, [offset], name="data.ptr"),
+                            name="data")
+        self.data = data
 
-        if self.as_scalar:
-            self.ndim = 1
-        else:
-            self.ndim = len(syms)
-            self.shape = []
-            self.strides = []
+        if isinstance(typ, types.Array):
+            as_scalar = not syms
 
-            for j in range(self.ndim):
+            # number of symbol in the shape spec should match the dimension
+            # of the array type.
+            if len(syms) != typ.ndim:
+                if len(syms) == 0 and typ.ndim == 1:
+                    # This is an exception for handling scalar argument.
+                    # The type can be 1D array for scalar.
+                    # In the future, we may deprecate this exception.
+                    pass
+                else:
+                    raise TypeError("type and shape signature mismatch for arg "
+                                    "#{0}".format(i + 1))
+
+            ndim = typ.ndim
+            shape = [sym_dim[s] for s in syms]
+            strides = []
+
+            for j in range(ndim):
                 stepptr = builder.gep(steps,
                                       [context.get_constant(types.intp,
                                                             step_offset + j)],
                                       name="step.ptr")
-
                 step = builder.load(stepptr)
-                self.strides.append(step)
+                strides.append(step)
 
-            for s in syms:
-                self.shape.append(sym_dim[s])
+            ldcls = (_ArrayAsScalarArgLoader
+                     if as_scalar
+                     else _ArrayArgLoader)
 
-        data = builder.load(builder.gep(args, [offset], name="data.ptr"),
-                            name="data")
+            core_step_ptr = builder.gep(steps, [offset], name="core.step.ptr")
+            core_step = builder.load(core_step_ptr)
 
-        self.data = data
+            self._loader = ldcls(dtype=typ.dtype,
+                                 ndim=ndim,
+                                 core_step=core_step,
+                                 as_scalar=as_scalar,
+                                 shape=shape,
+                                 strides=strides)
+        else:
+            # If typ is not an array
+            if syms:
+                raise TypeError("scalar type {0} given for non scalar "
+                                "argument #{1}".format(typ, i + 1))
+            self._loader = _ScalarArgLoader(dtype=typ)
 
     def get_array_at_offset(self, ind):
-        context = self.context
-        builder = self.builder
+        return self._loader.load(context=self.context, builder=self.builder,
+                                 data=self.data, ind=ind)
 
+
+class _ScalarArgLoader(object):
+    """
+    Handle GFunc argument loading where a scalar type is used in the core
+    function.
+    """
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+
+    def load(self, context, builder, data, ind):
+        # Always load from base position, ignoring `ind`
+        dptr = builder.bitcast(data,
+                               context.get_data_type(self.dtype).as_pointer())
+        return builder.load(dptr)
+
+
+class _ArrayArgLoader(object):
+    """
+    Handle GUFunc argument loading where an array is expected.
+    """
+
+    def __init__(self, dtype, ndim, core_step, as_scalar, shape, strides):
+        self.dtype = dtype
+        self.ndim = ndim
+        self.core_step = core_step
+        self.as_scalar = as_scalar
+        self.shape = shape
+        self.strides = strides
+
+    def load(self, context, builder, data, ind):
         arytyp = types.Array(dtype=self.dtype, ndim=self.ndim, layout="A")
         arycls = context.make_array(arytyp)
 
         array = arycls(context, builder)
-        offseted_data = cgutils.pointer_add(self.builder,
-                                            self.data,
-                                            self.builder.mul(self.core_step,
-                                                             ind))
-        if not self.as_scalar:
-            shape = cgutils.pack_array(builder, self.shape)
-            strides = cgutils.pack_array(builder, self.strides)
-        else:
-            one = context.get_constant(types.intp, 1)
-            zero = context.get_constant(types.intp, 0)
-            shape = cgutils.pack_array(builder, [one])
-            strides = cgutils.pack_array(builder, [zero])
+        offseted_data = cgutils.pointer_add(builder,
+                                            data,
+                                            builder.mul(self.core_step,
+                                                        ind))
+
+        shape, strides = self._shape_and_strides(context, builder)
 
         itemsize = context.get_abi_sizeof(context.get_data_type(self.dtype))
         context.populate_array(array,
@@ -576,3 +616,22 @@ class GUArrayArg(object):
 
         return array._getvalue()
 
+    def _shape_and_strides(self, context, builder):
+        shape = cgutils.pack_array(builder, self.shape)
+        strides = cgutils.pack_array(builder, self.strides)
+        return shape, strides
+
+
+class _ArrayAsScalarArgLoader(_ArrayArgLoader):
+    """
+    Handle GUFunc argument loading where the shape signature specifies
+    a scalar "()" but a 1D array is used for the type of the core function.
+    """
+
+    def _shape_and_strides(self, context, builder):
+        # Set shape and strides for a 1D size 1 array
+        one = context.get_constant(types.intp, 1)
+        zero = context.get_constant(types.intp, 0)
+        shape = cgutils.pack_array(builder, [one])
+        strides = cgutils.pack_array(builder, [zero])
+        return shape, strides
