@@ -373,21 +373,10 @@ class Lower(BaseLower):
         # In nopython mode, closure vars are frozen like globals
         if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
             if isinstance(ty, types.ExternalFunctionPointer):
-                res = self.context.get_constant_generic(self.builder, ty,
-                                                        value.value)
                 self.has_dynamic_globals = True
 
-            elif isinstance(ty, types.Dummy):
-                res = self.context.get_dummy_value()
-
-            elif isinstance(ty, types.Array):
-                res = self.context.make_constant_array(self.builder, ty,
-                                                       value.value)
-
-            else:
-                res = self.context.get_constant_generic(self.builder, ty,
-                                                        value.value)
-
+            res = self.context.get_constant_generic(self.builder, ty,
+                                                    value.value)
             self.incref(ty, res)
             return res
 

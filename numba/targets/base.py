@@ -334,7 +334,19 @@ class BaseContext(object):
         """
         Return a LLVM constant representing value *val* of Numba type *ty*.
         """
-        if self.is_struct_type(ty):
+        if isinstance(ty, types.ExternalFunctionPointer):
+            ptrty = self.get_function_pointer_type(ty)
+            ptrval = ty.get_pointer(val)
+            return builder.inttoptr(self.get_constant(types.intp, ptrval),
+                                    ptrty)
+
+        elif isinstance(ty, types.Array):
+            return self.make_constant_array(builder, ty, val)
+
+        elif isinstance(ty, types.Dummy):
+            return self.get_dummy_value()
+
+        elif self.is_struct_type(ty):
             struct = self.get_constant_struct(builder, ty, val)
             if isinstance(ty, types.Record):
                 ptrty = self.data_model_manager[ty].get_data_type()
@@ -342,15 +354,6 @@ class BaseContext(object):
                 builder.store(struct, ptr)
                 return ptr
             return struct
-
-        elif isinstance(ty, types.ExternalFunctionPointer):
-            ptrty = self.get_function_pointer_type(ty)
-            ptrval = ty.get_pointer(val)
-            return builder.inttoptr(self.get_constant(types.intp, ptrval),
-                                    ptrty)
-
-        elif isinstance(ty, types.Dummy):
-            return self.get_dummy_value()
 
         else:
             return self.get_constant(ty, val)

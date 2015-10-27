@@ -652,6 +652,8 @@ class TestGetItem(TestCase):
         np.testing.assert_equal(got, expected)
 
     def test_ellipsis_issue1499(self):
+        # This tests an issue when ndarray.__getitem__ recv a tuple of
+        # constants. The lowering is mishandling the constant value creation.
         @njit
         def udt(arr):
             return arr[..., 0]
