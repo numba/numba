@@ -349,6 +349,9 @@ class BaseContext(object):
             return builder.inttoptr(self.get_constant(types.intp, ptrval),
                                     ptrty)
 
+        elif isinstance(ty, types.Dummy):
+            return self.get_dummy_value()
+
         else:
             return self.get_constant(ty, val)
 
