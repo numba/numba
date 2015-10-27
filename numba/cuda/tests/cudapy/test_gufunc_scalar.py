@@ -96,10 +96,21 @@ class TestGUFuncScalr(unittest.TestCase):
             for i in range(b.size):
                 out[i] = a * b[i]
 
-        a = np.int64(2)
+        a = np.int64(2)  # type does not match signature (int32)
         b = np.arange(10).astype(np.int32)
         out = foo(a, b)
         np.testing.assert_equal(out, a * b)
+
+        # test error
+        a = np.array(a)
+        da = cuda.to_device(a)
+        self.assertEqual(da.dtype, np.int64)
+        with self.assertRaises(TypeError) as raises:
+            foo(da, b)
+
+        self.assertIn("does not support .astype()", str(raises.exception))
+
+
 
 
 if __name__ == '__main__':

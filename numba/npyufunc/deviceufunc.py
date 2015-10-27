@@ -12,6 +12,7 @@ from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder
 from numba import sigutils, types
 from numba.typing import signature
 from numba.npyufunc.sigparse import parse_signature
+from collections import OrderedDict
 
 if IS_PY3:
     def _exec(codestr, glbls):
@@ -357,7 +358,8 @@ class DeviceVectorize(_BaseUFuncBuilder):
         assert not targetoptions
         self.py_func = func
         self.identity = self.parse_identity(identity)
-        self.kernelmap = {}  # { arg_dtype: (return_dtype), cudakernel }
+        # { arg_dtype: (return_dtype), cudakernel }
+        self.kernelmap = OrderedDict()
 
     @property
     def pyfunc(self):
@@ -423,7 +425,8 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
         assert len(self.outputsig) == 1, "only support 1 output"
-        self.kernelmap = {}  # { arg_dtype: (return_dtype), cudakernel }
+        # { arg_dtype: (return_dtype), cudakernel }
+        self.kernelmap = OrderedDict()
 
     @property
     def pyfunc(self):
@@ -625,8 +628,9 @@ class GenerializedUFunc(object):
     def __call__(self, *args, **kws):
         callsteps = self._call_steps(args, kws)
         callsteps.prepare_inputs()
-        schedule, outdtype, kernel = self._schedule(callsteps.norm_inputs,
-                                                    callsteps.output)
+        indtypes, schedule, outdtype, kernel = self._schedule(
+            callsteps.norm_inputs, callsteps.output)
+        callsteps.adjust_input_types(indtypes)
         callsteps.allocate_outputs(schedule, outdtype)
         callsteps.prepare_kernel_parameters()
         newparams, newretval = self._broadcast(schedule,
@@ -641,13 +645,35 @@ class GenerializedUFunc(object):
 
         # find kernel
         idtypes = tuple(i.dtype for i in inputs)
-        outdtype, kernel = self.kernelmap[idtypes]
+        try:
+            outdtype, kernel = self.kernelmap[idtypes]
+        except KeyError:
+            # No exact match, then use the first compatbile.
+            # This does not match the numpy dispatching exactly.
+            # Later, we may just jit a new version for the missing signature.
+            idtypes = self._search_matching_signature(idtypes)
+            # Select kernel
+            outdtype, kernel = self.kernelmap[idtypes]
 
         # check output
         if out is not None and schedule.output_shapes[0] != out.shape:
             raise ValueError('output shape mismatch')
 
-        return schedule, outdtype, kernel
+        return idtypes, schedule, outdtype, kernel
+
+    def _search_matching_signature(self, idtypes):
+        """
+        Given the input types in `idtypes`, return a compatible sequence of
+        types that is defined in `kernelmap`.
+
+        Note: Ordering is guaranteed by `kernelmap` being a OrderedDict
+        """
+        for sig in self.kernelmap.keys():
+            if all(np.can_cast(actual, desired)
+                   for actual, desired in zip(sig, idtypes)):
+                return sig
+        else:
+            raise TypeError("no matching signature")
 
     def _broadcast(self, schedule, params, retval):
         assert schedule.loopn > 0, "zero looping dimension"
@@ -697,6 +723,23 @@ class GUFuncCallSteps(object):
             else:
                 inputs.append(np.array(a))
         self.norm_inputs = inputs
+
+    def adjust_input_types(self, indtypes):
+        """
+        Attempt to cast the inputs to the required types if necessary
+        and if they are not device array.
+
+        Side effect: Only affects the element of `norm_inputs` that requires
+        a type cast.
+        """
+        for i, (ity, val) in enumerate(zip(indtypes, self.norm_inputs)):
+            if ity != val.dtype:
+                if not hasattr(val, 'astype'):
+                    msg = ("compatible signature is possible by casting but "
+                           "{0} does not support .astype()").format(type(val))
+                    raise TypeError(msg)
+                # Cast types
+                self.norm_inputs[i] = val.astype(ity)
 
     def allocate_outputs(self, schedule, outdtype):
         # allocate output
