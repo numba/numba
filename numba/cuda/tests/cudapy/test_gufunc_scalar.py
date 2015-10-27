@@ -89,6 +89,18 @@ class TestGUFuncScalr(unittest.TestCase):
                 exp = A[j] * X[j, i] + Y[j, i]
                 self.assertTrue(exp == out[j, i], (exp, out[j, i]))
 
+    def test_gufunc_scalar_cast(self):
+        @guvectorize(['void(int32, int32[:], int32[:])'], '(),(t)->(t)',
+                     target='cuda')
+        def foo(a, b, out):
+            for i in range(b.size):
+                out[i] = a * b[i]
+
+        a = np.int64(2)
+        b = np.arange(10).astype(np.int32)
+        out = foo(a, b)
+        np.testing.assert_equal(out, a * b)
+
 
 if __name__ == '__main__':
     unittest.main()
