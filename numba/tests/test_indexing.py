@@ -651,6 +651,16 @@ class TestGetItem(TestCase):
         expected = py_func(arr)
         np.testing.assert_equal(got, expected)
 
+    def test_ellipsis_issue1499(self):
+        @njit
+        def udt(arr):
+            return arr[..., 0]
+
+        arr = np.arange(3)
+        got = udt(arr)
+        expected = udt.py_func(arr)
+        np.testing.assert_equal(got, expected)
+
     def test_none_index(self, flags=enable_pyobj_flags):
         pyfunc = none_index_usecase
         arraytype = types.Array(types.int32, 2, 'C')
