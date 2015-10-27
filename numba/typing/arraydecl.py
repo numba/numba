@@ -96,7 +96,7 @@ def get_array_index_type(ary, idx):
         layout = ary.layout
         if layout == 'C':
             # Integer indexing on the left keeps the array C-contiguous
-            if len(left_indices) + len(right_indices) == ary.ndim:
+            if n_indices == ary.ndim:
                 # If all indices are there, ellipsis's place is indifferent
                 left_indices = left_indices + right_indices
                 right_indices = []
@@ -110,7 +110,7 @@ def get_array_index_type(ary, idx):
                         break
         elif layout == 'F':
             # Integer indexing on the right keeps the array F-contiguous
-            if len(left_indices) + len(right_indices) == ary.ndim:
+            if n_indices == ary.ndim:
                 # If all indices are there, ellipsis's place is indifferent
                 right_indices = left_indices + right_indices
                 left_indices = []
