@@ -308,6 +308,12 @@ class ArrayAttribute(AttributeTemplate):
             raise TypeError("ravel() support contiguous array only")
         return signature(ary.copy(ndim=1))
 
+    @bound_function("array.flatten")
+    def resolve_flatten(self, ary, args, kws):
+        assert not kws
+        assert not args
+        return signature(ary.copy(ndim=1, layout='C'))
+
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):

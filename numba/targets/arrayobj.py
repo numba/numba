@@ -1151,6 +1151,19 @@ def array_ravel(context, builder, sig, args):
     return res
 
 
+@builtin
+@implement('array.flatten', types.Kind(types.Array))
+def array_flatten(context, builder, sig, args):
+    def imp(ary):
+        out = numpy.empty(ary.size, dtype=ary.dtype)
+        for i, v in enumerate(ary.flat):
+            out[i] = v
+        return out
+
+    res = context.compile_internal(builder, imp, sig, args)
+    res = impl_ret_new_ref(context, builder, sig.return_type, res)
+    return res
+
 
 def _change_dtype(context, builder, oldty, newty, ary):
     """

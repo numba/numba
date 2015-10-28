@@ -119,11 +119,18 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("reshape() supports contiguous array only",
                       str(raises.exception))
 
-    def test_flatten_array(self, flags=enable_pyobj_flags):
+    def test_flatten_array(self, flags=enable_pyobj_flags, layout='C'):
         a = np.arange(9).reshape(3, 3)
+        if layout == 'F':
+            a = a.T
 
         pyfunc = flatten_array
         arraytype1 = typeof(a)
+        if layout == 'A':
+            # Force A layout
+            arraytype1 = arraytype1.copy(layout='A')
+
+        self.assertEqual(arraytype1.layout, layout)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
@@ -132,10 +139,9 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(expected, got)
 
     def test_flatten_array_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_flatten_array(flags=no_pyobj_flags)
-
-        self.assertIn("flatten", str(raises.exception))
+        self.test_flatten_array(flags=no_pyobj_flags)
+        self.test_flatten_array(flags=no_pyobj_flags, layout='F')
+        self.test_flatten_array(flags=no_pyobj_flags, layout='A')
 
     def test_ravel_array(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
@@ -166,7 +172,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_ravel_array_size_npm(self):
         self.test_ravel_array_size(flags=no_pyobj_flags)
-        
+
     def test_transpose_array(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
 
