@@ -622,7 +622,7 @@ class ZipType(SimpleIteratorType):
 
     def __init__(self, iterable_types):
         self.source_types = tuple(tp.iterator_type for tp in iterable_types)
-        yield_type = Tuple(tp.yield_type for tp in self.source_types)
+        yield_type = Tuple([tp.yield_type for tp in self.source_types])
         name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)
         super(ZipType, self).__init__(name, yield_type)
 
@@ -1076,6 +1076,12 @@ class _HeterogenousTuple(BaseTuple):
 
 
 class Tuple(BaseAnonymousTuple, _HeterogenousTuple):
+
+    def __new__(cls, types):
+        if types and all(t == types[0] for t in types[1:]):
+            return UniTuple(dtype=types[0], count=len(types))
+        else:
+            return object.__new__(Tuple)
 
     def __init__(self, types):
         self.types = tuple(types)
