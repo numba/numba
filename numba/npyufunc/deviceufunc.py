@@ -6,13 +6,12 @@ import operator
 import warnings
 from functools import reduce
 import numpy as np
-from numba.utils import longint
+from numba.utils import longint, OrderedDict
 from numba.utils import IS_PY3
 from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder
 from numba import sigutils, types
 from numba.typing import signature
 from numba.npyufunc.sigparse import parse_signature
-from collections import OrderedDict
 
 if IS_PY3:
     def _exec(codestr, glbls):
