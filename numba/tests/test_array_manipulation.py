@@ -2,7 +2,7 @@ from __future__ import print_function
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import types, from_dtype, errors
+from numba import types, from_dtype, errors, typeof
 import numba.unittest_support as unittest
 from numba.tests.support import TestCase, MemoryLeakMixin
 
@@ -74,12 +74,13 @@ def bad_float_index(arr):
 
 class TestArrayManipulation(MemoryLeakMixin, TestCase):
     def test_reshape_array(self, flags=enable_pyobj_flags):
+        a = np.arange(9)
+
         pyfunc = reshape_array
-        arraytype1 = types.Array(types.int32, 1, 'C')
+        arraytype1 = typeof(a)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(9)
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
@@ -89,12 +90,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_reshape_array_to_1d(self, flags=enable_pyobj_flags,
                                  layout='C'):
+        a = np.arange(9).reshape(3, 3)
         pyfunc = reshape_array_to_1d
-        arraytype1 = types.Array(types.int32, 2, layout)
+        arraytype1 = typeof(a).copy(layout=layout)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(9).reshape(3, 3)
         expected = pyfunc(a)
         got = cfunc(a)
         self.assertEqual(got.ndim, 1)
@@ -109,12 +110,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                       str(raises.exception))
 
     def test_flatten_array(self, flags=enable_pyobj_flags):
+        a = np.arange(9).reshape(3, 3)
+
         pyfunc = flatten_array
-        arraytype1 = types.Array(types.int32, 2, 'C')
+        arraytype1 = typeof(a)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(9).reshape(3, 3)
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
@@ -126,23 +128,25 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("flatten", str(raises.exception))
 
     def test_ravel_array(self, flags=enable_pyobj_flags):
+        a = np.arange(9).reshape(3, 3)
+
         pyfunc = ravel_array
-        arraytype1 = types.Array(types.int32, 2, 'C')
+        arraytype1 = typeof(a)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(9).reshape(3, 3)
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
 
     def test_ravel_array_size(self, flags=enable_pyobj_flags):
+        a = np.arange(9).reshape(3, 3)
+
         pyfunc = ravel_array_size
-        arraytype1 = types.Array(types.int32, 2, 'C')
+        arraytype1 = typeof(a)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(9).reshape(3, 3)
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
@@ -160,12 +164,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("ravel", str(raises.exception))
 
     def test_transpose_array(self, flags=enable_pyobj_flags):
+        a = np.arange(9).reshape(3, 3)
+
         pyfunc = transpose_array
-        arraytype1 = types.Array(types.int32, 2, 'C')
+        arraytype1 = typeof(a)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(9).reshape(3, 3)
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
@@ -174,12 +179,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.test_transpose_array(flags=no_pyobj_flags)
 
     def test_squeeze_array(self, flags=enable_pyobj_flags):
+        a = np.arange(2 * 1 * 3 * 1 * 4).reshape(2, 1, 3, 1, 4)
+
         pyfunc = squeeze_array
-        arraytype1 = types.Array(types.int32, 2, 'C')
+        arraytype1 = typeof(a)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(2 * 1 * 3 * 1 * 4).reshape(2, 1, 3, 1, 4)
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
@@ -191,12 +197,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("squeeze", str(raises.exception))
 
     def test_convert_array_str(self, flags=enable_pyobj_flags):
+        a = np.arange(9, dtype='i4')
+
         pyfunc = convert_array_str
-        arraytype1 = types.Array(types.int32, 1, 'C')
+        arraytype1 = typeof(a)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(9, dtype='i4')
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
@@ -208,12 +215,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("astype", str(raises.exception))
 
     def test_convert_array(self, flags=enable_pyobj_flags):
+        a = np.arange(9, dtype='i4')
+
         pyfunc = convert_array_dtype
-        arraytype1 = types.Array(types.int32, 1, 'C')
+        arraytype1 = typeof(a)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(9, dtype='i4')
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
@@ -225,12 +233,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("astype", str(raises.exception))
 
     def test_add_axis1(self, flags=enable_pyobj_flags):
+        a = np.arange(9).reshape(3, 3)
+
         pyfunc = add_axis1
-        arraytype1 = types.Array(types.int32, 1, 'C')
+        arraytype1 = typeof(a)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(9).reshape(3, 3)
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
@@ -242,12 +251,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("expand_dims", str(raises.exception))
 
     def test_add_axis2(self, flags=enable_pyobj_flags):
+        a = np.arange(9).reshape(3, 3)
+
         pyfunc = add_axis2
-        arraytype1 = types.Array(types.int32, 1, 'C')
+        arraytype1 = typeof(a)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
-        a = np.arange(9).reshape(3, 3)
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
@@ -256,7 +266,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             self.test_add_axis2(flags=no_pyobj_flags)
         self.assertIn("unsupported array index type none in",
-                         str(raises.exception))
+                      str(raises.exception))
 
     def test_bad_index_npm(self):
         with self.assertTypingError() as raises:
