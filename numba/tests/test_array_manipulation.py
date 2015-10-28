@@ -91,8 +91,16 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     def test_reshape_array_to_1d(self, flags=enable_pyobj_flags,
                                  layout='C'):
         a = np.arange(9).reshape(3, 3)
+        if layout == 'F':
+            a = a.T
+
         pyfunc = reshape_array_to_1d
-        arraytype1 = typeof(a).copy(layout=layout)
+        arraytype1 = typeof(a)
+        if layout == 'A':
+            # Force A layout
+            arraytype1 = arraytype1.copy(layout='A')
+
+        self.assertEqual(arraytype1.layout, layout)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
@@ -103,11 +111,14 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_reshape_array_to_1d_npm(self):
         self.test_reshape_array_to_1d(flags=no_pyobj_flags)
-        self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='F')
+        # Test unsupported layout
+        message = "reshape() supports C-contiguous array only"
+        with self.assertTypingError() as raises:
+            self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='F')
+        self.assertIn(message, str(raises.exception))
         with self.assertTypingError() as raises:
             self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='A')
-        self.assertIn("reshape() supports contiguous array only",
-                      str(raises.exception))
+        self.assertIn(message, str(raises.exception))
 
     def test_flatten_array(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
