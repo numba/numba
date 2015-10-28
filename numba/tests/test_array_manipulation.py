@@ -162,17 +162,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(expected, got)
 
     def test_ravel_array_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_ravel_array(flags=no_pyobj_flags)
-
-        self.assertIn("ravel", str(raises.exception))
+        self.test_ravel_array(flags=no_pyobj_flags)
 
     def test_ravel_array_size_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_ravel_array_size(flags=no_pyobj_flags)
-
-        self.assertIn("ravel", str(raises.exception))
-
+        self.test_ravel_array_size(flags=no_pyobj_flags)
+        
     def test_transpose_array(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
 

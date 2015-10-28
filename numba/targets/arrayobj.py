@@ -1138,6 +1138,20 @@ def array_reshape_vararg(context, builder, sig, args):
     return array_reshape(context, builder, new_sig, new_args)
 
 
+@builtin
+@implement('array.ravel', types.Kind(types.Array))
+def array_ravel(context, builder, sig, args):
+    assert sig.args[0].layout in 'CF'
+
+    def imp(ary):
+        return ary.reshape(ary.size)
+
+    res = context.compile_internal(builder, imp, sig, args)
+    res = impl_ret_new_ref(context, builder, sig.return_type, res)
+    return res
+
+
+
 def _change_dtype(context, builder, oldty, newty, ary):
     """
     Attempt to fix up *ary* for switching from *oldty* to *newty*.

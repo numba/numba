@@ -300,6 +300,14 @@ class ArrayAttribute(AttributeTemplate):
         retty = ary.copy(dtype=dtype)
         return signature(retty, *args)
 
+    @bound_function("array.ravel")
+    def resolve_ravel(self, ary, args, kws):
+        assert not kws
+        assert not args
+        if ary.layout not in 'CF':
+            raise TypeError("ravel() support contiguous array only")
+        return signature(ary.copy(ndim=1))
+
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
