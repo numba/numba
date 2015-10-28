@@ -1,15 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import namedtuple
-import itertools
 
-from numba import types, intrinsics
-from numba.utils import PYVERSION
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    AbstractTemplate, builtin_global, builtin,
-                                    builtin_attr, signature, bound_function,
-                                    make_callable_template)
-
+from numba import types
+from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
+                                    builtin, builtin_attr, signature,
+                                    bound_function)
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
