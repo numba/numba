@@ -1078,7 +1078,7 @@ class _HeterogenousTuple(BaseTuple):
 class Tuple(BaseAnonymousTuple, _HeterogenousTuple):
 
     def __new__(cls, types):
-        if all(t == types[0] for t in types[1:]):
+        if types and all(t == types[0] for t in types[1:]):
             return UniTuple(dtype=types[0], count=len(types))
         else:
             return object.__new__(Tuple)
