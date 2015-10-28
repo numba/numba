@@ -87,9 +87,10 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     def test_reshape_array_npm(self):
         self.test_reshape_array(flags=no_pyobj_flags)
 
-    def test_reshape_array_to_1d(self, flags=enable_pyobj_flags):
+    def test_reshape_array_to_1d(self, flags=enable_pyobj_flags,
+                                 layout='C'):
         pyfunc = reshape_array_to_1d
-        arraytype1 = types.Array(types.int32, 2, 'C')
+        arraytype1 = types.Array(types.int32, 2, layout)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
@@ -101,6 +102,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_reshape_array_to_1d_npm(self):
         self.test_reshape_array_to_1d(flags=no_pyobj_flags)
+        self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='F')
+        with self.assertTypingError() as raises:
+            self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='A')
+        self.assertIn("reshape() supports contiguous array only",
+                      str(raises.exception))
 
     def test_flatten_array(self, flags=enable_pyobj_flags):
         pyfunc = flatten_array
