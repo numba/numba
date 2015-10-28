@@ -257,19 +257,34 @@ class ArrayAttribute(AttributeTemplate):
     @bound_function("array.reshape")
     def resolve_reshape(self, ary, args, kws):
         assert not kws
-        shape, = args
-        shape = normalize_shape(shape)
-        if shape is None:
-            return
-        if ary.layout == "C":
-            # Given order='C' (the only supported value), a C-contiguous
-            # array is always returned for a C-contiguous input.
-            layout = "C"
+
+        if ary.layout not in 'CF':
+            # only work for contiguous array
+            raise TypeError("reshape() supports contiguous array only")
+
+        if len(args) == 1:
+            # single arg
+            shape, = args
+            shape = normalize_shape(shape)
+            if shape is None:
+                return
+
+            ndim = shape.count
+            retty = ary.copy(ndim=ndim)
+            return signature(retty, shape)
+
+        elif len(args) == 0:
+            # no arg
+            raise TypeError("reshape() take at least one arg")
+
         else:
-            layout = "A"
-        ndim = shape.count if isinstance(shape, types.BaseTuple) else 1
-        retty = ary.copy(ndim=ndim)
-        return signature(retty, shape)
+            # vararg case
+            if any(a not in types.number_domain for a in args):
+                raise TypeError("reshape({0}) is not supported".format(
+                    ', '.join(args)))
+
+            retty = ary.copy(ndim=len(args))
+            return signature(retty, *args)
 
     @bound_function("array.sort")
     def resolve_sort(self, ary, args, kws):

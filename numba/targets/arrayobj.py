@@ -1115,6 +1115,26 @@ def array_reshape(context, builder, sig, args):
     res = ret._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
+@builtin
+@implement('array.reshape', types.Kind(types.Array), types.VarArg(types.Any))
+def array_reshape_vararg(context, builder, sig, args):
+    # types
+    aryty = sig.args[0]
+    dimtys = sig.args[1:]
+    # values
+    ary = args[0]
+    dims = args[1:]
+    # coerce all types to uintp
+    dims = [context.cast(builder, val, ty, types.uintp)
+            for ty, val in zip(dimtys, dims)]
+    # make a tuple
+    shape = cgutils.pack_array(builder, dims, dims[0].type)
+
+    shapety = types.UniTuple(dtype=types.uintp, count=len(dims))
+    new_sig = typing.signature(sig.return_type, aryty, shapety)
+    new_args = ary, shape
+    return array_reshape(context, builder, new_sig, new_args)
+
 
 def _change_dtype(context, builder, oldty, newty, ary):
     """
