@@ -17,6 +17,10 @@ def reshape_array(a):
     return a.reshape(3, 3)
 
 
+def reshape_array_to_1d(a):
+    return a.reshape(a.size)
+
+
 def flatten_array(a):
     return a.flatten()
 
@@ -82,6 +86,21 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_reshape_array_npm(self):
         self.test_reshape_array(flags=no_pyobj_flags)
+
+    def test_reshape_array_to_1d(self, flags=enable_pyobj_flags):
+        pyfunc = reshape_array_to_1d
+        arraytype1 = types.Array(types.int32, 2, 'C')
+        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(9).reshape(3, 3)
+        expected = pyfunc(a)
+        got = cfunc(a)
+        self.assertEqual(got.ndim, 1)
+        np.testing.assert_equal(expected, got)
+
+    def test_reshape_array_to_1d_npm(self):
+        self.test_reshape_array_to_1d(flags=no_pyobj_flags)
 
     def test_flatten_array(self, flags=enable_pyobj_flags):
         pyfunc = flatten_array
@@ -183,7 +202,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("astype", str(raises.exception))
 
     def test_convert_array(self, flags=enable_pyobj_flags):
-        pyfunc = convert_array_str
+        pyfunc = convert_array_dtype
         arraytype1 = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point

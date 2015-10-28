@@ -257,7 +257,6 @@ class ArrayAttribute(AttributeTemplate):
     @bound_function("array.reshape")
     def resolve_reshape(self, ary, args, kws):
         assert not kws
-
         if ary.layout not in 'CF':
             # only work for contiguous array
             raise TypeError("reshape() supports contiguous array only")
@@ -265,11 +264,14 @@ class ArrayAttribute(AttributeTemplate):
         if len(args) == 1:
             # single arg
             shape, = args
-            shape = normalize_shape(shape)
-            if shape is None:
-                return
 
-            ndim = shape.count
+            if shape in types.number_domain:
+                ndim = 1
+            else:
+                shape = normalize_shape(shape)
+                if shape is None:
+                    return
+                ndim = shape.count
             retty = ary.copy(ndim=ndim)
             return signature(retty, shape)
 
