@@ -127,7 +127,7 @@ def iternext_zip(context, builder, sig, args, result):
 
     result.set_valid(is_valid)
     with builder.if_then(is_valid):
-        result.yield_(cgutils.make_anonymous_struct(builder, values))
+        result.yield_(context.make_tuple(builder, zip_type.yield_type, values))
 
 
 #-------------------------------------------------------------------------------
