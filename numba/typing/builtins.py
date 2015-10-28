@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import itertools
 
-from numba import types, intrinsics
+from numba import types
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, operator_map
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
@@ -766,20 +766,6 @@ class Zip(AbstractTemplate):
 
 
 builtin_global(zip, types.Function(Zip))
-
-
-@builtin
-class Intrinsic_array_ravel(AbstractTemplate):
-    key = intrinsics.array_ravel
-
-    def generic(self, args, kws):
-        assert not kws
-        [arr] = args
-        if arr.layout in 'CF' and arr.ndim >= 1:
-            return signature(arr.copy(ndim=1), arr)
-
-builtin_global(intrinsics.array_ravel, types.Function(Intrinsic_array_ravel))
-
 
 #------------------------------------------------------------------------------
 
