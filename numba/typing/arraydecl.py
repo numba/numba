@@ -253,9 +253,9 @@ class ArrayAttribute(AttributeTemplate):
     @bound_function("array.reshape")
     def resolve_reshape(self, ary, args, kws):
         assert not kws
-        if ary.layout != 'C':
-            # only work for C-contiguous array
-            raise TypeError("reshape() supports C-contiguous array only")
+        if ary.layout not in 'CF':
+            # only work for contiguous array
+            raise TypeError("reshape() supports contiguous array only")
 
         if len(args) == 1:
             # single arg

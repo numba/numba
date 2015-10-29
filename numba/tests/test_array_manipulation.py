@@ -111,14 +111,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_reshape_array_to_1d_npm(self):
         self.test_reshape_array_to_1d(flags=no_pyobj_flags)
-        # Test unsupported layout
-        message = "reshape() supports C-contiguous array only"
-        with self.assertTypingError() as raises:
+        with self.assertRaises(NotImplementedError) as raises:
             self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='F')
-        self.assertIn(message, str(raises.exception))
+        self.assertIn("incompatible shape for array", str(raises.exception))
         with self.assertTypingError() as raises:
             self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='A')
-        self.assertIn(message, str(raises.exception))
+        self.assertIn("reshape() supports contiguous array only",
+                      str(raises.exception))
 
     def test_flatten_array(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
