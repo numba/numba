@@ -9,6 +9,7 @@ proprietary extension NumbaPro, improvements in array indexing.
 
 Improvements:
 
+* PR #1497: Allow scalar input type instead of size-1 array to @guvectorize
 * PR #1480: Add distutils support for AOT compilation
 * PR #1460: Create a new API for Ahead-of-Time (AOT) compilation
 * PR #1451: Allow passing Python lists to JIT-compiled functions, and
