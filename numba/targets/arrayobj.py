@@ -1101,6 +1101,8 @@ def array_reshape(context, builder, sig, args):
     fail = builder.icmp_unsigned('==', ok, lc.Constant.int(ok.type, 0))
 
     with builder.if_then(fail):
+        # Release allocated array if the function error out
+        context.nrt_decref(builder, aryty, args[0])
         msg = "incompatible shape for array"
         context.call_conv.return_user_exc(builder, NotImplementedError, (msg,))
 
