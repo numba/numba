@@ -7,6 +7,8 @@ from numba.config import MACHINE_BITS
 from numba import cgutils
 from llvmlite import ir, binding as llvm
 
+# Flag to enable debug print in NRT_incref and NRT_decref
+_debug_print = True
 
 _word_type = ir.IntType(MACHINE_BITS)
 _pointer_type = ir.PointerType(ir.IntType(8))
@@ -49,6 +51,10 @@ def _define_nrt_incref(module, atomic_incr):
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
+
+    if _debug_print:
+        cgutils.printf(builder, "*** NRT_Incref %zu [%p]\n", builder.load(ptr),
+                       ptr)
     builder.call(atomic_incr, [builder.bitcast(ptr, atomic_incr.args[0].type)])
     builder.ret_void()
 
@@ -67,6 +73,10 @@ def _define_nrt_decref(module, atomic_decr):
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
+
+    if _debug_print:
+        cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(ptr),
+                       ptr)
     newrefct = builder.call(atomic_decr,
                             [builder.bitcast(ptr, atomic_decr.args[0].type)])
 
