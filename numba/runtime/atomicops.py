@@ -264,8 +264,8 @@ def remove_redundant_nrt_refct(ll_module):
             yield ln, None, None
 
     def _prune_redundant_refct_ops(bb_lines):
-        incref_map = defaultdict(list)
-        decref_map = defaultdict(list)
+        incref_map = defaultdict(deque)
+        decref_map = defaultdict(deque)
         for num, incref_var, decref_var in _examine_refct_op(bb_lines):
             assert not (incref_var and decref_var)
             if incref_var:
@@ -279,7 +279,7 @@ def remove_redundant_nrt_refct(ll_module):
             ct = min(len(incops), len(decops))
             for _ in range(ct):
                 to_remove.add(incops.pop())
-                to_remove.add(decops.pop())
+                to_remove.add(decops.popleft())
 
         return [ln for num, ln in enumerate(bb_lines)
                 if num not in to_remove]
