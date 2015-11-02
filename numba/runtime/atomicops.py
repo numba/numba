@@ -167,6 +167,7 @@ def create_nrt_module(ctx):
 
     return ir_mod, library
 
+
 def compile_nrt_functions(ctx):
     """
     Compile all LLVM NRT functions and return a library containing them.
@@ -190,11 +191,13 @@ def remove_redundant_nrt_refct(ll_module):
     Remove redundant reference count operations from the
     `llvmlite.binding.ModuleRef`. This parses the ll_module as a string and
     line by line to remove the unnecessary nrt refct pairs within each block.
-
-    Note
-    -----
-    Should replace this.  Not efficient.
+    Decref calls are moved after the last incref call in the block to avoid
+    temporarily decref'ing to zero (which can happen due to hidden decref from
+    alias).
     """
+    # Note: As soon as we have better utility in analyzing materialized LLVM
+    #       module in llvmlite, we can redo this without so much string
+    #       processing.
 
     def _extract_functions(module):
         cur = []
