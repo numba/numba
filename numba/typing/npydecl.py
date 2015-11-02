@@ -751,5 +751,21 @@ class Where(AbstractTemplate):
 
 builtin_global(numpy.where, types.Function(Where))
 
+@builtin
+class Sinc(AbstractTemplate):
+    key = numpy.sinc
+
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        arg = args[0]
+        supported_scalars = (types.Float, types.Complex)
+        if (isinstance(arg, supported_scalars) or
+              (isinstance(arg, types.Array) and
+               isinstance(arg.dtype, supported_scalars))):
+            return signature(arg, arg)
+
+builtin_global(numpy.sinc, types.Function(Sinc))
+
 
 builtin_global(numpy, types.Module(numpy))
