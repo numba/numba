@@ -241,7 +241,7 @@ def remove_redundant_nrt_refct(ll_module):
             elif ln:
                 cur.append(ln)
 
-        yield False, cur
+        yield True, cur
         yield False, [func_lines[-1]]
 
     def _process_basic_block(bb_lines):
