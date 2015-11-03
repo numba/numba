@@ -418,7 +418,15 @@ class DeviceVectorize(_BaseUFuncBuilder):
 
 class DeviceGUFuncVectorize(_BaseUFuncBuilder):
     def __init__(self, func, sig, identity=None, targetoptions={}):
-        assert not targetoptions
+        # Allow nopython flag to be set.
+        if not targetoptions.pop('nopython', True):
+            raise TypeError("nopython flag must be True")
+        # Are there any more target options?
+        if targetoptions:
+            opts = ', '.join([repr(k) for k in targetoptions.keys()])
+            fmt = "The following target options are not supported: {0}"
+            raise TypeError(fmt.format(opts))
+
         self.py_func = func
         self.identity = self.parse_identity(identity)
         self.signature = sig

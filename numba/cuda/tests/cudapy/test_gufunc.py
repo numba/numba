@@ -276,7 +276,36 @@ class TestCUDAGufunc(unittest.TestCase):
         copy2d(A, out=B)
         self.assertTrue(np.allclose(A, B))
 
+    def test_nopython_flag(self):
+
+        def foo(A, B):
+            pass
+
+        # nopython = True is fine
+        guvectorize([void(float32[:], float32[:])], '(x)->(x)', target='cuda',
+                    nopython=True)(foo)
+
+        # nopython = False is bad
+        with self.assertRaises(TypeError) as raises:
+            guvectorize([void(float32[:], float32[:])], '(x)->(x)',
+                        target='cuda', nopython=False)(foo)
+        self.assertEqual("nopython flag must be True", str(raises.exception))
+
+    def test_invalid_flags(self):
+        # Check invalid flags
+        def foo(A, B):
+            pass
+
+        with self.assertRaises(TypeError) as raises:
+            guvectorize([void(float32[:], float32[:])], '(x)->(x)',
+                        target='cuda', what1=True, ever2=False)(foo)
+        head = "The following target options are not supported:"
+        msg = str(raises.exception)
+        self.assertEqual(msg[:len(head)], head)
+        items = msg[len(head):].strip().split(',')
+        items = [i.strip("'\" ") for i in items]
+        self.assertEqual(set(['what1', 'ever2']), set(items))
+        
 
 if __name__ == '__main__':
     unittest.main()
-
