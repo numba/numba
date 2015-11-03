@@ -7,6 +7,8 @@ from numba.config import MACHINE_BITS
 from numba import cgutils
 from llvmlite import ir, binding as llvm
 
+# Flag to enable debug print in NRT_incref and NRT_decref
+_debug_print = False
 
 _word_type = ir.IntType(MACHINE_BITS)
 _pointer_type = ir.PointerType(ir.IntType(8))
@@ -49,6 +51,10 @@ def _define_nrt_incref(module, atomic_incr):
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
+
+    if _debug_print:
+        cgutils.printf(builder, "*** NRT_Incref %zu [%p]\n", builder.load(ptr),
+                       ptr)
     builder.call(atomic_incr, [builder.bitcast(ptr, atomic_incr.args[0].type)])
     builder.ret_void()
 
@@ -67,6 +73,10 @@ def _define_nrt_decref(module, atomic_decr):
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
+
+    if _debug_print:
+        cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(ptr),
+                       ptr)
     newrefct = builder.call(atomic_decr,
                             [builder.bitcast(ptr, atomic_decr.args[0].type)])
 
@@ -157,6 +167,7 @@ def create_nrt_module(ctx):
 
     return ir_mod, library
 
+
 def compile_nrt_functions(ctx):
     """
     Compile all LLVM NRT functions and return a library containing them.
@@ -170,9 +181,9 @@ def compile_nrt_functions(ctx):
     return library
 
 
-_regex_incref = re.compile(r'call void @NRT_incref\((.*)\)')
-_regex_decref = re.compile(r'call void @NRT_decref\((.*)\)')
-_regex_bb = re.compile(r'[-a-zA-Z$._][-a-zA-Z$._0-9]*:')
+_regex_incref = re.compile(r'\s*call void @NRT_incref\((.*)\)')
+_regex_decref = re.compile(r'\s*call void @NRT_decref\((.*)\)')
+_regex_bb = re.compile(r'([-a-zA-Z$._][-a-zA-Z$._0-9]*:)|^define')
 
 
 def remove_redundant_nrt_refct(ll_module):
@@ -180,69 +191,131 @@ def remove_redundant_nrt_refct(ll_module):
     Remove redundant reference count operations from the
     `llvmlite.binding.ModuleRef`. This parses the ll_module as a string and
     line by line to remove the unnecessary nrt refct pairs within each block.
-
-    Note
-    -----
-    Should replace this.  Not efficient.
+    Decref calls are moved after the last incref call in the block to avoid
+    temporarily decref'ing to zero (which can happen due to hidden decref from
+    alias).
     """
+    # Note: As soon as we have better utility in analyzing materialized LLVM
+    #       module in llvmlite, we can redo this without so much string
+    #       processing.
+
+    def _extract_functions(module):
+        cur = []
+        for line in str(module).splitlines():
+            if line.startswith('define'):
+                # start of function
+                assert not cur
+                cur.append(line)
+            elif line.startswith('}'):
+                # end of function
+                assert cur
+                cur.append(line)
+                yield True, cur
+                cur = []
+            elif cur:
+                cur.append(line)
+            else:
+                yield False, [line]
+
+    def _process_function(func_lines):
+        out = []
+        for is_bb, bb_lines in _extract_basic_blocks(func_lines):
+            if is_bb and bb_lines:
+                bb_lines = _process_basic_block(bb_lines)
+            out += bb_lines
+        return out
+
+    def _extract_basic_blocks(func_lines):
+        assert func_lines[0].startswith('define')
+        assert func_lines[-1].startswith('}')
+        yield False, [func_lines[0]]
+
+        cur = []
+        for ln in func_lines[1:-1]:
+            m = _regex_bb.match(ln)
+            if m is not None:
+                # line is a basic block separator
+                yield True, cur
+                cur = []
+                yield False, [ln]
+            elif ln:
+                cur.append(ln)
+
+        yield True, cur
+        yield False, [func_lines[-1]]
+
+    def _process_basic_block(bb_lines):
+        bb_lines = _move_decref_after_all_increfs(bb_lines)
+        bb_lines = _prune_redundant_refct_ops(bb_lines)
+        return bb_lines
+
+    def _examine_refct_op(bb_lines):
+        for num, ln in enumerate(bb_lines):
+            m = _regex_incref.match(ln)
+            if m is not None:
+                yield num, m.group(1), None
+                continue
+
+            m = _regex_decref.match(ln)
+            if m is not None:
+                yield num, None, m.group(1)
+                continue
+
+            yield ln, None, None
+
+    def _prune_redundant_refct_ops(bb_lines):
+        incref_map = defaultdict(deque)
+        decref_map = defaultdict(deque)
+        for num, incref_var, decref_var in _examine_refct_op(bb_lines):
+            assert not (incref_var and decref_var)
+            if incref_var:
+                incref_map[incref_var].append(num)
+            elif decref_var:
+                decref_map[decref_var].append(num)
+
+        to_remove = set()
+        for var, decops in decref_map.items():
+            incops = incref_map[var]
+            ct = min(len(incops), len(decops))
+            for _ in range(ct):
+                to_remove.add(incops.pop())
+                to_remove.add(decops.popleft())
+
+        return [ln for num, ln in enumerate(bb_lines)
+                if num not in to_remove]
+
+    def _move_decref_after_all_increfs(bb_lines):
+        # find last incref
+        last_pos = 0
+        for pos, ln in enumerate(bb_lines):
+            if _regex_incref.match(ln) is not None:
+                last_pos = pos + 1
+
+        # find decrefs before last_pos
+        decrefs = []
+        head = []
+        for ln in bb_lines[:last_pos]:
+            if _regex_decref.match(ln) is not None:
+                decrefs.append(ln)
+            else:
+                head.append(ln)
+
+        # insert decrefs at last_pos
+        return head + decrefs + bb_lines[last_pos:]
+
     # Early escape if NRT_incref is not used
     try:
         ll_module.get_function('NRT_incref')
     except NameError:
         return ll_module
 
+    processed = []
 
-    incref_map = defaultdict(deque)
-    decref_map = defaultdict(deque)
-    scopes = []
+    for is_func, lines in _extract_functions(ll_module):
+        if is_func:
+            lines = _process_function(lines)
 
-    # Parse IR module as text
-    llasm = str(ll_module)
-    lines = llasm.splitlines()
+        processed += lines
 
-    # Phase 1:
-    # Find all refct ops and what they are operating on
-    for lineno, line in enumerate(lines):
-        # Match NRT_incref calls
-        m = _regex_incref.match(line.strip())
-        if m is not None:
-            incref_map[m.group(1)].append(lineno)
-            continue
-
-        # Match NRT_decref calls
-        m = _regex_decref.match(line.strip())
-        if m is not None:
-            decref_map[m.group(1)].append(lineno)
-            continue
-
-        # Split at BB boundaries
-        m = _regex_bb.match(line)
-        if m is not None:
-            # Push
-            scopes.append((incref_map, decref_map))
-            # Reset
-            incref_map = defaultdict(deque)
-            decref_map = defaultdict(deque)
-
-
-    # Phase 2:
-    # Determine which refct ops are unnecessary
-    to_remove = set()
-    for incref_map, decref_map in scopes:
-        # For each value being refct-ed
-        for val in incref_map.keys():
-            increfs = incref_map[val]
-            decrefs = decref_map[val]
-            # Mark the incref/decref pairs from the tail for removal
-            ref_pair_ct = min(len(increfs), len(decrefs))
-            for _ in range(ref_pair_ct):
-                to_remove.add(increfs.pop())
-                to_remove.add(decrefs.popleft())
-
-    # Phase 3
-    # Remove all marked instructions
-    newll = '\n'.join(ln for lno, ln in enumerate(lines) if lno not in
-                      to_remove)
-
-    # Regenerate the LLVM module
+    newll = '\n'.join(processed)
     return llvm.parse_assembly(newll)
