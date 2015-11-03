@@ -6,8 +6,10 @@ problems found in the 0.22.0 release.
 
 Fixes:
 
-* Include MANIFEST.in in MANIFEST.in so that sdist still works from source
-  tar files.
+* PR #1515: Include MANIFEST.in in MANIFEST.in so that sdist still works from
+  source tar files.
+* PR #1518: Fix reference counting bug caused by hidden alias
+* PR #1519: Fix erroneous assert when passing nopython=True to guvectorize.
 
 
 Version 0.22.0
