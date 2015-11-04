@@ -27,7 +27,7 @@ def printempty():
 
 
 class TestPrint(unittest.TestCase):
-
+    @unittest.skipIf(True, "Temporarily disable test")
     def test_cuhello(self):
         jcuhello = cuda.jit('void()', debug=False)(cuhello)
         with captured_cuda_stdout() as stdout:
