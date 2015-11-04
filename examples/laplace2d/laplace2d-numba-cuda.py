@@ -12,7 +12,7 @@ from numba import *
 # NOTE: CUDA kernel does not return any value
 
 @cuda.jit(argtypes=[f8[:,:], f8[:,:], f8[:,:]])
-def jocabi_relax_core(A, Anew, error):
+def jacobi_relax_core(A, Anew, error):
     n = A.shape[0]
     m = A.shape[1]
 
@@ -24,8 +24,8 @@ def jocabi_relax_core(A, Anew, error):
         error[j, i] = Anew[j, i] - A[j, i]
 
 def main():
-    NN = 4096
-    NM = 4096
+    NN = 512
+    NM = 512
 
     A = np.zeros((NN, NM), dtype=np.float64)
     Anew = np.zeros((NN, NM), dtype=np.float64)
@@ -47,7 +47,7 @@ def main():
     iter = 0
 
     blockdim = (32, 32)
-    griddim = (NN/blockdim[0], NM/blockdim[1])
+    griddim = (NN//blockdim[0], NM//blockdim[1])
         
     error_grid = np.zeros_like(A)
     
@@ -60,7 +60,7 @@ def main():
     while error > tol and iter < iter_max:
         assert error_grid.dtype == np.float64
         
-        jocabi_relax_core[griddim, blockdim, stream](dA, dAnew, derror_grid)
+        jacobi_relax_core[griddim, blockdim, stream](dA, dAnew, derror_grid)
         
         derror_grid.to_host(stream)
         

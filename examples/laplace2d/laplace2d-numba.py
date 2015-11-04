@@ -4,8 +4,8 @@ import time
 from numba import *
 
 
-@autojit(backend='ast')
-def jocabi_relax_core(A, Anew):
+@autojit
+def jacobi_relax_core(A, Anew):
     error = 0.0
     n = A.shape[0]
     m = A.shape[1]
@@ -18,8 +18,8 @@ def jocabi_relax_core(A, Anew):
 
 
 def main():
-    NN = 4096
-    NM = 4096
+    NN = 512
+    NM = 512
 
     A = np.zeros((NN, NM), dtype=np.float64)
     Anew = np.zeros((NN, NM), dtype=np.float64)
@@ -41,7 +41,7 @@ def main():
     iter = 0
 
     while error > tol and iter < iter_max:
-        error = jocabi_relax_core(A, Anew)
+        error = jacobi_relax_core(A, Anew)
     
         # swap A and Anew
         tmp = A

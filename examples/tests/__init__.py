@@ -3,6 +3,7 @@ from unittest.case import TestCase
 from unittest.suite import TestSuite
 from subprocess import STDOUT, call, check_output, CalledProcessError
 from numba.tests.ddt import ddt, data
+from numba import cuda
 
 test_scripts = [
     'bubblesort.py',
@@ -14,27 +15,14 @@ test_scripts = [
     'movemean.py',
     'nogil.py',
     'objects.py',
-    #   Error: assertion error
-    #'pycc_example.py',
     'ra24.py',
     'structures.py',
     'sum.py',
     'ufuncs.py',
     'blackscholes/blackscholes.py',
     'blackscholes/blackscholes_numba.py',
-    'blackscholes/blackscholes_cuda.py',
-    'cudajit/matmul.py',
-    'cudajit/matmul_smem.py',
-    'cudajit/sum.py',
-    #   This one runs forever...
-    #'laplace2d/laplace2d.py',
-    #   KeyError: "Does not support option: 'backend'"
-    #'laplace2d/laplace2d-numba.py',
-    #   ctypes.ArgumentError: argument 2: <class 'TypeError'>: wrong type
-    #'laplace2d/laplace2d-numba-cuda.py',
-    #'laplace2d/laplace2d-numba-cuda-improve.py',
-    #   Error: ArgumentError exception
-    #'laplace2d/laplace2d-numba-cuda-smem.py',
+    'laplace2d/laplace2d.py',
+    'laplace2d/laplace2d-numba.py',
     #   The following scripts are interactive
     #'example.py',
     #'mandel.py',
@@ -45,8 +33,19 @@ test_scripts = [
     # Missing input files !?
     #'vectorize/sum.py',
     'vectorize/polynomial.py',
-    'vectorize/cuda_polynomial.py',
 ]
+
+if cuda.is_available():
+    test_scripts.extend([
+    'blackscholes/blackscholes_cuda.py',
+    'cudajit/matmul.py',
+    'cudajit/matmul_smem.py',
+    'cudajit/sum.py',
+    'laplace2d/laplace2d-numba-cuda.py',
+    'laplace2d/laplace2d-numba-cuda-improve.py',
+    'laplace2d/laplace2d-numba-cuda-smem.py',
+    'vectorize/cuda_polynomial.py',
+    ])
 
 @ddt
 class TestExample(TestCase):

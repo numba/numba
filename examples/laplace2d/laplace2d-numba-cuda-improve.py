@@ -19,7 +19,7 @@ def get_max(a, b):
     else: return b
 
 @cuda.jit(void(f8[:,:], f8[:,:], f8[:,:]))
-def jocabi_relax_core(A, Anew, error):
+def jacobi_relax_core(A, Anew, error):
     err_sm = cuda.shared.array((tpb, tpb), dtype=f8)
 
     ty = cuda.threadIdx.x
@@ -61,8 +61,8 @@ def jocabi_relax_core(A, Anew, error):
         error[by, bx] = err_sm[0, 0]
 
 def main():
-    NN = 4096
-    NM = 4096
+    NN = 512
+    NM = 512
 
     A = np.zeros((NN, NM), dtype=np.float64)
     Anew = np.zeros((NN, NM), dtype=np.float64)
@@ -84,7 +84,7 @@ def main():
     iter = 0
 
     blockdim = (tpb, tpb)
-    griddim = (NN/blockdim[0], NM/blockdim[1])
+    griddim = (NN//blockdim[0], NM//blockdim[1])
         
     error_grid = np.zeros(griddim)
     
@@ -97,7 +97,7 @@ def main():
     while error > tol and iter < iter_max:
         assert error_grid.dtype == np.float64
         
-        jocabi_relax_core[griddim, blockdim, stream](dA, dAnew, derror_grid)
+        jacobi_relax_core[griddim, blockdim, stream](dA, dAnew, derror_grid)
         
         derror_grid.to_host(stream)
         
