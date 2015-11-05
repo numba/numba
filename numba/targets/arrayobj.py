@@ -1698,7 +1698,7 @@ def array_sinc(context, builder, sig, args):
 def scalar_sinc(context, builder, sig, args):
     scalar_dtype = sig.return_type
     def scalar_sinc_impl(val):
-        if numpy.fabs(val) == 0.e0: # to match np impl
+        if val == 0.e0: # to match np impl
             val = 1e-20
         val *= numpy.pi # np sinc is the normalised variant
         return numpy.sin(val)/val
@@ -1706,6 +1706,60 @@ def scalar_sinc(context, builder, sig, args):
                                    locals=dict(c=scalar_dtype))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+@builtin
+@implement(numpy.angle, types.Kind(types.Number))
+def scalar_angle(context, builder, sig, args):
+    def scalar_angle_impl(val):
+          return numpy.arctan2(val.imag, val.real)
+    res = context.compile_internal(builder, scalar_angle_impl,
+                                      sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@builtin
+@implement(numpy.angle, types.Kind(types.Number), types.Kind(types.Boolean))
+def scalar_angle_kwarg(context, builder, sig, args):
+    def scalar_angle_impl(val, deg=False):
+        if(deg):
+            scal = 180/numpy.pi
+            return numpy.arctan2(val.imag, val.real) * scal
+        else:
+            return numpy.arctan2(val.imag, val.real)
+    res = context.compile_internal(builder, scalar_angle_impl,
+                                      sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@builtin
+@implement(numpy.angle, types.Kind(types.Array))
+def array_angle(context, builder, sig, args):
+    arg=sig.args[0]
+    if isinstance(arg.dtype, types.Complex):
+        retty = arg.dtype.underlying_float
+    else:
+        retty = arg.dtype
+    def array_angle_impl(arr):
+        out = numpy.zeros_like(arr, dtype=retty)
+        for index, val in numpy.ndenumerate(arr):
+            out[index] = numpy.angle(val)
+        return out
+    res = context.compile_internal(builder, array_angle_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+@builtin
+@implement(numpy.angle, types.Kind(types.Array), types.Kind(types.Boolean))
+def array_angle_kwarg(context, builder, sig, args):
+    arg=sig.args[0]
+    if isinstance(arg.dtype, types.Complex):
+        retty = arg.dtype.underlying_float
+    else:
+        retty = arg.dtype
+    def array_angle_impl(arr, deg=False):
+        out = numpy.zeros_like(arr, dtype=retty)
+        for index, val in numpy.ndenumerate(arr):
+            out[index] = numpy.angle(val, deg)
+        return out
+    res = context.compile_internal(builder, array_angle_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
 @implement(numpy.nonzero, types.Kind(types.Array))

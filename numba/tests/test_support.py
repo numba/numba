@@ -92,6 +92,7 @@ class TestAssertPreciseEqual(TestCase):
                 self.eq(tp(0.0), tp(0.0), prec=prec)
                 self.eq(tp(-0.0), tp(-0.0), prec=prec)
                 self.ne(tp(0.0), tp(-0.0), prec=prec)
+                self.eq(tp(0.0), tp(-0.0), prec=prec, ignore_sign_on_zero=True)
                 # Infinities
                 self.eq(tp(INF), tp(INF), prec=prec)
                 self.ne(tp(INF), tp(1e38), prec=prec)
