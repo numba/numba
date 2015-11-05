@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Demonstration of using MPI and Numba CUDA to perform parallel computation
 # using GPUs in multiple nodes. This example requires MPI4py to be installed.
 #

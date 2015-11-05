@@ -1,30 +1,29 @@
-#!/usr/bin/env python
-"""
-Compute and plot the Mandelbrot set using matplotlib.
-"""
-
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
+from numba import autojit
+from timeit import default_timer as timer
 import numpy as np
-import pylab
+from matplotlib.pylab import imshow, jet, show, ion
 
-from numba import jit
-
-@jit
+@autojit
 def mandel(x, y, max_iters):
     """
     Given the real and imaginary parts of a complex number,
     determine if it is a candidate for membership in the Mandelbrot
     set given a fixed number of iterations.
     """
+    i = 0
     c = complex(x,y)
-    z = 0j
+    z = 0.0j
     for i in range(max_iters):
         z = z*z + c
-        if z.real * z.real + z.imag * z.imag >= 4:
-            return 255 * i // max_iters
+        if (z.real*z.real + z.imag*z.imag) >= 4:
+            return i
 
     return 255
 
-@jit(nopython=True)
+@autojit
 def create_fractal(min_x, max_x, min_y, max_y, image, iters):
     height = image.shape[0]
     width = image.shape[1]
@@ -40,9 +39,12 @@ def create_fractal(min_x, max_x, min_y, max_y, image, iters):
 
     return image
 
-image = np.zeros((700, 1400), dtype=np.uint8)
+image = np.zeros((500 * 2, 750 * 2), dtype=np.uint8)
+s = timer()
 create_fractal(-2.0, 1.0, -1.0, 1.0, image, 20)
-
-pylab.imshow(image)
-pylab.gray()
-pylab.show()
+e = timer()
+print(e - s)
+imshow(image)
+#jet()
+#ion()
+show()

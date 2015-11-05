@@ -1,0 +1,13 @@
+MatrixMul 1000 x 1000
+
+lincuda
+
+cpu:  0.281652
+cuda: 0.217016
+cuda speedup: 1.30x
+
+osx 10.8
+
+cpu:  0.017879
+cuda: 1.362290
+cuda speedup: 0.01x
