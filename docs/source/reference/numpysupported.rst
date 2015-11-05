@@ -166,6 +166,7 @@ The following top-level functions are supported:
 * :func:`numpy.ones`
 * :func:`numpy.ones_like`
 * :func:`numpy.round_`
+* :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.where`
 * :func:`numpy.zeros`

@@ -1683,6 +1683,31 @@ def array_round(context, builder, sig, args):
 
 
 @builtin
+@implement(numpy.sinc, types.Kind(types.Array))
+def array_sinc(context, builder, sig, args):
+    def array_sinc_impl(arr):
+        out = numpy.zeros_like(arr)
+        for index, val in numpy.ndenumerate(arr):
+            out[index] = numpy.sinc(val)
+        return out
+    res = context.compile_internal(builder, array_sinc_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+@builtin
+@implement(numpy.sinc, types.Kind(types.Number))
+def scalar_sinc(context, builder, sig, args):
+    scalar_dtype = sig.return_type
+    def scalar_sinc_impl(val):
+        if numpy.fabs(val) == 0.e0: # to match np impl
+            val = 1e-20
+        val *= numpy.pi # np sinc is the normalised variant
+        return numpy.sin(val)/val
+    res = context.compile_internal(builder, scalar_sinc_impl, sig, args,
+                                   locals=dict(c=scalar_dtype))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@builtin
 @implement(numpy.nonzero, types.Kind(types.Array))
 @implement("array.nonzero", types.Kind(types.Array))
 @implement(numpy.where, types.Kind(types.Array))
