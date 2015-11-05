@@ -245,7 +245,7 @@ def remove_redundant_nrt_refct(ll_module):
         yield False, [func_lines[-1]]
 
     def _process_basic_block(bb_lines):
-        bb_lines = _move_decref_after_all_increfs(bb_lines)
+        bb_lines = _move_and_group_decref_after_all_increfs(bb_lines)
         bb_lines = _prune_redundant_refct_ops(bb_lines)
         return bb_lines
 
@@ -284,12 +284,20 @@ def remove_redundant_nrt_refct(ll_module):
         return [ln for num, ln in enumerate(bb_lines)
                 if num not in to_remove]
 
-    def _move_decref_after_all_increfs(bb_lines):
+    def _move_and_group_decref_after_all_increfs(bb_lines):
         # find last incref
-        last_pos = 0
+        last_incref_pos = 0
         for pos, ln in enumerate(bb_lines):
             if _regex_incref.match(ln) is not None:
-                last_pos = pos + 1
+                last_incref_pos = pos + 1
+
+        # find last decref
+        last_decref_pos = 0
+        for pos, ln in enumerate(bb_lines):
+            if _regex_decref.match(ln) is not None:
+                last_decref_pos = pos + 1
+
+        last_pos = max(last_incref_pos, last_decref_pos)
 
         # find decrefs before last_pos
         decrefs = []
@@ -302,6 +310,7 @@ def remove_redundant_nrt_refct(ll_module):
 
         # insert decrefs at last_pos
         return head + decrefs + bb_lines[last_pos:]
+
 
     # Early escape if NRT_incref is not used
     try:

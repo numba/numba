@@ -306,6 +306,29 @@ class TestNRTIssue(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(a, b)
         np.testing.assert_equal(a, np.ones(10, dtype=np.float64))
 
+    def test_refct_pruning_issue_1526(self):
+        @njit
+        def udt(image, x, y):
+            next_loc = np.where(image == 1)
+
+            if len(next_loc[0]) == 0:
+                y_offset = 1
+                x_offset = 1
+            else:
+                y_offset = next_loc[0][0]
+                x_offset = next_loc[1][0]
+
+            next_loc_x = (x - 1) + x_offset
+            next_loc_y = (y - 1) + y_offset
+
+            return next_loc_x, next_loc_y
+
+        a = np.array([[1, 0, 1, 0, 1, 0, 0, 1, 0, 0]])
+        expect = udt.py_func(a, 1, 6)
+        got = udt(a, 1, 6)
+
+        self.assertEqual(expect, got)
+
 
 if __name__ == '__main__':
     unittest.main()
