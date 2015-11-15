@@ -295,6 +295,17 @@ class TestNRTIssue(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(z, 0j)
         self.assertPreciseEqual(arr, np.zeros(1, dtype=np.int32))
 
+    def test_refct_pruning_issue_1511(self):
+        @njit
+        def f():
+            a = np.ones(10, dtype=np.float64)
+            b = np.ones(10, dtype=np.float64)
+            return a, b[:]
+
+        a, b = f()
+        np.testing.assert_equal(a, b)
+        np.testing.assert_equal(a, np.ones(10, dtype=np.float64))
+
 
 if __name__ == '__main__':
     unittest.main()

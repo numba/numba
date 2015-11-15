@@ -444,4 +444,5 @@ class Context(BaseContext):
         self.install(npydecl.registry)
         self.install(operatordecl.registry)
         self.install(randomdecl.registry)
+        self.install(cffi_utils.registry)
 

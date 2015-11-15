@@ -61,7 +61,7 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         unified = self.context.unify_pairs(list.dtype, item)
         sig = signature(types.none, unified)
-        sig.recvr = types.List(unified)
+        sig.recvr = list.copy(dtype=unified)
         return sig
 
     @bound_function("list.clear")
@@ -93,7 +93,7 @@ class ListAttribute(AttributeTemplate):
         unified = self.context.unify_pairs(list.dtype, dtype)
       
         sig = signature(types.none, iterable)
-        sig.recvr = types.List(unified)
+        sig.recvr = list.copy(dtype=unified)
         return sig
 
     @bound_function("list.index")
@@ -116,7 +116,7 @@ class ListAttribute(AttributeTemplate):
         if isinstance(idx, types.Integer):
             unified = self.context.unify_pairs(list.dtype, item)
             sig = signature(types.none, types.intp, unified)
-            sig.recvr = types.List(unified)
+            sig.recvr = list.copy(dtype=unified)
             return sig
 
     @bound_function("list.pop")

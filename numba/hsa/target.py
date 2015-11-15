@@ -77,7 +77,7 @@ class HSATargetContext(BaseContext):
     def call_conv(self):
         return HSACallConv(self)
 
-    def jit_codegen(self):
+    def codegen(self):
         return self._internal_codegen
 
     def mangler(self, name, argtypes):

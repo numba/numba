@@ -55,7 +55,7 @@ class CUDATargetContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self._target_data = ll.create_target_data(nvvm.default_data_layout)
 
-    def jit_codegen(self):
+    def codegen(self):
         return self._internal_codegen
 
     @property

@@ -14,19 +14,23 @@ if config.ENABLE_CUDASIM:
     target='cpu'
 
 
-@vectorize(sig, target=target)
-def vector_add(a, b):
-    return a + b
-
-
 @skip_on_cudasim('ufunc API unsupported in the simulator')
 class TestCUDAVectorizeScalarArg(unittest.TestCase):
+
     def test_vectorize_scalar_arg(self):
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+
         A = np.arange(10, dtype=np.float64)
         dA = cuda.to_device(A)
         vector_add(1.0, dA)
 
     def test_vectorize_all_scalars(self):
+        @vectorize(sig, target=target)
+        def vector_add(a, b):
+            return a + b
+        
         vector_add(1.0, 1.0)
 
 

@@ -622,7 +622,7 @@ class ZipType(SimpleIteratorType):
 
     def __init__(self, iterable_types):
         self.source_types = tuple(tp.iterator_type for tp in iterable_types)
-        yield_type = Tuple(tp.yield_type for tp in self.source_types)
+        yield_type = Tuple([tp.yield_type for tp in self.source_types])
         name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)
         super(ZipType, self).__init__(name, yield_type)
 
@@ -1077,6 +1077,12 @@ class _HeterogenousTuple(BaseTuple):
 
 class Tuple(BaseAnonymousTuple, _HeterogenousTuple):
 
+    def __new__(cls, types):
+        if types and all(t == types[0] for t in types[1:]):
+            return UniTuple(dtype=types[0], count=len(types))
+        else:
+            return object.__new__(Tuple)
+
     def __init__(self, types):
         self.types = tuple(types)
         self.count = len(self.types)
@@ -1141,20 +1147,30 @@ class List(MutableSequence):
     """
     mutable = True
 
-    def __init__(self, dtype):
+    def __init__(self, dtype, reflected=False):
         self.dtype = dtype
-        name = "list(%s)" % (self.dtype,)
+        self.reflected = reflected
+        cls_name = "reflected list" if reflected else "list"
+        name = "%s(%s)" % (cls_name, self.dtype)
         super(List, self).__init__(name=name, param=True)
+
+    def copy(self, dtype=None, reflected=None):
+        if dtype is None:
+            dtype = self.dtype
+        if reflected is None:
+            reflected = self.reflected
+        return List(dtype, reflected)
 
     def unify(self, typingctx, other):
         if isinstance(other, List):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            reflected = self.reflected or other.reflected
             if dtype != pyobject:
-                return List(dtype=dtype)
+                return List(dtype, reflected)
 
     @property
     def key(self):
-        return self.dtype
+        return self.dtype, self.reflected
 
     @property
     def iterator_type(self):
@@ -1385,6 +1401,7 @@ class Slice3Type(Type):
 
 pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
+ffi = Opaque('ffi')
 none = NoneType('none')
 ellipsis = EllipsisType('...')
 Any = Phantom('any')
@@ -1562,4 +1579,5 @@ c8
 c16
 optional
 ffi_forced_object
+ffi
 '''.split()

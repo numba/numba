@@ -91,6 +91,14 @@ thumb, if a function takes less than 10 µs to execute: leave it.
 The exception is that you *should* JIT-compile that function if it is called
 from another jitted function.
 
+There is a delay when JIT-compiling a complicated function, how can I improve it?
+---------------------------------------------------------------------------------
+
+Try to pass ``cache=True`` to the ``@jit`` decorator.  It will keep the
+compiled version on disk for later use.
+
+A more radical alternative is :ref:`ahead-of-time compilation <pycc>`.
+
 
 Integration with other utilities
 ================================

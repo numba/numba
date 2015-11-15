@@ -13,9 +13,14 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import config, jit, npdatetime, types, vectorize
+from numba import config, jit, npdatetime, types, vectorize, numpy_support
 from numba.errors import TypingError
 from .support import TestCase, skip_on_numpy_16
+
+
+def value_unit(val):
+    ty = numpy_support.from_dtype(val.dtype)
+    return ty.unit
 
 
 date_units = ('Y', 'M')
@@ -177,6 +182,20 @@ class TestModuleHelpers(TestCase):
         for dt_unit, td_unit in itertools.product(date_units, time_units):
             self.assertEqual(f(dt_unit, td_unit), td_unit)
 
+    def test_same_kind(self):
+        f = npdatetime.same_kind
+        for u in all_units:
+            self.assertTrue(f(u, u))
+        A = ('Y', 'M', 'W', 'D')
+        B = ('h', 'm', 's', 'ms', 'us', 'ns', 'ps', 'fs', 'as')
+        for a, b in itertools.product(A, A):
+            self.assertTrue(f(a, b))
+        for a, b in itertools.product(B, B):
+            self.assertTrue(f(a, b))
+        for a, b in itertools.product(A, B):
+            self.assertFalse(f(a, b))
+            self.assertFalse(f(b, a))
+
 
 TD = np.timedelta64
 DT = np.datetime64
@@ -254,8 +273,9 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD(1), TD(2), TD(3))
         check(TD(1, 's'), TD(2, 's'), TD(3, 's'))
         # Implicit unit promotion
-        check(TD(1), TD(2, 's'), TD(3, 's'))
-        check(TD(1), TD(2, 'ms'), TD(3, 'ms'))
+        if not numpy_support.strict_ufunc_typing:
+            check(TD(1), TD(2, 's'), TD(3, 's'))
+            check(TD(1), TD(2, 'ms'), TD(3, 'ms'))
         check(TD(1, 's'), TD(2, 'us'), TD(1000002, 'us'))
         check(TD(1, 'W'), TD(2, 'D'), TD(9, 'D'))
         # NaTs
@@ -275,8 +295,9 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD(3), TD(2), TD(1))
         check(TD(3, 's'), TD(2, 's'), TD(1, 's'))
         # Implicit unit promotion
-        check(TD(3), TD(2, 's'), TD(1, 's'))
-        check(TD(3), TD(2, 'ms'), TD(1, 'ms'))
+        if not numpy_support.strict_ufunc_typing:
+            check(TD(3), TD(2, 's'), TD(1, 's'))
+            check(TD(3), TD(2, 'ms'), TD(1, 'ms'))
         check(TD(3, 's'), TD(2, 'us'), TD(2999998, 'us'))
         check(TD(1, 'W'), TD(2, 'D'), TD(5, 'D'))
         # NaTs
@@ -340,7 +361,8 @@ class TestTimedeltaArithmetic(TestCase):
 
         # timedelta64 / timedelta64
         check(TD(7), TD(3), 7. / 3.)
-        check(TD(7), TD(3, 'ms'), 7. / 3.)
+        if not numpy_support.strict_ufunc_typing:
+            check(TD(7), TD(3, 'ms'), 7. / 3.)
         check(TD(7, 'us'), TD(3, 'ms'), 7. / 3000.)
         check(TD(7, 'ms'), TD(3, 'us'), 7000. / 3.)
         check(TD(7), TD(0), float('+inf'))
@@ -517,27 +539,32 @@ class TestDatetimeArithmetic(TestCase):
                 self.assertPreciseEqual(a + b, expected)
 
         # Y + ...
-        # This one raises a DeprecationWarning in Numpy
-        check(DT('2014'), TD(2), DT('2016'))
+        if not numpy_support.strict_ufunc_typing:
+            check(DT('2014'), TD(2), DT('2016'))
+        check(DT('2014'), TD(2, 'Y'), DT('2016'))
         check(DT('2014'), TD(2, 'M'), DT('2014-03'))
         check(DT('2014'), TD(3, 'W'), DT('2014-01-16', 'W'))
         check(DT('2014'), TD(4, 'D'), DT('2014-01-05'))
         check(DT('2000'), TD(365, 'D'), DT('2000-12-31'))
-        check(DT('2001'), TD(61, 'm'), DT('2001-01-01T01:01Z'))
-        check(DT('2001'), TD(61, 's'), DT('2001-01-01T00:01:01Z'))
+        if not numpy_support.strict_ufunc_typing:
+            check(DT('2001'), TD(61, 'm'), DT('2001-01-01T01:01Z'))
+            check(DT('2001'), TD(61, 's'), DT('2001-01-01T00:01:01Z'))
         # M + ...
-        check(DT('2014-02'), TD(2), DT('2014-04'))
+        if not numpy_support.strict_ufunc_typing:
+            check(DT('2014-02'), TD(2), DT('2014-04'))
         check(DT('2014-02'), TD(2, 'Y'), DT('2016-02'))
         check(DT('2014-02'), TD(2, 'M'), DT('2014-04'))
         check(DT('2014-02'), TD(2, 'D'), DT('2014-02-03'))
-        check(DT('2014-02'), TD(61, 's'), DT('2014-02-01T00:01:01Z'))
+        if not numpy_support.strict_ufunc_typing:
+            check(DT('2014-02'), TD(61, 's'), DT('2014-02-01T00:01:01Z'))
         # W + ...
         check(DT('2014-01-07', 'W'), TD(2, 'W'), DT('2014-01-16', 'W'))
         # D + ...
         check(DT('2014-02-02'), TD(27, 'D'), DT('2014-03-01'))
         check(DT('2012-02-02'), TD(27, 'D'), DT('2012-02-29'))
         check(DT('2012-02-02'), TD(2, 'W'), DT('2012-02-16'))
-        check(DT('2014-02-02'), TD(73, 'h'), DT('2014-02-05T01Z'))
+        if not numpy_support.strict_ufunc_typing:
+            check(DT('2014-02-02'), TD(73, 'h'), DT('2014-02-05T01Z'))
         # s + ...
         check(DT('2000-01-01T01:02:03Z'), TD(2, 'h'), DT('2000-01-01T03:02:03Z'))
         check(DT('2000-01-01T01:02:03Z'), TD(2, 'ms'), DT('2000-01-01T01:02:03.002Z'))
@@ -560,13 +587,16 @@ class TestDatetimeArithmetic(TestCase):
 
         # NaTs
         check(DT('NaT'), TD(2), DT('NaT'))
-        check(DT('NaT', 's'), TD(2), DT('NaT', 's'))
+        if not numpy_support.strict_ufunc_typing:
+            check(DT('NaT', 's'), TD(2), DT('NaT', 's'))
         check(DT('NaT', 's'), TD(2, 'h'), DT('NaT', 's'))
         check(DT('NaT', 's'), TD(2, 'ms'), DT('NaT', 'ms'))
-        check(DT('2014'), TD('NaT'), DT('NaT', 'Y'))
+        if not numpy_support.strict_ufunc_typing:
+            check(DT('2014'), TD('NaT'), DT('NaT', 'Y'))
         check(DT('2014'), TD('NaT', 'W'), DT('NaT', 'W'))
         check(DT('2014-01-01'), TD('NaT', 'W'), DT('NaT', 'D'))
-        check(DT('NaT', 's'), TD('NaT'), DT('NaT', 's'))
+        if not numpy_support.strict_ufunc_typing:
+            check(DT('NaT', 's'), TD('NaT'), DT('NaT', 's'))
         check(DT('NaT', 's'), TD('NaT', 'ms'), DT('NaT', 'ms'))
 
         # Cannot add datetime days and timedelta months or years
@@ -601,7 +631,8 @@ class TestDatetimeArithmetic(TestCase):
         check(DT('2014-02'), DT('2017-01'), TD(-35, 'M'))
         check(DT('2014-02-28'), DT('2015-03-01'), TD(-366, 'D'))
         # NaTs
-        check(DT('NaT'), DT('2000'), TD('NaT', 'Y'))
+        if not numpy_support.strict_ufunc_typing:
+            check(DT('NaT'), DT('2000'), TD('NaT', 'Y'))
         check(DT('NaT', 'M'), DT('2000'), TD('NaT', 'M'))
         check(DT('NaT', 'M'), DT('2000-01-01'), TD('NaT', 'D'))
         check(DT('NaT'), DT('NaT'), TD('NaT'))
@@ -609,6 +640,10 @@ class TestDatetimeArithmetic(TestCase):
         with self.silence_numpy_warnings():
             dts = self.datetime_samples()
             for a, b in itertools.product(dts, dts):
+                if (numpy_support.strict_ufunc_typing
+                    and not npdatetime.same_kind(value_unit(a),
+                                                 value_unit(b))):
+                    continue
                 self.assertPreciseEqual(sub(a, b), a - b, (a, b))
 
     def test_comparisons(self):
@@ -666,12 +701,15 @@ class TestDatetimeArithmetic(TestCase):
         check_eq(DT('2014-01-01T00:01:01Z', 's'),
               DT('2014-01-01T00:01Z', 'm'), False)
         # NaTs
-        check_lt(DT('NaT'), DT('2017'), True)
+        if not numpy_support.strict_ufunc_typing:
+            check_lt(DT('NaT'), DT('2017'), True)
         check_lt(DT('NaT', 'Y'), DT('2017'), True)
-        check_lt(DT('NaT', 'ms'), DT('2017'), True)
+        if not numpy_support.strict_ufunc_typing:
+            check_lt(DT('NaT', 'ms'), DT('2017'), True)
         check_eq(DT('NaT'), DT('NaT'), True)
-        check_eq(DT('NaT', 'Y'), DT('NaT'), True)
-        check_eq(DT('NaT', 'ms'), DT('NaT', 'M'), True)
+        if not numpy_support.strict_ufunc_typing:
+            check_eq(DT('NaT', 'Y'), DT('NaT'), True)
+            check_eq(DT('NaT', 'ms'), DT('NaT', 'M'), True)
 
         # Check comparison between various units
         dts = self.datetime_samples()
@@ -683,6 +721,10 @@ class TestDatetimeArithmetic(TestCase):
             for unit in units:
                 # Force conversion
                 b = a.astype('M8[%s]' % unit)
+                if (numpy_support.strict_ufunc_typing
+                    and not npdatetime.same_kind(value_unit(a),
+                                                 value_unit(b))):
+                    continue
                 check_eq(a, b, True)
                 check_lt(a, b + np.timedelta64(1, unit), True)
                 check_lt(b - np.timedelta64(1, unit), a, True)

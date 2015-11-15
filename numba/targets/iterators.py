@@ -73,7 +73,8 @@ def iternext_enumerate(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         srcval = srcres.yielded_value()
-        result.yield_(cgutils.make_anonymous_struct(builder, [count, srcval]))
+        result.yield_(context.make_tuple(builder, enumty.yield_type,
+                                         [count, srcval]))
 
 
 #-------------------------------------------------------------------------------
@@ -127,7 +128,7 @@ def iternext_zip(context, builder, sig, args, result):
 
     result.set_valid(is_valid)
     with builder.if_then(is_valid):
-        result.yield_(cgutils.make_anonymous_struct(builder, values))
+        result.yield_(context.make_tuple(builder, zip_type.yield_type, values))
 
 
 #-------------------------------------------------------------------------------

@@ -6,6 +6,7 @@ from numba.dummyarray import Array
 
 
 class TestSlicing(unittest.TestCase):
+
     def assertSameContig(self, arr, nparr):
         attrs = 'C_CONTIGUOUS', 'F_CONTIGUOUS'
         for attr in attrs:
@@ -63,7 +64,7 @@ class TestSlicing(unittest.TestCase):
         nparr = np.empty((4, 5))
         arr = Array.from_desc(0, nparr.shape, nparr.strides,
                               nparr.dtype.itemsize)
-        xx = -2, -1, 0, 1, 2
+        xx = -2, 0, 1, 2
         for x in xx:
             expect = nparr[x:]
             got = arr[x:]
@@ -82,7 +83,7 @@ class TestSlicing(unittest.TestCase):
         nparr = np.empty((4, 5))
         arr = Array.from_desc(0, nparr.shape, nparr.strides,
                               nparr.dtype.itemsize)
-        xx = -2, -1, 0, 1, 2
+        xx = -2, 0, 2
         for x in xx:
             expect = nparr[:x]
             got = arr[:x]
@@ -101,7 +102,7 @@ class TestSlicing(unittest.TestCase):
         nparr = np.empty((4, 5))
         arr = Array.from_desc(0, nparr.shape, nparr.strides,
                               nparr.dtype.itemsize)
-        xx = -2, -1, 0, 1, 2
+        xx = -2, 0, 2
         for s, t, u, v in itertools.product(xx, xx, xx, xx):
             expect = nparr[s:t, u:v]
             got = arr[s:t, u:v]

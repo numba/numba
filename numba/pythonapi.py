@@ -40,9 +40,11 @@ class _Registry(object):
 # Registries of boxing / unboxing implementations
 _boxers = _Registry()
 _unboxers = _Registry()
+_reflectors = _Registry()
 
 box = _boxers.register
 unbox = _unboxers.register
+reflect = _reflectors.register
 
 class _BoxContext(namedtuple("_BoxContext",
                   ("context", "builder", "pyapi", "env_manager"))):
@@ -52,7 +54,7 @@ class _BoxContext(namedtuple("_BoxContext",
     __slots__ = ()
 
     def box(self, typ, val):
-        return self.pyapi.from_native_value(val, typ, self.env_manager)
+        return self.pyapi.from_native_value(typ, val, self.env_manager)
 
 
 class _UnboxContext(namedtuple("_UnboxContext",
@@ -63,7 +65,26 @@ class _UnboxContext(namedtuple("_UnboxContext",
     __slots__ = ()
 
     def unbox(self, typ, obj):
-        return self.pyapi.to_native_value(obj, typ)
+        return self.pyapi.to_native_value(typ, obj)
+
+
+class _ReflectContext(namedtuple("_ReflectContext",
+                      ("context", "builder", "pyapi", "env_manager",
+                       "is_error"))):
+    """
+    The facilities required by reflection implementations.
+    """
+    __slots__ = ()
+
+    # XXX the error bit is currently unused by consumers (e.g. PyCallWrapper)
+    def set_error(self):
+        self.builder.store(self.is_error, cgutils.true_bit)
+
+    def box(self, typ, val):
+        return self.pyapi.from_native_value(typ, val, self.env_manager)
+
+    def reflect(self, typ, val):
+        return self.pyapi.reflect_native_value(typ, val, self.env_manager)
 
 
 class NativeValue(object):
@@ -134,6 +155,7 @@ class PythonAPI(object):
 
         # Initialize types
         self.pyobj = self.context.get_argument_type(types.pyobject)
+        self.pyobjptr = self.pyobj.as_pointer()
         self.voidptr = Type.pointer(Type.int(8))
         self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
         self.ulong = self.long
@@ -263,6 +285,45 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyErr_WriteUnraisable")
         return self.builder.call(fn, (obj,))
 
+    def err_fetch(self, pty, pval, ptb):
+        fnty = Type.function(Type.void(), [self.pyobjptr] * 3)
+        fn = self._get_function(fnty, name="PyErr_Fetch")
+        return self.builder.call(fn, (pty, pval, ptb))
+
+    def err_restore(self, ty, val, tb):
+        fnty = Type.function(Type.void(), [self.pyobj] * 3)
+        fn = self._get_function(fnty, name="PyErr_Restore")
+        return self.builder.call(fn, (ty, val, tb))
+
+    @contextlib.contextmanager
+    def err_push(self, keep_new=False):
+        """
+        Temporarily push the current error indicator while the code
+        block is executed.  If *keep_new* is True and the code block
+        raises a new error, the new error is kept, otherwise the old
+        error indicator is restored at the end of the block.
+        """
+        pty, pval, ptb = [cgutils.alloca_once(self.builder, self.pyobj)
+                          for i in range(3)]
+        self.err_fetch(pty, pval, ptb)
+        yield
+        ty = self.builder.load(pty)
+        val = self.builder.load(pval)
+        tb = self.builder.load(ptb)
+        if keep_new:
+            new_error = cgutils.is_not_null(self.builder, self.err_occurred())
+            with self.builder.if_else(new_error, likely=False) as (if_error, if_ok):
+                with if_error:
+                    # Code block raised an error, keep it
+                    self.decref(ty)
+                    self.decref(val)
+                    self.decref(tb)
+                with if_ok:
+                    # Restore previous error
+                    self.err_restore(ty, val, tb)
+        else:
+            self.err_restore(ty, val, tb)
+
     def get_c_object(self, name):
         """
         Get a Python object through its C-accessible *name*
@@ -271,7 +332,8 @@ class PythonAPI(object):
         """
         # A LLVM global variable is implicitly a pointer to the declared
         # type, so fix up by using pyobj.pointee.
-        return self.context.get_c_value(self.builder, self.pyobj.pointee, name)
+        return self.context.get_c_value(self.builder, self.pyobj.pointee, name,
+                                        dllimport=True)
 
     def raise_missing_global_error(self, name):
         msg = "global name '%s' is not defined" % name
@@ -621,14 +683,24 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyList_New")
         return self.builder.call(fn, [szval])
 
-    def list_setitem(self, seq, idx, val):
+    def list_size(self, lst):
+        fnty = Type.function(self.py_ssize_t, [self.pyobj])
+        fn = self._get_function(fnty, name="PyList_Size")
+        return self.builder.call(fn, [lst])
+
+    def list_append(self, lst, val):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyList_Append")
+        return self.builder.call(fn, [lst, val])
+
+    def list_setitem(self, lst, idx, val):
         """
         Warning: Steals reference to ``val``
         """
         fnty = Type.function(Type.int(), [self.pyobj, self.py_ssize_t,
                                           self.pyobj])
         fn = self._get_function(fnty, name="PyList_SetItem")
-        return self.builder.call(fn, [seq, idx, val])
+        return self.builder.call(fn, [lst, idx, val])
 
     def list_getitem(self, lst, idx):
         """
@@ -639,6 +711,30 @@ class PythonAPI(object):
         if isinstance(idx, int):
             idx = self.context.get_constant(types.intp, idx)
         return self.builder.call(fn, [lst, idx])
+
+    def list_setslice(self, lst, start, stop, obj):
+        if obj is None:
+            obj = self.get_null_object()
+        fnty = Type.function(Type.int(), [self.pyobj, self.py_ssize_t,
+                                          self.py_ssize_t, self.pyobj])
+        fn = self._get_function(fnty, name="PyList_SetSlice")
+        return self.builder.call(fn, (lst, start, stop, obj))
+
+    def list_get_private_data(self, lst):
+        fnty = Type.function(self.voidptr, [self.pyobj])
+        fn = self._get_function(fnty, name="numba_get_list_private_data")
+        return self.builder.call(fn, (lst,))
+
+    def list_set_private_data(self, lst, ptr):
+        fnty = Type.function(Type.void(), [self.pyobj, self.voidptr])
+        fn = self._get_function(fnty, name="numba_set_list_private_data")
+        return self.builder.call(fn, (lst, ptr))
+
+    def list_reset_private_data(self, lst):
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="numba_reset_list_private_data")
+        return self.builder.call(fn, (lst,))
+
 
     #
     # Concrete tuple API
@@ -790,10 +886,10 @@ class PythonAPI(object):
             return self.builder.call(fn, (lhs, rhs, lopid))
         elif opstr == 'is':
             bitflag = self.builder.icmp(lc.ICMP_EQ, lhs, rhs)
-            return self.from_native_value(bitflag, types.boolean)
+            return self.from_native_value(types.boolean, bitflag)
         elif opstr == 'is not':
             bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
-            return self.from_native_value(bitflag, types.boolean)
+            return self.from_native_value(types.boolean, bitflag)
         elif opstr == 'in':
             fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
             fn = self._get_function(fnty, name="PySequence_Contains")
@@ -945,13 +1041,12 @@ class PythonAPI(object):
         return self.builder.call(fn, [obj])
 
     def make_none(self):
-        obj = self.get_c_object("Py_None")
+        obj = self.borrow_none()
         self.incref(obj)
         return obj
 
     def borrow_none(self):
-        obj = self.get_c_object("Py_None")
-        return obj
+        return self.get_c_object("_Py_NoneStruct")
 
     def sys_write_stdout(self, fmt, *args):
         fnty = Type.function(Type.void(), [self.cstring], var_arg=True)
@@ -1066,6 +1161,24 @@ class PythonAPI(object):
         n = self.builder.extract_value(self.builder.load(structptr), 1)
         return self.builder.call(fn, (ptr, n))
 
+    def serialize_uncached(self, obj):
+        """
+        Same as serialize_object(), but don't create a global variable,
+        simply return a literal {i8* data, i32 length} structure.
+        """
+        # First make the array constant
+        data = pickle.dumps(obj, protocol=-1)
+        assert len(data) < 2**31
+        name = ".const.pickledata.%s" % (id(obj))
+        bdata = cgutils.make_bytearray(data)
+        arr = self.context.insert_unique_const(self.module, name, bdata)
+        # Then populate the structure constant
+        struct = ir.Constant.literal_struct([
+            arr.bitcast(self.voidptr),
+            ir.Constant(ir.IntType(32), arr.type.pointee.count),
+            ])
+        return struct
+
     def serialize_object(self, obj):
         """
         Serialize the given object in the bitcode, and return it
@@ -1075,16 +1188,7 @@ class PythonAPI(object):
         try:
             gv = self.module.__serialized[obj]
         except KeyError:
-            # First make the array constant
-            data = pickle.dumps(obj, protocol=-1)
-            name = ".const.pickledata.%s" % (id(obj))
-            bdata = cgutils.make_bytearray(data)
-            arr = self.context.insert_unique_const(self.module, name, bdata)
-            # Then populate the structure constant
-            struct = ir.Constant.literal_struct([
-                arr.bitcast(self.voidptr),
-                ir.Constant(ir.IntType(32), arr.type.pointee.count),
-                ])
+            struct = self.serialize_uncached(obj)
             name = ".const.picklebuf.%s" % (id(obj))
             gv = self.context.insert_unique_const(self.module, name, struct)
             # Make the id() (and hence the name) unique while populating the module.
@@ -1094,9 +1198,7 @@ class PythonAPI(object):
     def c_api_error(self):
         return cgutils.is_not_null(self.builder, self.err_occurred())
 
-    def to_native_value(self, obj, typ):
-        builder = self.builder
-
+    def to_native_value(self, typ, obj):
         impl = _unboxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert %s to native value" % (typ,))
@@ -1104,20 +1206,36 @@ class PythonAPI(object):
         c = _UnboxContext(self.context, self.builder, self)
         return impl(c, typ, obj)
 
-    def from_native_return(self, val, typ, env_manager):
+    def from_native_return(self, typ, val, env_manager):
         assert not isinstance(typ, types.Optional), "callconv should have " \
                                                     "prevented the return of " \
                                                     "optional value"
-        out = self.from_native_value(val, typ, env_manager)
+        out = self.from_native_value(typ, val, env_manager)
         return out
 
-    def from_native_value(self, val, typ, env_manager=None):
+    def from_native_value(self, typ, val, env_manager=None):
         impl = _boxers.lookup(typ.__class__)
         if impl is None:
             raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
 
         c = _BoxContext(self.context, self.builder, self, env_manager)
         return impl(c, typ, val)
+
+    def reflect_native_value(self, typ, val, env_manager=None):
+        """
+        Reflect the native value onto its Python original, if any.
+        An error bit (as an LLVM value) is returned.
+        """
+        impl = _reflectors.lookup(typ.__class__)
+        if impl is None:
+            # Reflection isn't needed for most types
+            return cgutils.false_bit
+
+        is_error = cgutils.alloca_once_value(self.builder, cgutils.false_bit)
+        c = _ReflectContext(self.context, self.builder, self, env_manager,
+                            is_error)
+        impl(c, typ, val)
+        return self.builder.load(c.is_error)
 
     def to_native_generator(self, obj, typ):
         """

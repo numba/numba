@@ -630,6 +630,39 @@ class TestGetItem(TestCase):
     def test_ellipsis3_npm(self):
         self.test_ellipsis3(flags=Noflags)
 
+    def test_ellipsis_issue1498(self):
+        # This is an issue due to incorrect layout inferred for when
+        # ellpsis is used and ndenumerate is specializing on the layout.
+        @njit
+        def udt(arr):
+            out = np.zeros_like(arr)
+            i = 0
+            for index, val in np.ndenumerate(arr[..., i]):
+                out[index][i] = val
+
+            return out
+
+        py_func = udt.py_func
+
+        outersize = 4
+        innersize = 4
+        arr = np.arange(outersize * innersize).reshape(outersize, innersize)
+        got = udt(arr)
+        expected = py_func(arr)
+        np.testing.assert_equal(got, expected)
+
+    def test_ellipsis_issue1499(self):
+        # This tests an issue when ndarray.__getitem__ recv a tuple of
+        # constants. The lowering is mishandling the constant value creation.
+        @njit
+        def udt(arr):
+            return arr[..., 0]
+
+        arr = np.arange(3)
+        got = udt(arr)
+        expected = udt.py_func(arr)
+        np.testing.assert_equal(got, expected)
+
     def test_none_index(self, flags=enable_pyobj_flags):
         pyfunc = none_index_usecase
         arraytype = types.Array(types.int32, 2, 'C')

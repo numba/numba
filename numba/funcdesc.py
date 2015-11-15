@@ -60,7 +60,12 @@ class FunctionDescriptor(object):
         self.kws = kws
         self.restype = restype
         # Argument types
-        self.argtypes = argtypes or [self.typemap[a] for a in args]
+        if argtypes is not None:
+            self.argtypes = argtypes
+        else:
+            # Get argument types from the type inference result
+            # (note the "arg.FOO" convention as used in typeinfer
+            self.argtypes = [self.typemap['arg.' + a] for a in args]
         mangler = default_mangler if mangler is None else mangler
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.

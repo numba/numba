@@ -150,9 +150,10 @@ class _StructProxy(object):
         Store the LLVM *value* into the field at *index*.
         """
         ptr = self._get_ptr_by_index(index)
+        value = self._cast_member_from_value(index, value)
         if value.type != ptr.type.pointee:
             if (is_pointer(value.type) and is_pointer(ptr.type.pointee)
-                and  value.type.pointee == ptr.type.pointee.pointee):
+                and value.type.pointee == ptr.type.pointee.pointee):
                 # Differ by address-space only
                 # Auto coerce it
                 value = self._context.addrspacecast(self._builder,
@@ -164,8 +165,7 @@ class _StructProxy(object):
                                 "{self._datamodel}".format(value=value,
                                                            ptr=ptr,
                                                            self=self))
-        member_val = self._cast_member_from_value(index, value)
-        self._builder.store(member_val, ptr)
+        self._builder.store(value, ptr)
 
     def __len__(self):
         """
@@ -521,7 +521,7 @@ def for_range_slice_generic(builder, start, stop, step):
     A helper wrapper for for_range_slice().  This is a context manager which
     yields two for_range_slice()-alike context managers, the first for
     the positive step case, the second for the negative step case.
-    
+
     Use:
         with for_range_slice_generic(...) as (pos_range, neg_range):
             with pos_range as (idx, count):
@@ -531,7 +531,7 @@ def for_range_slice_generic(builder, start, stop, step):
     """
     intp = start.type
     is_pos_step = builder.icmp_signed('>=', step, ir.Constant(intp, 0))
-    
+
     pos_for_range = for_range_slice(builder, start, stop, step, intp, inc=True)
     neg_for_range = for_range_slice(builder, start, stop, step, intp, inc=False)
 
@@ -737,6 +737,14 @@ def guard_memory_error(context, builder, pointer, msg=None):
     exc_args = (msg,) if msg else ()
     with builder.if_then(is_null(builder, pointer), likely=False):
         context.call_conv.return_user_exc(builder, MemoryError, exc_args)
+
+@contextmanager
+def if_zero(builder, value, likely=False):
+    """
+    Execute the given block if the scalar value is zero.
+    """
+    with builder.if_then(is_scalar_zero(builder, value), likely=likely):
+        yield
 
 
 guard_zero = guard_null
@@ -957,3 +965,28 @@ def muladd_with_overflow(builder, a, b, c):
     res = builder.extract_value(s, 0)
     ovf = builder.or_(prod_ovf, builder.extract_value(s, 1))
     return res, ovf
+
+
+def printf(builder, format, *args):
+    """
+    Calls printf().
+    Argument `format` is expected to be a Python string.
+    Values to be printed are listed in `args`.
+
+    Note: There is no checking to ensure there is correct number of values
+    in `args` and there type matches the declaration in the format string.
+    """
+    assert isinstance(format, str)
+    mod = builder.module
+    # Make global constant for format string
+    cstring = ir.IntType(8).as_pointer()
+    fmt_bytes = make_bytearray((format + '\00').encode('ascii'))
+    global_fmt = global_constant(mod, "printf_format", fmt_bytes)
+    fnty = ir.FunctionType(Type.int(), [cstring], var_arg=True)
+    # Insert printf()
+    fn = mod.get_global('printf')
+    if fn is None:
+        fn = ir.Function(mod, fnty, name="printf")
+    # Call
+    ptr_fmt = builder.bitcast(global_fmt, cstring)
+    return builder.call(fn, [ptr_fmt] + list(args))

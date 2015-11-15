@@ -29,12 +29,10 @@ def discover_tests(startdir):
     return suite
 
 
-def run_tests(suite, xmloutput=None, verbosity=1, nomultiproc=False):
+def run_tests(argv=None, xmloutput=None, verbosity=1, nomultiproc=False):
     """
     args
     ----
-    - suite [TestSuite]
-        A suite of all tests to run
     - xmloutput [str or None]
         Path of XML output directory (optional)
     - verbosity [int]
@@ -49,50 +47,18 @@ def run_tests(suite, xmloutput=None, verbosity=1, nomultiproc=False):
         runner = xmlrunner.XMLTestRunner(output=xmloutput)
     else:
         runner = None
-    prog = NumbaTestProgram(suite=suite, testRunner=runner, exit=False,
+    prog = NumbaTestProgram(argv=argv,
+                            module=None,
+                            testRunner=runner, exit=False,
                             verbosity=verbosity,
                             nomultiproc=nomultiproc)
     return prog.result
 
 
-def test(**kwargs):
-    """
-    Run all tests under ``numba.tests``.
+def test(*args, **kwargs):
 
-    kwargs
-    ------
-    - descriptions
-    - verbosity
-    - buffer
-    - failfast
-    - xmloutput [str]
-        Path of XML output directory
-    """
-    from numba import cuda
-
-    suite = discover_tests("numba.tests")
-    ok = run_tests(suite, **kwargs).wasSuccessful()
-    if not ok:
-        return ok
-
-    # Test no cuda tests
-    from numba.cuda.tests.nocuda.runtests import test as nocuda_test
-    ok = nocuda_test()
-
-    # Test CUDA
-    if ok:
-        if cuda.is_available():
-            gpus = cuda.list_devices()
-            if gpus and gpus[0].compute_capability >= (2, 0):
-                print("== Run CUDA tests ==")
-                ok = cuda.test()
-            else:
-                print("== Skipped CUDA tests because GPU CC < 2.0 ==")
-        else:
-            print("== Skipped CUDA tests ==")
-
-    return ok
+    return run_tests(argv=['<main>'] + list(args), **kwargs).wasSuccessful()
 
 
 if __name__ == "__main__":
-    sys.exit(0 if test() else 1)
+    sys.exit(0 if run_tests(sys.argv) else 1)
