@@ -74,11 +74,6 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
                 mode. Any arrays that the tight loop uses should be created
                 before the loop is entered. Default value is True.
 
-            wraparound: bool
-                Set to True to enable array indexing wraparound for negative
-                indices, for a small performance penalty. Default value
-                is True.
-
     Returns
     --------
     A callable usable as a compiled function.  Actual compiling will be
