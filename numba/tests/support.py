@@ -174,8 +174,17 @@ class TestCase(unittest.TestCase):
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                            msg=None):
         """
-        Test that two scalars have similar types and are equal up to
-        a computed precision.
+        Versatile equality testing function with more built-in checks than
+        standard assertEqual().
+
+        For arrays, test that layout, dtype, shape are identical, and
+        recursively call assertPreciseEqual() on the contents.
+
+        For other sequences, recursively call assertPreciseEqual() on
+        the contents.
+
+        For scalars, test that two scalars or have similar types and are
+        equal up to a computed precision.
         If the scalars are instances of exact types or if *prec* is
         'exact', they are compared exactly.
         If the scalars are instances of inexact types (float, complex)
