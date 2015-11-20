@@ -198,11 +198,11 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
             self.assertEqual(str(raises.exception),
                              "total size of new array must be unchanged")
 
-        def check_err_negative(arr, shape):
-            with self.assertRaises(NotImplementedError) as raises:
+        def check_err_multiple_negative(arr, shape):
+            with self.assertRaises(ValueError) as raises:
                 run(arr, shape)
             self.assertEqual(str(raises.exception),
-                             "negative shape is not handled, yet")
+                             "multiple negative shape value")
 
         # C-contiguous
         arr = np.arange(24)
@@ -233,11 +233,13 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
         check_err_shape(arr, (6, 4))
         check_err_shape(arr, (2, 12))
 
-        # Test unhandled value (negative shape)
+        # Test negative shape value
         arr = np.arange(25).reshape(5,5)
-        check_err_negative(arr, -1)
-        check_err_negative(arr, (-1,))
-        check_err_negative(arr, (-1, -2, 5, 5))
+        check(arr, -1)
+        check(arr, (-1,))
+        check(arr, (-1, 5))
+        check_err_size(arr, (-1, 4))
+        check_err_multiple_negative(arr, (-1, -2, 5, 5))
 
     def test_array_view(self):
 
