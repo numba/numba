@@ -238,8 +238,11 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
         check(arr, -1)
         check(arr, (-1,))
         check(arr, (-1, 5))
+        check(arr, (5, -1, 5))
+        check(arr, (5, 5, -1))
         check_err_size(arr, (-1, 4))
         check_err_multiple_negative(arr, (-1, -2, 5, 5))
+        check_err_multiple_negative(arr, (5, 5, -1, -1))
 
     def test_array_view(self):
 
