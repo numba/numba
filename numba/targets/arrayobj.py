@@ -1138,7 +1138,7 @@ def array_reshape_vararg(context, builder, sig, args):
     # make a tuple
     shape = cgutils.pack_array(builder, dims, dims[0].type)
 
-    shapety = types.UniTuple(dtype=types.uintp, count=len(dims))
+    shapety = types.UniTuple(dtype=types.intp, count=len(dims))
     new_sig = typing.signature(sig.return_type, aryty, shapety)
     new_args = ary, shape
     return array_reshape(context, builder, new_sig, new_args)
