@@ -1126,8 +1126,8 @@ def array_reshape_vararg(context, builder, sig, args):
     # values
     ary = args[0]
     dims = args[1:]
-    # coerce all types to uintp
-    dims = [context.cast(builder, val, ty, types.uintp)
+    # coerce all types to intp
+    dims = [context.cast(builder, val, ty, types.intp)
             for ty, val in zip(dimtys, dims)]
     # make a tuple
     shape = cgutils.pack_array(builder, dims, dims[0].type)

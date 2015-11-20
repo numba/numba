@@ -216,7 +216,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         expected = pyfunc(a)
         got = cfunc(a)
-        np.testing.assert_equal(expected, got)
+        self.assertPreciseEqual(expected, got)
 
     def test_convert_array_str_npm(self):
         with self.assertRaises(errors.UntypedAttributeError) as raises:

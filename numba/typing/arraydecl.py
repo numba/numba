@@ -252,6 +252,15 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.reshape")
     def resolve_reshape(self, ary, args, kws):
+        def sentry_shape_scalar(ty):
+            if ty in types.number_domain:
+                # Guard against non integer type
+                if not isinstance(ty, types.Integer):
+                    raise TypeError("reshape() arg cannot be {0}".format(ty))
+                return True
+            else:
+                return False
+
         assert not kws
         if ary.layout not in 'CF':
             # only work for contiguous array
@@ -261,7 +270,7 @@ class ArrayAttribute(AttributeTemplate):
             # single arg
             shape, = args
 
-            if shape in types.number_domain:
+            if sentry_shape_scalar(shape):
                 ndim = 1
             else:
                 shape = normalize_shape(shape)
@@ -277,7 +286,7 @@ class ArrayAttribute(AttributeTemplate):
 
         else:
             # vararg case
-            if any(a not in types.number_domain for a in args):
+            if any(not sentry_shape_scalar(a) for a in args):
                 raise TypeError("reshape({0}) is not supported".format(
                     ', '.join(args)))
 
