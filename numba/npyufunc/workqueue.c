@@ -173,7 +173,6 @@ void add_task(void *fn, void *args, void *dims, void *steps, void *data) {
     if ( ++queue_pivot == queue_count ) {
         queue_pivot = 0;
     }
-
 }
 
 static
