@@ -1078,6 +1078,12 @@ def array_reshape(context, builder, sig, args):
     ary = make_array(aryty)(context, builder, args[0])
 
     # XXX unknown dimension (-1) is unhandled
+    msg = "negative shape is not handled, yet"
+    for s in cgutils.unpack_tuple(builder, shape):
+        is_neg = builder.icmp_signed('<', s, lc.Constant.int(ll_intp, 0))
+        with cgutils.if_unlikely(builder, is_neg):
+            context.call_conv.return_user_exc(builder, NotImplementedError,
+                                              (msg,))
 
     # Check requested size
     newsize = lc.Constant.int(ll_intp, 1)
