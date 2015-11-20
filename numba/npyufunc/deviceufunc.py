@@ -694,9 +694,28 @@ class GenerializedUFunc(object):
                 newparams.append(devary)
             else:
                 # Broadcast vector input
-                newparams.append(p.reshape(odim, *cs))
+                newparams.append(self._broadcast_array(p, odim, cs))
         newretval = retval.reshape(odim, *schedule.oshapes[0])
         return newparams, newretval
+
+    def _broadcast_array(self, ary, newdim, innerdim):
+        newshape = (newdim,) + innerdim
+        # No change in shape
+        if ary.shape == newshape:
+            return ary
+
+        # Creating new dimension
+        elif len(ary.shape) < len(newshape):
+            assert newshape[-len(ary.shape):] == ary.shape, \
+               "cannot add dim and reshape at the same time"
+            return self._broadcast_add_axis(ary, newshape)
+
+        # Collapsing dimension
+        else:
+            return ary.reshape(*newshape)
+
+    def _broadcast_add_axis(self, ary, newshape):
+        raise NotImplementedError("cannot add new axis")
 
     def _broadcast_scalar_input(self, ary, shape):
         raise NotImplementedError

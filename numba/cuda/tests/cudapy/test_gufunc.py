@@ -1,5 +1,5 @@
 from __future__ import print_function, absolute_import
-from numba import void, float32
+from numba import void, float32, float64
 import numpy as np
 import numpy.core.umath_tests as ut
 from numba import guvectorize
@@ -161,6 +161,33 @@ class TestCUDAGufunc(unittest.TestCase):
 
         self.assertTrue(np.allclose(C, Gold))
 
+    def test_gufunc_new_axis(self):
+
+        @guvectorize([void(float64[:, :], float64[:, :], float64[:, :])],
+                     '(m,n),(n,p)->(m,p)',
+                     target='cuda')
+        def matmulcore(A, B, C):
+            m, n = A.shape
+            n, p = B.shape
+            for i in range(m):
+                for j in range(p):
+                    C[i, j] = 0
+                    for k in range(n):
+                        C[i, j] += A[i, k] * B[k, j]
+
+        gufunc = matmulcore
+
+        X = np.random.randn(10, 3, 3)
+        Y = np.random.randn(3, 3)
+
+        gold = ut.matrix_multiply(X, Y)
+
+        res1 = gufunc(X, Y)
+        np.testing.assert_allclose(gold, res1)
+
+        res2 = gufunc(X, np.tile(Y, (10, 1, 1)))
+        np.testing.assert_allclose(gold, res2)
+
     def test_gufunc_adjust_blocksize(self):
 
         @guvectorize([void(float32[:, :], float32[:, :], float32[:, :])],
@@ -305,7 +332,7 @@ class TestCUDAGufunc(unittest.TestCase):
         items = msg[len(head):].strip().split(',')
         items = [i.strip("'\" ") for i in items]
         self.assertEqual(set(['what1', 'ever2']), set(items))
-        
+
 
 if __name__ == '__main__':
     unittest.main()
