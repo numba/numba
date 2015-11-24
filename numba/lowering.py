@@ -439,6 +439,21 @@ class Lower(BaseLower):
         return self.context.cast(self.builder, res,
                                  signature.return_type, resty)
 
+    def lower_getitem(self, resty, expr, value, index, signature):
+        baseval = self.loadvar(value.name)
+        indexval = self.loadvar(index.name)
+        impl = self.context.get_function("getitem", signature)
+        argvals = (baseval, indexval)
+        argtyps = (self.typeof(value.name),
+                   self.typeof(index.name))
+        castvals = [self.context.cast(self.builder, av, at, ft)
+                    for av, at, ft in zip(argvals, argtyps,
+                                          signature.args)]
+        res = impl(self.builder, castvals)
+        return self.context.cast(self.builder, res,
+                                 signature.return_type,
+                                 resty)
+
     def _cast_var(self, var, ty):
         """
         Cast a Numba IR variable to the given Numba type, returning a
@@ -692,41 +707,26 @@ class Lower(BaseLower):
             return res
 
         elif expr.op == "static_getitem":
-            baseval = self.loadvar(expr.value.name)
-            indexval = self.context.get_constant(types.intp, expr.index)
-            if cgutils.is_struct(baseval.type):
-                # Statically extract the given element from the structure
-                # (structures aren't dynamically indexable).
-                res = self.builder.extract_value(baseval, expr.index)
-                self.incref(resty, res)
-                return res
-            else:
+            signature = typing.signature(resty, self.typeof(expr.value.name),
+                                         types.Const(expr.index))
+            try:
+                # Both get_function() and the returned implementation can
+                # raise NotImplementedError if the types aren't supported
+                impl = self.context.get_function("static_getitem", signature)
+                return impl(self.builder, (self.loadvar(expr.value.name), expr.index))
+            except NotImplementedError:
+                if expr.index_var is None:
+                    raise
                 # Fall back on the generic getitem() implementation
                 # for this type.
-                signature = typing.signature(resty,
-                                             self.typeof(expr.value.name),
-                                             types.intp)
-                impl = self.context.get_function("getitem", signature)
-                argvals = (baseval, indexval)
-                res = impl(self.builder, argvals)
-                return self.context.cast(self.builder, res,
-                                         signature.return_type, resty)
+                signature = self.fndesc.calltypes[expr]
+                return self.lower_getitem(resty, expr, expr.value,
+                                          expr.index_var, signature)
 
         elif expr.op == "getitem":
-            baseval = self.loadvar(expr.value.name)
-            indexval = self.loadvar(expr.index.name)
             signature = self.fndesc.calltypes[expr]
-            impl = self.context.get_function("getitem", signature)
-            argvals = (baseval, indexval)
-            argtyps = (self.typeof(expr.value.name),
-                       self.typeof(expr.index.name))
-            castvals = [self.context.cast(self.builder, av, at, ft)
-                        for av, at, ft in zip(argvals, argtyps,
-                                              signature.args)]
-            res = impl(self.builder, castvals)
-            return self.context.cast(self.builder, res,
-                                     signature.return_type,
-                                     resty)
+            return self.lower_getitem(resty, expr, expr.value, expr.index,
+                                      signature)
 
         elif expr.op == "build_tuple":
             itemvals = [self.loadvar(i.name) for i in expr.items]

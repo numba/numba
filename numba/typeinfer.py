@@ -236,18 +236,32 @@ class PairSecondConstraint(object):
 
 
 class StaticGetItemConstraint(object):
-    def __init__(self, target, value, index, loc):
+    def __init__(self, target, value, index, index_var, loc):
         self.target = target
         self.value = value
         self.index = index
+        if index_var is not None:
+            self.fallback = IntrinsicCallConstraint(target, 'getitem',
+                                                    (value, index_var), {},
+                                                    None, loc)
+        else:
+            self.fallback = None
         self.loc = loc
 
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
         oset = typevars[self.target]
-        for tp in typevars[self.value.name].get():
-            if isinstance(tp, types.BaseTuple):
-                typeinfer.add_type(self.target, tp.types[self.index])
+        for ty in typevars[self.value.name].get():
+            itemty = typeinfer.context.resolve_static_getitem(value=ty,
+                                                              index=self.index)
+            if itemty is not None:
+                typeinfer.add_type(self.target, itemty)
+            else:
+                self.fallback(typeinfer)
+
+    def get_call_signature(self):
+        # The signature is only needed for the fallback case in lowering
+        return self.fallback and self.fallback.get_call_signature()
 
 
 class CallConstraint(object):
@@ -788,11 +802,12 @@ class TypeInferer(object):
         elif expr.op == 'static_getitem':
             constraint = StaticGetItemConstraint(target.name, value=expr.value,
                                                  index=expr.index,
+                                                 index_var=expr.index_var,
                                                  loc=expr.loc)
             self.constraints.append(constraint)
+            self.intrcalls.append((inst.value, constraint))
         elif expr.op == 'getitem':
-            self.typeof_intrinsic_call(inst, target, expr.op, expr.value,
-                                       expr.index)
+            self.typeof_intrinsic_call(inst, target, 'getitem', expr.value, expr.index)
         elif expr.op == 'getattr':
             constraint = GetAttrConstraint(target.name, attr=expr.attr,
                                            value=expr.value, loc=inst.loc,

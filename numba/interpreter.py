@@ -503,7 +503,7 @@ class Interpreter(object):
             value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
-        self.definitions[name].append(value)
+        self.definitions[target.name].append(value)
 
     def get(self, name):
         """
@@ -576,7 +576,8 @@ class Interpreter(object):
         # then index the tuple-like object to extract the values
         for i, st in enumerate(stores):
             expr = ir.Expr.static_getitem(self.get(tupleobj),
-                                          index=i, loc=self.loc)
+                                          index=i, index_var=None,
+                                          loc=self.loc)
             self.store(expr, st)
 
     def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):

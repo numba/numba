@@ -166,9 +166,7 @@ class AbstractTemplate(FunctionTemplate):
             assert not kws  # Not supported yet
             sig = generic(args, kws)
 
-        if sig:
-            cases = [sig]
-            return self._select(cases, args, kws)
+        return sig
 
 
 class CallableTemplate(FunctionTemplate):

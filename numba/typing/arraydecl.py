@@ -294,6 +294,19 @@ class ArrayAttribute(AttributeTemplate):
                 return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
 
 
+@builtin
+class StaticGetItemArray(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for record arrays
+        ary, idx = args
+        if (isinstance(ary, types.Array) and isinstance(idx, str) and
+            isinstance(ary.dtype, types.Record)):
+            if idx in ary.dtype.fields:
+                return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+
+
 @builtin_attr
 class ArrayCTypesAttribute(AttributeTemplate):
     key = types.ArrayCTypes

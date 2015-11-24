@@ -1945,6 +1945,9 @@ def array_ctypes_data(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 
+#-------------------------------------------------------------------------------
+# Structured array lookup
+
 @builtin_attr
 @impl_attribute_generic(types.Kind(types.Array))
 def array_record_getattr(context, builder, typ, value, attr):
@@ -1957,7 +1960,7 @@ def array_record_getattr(context, builder, typ, value, attr):
 
     rectype = typ.dtype
     if not isinstance(rectype, types.Record):
-        raise AttributeError("attribute %r of %s not defined" % (attr, typ))
+        raise NotImplementedError("attribute %r of %s not defined" % (attr, typ))
     dtype = rectype.typeof(attr)
     offset = rectype.offset(attr)
 
@@ -1983,6 +1986,11 @@ def array_record_getattr(context, builder, typ, value, attr):
                    parent=array.parent)
     res = rary._getvalue()
     return impl_ret_borrowed(context, builder, typ, res)
+
+@builtin
+@implement('static_getitem', types.Kind(types.Array), types.Kind(types.Const))
+def array_record_getitem(context, builder, sig, args):
+    return array_record_getattr(context, builder, sig.args[0], args[0], args[1])
 
 
 #-------------------------------------------------------------------------------

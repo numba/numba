@@ -143,6 +143,12 @@ class BaseContext(object):
             if self.can_convert(value, expectedty) is not None:
                 return templates.signature(types.void, target, value)
 
+    def resolve_static_getitem(self, value, index):
+        assert not isinstance(index, types.Type), index
+        args = value, index
+        kws = ()
+        return self.resolve_function_type("static_getitem", args, kws)
+
     def resolve_setitem(self, target, index, value):
         args = target, index, value
         kws = ()
