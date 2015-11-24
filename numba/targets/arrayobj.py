@@ -1946,7 +1946,7 @@ def array_ctypes_data(context, builder, typ, value):
 
 
 #-------------------------------------------------------------------------------
-# Structured array lookup
+# Structured / record lookup
 
 @builtin_attr
 @impl_attribute_generic(types.Kind(types.Array))
@@ -1991,6 +1991,54 @@ def array_record_getattr(context, builder, typ, value, attr):
 @implement('static_getitem', types.Kind(types.Array), types.Kind(types.Const))
 def array_record_getitem(context, builder, sig, args):
     return array_record_getattr(context, builder, sig.args[0], args[0], args[1])
+
+@builtin_attr
+@impl_attribute_generic(types.Kind(types.Record))
+def record_getattr(context, builder, typ, value, attr):
+    """
+    Generic getattr() implementation for records: fetch the given
+    record member, i.e. a scalar.
+    """
+    context.sentry_record_alignment(typ, attr)
+    offset = typ.offset(attr)
+    elemty = typ.typeof(attr)
+
+    if isinstance(elemty, types.NestedArray):
+        # Only a nested array's *data* is stored in a structured array,
+        # so we create an array structure to point to that data.
+        aryty = make_array(elemty)
+        ary = aryty(context, builder)
+        dtype = elemty.dtype
+        newshape = [context.get_constant(types.intp, s) for s in
+                    elemty.shape]
+        newstrides = [context.get_constant(types.intp, s) for s in
+                      elemty.strides]
+        newdata = cgutils.get_record_member(builder, value, offset,
+                                            context.get_data_type(dtype))
+        populate_array(
+            ary,
+            data=newdata,
+            shape=cgutils.pack_array(builder, newshape),
+            strides=cgutils.pack_array(builder, newstrides),
+            itemsize=context.get_constant(types.intp, elemty.size),
+            meminfo=None,
+            parent=None,
+        )
+        res = ary._getvalue()
+        return impl_ret_borrowed(context, builder, typ, res)
+    else:
+        dptr = cgutils.get_record_member(builder, value, offset,
+                                         context.get_data_type(elemty))
+        align = None if typ.aligned else 1
+        res = context.unpack_value(builder, elemty, dptr, align)
+        return impl_ret_borrowed(context, builder, typ, res)
+
+
+@builtin
+@implement('static_getitem', types.Kind(types.Record), types.Kind(types.Const))
+def record_getitem(context, builder, sig, args):
+    impl = context.get_attribute(args[0], sig.args[0], args[1])
+    return impl(context, builder, sig.args[0], args[0], args[1])
 
 
 #-------------------------------------------------------------------------------

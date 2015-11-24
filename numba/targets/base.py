@@ -491,48 +491,6 @@ class BaseContext(object):
         return obj
 
     def get_attribute(self, val, typ, attr):
-        if isinstance(typ, types.Record):
-            # Implement get attribute for records
-            self.sentry_record_alignment(typ, attr)
-            offset = typ.offset(attr)
-            elemty = typ.typeof(attr)
-
-            if isinstance(elemty, types.NestedArray):
-                # Inside a structured type only the array data is stored, so we
-                # create an array structure to point to that data.
-                aryty = arrayobj.make_array(elemty)
-                @impl_attribute(typ, attr, elemty)
-                def imp(context, builder, typ, val):
-                    ary = aryty(context, builder)
-                    dtype = elemty.dtype
-                    newshape = [self.get_constant(types.intp, s) for s in
-                                elemty.shape]
-                    newstrides = [self.get_constant(types.intp, s) for s in
-                                  elemty.strides]
-                    newdata = cgutils.get_record_member(builder, val, offset,
-                                                    self.get_data_type(dtype))
-                    arrayobj.populate_array(
-                        ary,
-                        data=newdata,
-                        shape=cgutils.pack_array(builder, newshape),
-                        strides=cgutils.pack_array(builder, newstrides),
-                        itemsize=context.get_constant(types.intp, elemty.size),
-                        meminfo=None,
-                        parent=None,
-                    )
-
-                    res = ary._getvalue()
-                    return impl_ret_borrowed(context, builder, typ, res)
-            else:
-                @impl_attribute(typ, attr, elemty)
-                def imp(context, builder, typ, val):
-                    dptr = cgutils.get_record_member(builder, val, offset,
-                                                     context.get_data_type(elemty))
-                    align = None if typ.aligned else 1
-                    res = self.unpack_value(builder, elemty, dptr, align)
-                    return impl_ret_borrowed(context, builder, typ, res)
-            return imp
-
         if isinstance(typ, types.Module):
             # Implement getattr for module-level globals.
             # We are treating them as constants.

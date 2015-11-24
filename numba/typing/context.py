@@ -113,11 +113,6 @@ class BaseContext(object):
             return func.get_call_type(self, args, kws)
 
     def resolve_getattr(self, value, attr):
-        if isinstance(value, types.Record):
-            ret = value.typeof(attr)
-            assert ret
-            return ret
-
         try:
             attrinfo = self.attributes[value]
         except KeyError:

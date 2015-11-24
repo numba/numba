@@ -299,12 +299,34 @@ class StaticGetItemArray(AbstractTemplate):
     key = "static_getitem"
 
     def generic(self, args, kws):
-        # Resolution of members for record arrays
+        # Resolution of members for record and structured arrays
         ary, idx = args
         if (isinstance(ary, types.Array) and isinstance(idx, str) and
             isinstance(ary.dtype, types.Record)):
             if idx in ary.dtype.fields:
                 return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+
+
+@builtin_attr
+class RecordAttribute(AttributeTemplate):
+    key = types.Record
+
+    def generic_resolve(self, record, attr):
+        ret = record.typeof(attr)
+        assert ret
+        return ret
+
+@builtin
+class StaticGetItemRecord(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for records
+        record, idx = args
+        if isinstance(record, types.Record) and isinstance(idx, str):
+            ret = record.typeof(idx)
+            assert ret
+            return ret
 
 
 @builtin_attr
