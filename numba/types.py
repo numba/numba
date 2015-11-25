@@ -161,7 +161,8 @@ class RawPointer(Dummy):
 
 class Const(Dummy):
     """
-    A compile-time constant, for use when a type is needed for lookup.
+    A compile-time constant, for (internal) use when a type is needed for
+    lookup.
     """
 
     def __init__(self, value):
@@ -171,7 +172,6 @@ class Const(Dummy):
     @property
     def key(self):
         return type(self.value), self.value
-
 
 
 class Kind(Type):
