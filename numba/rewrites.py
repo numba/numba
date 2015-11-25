@@ -132,7 +132,7 @@ class RewriteConstGetitems(Rewrite):
         return self.block
 
 
-#@register_rewrite('before-inference')
+@register_rewrite('before-inference')
 class RewriteConstSetitems(Rewrite):
     """
     Rewrite IR statements of the kind `setitem(target=arr, index=$constXX, ...)`

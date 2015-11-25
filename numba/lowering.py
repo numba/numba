@@ -269,6 +269,21 @@ class Lower(BaseLower):
             retval = self.context.get_return_value(self.builder, ty, val)
             self.call_conv.return_value(self.builder, retval)
 
+        elif isinstance(inst, ir.StaticSetItem):
+            signature = self.fndesc.calltypes[inst]
+            assert signature is not None
+            try:
+                impl = self.context.get_function('static_setitem', signature)
+            except NotImplementedError:
+                return self.lower_setitem(inst.target, inst.index_var, inst.value, signature)
+            else:
+                target = self.loadvar(inst.target.name)
+                value = self.loadvar(inst.value.name)
+                valuety = self.typeof(inst.value.name)
+                value = self.context.cast(self.builder, value, valuety,
+                                          signature.args[2])
+                return impl(self.builder, (target, inst.index, value))
+
         elif isinstance(inst, ir.SetItem):
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
