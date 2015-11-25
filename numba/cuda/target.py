@@ -13,7 +13,7 @@ from numba.targets import cmathimpl, operatorimpl
 from numba.typing import cmathdecl, operatordecl
 from numba.funcdesc import transform_arg_name
 from .cudadrv import nvvm
-from . import codegen, nvvmutils
+from . import codegen, nvvmutils, npydecl
 
 
 # -----------------------------------------------------------------------------
@@ -28,6 +28,7 @@ class CUDATypingContext(typing.BaseContext):
         self.install(cudamath.registry)
         self.install(cmathdecl.registry)
         self.install(operatordecl.registry)
+        self.install(npydecl.registry)
 
 # -----------------------------------------------------------------------------
 # Implementation
