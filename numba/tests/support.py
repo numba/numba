@@ -219,7 +219,7 @@ class TestCase(unittest.TestCase):
                 or math.isinf(first) or math.isinf(second)):
                 self.assertEqual(first, second, msg=msg)
                 # For signed zeros
-                if(not ignore_sign_on_zero):
+                if not ignore_sign_on_zero:
                     try:
                         if math.copysign(1, first) != math.copysign(1, second):
                             self.fail(

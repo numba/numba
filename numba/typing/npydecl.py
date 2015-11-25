@@ -774,14 +774,8 @@ class AngleCtor(CallableTemplate):
     """
     def generic(self):
         def typer(ref, deg = False):
-            if(isinstance(ref, types.Array)):
-                # type map
-                m = { types.complex128: types.float64,
-                      types.float64: types.float64,
-                      types.complex64: types.float32,
-                      types.float32: types.float32 }
-                dt=m[ref.dtype];
-                return ref.copy(dtype=dt)
+            if isinstance(ref, types.Array):
+                return ref.copy(dtype=ref.underlying_float)
             else:
                 return types.float64
         return typer

@@ -1719,7 +1719,7 @@ def scalar_angle(context, builder, sig, args):
 @implement(numpy.angle, types.Kind(types.Number), types.Kind(types.Boolean))
 def scalar_angle_kwarg(context, builder, sig, args):
     def scalar_angle_impl(val, deg=False):
-        if(deg):
+        if deg:
             scal = 180/numpy.pi
             return numpy.arctan2(val.imag, val.real) * scal
         else:
@@ -1730,25 +1730,9 @@ def scalar_angle_kwarg(context, builder, sig, args):
 
 @builtin
 @implement(numpy.angle, types.Kind(types.Array))
-def array_angle(context, builder, sig, args):
-    arg=sig.args[0]
-    if isinstance(arg.dtype, types.Complex):
-        retty = arg.dtype.underlying_float
-    else:
-        retty = arg.dtype
-    def array_angle_impl(arr):
-        out = numpy.zeros_like(arr, dtype=retty)
-        for index, val in numpy.ndenumerate(arr):
-            out[index] = numpy.angle(val)
-        return out
-    res = context.compile_internal(builder, array_angle_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@builtin
 @implement(numpy.angle, types.Kind(types.Array), types.Kind(types.Boolean))
 def array_angle_kwarg(context, builder, sig, args):
-    arg=sig.args[0]
+    arg = sig.args[0]
     if isinstance(arg.dtype, types.Complex):
         retty = arg.dtype.underlying_float
     else:

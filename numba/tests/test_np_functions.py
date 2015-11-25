@@ -12,14 +12,9 @@ from numba.compiler import compile_isolated, Flags, utils
 from numba import types
 from .support import TestCase, CompilationCache
 
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
 no_pyobj_flags = Flags()
 no_pyobj_flags.set("nrt")
-
 no_pyobj_flags = [no_pyobj_flags]
-enable_pyobj_flags = [enable_pyobj_flags]
-all_flags = enable_pyobj_flags + no_pyobj_flags
 
 def sinc(x):
     return np.sinc(x)
@@ -37,7 +32,7 @@ class TestNPFunctions(TestCase):
         self.ccache = CompilationCache()
 
     def run_unary_real(self, pyfunc, x_types, x_values,
-        flags=enable_pyobj_flags, prec='exact',
+        flags=no_pyobj_flags, prec='exact',
         func_extra_types=None, func_extra_args=None,
         ignore_sign_on_zero=False, **kwargs):
         """
@@ -49,7 +44,7 @@ class TestNPFunctions(TestCase):
                  functions to be tested.
         x_types: the types of the values being tested, see numba.types
         x_values: the numerical values of the values to be tested
-        flags: flags to pass to the ComplicationCache::ccache::compile function
+        flags: flags to pass to the CompilationCache::ccache::compile function
         func_extra_types: the types of additional arguments to the numpy
                           function
         func_extra_args:  additional arguments to the numpy function
@@ -64,7 +59,7 @@ class TestNPFunctions(TestCase):
         """
         for f in flags:
             for tx, vx in zip(x_types, x_values):
-                if(func_extra_args == None):
+                if func_extra_args == None:
                     cr = self.ccache.compile(pyfunc, (tx,), flags=f)
                     cfunc = cr.entry_point
                     got = cfunc(vx)
@@ -92,7 +87,7 @@ class TestNPFunctions(TestCase):
     def run_unary_complex(self, pyfunc, x_types, x_values, ulps=1,
                   func_extra_types=None, func_extra_args=None,
                   ignore_sign_on_zero=False,
-                  flags=enable_pyobj_flags):
+                  flags=no_pyobj_flags):
         """
         Runs tests for a unary function operating in the numerical complex
         space.
@@ -104,7 +99,7 @@ class TestNPFunctions(TestCase):
         x_types: the types of the values being tested, see numba.types
         x_values: the numerical values of the values to be tested
         ulps: the number of ulps in error considered acceptable
-        flags: flags to pass to the ComplicationCache::ccache::compile function
+        flags: flags to pass to the CompilationCache::ccache::compile function
         func_extra_types: the types of additional arguments to the numpy
                           function
         func_extra_args:  additional arguments to the numpy function
@@ -154,7 +149,7 @@ class TestNPFunctions(TestCase):
                                                     ignore_sign_on_zero=
                                                     ignore_sign_on_zero)
 
-    def test_sinc(self, flags=all_flags):
+    def test_sinc(self, flags=no_pyobj_flags):
         """
         Tests the sinc() function.
         This test is purely to assert numerical computations are correct.
@@ -162,7 +157,8 @@ class TestNPFunctions(TestCase):
 
         # Ignore sign of zeros, this will need masking depending on numpy
         # version once the fix to numpy complex division is in upstream
-        isoz=True
+        # See: https://github.com/numpy/numpy/pull/6699
+        isoz = True
 
         pyfunc = sinc
 
@@ -176,7 +172,7 @@ class TestNPFunctions(TestCase):
         x_values = np.array(x_values)
         x_types = [types.float32, types.float64]
         self.run_unary_real(pyfunc, x_types, x_values, flags=flags,
-                               ignore_sign_on_zero=True)
+                               ignore_sign_on_zero=isoz)
 
         # complex domain scalar context
         x_values = [1.+0j, -1+0j, 0.0+0.0j, -0.0+0.0j, 0+1j, 0-1j, 0.5+0.0j,
@@ -195,7 +191,7 @@ class TestNPFunctions(TestCase):
                                ignore_sign_on_zero=isoz)
 
 
-    def test_angle(self, flags=all_flags):
+    def test_angle(self, flags=no_pyobj_flags):
         """
         Tests the angle() function.
         This test is purely to assert numerical computations are correct.
