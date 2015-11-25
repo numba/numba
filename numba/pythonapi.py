@@ -263,7 +263,7 @@ class PythonAPI(object):
         fnty = Type.function(Type.void(), [self.pyobj])
         fn = self._get_function(fnty, name="numba_do_raise")
         if exc is None:
-            exc = self.get_null_object()
+            exc = self.make_none()
         return self.builder.call(fn, (exc,))
 
     def err_set_object(self, exctype, excval):

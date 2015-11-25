@@ -348,6 +348,30 @@ class Raise(Stmt):
         return "raise %s" % self.exception
 
 
+class StaticRaise(Stmt):
+    """
+    Raise an exception class and arguments known at compile-time.
+    Note that if *exc_class* is None, a bare "raise" statement is implied
+    (i.e. re-raise the current exception).
+    """
+    is_terminator = True
+    is_exit = True
+
+    def __init__(self, exc_class, exc_args, loc):
+        self.exc_class = exc_class
+        self.exc_args = exc_args
+        self.loc = loc
+
+    def __str__(self):
+        if self.exc_class is None:
+            return "raise"
+        elif self.exc_args is None:
+            return "raise %s" % (self.exc_class,)
+        else:
+            return "raise %s(%s)" % (self.exc_class,
+                                     ", ".join(map(repr, self.exc_args)))
+
+
 class Return(Stmt):
     is_terminator = True
     is_exit = True

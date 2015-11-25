@@ -684,7 +684,7 @@ class TypeInferer(object):
             self.typeof_setattr(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
-        elif isinstance(inst, ir.Raise):
+        elif isinstance(inst, ir.StaticRaise):
             pass
         else:
             raise NotImplementedError(inst)

@@ -1436,10 +1436,11 @@ numba_do_raise(PyObject *exc)
        raise <instance>
        raise <type> */
 
-    if (exc == NULL) {
+    if (exc == Py_None) {
         /* Reraise */
         PyThreadState *tstate = PyThreadState_GET();
         PyObject *tb;
+        Py_DECREF(exc);
         type = tstate->exc_type;
         value = tstate->exc_value;
         tb = tstate->exc_traceback;

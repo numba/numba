@@ -333,8 +333,8 @@ class Lower(BaseLower):
 
             return impl(self.builder, (target, value))
 
-        elif isinstance(inst, ir.Raise):
-            self.lower_raise(inst)
+        elif isinstance(inst, ir.StaticRaise):
+            self.lower_static_raise(inst)
 
         else:
             raise NotImplementedError(type(inst))
@@ -364,27 +364,12 @@ class Lower(BaseLower):
 
         return impl(self.builder, (target, index, value))
 
-    def lower_raise(self, inst):
-        if inst.exception is None:
+    def lower_static_raise(self, inst):
+        if inst.exc_class is None:
             # Reraise
             self.return_exception(None)
         else:
-            exctype = self.typeof(inst.exception.name)
-            if isinstance(exctype, types.ExceptionInstance):
-                # raise <instance> => find the instantiation site
-                excdef = self.interp.get_definition(inst.exception)
-                if (not isinstance(excdef, ir.Expr) or excdef.op != 'call'
-                    or excdef.kws):
-                    raise NotImplementedError("unsupported kind of raising")
-                # Try to infer the args tuple
-                args = tuple(self.interp.get_definition(arg).infer_constant()
-                             for arg in excdef.args)
-            elif isinstance(exctype, types.ExceptionClass):
-                args = None
-            else:
-                raise NotImplementedError("cannot raise value of type %s"
-                                          % (exctype,))
-            self.return_exception(exctype.exc_class, args)
+            self.return_exception(inst.exc_class, inst.exc_args)
 
     def lower_assign(self, ty, inst):
         value = inst.value
