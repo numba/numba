@@ -45,34 +45,33 @@ class RewriteConstRaises(Rewrite):
         self.block = block
         # Detect all raise statements and find which ones can be
         # rewritten
-        for inst in block.body:
-            if isinstance(inst, ir.Raise):
-                if inst.exception is None:
-                    # re-reraise
-                    exc_type, exc_args = None, None
-                else:
-                    # raise <something> => find the definition site for <something>
+        for inst in block.find_insts(ir.Raise):
+            if inst.exception is None:
+                # re-reraise
+                exc_type, exc_args = None, None
+            else:
+                # raise <something> => find the definition site for <something>
+                try:
+                    excdef = interp.get_definition(inst.exception)
+                except KeyError:
+                    continue
+                if isinstance(excdef, ir.Expr) and excdef.op == 'call':
+                    # Is it the result of calling a constant?
                     try:
-                        excdef = interp.get_definition(inst.exception)
-                    except KeyError:
+                        exc_type, exc_args = self._break_call(interp, excdef)
+                    except NotImplementedError:
                         continue
-                    if isinstance(excdef, ir.Expr) and excdef.op == 'call':
-                        # Is it the result of calling a constant?
-                        try:
-                            exc_type, exc_args = self._break_call(interp, excdef)
-                        except NotImplementedError:
-                            continue
-                    else:
-                        # Is it a compile-time constant?
-                        try:
-                            const = excdef.infer_constant()
-                        except TypeError:
-                            continue
-                        try:
-                            exc_type, exc_args = self._break_constant(interp, const)
-                        except NotImplementedError:
-                            continue
-                raises[inst] = exc_type, exc_args
+                else:
+                    # Is it a compile-time constant?
+                    try:
+                        const = excdef.infer_constant()
+                    except TypeError:
+                        continue
+                    try:
+                        exc_type, exc_args = self._break_constant(interp, const)
+                    except NotImplementedError:
+                        continue
+            raises[inst] = exc_type, exc_args
 
         return len(raises) > 0
 

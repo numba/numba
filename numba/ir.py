@@ -633,6 +633,25 @@ class Block(object):
         block.body = self.body[:]
         return block
 
+    def find_exprs(self, op=None):
+        """
+        Iterate over exprs of the given *op* in this block.
+        """
+        for inst in self.body:
+            if isinstance(inst, Assign):
+                expr = inst.value
+                if isinstance(expr, Expr):
+                    if op is None or expr.op == op:
+                        yield expr
+
+    def find_insts(self, cls=None):
+        """
+        Iterate over insts of the given class in this block.
+        """
+        for inst in self.body:
+            if isinstance(inst, cls):
+                yield inst
+
     def prepend(self, inst):
         assert isinstance(inst, Stmt)
         self.body.insert(0, inst)
