@@ -420,14 +420,17 @@ class MemoryLeak(object):
 
     def memory_leak_teardown(self):
         if self.__enable_leak_check:
-            old = self.__init_stats
-            new = rtsys.get_allocation_stats()
-            total_alloc = new.alloc - old.alloc
-            total_free = new.free - old.free
-            total_mi_alloc = new.mi_alloc - old.mi_alloc
-            total_mi_free = new.mi_free - old.mi_free
-            self.assertEqual(total_alloc, total_free)
-            self.assertEqual(total_mi_alloc, total_mi_free)
+            self.assert_no_memory_leak()
+
+    def assert_no_memory_leak(self):
+        old = self.__init_stats
+        new = rtsys.get_allocation_stats()
+        total_alloc = new.alloc - old.alloc
+        total_free = new.free - old.free
+        total_mi_alloc = new.mi_alloc - old.mi_alloc
+        total_mi_free = new.mi_free - old.mi_free
+        self.assertEqual(total_alloc, total_free)
+        self.assertEqual(total_mi_alloc, total_mi_free)
 
     def disable_leak_check(self):
         # For per-test use when MemoryLeakMixin is injected into a TestCase

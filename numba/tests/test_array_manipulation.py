@@ -118,6 +118,19 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='A')
         self.assertIn("reshape() supports contiguous array only",
                       str(raises.exception))
+        self.disable_leak_check()
+
+    @unittest.expectedFailure
+    def test_reshape_array_to_1d_leak_error_npm(self):
+        """
+        Rerun the test in ``test_reshape_array_to_1d_npm`` that will cause
+        a leak error.
+        """
+        with self.assertRaises(NotImplementedError) as raises:
+            self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='F')
+        self.assertIn("incompatible shape for array", str(raises.exception))
+        self.disable_leak_check()
+        self.assert_no_memory_leak()
 
     def test_flatten_array(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
