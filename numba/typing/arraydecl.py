@@ -328,6 +328,18 @@ class StaticGetItemRecord(AbstractTemplate):
             assert ret
             return ret
 
+@builtin
+class StaticSetItemRecord(AbstractTemplate):
+    key = "static_setitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for record and structured arrays
+        record, idx, value = args
+        if isinstance(record, types.Record) and isinstance(idx, str):
+            expectedty = record.typeof(idx)
+            if self.context.can_convert(value, expectedty) is not None:
+                return signature(types.void, record, types.Const(idx), value)
+
 
 @builtin_attr
 class ArrayCTypesAttribute(AttributeTemplate):

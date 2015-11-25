@@ -270,31 +270,9 @@ class Lower(BaseLower):
             self.call_conv.return_value(self.builder, retval)
 
         elif isinstance(inst, ir.SetItem):
-            target = self.loadvar(inst.target.name)
-            value = self.loadvar(inst.value.name)
-            index = self.loadvar(inst.index.name)
-
-            targetty = self.typeof(inst.target.name)
-            valuety = self.typeof(inst.value.name)
-            indexty = self.typeof(inst.index.name)
-
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
-            impl = self.context.get_function('setitem', signature)
-
-            # Convert argument to match
-            if isinstance(targetty, types.Optional):
-                target = self.context.cast(self.builder, target, targetty,
-                                           targetty.type)
-            else:
-                assert targetty == signature.args[0]
-
-            index = self.context.cast(self.builder, index, indexty,
-                                      signature.args[1])
-            value = self.context.cast(self.builder, value, valuety,
-                                      signature.args[2])
-
-            return impl(self.builder, (target, index, value))
+            return self.lower_setitem(inst.target, inst.index, inst.value, signature)
 
         elif isinstance(inst, ir.DelItem):
             target = self.loadvar(inst.target.name)
@@ -345,6 +323,31 @@ class Lower(BaseLower):
 
         else:
             raise NotImplementedError(type(inst))
+
+    def lower_setitem(self, target_var, index_var, value_var, signature):
+        target = self.loadvar(target_var.name)
+        value = self.loadvar(value_var.name)
+        index = self.loadvar(index_var.name)
+
+        targetty = self.typeof(target_var.name)
+        valuety = self.typeof(value_var.name)
+        indexty = self.typeof(index_var.name)
+
+        impl = self.context.get_function('setitem', signature)
+
+        # Convert argument to match
+        if isinstance(targetty, types.Optional):
+            target = self.context.cast(self.builder, target, targetty,
+                                       targetty.type)
+        else:
+            assert targetty == signature.args[0]
+
+        index = self.context.cast(self.builder, index, indexty,
+                                  signature.args[1])
+        value = self.context.cast(self.builder, value, valuety,
+                                  signature.args[2])
+
+        return impl(self.builder, (target, index, value))
 
     def lower_raise(self, inst):
         if inst.exception is None:

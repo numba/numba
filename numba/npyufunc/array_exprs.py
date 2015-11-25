@@ -179,7 +179,8 @@ class RewriteArrayExprs(rewrites.Rewrite):
         replace_map, dead_vars, used_vars = self._handle_matches()
         # Part 2: Using the information above, rewrite the target
         # basic block.
-        result = ir.Block(self.crnt_block.scope, self.crnt_block.loc)
+        result = self.crnt_block.copy()
+        result.clear()
         delete_map = {}
         for instr in self.crnt_block.body:
             if isinstance(instr, ir.Assign):

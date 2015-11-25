@@ -265,6 +265,22 @@ class SetItem(Stmt):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
 
 
+class StaticSetItem(Stmt):
+    """
+    target[constant index] = value
+    """
+
+    def __init__(self, target, index, index_var, value, loc):
+        self.target = target
+        self.index = index
+        self.index_var = index_var
+        self.value = value
+        self.loc = loc
+
+    def __repr__(self):
+        return '%s[%r] = %s' % (self.target, self.index, self.value)
+
+
 class DelItem(Stmt):
     """
     del target[index]
@@ -588,6 +604,11 @@ class Block(object):
         self.body = []
         self.loc = loc
 
+    def copy(self):
+        block = Block(self.scope, self.loc)
+        block.body = self.body[:]
+        return block
+
     def prepend(self, inst):
         assert isinstance(inst, Stmt)
         self.body.insert(0, inst)
@@ -599,6 +620,9 @@ class Block(object):
     def remove(self, inst):
         assert isinstance(inst, Stmt)
         del self.body[self.body.index(inst)]
+
+    def clear(self):
+        del self.body[:]
 
     def dump(self, file=sys.stdout):
         for inst in self.body:

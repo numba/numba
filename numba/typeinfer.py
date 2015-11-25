@@ -382,15 +382,50 @@ class SetItemConstraint(object):
 
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
-        targettys = typevars[self.target.name].get()
-        idxtys = typevars[self.index.name].get()
-        valtys = typevars[self.value.name].get()
+        if not all(typevars[var.name].defined
+                   for var in (self.target, self.index, self.value)):
+            return
+        targetty = typevars[self.target.name].getone()
+        idxty = typevars[self.index.name].getone()
+        valty = typevars[self.value.name].getone()
 
-        for ty, it, vt in itertools.product(targettys, idxtys, valtys):
-            if not typeinfer.context.resolve_setitem(target=ty,
-                                                     index=it, value=vt):
-                raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
-                                  (ty, it, vt), loc=self.loc)
+        sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
+        if sig is None:
+            raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
+                              (targetty, idxty, valty), loc=self.loc)
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
+
+
+class StaticSetItemConstraint(object):
+    def __init__(self, target, index, index_var, value, loc):
+        self.target = target
+        self.index = index
+        self.index_var = index_var
+        self.value = value
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
+        if not all(typevars[var.name].defined
+                   for var in (self.target, self.index_var, self.value)):
+            return
+        targetty = typevars[self.target.name].getone()
+        idxty = typevars[self.index_var.name].getone()
+        valty = typevars[self.value.name].getone()
+
+        sig = typeinfer.context.resolve_static_setitem(targetty, self.index, valty)
+        if sig is None:
+            sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
+        if sig is None:
+            raise TypingError("Cannot resolve setitem: %s[%r] = %s" %
+                              (targetty, self.index, valty), loc=self.loc)
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
 
 
 class DelItemConstraint(object):
@@ -472,6 +507,8 @@ class TypeInferer(object):
         self.delitemcalls = []
         self.setitemcalls = []
         self.setattrcalls = []
+        # The inference result of the above calls
+        self.calltypes = utils.UniqueDict()
         # Target var -> constraint with refine hook
         self.refine_map = {}
 
@@ -530,6 +567,9 @@ class TypeInferer(object):
             return
         unified = tv.add_type(tp)
         self.propagate_refined_type(var, unified)
+
+    def add_calltype(self, inst, signature):
+        calltypes[inst] = signature
 
     def copy_type(self, src_var, dest_var):
         unified = self.typevars[dest_var].union(self.typevars[src_var])
@@ -595,7 +635,7 @@ class TypeInferer(object):
         Fill and return a calltypes map using the inferred `typemap`.
         """
         # XXX why can't this be done on the fly?
-        calltypes = utils.UniqueDict()
+        calltypes = self.calltypes
         for call, constraint in self.intrcalls:
             calltypes[call] = constraint.get_call_signature()
 
@@ -621,12 +661,8 @@ class TypeInferer(object):
             signature = self.context.resolve_delitem(target, index)
             calltypes[inst] = signature
 
-        for inst in self.setitemcalls:
-            target = typemap[inst.target.name]
-            index = typemap[inst.index.name]
-            value = typemap[inst.value.name]
-            signature = self.context.resolve_setitem(target, index, value)
-            calltypes[inst] = signature
+        for inst, constraint in self.setitemcalls:
+            calltypes[inst] = constraint.get_call_signature()
 
         for inst in self.setattrcalls:
             target = typemap[inst.target.name]
@@ -665,6 +701,8 @@ class TypeInferer(object):
             self.typeof_assign(inst)
         elif isinstance(inst, ir.SetItem):
             self.typeof_setitem(inst)
+        elif isinstance(inst, ir.StaticSetItem):
+            self.typeof_static_setitem(inst)
         elif isinstance(inst, ir.DelItem):
             self.typeof_delitem(inst)
         elif isinstance(inst, ir.SetAttr):
@@ -680,7 +718,15 @@ class TypeInferer(object):
         constraint = SetItemConstraint(target=inst.target, index=inst.index,
                                        value=inst.value, loc=inst.loc)
         self.constraints.append(constraint)
-        self.setitemcalls.append(inst)
+        self.setitemcalls.append((inst, constraint))
+
+    def typeof_static_setitem(self, inst):
+        constraint = StaticSetItemConstraint(target=inst.target,
+                                             index=inst.index,
+                                             index_var=inst.index_var,
+                                             value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.setitemcalls.append((inst, constraint))
 
     def typeof_delitem(self, inst):
         constraint = DelItemConstraint(target=inst.target, index=inst.index,
