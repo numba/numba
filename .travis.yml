@@ -5,16 +5,14 @@ dist: trusty
 
 matrix:
   include:
-    - env: PYTHON=2.6
-      env: NUMPY="numpy=1.6"
+    - env: PYTHON=2.6 NUMPY="numpy=1.6"
     #- env: PYTHON=2.7
       #env: NUMPY="numpy=1.7"
     #- env: PYTHON=3.3
       #env: NUMPY="numpy=1.8"
     #- env: PYTHON=3.4
       #env: NUMPY="numpy=1.9"
-    - env: PYTHON=3.5
-      env: NUMPY="numpy=1.10"
+    - env: PYTHON=3.5 NUMPY="numpy=1.10"
 
 branches:
   only:
