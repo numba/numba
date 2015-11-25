@@ -210,8 +210,7 @@ def getitem_unituple(context, builder, sig, args):
 
 
 @builtin
-@implement('static_getitem', types.Kind(types.Tuple), types.Kind(types.Const))
-@implement('static_getitem', types.Kind(types.NamedTuple), types.Kind(types.Const))
+@implement('static_getitem', types.Kind(types.BaseTuple), types.Kind(types.Const))
 def static_getitem_tuple(context, builder, sig, args):
     tup, idx = args
     assert isinstance(idx, int)

@@ -480,7 +480,7 @@ class StaticGetItemTuple(AbstractTemplate):
 
     def generic(self, args, kws):
         tup, idx = args
-        if isinstance(tup, (types.Tuple, types.NamedTuple)) and isinstance(idx, int):
+        if isinstance(tup, types.BaseTuple) and isinstance(idx, int):
             return tup.types[idx]
 
 

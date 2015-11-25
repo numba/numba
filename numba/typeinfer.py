@@ -256,7 +256,7 @@ class StaticGetItemConstraint(object):
                                                               index=self.index)
             if itemty is not None:
                 typeinfer.add_type(self.target, itemty)
-            else:
+            elif self.fallback is not None:
                 self.fallback(typeinfer)
 
     def get_call_signature(self):
@@ -294,7 +294,7 @@ class CallConstraint(object):
         if self.vararg is not None:
             argtypes.append(typevars[self.vararg.name])
 
-        if not (a.defined for a in argtypes):
+        if not all(a.defined for a in argtypes):
             # Cannot resolve call type until all argument types are known
             return
 
