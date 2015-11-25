@@ -10,12 +10,16 @@ class InternArrayAlloc(rewrites.Rewrite):
         super(InternArrayAlloc, self).__init__(*args, **kwargs)
         self._block = None
         self._matches = None
-        # Install a lowering hook if we are using this rewrite.
-        special_ops = self.pipeline.targetctx.special_ops
-        if 'interned_alloc' not in special_ops:
-            special_ops['interned_alloc'] = _lower_interned_alloc
+        self._enabled = self.pipeline.targetctx.enable_nrt == False
+        if self._enabled:
+            # Install a lowering hook if we are using this rewrite.
+            special_ops = self.pipeline.targetctx.special_ops
+            if 'interned_alloc' not in special_ops:
+                special_ops['interned_alloc'] = _lower_interned_alloc
 
     def match(self, label, block, typemap, calltypes):
+        if not self._enabled:
+            return False
         # Match only the first block
         if label == 0 and block.body and len(calltypes) > 1:
             self._matches = {}
@@ -23,7 +27,8 @@ class InternArrayAlloc(rewrites.Rewrite):
             for i, tar, expr in self._iter_call(block.body):
                 fnty = typemap.get(expr.func.name)
                 if isinstance(fnty, types.Function):
-                    if issubclass(fnty.key, FunctionTemplate):
+                    if (isinstance(fnty.key, type) and
+                            issubclass(fnty.key, FunctionTemplate)):
                         if fnty.key.key == np.empty:
                             self._matches[i] = expr, typemap[tar.name]
             return bool(self._matches)
@@ -55,29 +60,52 @@ class InternArrayAlloc(rewrites.Rewrite):
 
 
 def _lower_interned_alloc(lower, expr):
+    if expr.ty.layout != 'C':
+        raise NotImplementedError("only support C layout")
     context = lower.context
     builder = lower.builder
 
+    cast_intp = lambda x, t: context.cast(builder, x, t, types.intp)
+
     elemcount = lower.loadvar(expr.args[0].name)
     elemcount_type = lower.typeof(expr.args[0].name)
-    assert isinstance(elemcount_type, types.Integer)  # XXX handle tuples
+    if isinstance(elemcount_type, types.Integer):
+        shape_values = [cast_intp(elemcount, elemcount_type)]
+    elif isinstance(elemcount_type, types.BaseTuple):
+        dims = [cast_intp(v, t)
+                for v, t in zip(cgutils.unpack_tuple(builder, elemcount),
+                                elemcount_type)]
+        elemcount = dims[0]
+        for d in dims[1:]:
+            elemcount = builder.mul(elemcount, d)
+
+        shape_values = dims
+    else:
+        msg = "invalid type for shape argument: {0}".format(elemcount_type)
+        raise TypeError(msg)
+
     lldtype = context.get_data_type(expr.ty.dtype)
     stackptr = builder.alloca(lldtype, size=elemcount)
 
     arycls = context.make_array(expr.ty)
     ary = arycls(context, builder)
 
-    shape_values = [context.cast(builder, elemcount, elemcount_type,
-                                 types.intp)]
-    shape = cgutils.pack_array(builder, shape_values)
-
     itemsize = context.get_constant(types.intp,
-                                    context.get_abi_sizeof(lldtype) * 8)
+                                    context.get_abi_sizeof(lldtype))
 
+    stride_values = [itemsize]
+    for dim in reversed(shape_values[1:]):
+        stride_values.insert(0, builder.mul(stride_values[0], dim))
+
+    shape = cgutils.pack_array(builder, shape_values)
+    strides = cgutils.pack_array(builder, stride_values)
+
+    assert len(shape_values) == len(stride_values)
+    assert len(shape_values) == expr.ty.ndim
     context.populate_array(ary,
                            data=stackptr,
                            shape=shape,
-                           strides=cgutils.pack_array(builder, [itemsize]),
+                           strides=strides,
                            itemsize=itemsize,
                            meminfo=None)
 
