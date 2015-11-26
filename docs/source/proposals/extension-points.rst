@@ -1,6 +1,6 @@
-================
-Extension points
-================
+========================
+NBEP 2: Extension points
+========================
 
 :Author: Antoine Pitrou
 :Date: July 2015
@@ -19,6 +19,24 @@ public.
 
 .. note::
    This document doesn't cover CUDA or any other non-CPU backend.
+
+
+High-level API
+==============
+
+There is currently no high-level API for quick implementation of
+an existing function or type.
+
+Proposed changes
+----------------
+
+It would be nice for people to be able to implement a function
+in a single go, as if they were writing a ``@jit`` function.
+Let's take :func:`numpy.where` as an example.  We would like to be
+able to define several implementations and select between them at
+compile-time depending on the input types.
+
+.. literalinclude:: np-where-override.py
 
 
 Typing
