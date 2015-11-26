@@ -10,7 +10,7 @@ class InternArrayAlloc(rewrites.Rewrite):
         super(InternArrayAlloc, self).__init__(*args, **kwargs)
         self._block = None
         self._matches = None
-        self._enabled = self.pipeline.targetctx.enable_nrt == False
+        self._enabled = self.pipeline.targetctx.enable_array_intern
         if self._enabled:
             # Install a lowering hook if we are using this rewrite.
             special_ops = self.pipeline.targetctx.special_ops
