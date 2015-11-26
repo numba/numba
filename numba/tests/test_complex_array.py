@@ -1,9 +1,9 @@
 from __future__ import print_function, absolute_import
 import numba.unittest_support as unittest
 import numpy as np
-from numba.compiler import compile_isolated, Flags
-from numba import types, utils
-from numba.tests import usecases
+from numba.compiler import compile_isolated
+from numba import types
+from .support import MemoryLeakMixin
 
 
 def copy(a, b):
@@ -11,7 +11,7 @@ def copy(a, b):
         b[i] = a[i]
 
 
-class TestArray(unittest.TestCase):
+class TestArray(MemoryLeakMixin, unittest.TestCase):
     def test_copy_complex64(self):
         pyfunc = copy
         carray = types.Array(types.complex64, 1, "C")

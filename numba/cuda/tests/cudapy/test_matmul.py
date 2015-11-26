@@ -1,6 +1,9 @@
 from __future__ import print_function, division, absolute_import
-import numpy as np
+
 from timeit import default_timer as time
+
+import numpy as np
+
 from numba import cuda, config, float32
 from numba.cuda.testing import unittest
 
@@ -14,41 +17,43 @@ n = bpg * tpb
 SM_SIZE = (tpb, tpb)
 
 
-@cuda.jit(argtypes=[float32[:, ::1], float32[:, ::1], float32[:, ::1]])
-def cu_square_matrix_mul(A, B, C):
-    sA = cuda.shared.array(shape=SM_SIZE, dtype=float32)
-    sB = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
-
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    bx = cuda.blockIdx.x
-    by = cuda.blockIdx.y
-    bw = cuda.blockDim.x
-    bh = cuda.blockDim.y
-
-    x = tx + bx * bw
-    y = ty + by * bh
-
-    acc = float32(0)  # forces all the math to be f32
-    for i in range(bpg):
-        if x < n and y < n:
-            sA[ty, tx] = A[y, tx + i * tpb]
-            sB[ty, tx] = B[ty + i * tpb, x]
-
-        cuda.syncthreads()
-
-        if x < n and y < n:
-            for j in range(tpb):
-                acc += sA[ty, j] * sB[j, tx]
-
-        cuda.syncthreads()
-
-    if x < n and y < n:
-        C[y, x] = acc
-
-
 class TestCudaMatMul(unittest.TestCase):
+
     def test_func(self):
+
+        @cuda.jit(argtypes=[float32[:, ::1], float32[:, ::1], float32[:, ::1]])
+        def cu_square_matrix_mul(A, B, C):
+            sA = cuda.shared.array(shape=SM_SIZE, dtype=float32)
+            sB = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
+
+            tx = cuda.threadIdx.x
+            ty = cuda.threadIdx.y
+            bx = cuda.blockIdx.x
+            by = cuda.blockIdx.y
+            bw = cuda.blockDim.x
+            bh = cuda.blockDim.y
+
+            x = tx + bx * bw
+            y = ty + by * bh
+
+            acc = float32(0)  # forces all the math to be f32
+            for i in range(bpg):
+                if x < n and y < n:
+                    sA[ty, tx] = A[y, tx + i * tpb]
+                    sB[ty, tx] = B[ty + i * tpb, x]
+
+                cuda.syncthreads()
+
+                if x < n and y < n:
+                    for j in range(tpb):
+                        acc += sA[ty, j] * sB[j, tx]
+
+                cuda.syncthreads()
+
+            if x < n and y < n:
+                C[y, x] = acc
+
+        np.random.seed(42)
         A = np.array(np.random.random((n, n)), dtype=np.float32)
         B = np.array(np.random.random((n, n)), dtype=np.float32)
         C = np.empty_like(A)
@@ -66,16 +71,13 @@ class TestCudaMatMul(unittest.TestCase):
         tcuda = e - s
 
         # Host compute
-        Amat = np.matrix(A)
-        Bmat = np.matrix(B)
-
         s = time()
-        Cans = Amat * Bmat
+        Cans = np.dot(A, B)
         e = time()
         tcpu = e - s
 
         # Check result
-        self.assertTrue(np.allclose(C, Cans))
+        np.testing.assert_allclose(C, Cans, rtol=1e-5)
 
 
 if __name__ == '__main__':

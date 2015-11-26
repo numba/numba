@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 from pprint import pprint
+import sys
 import warnings
 
 from numba import utils
@@ -168,7 +169,14 @@ class DataFlowAnalysis(object):
 
     def op_BUILD_MAP(self, info, inst):
         dct = info.make_temp()
-        info.append(inst, size=inst.arg, res=dct)
+        count = inst.arg
+        items = []
+        if sys.version_info >= (3, 5):
+            # In 3.5+, BUILD_MAP takes <count> pairs from the stack
+            for i in range(count):
+                v, k = info.pop(), info.pop()
+                items.append((k, v))
+        info.append(inst, items=items[::-1], size=count, res=dct)
         info.push(dct)
 
     def op_BUILD_SET(self, info, inst):
@@ -239,6 +247,11 @@ class DataFlowAnalysis(object):
         target = info.pop()
         value = info.pop()
         info.append(inst, target=target, index=index, value=value)
+
+    def op_DELETE_SUBSCR(self, info, inst):
+        index = info.pop()
+        target = info.pop()
+        info.append(inst, target=target, index=index)
 
     def op_GET_ITER(self, info, inst):
         value = info.pop()
@@ -446,6 +459,53 @@ class DataFlowAnalysis(object):
         slicevar = info.make_temp()
         indexvar = info.make_temp()
         info.append(inst, base=tos2, start=tos1, stop=tos, value=value,
+                    slicevar=slicevar, indexvar=indexvar)
+
+    def op_DELETE_SLICE_0(self, info, inst):
+        """
+        del TOS[:]
+        """
+        tos = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+
+    def op_DELETE_SLICE_1(self, info, inst):
+        """
+        del TOS1[TOS:]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, start=tos, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+
+    def op_DELETE_SLICE_2(self, info, inst):
+        """
+        del TOS1[:TOS]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, stop=tos, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+
+    def op_DELETE_SLICE_3(self, info, inst):
+        """
+        del TOS2[TOS1:TOS]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        tos2 = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        info.append(inst, base=tos2, start=tos1, stop=tos,
                     slicevar=slicevar, indexvar=indexvar)
 
     def op_BUILD_SLICE(self, info, inst):

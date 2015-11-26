@@ -40,6 +40,18 @@ for i, k in enumerate(RESULT_CODE_NAMES):
     setattr(sys.modules[__name__], k, i)
 
 
+def is_available():
+    """
+    Return if libNVVM is available
+    """
+    try:
+        NVVM()
+    except NvvmSupportError:
+        return False
+    else:
+        return True
+
+
 class NVVM(object):
     '''Process-wide singleton.
     '''

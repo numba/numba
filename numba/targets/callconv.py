@@ -104,6 +104,36 @@ class BaseCallConv(object):
     def _get_call_helper(self, builder):
         return builder.__call_helper
 
+    def raise_error(self, builder, api, status):
+        """
+        Given a non-ok *status*, raise the corresponding Python exception.
+        """
+        bbend = builder.function.append_basic_block()
+
+        with builder.if_then(status.is_user_exc):
+            # Unserialize user exception.
+            # Make sure another error may not interfere.
+            api.err_clear()
+            exc = api.unserialize(status.excinfoptr)
+            with cgutils.if_likely(builder,
+                                   cgutils.is_not_null(builder, exc)):
+                api.raise_object(exc)  # steals ref
+            builder.branch(bbend)
+
+        with builder.if_then(status.is_stop_iteration):
+            api.err_set_none("PyExc_StopIteration")
+            builder.branch(bbend)
+
+        with builder.if_then(status.is_python_exc):
+            # Error already raised => nothing to do
+            builder.branch(bbend)
+
+        api.err_set_string("PyExc_SystemError",
+                           "unknown error when calling native function")
+        builder.branch(bbend)
+
+        builder.position_at_end(bbend)
+
 
 class MinimalCallConv(BaseCallConv):
     """
@@ -329,14 +359,23 @@ class CPUCallConv(BaseCallConv):
 
     def decorate_function(self, fn, args, fe_argtypes):
         """
-        Set names of function arguments.
+        Set names of function arguments, and add useful attributes to them.
         """
         arginfo = self.context.get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
-        self._get_return_argument(fn).name = "retptr"
-        self._get_excinfo_argument(fn).name = "excinfo"
-        self.get_env_argument(fn).name = "env"
+        retarg = self._get_return_argument(fn)
+        retarg.name = "retptr"
+        retarg.add_attribute("nocapture")
+        retarg.add_attribute("noalias")
+        excarg = self._get_excinfo_argument(fn)
+        excarg.name = "excinfo"
+        excarg.add_attribute("nocapture")
+        excarg.add_attribute("noalias")
+        envarg = self.get_env_argument(fn)
+        envarg.name = "env"
+        envarg.add_attribute("nocapture")
+        envarg.add_attribute("noalias")
         return fn
 
     def get_arguments(self, func):
@@ -386,3 +425,44 @@ class CPUCallConv(BaseCallConv):
             retval = builder.load(retvaltmp)
         out = self.context.get_returned_value(builder, resty, retval)
         return status, out
+
+
+class ErrorModel(object):
+
+    def __init__(self, call_conv):
+        self.call_conv = call_conv
+
+    def fp_zero_division(self, builder, exc_args=None):
+        if self.raise_on_fp_zero_division:
+            self.call_conv.return_user_exc(builder, ZeroDivisionError, exc_args)
+            return True
+        else:
+            return False
+
+
+class PythonErrorModel(ErrorModel):
+    """
+    The Python error model.  Any invalid FP input raises an exception.
+    """
+    raise_on_fp_zero_division = True
+
+
+class NumpyErrorModel(ErrorModel):
+    """
+    In the Numpy error model, floating-point errors don't raise an
+    exception.  The FPU exception state is inspected by Numpy at the
+    end of a ufunc's execution and a warning is raised if appropriate.
+
+    Note there's no easy way to set the FPU exception state from LLVM.
+    Instructions known to set an FP exception can be optimized away:
+        https://llvm.org/bugs/show_bug.cgi?id=6050
+        http://lists.llvm.org/pipermail/llvm-dev/2014-September/076918.html
+        http://lists.llvm.org/pipermail/llvm-commits/Week-of-Mon-20140929/237997.html
+    """
+    raise_on_fp_zero_division = False
+
+
+error_models = {
+    'python': PythonErrorModel,
+    'numpy': NumpyErrorModel,
+    }

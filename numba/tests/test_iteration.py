@@ -171,6 +171,23 @@ class IterationTest(TestCase):
     def test_array_1d_record_mutate(self):
         self.test_array_1d_record_mutate_npm(flags=force_pyobj_flags)
 
+    def test_tuple_iter_issue1504(self):
+        # The issue is due to `row` being typed as heterogeneous tuple.
+        def bar(x, y):
+            total = 0
+            for row in zip(x, y):
+                total += row[0] + row[1]
+
+            return total
+
+        x = y = np.arange(3, dtype=np.int32)
+        aryty = types.Array(types.int32, 1, 'C')
+        cres = compile_isolated(bar, (aryty, aryty))
+
+        expect = bar(x, y)
+        got = cres.entry_point(x, y)
+        self.assertEqual(expect, got)
+
 
 if __name__ == '__main__':
     unittest.main()

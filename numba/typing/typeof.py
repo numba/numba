@@ -39,9 +39,12 @@ def typeof_impl(val, c):
         return tp
 
     # cffi is handled here as it does not expose a public base class
-    # for exported functions.
-    if cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
-        return cffi_utils.make_function_type(val)
+    # for exported functions or CompiledFFI instances.
+    if cffi_utils.SUPPORTED:
+        if cffi_utils.is_cffi_func(val):
+            return cffi_utils.make_function_type(val)
+        if cffi_utils.is_ffi_instance(val):
+            return types.ffi
 
     return getattr(val, "_numba_type_", None)
 
@@ -76,20 +79,17 @@ def _typeof_bool(val, c):
     return types.complex128
 
 def _typeof_int(val, c):
-    if c.purpose is Purpose.argument:
-        # As in _typeof.c
-        return types.int64
+    # As in _typeof.c
+    nbits = utils.bit_length(val)
+    if nbits < 32:
+        typ = types.intp
+    elif nbits < 64:
+        typ = types.int64
+    elif nbits == 64 and val >= 0:
+        typ = types.uint64
     else:
-        nbits = utils.bit_length(val)
-        if nbits < 32:
-            typ = types.int32
-        elif nbits < 64:
-            typ = types.int64
-        elif nbits == 64 and val >= 0:
-            typ = types.uint64
-        else:
-            raise ValueError("Int value is too large: %s" % val)
-        return typ
+        raise ValueError("Int value is too large: %s" % val)
+    return typ
 
 for cls in utils.INT_TYPES:
     typeof_impl.register(cls, _typeof_int)
@@ -109,16 +109,27 @@ def _typeof_str(val, c):
 def _typeof_none(val, c):
     return types.none
 
+@typeof_impl.register(type(Ellipsis))
+def _typeof_ellipsis(val, c):
+    return types.ellipsis
+
 @typeof_impl.register(tuple)
 def _typeof_tuple(val, c):
     tys = [typeof_impl(v, c) for v in val]
-    if not tys:
-        return types.Tuple(())
-    first = tys[0]
-    for ty in tys[1:]:
-        if ty != first:
-            return types.Tuple(tys)
-    return types.UniTuple(first, len(tys))
+    if any(ty is None for ty in tys):
+        return
+    return types.BaseTuple.from_types(tys, type(val))
+
+@typeof_impl.register(list)
+def _typeof_list(val, c):
+    if len(val) == 0:
+        raise ValueError("Cannot type empty list")
+    ty = typeof_impl(val[0], c)
+    return types.List(ty, reflected=True)
+
+@typeof_impl.register(slice)
+def _typeof_slice(val, c):
+    return types.slice3_type
 
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):

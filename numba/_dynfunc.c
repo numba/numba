@@ -1,3 +1,8 @@
+/*
+ * Definition of Environment and Closure objects.
+ * This module is included by _dynfuncmod.c and by pycc-compiled modules.
+ */
+
 #include "_pymodule.h"
 
 #include <string.h>
@@ -51,6 +56,12 @@ env_dealloc(EnvironmentObject *env)
     Py_TYPE(env)->tp_free((PyObject *) env);
 }
 
+static EnvironmentObject *
+env_new_empty(PyTypeObject* type)
+{
+    return (EnvironmentObject *) PyType_GenericNew(type, NULL, NULL);
+}
+
 static PyObject *
 env_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
 {
@@ -63,7 +74,7 @@ env_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
             &PyDict_Type, &globals))
         return NULL;
 
-    env = (EnvironmentObject *) PyType_GenericNew(type, args, kwds);
+    env = env_new_empty(type);
     if (env == NULL)
         return NULL;
     Py_INCREF(globals);
@@ -102,7 +113,7 @@ static PyTypeObject EnvironmentType = {
     0,                         /*tp_getattro*/
     0,                         /*tp_setattro*/
     0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /*tp_flags*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC, /*tp_flags*/
     0,                         /* tp_doc */
     (traverseproc) env_traverse, /* tp_traverse */
     (inquiry) env_clear,       /* tp_clear */
@@ -240,8 +251,10 @@ dup_string(PyObject *strobj)
     return str;
 }
 
+/* Create and initialize a new Closure object */
 static ClosureObject *
-closure_new(PyObject *module, PyObject *name, PyObject *doc, PyCFunction fnaddr)
+closure_new(PyObject *module, PyObject *name, PyObject *doc,
+            PyCFunction fnaddr, EnvironmentObject *env, PyObject *keepalive)
 {
     ClosureObject *clo = (ClosureObject *) PyType_GenericAlloc(&ClosureType, 0);
     if (clo == NULL)
@@ -259,43 +272,29 @@ closure_new(PyObject *module, PyObject *name, PyObject *doc, PyCFunction fnaddr)
         Py_DECREF(clo);
         return NULL;
     }
+    Py_INCREF(env);
+    clo->env = env;
+    Py_XINCREF(keepalive);
+    clo->keepalive = keepalive;
     return clo;
 }
 
-/* Dynamically create a new C function object */
-static PyObject*
-make_function(PyObject *self, PyObject *args)
+/* Create a new PyCFunction object wrapping a closure defined by
+   the given arguments. */
+static PyObject *
+pycfunction_new(PyObject *module, PyObject *name, PyObject *doc,
+                PyCFunction fnaddr, EnvironmentObject *env, PyObject *keepalive)
 {
-    PyObject *module, *fname, *fdoc, *fnaddrobj;
-    void *fnaddr;
-    ClosureObject *closure;
     PyObject *funcobj;
-    EnvironmentObject *env;
-    PyObject *keepalive;
+    ClosureObject *closure;
 
-    if (!PyArg_ParseTuple(args, "OOOOO!|O",
-            &module, &fname, &fdoc, &fnaddrobj, &EnvironmentType, &env,
-            &keepalive)) {
-        return NULL;
-    }
-
-    fnaddr = PyLong_AsVoidPtr(fnaddrobj);
-    if (fnaddr == NULL && PyErr_Occurred())
-        return NULL;
-
-    closure = closure_new(module, fname, fdoc, fnaddr);
+    closure = closure_new(module, name, doc, fnaddr, env, keepalive);
     if (closure == NULL)
         return NULL;
-    Py_INCREF(env);
-    closure->env = env;
-    Py_XINCREF(keepalive);
-    closure->keepalive = keepalive;
-
     funcobj = PyCFunction_NewEx(&closure->def, (PyObject *) closure, module);
     Py_DECREF(closure);
     return funcobj;
 }
-
 
 /*
  * Python-facing wrapper for Numba-compiled generator.
@@ -438,76 +437,15 @@ Numba_make_generator(Py_ssize_t gen_state_size,
     return (PyObject *) gen;
 }
 
-static PyMethodDef ext_methods[] = {
-#define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
-    declmethod(make_function),
-    { NULL },
-#undef declmethod
-};
-
-
-static PyObject *
-build_c_helpers_dict(void)
+/* Initialization subroutine for use by modules including this */
+static int
+init_dynfunc_module(PyObject *module)
 {
-    PyObject *dct = PyDict_New();
-    if (dct == NULL)
-        goto error;
-
-#define _declpointer(name, value) do {                 \
-    PyObject *o = PyLong_FromVoidPtr(value);           \
-    if (o == NULL) goto error;                         \
-    if (PyDict_SetItemString(dct, name, o)) {          \
-        Py_DECREF(o);                                  \
-        goto error;                                    \
-    }                                                  \
-    Py_DECREF(o);                                      \
-} while (0)
-
-#define declmethod(func) _declpointer(#func, &Numba_##func)
-
-#define declpointer(ptr) _declpointer(#ptr, &ptr)
-
-    declmethod(make_generator);
-
-#undef declmethod
-    return dct;
-error:
-    Py_XDECREF(dct);
-    return NULL;
-}
-
-MOD_INIT(_dynfunc) {
-    PyObject *m, *impl_info;
-
-    MOD_DEF(m, "_dynfunc", "No docs", ext_methods)
-    if (m == NULL)
-        return MOD_ERROR_VAL;
-
     if (PyType_Ready(&ClosureType))
-        return MOD_ERROR_VAL;
+        return -1;
     if (PyType_Ready(&EnvironmentType))
-        return MOD_ERROR_VAL;
+        return -1;
     if (PyType_Ready(&GeneratorType))
-        return MOD_ERROR_VAL;
-
-    impl_info = Py_BuildValue(
-        "{snsnsn}",
-        "offsetof_closure_body", offsetof(ClosureObject, env),
-        "offsetof_env_body", offsetof(EnvironmentObject, globals),
-        "offsetof_generator_state", offsetof(GeneratorObject, state)
-        );
-    if (impl_info == NULL)
-        return MOD_ERROR_VAL;
-    PyModule_AddObject(m, "_impl_info", impl_info);
-
-    Py_INCREF(&ClosureType);
-    PyModule_AddObject(m, "_Closure", (PyObject *) (&ClosureType));
-    Py_INCREF(&EnvironmentType);
-    PyModule_AddObject(m, "Environment", (PyObject *) (&EnvironmentType));
-    Py_INCREF(&GeneratorType);
-    PyModule_AddObject(m, "_Generator", (PyObject *) (&GeneratorType));
-
-    PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
-
-    return MOD_SUCCESS_VAL(m);
+        return -1;
+    return 0;
 }

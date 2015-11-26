@@ -43,7 +43,7 @@ class StructureTestCase(TestCase):
         first = [True]
 
         def call_func(*args):
-            codegen = self.context.jit_codegen()
+            codegen = self.context.codegen()
             library = codegen.create_library("test_module.%s" % self.id())
             library.add_ir_module(module)
             cptr = library.get_pointer_to_function(function.name)

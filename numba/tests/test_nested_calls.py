@@ -5,6 +5,7 @@ Usually due to invalid type conversion between function boundaries.
 
 from __future__ import print_function, division, absolute_import
 
+from numba import int32, int64
 from numba import njit
 from numba import unittest_support as unittest
 from .support import TestCase
@@ -33,6 +34,16 @@ def star(x, y, z):
 
 def star_call(x, y, z):
     return star_inner(x, *y), star_inner(*z)
+
+@njit
+def argcast_inner(a, b):
+    if b:
+        # Here `a` is unified to int64 (from int32 originally)
+        a = int64(0)
+    return a
+
+def argcast(a, b):
+    return argcast_inner(int32(a), b)
 
 
 class TestNestedCall(TestCase):
@@ -89,6 +100,15 @@ class TestNestedCall(TestCase):
         """
         cfunc, check = self.compile_func(star_call)
         check(1, (2,), (3,))
+
+    def test_argcast(self):
+        """
+        Issue #1488: implicitly casting an argument variable should not
+        break nested calls.
+        """
+        cfunc, check = self.compile_func(argcast)
+        check(1, 0)
+        check(1, 1)
 
 
 if __name__ == '__main__':

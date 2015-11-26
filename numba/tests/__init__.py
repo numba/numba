@@ -11,7 +11,7 @@ import multiprocessing
 import sys
 import time
 import warnings
-from unittest import result, runner, signals
+from unittest import result, runner, signals, suite
 
 from numba.utils import PYVERSION, StringIO
 from numba import config
@@ -21,6 +21,39 @@ try:
 except ImportError:
     from Queue import Empty as TimeoutError
 
+try:
+    import faulthandler
+except ImportError:
+    faulthandler = None
+else:
+    try:
+        # May fail in IPython Notebook with UnsupportedOperation
+        faulthandler.enable()
+    except BaseException as e:
+        msg = "Failed to enable faulthandler due to:\n{err}"
+        warnings.warn(msg.format(err=e))
+
+def load_tests(loader, tests, pattern):
+    suite = loader.discover("numba.tests")
+    return suite
+
+class TestLister(object):
+    def __init__(self):
+        pass
+
+    def run(self, test):
+        result = runner.TextTestResult(sys.stderr, True, 1)
+        self._test_list = _flatten_suite(test)
+        for t in self._test_list:
+            print(t.id())
+        print('%d tests found'%len(self._test_list))
+        return result
+        
+class SerialSuite(suite.TestSuite):
+    """A simple marker to make sure tests in this suite are run serially."""
+    
+    pass
+
 # "unittest.main" is really the TestProgram class!
 # (defined in a module named itself "unittest.main"...)
 
@@ -29,6 +62,8 @@ class NumbaTestProgram(unittest.main):
     A TestProgram subclass adding the following options:
     * a -R option to enable reference leak detection
     * a --profile option to enable profiling of the test run
+    * a -m option for parallel execution
+    * a -l option to (only) list tests
 
     Currently the options are only added in 3.4+.
     """
@@ -36,26 +71,19 @@ class NumbaTestProgram(unittest.main):
     refleak = False
     profile = False
     multiprocess = False
-
+    list = False
+    
     def __init__(self, *args, **kwargs):
         # Disable interpreter fallback if we are running the test suite
         if config.COMPATIBILITY_MODE:
             warnings.warn("Unset INTERPRETER_FALLBACK")
             config.COMPATIBILITY_MODE = False
 
-        self.discovered_suite = kwargs.pop('suite', None)
         # HACK to force unittest not to change warning display options
         # (so that NumbaWarnings don't appear all over the place)
         sys.warnoptions.append(':x')
         self.nomultiproc = kwargs.pop('nomultiproc', False)
         super(NumbaTestProgram, self).__init__(*args, **kwargs)
-
-
-    def createTests(self):
-        if self.discovered_suite is not None:
-            self.test = self.discovered_suite
-        else:
-            super(NumbaTestProgram, self).createTests()
 
     def _getParentArgParser(self):
         # NOTE: this hook only exists on Python 3.4+. The options won't be
@@ -69,22 +97,60 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('-m', '--multiprocess', dest='multiprocess',
                             action='store_true',
                             help='Parallelize tests')
+        parser.add_argument('-l', '--list', dest='list',
+                            action='store_true',
+                            help='List tests without running them')
         parser.add_argument('--profile', dest='profile',
                             action='store_true',
                             help='Profile the test run')
         return parser
 
     def parseArgs(self, argv):
+        if '-l' in argv:
+            argv.remove('-l')
+            self.list = True
         if PYVERSION < (3, 4) and '-m' in argv:
             # We want '-m' to work on all versions, emulate this option.
             argv.remove('-m')
             self.multiprocess = True
         super(NumbaTestProgram, self).parseArgs(argv)
+        # in Python 2.7, the 'discover' option isn't implicit.
+        # So if no test names were provided and 'self.test' is empty,
+        # we assume discovery hasn't been done yet.
+        if (not getattr(self, 'testNames', None) and
+            not self.test or (isinstance(self.test, suite.BaseTestSuite) and
+                              not self.test.countTestCases())):
+            self._do_discovery([])
+            
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
             # running with '-q'.
             self.buffer = True
+            
+    def _do_discovery(self, argv, Loader=None):
+        """The discovery process is complicated by the fact that:
 
+        * different test suites live under different directories
+        * some test suites may not be available (CUDA)
+        * some tests may have to be run serially, even in the presence of the '-m' flag."""
+
+        from numba import cuda
+        join = os.path.join
+        loader = unittest.TestLoader() if Loader is None else Loader()
+        topdir = os.path.abspath(join(os.path.dirname(__file__), '../..'))
+        base_tests = loader.discover(join(topdir, 'numba/tests'), 'test*.py', topdir)
+        cuda_tests = [loader.discover(join(topdir, 'numba/cuda/tests/nocuda'), 'test*.py', topdir)]
+        if cuda.is_available():
+            gpus = cuda.list_devices()
+            if gpus and gpus[0].compute_capability >= (2, 0):
+                cuda_tests.append(loader.discover(join(topdir, 'numba/cuda/tests/cudadrv'), 'test*.py', topdir))
+                cuda_tests.append(loader.discover(join(topdir, 'numba/cuda/tests/cudapy'), 'test*.py', topdir))
+            else:
+                print("skipped CUDA tests because GPU CC < 2.0")
+        else:
+            print("skipped CUDA tests")
+        self.test = suite.TestSuite(tests=(base_tests, SerialSuite(cuda_tests)))
+        
     def runTests(self):
         if self.refleak:
             self.testRunner = RefleakTestRunner
@@ -92,6 +158,9 @@ class NumbaTestProgram(unittest.main):
             if not hasattr(sys, "gettotalrefcount"):
                 warnings.warn("detecting reference leaks requires a debug build "
                               "of Python, only memory leaks will be detected")
+
+        elif self.list:
+            self.testRunner = TestLister()
 
         elif self.testRunner is None:
             self.testRunner = unittest.TextTestRunner
@@ -251,7 +320,6 @@ def _flatten_suite(test):
     else:
         return [test]
 
-
 class ParallelTestResult(runner.TextTestResult):
     """
     A TestResult able to inject results from other results.
@@ -278,7 +346,8 @@ class _MinimalResult(object):
 
     __slots__ = (
         'failures', 'errors', 'skipped', 'expectedFailures',
-        'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun')
+        'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun',
+        'test_id')
 
     def fixup_case(self, case):
         """
@@ -287,15 +356,16 @@ class _MinimalResult(object):
         # Python 3.3 doesn't reset this one.
         case._outcomeForDoCleanups = None
 
-    def __init__(self, original_result):
+    def __init__(self, original_result, test_id=None):
         for attr in self.__slots__:
-            setattr(self, attr, getattr(original_result, attr))
+            setattr(self, attr, getattr(original_result, attr, None))
         for case, _ in self.expectedFailures:
             self.fixup_case(case)
         for case, _ in self.errors:
             self.fixup_case(case)
         for case, _ in self.failures:
             self.fixup_case(case)
+        self.test_id = test_id
 
 
 class _FakeStringIO(object):
@@ -340,7 +410,7 @@ class _MinimalRunner(object):
             test(result)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
-        return _MinimalResult(result)
+        return _MinimalResult(result, test.id())
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -357,6 +427,21 @@ class _MinimalRunner(object):
                 del test.__dict__[name]
 
 
+def _split_nonparallel_tests(test):
+    """split test suite into parallel and serial tests."""
+    ptests = []
+    stests = []
+    if isinstance(test, SerialSuite):
+        stests.extend(_flatten_suite(test))
+    elif isinstance(test, unittest.TestSuite):
+        for t in test:
+            p, s = _split_nonparallel_tests(t)
+            ptests.extend(p)
+            stests.extend(s)
+    else:
+        ptests = [test]
+    return ptests, stests
+
 class ParallelTestRunner(runner.TextTestRunner):
     """
     A test runner which delegates the actual running to a pool of child
@@ -364,6 +449,8 @@ class ParallelTestRunner(runner.TextTestRunner):
     """
 
     resultclass = ParallelTestResult
+    # A test can't run longer than 2 minutes
+    timeout = 120
 
     def __init__(self, runner_cls, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
@@ -377,40 +464,37 @@ class ParallelTestRunner(runner.TextTestRunner):
         pool = multiprocessing.Pool()
 
         try:
-            self._inner(result, pool, child_runner)
-            return result
+            self._run_parallel_tests(result, pool, child_runner)
         finally:
             # Kill the still active workers
             pool.terminate()
             pool.join()
+        stests = SerialSuite(self._stests)
+        stests.run(result)
+        return result
 
-    def _inner(self, result, pool, child_runner):
-        it = pool.imap_unordered(child_runner, self._test_list)
+    def _run_parallel_tests(self, result, pool, child_runner):
+        remaining_ids = set(t.id() for t in self._ptests)
+        it = pool.imap_unordered(child_runner, self._ptests)
         while True:
             try:
-                # A test can't run longer than 2 minutes
-                child_result = it.__next__(120)
+                child_result = it.__next__(self.timeout)
             except StopIteration:
                 return
+            except TimeoutError as e:
+                # Diagnose the names of unfinished tests
+                msg = ("%s [unfinished tests: %s]"
+                       % (str(e), ", ".join(map(repr, sorted(remaining_ids))))
+                       )
+                e.args = (msg,) + e.args[1:]
+                raise e
             result.add_results(child_result)
+            remaining_ids.discard(child_result.test_id)
             if child_result.shouldStop:
                 return
 
     def run(self, test):
-        self._test_list = _flatten_suite(test)
+        self._ptests, self._stests = _split_nonparallel_tests(test)
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
-
-
-try:
-    import faulthandler
-except ImportError:
-    pass
-else:
-    try:
-        # May fail in IPython Notebook with UnsupportedOperation
-        faulthandler.enable()
-    except BaseException as e:
-        msg = "Failed to enable faulthandler due to:\n{err}"
-        warnings.warn(msg.format(err=e))

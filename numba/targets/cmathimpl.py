@@ -10,11 +10,10 @@ import math
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
 
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import implement, Registry, impl_ret_untracked
 from numba import types, cgutils, utils
 from numba.typing import signature
 from . import builtins, mathimpl
-
 
 registry = Registry()
 register = registry.register
@@ -40,7 +39,8 @@ def isnan_float_impl(context, builder, sig, args):
     [value] = args
     cplx_cls = context.make_complex(typ)
     z = cplx_cls(context, builder, value=value)
-    return is_nan(builder, z)
+    res = is_nan(builder, z)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
 @implement(cmath.isinf, types.Kind(types.Complex))
@@ -49,7 +49,8 @@ def isinf_float_impl(context, builder, sig, args):
     [value] = args
     cplx_cls = context.make_complex(typ)
     z = cplx_cls(context, builder, value=value)
-    return is_inf(builder, z)
+    res = is_inf(builder, z)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 if utils.PYVERSION >= (3, 2):
@@ -60,7 +61,8 @@ if utils.PYVERSION >= (3, 2):
         [value] = args
         cplx_cls = context.make_complex(typ)
         z = cplx_cls(context, builder, value=value)
-        return is_finite(builder, z)
+        res = is_finite(builder, z)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @register
@@ -94,9 +96,9 @@ def rect_impl(context, builder, sig, args):
         return complex(real, imag)
 
     inner_sig = signature(sig.return_type, *sig.args + (types.boolean,))
-    return context.compile_internal(builder, rect, inner_sig,
+    res = context.compile_internal(builder, rect, inner_sig,
                                     args + [phi_is_finite])
-
+    return impl_ret_untracked(context, builder, sig, res)
 
 def intrinsic_complex_unary(inner_func):
     def wrapper(context, builder, sig, args):
@@ -112,8 +114,9 @@ def intrinsic_complex_unary(inner_func):
         y_is_finite = mathimpl.is_finite(builder, y)
         inner_sig = signature(sig.return_type,
                               *(typ.underlying_float,) * 2 + (types.boolean,) * 2)
-        return context.compile_internal(builder, inner_func, inner_sig,
+        res = context.compile_internal(builder, inner_func, inner_sig,
                                         (x, y, x_is_finite, y_is_finite))
+        return impl_ret_untracked(context, builder, sig, res)
     return wrapper
 
 
@@ -181,7 +184,8 @@ def log_base_impl(context, builder, sig, args):
     def log_base(z, base):
         return cmath.log(z) / cmath.log(base)
 
-    return context.compile_internal(builder, log_base, sig, args)
+    res = context.compile_internal(builder, log_base, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 
 @register
@@ -196,7 +200,8 @@ def log10_impl(context, builder, sig, args):
         # See http://bugs.python.org/issue22544
         return complex(z.real / LN_10, z.imag / LN_10)
 
-    return context.compile_internal(builder, log10_impl, sig, args)
+    res = context.compile_internal(builder, log10_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 
 @register
@@ -262,7 +267,8 @@ def sqrt_impl(context, builder, sig, args):
         else:
             return complex(real, imag)
 
-    return context.compile_internal(builder, sqrt_impl, sig, args)
+    res = context.compile_internal(builder, sqrt_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 
 @register
@@ -272,7 +278,8 @@ def cos_impl(context, builder, sig, args):
         """cmath.cos(z) = cmath.cosh(z j)"""
         return cmath.cosh(complex(-z.imag, z.real))
 
-    return context.compile_internal(builder, cos_impl, sig, args)
+    res = context.compile_internal(builder, cos_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 @register
 @implement(cmath.cosh, types.Kind(types.Complex))
@@ -300,7 +307,8 @@ def cosh_impl(context, builder, sig, args):
         return complex(math.cos(y) * math.cosh(x),
                        math.sin(y) * math.sinh(x))
 
-    return context.compile_internal(builder, cosh_impl, sig, args)
+    res = context.compile_internal(builder, cosh_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 
 @register
@@ -311,7 +319,8 @@ def sin_impl(context, builder, sig, args):
         r = cmath.sinh(complex(-z.imag, z.real))
         return complex(r.imag, -r.real)
 
-    return context.compile_internal(builder, sin_impl, sig, args)
+    res = context.compile_internal(builder, sin_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 @register
 @implement(cmath.sinh, types.Kind(types.Complex))
@@ -336,7 +345,8 @@ def sinh_impl(context, builder, sig, args):
         return complex(math.cos(y) * math.sinh(x),
                        math.sin(y) * math.cosh(x))
 
-    return context.compile_internal(builder, sinh_impl, sig, args)
+    res = context.compile_internal(builder, sinh_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 
 @register
@@ -347,7 +357,8 @@ def tan_impl(context, builder, sig, args):
         r = cmath.tanh(complex(-z.imag, z.real))
         return complex(r.imag, -r.real)
 
-    return context.compile_internal(builder, tan_impl, sig, args)
+    res = context.compile_internal(builder, tan_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 @register
 @implement(cmath.tanh, types.Kind(types.Complex))
@@ -374,7 +385,8 @@ def tanh_impl(context, builder, sig, args):
             tx * (1. + ty * ty) / denom,
             ((ty / denom) * cx) * cx)
 
-    return context.compile_internal(builder, tanh_impl, sig, args)
+    res = context.compile_internal(builder, tanh_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 
 @register
@@ -401,7 +413,8 @@ def acos_impl(context, builder, sig, args):
             imag = math.asinh(s2.real * s1.imag - s2.imag * s1.real)
             return complex(real, imag)
 
-    return context.compile_internal(builder, acos_impl, sig, args)
+    res = context.compile_internal(builder, acos_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 @register
 @implement(cmath.acosh, types.Kind(types.Complex))
@@ -427,7 +440,8 @@ def acosh_impl(context, builder, sig, args):
         # Condensed formula (NumPy)
         #return cmath.log(z + cmath.sqrt(z + 1.) * cmath.sqrt(z - 1.))
 
-    return context.compile_internal(builder, acosh_impl, sig, args)
+    res = context.compile_internal(builder, acosh_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 @register
 @implement(cmath.asinh, types.Kind(types.Complex))
@@ -451,7 +465,8 @@ def asinh_impl(context, builder, sig, args):
             imag = math.atan2(z.imag, s1.real * s2.real - s1.imag * s2.imag)
             return complex(real, imag)
 
-    return context.compile_internal(builder, asinh_impl, sig, args)
+    res = context.compile_internal(builder, asinh_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 @register
 @implement(cmath.asin, types.Kind(types.Complex))
@@ -461,7 +476,8 @@ def asin_impl(context, builder, sig, args):
         r = cmath.asinh(complex(-z.imag, z.real))
         return complex(r.imag, -r.real)
 
-    return context.compile_internal(builder, asin_impl, sig, args)
+    res = context.compile_internal(builder, asin_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 @register
 @implement(cmath.atan, types.Kind(types.Complex))
@@ -475,7 +491,8 @@ def atan_impl(context, builder, sig, args):
         else:
             return complex(r.imag, -r.real)
 
-    return context.compile_internal(builder, atan_impl, sig, args)
+    res = context.compile_internal(builder, atan_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 @register
 @implement(cmath.atanh, types.Kind(types.Complex))
@@ -529,4 +546,5 @@ def atanh_impl(context, builder, sig, args):
         else:
             return complex(real, imag)
 
-    return context.compile_internal(builder, atanh_impl, sig, args)
+    res = context.compile_internal(builder, atanh_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)

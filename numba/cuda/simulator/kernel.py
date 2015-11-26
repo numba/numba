@@ -84,6 +84,8 @@ class FakeCUDAKernel(object):
         return res
 
 
+
+
 # Thread emulation
 
 

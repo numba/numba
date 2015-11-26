@@ -10,6 +10,7 @@ from numba.compiler import compile_isolated
 from numba import types, typeinfer, typing, jit, errors
 from numba.typeconv import Conversion
 
+from .support import TestCase
 from .test_typeconv import CompatibilityTestMixin
 
 
@@ -120,12 +121,13 @@ class TestUnify(unittest.TestCase):
     def assert_unify(self, aty, bty, expected):
         ctx = typing.Context()
         template = "{0}, {1} -> {2} != {3}"
-        unified = ctx.unify_types(aty, bty)
-        self.assertEqual(unified, expected,
-                         msg=template.format(aty, bty, unified, expected))
-        unified = ctx.unify_types(bty, aty)
-        self.assertEqual(unified, expected,
-                         msg=template.format(bty, aty, unified, expected))
+        for unify_func in ctx.unify_types, ctx.unify_pairs:
+            unified = unify_func(aty, bty)
+            self.assertEqual(unified, expected,
+                             msg=template.format(aty, bty, unified, expected))
+            unified = unify_func(bty, aty)
+            self.assertEqual(unified, expected,
+                             msg=template.format(bty, aty, unified, expected))
 
     def assert_unify_failure(self, aty, bty):
         self.assert_unify(aty, bty, types.pyobject)
@@ -140,6 +142,14 @@ class TestUnify(unittest.TestCase):
             except KeyError:
                 expected = self.int_unify[key[::-1]]
             self.assert_unify(aty, bty, getattr(types, expected))
+
+    def test_bool(self):
+        aty = types.boolean
+        for bty in types.integer_domain:
+            self.assert_unify(aty, bty, bty)
+        # Not sure about this one, but it respects transitivity
+        for cty in types.real_domain:
+            self.assert_unify(aty, cty, cty)
 
     def unify_number_pair_test(self, n):
         """
@@ -204,6 +214,9 @@ class TestUnify(unittest.TestCase):
         aty = types.UniTuple(i32, 2)
         bty = types.Tuple((i16, i64))
         self.assert_unify(aty, bty, types.Tuple((i32, i64)))
+        aty = types.UniTuple(i64, 0)
+        bty = types.Tuple(())
+        self.assert_unify(aty, bty, bty)
         # (Tuple, Tuple) -> Tuple
         aty = types.Tuple((i8, i16, i32))
         bty = types.Tuple((i32, i16, i8))
@@ -274,6 +287,32 @@ class TestUnify(unittest.TestCase):
         bty = types.Array(u32, 2, "C")
         self.assert_unify_failure(aty, bty)
 
+    def test_list(self):
+        aty = types.List(types.undefined)
+        bty = types.List(i32)
+        self.assert_unify(aty, bty, bty)
+        aty = types.List(i16)
+        bty = types.List(i32)
+        self.assert_unify(aty, bty, bty)
+        aty = types.List(types.Tuple([i32, i16]))
+        bty = types.List(types.Tuple([i16, i64]))
+        cty = types.List(types.Tuple([i32, i64]))
+        self.assert_unify(aty, bty, cty)
+        # Different reflections
+        aty = types.List(i16, reflected=True)
+        bty = types.List(i32)
+        cty = types.List(i32, reflected=True)
+        self.assert_unify(aty, bty, cty)
+        # Incompatible dtypes
+        aty = types.List(i16)
+        bty = types.List(types.Tuple([i16]))
+        self.assert_unify_failure(aty, bty)
+
+    def test_range(self):
+        aty = types.range_state32_type
+        bty = types.range_state64_type
+        self.assert_unify(aty, bty, bty)
+
 
 class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
     """
@@ -298,6 +337,7 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
         self.check_number_compatibility(ctx.can_convert)
 
     def test_tuple(self):
+        # UniTuple -> UniTuple
         aty = types.UniTuple(i32, 3)
         bty = types.UniTuple(i64, 3)
         self.assert_can_convert(aty, aty, Conversion.exact)
@@ -305,9 +345,23 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
         aty = types.UniTuple(i32, 3)
         bty = types.UniTuple(f64, 3)
         self.assert_can_convert(aty, bty, Conversion.safe)
+        # Tuple -> Tuple
         aty = types.Tuple((i32, i32))
         bty = types.Tuple((i32, i64))
         self.assert_can_convert(aty, bty, Conversion.promote)
+        # UniTuple <-> Tuple
+        aty = types.UniTuple(i32, 2)
+        bty = types.Tuple((i32, i64))
+        self.assert_can_convert(aty, bty, Conversion.promote)
+        self.assert_can_convert(bty, aty, Conversion.unsafe)
+        # Empty tuples
+        aty = types.UniTuple(i64, 0)
+        bty = types.UniTuple(i32, 0)
+        cty = types.Tuple(())
+        self.assert_can_convert(aty, bty, Conversion.safe)
+        self.assert_can_convert(bty, aty, Conversion.safe)
+        self.assert_can_convert(aty, cty, Conversion.safe)
+        self.assert_can_convert(cty, aty, Conversion.safe)
         # Failures
         aty = types.UniTuple(i64, 3)
         bty = types.UniTuple(types.none, 3)
@@ -516,7 +570,54 @@ def issue_1080(a, b):
     return b
 
 
-class TestMiscIssues(unittest.TestCase):
+def list_unify_usecase1(n):
+    res = 0
+    x = []
+    if n < 10:
+        x.append(np.int32(n))
+    else:
+        for i in range(n):
+            x.append(np.int64(i))
+    x.append(5.0)
+
+    # Note `i` and `j` may have different types (int64 vs. int32)
+    for j in range(len(x)):
+        res += j * x[j]
+    for val in x:
+        res += int(val) & len(x)
+    while len(x) > 0:
+        res += x.pop()
+    return res
+
+def list_unify_usecase2(n):
+    res = []
+    for i in range(n):
+        if i & 1:
+            res.append((i, 1.0))
+        else:
+            res.append((2.0, i))
+    res.append((123j, 42))
+    return res
+
+def range_unify_usecase(v):
+    if v:
+        r = range(np.int32(3))
+    else:
+        r = range(np.int64(5))
+    for x in r:
+        return x
+
+def issue_1394(a):
+    if a:
+        for i in range(a):
+            a += i
+        i = 1.2
+    else:
+        i = 3
+    return a, i
+
+
+class TestMiscIssues(TestCase):
 
     def test_issue_797(self):
         """https://github.com/numba/numba/issues/797#issuecomment-58592401
@@ -534,6 +635,38 @@ class TestMiscIssues(unittest.TestCase):
         """
         foo = jit(nopython=True)(issue_1080)
         foo(True, False)
+
+    def test_list_unify1(self):
+        """
+        Exercise back-propagation of refined list type.
+        """
+        pyfunc = list_unify_usecase1
+        cfunc = jit(nopython=True)(pyfunc)
+        for n in [5, 100]:
+            res = cfunc(n)
+            self.assertPreciseEqual(res, pyfunc(n))
+
+    def test_list_unify2(self):
+        pyfunc = list_unify_usecase2
+        cfunc = jit(nopython=True)(pyfunc)
+        res = cfunc(3)
+        # NOTE: the types will differ (Numba returns a homogenous list with
+        # converted values).
+        self.assertEqual(res, pyfunc(3))
+
+    def test_range_unify(self):
+        pyfunc = range_unify_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        for v in (0, 1):
+            res = cfunc(v)
+            self.assertPreciseEqual(res, pyfunc(v))
+
+    def test_issue_1394(self):
+        pyfunc = issue_1394
+        cfunc = jit(nopython=True)(pyfunc)
+        for v in (0, 1, 2):
+            res = cfunc(v)
+            self.assertEqual(res, pyfunc(v))
 
 
 if __name__ == '__main__':

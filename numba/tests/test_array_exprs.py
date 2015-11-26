@@ -8,6 +8,7 @@ from numba import unittest_support as unittest
 from numba import compiler, typing, typeof, ir
 from numba.compiler import Pipeline, _PipelineManager, Flags
 from numba.targets import cpu
+from .support import MemoryLeakMixin
 
 
 class Namespace(dict):
@@ -79,7 +80,7 @@ class RewritesTester(Pipeline):
         return cls.mk_pipeline(args, return_type, flags, locals, library, **kws)
 
 
-class TestArrayExpressions(unittest.TestCase):
+class TestArrayExpressions(MemoryLeakMixin, unittest.TestCase):
 
     def test_simple_expr(self):
         '''
@@ -260,7 +261,7 @@ class TestArrayExpressions(unittest.TestCase):
                                    ns.test_pipeline.interp.blocks)
 
 
-class TestRewriteIssues(unittest.TestCase):
+class TestRewriteIssues(MemoryLeakMixin, unittest.TestCase):
     def test_issue_1184(self):
         from numba import jit
         import numpy as np
@@ -286,6 +287,38 @@ class TestRewriteIssues(unittest.TestCase):
         expected = distance_matrix(x)
         actual = njit(distance_matrix)(x)
         np.testing.assert_array_almost_equal(expected, actual)
+
+    def test_issue_1372(self):
+        """Test array expression with duplicated term"""
+        from numba import njit
+
+        @njit
+        def foo(a, b):
+            b = np.sin(b)
+            return b + b + a
+
+        a = np.random.uniform(10)
+        b = np.random.uniform(10)
+        expect = foo.py_func(a, b)
+        got = foo(a, b)
+        np.testing.assert_allclose(got, expect)
+
+    def test_unary_arrayexpr(self):
+        """
+        Typing of unary array expression (np.negate) can be incorrect.
+        """
+        @njit
+        def foo(a, b):
+            return b - a + -a
+
+        b = 1.5
+        a = np.arange(10, dtype=np.int32)
+
+        expect = foo.py_func(a, b)
+        got = foo(a, b)
+
+        self.assertEqual(got.dtype, np.float64)
+        np.testing.assert_allclose(got, expect)
 
 
 if __name__ == "__main__":

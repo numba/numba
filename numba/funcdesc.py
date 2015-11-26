@@ -60,7 +60,12 @@ class FunctionDescriptor(object):
         self.kws = kws
         self.restype = restype
         # Argument types
-        self.argtypes = argtypes or [self.typemap[a] for a in args]
+        if argtypes is not None:
+            self.argtypes = argtypes
+        else:
+            # Get argument types from the type inference result
+            # (note the "arg.FOO" convention as used in typeinfer
+            self.argtypes = [self.typemap['arg.' + a] for a in args]
         mangler = default_mangler if mangler is None else mangler
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
@@ -81,6 +86,12 @@ class FunctionDescriptor(object):
             return _dynamic_module
         else:
             return sys.modules[self.modname]
+
+    def lookup_function(self):
+        """
+        Return the original function object described by this object.
+        """
+        return getattr(self.lookup_module(), self.qualname)
 
     @property
     def llvm_func_name(self):

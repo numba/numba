@@ -38,13 +38,7 @@ class _TypeMetaclass(ABCMeta):
     and hashing), then looking it up in the _typecache registry.
     """
 
-    def __call__(cls, *args, **kwargs):
-        """
-        Instantiate *cls* (a Type subclass, presumably) and intern it.
-        If an interned instance already exists, it is returned, otherwise
-        the new instance is returned.
-        """
-        inst = type.__call__(cls, *args, **kwargs)
+    def _intern(cls, inst):
         # Try to intern the created instance
         wr = weakref.ref(inst, _on_type_disposal)
         orig = _typecache.get(wr)
@@ -55,6 +49,25 @@ class _TypeMetaclass(ABCMeta):
             inst._code = _autoincr()
             _typecache[wr] = wr
             return inst
+
+    def __call__(cls, *args, **kwargs):
+        """
+        Instantiate *cls* (a Type subclass, presumably) and intern it.
+        If an interned instance already exists, it is returned, otherwise
+        the new instance is returned.
+        """
+        inst = type.__call__(cls, *args, **kwargs)
+        return cls._intern(inst)
+
+
+def _type_reconstructor(reconstructor, reconstructor_args, state):
+    """
+    Rebuild function for unpickling types.
+    """
+    obj = reconstructor(*reconstructor_args)
+    if state:
+        obj.__dict__.update(state)
+    return type(obj)._intern(obj)
 
 
 @add_metaclass(_TypeMetaclass)
@@ -92,6 +105,10 @@ class Type(object):
     def __ne__(self, other):
         return not (self == other)
 
+    def __reduce__(self):
+        reconstructor, args, state = super(Type, self).__reduce__()
+        return (_type_reconstructor, (reconstructor, args, state))
+
     def unify(self, typingctx, other):
         """
         Try to unify this type with the *other*.  A third type must
@@ -115,6 +132,13 @@ class Type(object):
         the type provides conversion from other types.
         """
         return None
+
+    def is_precise(self):
+        """
+        Whether this type is precise, i.e. can be part of a successful
+        type inference.  Default implementation returns True.
+        """
+        return True
 
     # User-facing helpers.  These are not part of the core Type API but
     # are provided so that users can write e.g. `numba.boolean(1.5)`
@@ -202,6 +226,12 @@ class Callable(Type):
         """
         pass
 
+    @abstractmethod
+    def get_call_signatures(self):
+        """
+        Returns a tuple of (signatures, parameterized)
+        """
+        pass
 
 class DTypeSpec(Type):
     """
@@ -235,7 +265,6 @@ class IteratorType(IterableType):
     """
 
     def __init__(self, name, **kwargs):
-        self._iterator_type = self
         super(IteratorType, self).__init__(name, **kwargs)
 
     @abstractproperty
@@ -244,7 +273,22 @@ class IteratorType(IterableType):
         The type of values yielded by the iterator.
         """
 
+    # This is a property to avoid recursivity (for pickling)
+
     @property
     def iterator_type(self):
-        return self._iterator_type
+        return self
 
+
+class Sequence(IterableType):
+    """
+    Base class for 1d sequence types.  Instances should have the *dtype*
+    attribute.
+    """
+
+
+class MutableSequence(Sequence):
+    """
+    Base class for 1d mutable sequence types.  Instances should have the
+    *dtype* attribute.
+    """

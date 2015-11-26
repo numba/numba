@@ -1,21 +1,51 @@
 .. _numba-types:
 
-===========
-Numba Types
+====================
+Types and signatures
+====================
+
+Rationale
+=========
+
+As an optimizing compiler, Numba needs to decide on the type of each
+variable to generate efficient machine code.  Python's standard types
+are not precise enough for that, so we had to develop our own fine-grained
+type system.
+
+You will encounter Numba types mainly when trying to inspect the results
+of Numba's type inference, for :ref:`debugging <numba-envvars>` or
+:ref:`educational <architecture>` purposes.  However, you need to use
+types explicitly if compiling code :ref:`ahead-of-time <pycc>`.
+
+
+Signatures
+==========
+
+A signature specifies the type of a function.  Exactly which kind
+of signature is allowed depends on the context (:term:`AOT` or :term:`JIT`
+compilation), but signatures always involve some representation of Numba
+types to specifiy the concrete types for the function's arguments and,
+if required, the function's return type.
+
+An example function signature would be the string ``"f8(i4, i4)"``
+(or the equivalent ``"float64(int32, int32)"``) which specifies a
+function taking two 32-bit integers and returning a double-precision float.
+
+
+Basic types
 ===========
 
-Basic Types
-===========
-
-"Basic" Numba types can be expressed through simple expressions.  The
+The most basic types can be expressed through simple expressions.  The
 symbols below refer to attributes of the main ``numba`` module (so if
 you read "boolean", it means that symbol can be accessed as ``numba.boolean``).
+Many types are available both as a canonical name and a shorthand alias,
+following Numpy's conventions.
 
 Numbers
 -------
 
 The following table contains the elementary numeric types currently defined
-by Numba, and their various aliases.
+by Numba and their aliases.
 
 ===================     =========        ===================================
 Type name(s)            Shorthand        Comments
@@ -31,8 +61,13 @@ int16                   i2               16-bit signed integer
 int32                   i4               32-bit signed integer
 int64                   i8               64-bit signed integer
 
-float32                 f4               float32
-float64, double         f8               float64
+intc                    --               C int-sized integer
+uintc                   --               C int-sized unsigned integer
+intp                    --               pointer-sized integer
+uintp                   --               pointer-sized unsigned integer
+
+float32                 f4               single-precision floating-point number
+float64, double         f8               double-precision floating-point number
 
 complex64               c8               single-precision complex number
 complex128              c16              double-precision complex number
@@ -46,22 +81,31 @@ according to the number of dimensions.  For example a 1-dimension
 single-precision array::
 
    >>> numba.float32[:]
-   array(float32, 1d, A, nonconst)
+   array(float32, 1d, A)
 
 or a 3-dimension array of the same underlying type::
 
-   >>> numba.float32[:,:,:]
-   array(float32, 3d, A, nonconst)
+   >>> numba.float32[:, :, :]
+   array(float32, 3d, A)
 
-However, this is not enough to express all possibilities, such as a particular
-contiguity or a structured array.
+This syntax defines array types with no particular layout (producing code
+that accepts both non-contiguous and contiguous arrays), but you can
+specify a particular contiguity by using the ``::1`` index either at
+the beginning or the end of the index specification::
+
+   >>> numba.float32[::1]
+   array(float32, 1d, C)
+   >>> numba.float32[:, :, ::1]
+   array(float32, 3d, C)
+   >>> numba.float32[::1, :, :]
+   array(float32, 3d, F)
 
 
-Advanced Types
+Advanced types
 ==============
 
-For more advanced declarations, you have to use constructors provided
-by Numba.
+For more advanced declarations, you have to explicitly call helper
+functions or classes provided by Numba.
 
 .. warning::
    The APIs documented here are not guaranteed to be stable.  Unless
@@ -73,19 +117,39 @@ by Numba.
    function.  Other types such as tuple are only usable in type inference.
 
 
+Inference
+---------
+
+.. function:: numba.typeof(value)
+
+   Create a Numba type accurately describing the given *value*.  ``None``
+   is returned if the value isn't supported in :term:`nopython mode`.
+
+   ::
+
+      >>> numba.typeof(np.empty(3))
+      array(float64, 1d, C)
+      >>> numba.typeof((1, 2.0))
+      (int64, float64)
+      >>> numba.typeof([0])
+      reflected list(int64)
+
+
 Numpy scalars
 -------------
 
-Non-trivial scalars such as structured types need to be constructed
-programmatically.
+Instead of using :func:`~numba.typeof`, non-trivial scalars such as
+structured types can also be constructed programmatically.
 
 .. function:: numba.from_dtype(dtype)
 
    Create a Numba type corresponding to the given Numpy *dtype*::
 
       >>> struct_dtype = np.dtype([('row', np.float64), ('col', np.float64)])
-      >>> numba.from_dtype(struct_dtype)
+      >>> tp
       Record([('row', '<f8'), ('col', '<f8')])
+      >>> tp[:, :]
+      unaligned array(Record([('row', '<f8'), ('col', '<f8')]), 2d, A)
 
 .. class:: numba.types.NPDatetime(unit)
 

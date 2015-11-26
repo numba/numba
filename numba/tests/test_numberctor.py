@@ -9,6 +9,10 @@ from numba import jit, types
 from .support import TestCase
 
 
+def dobool(a):
+    return bool(a)
+
+
 def doint(a):
     return int(a)
 
@@ -42,18 +46,23 @@ def converter(tp):
 
 
 class TestNumberCtor(TestCase):
-    def test_int(self):
-        pyfunc = doint
 
+    def check_int_constructor(self, pyfunc):
         x_types = [
-            types.int32, types.int64, types.float32, types.float64
+            types.boolean, types.int32, types.int64, types.float32, types.float64
         ]
-        x_values = [1, 1000, 12.2, 23.4]
+        x_values = [1, 0, 1000, 12.2, 23.4]
 
         for ty, x in zip(x_types, x_values):
             cres = compile_isolated(pyfunc, [ty])
             cfunc = cres.entry_point
             self.assertPreciseEqual(pyfunc(x), cfunc(x))
+
+    def test_bool(self):
+        self.check_int_constructor(dobool)
+
+    def test_int(self):
+        self.check_int_constructor(doint)
 
     def test_float(self):
         pyfunc = dofloat
@@ -136,10 +145,16 @@ class TestNumberCtor(TestCase):
             np_converter = lambda x: np_type(np.int64(x))
         else:
             np_converter = np_type
+        dtype = np.dtype(np_type)
         for val in values:
+            if dtype.kind == 'u' and isinstance(val, float) and val < 0.0:
+                # Converting negative float to unsigned int yields undefined
+                # behaviour (and concretely different on ARM vs. x86)
+                continue
             expected = np_converter(val)
             got = cfunc(val)
-            self.assertPreciseEqual(got, expected)
+            self.assertPreciseEqual(got, expected,
+                                    msg="for type %s with arg %s" % (np_type, val))
 
     def check_number_types(self, tp_factory):
         values = [0, 1, -1, 100003, 10000000000007, -100003, -10000000000007,

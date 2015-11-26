@@ -47,9 +47,11 @@ if sys.platform == 'darwin':
 
 npymath_info = np_misc.get_info('npymath')
 
-ext_dynfunc = Extension(name='numba._dynfunc', sources=['numba/_dynfunc.c'],
+ext_dynfunc = Extension(name='numba._dynfunc',
+                        sources=['numba/_dynfuncmod.c'],
                         extra_compile_args=CFLAGS,
-                        depends=["numba/_pymodule.h"])
+                        depends=['numba/_pymodule.h',
+                                 'numba/_dynfunc.c'])
 
 ext_npymath_exports = Extension(name='numba._npymath_exports',
                                 sources=['numba/_npymath_exports.c'],
@@ -63,20 +65,23 @@ ext_dispatcher = Extension(name="numba._dispatcher",
                            include_dirs=[numpy.get_include()],
                            sources=['numba/_dispatcher.c',
                                     'numba/_typeof.c',
+                                    'numba/_hashtable.c',
                                     'numba/_dispatcherimpl.cpp',
                                     'numba/typeconv/typeconv.cpp'],
                            depends=["numba/_pymodule.h",
                                     "numba/_dispatcher.h",
-                                    "numba/_typeof.h"],
+                                    "numba/_typeof.h",
+                                    "numba/_hashtable.h"],
                            extra_link_args=cpp_link_args)
 
 ext_helperlib = Extension(name="numba._helperlib",
                           include_dirs=[numpy.get_include()],
-                          sources=["numba/_helperlib.c", "numba/_math_c99.c"],
+                          sources=["numba/_helpermod.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS,
                           extra_link_args=install_name_tool_fixer,
                           depends=["numba/_pymodule.h",
                                    "numba/_math_c99.h",
+                                   "numba/_helperlib.c",
                                    "numba/mathnames.inc"])
 
 ext_typeconv = Extension(name="numba.typeconv._typeconv",
@@ -92,18 +97,26 @@ ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
                                         "numba/npyufunc/_internal.h",
                                         "numba/_pymodule.h"])
 
+ext_npyufunc_workqueue = Extension(
+    name='numba.npyufunc.workqueue',
+    sources=['numba/npyufunc/workqueue.c'],
+    depends=['numba/npyufunc/workqueue.h'])
+
+
 ext_mviewbuf = Extension(name='numba.mviewbuf',
                          sources=['numba/mviewbuf.c'])
 
 ext_nrt_python = Extension(name='numba.runtime._nrt_python',
-                           sources=['numba/runtime/_nrt_python.c',
+                           sources=['numba/runtime/_nrt_pythonmod.c',
                                     'numba/runtime/nrt.c'],
                            depends=['numba/runtime/nrt.h',
-                                    'numba/_pymodule.h'],
+                                    'numba/_pymodule.h',
+                                    'numba/runtime/_nrt_python.c'],
                            include_dirs=["numba"] + npymath_info['include_dirs'])
 
 ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
-               ext_helperlib, ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf,
+               ext_helperlib, ext_typeconv,
+               ext_npyufunc_ufunc, ext_npyufunc_workqueue, ext_mviewbuf,
                ext_nrt_python]
 
 
@@ -148,8 +161,16 @@ setup(name='numba',
         "Topic :: Software Development :: Compilers",
       ],
       package_data={
-        "numba.cuda.tests.cudadrv.data": ["*.ptx"],
+        # HTML templates for type annotations
         "numba.annotations": ["*.html"],
+        # Various test data
+        "numba.cuda.tests.cudadrv.data": ["*.ptx"],
+        "numba.hsa.tests.hsadrv": ["*.brig"],
+        "numba.tests": ["pycc_distutils_usecase/*.py"],
+        # Some C files are needed by pycc
+        "numba": ["*.c", "*.h"],
+        "numba.pycc": ["*.c", "*.h"],
+        "numba.runtime": ["*.c", "*.h"],
       },
       scripts=["numba/pycc/pycc", "bin/numba"],
       author="Continuum Analytics, Inc.",

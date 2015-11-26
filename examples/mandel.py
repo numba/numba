@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Compute and plot the Mandelbrot set using matplotlib.
 """

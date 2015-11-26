@@ -5,7 +5,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
-from .support import TestCase, CompilationCache
+from .support import TestCase, CompilationCache, MemoryLeakMixin
 
 
 def array_iter(arr):
@@ -24,8 +24,11 @@ def array_flat(arr, out):
     for i, v in enumerate(arr.flat):
         out[i] = v
 
-def array_flat_index(arr, ind):
+def array_flat_getitem(arr, ind):
     return arr.flat[ind]
+
+def array_flat_setitem(arr, ind, val):
+    arr.flat[ind] = val
 
 def array_flat_sum(arr):
     s = 0
@@ -61,12 +64,13 @@ def np_ndindex_array(arr):
     return s
 
 
-class TestArrayIterators(TestCase):
+class TestArrayIterators(MemoryLeakMixin, TestCase):
     """
     Test array.flat, np.ndenumerate(), etc.
     """
 
     def setUp(self):
+        super(TestArrayIterators, self).setUp()
         self.ccache = CompilationCache()
 
     def check_array_iter(self, arr):
@@ -116,6 +120,8 @@ class TestArrayIterators(TestCase):
         self.assertFalse(arr.flags.c_contiguous)
         self.assertFalse(arr.flags.f_contiguous)
         self.check_array_iter(arr)
+        arr = np.bool_([1, 0, 0, 1])
+        self.check_array_iter(arr)
 
     def test_array_view_iter(self):
         # Test iterating over a 1d view over a 2d array
@@ -123,6 +129,8 @@ class TestArrayIterators(TestCase):
         self.check_array_view_iter(arr, 1)
         self.check_array_view_iter(arr.T, 1)
         arr = arr[::2]
+        self.check_array_view_iter(arr, 1)
+        arr = np.bool_([1, 0, 0, 1]).reshape((2, 2))
         self.check_array_view_iter(arr, 1)
 
     def test_array_flat_3d(self):
@@ -146,6 +154,9 @@ class TestArrayIterators(TestCase):
         self.assertFalse(arr.flags.f_contiguous)
         self.assertEqual(typeof(arr).layout, 'A')
         self.check_array_flat(arr)
+        # Boolean array
+        arr = np.bool_([1, 0, 0, 1] * 2).reshape((2, 2, 2))
+        self.check_array_flat(arr)
 
     def test_array_flat_empty(self):
         # Test .flat with various shapes of empty arrays, contiguous
@@ -166,9 +177,9 @@ class TestArrayIterators(TestCase):
         arrty = types.Array(types.int32, 2, layout='A')
         self.check_array_flat_sum(arr, arrty)
 
-    def test_array_flat_indexing(self):
+    def test_array_flat_getitem(self):
         # Test indexing of array.flat object
-        pyfunc = array_flat_index
+        pyfunc = array_flat_getitem
         def check(arr, ind):
             cr = self.ccache.compile(pyfunc, (typeof(arr), typeof(ind)))
             expected = pyfunc(arr, ind)
@@ -184,6 +195,46 @@ class TestArrayIterators(TestCase):
         for i in range(arr.size):
             check(arr, i)
         arr = np.array([42]).reshape(())
+        for i in range(arr.size):
+            check(arr, i)
+        # Boolean array
+        arr = np.bool_([1, 0, 0, 1])
+        for i in range(arr.size):
+            check(arr, i)
+        arr = arr[::2]
+        for i in range(arr.size):
+            check(arr, i)
+
+    def test_array_flat_setitem(self):
+        # Test indexing of array.flat object
+        pyfunc = array_flat_setitem
+        def check(arr, ind):
+            arrty = typeof(arr)
+            cr = self.ccache.compile(pyfunc, (arrty, typeof(ind), arrty.dtype))
+            # Use np.copy() to keep the layout
+            expected = np.copy(arr)
+            got = np.copy(arr)
+            pyfunc(expected, ind, 123)
+            cr.entry_point(got, ind, 123)
+            self.assertPreciseEqual(got, expected)
+
+        arr = np.arange(24).reshape(4, 2, 3)
+        for i in range(arr.size):
+            check(arr, i)
+        arr = arr.T
+        for i in range(arr.size):
+            check(arr, i)
+        arr = arr[::2]
+        for i in range(arr.size):
+            check(arr, i)
+        arr = np.array([42]).reshape(())
+        for i in range(arr.size):
+            check(arr, i)
+        # Boolean array
+        arr = np.bool_([1, 0, 0, 1])
+        for i in range(arr.size):
+            check(arr, i)
+        arr = arr[::2]
         for i in range(arr.size):
             check(arr, i)
 
@@ -209,6 +260,9 @@ class TestArrayIterators(TestCase):
         arrty = typeof(arr)
         self.assertEqual(arrty.layout, 'A')
         self.check_array_ndenumerate_sum(arr, arrty)
+        # Boolean array
+        arr = np.bool_([1, 0, 0, 1]).reshape((2, 2))
+        self.check_array_ndenumerate_sum(arr, typeof(arr))
 
     def test_array_ndenumerate_empty(self):
         arr = np.zeros(0, dtype=np.int32)

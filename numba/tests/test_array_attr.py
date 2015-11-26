@@ -5,10 +5,10 @@ import sys
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
+from numba.compiler import compile_isolated
 from numba.numpy_support import from_dtype
-from numba import types, njit, typeof
-from .support import TestCase, CompilationCache
+from numba import types, njit, typeof, numpy_support
+from .support import TestCase, CompilationCache, MemoryLeakMixin
 
 
 def array_dtype(a):
@@ -79,18 +79,20 @@ def array_ctypes_data(arr):
     return arr.ctypes.data
 
 
-class TestArrayAttr(TestCase):
+class TestArrayAttr(MemoryLeakMixin, TestCase):
 
     def setUp(self):
+        super(TestArrayAttr, self).setUp()
         self.ccache = CompilationCache()
-        self.a = np.arange(10, dtype=np.int32).reshape(2, 5)
+        self.a = np.arange(20, dtype=np.int32).reshape(4, 5)
 
     def check_unary(self, pyfunc, arr):
         cfunc = self.get_cfunc(pyfunc, (typeof(arr),))
         expected = pyfunc(arr)
         self.assertPreciseEqual(cfunc(arr), expected)
 
-    def check_unary_with_arrays(self, pyfunc):
+    def check_unary_with_arrays(self, pyfunc,
+                                use_reshaped_empty_array=True):
         self.check_unary(pyfunc, self.a)
         self.check_unary(pyfunc, self.a.T)
         self.check_unary(pyfunc, self.a[::2])
@@ -100,7 +102,8 @@ class TestArrayAttr(TestCase):
         # array with an empty dimension
         arr = np.zeros(0)
         self.check_unary(pyfunc, arr)
-        self.check_unary(pyfunc, arr.reshape((1, 0, 2)))
+        if use_reshaped_empty_array:
+            self.check_unary(pyfunc, arr.reshape((1, 0, 2)))
 
     def get_cfunc(self, pyfunc, argspec):
         cres = self.ccache.compile(pyfunc, argspec)
@@ -151,11 +154,16 @@ class TestArrayAttr(TestCase):
         self.check_unary_with_arrays(array_flags_c_contiguous)
 
     def test_flags_f_contiguous(self):
-        self.check_unary_with_arrays(array_flags_f_contiguous)
+        # Numpy 1.10 is more opportunistic when computing contiguousness
+        # of empty arrays.
+        use_reshaped_empty_array = numpy_support.version < (1, 10)
+        self.check_unary_with_arrays(array_flags_f_contiguous,
+                                     use_reshaped_empty_array=use_reshaped_empty_array)
 
 
-class TestNestedArrayAttr(unittest.TestCase):
+class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):
     def setUp(self):
+        super(TestNestedArrayAttr, self).setUp()
         dtype = np.dtype([('a', np.int32), ('f', np.int32, (2, 5))])
         self.a = np.recarray(1, dtype)[0]
         self.nbrecord = from_dtype(self.a.dtype)
@@ -195,7 +203,7 @@ class TestNestedArrayAttr(unittest.TestCase):
         self.assertEqual(pyfunc(self.a), cfunc(self.a))
 
 
-class TestSlicedArrayAttr(unittest.TestCase):
+class TestSlicedArrayAttr(MemoryLeakMixin, unittest.TestCase):
     def test_size_after_slicing(self):
         pyfunc = size_after_slicing_usecase
         cfunc = njit(pyfunc)
@@ -207,7 +215,7 @@ class TestSlicedArrayAttr(unittest.TestCase):
             self.assertEqual(pyfunc(arr, i), cfunc(arr, i))
 
 
-class TestArrayCTypes(unittest.TestCase):
+class TestArrayCTypes(MemoryLeakMixin, unittest.TestCase):
     def test_array_ctypes_data(self):
         pyfunc = array_ctypes_data
         cfunc = njit(pyfunc)

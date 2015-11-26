@@ -4,7 +4,7 @@ Utilities to simplify the boilerplate for native lowering.
 
 from __future__ import print_function, absolute_import, division
 
-import collections
+import inspect
 import functools
 
 from .. import typing, cgutils, types
@@ -29,8 +29,7 @@ def impl_attribute(ty, attr, rtype=None):
 
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = real_impl(context, builder, typ, value)
-            return ret
+            return real_impl(context, builder, typ, value)
 
         if rtype is None:
             res.signature = typing.signature(types.Any, ty)
@@ -51,8 +50,7 @@ def impl_attribute_generic(ty):
 
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
-            ret = real_impl(context, builder, typ, value, attr)
-            return ret
+            return real_impl(context, builder, typ, value, attr)
 
         res.signature = typing.signature(types.Any, ty)
         res.attr = None
@@ -74,7 +72,7 @@ def user_function(fndesc, libs):
             builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
         with cgutils.if_unlikely(builder, status.is_error):
             context.call_conv.return_status_propagate(builder, status)
-        return retval
+        return impl_ret_new_ref(context, builder, fndesc.restype, retval)
 
     imp.signature = typing.signature(fndesc.restype, *fndesc.argtypes)
     imp.libs = tuple(libs)
@@ -95,25 +93,6 @@ def user_generator(gendesc, libs):
         return status, retval
 
     imp.libs = tuple(libs)
-    return imp
-
-
-def python_attr_impl(cls, attr, atyp):
-    @impl_attribute(cls, attr, atyp)
-    def imp(context, builder, typ, value):
-        api = context.get_python_api(builder)
-        aval = api.object_getattr_string(value, attr)
-        with builder.if_then(cgutils.is_null(builder, aval)):
-            context.call_conv.return_exc(builder)
-
-        if isinstance(atyp, types.Method):
-            return aval
-        else:
-            native = api.to_native_value(aval, atyp)
-            assert native.cleanup is None
-            api.decref(aval)
-            return native.value
-
     return imp
 
 
@@ -203,7 +182,8 @@ def iternext_impl(func):
         pairobj = cls(context, builder)
         func(context, builder, sig, args,
              _IternextResult(context, builder, pairobj))
-        return pairobj._getvalue()
+        return impl_ret_borrowed(context, builder,
+                                 pair_type, pairobj._getvalue())
     return wrapper
 
 
@@ -256,60 +236,27 @@ builtin = builtin_registry.register
 builtin_attr = builtin_registry.register_attr
 
 
-class _StructRegistry(object):
+def impl_ret_new_ref(ctx, builder, retty, ret):
     """
-    A registry of factories of cgutils.Structure classes.
+    The implementation returns a new reference.
     """
-
-    def __init__(self):
-        self.impls = {}
-
-    def register(self, type_class):
-        """
-        Register a Structure factory function for the given *type_class*
-        (i.e. a subclass of numba.types.Type).
-        """
-        assert issubclass(type_class, types.Type)
-        def decorator(func):
-            self.impls[type_class] = func
-            return func
-        return decorator
-
-    def match(self, typ):
-        """
-        Return the Structure factory function for the given Numba type
-        instance *typ*.
-        """
-        return self.impls[typ.__class__]
+    return ret
 
 
-struct_registry = _StructRegistry()
-struct_factory = struct_registry.register
+def impl_ret_borrowed(ctx, builder, retty, ret):
+    """
+    The implementation returns a borrowed reference.
+    This function automatically incref so that the implementation is
+    returning a new reference.
+    """
+    if ctx.enable_nrt:
+        ctx.nrt_incref(builder, retty, ret)
+    return ret
 
 
-class _TypeRegistry(object):
+def impl_ret_untracked(ctx, builder, retty, ret):
+    """
+    The return type is not a NRT object.
+    """
+    return ret
 
-    def __init__(self):
-        self.factories = {}
-
-    def register(self, type_class):
-        """
-        Register a LLVM type factory function for the given *type_class*
-        (i.e. a subclass of numba.types.Type).
-        """
-        assert issubclass(type_class, types.Type)
-        def decorator(func):
-            self.factories[type_class] = func
-            return func
-        return decorator
-
-    def match(self, typ):
-        """
-        Return the LLVM type factory function for the given Numba type
-        instance *typ*.
-        """
-        return self.factories[typ.__class__]
-
-
-type_registry = _TypeRegistry()
-type_factory = type_registry.register

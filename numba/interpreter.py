@@ -735,6 +735,72 @@ class Interpreter(object):
                           loc=self.loc)
         self.current_block.append(stmt)
 
+    def op_DELETE_SLICE_0(self, inst, base, slicevar, indexvar, nonevar):
+        base = self.get(base)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        index = ir.Expr.call(self.get(slicevar), (none, none), (), loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        stmt = ir.DelItem(base, self.get(indexvar), loc=self.loc)
+        self.current_block.append(stmt)
+
+    def op_DELETE_SLICE_1(self, inst, base, start, nonevar, slicevar, indexvar):
+        base = self.get(base)
+        start = self.get(start)
+
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (start, none), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        stmt = ir.DelItem(base, self.get(indexvar), loc=self.loc)
+        self.current_block.append(stmt)
+
+    def op_DELETE_SLICE_2(self, inst, base, nonevar, stop, slicevar, indexvar):
+        base = self.get(base)
+        stop = self.get(stop)
+
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (none, stop,), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        stmt = ir.DelItem(base, self.get(indexvar), loc=self.loc)
+        self.current_block.append(stmt)
+
+    def op_DELETE_SLICE_3(self, inst, base, start, stop, slicevar, indexvar):
+        base = self.get(base)
+        start = self.get(start)
+        stop = self.get(stop)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (start, stop), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+        stmt = ir.DelItem(base, self.get(indexvar), loc=self.loc)
+        self.current_block.append(stmt)
+
     def op_LOAD_FAST(self, inst, res):
         srcname = self.code_locals[inst.arg]
         self.store(value=self.get(srcname), name=res)
@@ -859,6 +925,12 @@ class Interpreter(object):
                           loc=self.loc)
         self.current_block.append(stmt)
 
+    def op_DELETE_SUBSCR(self, inst, target, index):
+        index = self.get(index)
+        target = self.get(target)
+        stmt = ir.DelItem(target=target, index=index, loc=self.loc)
+        self.current_block.append(stmt)
+
     def op_BUILD_TUPLE(self, inst, items, res):
         expr = ir.Expr.build_tuple(items=[self.get(x) for x in items],
                                    loc=self.loc)
@@ -874,8 +946,9 @@ class Interpreter(object):
                                  loc=self.loc)
         self.store(expr, res)
 
-    def op_BUILD_MAP(self, inst, size, res):
-        expr = ir.Expr.build_map(size=size, loc=self.loc)
+    def op_BUILD_MAP(self, inst, items, size, res):
+        items = [(self.get(k), self.get(v)) for k, v in items]
+        expr = ir.Expr.build_map(items=items, size=size, loc=self.loc)
         self.store(expr, res)
 
     def op_STORE_MAP(self, inst, dct, key, value):
@@ -912,7 +985,7 @@ class Interpreter(object):
     def _inplace_binop(self, op, lhs, rhs, res):
         lhs = self.get(lhs)
         rhs = self.get(rhs)
-        expr = ir.Expr.inplace_binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
+        expr = ir.Expr.inplace_binop(op + '=', op, lhs=lhs, rhs=rhs, loc=self.loc)
         self.store(expr, res)
 
     def op_BINARY_ADD(self, inst, lhs, rhs, res):

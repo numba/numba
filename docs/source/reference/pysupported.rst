@@ -40,7 +40,8 @@ Function calls
 --------------
 
 Numba supports function calls using positional and named arguments, as well
-as arguments with default values and ``*args``.  Explicit ``**kwargs`` are
+as arguments with default values and ``*args`` (note the argument for
+``*args`` can only be a tuple, not a list).  Explicit ``**kwargs`` are
 not supported.
 
 Generators
@@ -54,6 +55,7 @@ Coroutine features of generators are not supported (i.e. the
 :meth:`generator.send`, :meth:`generator.throw`, :meth:`generator.close`
 methods).
 
+.. _pysupported-builtin-types:
 
 Built-in types
 ==============
@@ -87,7 +89,23 @@ Tuple construction and unpacking is supported, as well as the following
 operations:
 
 * comparison between tuples
-* iteration over homogenous tuples
+* iteration and indexing over homogenous tuples
+
+list
+----
+
+Creating and returning lists from JIT-compiled functions is supported,
+as well as all methods and operations.
+
+.. note::
+   When passing a list into a JIT-compiled function, any modifications
+   made to the list will not be visible by the Python interpreter until
+   the function returns.
+
+.. warning::
+   List sorting currently uses a quicksort algorithm, which has different
+   performance characterics than the algorithm used by Python.
+
 
 None
 ----
@@ -133,6 +151,9 @@ The following built-in functions are supported:
 * :class:`range`: semantics are similar to those of Python 3 even in Python 2:
   a range object is returned instead of an array of values.
 * :func:`round`
+* :func:`sorted`: the ``key`` argument is not supported
+* :func:`type`: only the one-argument form, and only on some types
+  (e.g. numbers and named tuples)
 * :func:`zip`
 
 
@@ -173,6 +194,16 @@ The following functions from the :mod:`cmath` module are supported:
 * :func:`cmath.sqrt`
 * :func:`cmath.tan`
 * :func:`cmath.tanh`
+
+``collections``
+---------------
+
+Named tuple classes, as returned by :func:`collections.namedtuple`, are
+supported in the same way regular tuples are supported.  Attribute access
+and named parameters in the constructor are also supported.
+
+Creating a named tuple class inside Numba code is *not* supported; the class
+must be created at the global level.
 
 ``ctypes``
 ----------
@@ -360,8 +391,23 @@ functions, using the following C types:
 * :c:type:`char *`
 * :c:type:`void *`
 * :c:type:`uint8_t *`
+* :c:type:`float *`
+* :c:type:`double *`
 * :c:type:`ssize_t`
 * :c:type:`size_t`
 * :c:type:`void`
+
+The ``from_buffer`` method of ``cffi.FFI`` and ``CompiledFFI`` objects is
+supported for passing NumPy arrays of ``float32`` and ``float64`` values to C
+function parameters of type ``float *`` and ``double *`` respectively.
+
+Out-of-line cffi modules must be registered with Numba prior to the use of any
+of their functions from within Numba-compiled functions:
+
+.. function:: numba.cffi_support.register_module(mod)
+
+   Register the cffi out-of-line module ``mod`` with Numba.
+
+Inline cffi modules require no registration.
 
 .. _cffi: https://cffi.readthedocs.org/

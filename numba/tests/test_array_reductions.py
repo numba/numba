@@ -5,10 +5,9 @@ from itertools import product
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import typeof, types
+from numba import typeof
 from numba.compiler import compile_isolated
-from numba.numpy_support import as_dtype
-from .support import TestCase, CompilationCache, skip_on_numpy_16
+from .support import TestCase, skip_on_numpy_16, MemoryLeakMixin
 
 
 def array_cumprod(arr):
@@ -106,7 +105,7 @@ def run_comparative(compare_func, test_array):
     return numpy_result, numba_result
 
 
-class TestArrayReductions(TestCase):
+class TestArrayReductions(MemoryLeakMixin, TestCase):
     """
     Test array reduction methods and functions such as .sum(), .max(), etc.
     """

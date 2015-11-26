@@ -2,10 +2,9 @@ from __future__ import print_function
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import types, from_dtype, utils
+from numba import types, from_dtype
 import numba.unittest_support as unittest
-from numba.tests import usecases
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, MemoryLeakMixin
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -52,7 +51,7 @@ def bad_float_index(arr):
     return arr[1, 2.0]
 
 
-class TestArrayManipulation(TestCase):
+class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_reshape_array(self, flags=enable_pyobj_flags):
         pyfunc = reshape_array
@@ -201,14 +200,13 @@ class TestArrayManipulation(TestCase):
             arraytype2 = types.Array(types.int32, 2, 'C')
             compile_isolated(bad_index, (arraytype1, arraytype2),
                              flags=no_pyobj_flags)
-        self.assertIn('is unsupported for indexing', str(raises.exception))
+        self.assertIn('unsupported array index type', str(raises.exception))
 
     def test_bad_float_index_npm(self):
         with self.assertTypingError() as raises:
             compile_isolated(bad_float_index,
                              (types.Array(types.float64, 2, 'C'),))
-        self.assertIn('Type float', str(raises.exception))
-        self.assertIn('is unsupported for indexing', str(raises.exception))
+        self.assertIn('unsupported array index type float64', str(raises.exception))
 
 
 if __name__ == '__main__':

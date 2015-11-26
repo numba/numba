@@ -4,6 +4,7 @@ from numba import jit
 import numba.unittest_support as unittest
 import numpy as np
 import copy
+from .support import MemoryLeakMixin
 
 
 try:
@@ -77,7 +78,7 @@ def unpack6(x, y):
     return a + c / 2, b / 2 + d
 
 
-class TestChainedAssign(unittest.TestCase):
+class TestChainedAssign(MemoryLeakMixin, unittest.TestCase):
     def test_chain1(self):
         args = [
             [np.arange(2)],

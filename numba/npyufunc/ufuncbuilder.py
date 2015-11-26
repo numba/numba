@@ -48,6 +48,7 @@ class UFuncDispatcher(object):
         self.targetdescr.options.parse_as_flags(flags, topt)
         flags.set("no_compile")
         flags.set("no_cpython_wrapper")
+        flags.set("error_model", "numpy")
         # Disable loop lifting
         # The feature requires a real python function
         flags.unset("enable_looplift")
@@ -123,7 +124,7 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
         envptr = None
 
     wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature,
-                                  cres.objectmode, envptr)
+                                  cres.objectmode, envptr, env)
     ptr = library.get_pointer_to_function(wrapper.name)
 
     # Get dtypes

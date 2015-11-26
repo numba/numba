@@ -6,10 +6,29 @@ import sys
 from llvmlite.ir import Value
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
-
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
                typing, utils)
 from .errors import LoweringError
+
+
+class Environment(_dynfunc.Environment):
+    __slots__ = ()
+
+    @classmethod
+    def from_fndesc(cls, fndesc):
+        mod = fndesc.lookup_module()
+        return cls(mod.__dict__)
+
+    def __reduce__(self):
+        return _rebuild_env, (self.globals['__name__'], self.consts)
+
+
+def _rebuild_env(modname, consts):
+    from . import serialize
+    mod = serialize._rebuild_module(modname)
+    env = Environment(mod.__dict__)
+    env.consts[:] = consts
+    return env
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
@@ -19,6 +38,10 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
+
+    # If true, then can't cache LLVM module accross process calls
+    has_dynamic_globals = False
+
     def __init__(self, context, library, fndesc, interp):
         self.context = context
         self.library = library
@@ -33,8 +56,7 @@ class BaseLower(object):
 
         # Python execution environment (will be available to the compiled
         # function).
-        self.env = _dynfunc.Environment(
-            globals=self.fndesc.lookup_module().__dict__)
+        self.env = Environment.from_fndesc(self.fndesc)
 
         # Internal states
         self.blkmap = {}
@@ -113,6 +135,9 @@ class BaseLower(object):
             print(self.module)
             print('=' * 80)
 
+        # Run target specific post lowering transformation
+        self.context.post_lowering(self.module, self.library)
+
         # Materialize LLVM Module
         self.library.add_ir_module(self.module)
 
@@ -136,9 +161,6 @@ class BaseLower(object):
         self.builder.position_at_end(entry_block_tail)
         self.builder.branch(self.blkmap[self.firstblk])
 
-        # Run target specific post lowering transformation
-        self.context.post_lowering(self.function)
-
     def lower_function_body(self):
         """
         Lower the current function's body, and return the entry block.
@@ -152,6 +174,8 @@ class BaseLower(object):
         # pre_lower() may have changed the current basic block
         entry_block_tail = self.builder.basic_block
 
+        self.debug_print("# function begin: {0}".format(
+            self.fndesc.unique_name))
         # Lower all blocks
         for offset, block in self.blocks.items():
             bb = self.blkmap[offset]
@@ -199,31 +223,20 @@ class BaseLower(object):
     def typeof(self, varname):
         return self.fndesc.typemap[varname]
 
+    def debug_print(self, msg):
+        if config.DEBUG_JIT:
+            self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
+
 
 class Lower(BaseLower):
-
     GeneratorLower = generators.GeneratorLower
 
     def lower_inst(self, inst):
-        if config.DEBUG_JIT:
-            self.context.debug_print(self.builder, str(inst))
+        self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
             self.storevar(val, inst.target.name)
-            # TODO: emit incref/decref in the numba IR properly.
-            # Workaround due to lack of proper incref/decref info.
-            if self.context.enable_nrt:
-                if isinstance(inst.value, ir.Expr) and inst.value.op == 'call':
-                    callexpr = inst.value
-                    # NPM function returns new reference
-                    fnty = self.typeof(callexpr.func.name)
-                    if (isinstance(fnty, types.Dispatcher)
-                        or (isinstance(fnty, types.Function)
-                            and getattr(fnty.template,
-                                        'return_new_reference',
-                                        False))):
-                        self.decref(ty, val)
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
@@ -283,6 +296,23 @@ class Lower(BaseLower):
 
             return impl(self.builder, (target, index, value))
 
+        elif isinstance(inst, ir.DelItem):
+            target = self.loadvar(inst.target.name)
+            index = self.loadvar(inst.index.name)
+
+            targetty = self.typeof(inst.target.name)
+            indexty = self.typeof(inst.index.name)
+
+            signature = self.fndesc.calltypes[inst]
+            assert signature is not None
+            impl = self.context.get_function('delitem', signature)
+
+            assert targetty == signature.args[0]
+            index = self.context.cast(self.builder, index, indexty,
+                                      signature.args[1])
+
+            return impl(self.builder, (target, index))
+
         elif isinstance(inst, ir.Del):
             try:
                 # XXX: incorrect Del injection?
@@ -331,7 +361,7 @@ class Lower(BaseLower):
                 # Try to infer the args tuple
                 args = tuple(self.interp.get_definition(arg).infer_constant()
                              for arg in excdef.args)
-            elif isinstance(exctype, types.ExceptionType):
+            elif isinstance(exctype, types.ExceptionClass):
                 args = None
             else:
                 raise NotImplementedError("cannot raise value of type %s"
@@ -343,19 +373,12 @@ class Lower(BaseLower):
         # In nopython mode, closure vars are frozen like globals
         if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
             if isinstance(ty, types.ExternalFunctionPointer):
-                return self.context.get_constant_generic(self.builder, ty,
-                                                         value.value)
+                self.has_dynamic_globals = True
 
-            elif isinstance(ty, types.Dummy):
-                return self.context.get_dummy_value()
-
-            elif isinstance(ty, types.Array):
-                return self.context.make_constant_array(self.builder, ty,
-                                                        value.value)
-
-            else:
-                return self.context.get_constant_generic(self.builder, ty,
-                                                         value.value)
+            res = self.context.get_constant_generic(self.builder, ty,
+                                                    value.value)
+            self.incref(ty, res)
+            return res
 
         elif isinstance(value, ir.Expr):
             return self.lower_expr(ty, value)
@@ -363,16 +386,25 @@ class Lower(BaseLower):
         elif isinstance(value, ir.Var):
             val = self.loadvar(value.name)
             oty = self.typeof(value.name)
-            return self.context.cast(self.builder, val, oty, ty)
+            res = self.context.cast(self.builder, val, oty, ty)
+            self.incref(ty, res)
+            return res
 
         elif isinstance(value, ir.Arg):
-            return self.fnargs[value.index]
+            val = self.fnargs[value.index]
+            # Cast from the argument type to the local variable type
+            # (note the "arg.FOO" convention as used in typeinfer)
+            oty = self.typeof("arg." + value.name)
+            res = self.context.cast(self.builder, val, oty, ty)
+            self.incref(ty, res)
+            return res
 
         elif isinstance(value, ir.Yield):
-            return self.lower_yield(ty, value)
+            res = self.lower_yield(ty, value)
+            self.incref(ty, res)
+            return res
 
-        else:
-            raise NotImplementedError(type(value), value)
+        raise NotImplementedError(type(value), value)
 
     def lower_yield(self, retty, inst):
         yp = self.generator_info.yield_points[inst.index]
@@ -390,7 +422,7 @@ class Lower(BaseLower):
         # None is returned by the yield expression
         return self.context.get_constant_generic(self.builder, retty, None)
 
-    def lower_binop(self, resty, expr):
+    def lower_binop(self, resty, expr, op):
         lhs = expr.lhs
         rhs = expr.rhs
         lty = self.typeof(lhs.name)
@@ -399,13 +431,13 @@ class Lower(BaseLower):
         rhs = self.loadvar(rhs.name)
         # Get function
         signature = self.fndesc.calltypes[expr]
-        impl = self.context.get_function(expr.fn, signature)
+        impl = self.context.get_function(op, signature)
         # Convert argument to match
         lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
         rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
         res = impl(self.builder, (lhs, rhs))
-        return self.context.cast(self.builder, res, signature.return_type,
-                                 resty)
+        return self.context.cast(self.builder, res,
+                                 signature.return_type, resty)
 
     def _cast_var(self, var, ty):
         """
@@ -451,13 +483,17 @@ class Lower(BaseLower):
             else:
                 def normal_handler(index, param, var):
                     return self._cast_var(var, signature.args[index])
+
                 def default_handler(index, param, default):
                     return self.context.get_constant_generic(
-                                self.builder, signature.args[index], default)
+                        self.builder, signature.args[index], default)
+
                 def stararg_handler(index, param, vars):
                     values = [self._cast_var(var, sigty)
-                              for var, sigty in zip(vars, signature.args[index])]
+                              for var, sigty in
+                              zip(vars, signature.args[index])]
                     return cgutils.make_anonymous_struct(self.builder, values)
+
                 argvals = typing.fold_arguments(pysig,
                                                 pos_args, dict(expr.kws),
                                                 normal_handler,
@@ -466,6 +502,7 @@ class Lower(BaseLower):
 
         if isinstance(fnty, types.ExternalFunction):
             # Handle a named external function
+            self.debug_print("# external function")
             fndesc = funcdesc.ExternalFunctionDescriptor(
                 fnty.symbol, fnty.sig.return_type, fnty.sig.args)
             func = self.context.declare_external_function(self.builder.module,
@@ -475,16 +512,12 @@ class Lower(BaseLower):
 
         elif isinstance(fnty, types.NumbaFunction):
             # Handle a compiled Numba function
+            self.debug_print("# calling numba function")
             res = self.context.call_internal(self.builder, fnty.fndesc,
                                              fnty.sig, argvals)
 
-        elif isinstance(fnty, types.Method):
-            # Method of objects are handled differently
-            fnobj = self.loadvar(expr.func.name)
-            res = self.context.call_class_method(self.builder, fnobj,
-                                                 signature, argvals)
-
         elif isinstance(fnty, types.ExternalFunctionPointer):
+            self.debug_print("# calling external function pointer")
             # Handle a C function pointer
             pointer = self.loadvar(expr.func.name)
             # If the external function pointer uses libpython
@@ -499,7 +532,8 @@ class Lower(BaseLower):
                                                 argvals):
                     # Adjust argument values to pyobjects
                     if exptyp == types.ffi_forced_object:
-                        obj = self.pyapi.from_native_value(aval, gottyp,
+                        self.incref(gottyp, aval)
+                        obj = self.pyapi.from_native_value(gottyp, aval,
                                                            self.env_manager)
                         newargvals.append(obj)
                         pyvals.append(obj)
@@ -522,30 +556,35 @@ class Lower(BaseLower):
 
         else:
             # Normal function resolution (for Numba-compiled functions)
+            self.debug_print("# calling normal function: {0}".format(fnty))
             impl = self.context.get_function(fnty, signature)
             if signature.recvr:
                 # The "self" object is passed as the function object
                 # for bounded function
                 the_self = self.loadvar(expr.func.name)
                 # Prepend the self reference
-                argvals = [the_self] + argvals
+                argvals = [the_self] + list(argvals)
 
             res = impl(self.builder, argvals)
+
             libs = getattr(impl, "libs", ())
             for lib in libs:
                 self.library.add_linking_library(lib)
+
         return self.context.cast(self.builder, res, signature.return_type,
                                  resty)
 
     def lower_expr(self, resty, expr):
         if expr.op == 'binop':
-            return self.lower_binop(resty, expr)
+            return self.lower_binop(resty, expr, expr.fn)
         elif expr.op == 'inplace_binop':
             lty = self.typeof(expr.lhs.name)
-            if not lty.mutable:
+            if lty.mutable:
+                return self.lower_binop(resty, expr, expr.fn)
+            else:
                 # inplace operators on non-mutable types reuse the same
                 # definition as the corresponding copying operators.
-                return self.lower_binop(resty, expr)
+                return self.lower_binop(resty, expr, expr.immutable_fn)
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)
             typ = self.typeof(expr.value.name)
@@ -555,21 +594,27 @@ class Lower(BaseLower):
             # Convert argument to match
             val = self.context.cast(self.builder, val, typ, signature.args[0])
             res = impl(self.builder, [val])
-            return self.context.cast(self.builder, res, signature.return_type,
-                                     resty)
+            res = self.context.cast(self.builder, res,
+                                    signature.return_type, resty)
+            return res
 
         elif expr.op == 'call':
-            return self.lower_call(resty, expr)
+            res = self.lower_call(resty, expr)
+            return res
 
         elif expr.op == 'pair_first':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            return self.context.pair_first(self.builder, val, ty)
+            res = self.context.pair_first(self.builder, val, ty)
+            self.incref(resty, res)
+            return res
 
         elif expr.op == 'pair_second':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            return self.context.pair_second(self.builder, val, ty)
+            res = self.context.pair_second(self.builder, val, ty)
+            self.incref(resty, res)
+            return res
 
         elif expr.op in ('getiter', 'iternext'):
             val = self.loadvar(expr.value.name)
@@ -579,8 +624,9 @@ class Lower(BaseLower):
             [fty] = signature.args
             castval = self.context.cast(self.builder, val, ty, fty)
             res = impl(self.builder, (castval,))
-            return self.context.cast(self.builder, res, signature.return_type,
-                                     resty)
+            res = self.context.cast(self.builder, res, signature.return_type,
+                                    resty)
+            return res
 
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
@@ -588,6 +634,8 @@ class Lower(BaseLower):
             # If we have a tuple, we needn't do anything
             # (and we can't iterate over the heterogenous ones).
             if isinstance(ty, types.BaseTuple):
+                assert ty == resty
+                self.incref(ty, val)
                 return val
 
             itemty = ty.iterator_type.yield_type
@@ -620,6 +668,7 @@ class Lower(BaseLower):
             with cgutils.if_unlikely(self.builder, is_valid):
                 self.return_exception(ValueError)
 
+            self.decref(ty.iterator_type, iterobj)
             return tup
 
         elif expr.op == "getattr":
@@ -630,12 +679,14 @@ class Lower(BaseLower):
                 # if we are getting out a method, assume we have typed this
                 # properly and just build a bound function object
                 res = self.context.get_bound_function(self.builder, val, ty)
+                self.incref(resty, res)
+                return res
             else:
                 impl = self.context.get_attribute(val, ty, expr.attr)
 
                 if impl is None:
                     # ignore the attribute
-                    res = self.context.get_dummy_value()
+                    return self.context.get_dummy_value()
                 else:
                     res = impl(self.context, self.builder, ty, val, expr.attr)
             return res
@@ -646,7 +697,9 @@ class Lower(BaseLower):
             if cgutils.is_struct(baseval.type):
                 # Statically extract the given element from the structure
                 # (structures aren't dynamically indexable).
-                return self.builder.extract_value(baseval, expr.index)
+                res = self.builder.extract_value(baseval, expr.index)
+                self.incref(resty, res)
+                return res
             else:
                 # Fall back on the generic getitem() implementation
                 # for this type.
@@ -656,8 +709,8 @@ class Lower(BaseLower):
                 impl = self.context.get_function("getitem", signature)
                 argvals = (baseval, indexval)
                 res = impl(self.builder, argvals)
-                return self.context.cast(self.builder, res, signature.return_type,
-                                         resty)
+                return self.context.cast(self.builder, res,
+                                         signature.return_type, resty)
 
         elif expr.op == "getitem":
             baseval = self.loadvar(expr.value.name)
@@ -671,7 +724,8 @@ class Lower(BaseLower):
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]
             res = impl(self.builder, castvals)
-            return self.context.cast(self.builder, res, signature.return_type,
+            return self.context.cast(self.builder, res,
+                                     signature.return_type,
                                      resty)
 
         elif expr.op == "build_tuple":
@@ -679,19 +733,27 @@ class Lower(BaseLower):
             itemtys = [self.typeof(i.name) for i in expr.items]
             castvals = [self.context.cast(self.builder, val, fromty, toty)
                         for val, toty, fromty in zip(itemvals, resty, itemtys)]
-            tup = self.context.get_constant_undef(resty)
-            for i in range(len(castvals)):
-                tup = self.builder.insert_value(tup, castvals[i], i)
+            tup = self.context.make_tuple(self.builder, resty, castvals)
+            self.incref(resty, tup)
             return tup
+
+        elif expr.op == "build_list":
+            itemvals = [self.loadvar(i.name) for i in expr.items]
+            itemtys = [self.typeof(i.name) for i in expr.items]
+            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
+                        for val, fromty in zip(itemvals, itemtys)]
+            return self.context.build_list(self.builder, resty, castvals)
 
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             castval = self.context.cast(self.builder, val, ty, resty)
+            self.incref(resty, castval)
             return castval
 
         elif expr.op in self.context.special_ops:
-            return self.context.special_ops[expr.op](self, expr)
+            res = self.context.special_ops[expr.op](self, expr)
+            return res
 
         raise NotImplementedError(expr)
 
@@ -720,14 +782,12 @@ class Lower(BaseLower):
         # Store variable
         ptr = self.getvar(name)
         if value.type != ptr.type.pointee:
-            msg = ("Storing {value.type} to ptr of {ptr.type.pointee}. "
+            msg = ("Storing {value.type} to ptr of {ptr.type.pointee} ('{name}'). "
                    "FE type {fetype}").format(value=value, ptr=ptr,
-                                              fetype=fetype)
+                                              fetype=fetype, name=name)
             raise AssertionError(msg)
 
         self.builder.store(value, ptr)
-        # Incref
-        self.incref(fetype, value)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)

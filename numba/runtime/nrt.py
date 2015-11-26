@@ -1,10 +1,14 @@
 from __future__ import print_function, absolute_import, division
 
+from collections import namedtuple
+
 from . import atomicops
 from llvmlite import binding as ll
 
 from numba.utils import finalize as _finalize
 from . import _nrt_python as _nrt
+
+_nrt_mstats = namedtuple("nrt_mstats", ["alloc", "free", "mi_alloc", "mi_free"])
 
 
 class _Runtime(object):
@@ -21,18 +25,22 @@ class _Runtime(object):
             # Already initialized
             return
 
-        # Compile atomic operations
-        compiled = atomicops.compile_atomic_ops(ctx)
-        self._library, self._ptr_inc, self._ptr_dec, self._ptr_cas = compiled
-        # Install atomic ops to NRT
-        _nrt.memsys_set_atomic_inc_dec(self._ptr_inc, self._ptr_dec)
-        _nrt.memsys_set_atomic_cas(self._ptr_cas)
-
         # Register globals into the system
         for py_name in _nrt.c_helpers:
             c_name = "NRT_" + py_name
             c_address = _nrt.c_helpers[py_name]
             ll.add_symbol(c_name, c_address)
+
+        # Compile atomic operations
+        self._library = atomicops.compile_nrt_functions(ctx)
+
+        self._ptr_inc = self._library.get_pointer_to_function("nrt_atomic_add")
+        self._ptr_dec = self._library.get_pointer_to_function("nrt_atomic_sub")
+        self._ptr_cas = self._library.get_pointer_to_function("nrt_atomic_cas")
+
+        # Install atomic ops to NRT
+        _nrt.memsys_set_atomic_inc_dec(self._ptr_inc, self._ptr_dec)
+        _nrt.memsys_set_atomic_cas(self._ptr_cas)
 
         self._init = True
 
@@ -43,6 +51,13 @@ class _Runtime(object):
         Safe to be called without calling Runtime.initialize first
         """
         _nrt.memsys_shutdown()
+
+    @property
+    def library(self):
+        """
+        Return the Library object containing the various NRT functions.
+        """
+        return self._library
 
     def meminfo_new(self, data, pyobj):
         """
@@ -69,17 +84,22 @@ class _Runtime(object):
             mi = _nrt.meminfo_alloc(size)
         return MemInfo(mi)
 
-    def process_defer_dtor(self):
-        """Process all deferred dtors.
+    def get_allocation_stats(self):
         """
-        _nrt.memsys_process_defer_dtor()
+        Returns a namedtuple of (alloc, free, mi_alloc, mi_free) for count of
+        each memory operations.
+        """
+        return _nrt_mstats(alloc=_nrt.memsys_get_stats_alloc(),
+                           free=_nrt.memsys_get_stats_free(),
+                           mi_alloc=_nrt.memsys_get_stats_mi_alloc(),
+                           mi_free=_nrt.memsys_get_stats_mi_free())
 
 
 # Alias to _nrt_python._MemInfo
 MemInfo = _nrt._MemInfo
 
-
-# Initialize
+# Create runtime
+_nrt.memsys_use_cpython_allocator()
 rtsys = _Runtime()
 
 # Install finalizer

@@ -13,8 +13,8 @@ from collections import namedtuple
 from llvmlite.llvmpy import core as lc
 
 from . import builtins, ufunc_db, arrayobj
-from .imputils import implement, Registry
-from .. import typing, types, cgutils, numpy_support
+from .imputils import implement, Registry, impl_ret_new_ref
+from .. import typing, types, cgutils, numpy_support, utils
 from ..config import PYVERSION
 from ..numpy_support import ufunc_find_matching_loop
 from ..typing import npydecl
@@ -144,10 +144,8 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
     def store_data(self, indices, value):
         ctx = self.context
         bld = self.builder
-
         store_value = ctx.get_value_as_data(bld, self.base_type, value)
         assert ctx.get_data_type(self.base_type) == store_value.type
-
         bld.store(store_value, self._load_effective_address(indices))
 
 
@@ -286,6 +284,9 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
                 context, builder,
                 lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
         arguments.append(output)
+    elif context.enable_nrt:
+        # Incref the output
+        context.nrt_incref(builder, sig.return_type, args[-1])
 
     inputs = arguments[0:-1]
     output = arguments[-1]
@@ -308,7 +309,8 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
 
         val_out = kernel.generate(*vals_in)
         output.store_data(loop_indices, val_out)
-    return arguments[-1].return_val
+    out = arguments[-1].return_val
+    return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
 # Kernels are the code to be executed inside the multidimensional loop.
@@ -439,11 +441,24 @@ def register_binary_operator_kernel(operator, kernel):
     def lower_binary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
+
+    def lower_inplace_operator(context, builder, sig, args):
+        # The visible signature is (A, B) -> A
+        # The implementation's signature (with explicit output)
+        # is (A, B, A) -> A
+        args = args + (args[0],)
+        sig = typing.signature(sig.return_type, *sig.args + (sig.args[0],))
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
+                                  explicit_output=True)
+
     _any = types.Any
     _arr_kind = types.Kind(types.Array)
-    register(implement(operator, _arr_kind, _arr_kind)(lower_binary_operator))
-    register(implement(operator, _any, _arr_kind)(lower_binary_operator))
-    register(implement(operator, _arr_kind, _any)(lower_binary_operator))
+    formal_sigs = [(_arr_kind, _arr_kind), (_any, _arr_kind), (_arr_kind, _any)]
+    for sig in formal_sigs:
+        register(implement(operator, *sig)(lower_binary_operator))
+        inplace = operator + '='
+        if inplace in utils.inplace_map:
+            register(implement(inplace, *sig)(lower_inplace_operator))
 
 
 ################################################################################

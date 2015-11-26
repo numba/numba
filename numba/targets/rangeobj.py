@@ -4,12 +4,11 @@ Implementation of the range object for fixed-size integers.
 
 import llvmlite.llvmpy.core as lc
 
-from numba import types, typing, cgutils
+from numba import types, cgutils
 from numba.targets.imputils import (builtin, implement, iterator_impl,
-                                    struct_factory)
+                                    impl_ret_untracked)
 
 
-@struct_factory(types.RangeIteratorType)
 def make_range_iterator(typ):
     """
     Return the Structure representation of the given *typ* (an
@@ -32,7 +31,10 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
         state.start = context.get_constant(int_type, 0)
         state.stop = stop
         state.step = context.get_constant(int_type, 1)
-        return state._getvalue()
+        return impl_ret_untracked(context,
+                                  builder,
+                                  range_state_type,
+                                  state._getvalue())
 
     @builtin
     @implement(types.range_type, int_type, int_type)
@@ -45,7 +47,10 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
         state.start = start
         state.stop = stop
         state.step = context.get_constant(int_type, 1)
-        return state._getvalue()
+        return impl_ret_untracked(context,
+                                  builder,
+                                  range_state_type,
+                                  state._getvalue())
 
     @builtin
     @implement(types.range_type, int_type, int_type, int_type)
@@ -58,7 +63,10 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
         state.start = start
         state.stop = stop
         state.step = step
-        return state._getvalue()
+        return impl_ret_untracked(context,
+                                  builder,
+                                  range_state_type,
+                                  state._getvalue())
 
     @builtin
     @implement('getiter', range_state_type)
@@ -68,7 +76,8 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
         """
         (value,) = args
         state = RangeState(context, builder, value)
-        return RangeIter.from_range_state(context, builder, state)._getvalue()
+        res = RangeIter.from_range_state(context, builder, state)._getvalue()
+        return impl_ret_untracked(context, builder, range_iter_type, res)
 
     @iterator_impl(range_state_type, range_iter_type)
     class RangeIter(make_range_iterator(range_iter_type)):

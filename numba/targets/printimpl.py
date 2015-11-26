@@ -4,7 +4,7 @@ This file implements print functionality for the CPU.
 from __future__ import print_function, absolute_import, division
 from llvmlite.llvmpy.core import Type
 from numba import types, typing, cgutils
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import implement, Registry, impl_ret_untracked
 
 registry = Registry()
 register = registry.register
@@ -19,11 +19,14 @@ register = registry.register
 def int_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
-    szval = context.cast(builder, x, sig.args[0], types.intp)
-    intobj = py.long_from_ssize_t(szval)
+    if sig.args[0].signed:
+        intobj = py.long_from_signed_int(x)
+    else:
+        intobj = py.long_from_unsigned_int(x)
     py.print_object(intobj)
     py.decref(intobj)
-    return context.get_dummy_value()
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @register
@@ -35,7 +38,8 @@ def real_print_impl(context, builder, sig, args):
     intobj = py.float_from_double(szval)
     py.print_object(intobj)
     py.decref(intobj)
-    return context.get_dummy_value()
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @register
@@ -51,7 +55,8 @@ def print_charseq(context, builder, sig, args):
     cstr = py.bytes_from_string_and_size(byteptr, size)
     py.print_object(cstr)
     py.decref(cstr)
-    return context.get_dummy_value()
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @register
@@ -62,9 +67,9 @@ def print_varargs(context, builder, sig, args):
         signature = typing.signature(types.none, argtype)
         imp = context.get_function(types.print_item_type, signature)
         imp(builder, [argval])
-        if i == len(args) - 1:
-            py.print_string('\n')
-        else:
+        if i < len(args) - 1:
             py.print_string(' ')
+    py.print_string('\n')
 
-    return context.get_dummy_value()
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)

@@ -222,6 +222,42 @@ def ptx_syncthreads(context, builder, sig, args):
 
 
 @register
+@implement(stubs.threadfence_block)
+def ptx_threadfence_block(context, builder, sig, args):
+    assert not args
+    fname = 'llvm.nvvm.membar.cta'
+    lmod = builder.module
+    fnty = Type.function(Type.void(), ())
+    sync = lmod.get_or_insert_function(fnty, name=fname)
+    builder.call(sync, ())
+    return context.get_dummy_value()
+
+
+@register
+@implement(stubs.threadfence_system)
+def ptx_threadfence_system(context, builder, sig, args):
+    assert not args
+    fname = 'llvm.nvvm.membar.sys'
+    lmod = builder.module
+    fnty = Type.function(Type.void(), ())
+    sync = lmod.get_or_insert_function(fnty, name=fname)
+    builder.call(sync, ())
+    return context.get_dummy_value()
+
+
+@register
+@implement(stubs.threadfence)
+def ptx_threadfence_device(context, builder, sig, args):
+    assert not args
+    fname = 'llvm.nvvm.membar.gl'
+    lmod = builder.module
+    fnty = Type.function(Type.void(), ())
+    sync = lmod.get_or_insert_function(fnty, name=fname)
+    builder.call(sync, ())
+    return context.get_dummy_value()
+
+
+@register
 @implement(stubs.atomic.add, types.Kind(types.Array), types.intp, types.Any)
 def ptx_atomic_add_intp(context, builder, sig, args):
     aryty, indty, valty = sig.args
@@ -351,7 +387,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         # Special case local addrespace allocation to use alloca
         # NVVM is smart enough to only use local memory if no register is
         # available
-        dataptr = builder.alloca(laryty, name=symbol_name)
+        dataptr = cgutils.alloca_once(builder, laryty, name=symbol_name)
     else:
         lmod = builder.module
 

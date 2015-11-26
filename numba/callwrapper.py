@@ -3,17 +3,18 @@ from __future__ import print_function, division, absolute_import
 from llvmlite.llvmpy.core import Type, Builder, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils
+from numba import types, cgutils, config
 
 
 class _ArgManager(object):
     """
     A utility class to handle argument unboxing and cleanup
     """
-    def __init__(self, context, builder, api, endblk, nargs):
+    def __init__(self, context, builder, api, env_manager, endblk, nargs):
         self.context = context
         self.builder = builder
         self.api = api
+        self.env_manager = env_manager
         self.arg_count = 0  # how many function arguments have been processed
         self.cleanups = []
         self.nextblk = endblk
@@ -28,26 +29,33 @@ class _ArgManager(object):
             arg2.err -> arg1.err -> arg0.err -> arg.end (returns)
         """
         # Unbox argument
-        native = self.api.to_native_value(self.builder.load(obj), ty)
+        native = self.api.to_native_value(ty, obj)
 
         # If an error occurred, go to the cleanup block for the previous argument.
         with cgutils.if_unlikely(self.builder, native.is_error):
             self.builder.branch(self.nextblk)
 
-        # Write the cleanup block for this argument
-        cleanupblk = self.builder.append_basic_block("arg%d.err" % self.arg_count)
-        with self.builder.goto_block(cleanupblk):
-            # NRT cleanup
+        # Define the cleanup function for the argument
+        def cleanup_arg():
+            # Native value reflection
+            self.api.reflect_native_value(ty, native.value, self.env_manager)
 
-            if self.context.enable_nrt:
-                def nrt_cleanup():
-                    self.context.nrt_decref(self.builder, ty, native.value)
-                nrt_cleanup()
-                self.cleanups.append(nrt_cleanup)
-
+            # Native value cleanup
             if native.cleanup is not None:
                 native.cleanup()
-                self.cleanups.append(native.cleanup)
+
+            # NRT cleanup
+            # (happens after the native value cleanup as the latter
+            #  may need the native value)
+            if self.context.enable_nrt:
+                self.context.nrt_decref(self.builder, ty, native.value)
+
+        self.cleanups.append(cleanup_arg)
+
+        # Write the on-error cleanup block for this argument
+        cleanupblk = self.builder.append_basic_block("arg%d.err" % self.arg_count)
+        with self.builder.goto_block(cleanupblk):
+            cleanup_arg()
             # Go to next cleanup block
             self.builder.branch(self.nextblk)
 
@@ -56,7 +64,8 @@ class _ArgManager(object):
         return native.value
 
     def emit_cleanup(self):
-        """Emit the cleanup code after we are done with the arguments
+        """
+        Emit the cleanup code after returning from the wrapped function.
         """
         for dtor in self.cleanups:
             dtor()
@@ -129,76 +138,48 @@ class PyCallWrapper(object):
         with builder.goto_block(endblk):
             builder.ret(api.get_null_object())
 
-        cleanup_manager = _ArgManager(self.context, builder, api, endblk, nargs)
+        # Extract the Environment object from the Closure
+        envptr, env_manager = self.get_env(api, builder, closure)
+
+        cleanup_manager = _ArgManager(self.context, builder, api,
+                                      env_manager, endblk, nargs)
 
         innerargs = []
         for obj, ty in zip(objs, self.fndesc.argtypes):
-            val = cleanup_manager.add_arg(obj, ty)
+            val = cleanup_manager.add_arg(builder.load(obj), ty)
             innerargs.append(val)
 
         if self.release_gil:
             cleanup_manager = _GilManager(builder, api, cleanup_manager)
 
-        # Extract the Environment object from the Closure
-        envptr, env_manager = self.get_env(api, builder, closure)
-
-        status, res = self.context.call_conv.call_function(
+        status, retval = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
             innerargs, envptr)
         # Do clean up
+        self.debug_print(builder, "# callwrapper: emit_cleanup")
         cleanup_manager.emit_cleanup()
+        self.debug_print(builder, "# callwrapper: emit_cleanup end")
 
         # Determine return status
-        with cgutils.if_likely(builder, status.is_ok):
+        with builder.if_then(status.is_ok, likely=True):
             # Ok => return boxed Python value
             with builder.if_then(status.is_none):
                 api.return_none()
 
-            retval = api.from_native_return(res, self._simplified_return_type(),
-                                            env_manager)
-            builder.ret(retval)
-
-        with builder.if_then(builder.not_(status.is_python_exc)):
-            # User exception raised
-            self.make_exception_switch(api, builder, status)
+            retty = self._simplified_return_type()
+            obj = api.from_native_return(retty, retval, env_manager)
+            builder.ret(obj)
 
         # Error out
+        self.context.call_conv.raise_error(builder, api, status)
         builder.ret(api.get_null_object())
 
     def get_env(self, api, builder, closure):
-        if self.context.aot_mode:
-            # TODO: need to fix this properly for AOT compilation.
-            envptr = None
-            env_manager = None
-        else:
-            envptr = self.context.get_env_from_closure(builder, closure)
-            env_body = self.context.get_env_body(builder, envptr)
-            api.emit_environment_sentry(envptr, return_pyobject=True)
-            env_manager = api.get_env_manager(self.env, env_body, envptr)
+        envptr = self.context.get_env_from_closure(builder, closure)
+        env_body = self.context.get_env_body(builder, envptr)
+        api.emit_environment_sentry(envptr, return_pyobject=True)
+        env_manager = api.get_env_manager(self.env, env_body, envptr)
         return envptr, env_manager
-
-    def make_exception_switch(self, api, builder, status):
-        """
-        Handle user exceptions.  Unserialize the exception info and raise it.
-        """
-        code = status.code
-        # Handle user exceptions
-        with builder.if_then(status.is_user_exc):
-            exc = api.unserialize(status.excinfoptr)
-            with cgutils.if_likely(builder,
-                                   cgutils.is_not_null(builder, exc)):
-                api.raise_object(exc)  # steals ref
-            builder.ret(api.get_null_object())
-
-        with builder.if_then(status.is_stop_iteration):
-            api.err_set_none("PyExc_StopIteration")
-            builder.ret(api.get_null_object())
-
-        msg = "unknown error in native function: %s" % self.fndesc.mangled_name
-        api.err_set_string("PyExc_SystemError", msg)
-
-    def make_const_string(self, string):
-        return self.context.insert_const_string(self.module, string)
 
     def _simplified_return_type(self):
         """
@@ -211,3 +192,7 @@ class PyCallWrapper(object):
             return restype.type
         else:
             return restype
+
+    def debug_print(self, builder, msg):
+        if config.DEBUG_JIT:
+            self.context.debug_print(builder, "DEBUGJIT: {0}".format(msg))

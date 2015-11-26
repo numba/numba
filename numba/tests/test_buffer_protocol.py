@@ -7,7 +7,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import jit
-from .support import TestCase, compile_function
+from .support import TestCase, compile_function, MemoryLeakMixin
 
 
 @jit(nopython=True)
@@ -68,7 +68,7 @@ memoryview_structured_indexing = sys.version_info >= (3,)
 
 @unittest.skipIf(sys.version_info < (2, 7),
                  "buffer protocol not supported on Python 2.6")
-class TestBufferProtocol(TestCase):
+class TestBufferProtocol(MemoryLeakMixin, TestCase):
     """
     Test operations on buffer-providing objects.
     """
@@ -248,7 +248,7 @@ class TestBufferProtocol(TestCase):
 
 @unittest.skipUnless(sys.version_info >= (2, 7),
                      "memoryview doesn't exist on 2.6")
-class TestMemoryView(TestCase):
+class TestMemoryView(MemoryLeakMixin, TestCase):
     """
     Test memoryview-specific attributes and operations.
     """

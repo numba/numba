@@ -29,3 +29,14 @@ class DataModelManager(object):
         """Shorthand for lookup()
         """
         return self.lookup(fetype)
+
+    def copy(self):
+        """
+        Make a copy of the manager.
+        Use this to inherit from the default data model and specialize it
+        for custom target.
+        """
+        dmm = DataModelManager()
+        dmm._handlers = self._handlers.copy()
+        return dmm
+

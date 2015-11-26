@@ -4,8 +4,8 @@ import numpy
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types
-from .support import TestCase
+from numba import errors, types, typeof
+from .support import TestCase, MemoryLeakMixin
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -14,6 +14,7 @@ force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
+no_pyobj_flags.set("nrt")
 
 
 def unpack_list(l):
@@ -76,6 +77,19 @@ def unpack_nested_heterogenous_tuple():
     return a + b + c
 
 
+def unpack_arbitrary(seq):
+    a, b = seq
+    return b, a
+
+
+def unpack_nrt():
+    a = numpy.zeros(1)
+    b = numpy.zeros(2)
+    tup = b, a
+    alpha, beta = tup
+    return alpha, beta
+
+
 def chained_unpack_assign1(x, y):
     # Used to fail in object mode (issue #580)
     a = (b, c) = (x, y)
@@ -90,7 +104,7 @@ def conditional_swap(x, y):
     return x, y
 
 
-class TestUnpack(TestCase):
+class TestUnpack(MemoryLeakMixin, TestCase):
 
     def test_unpack_list(self):
         pyfunc = unpack_list
@@ -159,9 +173,9 @@ class TestUnpack(TestCase):
 
     def test_unpack_tuple_too_small_npm(self):
         self.check_unpack_error(unpack_tuple_too_small, no_pyobj_flags,
-                                TypeError)
+                                errors.TypingError)
         self.check_unpack_error(unpack_heterogenous_tuple_too_small,
-                                no_pyobj_flags, TypeError)
+                                no_pyobj_flags, errors.TypingError)
 
     def test_unpack_tuple_too_large(self):
         self.check_unpack_error(unpack_tuple_too_large)
@@ -169,9 +183,9 @@ class TestUnpack(TestCase):
 
     def test_unpack_tuple_too_large_npm(self):
         self.check_unpack_error(unpack_tuple_too_large, no_pyobj_flags,
-                                TypeError)
+                                errors.TypingError)
         self.check_unpack_error(unpack_heterogenous_tuple_too_large,
-                                no_pyobj_flags, TypeError)
+                                no_pyobj_flags, errors.TypingError)
 
     def test_unpack_range_too_small(self):
         self.check_unpack_error(unpack_range_too_small)
@@ -197,6 +211,21 @@ class TestUnpack(TestCase):
 
     def test_conditional_swap_npm(self):
         self.check_conditional_swap(no_pyobj_flags)
+
+    def test_unpack_tuple_of_arrays(self):
+        tup = tuple(numpy.zeros(i + 1) for i in range(2))
+        tupty = typeof(tup)
+        pyfunc = unpack_arbitrary
+        cr = compile_isolated(pyfunc, (tupty,),
+                              flags=no_pyobj_flags)
+        cfunc = cr.entry_point
+        self.assertPreciseEqual(cfunc(tup), pyfunc(tup))
+
+    def test_unpack_nrt(self):
+        pyfunc = unpack_nrt
+        cr = compile_isolated(pyfunc, (), flags=no_pyobj_flags)
+        cfunc = cr.entry_point
+        self.assertPreciseEqual(cfunc(), pyfunc())
 
 
 if __name__ == '__main__':

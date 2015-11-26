@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from numba import exportmany, export
 
 

@@ -4,15 +4,19 @@ Assorted utilities for use in tests.
 
 import cmath
 import contextlib
+import errno
 import math
+import os
 import sys
+import tempfile
 
 import numpy as np
 
-from numba import config, errors, typing, utils
+from numba import config, errors, typing, utils, numpy_support
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
+from numba.runtime import rtsys
 
 
 enable_pyobj_flags = Flags()
@@ -24,7 +28,7 @@ force_pyobj_flags.set("force_pyobject")
 no_pyobj_flags = Flags()
 
 
-is_on_numpy_16 = np.__version__.startswith("1.6.")
+is_on_numpy_16 = numpy_support.version == (1, 6)
 skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
                                    "test requires Numpy 1.7 or later")
 
@@ -89,6 +93,21 @@ class TestCase(unittest.TestCase):
         with self.assertRaises(_accepted_errors) as cm:
             yield cm
 
+    @contextlib.contextmanager
+    def assertRefCount(self, *objects):
+        """
+        A context manager that asserts the given objects have the
+        same reference counts before and after executing the
+        enclosed blocks.
+        """
+        old_refcounts = [sys.getrefcount(x) for x in objects]
+        yield
+        new_refcounts = [sys.getrefcount(x) for x in objects]
+        for old, new, obj in zip(old_refcounts, new_refcounts, objects):
+            if old != new:
+                self.fail("Refcount changed from %d to %d for object: %r"
+                          % (old, new, obj))
+
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]
@@ -143,11 +162,29 @@ class TestCase(unittest.TestCase):
                 for (stride, shape) in zip(arr.strides, arr.shape)
                 if shape > 1]
 
+    def assertStridesEqual(self, first, second):
+        """
+        Test that two arrays have the same shape and strides.
+        """
+        self.assertEqual(first.shape, second.shape, "shapes differ")
+        self.assertEqual(first.itemsize, second.itemsize, "itemsizes differ")
+        self.assertEqual(self._fix_strides(first), self._fix_strides(second),
+                         "strides differ")
+
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                            msg=None):
         """
-        Test that two scalars have similar types and are equal up to
-        a computed precision.
+        Versatile equality testing function with more built-in checks than
+        standard assertEqual().
+
+        For arrays, test that layout, dtype, shape are identical, and
+        recursively call assertPreciseEqual() on the contents.
+
+        For other sequences, recursively call assertPreciseEqual() on
+        the contents.
+
+        For scalars, test that two scalars or have similar types and are
+        equal up to a computed precision.
         If the scalars are instances of exact types or if *prec* is
         'exact', they are compared exactly.
         If the scalars are instances of inexact types (float, complex)
@@ -311,6 +348,45 @@ def compile_function(name, code, globs):
     eval(co, globs, ns)
     return ns[name]
 
+def tweak_code(func, codestring=None, consts=None):
+    """
+    Tweak the code object of the given function by replacing its
+    *codestring* (a bytes object) and *consts* tuple, optionally.
+    """
+    co = func.__code__
+    tp = type(co)
+    if codestring is None:
+        codestring = co.co_code
+    if consts is None:
+        consts = co.co_consts
+    if sys.version_info >= (3,):
+        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
+                      co.co_stacksize, co.co_flags, codestring,
+                      consts, co.co_names, co.co_varnames,
+                      co.co_filename, co.co_name, co.co_firstlineno,
+                      co.co_lnotab)
+    else:
+        new_code = tp(co.co_argcount, co.co_nlocals,
+                      co.co_stacksize, co.co_flags, codestring,
+                      consts, co.co_names, co.co_varnames,
+                      co.co_filename, co.co_name, co.co_firstlineno,
+                      co.co_lnotab)
+    func.__code__ = new_code
+
+def static_temp_directory(dirname):
+    """
+    Create a directory in the temp dir with a given name. Statically-named
+    temp dirs created using this function are needed because we can't delete a
+    DLL under Windows (this is a bit fragile if stale files can influence the
+    result of future test runs).
+    """
+    tmpdir = os.path.join(tempfile.gettempdir(), dirname)
+    try:
+        os.mkdir(tmpdir)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+    return tmpdir
 
 # From CPython
 
@@ -342,3 +418,37 @@ def captured_stderr():
        self.assertEqual(stderr.getvalue(), "hello\n")
     """
     return captured_output("stderr")
+
+
+class MemoryLeak(object):
+
+    __enable_leak_check = True
+
+    def memory_leak_setup(self):
+        self.__init_stats = rtsys.get_allocation_stats()
+
+    def memory_leak_teardown(self):
+        if self.__enable_leak_check:
+            old = self.__init_stats
+            new = rtsys.get_allocation_stats()
+            total_alloc = new.alloc - old.alloc
+            total_free = new.free - old.free
+            total_mi_alloc = new.mi_alloc - old.mi_alloc
+            total_mi_free = new.mi_free - old.mi_free
+            self.assertEqual(total_alloc, total_free)
+            self.assertEqual(total_mi_alloc, total_mi_free)
+
+    def disable_leak_check(self):
+        # For per-test use when MemoryLeakMixin is injected into a TestCase
+        self.__enable_leak_check = False
+
+
+class MemoryLeakMixin(MemoryLeak):
+
+    def setUp(self):
+        super(MemoryLeakMixin, self).setUp()
+        self.memory_leak_setup()
+
+    def tearDown(self):
+        super(MemoryLeakMixin, self).tearDown()
+        self.memory_leak_teardown()

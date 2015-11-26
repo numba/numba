@@ -8,7 +8,10 @@ Numba for CUDA GPUs
    kernels.rst
    memory.rst
    device-functions.rst
+   cudapysupported.rst
    intrinsics.rst
    device-management.rst
    examples.rst
    simulator.rst
+   reduction.rst
+   ufunc.rst

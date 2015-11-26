@@ -127,12 +127,10 @@ class TestFromDtype(TestCase):
               size=8, aligned=True)
 
         dtype = np.dtype([('m', np.int32), ('n', 'S5')])
-        # A heuristic is used on Numpy 1.6
-        aligned = False if np.__version__ >= '1.7' else True
         check(dtype,
               fields={'m': (types.int32, 0),
                       'n': (types.CharSeq(5), 4)},
-              size=9, aligned=aligned)
+              size=9, aligned=False)
 
 
 class ValueTypingTestBase(object):
@@ -147,6 +145,8 @@ class ValueTypingTestBase(object):
         f = func
         # Standard Python types get inferred by numpy
         self.assertIn(f(1), (types.int32, types.int64))
+        self.assertIn(f(2**31 - 1), (types.int32, types.int64))
+        self.assertIn(f(-2**31), (types.int32, types.int64))
         self.assertIs(f(1.0), types.float64)
         self.assertIs(f(1.0j), types.complex128)
         self.assertIs(f(True), types.bool_)
