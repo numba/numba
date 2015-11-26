@@ -428,14 +428,23 @@ class NdConstructorLike(CallableTemplate):
     """
 
     def generic(self):
-        def typer(arr, dtype=None):
-            if dtype is None:
-                nb_dtype = arr.dtype
-            else:
+        """
+        np.empty_like(array) -> empty array of the same shape and layout
+        np.empty_like(scalar) -> empty 0-d array of the scalar type
+        """
+        def typer(arg, dtype=None):
+            if dtype is not None:
                 nb_dtype = _parse_dtype(dtype)
+            elif isinstance(arg, types.Array):
+                nb_dtype = arg.dtype
+            else:
+                nb_dtype = arg
             if nb_dtype is not None:
-                layout = arr.layout if arr.layout != 'A' else 'C'
-                return arr.copy(dtype=nb_dtype, layout=layout)
+                if isinstance(arg, types.Array):
+                    layout = arg.layout if arg.layout != 'A' else 'C'
+                    return arg.copy(dtype=nb_dtype, layout=layout)
+                else:
+                    return types.Array(nb_dtype, 0, 'C')
 
         return typer
 
@@ -503,13 +512,22 @@ if numpy_version >= (1, 8):
         return_new_reference = True
 
         def generic(self):
-            def typer(arr, fill_value, dtype=None):
-                if dtype is None:
-                    nb_dtype = arr.dtype
-                else:
+            """
+            np.full_like(array, val) -> array of the same shape and layout
+            np.full_like(scalar, val) -> 0-d array of the scalar type
+            """
+            def typer(arg, fill_value, dtype=None):
+                if dtype is not None:
                     nb_dtype = _parse_dtype(dtype)
+                elif isinstance(arg, types.Array):
+                    nb_dtype = arg.dtype
+                else:
+                    nb_dtype = arg
                 if nb_dtype is not None:
-                    return arr.copy(dtype=nb_dtype)
+                    if isinstance(arg, types.Array):
+                        return arg.copy(dtype=nb_dtype)
+                    else:
+                        return types.Array(dtype=nb_dtype, ndim=0, layout='C')
 
             return typer
 
@@ -736,20 +754,29 @@ class Where(AbstractTemplate):
         assert not kws
 
         if len(args) == 1:
-            # np.where(cond) is the same as np.nonzero(cond)
+            # 0-dim arrays return one result array
             ary = args[0]
             ndim = max(ary.ndim, 1)
             retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
             return signature(retty, ary)
 
         elif len(args) == 3:
+            # NOTE: contrary to Numpy, we only support homogenous arguments
             cond, x, y = args
-            if (cond.ndim == x.ndim == y.ndim and
-                x.dtype == y.dtype):
-                retty = types.Array(x.dtype, x.ndim, x.layout)
-                return signature(retty, *args)
+            if isinstance(cond, types.Array):
+                # array where()
+                if (cond.ndim == x.ndim == y.ndim and
+                    x.dtype == y.dtype):
+                    retty = types.Array(x.dtype, x.ndim, x.layout)
+                    return signature(retty, *args)
+            else:
+                # scalar where()
+                if not isinstance(x, types.Array) and x == y:
+                    retty = types.Array(x, 0, 'C')
+                    return signature(retty, *args)
 
 builtin_global(numpy.where, types.Function(Where))
+
 
 @builtin
 class Sinc(AbstractTemplate):

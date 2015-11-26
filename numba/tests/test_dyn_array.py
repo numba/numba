@@ -672,6 +672,9 @@ class ConstructorLikeBaseTest(object):
             if arr.ndim > 0:
                 check_arr(arr[::2])
 
+        # Scalar argument => should produce a 0-d array
+        check_arr(orig[0])
+
 
 class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
 
