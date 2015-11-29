@@ -1417,6 +1417,9 @@ class ClassInstanceType(Type):
         return ClassDataType(self)
 
 
+    def get_reference_type(self):
+        return self
+
 class ClassDataType(Type):
     def __init__(self, classtyp):
         self.class_type = classtyp
