@@ -82,7 +82,8 @@ def register_struct_type(cls, specfn):
 
                         def generic(self, args, kws):
                             args = (instance,) + tuple(args)
-                            template, args, kws = meth.get_call_template(args, kws)
+                            template, args, kws = meth.get_call_template(args,
+                                                                         kws)
                             sig = template(self.context).apply(args, kws)
                             sig = templates.signature(sig.return_type,
                                                       *sig.args[1:],
@@ -123,9 +124,9 @@ def register_struct_type(cls, specfn):
                     #
                     #     return types.BoundFunction(MethodTemplate, instance)
 
-        refattrspec = RefStructAttribute(typer, instance_type.get_reference_type())
+        refattrspec = RefStructAttribute(typer,
+                                         instance_type.get_reference_type())
         typer.insert_attributes(refattrspec)
-
 
     ### Backend ###
     backend = CPUTarget.target_context
@@ -207,7 +208,7 @@ def register_struct_type(cls, specfn):
         ret = inst_struct._getvalue()
 
         # Add function to link
-        codegen = context.jit_codegen()
+        codegen = context.codegen()
         codegen.add_linking_library(cres.library)
 
         return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)

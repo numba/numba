@@ -87,7 +87,8 @@ def register_class_type(cls, specfn):
 
                         def generic(self, args, kws):
                             args = (instance,) + tuple(args)
-                            template, args, kws = meth.get_call_template(args, kws)
+                            template, args, kws = meth.get_call_template(args,
+                                                                         kws)
                             sig = template(self.context).apply(args, kws)
                             sig = templates.signature(sig.return_type,
                                                       *sig.args[1:],
@@ -98,7 +99,6 @@ def register_class_type(cls, specfn):
 
         attrspec = ClassAttribute(typer, instance_type)
         typer.insert_attributes(attrspec)
-
 
     ### Backend ###
     backend = CPUTarget.target_context
@@ -111,7 +111,8 @@ def register_class_type(cls, specfn):
     def defer_backend(instance_type):
         def imp_dtor(context, module):
             dtor_ftype = llvmir.FunctionType(llvmir.VoidType(),
-                                             [context.get_value_type(types.voidptr),
+                                             [context.get_value_type(
+                                                 types.voidptr),
                                               context.get_value_type(
                                                   types.voidptr)])
 
@@ -150,7 +151,8 @@ def register_class_type(cls, specfn):
                 imp_dtor(context, builder.module),
             )
             data_pointer = context.nrt_meminfo_data(builder, meminfo)
-            data_pointer = builder.bitcast(data_pointer, alloc_type.as_pointer())
+            data_pointer = builder.bitcast(data_pointer,
+                                           alloc_type.as_pointer())
 
             # Nullify all data
             builder.store(cgutils.get_null_value(alloc_type),
@@ -176,7 +178,7 @@ def register_class_type(cls, specfn):
             ret = inst_struct._getvalue()
 
             # Add function to link
-            codegen = context.jit_codegen()
+            codegen = context.codegen()
             codegen.add_linking_library(cres.library)
 
             return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)
@@ -218,8 +220,6 @@ def register_class_type(cls, specfn):
 
         backend.insert_func_defn(registry.functions)
         backend.insert_attr_defn(registry.attributes)
-
-
 
     # Register constructor
     class ConstructorTemplate(templates.AbstractTemplate):
