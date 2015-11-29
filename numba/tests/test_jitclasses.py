@@ -1,5 +1,4 @@
 import numpy as np
-
 from numba import float32, int32
 from numba import njit
 from numba import unittest_support as unittest
@@ -50,9 +49,9 @@ class TestJitClass(TestCase):
 
         inp = np.ones(10, dtype=np.float32)
         a, b, c = foo(inp)
-        assert a == 123 + 1 + 123 + 2
-        assert b == 3 + 4
-        np.testing.assert_equal(c, inp)
+        self.assertEqual(a, 123 + 1 + 123 + 2)
+        self.assertEqual(b, 3 + 4)
+        self.assertPreciseEqual(c, inp)
 
     def test_jit_class_generic(self):
         def spec(x, y, arr):
@@ -82,8 +81,8 @@ class TestJitClass(TestCase):
         a = np.arange(1024)
         arr, x, y = foo()
         np.testing.assert_equal(a, arr)
-        assert x == 2
-        assert y == 3
+        self.assertEqual(x, 2)
+        self.assertEqual(y, 3)
 
     def test_byval_struct(self):
         # A JIT-Struct is a immutable copy
@@ -111,10 +110,10 @@ class TestJitClass(TestCase):
             return vec.x, vec.y, vec2.x, vec2.y
 
         x1, y1, x2, y2 = foo()
-        assert x1 == 1
-        assert y1 == 2
-        assert x2 == x1
-        assert y2 == y1 + 3
+        self.assertEqual(x1, 1)
+        self.assertEqual(y1, 2)
+        self.assertEqual(x2, x1)
+        self.assertEqual(y2, y1 + 3)
 
     def test_byval_struct_generic(self):
         def spec(x, y):
@@ -149,10 +148,10 @@ class TestJitClass(TestCase):
             return vec.x, vec.y, vec2.x, vec2.y
 
         x1, y1, x2, y2 = foo()
-        assert x1 == 1
-        assert y1 == 2
-        assert x2 == x1
-        assert y2 == y1 + 3
+        self.assertEqual(x1, 1)
+        self.assertEqual(y1, 2)
+        self.assertEqual(x2, x1)
+        self.assertEqual(y2, y1 + 3)
 
 
 if __name__ == '__main__':
