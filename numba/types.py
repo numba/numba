@@ -1399,7 +1399,7 @@ class Slice3Type(Type):
 
 class ClassType(Opaque):
     mutable = True
-    name_prefix = "jitclass.class"
+    name_prefix = "jitclass"
 
     def __init__(self, class_def):
         self.class_def = class_def
@@ -1409,7 +1409,7 @@ class ClassType(Opaque):
 
 class ClassInstanceType(Type):
     mutable = True
-    name_prefix = "jitclass"
+    name_prefix = "instance"
 
     def __init__(self, class_type, struct, methods):
         self.class_type = class_type
@@ -1431,18 +1431,18 @@ class ClassInstanceType(Type):
 class ClassDataType(Type):
     def __init__(self, classtyp):
         self.class_type = classtyp
-        name = "jitclass.data.{0}".format(self.class_type.name)
+        name = "data.{0}".format(self.class_type.name)
         super(ClassDataType, self).__init__(name)
 
 
 class ImmutableClassType(ClassType):
     mutable = False
-    name_prefix = "immjitclass.class"
+    name_prefix = "immjitclass"
 
 
 class ImmutableClassInstanceType(ClassInstanceType):
     mutable = False
-    name_prefix = 'immjitclass'
+    name_prefix = 'immutable.instance'
 
     def get_reference_type(self):
         return ImmutableClassRefType(self)
