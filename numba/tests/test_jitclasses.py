@@ -1,10 +1,10 @@
-from numba.jitclass import jitclass
-from numba.jitstruct import jitstruct
-from numba import float32, int32
-from numba.utils import OrderedDict
-from numba import njit
 import numpy as np
+
+from numba import float32, int32
+from numba import njit
 from numba import unittest_support as unittest
+from numba.jitclass import jitclass
+from numba.utils import OrderedDict
 from .support import TestCase
 
 
@@ -91,7 +91,7 @@ class TestJitClass(TestCase):
         spec['x'] = float32
         spec['y'] = float32
 
-        @jitstruct(spec)
+        @jitclass(spec, immutable=True)
         class Vector(object):
             def __init__(self, x, y):
                 self.x = x
@@ -124,7 +124,7 @@ class TestJitClass(TestCase):
             dct['y'] = y
             return dct
 
-        @jitstruct(spec)
+        @jitclass(spec, immutable=True)
         class Vector(object):
             # Alternatively, `spec()` can be a classmethod (not implemented, yet)
             #

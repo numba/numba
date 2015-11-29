@@ -1,3 +1,4 @@
+from __future__ import absolute_import, print_function
 import types as pytypes
 from numba import types
 from numba.targets.registry import CPUTarget
@@ -9,21 +10,8 @@ from numba import cgutils
 from llvmlite import ir as llvmir
 
 
-def jitclass(spec):
-    if not callable(spec):
-        specfn = lambda *args, **kwargs: spec
-    else:
-        specfn = spec
 
-    def wrap(cls):
-        register_class_type(cls, specfn, types.ClassType,
-                            ClassBuilder)
-        return cls
-
-    return wrap
-
-
-class ClassModel(models.StructModel):
+class InstanceModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
         cls_data_ty = types.ClassDataType(fe_typ)
         # MemInfoPointer uses the `dtype` attribute to traverse for nested
@@ -35,18 +23,18 @@ class ClassModel(models.StructModel):
             ('meminfo', types.MemInfoPointer(dtype)),
             ('data', types.CPointer(cls_data_ty)),
         ]
-        super(ClassModel, self).__init__(dmm, fe_typ, members)
+        super(InstanceModel, self).__init__(dmm, fe_typ, members)
 
 
-class ClassDataModel(models.StructModel):
+class InstanceDataModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
         clsty = fe_typ.class_type
         members = list(clsty.struct.items())
-        super(ClassDataModel, self).__init__(dmm, fe_typ, members)
+        super(InstanceDataModel, self).__init__(dmm, fe_typ, members)
 
 
-default_manager.register(types.ClassInstanceType, ClassModel)
-default_manager.register(types.ClassDataType, ClassDataModel)
+default_manager.register(types.ClassInstanceType, InstanceModel)
+default_manager.register(types.ClassDataType, InstanceDataModel)
 default_manager.register(types.ClassType, models.OpaqueModel)
 
 
@@ -230,7 +218,6 @@ class ClassBuilder(object):
             return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)
 
     def register_attributes_methods(self, registry, instance_type):
-
         # Add attributes
         for attr in instance_type.struct:
             self.implement_attribute(registry, instance_type, attr)

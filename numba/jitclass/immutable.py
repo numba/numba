@@ -1,43 +1,29 @@
-
+from __future__ import absolute_import, print_function
 from numba import types
 from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils
-from .jitclass import ClassBuilder, register_class_type
+from .base import ClassBuilder
 
 
-def jitstruct(spec):
-    if not callable(spec):
-        specfn = lambda *args, **kwargs: spec
-    else:
-        specfn = spec
-
-    def wrap(cls):
-        register_class_type(cls, specfn, types.ImmutableClassType,
-                            ImmutableClassBuilder)
-        return cls
-
-    return wrap
-
-
-class StructInstanceModel(models.StructModel):
+class ImmInstanceModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
         members = list(fe_typ.struct.items())
-        super(StructInstanceModel, self).__init__(dmm, fe_typ, members)
+        super(ImmInstanceModel, self).__init__(dmm, fe_typ, members)
 
 
-class StructRefModel(models.PrimitiveModel):
+class ImmRefModel(models.PrimitiveModel):
     def __init__(self, dmm, fe_type):
         self._pointee_model = dmm.lookup(fe_type.instance_type)
         self._pointee_be_type = self._pointee_model.get_data_type()
         be_type = self._pointee_be_type.as_pointer()
-        super(StructRefModel, self).__init__(dmm, fe_type, be_type)
+        super(ImmRefModel, self).__init__(dmm, fe_type, be_type)
 
 
-default_manager.register(types.ImmutableClassInstanceType, StructInstanceModel)
+default_manager.register(types.ImmutableClassInstanceType, ImmInstanceModel)
 default_manager.register(types.ImmutableClassType, models.OpaqueModel)
-default_manager.register(types.ImmutableClassRefType, StructRefModel)
+default_manager.register(types.ImmutableClassRefType, ImmRefModel)
 
 
 class ImmutableClassBuilder(ClassBuilder):
