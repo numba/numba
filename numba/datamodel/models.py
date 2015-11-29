@@ -197,6 +197,7 @@ class PrimitiveModel(DataModel):
 @register_default(types.PyObject)
 @register_default(types.RawPointer)
 @register_default(types.NoneType)
+@register_default(types.EllipsisType)
 @register_default(types.Function)
 @register_default(types.Type)
 @register_default(types.Object)
@@ -554,11 +555,21 @@ class StructModel(CompositeModel):
         ----
         pos: int or str
             field index or field name
-
         """
         if isinstance(pos, str):
             pos = self.get_field_position(pos)
         return self._members[pos]
+
+    def get_model(self, pos):
+        """
+        Get the datamodel of a field given the position or the fieldname.
+
+        Args
+        ----
+        pos: int or str
+            field index or field name
+        """
+        return self._models[pos]
 
     def traverse(self, builder, value):
         out = [(self.get_type(k), self.get(builder, value, k))
@@ -609,6 +620,8 @@ class ListPayloadModel(StructModel):
         members = [
             ('size', types.intp),
             ('allocated', types.intp),
+            # This member is only used only for reflected lists
+            ('dirty', types.boolean),
             # Actually an inlined var-sized array
             ('data', fe_type.list_type.dtype),
         ]
@@ -622,6 +635,8 @@ class ListModel(StructModel):
         members = [
             # The meminfo data points to a ListPayload
             ('meminfo', types.MemInfoPointer(payload_type)),
+            # This member is only used only for reflected lists
+            ('parent', types.pyobject),
         ]
         super(ListModel, self).__init__(dmm, fe_type, members)
 

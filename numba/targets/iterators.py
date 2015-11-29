@@ -5,7 +5,7 @@ Implementation of various iterable and iterator types.
 from numba import types, cgutils
 from numba.targets.imputils import (
     builtin, implement, iternext_impl, call_iternext, call_getiter,
-    struct_factory, impl_ret_borrowed, impl_ret_new_ref)
+    impl_ret_borrowed, impl_ret_new_ref)
 
 
 @builtin
@@ -17,7 +17,6 @@ def iterator_getiter(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # builtin `enumerate` implementation
 
-@struct_factory(types.EnumerateType)
 def make_enumerate_cls(enum_type):
     """
     Return the Structure representation of the given *enum_type* (an
@@ -74,13 +73,13 @@ def iternext_enumerate(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         srcval = srcres.yielded_value()
-        result.yield_(cgutils.make_anonymous_struct(builder, [count, srcval]))
+        result.yield_(context.make_tuple(builder, enumty.yield_type,
+                                         [count, srcval]))
 
 
 #-------------------------------------------------------------------------------
 # builtin `zip` implementation
 
-@struct_factory(types.ZipType)
 def make_zip_cls(zip_type):
     """
     Return the Structure representation of the given *zip_type* (an
@@ -129,7 +128,7 @@ def iternext_zip(context, builder, sig, args, result):
 
     result.set_valid(is_valid)
     with builder.if_then(is_valid):
-        result.yield_(cgutils.make_anonymous_struct(builder, values))
+        result.yield_(context.make_tuple(builder, zip_type.yield_type, values))
 
 
 #-------------------------------------------------------------------------------

@@ -18,6 +18,16 @@ def usecase_uint64_constant():
 def usecase_uint64_func():
     return max(18446744073709551614, 18446744073709551615)
 
+def usecase_int64_pos():
+    return 9223372036854775807
+
+def usecase_int64_neg():
+    return -9223372036854775808
+
+def usecase_int64_func():
+    return (max(9223372036854775807, -9223372036854775808)
+            + min(9223372036854775807, -9223372036854775808))
+
 
 class IntWidthTest(TestCase):
 
@@ -51,18 +61,29 @@ class IntWidthTest(TestCase):
         self.assertEqual(f(0x7f), 7)
         self.assertEqual(f(-0x7f), 7)
         self.assertEqual(f(0x80), 8)
-        self.assertEqual(f(-0x80), 8)
+        self.assertEqual(f(-0x80), 7)
         self.assertEqual(f(0xff), 8)
         self.assertEqual(f(-0xff), 8)
         self.assertEqual(f(0x100), 9)
-        self.assertEqual(f(-0x100), 9)
+        self.assertEqual(f(-0x100), 8)
+        self.assertEqual(f(-0x101), 9)
         self.assertEqual(f(0x7fffffff), 31)
+        self.assertEqual(f(-0x7fffffff), 31)
+        self.assertEqual(f(-0x80000000), 31)
         self.assertEqual(f(0x80000000), 32)
         self.assertEqual(f(0xffffffff), 32)
         self.assertEqual(f(0xffffffffffffffff), 64)
         self.assertEqual(f(0x10000000000000000), 65)
         if utils.PYVERSION < (3, 0):
             self.assertEqual(f(long(0xffffffffffffffff)), 64)
+
+    def test_constant_int64(self, nopython=False):
+        self.check_nullary_func(usecase_int64_pos, nopython=nopython)
+        self.check_nullary_func(usecase_int64_neg, nopython=nopython)
+        self.check_nullary_func(usecase_int64_func, nopython=nopython)
+
+    def test_constant_int64_npm(self):
+        self.test_constant_int64(nopython=True)
 
 
 if __name__ == '__main__':

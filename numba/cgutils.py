@@ -52,24 +52,29 @@ def make_bytearray(buf):
     n = len(b)
     return ir.Constant(ir.ArrayType(ir.IntType(8), n), b)
 
+
 _struct_proxy_cache = {}
 
-
-def create_struct_proxy(fe_type):
+def create_struct_proxy(fe_type, kind='value'):
     """
     Returns a specialized StructProxy subclass for the given fe_type.
     """
-    res = _struct_proxy_cache.get(fe_type)
+    cache_key = (fe_type, kind)
+    res = _struct_proxy_cache.get(cache_key)
     if res is None:
-        clsname = StructProxy.__name__ + '_' + str(fe_type)
-        bases = (StructProxy,)
+        base = {'value': ValueStructProxy,
+                'data': DataStructProxy,
+                }[kind]
+        clsname = base.__name__ + '_' + str(fe_type)
+        bases = (base,)
         clsmembers = dict(_fe_type=fe_type)
         res = type(clsname, bases, clsmembers)
-        _struct_proxy_cache[fe_type] = res
+
+        _struct_proxy_cache[cache_key] = res
     return res
 
 
-class StructProxy(object):
+class _StructProxy(object):
     """
     Creates a `Structure` like interface that is constructed with information
     from DataModel instance.  FE type must have a data model that is a
@@ -81,13 +86,12 @@ class StructProxy(object):
     def __init__(self, context, builder, value=None, ref=None):
         from numba import datamodel   # Avoid circular import
         self._context = context
-        self._dmm = self._context.data_model_manager
-        self._datamodel = self._dmm[self._fe_type]
+        self._datamodel = self._context.data_model_manager[self._fe_type]
         if not isinstance(self._datamodel, datamodel.StructModel):
             raise TypeError("Not a structure model: {0}".format(self._datamodel))
         self._builder = builder
 
-        self._be_type = self._datamodel.get_value_type()
+        self._be_type = self._get_be_type(self._datamodel)
         assert not is_pointer(self._be_type)
 
         if ref is not None:
@@ -100,6 +104,15 @@ class StructProxy(object):
             self._value = alloca_once(self._builder, self._be_type, zfill=True)
             if value is not None:
                 self._builder.store(value, self._value)
+
+    def _get_be_type(self, datamodel):
+        raise NotImplementedError
+
+    def _cast_member_to_value(self, index, val):
+        raise NotImplementedError
+
+    def _cast_member_from_value(self, index, val):
+        raise NotImplementedError
 
     def _get_ptr_by_index(self, index):
         return gep_inbounds(self._builder, self._value, 0, index)
@@ -122,32 +135,33 @@ class StructProxy(object):
         Store the LLVM *value* into the named *field*.
         """
         if field.startswith('_'):
-            return super(StructProxy, self).__setattr__(field, value)
+            return super(_StructProxy, self).__setattr__(field, value)
         self[self._datamodel.get_field_position(field)] = value
 
     def __getitem__(self, index):
         """
         Load the LLVM value of the field at *index*.
         """
-
-        return self._builder.load(self._get_ptr_by_index(index))
+        member_val = self._builder.load(self._get_ptr_by_index(index))
+        return self._cast_member_to_value(index, member_val)
 
     def __setitem__(self, index, value):
         """
         Store the LLVM *value* into the field at *index*.
         """
         ptr = self._get_ptr_by_index(index)
+        value = self._cast_member_from_value(index, value)
         if value.type != ptr.type.pointee:
             if (is_pointer(value.type) and is_pointer(ptr.type.pointee)
-                and  value.type.pointee == ptr.type.pointee.pointee):
+                and value.type.pointee == ptr.type.pointee.pointee):
                 # Differ by address-space only
                 # Auto coerce it
                 value = self._context.addrspacecast(self._builder,
                                                     value,
                                                     ptr.type.pointee.addrspace)
             else:
-                raise TypeError("Invalid store {value.type} {"
-                                "ptr.type.pointee} in "
+                raise TypeError("Invalid store of {value.type} to "
+                                "{ptr.type.pointee} in "
                                 "{self._datamodel}".format(value=value,
                                                            ptr=ptr,
                                                            self=self))
@@ -176,6 +190,37 @@ class StructProxy(object):
         assert not is_pointer(value.type)
         assert value.type == self._type, (value.type, self._type)
         self._builder.store(value, self._value)
+
+
+class ValueStructProxy(_StructProxy):
+    """
+    Create a StructProxy suitable for accessing regular values
+    (e.g. LLVM values or alloca slots).
+    """
+    def _get_be_type(self, datamodel):
+        return datamodel.get_value_type()
+
+    def _cast_member_to_value(self, index, val):
+        return val
+
+    def _cast_member_from_value(self, index, val):
+        return val
+
+
+class DataStructProxy(_StructProxy):
+    """
+    Create a StructProxy suitable for accessing data persisted in memory.
+    """
+    def _get_be_type(self, datamodel):
+        return datamodel.get_data_type()
+
+    def _cast_member_to_value(self, index, val):
+        model = self._datamodel.get_model(index)
+        return model.from_data(self._builder, val)
+
+    def _cast_member_from_value(self, index, val):
+        model = self._datamodel.get_model(index)
+        return model.as_data(self._builder, val)
 
 
 class Structure(object):
@@ -476,7 +521,7 @@ def for_range_slice_generic(builder, start, stop, step):
     A helper wrapper for for_range_slice().  This is a context manager which
     yields two for_range_slice()-alike context managers, the first for
     the positive step case, the second for the negative step case.
-    
+
     Use:
         with for_range_slice_generic(...) as (pos_range, neg_range):
             with pos_range as (idx, count):
@@ -486,7 +531,7 @@ def for_range_slice_generic(builder, start, stop, step):
     """
     intp = start.type
     is_pos_step = builder.icmp_signed('>=', step, ir.Constant(intp, 0))
-    
+
     pos_for_range = for_range_slice(builder, start, stop, step, intp, inc=True)
     neg_for_range = for_range_slice(builder, start, stop, step, intp, inc=False)
 
@@ -502,9 +547,17 @@ def for_range_slice_generic(builder, start, stop, step):
 
 @contextmanager
 def loop_nest(builder, shape, intp):
-    with _loop_nest(builder, shape, intp) as indices:
-        assert len(indices) == len(shape)
-        yield indices
+    """
+    Generate a loop nest walking a N-dimensional array.
+    Yields a tuple of N indices for use in the inner loop body.
+    """
+    if not shape:
+        # 0-d array
+        yield ()
+    else:
+        with _loop_nest(builder, shape, intp) as indices:
+            assert len(indices) == len(shape)
+            yield indices
 
 
 @contextmanager
@@ -532,6 +585,9 @@ def pack_array(builder, values, ty=None):
 
 
 def unpack_tuple(builder, tup, count=None):
+    """
+    Unpack an array or structure of values, return a Python tuple.
+    """
     if count is None:
         # Assuming *tup* is an aggregate
         count = len(tup.type.elements)
@@ -681,6 +737,14 @@ def guard_memory_error(context, builder, pointer, msg=None):
     exc_args = (msg,) if msg else ()
     with builder.if_then(is_null(builder, pointer), likely=False):
         context.call_conv.return_user_exc(builder, MemoryError, exc_args)
+
+@contextmanager
+def if_zero(builder, value, likely=False):
+    """
+    Execute the given block if the scalar value is zero.
+    """
+    with builder.if_then(is_scalar_zero(builder, value), likely=likely):
+        yield
 
 
 guard_zero = guard_null
@@ -901,3 +965,28 @@ def muladd_with_overflow(builder, a, b, c):
     res = builder.extract_value(s, 0)
     ovf = builder.or_(prod_ovf, builder.extract_value(s, 1))
     return res, ovf
+
+
+def printf(builder, format, *args):
+    """
+    Calls printf().
+    Argument `format` is expected to be a Python string.
+    Values to be printed are listed in `args`.
+
+    Note: There is no checking to ensure there is correct number of values
+    in `args` and there type matches the declaration in the format string.
+    """
+    assert isinstance(format, str)
+    mod = builder.module
+    # Make global constant for format string
+    cstring = ir.IntType(8).as_pointer()
+    fmt_bytes = make_bytearray((format + '\00').encode('ascii'))
+    global_fmt = global_constant(mod, "printf_format", fmt_bytes)
+    fnty = ir.FunctionType(Type.int(), [cstring], var_arg=True)
+    # Insert printf()
+    fn = mod.get_global('printf')
+    if fn is None:
+        fn = ir.Function(mod, fnty, name="printf")
+    # Call
+    ptr_fmt = builder.bitcast(global_fmt, cstring)
+    return builder.call(fn, [ptr_fmt] + list(args))

@@ -5,6 +5,7 @@ from __future__ import print_function, division, absolute_import
 import contextlib
 import functools
 import errno
+import hashlib
 import itertools
 import inspect
 import os
@@ -453,6 +454,100 @@ class NullCache(object):
         pass
 
 
+class _CacheLocator(object):
+
+    def get_cache_path(self):
+        raise NotImplementedError
+
+    def get_source_stamp(self):
+        raise NotImplementedError
+
+    def get_disambiguator(self):
+        raise NotImplementedError
+
+    @classmethod
+    def from_function(cls, py_func, py_file):
+        raise NotImplementedError
+
+
+class _SourceCacheLocator(_CacheLocator):
+    """
+    A locator for functions backed by a regular Python module.
+    """
+
+    def __init__(self, py_func, py_file):
+        self._py_file = py_file
+        self._lineno = py_func.__code__.co_firstlineno
+
+    def get_cache_path(self):
+        # NOTE: this assumes the __pycache__ directory is writable, which
+        # is false for system installs, but true for conda environments
+        # and local work directories.
+        return os.path.join(os.path.dirname(self._py_file), '__pycache__')
+
+    def get_source_stamp(self):
+        st = os.stat(self._py_file)
+        # We use both timestamp and size as some filesystems only have second
+        # granularity.
+        return st.st_mtime, st.st_size
+
+    def get_disambiguator(self):
+        return str(self._lineno)
+
+    @classmethod
+    def from_function(cls, py_func, py_file):
+        if not os.path.exists(py_file):
+            # Perhaps a placeholder (e.g. "<ipython-XXX>")
+            return
+        return cls(py_func, py_file)
+
+
+class _IPythonCacheLocator(_CacheLocator):
+    """
+    A locator for functions entered at the IPython prompt (notebook or other).
+    """
+
+    def __init__(self, py_func, py_file):
+        self._py_file = py_file
+        # Note IPython enhances the linecache module to be able to
+        # inspect source code of functions defined on the interactive prompt.
+        source = inspect.getsource(py_func)
+        if isinstance(source, bytes):
+            self._bytes_source = source
+        else:
+            self._bytes_source = source.encode('utf-8')
+
+    def get_cache_path(self):
+        # We could also use jupyter_core.paths.jupyter_runtime_dir()
+        # In both cases this is a user-wide directory, so we need to
+        # be careful when disambiguating if we don't want too many
+        # conflicts (see below).
+        try:
+            from IPython.paths import get_ipython_cache_dir
+        except ImportError:
+            # older IPython version
+            from IPython.utils.path import get_ipython_cache_dir
+        return os.path.join(get_ipython_cache_dir(), 'numba')
+
+    def get_source_stamp(self):
+        return hashlib.sha256(self._bytes_source).hexdigest()
+
+    def get_disambiguator(self):
+        # Heuristic: we don't want too many variants being saved, but
+        # we don't want similar named functions (e.g. "f") to compete
+        # for the cache, so we hash the first two lines of the function
+        # source (usually this will be the @jit decorator + the function
+        # signature).
+        firstlines = b''.join(self._bytes_source.splitlines(True)[:2])
+        return hashlib.sha256(firstlines).hexdigest()[:10]
+
+    @classmethod
+    def from_function(cls, py_func, py_file):
+        if not py_file.startswith("<ipython-"):
+            return
+        return cls(py_func, py_file)
+
+
 class FunctionCache(object):
     """
     A per-function compilation cache.  The cache saves data in separate
@@ -472,6 +567,7 @@ class FunctionCache(object):
     """
 
     _source_stamp = None
+    _locator_classes = [_SourceCacheLocator, _IPythonCacheLocator]
 
     def __init__(self, py_func):
         try:
@@ -483,20 +579,26 @@ class FunctionCache(object):
         modname = py_func.__module__.split('.')[-1]
         self._funcname = qualname.split('.')[-1]
         self._fullname = "%s.%s" % (modname, qualname)
-        self._source_path = inspect.getfile(py_func)
         self._is_closure = bool(py_func.__closure__)
         self._lineno = py_func.__code__.co_firstlineno
-        # NOTE: this assumes the __pycache__ directory is writable, which
-        # is false for system installs, but true for conda environments
-        # and local work directories.
-        self._cache_path = os.path.join(os.path.dirname(self._source_path),
-                                        '__pycache__')
         abiflags = getattr(sys, 'abiflags', '')
+
+        # Find a locator
+        self._source_path = inspect.getfile(py_func)
+        for cls in self._locator_classes:
+            self._locator = cls.from_function(py_func, self._source_path)
+            if self._locator is not None:
+                break
+        else:
+            raise RuntimeError("cannot cache function %r: no locator available "
+                               "for file %r" % (qualname, self._source_path))
+        self._cache_path = self._locator.get_cache_path()
+
         # '<' and '>' can appear in the qualname (e.g. '<locals>') but
         # are forbidden in Windows filenames
         fixed_fullname = self._fullname.replace('<', '').replace('>', '')
         filename_base = (
-            '%s-%d.py%d%d%s' % (fixed_fullname, self._lineno,
+            '%s-%s.py%d%d%s' % (fixed_fullname, self._locator.get_disambiguator(),
                                 sys.version_info[0], sys.version_info[1],
                                 abiflags)
             )
@@ -511,12 +613,9 @@ class FunctionCache(object):
 
     def enable(self):
         self._enabled = True
-        st = os.stat(self._source_path)
         # This may be a bit strict but avoids us maintaining a magic number
         self._version = numba.__version__
-        # We use both timestamp and size as some filesystems only have second
-        # granularity.
-        self._source_stamp = st.st_mtime, st.st_size
+        self._source_stamp = self._locator.get_source_stamp()
 
     def disable(self):
         self._enabled = False
@@ -532,7 +631,7 @@ class FunctionCache(object):
         if not self._enabled:
             return
         overloads = self._load_index()
-        key = self._index_key(sig, target_context.jit_codegen())
+        key = self._index_key(sig, target_context.codegen())
         data_name = overloads.get(key)
         if data_name is None:
             return

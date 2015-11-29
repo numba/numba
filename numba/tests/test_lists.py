@@ -226,10 +226,27 @@ def list_add(m, n):
     res.append(42)   # check result is a copy
     return a, b, res
 
+def list_add_heterogenous():
+    a = [1]
+    b = [2.0]
+    c = a + b
+    d = b + a
+    # check result is a copy
+    a.append(3)
+    b.append(4.0)
+    return a, b, c, d
+
 def list_add_inplace(m, n):
     a = list(range(0, m))
     b = list(range(100, 100 + n))
     a += b
+    return a, b
+
+def list_add_inplace_heterogenous():
+    a = [1]
+    b = [2.0]
+    a += b
+    b += a
     return a, b
 
 def list_mul(n, v):
@@ -269,16 +286,42 @@ def identity_usecase(n):
     c = a[:]
     return (a is b), (a is not b), (a is c), (a is not c)
 
+def bool_list_usecase():
+    # Exercise getitem, setitem, iteration with bool values (issue #1373)
+    l = [False]
+    l[0] = True
+    x = False
+    for v in l:
+        x = x ^ v
+    return l, x
+
+def reflect_simple(l, ll):
+    x = l.pop()
+    y = l.pop()
+    l[0] = 42.
+    l.extend(ll)
+    return l, x, y
+
+def reflect_conditional(l, ll):
+    # `l` may or may not actually reflect a Python list
+    if ll[0]:
+        l = [11., 22., 33., 44.]
+    x = l.pop()
+    y = l.pop()
+    l[0] = 42.
+    l.extend(ll)
+    return l, x, y
+
+def reflect_exception(l):
+    l.append(42)
+    raise ZeroDivisionError
+
+def reflect_dual(l, ll):
+    l.append(ll.pop())
+    return l is ll
+
 
 class TestLists(MemoryLeakMixin, TestCase):
-
-    def test_identity_func(self):
-        pyfunc = identity_func
-        with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-            cfunc = cr.entry_point
-            l = range(10)
-            self.assertEqual(cfunc(l), pyfunc(l))
 
     def test_create_list(self):
         pyfunc = create_list
@@ -529,8 +572,20 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_add(self):
         self.check_add(list_add)
 
+    def test_add_heterogenous(self):
+        pyfunc = list_add_heterogenous
+        cfunc = jit(nopython=True)(pyfunc)
+        expected = pyfunc()
+        self.assertEqual(cfunc(), expected)
+
     def test_add_inplace(self):
         self.check_add(list_add_inplace)
+
+    def test_add_inplace_heterogenous(self):
+        pyfunc = list_add_inplace_heterogenous
+        cfunc = jit(nopython=True)(pyfunc)
+        expected = pyfunc()
+        self.assertEqual(cfunc(), expected)
 
     def check_mul(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -577,9 +632,6 @@ class TestLists(MemoryLeakMixin, TestCase):
             return inner(l)
 
         self.assertPreciseEqual(outer(5), (5, 4))
-        # Cannot call the inner function directly
-        with self.assertRaises(TypeError):
-            inner([42])
 
     def _test_compare(self, pyfunc):
         def eq(args):
@@ -616,6 +668,68 @@ class TestLists(MemoryLeakMixin, TestCase):
         pyfunc = identity_usecase
         cfunc = jit(nopython=True)(pyfunc)
         self.assertPreciseEqual(cfunc(3), pyfunc(3))
+
+    def test_bool_list(self):
+        # Check lists of bools compile and run successfully
+        pyfunc = bool_list_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(), pyfunc())
+
+
+class TestListReflection(MemoryLeakMixin, TestCase):
+    """
+    Test reflection of native Numba lists on Python list objects.
+    """
+
+    def check_reflection(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        samples = [([1., 2., 3., 4.], [0.]),
+                   ([1., 2., 3., 4.], [5., 6., 7., 8., 9.]),
+                   ]
+        for dest, src in samples:
+            expected = list(dest)
+            got = list(dest)
+            pyres = pyfunc(expected, src)
+            with self.assertRefCount(got, src):
+                cres = cfunc(got, src)
+                self.assertPreciseEqual(cres, pyres)
+                self.assertPreciseEqual(expected, got)
+                self.assertEqual(pyres[0] is expected, cres[0] is got)
+                del pyres, cres
+
+    def test_reflect_simple(self):
+        self.check_reflection(reflect_simple)
+
+    def test_reflect_conditional(self):
+        self.check_reflection(reflect_conditional)
+
+    def test_reflect_exception(self):
+        """
+        When the function exits with an exception, lists should still be
+        reflected.
+        """
+        pyfunc = reflect_exception
+        cfunc = jit(nopython=True)(pyfunc)
+        l = [1, 2, 3]
+        with self.assertRefCount(l):
+            with self.assertRaises(ZeroDivisionError):
+                cfunc(l)
+            self.assertPreciseEqual(l, [1, 2, 3, 42])
+
+    def test_reflect_same_list(self):
+        """
+        When the same list object is reflected twice, behaviour should
+        be consistent.
+        """
+        pyfunc = reflect_dual
+        cfunc = jit(nopython=True)(pyfunc)
+        pylist = [1, 2, 3]
+        clist = pylist[:]
+        expected = pyfunc(pylist, pylist)
+        got = cfunc(clist, clist)
+        self.assertPreciseEqual(expected, got)
+        self.assertPreciseEqual(pylist, clist)
+        self.assertPreciseEqual(sys.getrefcount(pylist), sys.getrefcount(clist))
 
 
 if __name__ == '__main__':

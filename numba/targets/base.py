@@ -1,6 +1,8 @@
 from __future__ import print_function
+
 from collections import namedtuple, defaultdict
 import copy
+import sys
 from types import MethodType
 
 import numpy
@@ -15,7 +17,6 @@ from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     builtin_registry, impl_attribute,
-                                    type_registry,
                                     impl_ret_borrowed)
 from . import (
     arrayobj, builtins, iterators, rangeobj, optional, slicing, tupleobj)
@@ -110,7 +111,8 @@ def _load_global_helpers():
     """
     Execute once to install special symbols into the LLVM symbol table.
     """
-    ll.add_symbol("Py_None", id(None))
+    # This is Py_None's real C name
+    ll.add_symbol("_Py_NoneStruct", id(None))
 
     # Add C helper functions
     for c_helpers in (_helperlib.c_helpers, _dynfunc.c_helpers):
@@ -156,6 +158,9 @@ class BaseContext(object):
     # PYCC
     aot_mode = False
 
+    # Error model for various operations (only FP exceptions currently)
+    error_model = None
+
     def __init__(self, typing_context):
         _load_global_helpers()
         self.address_size = utils.MACHINE_BITS
@@ -194,6 +199,9 @@ class BaseContext(object):
             if not hasattr(obj, k):
                 raise NameError("unknown option {0!r}".format(k))
             setattr(obj, k, v)
+        if obj.codegen() is not self.codegen():
+            # We can't share functions accross different codegens
+            obj.cached_internal_func = {}
         return obj
 
     def install_registry(self, registry):
@@ -296,13 +304,6 @@ class BaseContext(object):
         The return value is a llvmlite.ir.Type object, or None if the type
         is an opaque pointer (???).
         """
-        try:
-            fac = type_registry.match(ty)
-        except KeyError:
-            pass
-        else:
-            return fac(self, ty)
-
         return self.data_model_manager[ty].get_data_type()
 
     def get_value_type(self, ty):
@@ -333,7 +334,19 @@ class BaseContext(object):
         """
         Return a LLVM constant representing value *val* of Numba type *ty*.
         """
-        if self.is_struct_type(ty):
+        if isinstance(ty, types.ExternalFunctionPointer):
+            ptrty = self.get_function_pointer_type(ty)
+            ptrval = ty.get_pointer(val)
+            return builder.inttoptr(self.get_constant(types.intp, ptrval),
+                                    ptrty)
+
+        elif isinstance(ty, types.Array):
+            return self.make_constant_array(builder, ty, val)
+
+        elif isinstance(ty, types.Dummy):
+            return self.get_dummy_value()
+
+        elif self.is_struct_type(ty):
             struct = self.get_constant_struct(builder, ty, val)
             if isinstance(ty, types.Record):
                 ptrty = self.data_model_manager[ty].get_data_type()
@@ -341,12 +354,6 @@ class BaseContext(object):
                 builder.store(struct, ptr)
                 return ptr
             return struct
-
-        elif isinstance(ty, types.ExternalFunctionPointer):
-            ptrty = self.get_function_pointer_type(ty)
-            ptrval = ty.get_pointer(val)
-            return builder.inttoptr(self.get_constant(types.intp, ptrval),
-                                    ptrty)
 
         else:
             return self.get_constant(ty, val)
@@ -721,28 +728,13 @@ class BaseContext(object):
             dst.imag = self.cast(builder, src.imag, srcty, dstty)
             return dst._getvalue()
 
-        elif (isinstance(toty, types.UniTuple) and
-                  isinstance(fromty, types.UniTuple) and
-                      len(fromty) == len(toty)):
-            olditems = cgutils.unpack_tuple(builder, val, len(fromty))
-            items = [self.cast(builder, i, fromty.dtype, toty.dtype)
-                     for i in olditems]
-            tup = self.get_constant_undef(toty)
-            for idx, val in enumerate(items):
-                tup = builder.insert_value(tup, val, idx)
-            return tup
-
         elif (isinstance(fromty, (types.UniTuple, types.Tuple)) and
-                  isinstance(toty, (types.UniTuple, types.Tuple)) and
-                      len(toty) == len(fromty)):
-
+              isinstance(toty, (types.UniTuple, types.Tuple)) and
+              len(toty) == len(fromty)):
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
             items = [self.cast(builder, i, f, t)
                      for i, f, t in zip(olditems, fromty, toty)]
-            tup = self.get_constant_undef(toty)
-            for idx, val in enumerate(items):
-                tup = builder.insert_value(tup, val, idx)
-            return tup
+            return cgutils.make_anonymous_struct(builder, items)
 
         elif toty == types.boolean:
             return self.is_true(builder, fromty, val)
@@ -771,10 +763,23 @@ class BaseContext(object):
             return optval.data
 
         elif (isinstance(fromty, types.Array) and
-                  isinstance(toty, types.Array)):
+              isinstance(toty, types.Array)):
             # Type inference should have prevented illegal array casting.
             assert toty.layout == 'A'
             return val
+
+        elif (isinstance(fromty, types.List) and
+              isinstance(toty, types.List)):
+            # Casting from non-reflected to reflected
+            assert fromty.dtype == toty.dtype
+            return val
+
+        elif (isinstance(fromty, types.RangeType) and
+              isinstance(toty, types.RangeType)):
+            olditems = cgutils.unpack_tuple(builder, val, 3)
+            items = [self.cast(builder, v, fromty.dtype, toty.dtype)
+                     for v in olditems]
+            return cgutils.make_anonymous_struct(builder, items)
 
         elif fromty in types.integer_domain and toty == types.voidptr:
             return builder.inttoptr(val, self.get_value_type(toty))
@@ -813,19 +818,26 @@ class BaseContext(object):
         return optval._getvalue()
 
     def is_true(self, builder, typ, val):
+        """
+        Return the truth value of a value of the given Numba type.
+        """
         impl = self.get_function(bool, typing.signature(types.boolean, typ))
         return impl(builder, (val,))
 
-    def get_c_value(self, builder, typ, name):
+    def get_c_value(self, builder, typ, name, dllimport=False):
         """
         Get a global value through its C-accessible *name*, with the given
         LLVM type.
+        If *dllimport* is true, the symbol will be marked as imported
+        from a DLL (necessary for AOT compilation under Windows).
         """
         module = builder.function.module
         try:
             gv = module.get_global_variable_named(name)
         except LLVMException:
             gv = module.add_global_variable(typ, name)
+            if dllimport and self.aot_mode and sys.platform == 'win32':
+                gv.storage_class = "dllimport"
         return gv
 
     def call_external_function(self, builder, callee, argtys, args):
@@ -873,7 +885,7 @@ class BaseContext(object):
         # Compile
         from numba import compiler
 
-        codegen = self.jit_codegen()
+        codegen = self.codegen()
         library = codegen.create_library(impl.__name__)
         flags = compiler.Flags()
         flags.set('no_compile')
@@ -1138,7 +1150,8 @@ class BaseContext(object):
         from numba.runtime.atomicops import meminfo_data_ty
 
         mod = builder.module
-        fn = mod.get_or_insert_function(meminfo_data_ty, name="NRT_MemInfo_data")
+        fn = mod.get_or_insert_function(meminfo_data_ty,
+                                        name="NRT_MemInfo_data_fast")
         return builder.call(fn, [meminfo])
 
     def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):

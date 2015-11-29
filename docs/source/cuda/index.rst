@@ -14,3 +14,4 @@ Numba for CUDA GPUs
    examples.rst
    simulator.rst
    reduction.rst
+   ufunc.rst

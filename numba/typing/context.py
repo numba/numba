@@ -11,7 +11,7 @@ from .typeof import typeof, Purpose
 
 # Initialize declarations
 from . import (
-    builtins, cmathdecl, listdecl, mathdecl, npdatetime, npydecl,
+    builtins, arraydecl, cmathdecl, listdecl, mathdecl, npdatetime, npydecl,
     operatordecl, randomdecl)
 from numba import utils
 from . import ctypes_utils, cffi_utils, bufproto
@@ -237,8 +237,10 @@ class BaseContext(object):
         Register type *gty* for value *gv*.  Only a weak reference
         to *gv* is kept, if possible.
         """
-        def on_disposal(wr):
-            self._globals.pop(wr)
+        def on_disposal(wr, pop=self._globals.pop):
+            # pop() is pre-looked up to avoid a crash late at shutdown on 3.5
+            # (https://bugs.python.org/issue25217)
+            pop(wr)
         try:
             gv = weakref.ref(gv, on_disposal)
         except TypeError:
@@ -388,9 +390,9 @@ class BaseContext(object):
         # pairwise unification (with thanks to aterrel).
         def keyfunc(obj):
             """Uses bitwidth to order numeric-types.
-            Fallback to hash() for arbitary ordering.
+            Fallback to stable, deterministic sort.
             """
-            return getattr(obj, 'bitwidth', hash(obj))
+            return getattr(obj, 'bitwidth', 0)
 
         typelist = sorted(typelist, key=keyfunc)
         unified = typelist[0]
@@ -403,7 +405,7 @@ class BaseContext(object):
     def unify_pairs(self, first, second):
         """
         Try to unify the two given types.  A third type is returned,
-        or None in case of failure.
+        or pyobject in case of failure.
         """
         if first == second:
             return first
@@ -425,8 +427,15 @@ class BaseContext(object):
         # Other types with simple conversion rules
         conv = self.can_convert(fromty=first, toty=second)
         if conv is not None and conv <= Conversion.safe:
-            return conv
+            # Can convert from first to second
+            return second
 
+        conv = self.can_convert(fromty=second, toty=first)
+        if conv is not None and conv <= Conversion.safe:
+            # Can convert from second to first
+            return first
+
+        # Cannot unify
         return types.pyobject
 
 
@@ -438,4 +447,5 @@ class Context(BaseContext):
         self.install(npydecl.registry)
         self.install(operatordecl.registry)
         self.install(randomdecl.registry)
+        self.install(cffi_utils.registry)
 

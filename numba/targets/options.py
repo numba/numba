@@ -43,9 +43,6 @@ class TargetOptions(object):
         if kws.pop('looplift', True):
             flags.set("enable_looplift")
 
-        if kws.pop('wraparound', True) == False:
-            flags.set("no_wraparound")
-
         if kws.pop('boundcheck', False):
             flags.set("boundcheck")
 

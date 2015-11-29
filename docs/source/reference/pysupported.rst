@@ -98,12 +98,12 @@ Creating and returning lists from JIT-compiled functions is supported,
 as well as all methods and operations.
 
 .. note::
-   Passing lists from Python into JIT-compiled functions is unsupported,
-   as mutations done by Numba code would not be visible from the Python
-   interpreter.
+   When passing a list into a JIT-compiled function, any modifications
+   made to the list will not be visible by the Python interpreter until
+   the function returns.
 
 .. warning::
-   Sorting currently uses a quicksort algorithm, which has different
+   List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
 
 
@@ -391,8 +391,23 @@ functions, using the following C types:
 * :c:type:`char *`
 * :c:type:`void *`
 * :c:type:`uint8_t *`
+* :c:type:`float *`
+* :c:type:`double *`
 * :c:type:`ssize_t`
 * :c:type:`size_t`
 * :c:type:`void`
+
+The ``from_buffer`` method of ``cffi.FFI`` and ``CompiledFFI`` objects is
+supported for passing NumPy arrays of ``float32`` and ``float64`` values to C
+function parameters of type ``float *`` and ``double *`` respectively.
+
+Out-of-line cffi modules must be registered with Numba prior to the use of any
+of their functions from within Numba-compiled functions:
+
+.. function:: numba.cffi_support.register_module(mod)
+
+   Register the cffi out-of-line module ``mod`` with Numba.
+
+Inline cffi modules require no registration.
 
 .. _cffi: https://cffi.readthedocs.org/

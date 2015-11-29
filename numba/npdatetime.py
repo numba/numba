@@ -42,10 +42,18 @@ if NPDATETIME_SUPPORTED:
 #   generic units (used for promotion)
 
 
+def same_kind(src, dest):
+    """
+    Whether the *src* and *dest* units are of the same kind.
+    """
+    return (DATETIME_UNITS[src] < 5) == (DATETIME_UNITS[dest] < 5)
+
+
 def can_cast_timedelta_units(src, dest):
     # Mimick numpy's "safe" casting and promotion
     # `dest` must be more precise than `src` and they must be compatible
     # for conversion.
+    # XXX should we switch to enforcing "same-kind" for Numpy 1.10+ ?
     src = DATETIME_UNITS[src]
     dest = DATETIME_UNITS[dest]
     if src == dest:

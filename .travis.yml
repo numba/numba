@@ -10,7 +10,10 @@ matrix:
     - python: 3.3
       env: NUMPY="numpy=1.8"
     - python: 3.4
-      env: NUMPY=numpy
+      env: NUMPY="numpy=1.9"
+    - python: 3.5-dev
+      # TODO: change this to 1.10 when we're ok
+      env: NUMPY="numpy=1.10"
 
 branches:
   only:
@@ -34,6 +37,7 @@ before_install:
   - export PATH=$HOME/miniconda3/bin:$PATH
   - PY_MAJOR_MINOR=${TRAVIS_PYTHON_VERSION:0:3}
   # Setup environment
+  - conda update --yes conda
   - conda create -n travisci --yes python=$PY_MAJOR_MINOR $NUMPY cffi pip
   - source activate travisci
   - CONDA_INSTALL="conda install --yes -q"

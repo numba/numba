@@ -61,7 +61,7 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         unified = self.context.unify_pairs(list.dtype, item)
         sig = signature(types.none, unified)
-        sig.recvr = types.List(unified)
+        sig.recvr = list.copy(dtype=unified)
         return sig
 
     @bound_function("list.clear")
@@ -93,7 +93,7 @@ class ListAttribute(AttributeTemplate):
         unified = self.context.unify_pairs(list.dtype, dtype)
       
         sig = signature(types.none, iterable)
-        sig.recvr = types.List(unified)
+        sig.recvr = list.copy(dtype=unified)
         return sig
 
     @bound_function("list.index")
@@ -116,7 +116,7 @@ class ListAttribute(AttributeTemplate):
         if isinstance(idx, types.Integer):
             unified = self.context.unify_pairs(list.dtype, item)
             sig = signature(types.none, types.intp, unified)
-            sig.recvr = types.List(unified)
+            sig.recvr = list.copy(dtype=unified)
             return sig
 
     @bound_function("list.pop")
@@ -165,14 +165,32 @@ class AddList(AbstractTemplate):
                 unified = self.context.unify_pairs(a, b)
                 return signature(unified, a, b)
 
+
 @builtin
-class AddList(AbstractTemplate):
+class InplaceAddList(AbstractTemplate):
+    key = "+="
+
+    def generic(self, args, kws):
+        if len(args) == 2:
+            a, b = args
+            if isinstance(a, types.List) and isinstance(b, types.List):
+                if self.context.can_convert(b.dtype, a.dtype):
+                    return signature(a, a, b)
+
+
+@builtin
+class MulList(AbstractTemplate):
     key = "*"
 
     def generic(self, args, kws):
         a, b = args
         if isinstance(a, types.List) and isinstance(b, types.Integer):
             return signature(a, a, types.intp)
+
+
+@builtin
+class InplaceMulList(MulList):
+    key = "*="
 
 
 class ListCompare(AbstractTemplate):

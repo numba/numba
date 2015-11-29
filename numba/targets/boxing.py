@@ -5,7 +5,7 @@ Boxing and unboxing of native Numba values to / from CPython objects.
 from llvmlite import ir
 
 from .. import cgutils, numpy_support, types
-from ..pythonapi import box, unbox, NativeValue
+from ..pythonapi import box, unbox, reflect, NativeValue
 
 from . import listobj
 
@@ -115,6 +115,11 @@ def unbox_complex(c, typ, obj):
 @box(types.NoneType)
 def box_none(c, typ, val):
     return c.pyapi.make_none()
+
+@unbox(types.NoneType)
+@unbox(types.EllipsisType)
+def unbox_none(c, typ, val):
+    return NativeValue(c.context.get_dummy_value())
 
 
 @box(types.NPDatetime)
@@ -268,11 +273,26 @@ def unbox_optional(c, typ, obj):
                        cleanup=cleanup)
 
 
+@unbox(types.Slice3Type)
+def unbox_slice(c, typ, obj):
+    """
+    Convert object *obj* to a native slice structure.
+    """
+    from . import slicing
+    ok, start, stop, step = \
+        c.pyapi.slice_as_ints(obj, slicing.get_defaults(c.context))
+    slice3 = slicing.Slice(c.context, c.builder)
+    slice3.start = start
+    slice3.stop = stop
+    slice3.step = step
+    return NativeValue(slice3._getvalue(), is_error=c.builder.not_(ok))
+
+
 #
 # Collections
 #
 
-# NOTE: those functions are supposed to steal any NRT references in
+# NOTE: boxing functions are supposed to steal any NRT references in
 # the given native value.
 
 @box(types.Array)
@@ -405,35 +425,130 @@ def box_list(c, typ, val):
     Convert native list *val* to a list object.
     """
     list = listobj.ListInstance(c.context, c.builder, typ, val)
+    obj = list.parent
+    res = cgutils.alloca_once_value(c.builder, obj)
+    with c.builder.if_else(cgutils.is_not_null(c.builder, obj)) as (has_parent, otherwise):
+        with has_parent:
+            # List is actually reflected => return the original object
+            # (note not all list instances whose *type* is reflected are
+            #  actually reflected; see numba.tests.test_lists for an example)
+            c.pyapi.incref(obj)
 
-    nitems = list.size
-    obj = c.pyapi.list_new(nitems)
+        with otherwise:
+            # Build a new Python list
+            nitems = list.size
+            obj = c.pyapi.list_new(nitems)
+            with c.builder.if_then(cgutils.is_not_null(c.builder, obj),
+                                   likely=True):
+                with cgutils.for_range(c.builder, nitems) as loop:
+                    item = list.getitem(loop.index)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_setitem(obj, loop.index, itemobj)
 
-    with c.builder.if_then(cgutils.is_not_null(c.builder, obj),
-                           likely=True):
-        with cgutils.for_range(c.builder, nitems) as loop:
-            item = list.getitem(loop.index)
-            itemobj = c.box(typ.dtype, item)
-            c.pyapi.list_setitem(obj, loop.index, itemobj)
+            c.builder.store(obj, res)
 
     # Steal NRT ref
     c.context.nrt_decref(c.builder, typ, val)
-
-    return obj
+    return c.builder.load(res)
 
 
 @unbox(types.List)
 def unbox_list(c, typ, obj):
-    # Since a wrapper is always compiled even for an inner function,
-    # we have to define this to be able to pass lists from one Numba
-    # function to another.
-    # This code should nevertheless never be executed at runtime.
-    c.pyapi.err_set_string("PyExc_RuntimeError",
-                           "cannot unbox list objects")
+    """
+    Convert list *obj* to a native list.
 
-    # Just return a zero-initialized list value for successful codegen.
-    value = ir.Constant(c.context.get_value_type(typ), None)
-    return NativeValue(value, is_error=cgutils.true_bit)
+    If list was previously unboxed, we reuse the existing native list
+    to ensure consistency.
+    """
+    size = c.pyapi.list_size(obj)
+
+    errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+    listptr = cgutils.alloca_once(c.builder, c.context.get_value_type(typ))
+
+    # Use pointer-stuffing hack to see if the list was previously unboxed,
+    # if so, re-use the meminfo.
+    ptr = c.pyapi.list_get_private_data(obj)
+
+    with c.builder.if_else(cgutils.is_not_null(c.builder, ptr)) \
+        as (has_meminfo, otherwise):
+
+        with has_meminfo:
+            # List was previously unboxed => reuse meminfo
+            list = listobj.ListInstance.from_meminfo(c.context, c.builder, typ, ptr)
+            list.size = size
+            if typ.reflected:
+                list.parent = obj
+            c.builder.store(list.value, listptr)
+
+        with otherwise:
+            # Allocate a new native list
+            ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
+            with c.builder.if_then(ok, likely=True):
+                list.size = size
+                with cgutils.for_range(c.builder, size) as loop:
+                    itemobj = c.pyapi.list_getitem(obj, loop.index)
+                    # XXX error checking
+                    native = c.unbox(typ.dtype, itemobj)
+                    list.setitem(loop.index, native.value)
+                if typ.reflected:
+                    list.parent = obj
+                # Stuff meminfo pointer into the Python object for
+                # later reuse.
+                c.pyapi.list_set_private_data(obj, list.meminfo)
+                c.builder.store(list.value, listptr)
+            c.builder.store(c.builder.not_(ok), errorptr)
+
+    def cleanup():
+        # Clean up the stuffed pointer, as the meminfo is now invalid.
+        c.pyapi.list_reset_private_data(obj)
+
+    return NativeValue(c.builder.load(listptr),
+                       is_error=c.builder.load(errorptr),
+                       cleanup=cleanup)
+
+
+@reflect(types.List)
+def reflect_list(c, typ, val):
+    """
+    Reflect the native list's contents into the Python object.
+    """
+    if not typ.reflected:
+        return
+    list = listobj.ListInstance(c.context, c.builder, typ, val)
+    with c.builder.if_then(list.dirty, likely=False):
+        obj = list.parent
+        size = c.pyapi.list_size(obj)
+        new_size = list.size
+        diff = c.builder.sub(new_size, size)
+        diff_gt_0 = c.builder.icmp_signed('>=', diff,
+                                          ir.Constant(diff.type, 0))
+        with c.builder.if_else(diff_gt_0) as (if_grow, if_shrink):
+            # XXX no error checking below
+            with if_grow:
+                # First overwrite existing items
+                with cgutils.for_range(c.builder, size) as loop:
+                    item = list.getitem(loop.index)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_setitem(obj, loop.index, itemobj)
+                # Then add missing items
+                with cgutils.for_range(c.builder, diff) as loop:
+                    idx = c.builder.add(size, loop.index)
+                    item = list.getitem(idx)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_append(obj, itemobj)
+                    c.pyapi.decref(itemobj)
+
+            with if_shrink:
+                # First delete list tail
+                c.pyapi.list_setslice(obj, new_size, size, None)
+                # Then overwrite remaining items
+                with cgutils.for_range(c.builder, new_size) as loop:
+                    item = list.getitem(loop.index)
+                    itemobj = c.box(typ.dtype, item)
+                    c.pyapi.list_setitem(obj, loop.index, itemobj)
+
+        # Mark the list clean, in case it is reflected twice
+        list.set_dirty(False)
 
 
 #

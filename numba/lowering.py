@@ -375,21 +375,10 @@ class Lower(BaseLower):
         # In nopython mode, closure vars are frozen like globals
         if isinstance(value, (ir.Const, ir.Global, ir.FreeVar)):
             if isinstance(ty, types.ExternalFunctionPointer):
-                res = self.context.get_constant_generic(self.builder, ty,
-                                                        value.value)
                 self.has_dynamic_globals = True
 
-            elif isinstance(ty, types.Dummy):
-                res = self.context.get_dummy_value()
-
-            elif isinstance(ty, types.Array):
-                res = self.context.make_constant_array(self.builder, ty,
-                                                       value.value)
-
-            else:
-                res = self.context.get_constant_generic(self.builder, ty,
-                                                        value.value)
-
+            res = self.context.get_constant_generic(self.builder, ty,
+                                                    value.value)
             self.incref(ty, res)
             return res
 
@@ -404,7 +393,11 @@ class Lower(BaseLower):
             return res
 
         elif isinstance(value, ir.Arg):
-            res = self.fnargs[value.index]
+            val = self.fnargs[value.index]
+            # Cast from the argument type to the local variable type
+            # (note the "arg.FOO" convention as used in typeinfer)
+            oty = self.typeof("arg." + value.name)
+            res = self.context.cast(self.builder, val, oty, ty)
             self.incref(ty, res)
             return res
 
@@ -542,7 +535,7 @@ class Lower(BaseLower):
                     # Adjust argument values to pyobjects
                     if exptyp == types.ffi_forced_object:
                         self.incref(gottyp, aval)
-                        obj = self.pyapi.from_native_value(aval, gottyp,
+                        obj = self.pyapi.from_native_value(gottyp, aval,
                                                            self.env_manager)
                         newargvals.append(obj)
                         pyvals.append(obj)
@@ -757,7 +750,7 @@ class Lower(BaseLower):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             castval = self.context.cast(self.builder, val, ty, resty)
-            self.incref(resty, val)
+            self.incref(resty, castval)
             return castval
 
         elif expr.op in self.context.special_ops:

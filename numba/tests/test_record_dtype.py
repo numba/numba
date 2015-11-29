@@ -542,11 +542,10 @@ class TestRecordDtype(unittest.TestCase):
         attrs = 'abc'
         indices = [0, 1, 2]
         for index, attr in zip(indices, attrs):
-            npary = self.refsample1d.copy()
             nbary = self.nbsample1d.copy()
             old_refcnt = sys.getrefcount(nbary)
-            res = cfunc(npary, index)
-            self.assertEqual(npary[index], res)
+            res = cfunc(nbary, index)
+            self.assertEqual(nbary[index], res)
             # Prove that this is a by-value copy
             setattr(res, attr, 0)
             self.assertNotEqual(nbary[index], res)

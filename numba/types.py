@@ -497,11 +497,32 @@ class SimpleIteratorType(IteratorType):
 
 
 class RangeType(SimpleIterableType):
-    pass
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        name = "range_state_%s" % (dtype,)
+        super(SimpleIterableType, self).__init__(name, param=True)
+        self._iterator_type = RangeIteratorType(self.dtype)
+
+    def unify(self, typingctx, other):
+        if isinstance(other, RangeType):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            if dtype != pyobject:
+                return RangeType(dtype)
 
 
 class RangeIteratorType(SimpleIteratorType):
-    pass
+
+    def __init__(self, dtype):
+        name = "range_iter_%s" % (dtype,)
+        super(SimpleIteratorType, self).__init__(name, param=True)
+        self._yield_type = dtype
+
+    def unify(self, typingctx, other):
+        if isinstance(other, RangeIteratorType):
+            dtype = typingctx.unify_pairs(self.yield_type, other.yield_type)
+            if dtype != pyobject:
+                return RangeIteratorType(dtype)
 
 
 class Generator(SimpleIteratorType):
@@ -525,7 +546,7 @@ class Generator(SimpleIteratorType):
         return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
 
 
-class NumpyFlatType(SimpleIteratorType, Sequence):
+class NumpyFlatType(SimpleIteratorType, MutableSequence):
     """
     Type class for `ndarray.flat()` objects.
     """
@@ -601,7 +622,7 @@ class ZipType(SimpleIteratorType):
 
     def __init__(self, iterable_types):
         self.source_types = tuple(tp.iterator_type for tp in iterable_types)
-        yield_type = Tuple(tp.yield_type for tp in self.source_types)
+        yield_type = Tuple([tp.yield_type for tp in self.source_types])
         name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)
         super(ZipType, self).__init__(name, yield_type)
 
@@ -951,6 +972,29 @@ class BaseTuple(Type):
             return Tuple(tys)
 
 
+class BaseAnonymousTuple(BaseTuple):
+    """
+    Mixin for non-named tuples.
+    """
+
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this tuple to another one.  Note named tuples are rejected.
+        """
+        if not isinstance(other, BaseAnonymousTuple):
+            return
+        if len(self) != len(other):
+            return
+        if len(self) == 0:
+            return Conversion.safe
+        if isinstance(other, BaseTuple):
+            kinds = [typingctx.can_convert(ta, tb)
+                     for ta, tb in zip(self, other)]
+            if any(kind is None for kind in kinds):
+                return
+            return max(kinds)
+
+
 class _HomogenousTuple(Sequence, BaseTuple):
 
     @property
@@ -977,7 +1021,7 @@ class _HomogenousTuple(Sequence, BaseTuple):
         return (self.dtype,) * self.count
 
 
-class UniTuple(_HomogenousTuple):
+class UniTuple(BaseAnonymousTuple, _HomogenousTuple):
     """
     Type class for homogenous tuples.
     """
@@ -1000,13 +1044,6 @@ class UniTuple(_HomogenousTuple):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
             if dtype != pyobject:
                 return UniTuple(dtype=dtype, count=self.count)
-
-    def can_convert_to(self, typingctx, other):
-        """
-        Convert this UniTuple to another one.
-        """
-        if isinstance(other, UniTuple) and len(self) == len(other):
-            return typingctx.can_convert(self.dtype, other.dtype)
 
 
 class UniTupleIter(SimpleIteratorType):
@@ -1038,7 +1075,13 @@ class _HeterogenousTuple(BaseTuple):
         return iter(self.types)
 
 
-class Tuple(_HeterogenousTuple):
+class Tuple(BaseAnonymousTuple, _HeterogenousTuple):
+
+    def __new__(cls, types):
+        if types and all(t == types[0] for t in types[1:]):
+            return UniTuple(dtype=types[0], count=len(types))
+        else:
+            return object.__new__(Tuple)
 
     def __init__(self, types):
         self.types = tuple(types)
@@ -1061,17 +1104,6 @@ class Tuple(_HeterogenousTuple):
 
             if all(t != pyobject for t in unified):
                 return Tuple(unified)
-
-    def can_convert_to(self, typingctx, other):
-        """
-        Convert this Tuple to another UniTuple or Tuple.
-        """
-        if isinstance(other, BaseTuple) and len(self) == len(other):
-            kinds = [typingctx.can_convert(ta, tb)
-                     for ta, tb in zip(self, other)]
-            if any(kind is None for kind in kinds):
-                return
-            return max(kinds)
 
 
 class BaseNamedTuple(BaseTuple):
@@ -1115,20 +1147,30 @@ class List(MutableSequence):
     """
     mutable = True
 
-    def __init__(self, dtype):
+    def __init__(self, dtype, reflected=False):
         self.dtype = dtype
-        name = "list(%s)" % (self.dtype,)
+        self.reflected = reflected
+        cls_name = "reflected list" if reflected else "list"
+        name = "%s(%s)" % (cls_name, self.dtype)
         super(List, self).__init__(name=name, param=True)
+
+    def copy(self, dtype=None, reflected=None):
+        if dtype is None:
+            dtype = self.dtype
+        if reflected is None:
+            reflected = self.reflected
+        return List(dtype, reflected)
 
     def unify(self, typingctx, other):
         if isinstance(other, List):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            reflected = self.reflected or other.reflected
             if dtype != pyobject:
-                return List(dtype=dtype)
+                return List(dtype, reflected)
 
     @property
     def key(self):
-        return self.dtype
+        return self.dtype, self.reflected
 
     @property
     def iterator_type(self):
@@ -1291,13 +1333,23 @@ class Optional(Type):
 
 
 class NoneType(Opaque):
-    def unify(self, typingctx, other):
-        """Turns anything to a Optional type
-        """
-        if isinstance(other, Optional):
-            return other
+    """
+    The type for None.
+    """
 
+    def unify(self, typingctx, other):
+        """
+        Turn anything to a Optional type;
+        """
+        if isinstance(other, (Optional, NoneType)):
+            return other
         return Optional(other)
+
+
+class EllipsisType(Opaque):
+    """
+    The type for the Ellipsis singleton.
+    """
 
 
 class ExceptionClass(Callable, Phantom):
@@ -1412,7 +1464,9 @@ def is_int_tuple(x):
 
 pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
+ffi = Opaque('ffi')
 none = NoneType('none')
+ellipsis = EllipsisType('...')
 Any = Phantom('any')
 undefined = Undefined('undefined')
 string = Opaque('str')
@@ -1452,13 +1506,12 @@ print_type = Phantom('print')
 print_item_type = Phantom('print-item')
 sign_type = Phantom('sign')
 
-range_iter32_type = RangeIteratorType('range_iter32', int32)
-range_iter64_type = RangeIteratorType('range_iter64', int64)
-unsigned_range_iter64_type = RangeIteratorType('unsigned_range_iter64', uint64)
-range_state32_type = RangeType('range_state32', range_iter32_type)
-range_state64_type = RangeType('range_state64', range_iter64_type)
-unsigned_range_state64_type = RangeType('unsigned_range_state64',
-                                        unsigned_range_iter64_type)
+range_iter32_type = RangeIteratorType(int32)
+range_iter64_type = RangeIteratorType(int64)
+unsigned_range_iter64_type = RangeIteratorType(uint64)
+range_state32_type = RangeType(int32)
+range_state64_type = RangeType(int64)
+unsigned_range_state64_type = RangeType(uint64)
 
 # slice2_type = Type('slice2_type')
 slice3_type = Slice3Type('slice3_type')
@@ -1589,4 +1642,5 @@ c8
 c16
 optional
 ffi_forced_object
+ffi
 '''.split()

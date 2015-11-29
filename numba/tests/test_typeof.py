@@ -64,6 +64,8 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(typeof(-1), types.intp)
         self.assertEqual(typeof(2**40), types.int64)
         self.assertEqual(typeof(2**63), types.uint64)
+        self.assertEqual(typeof(2**63 - 1), types.int64)
+        self.assertEqual(typeof(-2**63), types.int64)
 
     def test_datetime_values(self):
         """
@@ -154,6 +156,10 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         ty = typeof(None)
         self.assertEqual(ty, types.none)
 
+    def test_ellipsis(self):
+        ty = typeof(Ellipsis)
+        self.assertEqual(ty, types.ellipsis)
+
     def test_str(self):
         ty = typeof("abc")
         self.assertEqual(ty, types.string)
@@ -166,6 +172,10 @@ class TestTypeof(ValueTypingTestBase, TestCase):
                          types.Tuple((types.intp,
                                       types.Tuple((types.float64, types.intp))))
                          )
+
+    def test_lists(self):
+        v = [1.0] * 100
+        self.assertEqual(typeof(v), types.List(types.float64, reflected=True))
 
     def test_namedtuple(self):
         v = Point(1, 2)

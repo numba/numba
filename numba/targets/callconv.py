@@ -104,6 +104,36 @@ class BaseCallConv(object):
     def _get_call_helper(self, builder):
         return builder.__call_helper
 
+    def raise_error(self, builder, api, status):
+        """
+        Given a non-ok *status*, raise the corresponding Python exception.
+        """
+        bbend = builder.function.append_basic_block()
+
+        with builder.if_then(status.is_user_exc):
+            # Unserialize user exception.
+            # Make sure another error may not interfere.
+            api.err_clear()
+            exc = api.unserialize(status.excinfoptr)
+            with cgutils.if_likely(builder,
+                                   cgutils.is_not_null(builder, exc)):
+                api.raise_object(exc)  # steals ref
+            builder.branch(bbend)
+
+        with builder.if_then(status.is_stop_iteration):
+            api.err_set_none("PyExc_StopIteration")
+            builder.branch(bbend)
+
+        with builder.if_then(status.is_python_exc):
+            # Error already raised => nothing to do
+            builder.branch(bbend)
+
+        api.err_set_string("PyExc_SystemError",
+                           "unknown error when calling native function")
+        builder.branch(bbend)
+
+        builder.position_at_end(bbend)
+
 
 class MinimalCallConv(BaseCallConv):
     """
@@ -395,3 +425,44 @@ class CPUCallConv(BaseCallConv):
             retval = builder.load(retvaltmp)
         out = self.context.get_returned_value(builder, resty, retval)
         return status, out
+
+
+class ErrorModel(object):
+
+    def __init__(self, call_conv):
+        self.call_conv = call_conv
+
+    def fp_zero_division(self, builder, exc_args=None):
+        if self.raise_on_fp_zero_division:
+            self.call_conv.return_user_exc(builder, ZeroDivisionError, exc_args)
+            return True
+        else:
+            return False
+
+
+class PythonErrorModel(ErrorModel):
+    """
+    The Python error model.  Any invalid FP input raises an exception.
+    """
+    raise_on_fp_zero_division = True
+
+
+class NumpyErrorModel(ErrorModel):
+    """
+    In the Numpy error model, floating-point errors don't raise an
+    exception.  The FPU exception state is inspected by Numpy at the
+    end of a ufunc's execution and a warning is raised if appropriate.
+
+    Note there's no easy way to set the FPU exception state from LLVM.
+    Instructions known to set an FP exception can be optimized away:
+        https://llvm.org/bugs/show_bug.cgi?id=6050
+        http://lists.llvm.org/pipermail/llvm-dev/2014-September/076918.html
+        http://lists.llvm.org/pipermail/llvm-commits/Week-of-Mon-20140929/237997.html
+    """
+    raise_on_fp_zero_division = False
+
+
+error_models = {
+    'python': PythonErrorModel,
+    'numpy': NumpyErrorModel,
+    }

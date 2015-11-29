@@ -8,9 +8,13 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import njit
+from numba.compiler import compile_isolated, Flags, types
 from numba.runtime import rtsys
 from numba.config import PYVERSION
-from .support import MemoryLeakMixin
+from .support import MemoryLeakMixin, TestCase
+
+enable_nrt_flags = Flags()
+enable_nrt_flags.set("nrt")
 
 
 class Dummy(object):
@@ -230,7 +234,7 @@ class TestTracemalloc(unittest.TestCase):
         self.assertLess(stat.size, N * 0.01)
 
 
-class TestNRTIssue(MemoryLeakMixin, unittest.TestCase):
+class TestNRTIssue(MemoryLeakMixin, TestCase):
     def test_issue_with_refct_op_pruning(self):
         """
         GitHub Issue #1244 https://github.com/numba/numba/issues/1244
@@ -273,6 +277,57 @@ class TestNRTIssue(MemoryLeakMixin, unittest.TestCase):
         expected = normalize_vectors.py_func(num_vectors, test_vectors)
 
         np.testing.assert_almost_equal(expected, got)
+
+    def test_incref_after_cast(self):
+        # Issue #1427: when casting a value before returning it, the
+        # cast result should be incref'ed, not the original value.
+        def f():
+            return 0.0, np.zeros(1, dtype=np.int32)
+
+        # Note the return type isn't the same as the tuple type above:
+        # the first element is a complex rather than a float.
+        cres = compile_isolated(f, (),
+                                types.Tuple((types.complex128,
+                                             types.Array(types.int32, 1, 'C')
+                                             ))
+                                )
+        z, arr = cres.entry_point()
+        self.assertPreciseEqual(z, 0j)
+        self.assertPreciseEqual(arr, np.zeros(1, dtype=np.int32))
+
+    def test_refct_pruning_issue_1511(self):
+        @njit
+        def f():
+            a = np.ones(10, dtype=np.float64)
+            b = np.ones(10, dtype=np.float64)
+            return a, b[:]
+
+        a, b = f()
+        np.testing.assert_equal(a, b)
+        np.testing.assert_equal(a, np.ones(10, dtype=np.float64))
+
+    def test_refct_pruning_issue_1526(self):
+        @njit
+        def udt(image, x, y):
+            next_loc = np.where(image == 1)
+
+            if len(next_loc[0]) == 0:
+                y_offset = 1
+                x_offset = 1
+            else:
+                y_offset = next_loc[0][0]
+                x_offset = next_loc[1][0]
+
+            next_loc_x = (x - 1) + x_offset
+            next_loc_y = (y - 1) + y_offset
+
+            return next_loc_x, next_loc_y
+
+        a = np.array([[1, 0, 1, 0, 1, 0, 0, 1, 0, 0]])
+        expect = udt.py_func(a, 1, 6)
+        got = udt(a, 1, 6)
+
+        self.assertEqual(expect, got)
 
 
 if __name__ == '__main__':

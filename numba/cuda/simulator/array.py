@@ -21,6 +21,9 @@ class FakeCUDAArray(object):
     wraps a NumPy array.
     '''
 
+    __cuda_ndarray__ = True     # There must be gpu_data attribute
+
+
     def __init__(self, ary):
         self._ary = ary
 
@@ -123,6 +126,8 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
 
 
 def device_array(*args, **kwargs):
+    if 'stream' in kwargs:
+        kwargs.pop('stream')
     return FakeCUDAArray(np.ndarray(*args, **kwargs))
 
 
@@ -135,4 +140,5 @@ class devicearray(object):
     @staticmethod
     def auto_device(ary, stream=0, copy=True):
         return to_device(ary, stream, copy), False
+
 
