@@ -466,7 +466,7 @@ class BaseContext(object):
 
             return _wrap_impl(imp, self, sig)
 
-        elif isinstance(typ, types.StructRefType):
+        elif isinstance(typ, types.ImmutableClassRefType):
             def imp(context, builder, sig, args):
                 instance_struct = cgutils.create_struct_proxy(typ.instance_type)
                 [this, val] = args

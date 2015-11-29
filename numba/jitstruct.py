@@ -1,7 +1,5 @@
-import types as pytypes
+
 from numba import types
-from numba.targets.registry import CPUTarget
-from numba import njit
 from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
@@ -16,7 +14,7 @@ def jitstruct(spec):
         specfn = spec
 
     def wrap(cls):
-        register_class_type(cls, specfn, types.StructClassType,
+        register_class_type(cls, specfn, types.ImmutableClassType,
                             ImmutableClassBuilder)
         return cls
 
@@ -37,13 +35,13 @@ class StructRefModel(models.PrimitiveModel):
         super(StructRefModel, self).__init__(dmm, fe_type, be_type)
 
 
-default_manager.register(types.StructInstanceType, StructInstanceModel)
-default_manager.register(types.StructClassType, models.OpaqueModel)
-default_manager.register(types.StructRefType, StructRefModel)
+default_manager.register(types.ImmutableClassInstanceType, StructInstanceModel)
+default_manager.register(types.ImmutableClassType, models.OpaqueModel)
+default_manager.register(types.ImmutableClassRefType, StructRefModel)
 
 
 class ImmutableClassBuilder(ClassBuilder):
-    instance_type_class = types.StructInstanceType
+    instance_type_class = types.ImmutableClassInstanceType
 
     def implement_frontend(self, instance_type):
         self.implement_attribute_typing(instance_type)

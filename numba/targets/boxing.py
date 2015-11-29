@@ -613,7 +613,7 @@ def unbox_class(c, typ, val):
     return NativeValue(ret)
 
 
-@unbox(types.StructRefType)
+@unbox(types.ImmutableClassRefType)
 def unbox_structref(c, typ, val):
     # XXX: not implemented
     struct_cls = cgutils.create_struct_proxy(typ.instance_type)
@@ -621,7 +621,7 @@ def unbox_structref(c, typ, val):
     return NativeValue(ret)
 
 
-@unbox(types.StructInstanceType)
+@unbox(types.ImmutableClassInstanceType)
 def unbox_structinst(c, typ, val):
     # XXX: not implemented
     struct_cls = cgutils.create_struct_proxy(typ)
@@ -629,7 +629,7 @@ def unbox_structinst(c, typ, val):
     return NativeValue(ret)
 
 
-@box(types.StructInstanceType)
+@box(types.ImmutableClassInstanceType)
 def box_structinst(c, typ, val):
     # XXX: not implemented
     return ir.Constant(c.pyapi.pyobj, None)

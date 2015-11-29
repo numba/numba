@@ -1398,59 +1398,61 @@ class Slice3Type(Type):
 
 
 class ClassType(Opaque):
+    mutable = True
+    name_prefix = "jitclass.class"
+
     def __init__(self, class_def):
         self.class_def = class_def
-        name = "class.{0}#{1}".format(class_def, id(class_def))
+        name = "{0}.{1}#{2}".format(self.name_prefix, class_def, id(class_def))
         super(ClassType, self).__init__(name)
 
 
 class ClassInstanceType(Type):
+    mutable = True
+    name_prefix = "jitclass"
+
     def __init__(self, class_type, struct, methods):
         self.class_type = class_type
         self.struct = struct
         parameters = tuple((k, v) for k, v in self.struct.items())
         self.methods = methods
-        super(ClassInstanceType, self).__init__("jitclass.{0}!{1}".format(
-            self.class_type.name, parameters))
+        name = "{0}.{1}!{2}".format(self.name_prefix,
+                                    self.class_type.name,
+                                    parameters)
+        super(ClassInstanceType, self).__init__(name)
 
     def get_data_type(self):
         return ClassDataType(self)
 
-
     def get_reference_type(self):
         return self
+
 
 class ClassDataType(Type):
     def __init__(self, classtyp):
         self.class_type = classtyp
-        name = "data.{0}".format(self.class_type.name)
+        name = "jitclass.data.{0}".format(self.class_type.name)
         super(ClassDataType, self).__init__(name)
 
 
-class StructClassType(Opaque):
-    def __init__(self, class_def):
-        self.class_def = class_def
-        name = "struct.{0}#{1}".format(class_def, id(class_def))
-        super(StructClassType, self).__init__(name)
+class ImmutableClassType(ClassType):
+    mutable = False
+    name_prefix = "immjitclass.class"
 
 
-class StructInstanceType(Type):
-    def __init__(self, class_type, struct, methods):
-        self.class_type = class_type
-        self.struct = struct
-        parameters = tuple((k, v) for k, v in self.struct.items())
-        self.methods = methods
-        super(StructInstanceType, self).__init__("jitstruct.{0}!{1}".format(
-            self.class_type.name, parameters))
+class ImmutableClassInstanceType(ClassInstanceType):
+    mutable = False
+    name_prefix = 'immjitclass'
 
     def get_reference_type(self):
-        return StructRefType(self)
+        return ImmutableClassRefType(self)
 
 
-class StructRefType(Type):
+class ImmutableClassRefType(Type):
     def __init__(self, instance_type):
         self.instance_type = instance_type
-        super(StructRefType, self).__init__("*{0}".format(instance_type.name))
+        super(ImmutableClassRefType, self).__init__(
+            "*{0}".format(instance_type.name))
 
 
 # Utils
