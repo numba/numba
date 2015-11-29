@@ -16,7 +16,8 @@ def jitclass(spec):
         specfn = spec
 
     def wrap(cls):
-        register_class_type(cls, specfn)
+        register_class_type(cls, specfn, types.ClassType,
+                            ClassBuilder)
         return cls
 
     return wrap
@@ -49,12 +50,13 @@ default_manager.register(types.ClassDataType, ClassDataModel)
 default_manager.register(types.ClassType, models.OpaqueModel)
 
 
-def register_class_type(cls, specfn):
+def register_class_type(cls, specfn, class_ctor, builder):
+
     clsdct = cls.__dict__
     methods = dict((k, v) for k, v in clsdct.items()
                    if isinstance(v, pytypes.FunctionType))
 
-    class_type = types.ClassType(cls)
+    class_type = class_ctor(cls)
 
     jitmethods = {}
     for k, v in methods.items():
@@ -64,12 +66,9 @@ def register_class_type(cls, specfn):
     typer = CPUTarget.typing_context
     typer.insert_global(cls, class_type)
 
-    ### Backend ###
+    # Register class
     backend = CPUTarget.target_context
-
-    # Register constructor
-    ClassBuilder(class_type, jitmethods, specfn, methods,
-                 typer, backend).register()
+    builder(class_type, jitmethods, specfn, methods, typer, backend).register()
 
 
 class ClassBuilder(object):

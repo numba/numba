@@ -6,7 +6,7 @@ from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils
-from llvmlite import ir as llvmir
+from .jitclass import ClassBuilder, register_class_type
 
 
 def jitstruct(spec):
@@ -16,7 +16,8 @@ def jitstruct(spec):
         specfn = spec
 
     def wrap(cls):
-        register_struct_type(cls, specfn)
+        register_class_type(cls, specfn, types.StructClassType,
+                            ImmutableClassBuilder)
         return cls
 
     return wrap
@@ -39,33 +40,6 @@ class StructRefModel(models.PrimitiveModel):
 default_manager.register(types.StructInstanceType, StructInstanceModel)
 default_manager.register(types.StructClassType, models.OpaqueModel)
 default_manager.register(types.StructRefType, StructRefModel)
-
-
-def register_struct_type(cls, specfn):
-    clsdct = cls.__dict__
-    methods = dict((k, v) for k, v in clsdct.items()
-                   if isinstance(v, pytypes.FunctionType))
-    # classname = cls.__name__
-
-
-    class_type = types.StructClassType(cls)
-
-    jitmethods = {}
-    for k, v in methods.items():
-        jitmethods[k] = njit(v)
-
-    # Register resolution of the class object
-    typer = CPUTarget.typing_context
-    typer.insert_global(cls, class_type)
-
-    ### Backend ###
-    backend = CPUTarget.target_context
-
-    ImmutableClassBuilder(class_type, jitmethods, specfn, methods,
-                          typer, backend).register()
-
-
-from .jitclass import ClassBuilder
 
 
 class ImmutableClassBuilder(ClassBuilder):
