@@ -4,10 +4,10 @@ from numba import njit
 from numba import unittest_support as unittest
 from numba.jitclass import jitclass
 from numba.utils import OrderedDict
-from .support import TestCase
+from .support import TestCase, MemoryLeakMixin
 
 
-class TestJitClass(TestCase):
+class TestJitClass(TestCase, MemoryLeakMixin):
     def test_jit_class_1(self):
         spec = OrderedDict()
         spec['x'] = float32
@@ -152,6 +152,30 @@ class TestJitClass(TestCase):
         self.assertEqual(y1, 2)
         self.assertEqual(x2, x1)
         self.assertEqual(y2, y1 + 3)
+
+    def test_ctor_in_python(self):
+        spec = OrderedDict()
+        spec['x'] = float32
+        spec['y'] = float32
+        spec['arr'] = float32[:]
+
+        @jitclass(spec)
+        class Float2AndArray(object):
+            def __init__(self, x, y, arr):
+                self.x = x
+                self.y = y
+                self.arr = arr
+
+            def add(self, val):
+                self.x += val
+                self.y += val
+
+        arr = np.arange(10, dtype=np.float32)
+        obj = Float2AndArray(1, 2, arr)
+        self.assertEqual(obj._meminfo.refcount, 1)
+        self.assertEqual(obj._meminfo.data, obj._dataptr)
+        self.assertEqual(obj._typ.class_type, Float2AndArray.class_type)
+        # TODO: add more test to check the data integrity
 
 
 if __name__ == '__main__':

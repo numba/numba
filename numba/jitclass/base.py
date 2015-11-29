@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function
 import types as pytypes
+import inspect
 from numba import types
 from numba.targets.registry import CPUTarget
 from numba import njit
@@ -8,7 +9,7 @@ from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils
 from llvmlite import ir as llvmir
-
+from numba.six import exec_
 
 
 class InstanceModel(models.StructModel):
@@ -37,14 +38,46 @@ default_manager.register(types.ClassInstanceType, InstanceModel)
 default_manager.register(types.ClassDataType, InstanceDataModel)
 default_manager.register(types.ClassType, models.OpaqueModel)
 
+_ctor_template = """
+def ctor({args}):
+    return __numba_cls_({args})
+"""
+
+
+class JitClassType(object):
+    def __init__(self, cls, class_type, init):
+        self.cls = cls
+        self.class_type = class_type
+
+        # make ctor
+        argspec = inspect.getargspec(init)
+        assert not argspec.varargs, 'varargs not supported'
+        assert not argspec.keywords, 'keywords not supported'
+        assert not argspec.defaults, 'defaults not supported'
+        args = ', '.join(argspec.args[1:])
+
+        ctor_source = _ctor_template.format(args=args)
+        glbls = {"__numba_cls_": self}
+        exec_(ctor_source, glbls)
+        ctor = glbls['ctor']
+
+        self._ctor = njit(ctor)
+
+    def __call__(self, *args, **kwargs):
+        return self._ctor(*args, **kwargs)
+
+    def __repr__(self):
+        return "<numba.jitclass of {0}>".format(self.cls)
+
 
 def register_class_type(cls, specfn, class_ctor, builder):
-
+    # TODO: copy methods from base classes
     clsdct = cls.__dict__
     methods = dict((k, v) for k, v in clsdct.items()
                    if isinstance(v, pytypes.FunctionType))
 
     class_type = class_ctor(cls)
+    cls = JitClassType(cls, class_type, methods['__init__'])
 
     jitmethods = {}
     for k, v in methods.items():
@@ -57,6 +90,8 @@ def register_class_type(cls, specfn, class_ctor, builder):
     # Register class
     backend = CPUTarget.target_context
     builder(class_type, jitmethods, specfn, methods, typer, backend).register()
+
+    return cls
 
 
 class ClassBuilder(object):

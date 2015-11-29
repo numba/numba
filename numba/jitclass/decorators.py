@@ -14,7 +14,6 @@ def jitclass(spec, immutable=False):
         args = ((types.ImmutableClassType, ImmutableClassBuilder)
                 if immutable
                 else (types.ClassType, ClassBuilder))
-        register_class_type(cls, specfn, *args)
-        return cls
+        return register_class_type(cls, specfn, *args)
 
     return wrap
