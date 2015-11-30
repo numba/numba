@@ -169,6 +169,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def add(self, val):
                 self.x += val
                 self.y += val
+                return val
 
         @njit
         def idenity(obj):
@@ -205,6 +206,11 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(obj.x, 1)
         self.assertEqual(obj.y, 2)
         self.assertIs(obj.arr, arr)
+
+        # Access methods from python
+        self.assertEqual(obj.add(123), 123)
+        self.assertEqual(obj.x, 1 + 123)
+        self.assertEqual(obj.y, 2 + 123)
 
 
 if __name__ == '__main__':

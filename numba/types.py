@@ -1427,6 +1427,10 @@ class ClassInstanceType(Type):
     def get_reference_type(self):
         return self
 
+    @property
+    def classname(self):
+        return self.class_type.class_def.__name__
+
 
 class ClassDataType(Type):
     def __init__(self, classtyp):

@@ -6,10 +6,17 @@ from numba.typing.typeof import typeof_impl
 from numba import njit
 from numba.six import exec_
 from llvmlite import ir
+import inspect
+from functools import wraps
 
 _accessor_code_template = """
 def accessor(__numba_self_):
     return __numba_self_.{0}
+"""
+
+_method_code_template = """
+def method(__numba_self_, {args}):
+    return __numba_self_.{method}({args})
 """
 
 
@@ -21,6 +28,24 @@ def _generate_accessor(field):
     return njit(accessor)
 
 
+def _generate_method(name, func):
+    argspec = inspect.getargspec(func)
+    assert not argspec.varargs, 'varargs not supported'
+    assert not argspec.keywords, 'keywords not supported'
+    assert not argspec.defaults, 'defaults not supported'
+    args = ', '.join(argspec.args[1:])
+    source = _method_code_template.format(method=name, args=args)
+    glbls = {}
+    exec_(source, glbls)
+    method = njit(glbls['method'])
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return method(*args, **kwargs)
+
+    return wrapper
+
+
 class BoxedJitClassInstance(object):
     __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_typ'
 
@@ -28,10 +53,16 @@ class BoxedJitClassInstance(object):
         dct = {'__slots__': ()}
         # Inject attributes as class properties
         for field in typ.struct:
-            fn = _generate_accessor(field)
-            dct[field] = property(fn)
+            if not field.startswith('_'):
+                fn = _generate_accessor(field)
+                dct[field] = property(fn)
+        # Inject methods as class members
+        for name, func in typ.methods.items():
+            if not name.startswith('_'):
+                fn = _generate_method(name, func)
+                dct[name] = fn
         # Create a new subclass
-        newcls = type(cls.__name__, (cls,), dct)
+        newcls = type(typ.classname, (cls,), dct)
         return object.__new__(newcls)
 
     def __init__(self, meminfoptr, dataptr, typ):
