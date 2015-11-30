@@ -1397,16 +1397,6 @@ class Slice3Type(Type):
     pass
 
 
-class ClassType(Opaque):
-    mutable = True
-    name_prefix = "jitclass"
-
-    def __init__(self, class_def):
-        self.class_def = class_def
-        name = "{0}.{1}#{2}".format(self.name_prefix, class_def, id(class_def))
-        super(ClassType, self).__init__(name)
-
-
 class ClassInstanceType(Type):
     mutable = True
     name_prefix = "instance"
@@ -1432,16 +1422,22 @@ class ClassInstanceType(Type):
         return self.class_type.class_def.__name__
 
 
+class ClassType(Opaque):
+    mutable = True
+    name_prefix = "jitclass"
+    instance_type_class = ClassInstanceType
+
+    def __init__(self, class_def, struct, methods):
+        self.class_def = class_def
+        name = "{0}.{1}#{2}".format(self.name_prefix, class_def, id(class_def))
+        super(ClassType, self).__init__(name)
+        self.instance_type = self.instance_type_class(self, struct, methods)
+
 class ClassDataType(Type):
     def __init__(self, classtyp):
         self.class_type = classtyp
         name = "data.{0}".format(self.class_type.name)
         super(ClassDataType, self).__init__(name)
-
-
-class ImmutableClassType(ClassType):
-    mutable = False
-    name_prefix = "immjitclass"
 
 
 class ImmutableClassInstanceType(ClassInstanceType):
@@ -1450,6 +1446,12 @@ class ImmutableClassInstanceType(ClassInstanceType):
 
     def get_reference_type(self):
         return ImmutableClassRefType(self)
+
+
+class ImmutableClassType(ClassType):
+    mutable = False
+    name_prefix = "immjitclass"
+    instance_type_class = ImmutableClassInstanceType
 
 
 class ImmutableClassRefType(Type):

@@ -5,15 +5,10 @@ from .immutable import ImmutableClassBuilder
 
 
 def jitclass(spec, immutable=False):
-    if not callable(spec):
-        specfn = lambda *args, **kwargs: spec
-    else:
-        specfn = spec
-
     def wrap(cls):
         args = ((types.ImmutableClassType, ImmutableClassBuilder)
                 if immutable
                 else (types.ClassType, ClassBuilder))
-        return register_class_type(cls, specfn, *args)
+        return register_class_type(cls, spec, *args)
 
     return wrap

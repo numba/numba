@@ -70,13 +70,13 @@ class JitClassType(object):
         return "<numba.jitclass of {0}>".format(self.cls)
 
 
-def register_class_type(cls, specfn, class_ctor, builder):
+def register_class_type(cls, spec, class_ctor, builder):
     # TODO: copy methods from base classes
     clsdct = cls.__dict__
     methods = dict((k, v) for k, v in clsdct.items()
                    if isinstance(v, pytypes.FunctionType))
 
-    class_type = class_ctor(cls)
+    class_type = class_ctor(cls, spec, methods)
     cls = JitClassType(cls, class_type, methods['__init__'])
 
     jitmethods = {}
@@ -89,7 +89,7 @@ def register_class_type(cls, specfn, class_ctor, builder):
 
     # Register class
     backend = CPUTarget.target_context
-    builder(class_type, jitmethods, specfn, methods, typer, backend).register()
+    builder(class_type, jitmethods, methods, typer, backend).register()
 
     return cls
 
@@ -97,10 +97,9 @@ def register_class_type(cls, specfn, class_ctor, builder):
 class ClassBuilder(object):
     instance_type_class = types.ClassInstanceType
 
-    def __init__(self, class_type, jitmethods, specfn, methods, typer, backend):
+    def __init__(self, class_type, jitmethods, methods, typer, backend):
         self.class_type = class_type
         self.jitmethods = jitmethods
-        self.specfn = specfn
         self.methods = methods
         self.typer = typer
         self.backend = backend
@@ -114,12 +113,7 @@ class ClassBuilder(object):
             def generic(self, args, kws):
                 ctor = outer.jitmethods['__init__']
 
-                struct = outer.specfn(*args, **kws)
-                instance_type = outer.instance_type_class(
-                    class_type=outer.class_type,
-                    struct=struct,
-                    methods=outer.methods)
-
+                instance_type = outer.class_type.instance_type
                 if instance_type not in defined_types:
                     defined_types.add(instance_type)
                     outer.implement_frontend(instance_type)
