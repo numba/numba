@@ -4,16 +4,38 @@ from numba.pythonapi import box, unbox, NativeValue
 from numba.runtime.nrt import MemInfo
 from numba.typing.typeof import typeof_impl
 from llvmlite import ir
+from numba import njit
+from numba.six import exec_
+
+_accessor_code_template = """
+def accessor(__numba_self_):
+    return __numba_self_.{0}
+"""
 
 
 class BoxedJitClassInstance(object):
-    __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_typ'
+    __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_typ', '_accessors'
 
     def __init__(self, meminfoptr, dataptr, typ):
         self._meminfo = MemInfo(meminfoptr)
         self._meminfoptr = meminfoptr
         self._dataptr = dataptr
         self._typ = typ
+        self._accessors = {}
+
+    def __getattr__(self, field):
+        # Accessing undefined fields
+        if field not in self._accessors:
+            # Lazily define the accessor
+            self._generate_accessor(field)
+        return self._accessors[field](self)
+
+    def _generate_accessor(self, field):
+        source = _accessor_code_template.format(field)
+        glbls = {}
+        exec_(source, glbls)
+        accessor = glbls['accessor']
+        self._accessors[field] = njit(accessor)
 
 
 @typeof_impl.register(BoxedJitClassInstance)

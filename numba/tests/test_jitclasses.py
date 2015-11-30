@@ -153,7 +153,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(x2, x1)
         self.assertEqual(y2, y1 + 3)
 
-    def test_ctor_in_python(self):
+    def test_jitclass_usage_from_python(self):
         spec = OrderedDict()
         spec['x'] = float32
         spec['y'] = float32
@@ -201,7 +201,10 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(out_y, 2)
         self.assertIs(out_arr, arr)
 
-
+        # Access attributes from python
+        self.assertEqual(obj.x, 1)
+        self.assertEqual(obj.y, 2)
+        self.assertIs(obj.arr, arr)
 
 
 if __name__ == '__main__':
