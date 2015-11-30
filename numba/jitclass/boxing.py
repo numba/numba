@@ -3,9 +3,9 @@ from numba import types, cgutils
 from numba.pythonapi import box, unbox, NativeValue
 from numba.runtime.nrt import MemInfo
 from numba.typing.typeof import typeof_impl
-from llvmlite import ir
 from numba import njit
 from numba.six import exec_
+from llvmlite import ir
 
 _accessor_code_template = """
 def accessor(__numba_self_):
@@ -13,29 +13,32 @@ def accessor(__numba_self_):
 """
 
 
+def _generate_accessor(field):
+    source = _accessor_code_template.format(field)
+    glbls = {}
+    exec_(source, glbls)
+    accessor = glbls['accessor']
+    return njit(accessor)
+
+
 class BoxedJitClassInstance(object):
-    __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_typ', '_accessors'
+    __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_typ'
+
+    def __new__(cls, meminfoptr, dataptr, typ):
+        dct = {'__slots__': ()}
+        # Inject attributes as class properties
+        for field in typ.struct:
+            fn = _generate_accessor(field)
+            dct[field] = property(fn)
+        # Create a new subclass
+        newcls = type(cls.__name__, (cls,), dct)
+        return object.__new__(newcls)
 
     def __init__(self, meminfoptr, dataptr, typ):
         self._meminfo = MemInfo(meminfoptr)
         self._meminfoptr = meminfoptr
         self._dataptr = dataptr
         self._typ = typ
-        self._accessors = {}
-
-    def __getattr__(self, field):
-        # Accessing undefined fields
-        if field not in self._accessors:
-            # Lazily define the accessor
-            self._generate_accessor(field)
-        return self._accessors[field](self)
-
-    def _generate_accessor(self, field):
-        source = _accessor_code_template.format(field)
-        glbls = {}
-        exec_(source, glbls)
-        accessor = glbls['accessor']
-        self._accessors[field] = njit(accessor)
 
 
 @typeof_impl.register(BoxedJitClassInstance)
