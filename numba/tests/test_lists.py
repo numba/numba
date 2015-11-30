@@ -729,7 +729,7 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypeError) as raises:
             yield
         if msg is not None:
-            self.assertIn(msg, str(raises.exception))
+            self.assertRegexpMatches(str(raises.exception), msg)
 
     def check_unary(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -760,7 +760,7 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
 
     def test_errors(self):
         # See #1545: error checking should ensure the list is homogenous
-        msg = "can't convert complex to int"
+        msg = "can't convert complex to (int|long)"
         pyfunc = noop
         cfunc = jit(nopython=True)(pyfunc)
         with self.assert_type_error(msg):
