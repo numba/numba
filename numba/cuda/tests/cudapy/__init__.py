@@ -1,5 +1,6 @@
-from numba.tests import SerialSuite
+from numba.testing import SerialSuite
+from numba.testing import load_testsuite
+import os
 
 def load_tests(loader, tests, pattern):
-    suite = loader.discover("numba.cuda.tests.cudapy")
-    return SerialSuite(suite)
+    return SerialSuite(load_testsuite(loader, os.path.dirname(__file__)))
