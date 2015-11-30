@@ -170,12 +170,38 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 self.x += val
                 self.y += val
 
+        @njit
+        def idenity(obj):
+            return obj
+
+        @njit
+        def retrieve_attributes(obj):
+            return obj.x, obj.y, obj.arr
+
         arr = np.arange(10, dtype=np.float32)
         obj = Float2AndArray(1, 2, arr)
         self.assertEqual(obj._meminfo.refcount, 1)
         self.assertEqual(obj._meminfo.data, obj._dataptr)
         self.assertEqual(obj._typ.class_type, Float2AndArray.class_type)
-        # TODO: add more test to check the data integrity
+
+        # Use jit class instance in numba
+        other = idenity(obj)
+        self.assertEqual(obj._meminfo.refcount, 2)
+        self.assertEqual(other._meminfo.refcount, 2)
+        self.assertEqual(other._meminfo.data, other._dataptr)
+        self.assertEqual(other._meminfo.data, obj._meminfo.data)
+
+        # Check dtor
+        del other
+        self.assertEqual(obj._meminfo.refcount, 1)
+
+        # Check attributes
+        out_x, out_y, out_arr = retrieve_attributes(obj)
+        self.assertEqual(out_x, 1)
+        self.assertEqual(out_y, 2)
+        self.assertIs(out_arr, arr)
+
+
 
 
 if __name__ == '__main__':

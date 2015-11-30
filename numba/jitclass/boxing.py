@@ -1,16 +1,24 @@
 from __future__ import print_function, absolute_import
 from numba import types, cgutils
-from numba.pythonapi import box, unbox
+from numba.pythonapi import box, unbox, NativeValue
 from numba.runtime.nrt import MemInfo
+from numba.typing.typeof import typeof_impl
+from llvmlite import ir
+
 
 class BoxedJitClassInstance(object):
-    __slots__ = '_meminfo', '_dataptr', '_typ'
+    __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_typ'
 
     def __init__(self, meminfoptr, dataptr, typ):
         self._meminfo = MemInfo(meminfoptr)
+        self._meminfoptr = meminfoptr
         self._dataptr = dataptr
         self._typ = typ
-        # XXX: impl nrt_decref
+
+
+@typeof_impl.register(BoxedJitClassInstance)
+def _typeof_boxed_jitclass_instance(val, c):
+    return val._typ
 
 
 @box(types.ClassInstanceType)
@@ -38,7 +46,55 @@ def box_jitclass(c, typ, val):
     args = [addr_meminfo, addr_dataptr, typ_obj]
     res = c.pyapi.call_function_objargs(box_cls, args)
 
+    # Clean up
     for obj in args:
         c.pyapi.decref(obj)
 
     return res
+
+
+@unbox(types.ClassInstanceType)
+def unbox_jitclass(c, typ, val):
+    struct_cls = cgutils.create_struct_proxy(typ)
+    inst = struct_cls(c.context, c.builder)
+
+    int_meminfo = c.pyapi.object_getattr_string(val, "_meminfoptr")
+    int_dataptr = c.pyapi.object_getattr_string(val, "_dataptr")
+
+    ptr_meminfo = c.pyapi.long_as_voidptr(int_meminfo)
+    ptr_dataptr = c.pyapi.long_as_voidptr(int_dataptr)
+
+    c.pyapi.decref(int_meminfo)
+    c.pyapi.decref(int_dataptr)
+
+    inst.meminfo = c.builder.bitcast(ptr_meminfo, inst.meminfo.type)
+    inst.data = c.builder.bitcast(ptr_dataptr, inst.data.type)
+
+    ret = inst._getvalue()
+
+    c.context.nrt_incref(c.builder, typ, ret)
+
+    # XXX: cleanup to reversed the incref
+    return NativeValue(ret, is_error=c.pyapi.c_api_error())
+
+
+@unbox(types.ImmutableClassRefType)
+def unbox_structref(c, typ, val):
+    # XXX: not implemented
+    struct_cls = cgutils.create_struct_proxy(typ.instance_type)
+    ret = struct_cls(c.context, c.builder)._getpointer()
+    return NativeValue(ret)
+
+
+@unbox(types.ImmutableClassInstanceType)
+def unbox_structinst(c, typ, val):
+    # XXX: not implemented
+    struct_cls = cgutils.create_struct_proxy(typ)
+    ret = struct_cls(c.context, c.builder)._getvalue()
+    return NativeValue(ret)
+
+
+@box(types.ImmutableClassInstanceType)
+def box_structinst(c, typ, val):
+    # XXX: not implemented
+    return ir.Constant(c.pyapi.pyobj, None)

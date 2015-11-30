@@ -604,32 +604,3 @@ def unbox_funcptr(c, typ, obj):
             c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
     return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
 
-
-@unbox(types.ClassInstanceType)
-def unbox_class(c, typ, val):
-    # XXX: not implemented
-    struct_cls = cgutils.create_struct_proxy(typ)
-    ret = struct_cls(c.context, c.builder)._getvalue()
-    return NativeValue(ret)
-
-
-@unbox(types.ImmutableClassRefType)
-def unbox_structref(c, typ, val):
-    # XXX: not implemented
-    struct_cls = cgutils.create_struct_proxy(typ.instance_type)
-    ret = struct_cls(c.context, c.builder)._getpointer()
-    return NativeValue(ret)
-
-
-@unbox(types.ImmutableClassInstanceType)
-def unbox_structinst(c, typ, val):
-    # XXX: not implemented
-    struct_cls = cgutils.create_struct_proxy(typ)
-    ret = struct_cls(c.context, c.builder)._getvalue()
-    return NativeValue(ret)
-
-
-@box(types.ImmutableClassInstanceType)
-def box_structinst(c, typ, val):
-    # XXX: not implemented
-    return ir.Constant(c.pyapi.pyobj, None)
