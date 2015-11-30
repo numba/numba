@@ -18,11 +18,11 @@ Implemented proposals
 .. toctree::
    :maxdepth: 1
 
+   integer-typing.rst
+
 
 Other proposals
 ---------------
 
 .. toctree::
    :maxdepth: 1
-
-   integer-typing.rst
