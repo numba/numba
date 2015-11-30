@@ -450,7 +450,8 @@ class BaseContext(object):
                 [this, val] = args
                 inst = instance_struct(context, builder, value=this)
                 data_ptr = inst.data
-                data_struct = cgutils.create_struct_proxy(typ.get_data_type())
+                data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
+                                                          kind='data')
                 data = data_struct(context, builder, ref=data_ptr)
 
                 # Get old value

@@ -205,7 +205,7 @@ class ClassBuilder(object):
         def ctor_impl(context, builder, sig, args):
             # Allocate the instance
             inst_typ = sig.return_type
-            alloc_type = context.get_value_type(inst_typ.get_data_type())
+            alloc_type = context.get_data_type(inst_typ.get_data_type())
             alloc_size = context.get_abi_sizeof(alloc_type)
 
             meminfo = context.nrt_meminfo_alloc_dtor(
@@ -265,7 +265,8 @@ class ClassBuilder(object):
             inst_struct = cgutils.create_struct_proxy(typ)
             inst = inst_struct(context, builder, value=value)
             data_pointer = inst.data
-            data_struct = cgutils.create_struct_proxy(typ.get_data_type())
+            data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
+                                                      kind='data')
             data = data_struct(context, builder, ref=data_pointer)
             return imputils.impl_ret_borrowed(context, builder,
                                               typ.struct[attr],
