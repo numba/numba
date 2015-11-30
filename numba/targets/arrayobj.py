@@ -1767,10 +1767,11 @@ def array_nonzero(context, builder, sig, args):
     tup = context.make_tuple(builder, sig.return_type, outs)
     return impl_ret_new_ref(context, builder, sig.return_type, tup)
 
-@builtin
-@implement(numpy.where, types.Kind(types.Array),
-           types.Kind(types.Array), types.Kind(types.Array))
+
 def array_where(context, builder, sig, args):
+    """
+    np.where(array, array, array)
+    """
     layouts = set(a.layout for a in sig.args)
     if layouts == set('C'):
         # Faster implementation for C-contiguous arrays
@@ -1799,6 +1800,24 @@ def array_where(context, builder, sig, args):
 
     res = context.compile_internal(builder, where_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@builtin
+@implement(numpy.where, types.Any, types.Any, types.Any)
+def any_where(context, builder, sig, args):
+    cond = sig.args[0]
+    if isinstance(cond, types.Array):
+        return array_where(context, builder, sig, args)
+
+    def scalar_where_impl(cond, x, y):
+        """
+        np.where(scalar, scalar, scalar): return a 0-dim array
+        """
+        scal = x if cond else y
+        return numpy.full_like(scal, scal)
+
+    res = context.compile_internal(builder, scalar_where_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
 #-------------------------------------------------------------------------------
@@ -2579,9 +2598,12 @@ def _parse_empty_like_args(context, builder, sig, args):
     np.ones_like() call.
     """
     arytype = sig.args[0]
-    ary = make_array(arytype)(context, builder, value=args[0])
-    shapes = cgutils.unpack_tuple(builder, ary.shape, count=arytype.ndim)
-    return sig.return_type, shapes
+    if isinstance(arytype, types.Array):
+        ary = make_array(arytype)(context, builder, value=args[0])
+        shapes = cgutils.unpack_tuple(builder, ary.shape, count=arytype.ndim)
+        return sig.return_type, shapes
+    else:
+        return sig.return_type, ()
 
 
 @builtin
@@ -2593,8 +2615,8 @@ def numpy_empty_nd(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
 
 @builtin
-@implement(numpy.empty_like, types.Kind(types.Array))
-@implement(numpy.empty_like, types.Kind(types.Array), types.Kind(types.DTypeSpec))
+@implement(numpy.empty_like, types.Any)
+@implement(numpy.empty_like, types.Any, types.Kind(types.DTypeSpec))
 def numpy_empty_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
@@ -2612,8 +2634,8 @@ def numpy_zeros_nd(context, builder, sig, args):
 
 
 @builtin
-@implement(numpy.zeros_like, types.Kind(types.Array))
-@implement(numpy.zeros_like, types.Kind(types.Array), types.Kind(types.DTypeSpec))
+@implement(numpy.zeros_like, types.Any)
+@implement(numpy.zeros_like, types.Any, types.Kind(types.DTypeSpec))
 def numpy_zeros_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
@@ -2650,7 +2672,7 @@ if numpy_version >= (1, 8):
 
 
     @builtin
-    @implement(numpy.full_like, types.Kind(types.Array), types.Any)
+    @implement(numpy.full_like, types.Any, types.Any)
     def numpy_full_like_nd(context, builder, sig, args):
 
         def full_like(arr, value):
@@ -2664,7 +2686,7 @@ if numpy_version >= (1, 8):
 
 
     @builtin
-    @implement(numpy.full_like, types.Kind(types.Array), types.Any, types.Kind(types.DTypeSpec))
+    @implement(numpy.full_like, types.Any, types.Any, types.Kind(types.DTypeSpec))
     def numpy_full_like_nd(context, builder, sig, args):
 
         def full_like(arr, value, dtype):
@@ -2706,7 +2728,7 @@ def numpy_ones_dtype_nd(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.ones_like, types.Kind(types.Array))
+@implement(numpy.ones_like, types.Any)
 def numpy_ones_like_nd(context, builder, sig, args):
 
     def ones_like(arr):
@@ -2719,7 +2741,7 @@ def numpy_ones_like_nd(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.ones_like, types.Kind(types.Array), types.Kind(types.DTypeSpec))
+@implement(numpy.ones_like, types.Any, types.Kind(types.DTypeSpec))
 def numpy_ones_like_dtype_nd(context, builder, sig, args):
 
     def ones_like(arr, dtype):
