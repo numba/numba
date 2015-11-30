@@ -1852,7 +1852,11 @@ def any_where(context, builder, sig, args):
         np.where(scalar, scalar, scalar): return a 0-dim array
         """
         scal = x if cond else y
-        return numpy.full_like(scal, scal)
+        # This is the equivalent of numpy.full_like(scal, scal),
+        # for compatibility with Numpy < 1.8
+        arr = numpy.empty_like(scal)
+        arr[()] = scal
+        return arr
 
     res = context.compile_internal(builder, scalar_where_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
