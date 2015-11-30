@@ -795,4 +795,24 @@ class Sinc(AbstractTemplate):
 builtin_global(numpy.sinc, types.Function(Sinc))
 
 
+class AngleCtor(CallableTemplate):
+    """
+    Typing template for np.angle()
+    """
+    def generic(self):
+        def typer(ref, deg = False):
+            if isinstance(ref, types.Array):
+                return ref.copy(dtype=ref.underlying_float)
+            else:
+                return types.float64
+        return typer
+
+@builtin
+class Angle(AngleCtor):
+    key = numpy.angle
+
+
+builtin_global(numpy.angle, types.Function(Angle))
+
+
 builtin_global(numpy, types.Module(numpy))

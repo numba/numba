@@ -172,7 +172,7 @@ class TestCase(unittest.TestCase):
                          "strides differ")
 
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
-                           msg=None):
+                           msg=None, ignore_sign_on_zero=False):
         """
         Versatile equality testing function with more built-in checks than
         standard assertEqual().
@@ -192,12 +192,15 @@ class TestCase(unittest.TestCase):
         is computed according to the value of *prec*: 53 bits if *prec*
         is 'double', 24 bits if *prec* is single.  This number of bits
         can be lowered by raising the *ulps* value.
+        ignore_sign_on_zero can be set to True if zeros are to be considered
+        equal regardless of their sign bit.
 
         Any value of *prec* other than 'exact', 'single' or 'double'
         will raise an error.
         """
         try:
-            self._assertPreciseEqual(first, second, prec, ulps, msg)
+            self._assertPreciseEqual(first, second, prec, ulps, msg,
+                ignore_sign_on_zero)
         except AssertionError as exc:
             failure_msg = str(exc)
             # Fall off of the 'except' scope to avoid Python 3 exception
@@ -208,7 +211,7 @@ class TestCase(unittest.TestCase):
         self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
 
     def _assertPreciseEqual(self, first, second, prec='exact', ulps=1,
-                            msg=None):
+                            msg=None, ignore_sign_on_zero=False):
         """Recursive workhorse for assertPreciseEqual()."""
 
         def _assertNumberEqual(first, second, delta=None):
@@ -216,13 +219,15 @@ class TestCase(unittest.TestCase):
                 or math.isinf(first) or math.isinf(second)):
                 self.assertEqual(first, second, msg=msg)
                 # For signed zeros
-                try:
-                    if math.copysign(1, first) != math.copysign(1, second):
-                        self.fail(
-                            self._formatMessage(msg,
-                                                "%s != %s" % (first, second)))
-                except TypeError:
-                    pass
+                if not ignore_sign_on_zero:
+                    try:
+                        if math.copysign(1, first) != math.copysign(1, second):
+                            self.fail(
+                                self._formatMessage(msg,
+                                                    "%s != %s" %
+                                                    (first, second)))
+                    except TypeError:
+                        pass
             else:
                 self.assertAlmostEqual(first, second, delta=delta, msg=msg)
 
@@ -255,13 +260,15 @@ class TestCase(unittest.TestCase):
             if second.dtype != dtype:
                 second = second.astype(dtype)
             for a, b in zip(first.flat, second.flat):
-                self._assertPreciseEqual(a, b, prec, ulps, msg)
+                self._assertPreciseEqual(a, b, prec, ulps, msg,
+                                         ignore_sign_on_zero)
             return
 
         if compare_family == "sequence":
             self.assertEqual(len(first), len(second), msg=msg)
             for a, b in zip(first, second):
-                self._assertPreciseEqual(a, b, prec, ulps, msg)
+                self._assertPreciseEqual(a, b, prec, ulps, msg,
+                                         ignore_sign_on_zero)
             return
 
         if compare_family == "exact":
