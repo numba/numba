@@ -67,10 +67,17 @@ def _generate_method(name, func):
     return wrapper
 
 
+_cache_specialized_box = {}
+
 def _specialize_box(typ):
     """
-    Create a subclass of Box that is specialized to the jitclass
+    Create a subclass of Box that is specialized to the jitclass.
+
+    This function caches the result to avoid code bloat.
     """
+    # Check cache
+    if typ in _cache_specialized_box:
+        return _cache_specialized_box[typ]
     dct = {'__slots__': ()}
     # Inject attributes as class properties
     for field in typ.struct:
@@ -83,9 +90,12 @@ def _specialize_box(typ):
         if not name.startswith('_'):
             getter = _generate_method(name, func)
             dct[name] = getter
-
     # Create subclass
-    return type(typ.classname, (Box,), dct)
+    subcls = type(typ.classname, (Box,), dct)
+    # Store to cache
+    _cache_specialized_box[typ] = subcls
+
+    return subcls
 
 
 class Box(object):
