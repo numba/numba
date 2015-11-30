@@ -1,3 +1,7 @@
+"""
+Implement logic relating to wrapping (box) and unwrapping (unbox) instances
+of jitclasses for use inside the python interpreter.
+"""
 from __future__ import print_function, absolute_import
 from numba import types, cgutils
 from numba.pythonapi import box, unbox, NativeValue
@@ -7,7 +11,7 @@ from numba import njit
 from numba.six import exec_
 from llvmlite import ir
 import inspect
-from functools import wraps
+from functools import wraps, partial
 
 _getter_code_template = """
 def accessor(__numba_self_):
@@ -25,29 +29,32 @@ def method(__numba_self_, {args}):
 """
 
 
-def _generate_getter(field):
-    source = _getter_code_template.format(field)
+def _generate_property(field, template, fname):
+    """
+    Generate simple function that get/set a field of the instance
+    """
+    source = template.format(field)
     glbls = {}
     exec_(source, glbls)
-    accessor = glbls['accessor']
-    return njit(accessor)
+    return njit(glbls[fname])
 
 
-def _generate_setter(field):
-    source = _setter_code_template.format(field)
-    glbls = {}
-    exec_(source, glbls)
-    mutator = glbls['mutator']
-    return njit(mutator)
+_generate_getter = partial(_generate_property, template=_getter_code_template,
+                           fname='accessor')
+_generate_setter = partial(_generate_property, template=_setter_code_template,
+                           fname='mutator')
 
 
 def _generate_method(name, func):
+    """
+    Generate a wrapper for calling a method
+    """
     argspec = inspect.getargspec(func)
     assert not argspec.varargs, 'varargs not supported'
     assert not argspec.keywords, 'keywords not supported'
     assert not argspec.defaults, 'defaults not supported'
 
-    args = ', '.join(argspec.args[1:])
+    args = ', '.join(argspec.args[1:])  # skipped self arg
     source = _method_code_template.format(method=name, args=args)
     glbls = {}
     exec_(source, glbls)
@@ -60,25 +67,37 @@ def _generate_method(name, func):
     return wrapper
 
 
-class BoxedJitClassInstance(object):
+def _specialize_box(typ):
+    """
+    Create a subclass of Box that is specialized to the jitclass
+    """
+    dct = {'__slots__': ()}
+    # Inject attributes as class properties
+    for field in typ.struct:
+        if not field.startswith('_'):
+            getter = _generate_getter(field)
+            setter = _generate_setter(field)
+            dct[field] = property(getter, setter)
+    # Inject methods as class members
+    for name, func in typ.methods.items():
+        if not name.startswith('_'):
+            getter = _generate_method(name, func)
+            dct[name] = getter
+
+    # Create subclass
+    return type(typ.classname, (Box,), dct)
+
+
+class Box(object):
+    """
+    A box for numba created jit-class instance
+    """
     __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_typ'
 
     def __new__(cls, meminfoptr, dataptr, typ):
-        dct = {'__slots__': ()}
-        # Inject attributes as class properties
-        for field in typ.struct:
-            if not field.startswith('_'):
-                getter = _generate_getter(field)
-                setter = _generate_setter(field)
-                dct[field] = property(getter, setter)
-        # Inject methods as class members
-        for name, func in typ.methods.items():
-            if not name.startswith('_'):
-                getter = _generate_method(name, func)
-                dct[name] = getter
-        # Create a new subclass
-        newcls = type(typ.classname, (cls,), dct)
-        return object.__new__(newcls)
+        if cls is not Box:
+            raise TypeError("cannot extend from specialized box")
+        return object.__new__(_specialize_box(typ))
 
     def __init__(self, meminfoptr, dataptr, typ):
         self._meminfo = MemInfo(meminfoptr)
@@ -87,13 +106,16 @@ class BoxedJitClassInstance(object):
         self._typ = typ
 
 
-@typeof_impl.register(BoxedJitClassInstance)
-def _typeof_boxed_jitclass_instance(val, c):
+@typeof_impl.register(Box)
+def _typeof_box(val, c):
     return val._typ
 
 
+###############################################################################
+# Implement box/unbox for call wrapper
+
 @box(types.ClassInstanceType)
-def box_jitclass(c, typ, val):
+def _box_class_instance(c, typ, val):
     meminfo, dataptr = cgutils.unpack_tuple(c.builder, val)
 
     lluintp = c.context.get_data_type(types.uintp)
@@ -109,7 +131,7 @@ def box_jitclass(c, typ, val):
     int_addr_typ = c.context.get_constant(types.uintp, id(typ))
 
     int_addr_boxcls = c.context.get_constant(types.uintp,
-                                             id(BoxedJitClassInstance))
+                                             id(Box))
 
     typ_obj = c.builder.inttoptr(int_addr_typ, c.pyapi.pyobj)
     box_cls = c.builder.inttoptr(int_addr_boxcls, c.pyapi.pyobj)
@@ -125,7 +147,7 @@ def box_jitclass(c, typ, val):
 
 
 @unbox(types.ClassInstanceType)
-def unbox_jitclass(c, typ, val):
+def _unbox_class_instance(c, typ, val):
     struct_cls = cgutils.create_struct_proxy(typ)
     inst = struct_cls(c.context, c.builder)
 
@@ -150,7 +172,7 @@ def unbox_jitclass(c, typ, val):
 
 
 @unbox(types.ImmutableClassRefType)
-def unbox_structref(c, typ, val):
+def _unbox_immutable_class_ref(c, typ, val):
     # XXX: not implemented
     struct_cls = cgutils.create_struct_proxy(typ.instance_type)
     ret = struct_cls(c.context, c.builder)._getpointer()
@@ -158,7 +180,7 @@ def unbox_structref(c, typ, val):
 
 
 @unbox(types.ImmutableClassInstanceType)
-def unbox_structinst(c, typ, val):
+def _unbox_immutable_class_instance(c, typ, val):
     # XXX: not implemented
     struct_cls = cgutils.create_struct_proxy(typ)
     ret = struct_cls(c.context, c.builder)._getvalue()
@@ -166,6 +188,6 @@ def unbox_structinst(c, typ, val):
 
 
 @box(types.ImmutableClassInstanceType)
-def box_structinst(c, typ, val):
+def _box_immutable_class_instance(c, typ, val):
     # XXX: not implemented
     return ir.Constant(c.pyapi.pyobj, None)
