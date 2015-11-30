@@ -9,9 +9,14 @@ from llvmlite import ir
 import inspect
 from functools import wraps
 
-_accessor_code_template = """
+_getter_code_template = """
 def accessor(__numba_self_):
     return __numba_self_.{0}
+"""
+
+_setter_code_template = """
+def mutator(__numba_self_, __numba_val):
+    __numba_self_.{0} = __numba_val
 """
 
 _method_code_template = """
@@ -20,12 +25,20 @@ def method(__numba_self_, {args}):
 """
 
 
-def _generate_accessor(field):
-    source = _accessor_code_template.format(field)
+def _generate_getter(field):
+    source = _getter_code_template.format(field)
     glbls = {}
     exec_(source, glbls)
     accessor = glbls['accessor']
     return njit(accessor)
+
+
+def _generate_setter(field):
+    source = _setter_code_template.format(field)
+    glbls = {}
+    exec_(source, glbls)
+    mutator = glbls['mutator']
+    return njit(mutator)
 
 
 def _generate_method(name, func):
@@ -33,6 +46,7 @@ def _generate_method(name, func):
     assert not argspec.varargs, 'varargs not supported'
     assert not argspec.keywords, 'keywords not supported'
     assert not argspec.defaults, 'defaults not supported'
+
     args = ', '.join(argspec.args[1:])
     source = _method_code_template.format(method=name, args=args)
     glbls = {}
@@ -54,13 +68,14 @@ class BoxedJitClassInstance(object):
         # Inject attributes as class properties
         for field in typ.struct:
             if not field.startswith('_'):
-                fn = _generate_accessor(field)
-                dct[field] = property(fn)
+                getter = _generate_getter(field)
+                setter = _generate_setter(field)
+                dct[field] = property(getter, setter)
         # Inject methods as class members
         for name, func in typ.methods.items():
             if not name.startswith('_'):
-                fn = _generate_method(name, func)
-                dct[name] = fn
+                getter = _generate_method(name, func)
+                dct[name] = getter
         # Create a new subclass
         newcls = type(typ.classname, (cls,), dct)
         return object.__new__(newcls)

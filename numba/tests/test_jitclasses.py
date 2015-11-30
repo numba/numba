@@ -212,6 +212,14 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(obj.x, 1 + 123)
         self.assertEqual(obj.y, 2 + 123)
 
+        # Setter from python
+        obj.x = 333
+        obj.y = 444
+        obj.arr = newarr = np.arange(5, dtype=np.float32)
+        self.assertEqual(obj.x, 333)
+        self.assertEqual(obj.y, 444)
+        self.assertIs(obj.arr, newarr)
+
 
 if __name__ == '__main__':
     unittest.main()
