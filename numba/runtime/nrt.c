@@ -328,8 +328,8 @@ void NRT_MemInfo_acquire(NRT_MemInfo *mi) {
 
 void NRT_MemInfo_call_dtor(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
-    if (mi->dtor)
-        /* We have a destructor */
+    if (mi->dtor && !TheMSys.shutting)
+        /* We have a destructor and the system is not shutting down */
         mi->dtor(mi->data, mi->dtor_info);
     /* Clear and release MemInfo */
     NRT_MemInfo_destroy(mi);
