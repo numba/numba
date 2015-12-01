@@ -1280,6 +1280,131 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
     return 1;
 }
 
+/*
+ * BLAS calling helpers
+ */
+
+/* Fetch the address of the given CBLAS function, as exposed by
+   scipy.linalg.cython_blas. */
+static void *
+import_cblas_function(const char *function_name)
+{
+    PyObject *module, *capi, *cobj;
+    void *res = NULL;
+
+    module = PyImport_ImportModule("scipy.linalg.cython_blas");
+    if (module == NULL)
+        return NULL;
+    capi = PyObject_GetAttrString(module, "__pyx_capi__");
+    Py_DECREF(module);
+    if (capi == NULL)
+        return NULL;
+    cobj = PyMapping_GetItemString(capi, function_name);
+    Py_DECREF(capi);
+    if (cobj == NULL)
+        return NULL;
+#if PY_MAJOR_VERSION >= 3 || (PY_MINOR_VERSION >= 7)
+    {
+        /* 2.7+ => Cython exports a PyCapsule object */
+        const char *capsule_name = PyCapsule_GetName(cobj);
+        if (capsule_name != NULL) {
+            res = PyCapsule_GetPointer(cobj, capsule_name);
+        }
+        Py_DECREF(cobj);
+        return res;
+    }
+#else
+#error XXX 2.6
+#endif
+}
+
+/* Fast getters caching the value of a function's address after
+   the first call to import_cblas_function(). */
+
+#define EMIT_GET_CBLAS_FUNC(name)                            \
+    static void *cblas_ ## name = NULL;                      \
+    static void *get_cblas_ ## name(void) {                  \
+        if (cblas_ ## name == NULL)                          \
+            cblas_ ## name = import_cblas_function(# name);  \
+        return cblas_ ## name;                               \
+    }
+
+EMIT_GET_CBLAS_FUNC(dgemm)
+EMIT_GET_CBLAS_FUNC(sgemm)
+EMIT_GET_CBLAS_FUNC(cgemm)
+EMIT_GET_CBLAS_FUNC(zgemm)
+
+#undef EMIT_GET_CBLAS_FUNC
+
+/*
+ * For example:
+    void dgemm(char *transa, char *transb,
+               int *m, int *n, int *k,
+               d *alpha, d *a, int *lda,
+               d *b, int *ldb, d *beta,
+               d *c, int *ldc)
+*/
+typedef void (*xxgemm_t)(char *transa, char *transb,
+                         int *m, int *n, int *k,
+                         void *alpha, void *a, int *lda,
+                         void *b, int *ldb, void *beta,
+                         void *c, int *ldc);
+
+NUMBA_EXPORT_FUNC(int)
+numba_xxgemm(char kind, char *transa, char *transb,
+             Py_ssize_t m, Py_ssize_t n, Py_ssize_t k,
+             void *alpha, void *a, Py_ssize_t lda,
+             void *b, Py_ssize_t ldb, void *beta,
+             void *c, Py_ssize_t ldc)
+{
+    void *raw_func = NULL;
+    int _m, _n, _k;
+    int _lda, _ldb, _ldc;
+
+    switch (kind) {
+        case 'd':
+            raw_func = get_cblas_dgemm();
+            break;
+        case 's':
+            raw_func = get_cblas_sgemm();
+            break;
+        case 'c':
+            raw_func = get_cblas_cgemm();
+            break;
+        case 'z':
+            raw_func = get_cblas_zgemm();
+            break;
+        default:
+            PyErr_SetString(PyExc_ValueError,
+                            "invalid kind of *GEMM function");
+            return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+#define CHECK_INT(varname)                                         \
+    _ ## varname = (int) varname;                                  \
+    if (_ ## varname != varname) {                                 \
+        PyErr_SetString(PyExc_OverflowError,                       \
+                        "array dimension does not fit in C int");  \
+        return -1;                                                 \
+    }
+
+    CHECK_INT(m)
+    CHECK_INT(n)
+    CHECK_INT(k)
+    CHECK_INT(lda)
+    CHECK_INT(ldb)
+    CHECK_INT(ldc)
+
+#undef CHECK_INT
+
+    (*(xxgemm_t) raw_func)(transa, transb, &_m, &_n, &_k, alpha, a, &_lda,
+                           b, &_ldb, beta, c, &_ldc);
+    return 0;
+}
+
+
 /* We use separate functions for datetime64 and timedelta64, to ensure
  * proper type checking.
  */

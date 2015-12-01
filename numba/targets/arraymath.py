@@ -6,8 +6,9 @@ from __future__ import print_function, absolute_import, division
 
 import math
 
+from llvmlite import ir
 import llvmlite.llvmpy.core as lc
-from llvmlite.llvmpy.core import Constant
+from llvmlite.llvmpy.core import Constant, Type
 
 import numpy
 from numba import types, cgutils, typing
@@ -611,3 +612,110 @@ def any_where(context, builder, sig, args):
 
     res = context.compile_internal(builder, scalar_where_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+#----------------------------------------------------------------------------
+# Linear algebra
+
+ll_char = ir.IntType(8)
+ll_char_p = ll_char.as_pointer()
+ll_void_p = ll_char_p
+intp_t = cgutils.intp_t
+
+@builtin
+@implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array))
+def dot_2(context, builder, sig, args):
+    def dot_2_impl(a, b):
+        m, k = a.shape
+        _k, n = b.shape
+        if k != _k:
+            raise ValueError("incompatible array shapes for np.dot(a, b): "
+                             "a.shape[1] != b.shape[0]")
+        out = numpy.empty((m, n), a.dtype)
+        return numpy.dot(a, b, out)
+
+    res = context.compile_internal(builder, dot_2_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+@builtin
+@implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array))
+def dot_3(context, builder, sig, args):
+    xty, yty, outty = sig.args
+    assert outty == sig.return_type
+    dtype = xty.dtype
+    #ll_dtype = context.get_value_type(dtype)
+
+    x = make_array(xty)(context, builder, args[0])
+    y = make_array(yty)(context, builder, args[1])
+    out = make_array(outty)(context, builder, args[2])
+    x_shapes = cgutils.unpack_tuple(builder, x.shape)
+    y_shapes = cgutils.unpack_tuple(builder, y.shape)
+    out_shapes = cgutils.unpack_tuple(builder, out.shape)
+    m, k = x_shapes
+    _k, n = y_shapes
+
+    def check_args(a, b, out):
+        m, k = a.shape
+        _k, n = b.shape
+        if k != _k:
+            raise ValueError("incompatible array shapes for np.dot(a, b, out): "
+                             "a.shape[1] != b.shape[0]")
+        if out.shape != (m, n):
+            raise ValueError("incompatible output array shape for np.dot(a, b, out): "
+                             "out.shape != (a.shape[0], b.shape[1])")
+
+    context.compile_internal(builder, check_args,
+                             signature(types.none, *sig.args), args)
+
+    fnty = ir.FunctionType(ir.VoidType(),
+                           [ll_char,                       # kind
+                            ll_char_p, ll_char_p,          # transa, transb
+                            intp_t, intp_t, intp_t,        # m, n, k
+                            ll_void_p, ll_void_p, intp_t,  # alpha, a, lda
+                            ll_void_p, intp_t, ll_void_p,  # b, ldb, beta
+                            ll_void_p, intp_t,             # c, ldc
+                           ])
+    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgemm")
+
+    def make_constant_slot(ty, val):
+        const = context.get_constant_generic(builder, ty, val)
+        return cgutils.alloca_once_value(builder, const)
+
+    alpha = make_constant_slot(dtype, 1.0)
+    beta = make_constant_slot(dtype, 0.0)
+
+    trans = context.insert_const_string(builder.module, "t")
+    notrans = context.insert_const_string(builder.module, "n")
+
+    # Since out is C-contiguous, compute a * b = y.T * x.T
+    assert outty.layout == 'C'
+
+    def get_array_param(ty, shapes, data):
+        return (
+                # Transpose if layout different from result's
+                notrans if ty.layout == outty.layout else trans,
+                # Size of the inner dimension in physical array order
+                shapes[1] if ty.layout == 'C' else shapes[0],
+                # The data pointer, unit-less
+                builder.bitcast(data, ll_void_p),
+                )
+
+    transa, lda, data_a = get_array_param(yty, y_shapes, y.data)
+    transb, ldb, data_b = get_array_param(xty, x_shapes, x.data)
+    _, ldc, data_c = get_array_param(outty, out_shapes, out.data)
+
+    kind = {
+        types.float32: 's',
+        types.float64: 'd',
+        types.complex64: 'c',
+        types.complex128: 'z',
+        }[dtype]
+    kind_val = ir.Constant(ll_char, ord(kind))
+
+    builder.call(fn, (kind_val, transa, transb, n, m, k,
+                      builder.bitcast(alpha, ll_void_p), data_a, lda,
+                      data_b, ldb, builder.bitcast(beta, ll_void_p),
+                      data_c, ldc))
+
+    return impl_ret_borrowed(context, builder, sig.return_type, out._getvalue())

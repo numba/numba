@@ -697,6 +697,9 @@ class Dot(CallableTemplate):
             if not all(x.dtype == a.dtype for x in all_args):
                 raise NotImplementedError("np.dot() arguments must all have "
                                           "the same dtype")
+            if not isinstance(a.dtype, (types.Float, types.Complex)):
+                raise NotImplementedError("np.dot() only supported on "
+                                          "float and complex arrays")
             if out:
                 return out
             else:
