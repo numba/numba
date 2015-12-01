@@ -150,8 +150,8 @@ def _box_class_instance(c, typ, val):
     res = c.pyapi.call_function_objargs(box_cls, args)
 
     # Clean up
-    for obj in args:
-        c.pyapi.decref(obj)
+    c.pyapi.decref(addr_meminfo)
+    c.pyapi.decref(addr_dataptr)
 
     return res
 
