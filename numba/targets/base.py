@@ -533,14 +533,22 @@ class BaseContext(object):
         return obj
 
     def get_attribute(self, val, typ, attr):
-        if isinstance(typ, types.Optional):
+        if isinstance(typ, (types.Optional, types.DeferredType)):
             elemty = self.typing_context.resolve_getattr(typ, attr)
+
+            if isinstance(typ, types.Optional):
+                inner_type = typ.type
+
+            elif isinstance(typ, types.DeferredType):
+                inner_type = typ.get()
+            else:
+                raise AssertionError("unreachable")
 
             @impl_attribute(typ, attr, elemty)
             def imp(context, builder, typ, val):
-                val = context.cast(builder, val, typ, typ.type)
-                imp = context.get_attribute(val, typ.type, attr)
-                return imp(context, builder, typ.type, val, attr)
+                val = context.cast(builder, val, typ, inner_type)
+                imp = context.get_attribute(val, inner_type, attr)
+                return imp(context, builder, inner_type, val, attr)
 
             return imp
 

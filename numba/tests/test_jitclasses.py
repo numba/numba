@@ -171,11 +171,19 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec['data'] = float32
         spec['next'] = optional(node_type)
 
+        @njit
+        def get_data(node):
+            return node.data
+
         @jitclass(spec)
         class LinkedNode(object):
             def __init__(self, data, next):
                 self.data = data
                 self.next = next
+
+            def get_next_data(self):
+                # use deferred type as argument
+                return get_data(self.next)
 
         node_type.define(LinkedNode.class_type.instance_type)
 
@@ -189,6 +197,11 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(first._meminfo.refcount, 2)
         self.assertEqual(second._meminfo.refcount, 1)
 
+        # Test using deferred type as argument
+        first_val = second.get_next_data()
+        self.assertEqual(first_val, first.data)
+
+        # Check ownership
         self.assertEqual(first._meminfo.refcount, 2)
         del second
         self.assertEqual(first._meminfo.refcount, 1)

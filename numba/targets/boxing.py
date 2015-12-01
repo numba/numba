@@ -610,3 +610,12 @@ def box_deferred(c, typ, val):
                                     c.builder.extract_value(val, [0]),
                                     env_manager=c.env_manager)
     return out
+
+
+@unbox(types.DeferredType)
+def unbox_deferred(c, typ, obj):
+    native_value= c.pyapi.to_native_value(typ.get(), obj)
+    model = c.context.data_model_manager[typ]
+    res = model.set(c.builder, model.make_uninitialized(), native_value.value)
+    return NativeValue(res, is_error=native_value.is_error,
+                       cleanup=native_value.cleanup)

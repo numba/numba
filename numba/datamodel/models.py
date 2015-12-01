@@ -1013,6 +1013,17 @@ class DeferredStructModel(CompositeModel):
     def get_data_type(self):
         return ir.global_context.get_identified_type(self.typename + '.data')
 
+    def get_argument_type(self):
+        return self._actual_model.get_argument_type()
+
+    def as_argument(self, builder, value):
+        inner = self.get(builder, value)
+        return self._actual_model.as_argument(builder, inner)
+
+    def from_argument(self, builder, value):
+        res = self._actual_model.from_argument(builder, value)
+        return self.set(builder, self.make_uninitialized(), res)
+
     def from_data(self, builder, value):
         self._define()
         elem = builder.extract_value(value, [0])
@@ -1029,6 +1040,19 @@ class DeferredStructModel(CompositeModel):
 
     def from_return(self, builder, value):
         return self.from_data(builder, value)
+
+    def get(self, builder, value):
+        return builder.extract_value(value, [0])
+
+    def set(self, builder, value, content):
+        return builder.insert_value(value, content, [0])
+
+    def make_uninitialized(self, kind='value'):
+        if kind == 'value':
+            ty = self.get_value_type()
+        else:
+            ty = self.get_data_type()
+        return ir.Constant(ty, ir.Undefined)
 
     def _define(self):
         valty = self.get_value_type()

@@ -114,7 +114,10 @@ class BaseContext(object):
 
     def resolve_getattr(self, value, attr):
         if isinstance(value, types.Optional):
-            value = value.type
+            return self.resolve_getattr(value.type, attr)
+
+        if isinstance(value, types.DeferredType):
+            return self.resolve_getattr(value.get(), attr)
 
         if isinstance(value, types.Record):
             ret = value.typeof(attr)
