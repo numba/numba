@@ -532,6 +532,17 @@ class BaseContext(object):
         return obj
 
     def get_attribute(self, val, typ, attr):
+        if isinstance(typ, types.Optional):
+            elemty = self.typing_context.resolve_getattr(typ, attr)
+
+            @impl_attribute(typ, attr, elemty)
+            def imp(context, builder, typ, val):
+                val = context.cast(builder, val, typ, typ.type)
+                imp = context.get_attribute(val, typ.type, attr)
+                return imp(context, builder, typ.type, val, attr)
+
+            return imp
+
         if isinstance(typ, types.Record):
             # Implement get attribute for records
             self.sentry_record_alignment(typ, attr)

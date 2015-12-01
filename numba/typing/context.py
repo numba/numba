@@ -113,6 +113,9 @@ class BaseContext(object):
             return func.get_call_type(self, args, kws)
 
     def resolve_getattr(self, value, attr):
+        if isinstance(value, types.Optional):
+            value = value.type
+
         if isinstance(value, types.Record):
             ret = value.typeof(attr)
             assert ret
@@ -409,7 +412,7 @@ class BaseContext(object):
         """
         if first == second:
             return first
-        
+
         if first is types.undefined:
             return second
         elif second is types.undefined:
