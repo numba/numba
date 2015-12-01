@@ -1,5 +1,5 @@
 import numpy as np
-from numba import float32, int32
+from numba import float32, int32, boolean, deferred_type, optional
 from numba import njit
 from numba import unittest_support as unittest
 from numba.jitclass import jitclass
@@ -150,6 +150,48 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(obj.x, 333)
         self.assertEqual(obj.y, 444)
         self.assertIs(obj.arr, newarr)
+
+    def test_jitclass_datalayout(self):
+        spec = OrderedDict()
+        # Boolean has different layout as value vs data
+        spec['val'] = boolean
+
+        @jitclass(spec)
+        class Foo(object):
+            def __init__(self, val):
+                self.val = val
+
+        self.assertTrue(Foo(True).val)
+        self.assertFalse(Foo(False).val)
+
+    def test_deferred_type(self):
+        node_type = deferred_type()
+
+        spec = OrderedDict()
+        spec['data'] = float32
+        spec['next'] = optional(node_type)
+
+        @jitclass(spec)
+        class LinkedNode(object):
+            def __init__(self, data, next):
+                self.data = data
+                self.next = next
+
+        node_type.define(LinkedNode.class_type.instance_type)
+
+        first = LinkedNode(123, None)
+        self.assertEqual(first.data, 123)
+        self.assertIsNone(first.next)
+
+        second = LinkedNode(321, first)
+        self.assertEqual(first._meminfo.refcount, 2)
+        self.assertEqual(second.next.data, first.data)
+        self.assertEqual(first._meminfo.refcount, 2)
+        self.assertEqual(second._meminfo.refcount, 1)
+
+        self.assertEqual(first._meminfo.refcount, 2)
+        del second
+        self.assertEqual(first._meminfo.refcount, 1)
 
 
 if __name__ == '__main__':

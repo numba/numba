@@ -604,3 +604,9 @@ def unbox_funcptr(c, typ, obj):
             c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
     return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
 
+@box(types.DeferredType)
+def box_deferred(c, typ, val):
+    out = c.pyapi.from_native_value(typ.get(),
+                                    c.builder.extract_value(val, [0]),
+                                    env_manager=c.env_manager)
+    return out

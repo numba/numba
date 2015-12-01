@@ -785,6 +785,12 @@ class BaseContext(object):
         elif fromty in types.integer_domain and toty == types.voidptr:
             return builder.inttoptr(val, self.get_value_type(toty))
 
+        elif isinstance(toty, types.DeferredType):
+            actual = self.cast(builder, val, fromty, toty.get())
+            out = llvmir.Constant(self.get_value_type(toty), llvmir.Undefined)
+            ret = builder.insert_value(out, actual, [0])
+            return ret
+
         raise NotImplementedError("cast", val, fromty, toty)
 
     def generic_compare(self, builder, key, argtypes, args):
