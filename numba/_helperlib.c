@@ -1305,17 +1305,21 @@ import_cblas_function(const char *function_name)
         return NULL;
 #if PY_MAJOR_VERSION >= 3 || (PY_MINOR_VERSION >= 7)
     {
-        /* 2.7+ => Cython exports a PyCapsule object */
+        /* 2.7+ => Cython exports a PyCapsule */
         const char *capsule_name = PyCapsule_GetName(cobj);
         if (capsule_name != NULL) {
             res = PyCapsule_GetPointer(cobj, capsule_name);
         }
         Py_DECREF(cobj);
-        return res;
     }
 #else
-#error XXX 2.6
+    {
+        /* 2.6 => Cython exports a legacy PyCObject */
+        res = PyCObject_AsVoidPtr(cobj);
+        Py_DECREF(cobj);
+    }
 #endif
+    return res;
 }
 
 /* Fast getters caching the value of a function's address after
