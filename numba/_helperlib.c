@@ -1361,6 +1361,7 @@ numba_xxgemm(char kind, char *transa, char *transb,
              void *b, Py_ssize_t ldb, void *beta,
              void *c, Py_ssize_t ldc)
 {
+    /* TODO make sure this works in nogil mode */
     void *raw_func = NULL;
     int _m, _n, _k;
     int _lda, _ldb, _ldc;
