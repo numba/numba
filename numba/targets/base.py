@@ -830,12 +830,12 @@ class BaseContext(object):
 
         elif isinstance(toty, types.DeferredType):
             actual = self.cast(builder, val, fromty, toty.get())
-            out = llvmir.Constant(self.get_value_type(toty), llvmir.Undefined)
-            ret = builder.insert_value(out, actual, [0])
-            return ret
+            model = self.data_model_manager[toty]
+            return model.set(builder, model.make_uninitialized(), actual)
 
         elif isinstance(fromty, types.DeferredType):
-            val = builder.extract_value(val, [0])
+            model = self.data_model_manager[fromty]
+            val = model.get(builder, val)
             return self.cast(builder, val, fromty.get(), toty)
 
         raise NotImplementedError("cast", val, fromty, toty)

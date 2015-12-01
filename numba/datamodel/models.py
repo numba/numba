@@ -1026,17 +1026,17 @@ class DeferredStructModel(CompositeModel):
 
     def from_data(self, builder, value):
         self._define()
-        elem = builder.extract_value(value, [0])
+        elem = self.get(builder, value)
         value = self._actual_model.from_data(builder, elem)
-        out = ir.Constant(self.get_value_type(), ir.Undefined)
-        return builder.insert_value(out, value, [0])
+        out = self.make_uninitialized()
+        return self.set(builder, out, value)
 
     def as_data(self, builder, value):
         self._define()
-        elem = builder.extract_value(value, [0])
+        elem = self.get(builder, value)
         value = self._actual_model.as_data(builder, elem)
-        out = ir.Constant(self.get_data_type(), ir.Undefined)
-        return builder.insert_value(out, value, [0])
+        out = self.make_uninitialized(kind='data')
+        return self.set(builder, out, value)
 
     def from_return(self, builder, value):
         return self.from_data(builder, value)
