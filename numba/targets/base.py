@@ -760,6 +760,27 @@ class BaseContext(object):
         elif fromty == types.none and isinstance(toty, types.Optional):
             return self.make_optional_none(builder, toty.type)
 
+        elif (isinstance(toty, types.Optional) and
+                  isinstance(fromty, types.Optional)):
+            optty = self.make_optional(fromty)
+            optval = optty(self, builder, value=val)
+            validbit = cgutils.as_bool_bit(builder, optval.valid)
+
+            outoptty = self.make_optional(toty)
+            outoptval = outoptty(self, builder)
+
+            with builder.if_else(validbit) as (is_valid, is_not_valid):
+                with is_valid:
+                    # Cast internal value
+                    outoptval.valid = cgutils.true_bit
+                    outoptval.data = self.cast(builder, optval.data,
+                                               fromty.type, toty.type)
+
+                with is_not_valid:
+                    outoptval.valid = cgutils.false_bit
+
+            return outoptval._getvalue()
+
         elif isinstance(toty, types.Optional):
             casted = self.cast(builder, val, fromty, toty.type)
             return self.make_optional_value(builder, toty.type, casted)
@@ -772,7 +793,7 @@ class BaseContext(object):
                 msg = "expected %s, got None" % (fromty.type,)
                 self.call_conv.return_user_exc(builder, TypeError, (msg,))
 
-            return optval.data
+            return self.cast(builder, optval.data, fromty.type, toty)
 
         elif (isinstance(fromty, types.Array) and
               isinstance(toty, types.Array)):
