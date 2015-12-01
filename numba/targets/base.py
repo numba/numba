@@ -778,6 +778,8 @@ class BaseContext(object):
 
                 with is_not_valid:
                     outoptval.valid = cgutils.false_bit
+                    outoptval.data = cgutils.get_null_value(
+                        outoptval.data.type)
 
             return outoptval._getvalue()
 

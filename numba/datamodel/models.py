@@ -572,6 +572,9 @@ class StructModel(CompositeModel):
         return self._models[pos]
 
     def traverse(self, builder, value):
+        if value.type != self.get_value_type():
+            args = self.get_value_type(), value.type
+            raise TypeError("expecting {0} but got {1}".format(*args))
         out = [(self.get_type(k), self.get(builder, value, k))
                 for k in self._fields]
         return out
