@@ -671,6 +671,43 @@ builtin_global(numpy.sort, types.Function(NdSort))
 
 
 # -----------------------------------------------------------------------------
+# Linear algebra
+
+@builtin
+class Dot(CallableTemplate):
+    key = numpy.dot
+
+    def generic(self):
+        def typer(a, b, out=None):
+            if not isinstance(a, types.Array) or not isinstance(b, types.Array):
+                return
+            if out is not None:
+                if not isinstance(out, types.Array) or out.layout != 'C':
+                    raise TypeError("output must be a C-contiguous array")
+                all_args = (a, b, out)
+            else:
+                all_args = (a, b)
+            if not all(x.layout in 'CF' for x in (a, b)):
+                # Numpy seems to allow non-contiguous arguments, but we
+                # don't (we would need to copy before calling BLAS)
+                raise NotImplementedError("np.dot() only supported on "
+                                          "contiguous arrays")
+            if not all(x.ndim == 2 for x in all_args):
+                raise NotImplementedError("np.dot() only supported on 2-D arrays")
+            if not all(x.dtype == a.dtype for x in all_args):
+                raise NotImplementedError("np.dot() arguments must all have "
+                                          "the same dtype")
+            if out:
+                return out
+            else:
+                return types.Array(a.dtype, 2, 'C')
+
+        return typer
+
+builtin_global(numpy.dot, types.Function(Dot))
+
+
+# -----------------------------------------------------------------------------
 # Miscellaneous functions
 
 @builtin
