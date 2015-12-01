@@ -823,6 +823,10 @@ class BaseContext(object):
             ret = builder.insert_value(out, actual, [0])
             return ret
 
+        elif isinstance(fromty, types.DeferredType):
+            val = builder.extract_value(val, [0])
+            return self.cast(builder, val, fromty.get(), toty)
+
         raise NotImplementedError("cast", val, fromty, toty)
 
     def generic_compare(self, builder, key, argtypes, args):
