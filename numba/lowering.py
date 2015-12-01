@@ -680,7 +680,9 @@ class Lower(BaseLower):
             if isinstance(resty, types.BoundFunction):
                 # if we are getting out a method, assume we have typed this
                 # properly and just build a bound function object
-                res = self.context.get_bound_function(self.builder, val, ty)
+                casted = self.context.cast(self.builder, val, ty, resty.this)
+                res = self.context.get_bound_function(self.builder, casted,
+                                                      resty.this)
                 self.incref(resty, res)
                 return res
             else:

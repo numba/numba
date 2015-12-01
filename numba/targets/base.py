@@ -529,6 +529,7 @@ class BaseContext(object):
         return self.generators[genty][1]
 
     def get_bound_function(self, builder, obj, ty):
+        assert self.get_value_type(ty) == obj.type
         return obj
 
     def get_attribute(self, val, typ, attr):
