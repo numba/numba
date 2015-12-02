@@ -699,7 +699,7 @@ def dot_2_vv(context, builder, sig, args):
         n, = b.shape
         if m != n:
             raise ValueError("incompatible array sizes for np.dot(a, b) "
-                             "(matrix * matrix)")
+                             "(vector * vector)")
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
