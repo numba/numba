@@ -172,7 +172,9 @@ class TestCase(unittest.TestCase):
                          "strides differ")
 
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
-                           msg=None, ignore_sign_on_zero=False):
+                           msg=None, ignore_sign_on_zero=False,
+                           abs_tol=None
+                           ):
         """
         Versatile equality testing function with more built-in checks than
         standard assertEqual().
@@ -194,13 +196,20 @@ class TestCase(unittest.TestCase):
         can be lowered by raising the *ulps* value.
         ignore_sign_on_zero can be set to True if zeros are to be considered
         equal regardless of their sign bit.
+        abs_tol if this is set to a float value its value is used in the
+        following. If, however, this is set to the string "eps" then machine
+        precision of the type(first) is used in the following instead. This
+        kwarg is used to check if the absolute difference in value between first
+        and second is less than the value set, if so the numbers being compared
+        are considered equal. (This is to handle small numbers typically of
+        magnitude less than machine precision).
 
         Any value of *prec* other than 'exact', 'single' or 'double'
         will raise an error.
         """
         try:
             self._assertPreciseEqual(first, second, prec, ulps, msg,
-                ignore_sign_on_zero)
+                ignore_sign_on_zero, abs_tol)
         except AssertionError as exc:
             failure_msg = str(exc)
             # Fall off of the 'except' scope to avoid Python 3 exception
@@ -211,7 +220,8 @@ class TestCase(unittest.TestCase):
         self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
 
     def _assertPreciseEqual(self, first, second, prec='exact', ulps=1,
-                            msg=None, ignore_sign_on_zero=False):
+                            msg=None, ignore_sign_on_zero=False,
+                            abs_tol=None):
         """Recursive workhorse for assertPreciseEqual()."""
 
         def _assertNumberEqual(first, second, delta=None):
@@ -234,7 +244,8 @@ class TestCase(unittest.TestCase):
         first_family = self._detect_family(first)
         second_family = self._detect_family(second)
 
-        assertion_message = "Type Family mismatch. (%s != %s)" % (first_family, second_family)
+        assertion_message = "Type Family mismatch. (%s != %s)" % (first_family,
+            second_family)
         if msg:
             assertion_message += ': %s' % (msg,)
         self.assertEqual(first_family, second_family, msg=assertion_message)
@@ -253,22 +264,22 @@ class TestCase(unittest.TestCase):
             self.assertEqual(first.flags.writeable, second.flags.writeable,
                              "different mutability")
             # itemsize is already checked by the dtype test above
-            self.assertEqual(self._fix_strides(first), self._fix_strides(second),
-                             "different strides")
+            self.assertEqual(self._fix_strides(first),
+                self._fix_strides(second), "different strides")
             if first.dtype != dtype:
                 first = first.astype(dtype)
             if second.dtype != dtype:
                 second = second.astype(dtype)
             for a, b in zip(first.flat, second.flat):
                 self._assertPreciseEqual(a, b, prec, ulps, msg,
-                                         ignore_sign_on_zero)
+                                         ignore_sign_on_zero, abs_tol)
             return
 
         if compare_family == "sequence":
             self.assertEqual(len(first), len(second), msg=msg)
             for a, b in zip(first, second):
                 self._assertPreciseEqual(a, b, prec, ulps, msg,
-                                         ignore_sign_on_zero)
+                                         ignore_sign_on_zero, abs_tol)
             return
 
         if compare_family == "exact":
@@ -295,6 +306,19 @@ class TestCase(unittest.TestCase):
         except TypeError:
             # Not floats.
             pass
+
+        # if absolute comparison is set, use it
+        if abs_tol is not None:
+            if abs_tol == "eps":
+                rtol = np.finfo(type(first)).eps
+            elif isinstance(abs_tol, float):
+                rtol = abs_tol
+            else:
+                self.fail(
+                    self._formatMessage(
+                        msg, "abs_tol is not \"eps\" or a float"))
+            if abs(first - second) < rtol:
+                return
 
         exact_comparison = exact_comparison or prec == 'exact'
 

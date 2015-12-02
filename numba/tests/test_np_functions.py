@@ -34,7 +34,7 @@ class TestNPFunctions(TestCase):
     def run_unary_real(self, pyfunc, x_types, x_values,
         flags=no_pyobj_flags, prec='exact',
         func_extra_types=None, func_extra_args=None,
-        ignore_sign_on_zero=False, **kwargs):
+        ignore_sign_on_zero=False, abs_tol=None, **kwargs):
         """
         Runs tests for a unary function operating in the numerical real space.
 
@@ -69,7 +69,8 @@ class TestNPFunctions(TestCase):
                     self.assertPreciseEqual(got, expected,
                                             prec=actual_prec, msg=msg,
                                             ignore_sign_on_zero=
-                                            ignore_sign_on_zero, **kwargs)
+                                            ignore_sign_on_zero,
+                                            abs_tol=abs_tol, **kwargs)
                 else:
                     for xtype, xargs in zip(func_extra_types, func_extra_args):
                         cr = self.ccache.compile(pyfunc, (tx,xtype), flags=f)
@@ -82,11 +83,12 @@ class TestNPFunctions(TestCase):
                                                 prec=actual_prec,
                                                 msg=msg,
                                                 ignore_sign_on_zero=
-                                                ignore_sign_on_zero, **kwargs)
+                                                ignore_sign_on_zero,
+                                                abs_tol=abs_tol, **kwargs)
 
     def run_unary_complex(self, pyfunc, x_types, x_values, ulps=1,
                   func_extra_types=None, func_extra_args=None,
-                  ignore_sign_on_zero=False,
+                  ignore_sign_on_zero=False, abs_tol=None,
                   flags=no_pyobj_flags):
         """
         Runs tests for a unary function operating in the numerical complex
@@ -129,7 +131,8 @@ class TestNPFunctions(TestCase):
                         self.assertPreciseEqual(got, expected, prec=prec,
                                                 ulps=ulps, msg=msg,
                                                 ignore_sign_on_zero=
-                                                ignore_sign_on_zero)
+                                                ignore_sign_on_zero,
+                                                abs_tol=abs_tol)
                 else:
                     for xtype, xargs in zip(func_extra_types, func_extra_args):
                         cr = self.ccache.compile(pyfunc, (tx,xtype), flags=f)
@@ -147,7 +150,8 @@ class TestNPFunctions(TestCase):
                             self.assertPreciseEqual(got, expected, prec=prec,
                                                     ulps=ulps, msg=msg,
                                                     ignore_sign_on_zero=
-                                                    ignore_sign_on_zero)
+                                                    ignore_sign_on_zero,
+                                                    abs_tol=abs_tol)
 
     def test_sinc(self, flags=no_pyobj_flags):
         """
@@ -160,19 +164,34 @@ class TestNPFunctions(TestCase):
         # See: https://github.com/numpy/numpy/pull/6699
         isoz = True
 
+        # Testing sinc(1.) leads to sin(pi)/pi, which is below machine
+        # precision in practice on most machines. Small floating point
+        # differences in sin() etc. may lead to large differences in the result
+        # that are at a range that in accessible using standard width
+        # floating point representations.
+        # e.g. Assume float64 type.
+        # sin(pi) ~= 1e-16, but should be zero
+        # sin(pi)/pi ~= 1e-17, should be zero, error carried from above
+        # float64 has log10(2^53)~=15.9 digits of precision and the magnitude
+        # change in the alg is > 16  digits (1.0...0 -> 0.0...0),
+        # so comparison via ULP is invalid.
+        # We therefore opt to assume that values under machine precision are
+        # equal in this case.
+        tol="eps"
+
         pyfunc = sinc
 
         # real domain scalar context
         x_values = [1., -1., 0.0, -0.0, 0.5, -0.5, 5, -5, 5e-21, -5e-21]
         x_types = [types.float32, types.float64] * (len(x_values) // 2)
         self.run_unary_real(pyfunc, x_types, x_values, flags,
-                            ignore_sign_on_zero=isoz)
+                            ignore_sign_on_zero=isoz, abs_tol=tol)
 
         # real domain vector context
         x_values = np.array(x_values)
         x_types = [types.float32, types.float64]
         self.run_unary_real(pyfunc, x_types, x_values, flags=flags,
-                               ignore_sign_on_zero=isoz)
+                               ignore_sign_on_zero=isoz, abs_tol=tol)
 
         # complex domain scalar context
         x_values = [1.+0j, -1+0j, 0.0+0.0j, -0.0+0.0j, 0+1j, 0-1j, 0.5+0.0j,
@@ -182,13 +201,13 @@ class TestNPFunctions(TestCase):
                     ]
         x_types = [types.complex64, types.complex128] * (len(x_values) // 2)
         self.run_unary_complex(pyfunc, x_types, x_values, flags=flags,
-                               ignore_sign_on_zero=isoz)
+                               ignore_sign_on_zero=isoz, abs_tol=tol)
 
         # complex domain vector context
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         self.run_unary_complex(pyfunc, x_types, x_values, flags=flags,
-                               ignore_sign_on_zero=isoz)
+                               ignore_sign_on_zero=isoz, abs_tol=tol)
 
 
     def test_angle(self, flags=no_pyobj_flags):
