@@ -25,7 +25,7 @@ hsa_device_type_t = ctypes.c_int # enum
 hsa_system_info_t = ctypes.c_int # enum
 hsa_agent_info_t = ctypes.c_int # enum
 hsa_region_segment_t = ctypes.c_int # enum
-hsa_region_flag_t = ctypes.c_int # enum
+hsa_region_global_flag_t = ctypes.c_int # enum
 hsa_region_info_t = ctypes.c_int # enum
 hsa_executable_state_t = ctypes.c_int # enum
 hsa_executable_symbol_info_t = ctypes.c_int # enum
@@ -573,6 +573,17 @@ API_PROTOTYPES = {
         'argtypes': [ctypes.c_void_p],
         'errcheck': _check_error
     },
+
+    # hsa_status_t HSA_API hsa_memory_copy(
+    #     void * dst,
+    #     const void * src,
+    #     size_t size);
+    'hsa_memory_copy': {
+        'restype': hsa_status_t,
+        'argtypes': [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t],
+        'errcheck': _check_error
+    },
+
 
 
     # Signals ##################################################################
