@@ -1337,22 +1337,85 @@ EMIT_GET_CBLAS_FUNC(dgemm)
 EMIT_GET_CBLAS_FUNC(sgemm)
 EMIT_GET_CBLAS_FUNC(cgemm)
 EMIT_GET_CBLAS_FUNC(zgemm)
+EMIT_GET_CBLAS_FUNC(ddot)
+EMIT_GET_CBLAS_FUNC(sdot)
+EMIT_GET_CBLAS_FUNC(cdotu)
+EMIT_GET_CBLAS_FUNC(zdotu)
+EMIT_GET_CBLAS_FUNC(cdotc)
+EMIT_GET_CBLAS_FUNC(zdotc)
 
 #undef EMIT_GET_CBLAS_FUNC
 
-/*
- * For example:
-    void dgemm(char *transa, char *transb,
-               int *m, int *n, int *k,
-               d *alpha, d *a, int *lda,
-               d *b, int *ldb, d *beta,
-               d *c, int *ldc)
-*/
+typedef float (*sdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
+typedef double (*ddot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
+typedef npy_complex64 (*cdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
+typedef npy_complex128 (*zdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
 typedef void (*xxgemm_t)(char *transa, char *transb,
                          int *m, int *n, int *k,
                          void *alpha, void *a, int *lda,
                          void *b, int *ldb, void *beta,
                          void *c, int *ldc);
+
+#define CHECK_SIZE(varname)                                        \
+    _ ## varname = (int) varname;                                  \
+    if (_ ## varname != varname) {                                 \
+        PyErr_SetString(PyExc_OverflowError,                       \
+                        "array dimension does not fit in C int");  \
+        return -1;                                                 \
+    }
+
+
+NUMBA_EXPORT_FUNC(int)
+numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
+            void *result)
+{
+    /* TODO make sure this works in nogil mode */
+    void *raw_func = NULL;
+    int _n;
+    int inc = 1;
+
+    switch (kind) {
+        case 'd':
+            raw_func = get_cblas_ddot();
+            break;
+        case 's':
+            raw_func = get_cblas_sdot();
+            break;
+        case 'c':
+            raw_func = conjugate ? get_cblas_cdotc() : get_cblas_cdotu();
+            break;
+        case 'z':
+            raw_func = conjugate ? get_cblas_zdotc() : get_cblas_zdotu();
+            break;
+        default:
+            PyErr_SetString(PyExc_ValueError,
+                            "invalid kind of *DOT function");
+            return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    CHECK_SIZE(n)
+
+#undef CHECK_INT
+
+    switch (kind) {
+        case 'd':
+            *(double *) result = (*(ddot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
+            break;
+        case 's':
+            *(float *) result = (*(sdot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
+            break;
+        case 'c':
+            *(npy_complex64 *) result = (*(cdot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
+            break;
+        case 'z':
+            *(npy_complex128 *) result = (*(zdot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
+            break;
+    }
+
+    return 0;
+}
 
 NUMBA_EXPORT_FUNC(int)
 numba_xxgemm(char kind, char *transa, char *transb,
@@ -1387,28 +1450,19 @@ numba_xxgemm(char kind, char *transa, char *transb,
     if (raw_func == NULL)
         return -1;
 
-#define CHECK_INT(varname)                                         \
-    _ ## varname = (int) varname;                                  \
-    if (_ ## varname != varname) {                                 \
-        PyErr_SetString(PyExc_OverflowError,                       \
-                        "array dimension does not fit in C int");  \
-        return -1;                                                 \
-    }
-
-    CHECK_INT(m)
-    CHECK_INT(n)
-    CHECK_INT(k)
-    CHECK_INT(lda)
-    CHECK_INT(ldb)
-    CHECK_INT(ldc)
-
-#undef CHECK_INT
+    CHECK_SIZE(m)
+    CHECK_SIZE(n)
+    CHECK_SIZE(k)
+    CHECK_SIZE(lda)
+    CHECK_SIZE(ldb)
+    CHECK_SIZE(ldc)
 
     (*(xxgemm_t) raw_func)(transa, transb, &_m, &_n, &_k, alpha, a, &_lda,
                            b, &_ldb, beta, c, &_ldc);
     return 0;
 }
 
+#undef CHECK_SIZE
 
 /* We use separate functions for datetime64 and timedelta64, to ensure
  * proper type checking.

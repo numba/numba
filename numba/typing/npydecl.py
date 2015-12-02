@@ -681,29 +681,48 @@ class Dot(CallableTemplate):
         def typer(a, b, out=None):
             if not isinstance(a, types.Array) or not isinstance(b, types.Array):
                 return
+            if not all(x.ndim in (1, 2) for x in (a, b)):
+                raise TypingError("np.dot() only supported on 1-D and 2-D arrays")
+            # Output dimensionality
+            ndims = set([a.ndim, b.ndim])
+            if ndims == set([2]):
+                # M * M
+                out_ndim = 2
+            elif ndims == set([1, 2]):
+                # M* V and V * M
+                out_ndim = 1
+            elif ndims == set([1]):
+                # V * V
+                out_ndim = 0
+
             if out is not None:
+                if out_ndim == 0:
+                    raise TypeError("explicit output unsupported for vector * vector")
+                elif out.ndim != out_ndim:
+                    raise TypeError("explicit output has incorrect dimensionality")
                 if not isinstance(out, types.Array) or out.layout != 'C':
                     raise TypeError("output must be a C-contiguous array")
                 all_args = (a, b, out)
             else:
                 all_args = (a, b)
+
             if not all(x.layout in 'CF' for x in (a, b)):
                 # Numpy seems to allow non-contiguous arguments, but we
                 # don't (we would need to copy before calling BLAS)
-                raise NotImplementedError("np.dot() only supported on "
-                                          "contiguous arrays")
-            if not all(x.ndim == 2 for x in all_args):
-                raise NotImplementedError("np.dot() only supported on 2-D arrays")
+                raise TypingError("np.dot() only supported on "
+                                  "contiguous arrays")
             if not all(x.dtype == a.dtype for x in all_args):
-                raise NotImplementedError("np.dot() arguments must all have "
-                                          "the same dtype")
+                raise TypingError("np.dot() arguments must all have "
+                                  "the same dtype")
             if not isinstance(a.dtype, (types.Float, types.Complex)):
-                raise NotImplementedError("np.dot() only supported on "
-                                          "float and complex arrays")
+                raise TypingError("np.dot() only supported on "
+                                  "float and complex arrays")
             if out:
                 return out
+            elif out_ndim > 0:
+                return types.Array(a.dtype, out_ndim, 'C')
             else:
-                return types.Array(a.dtype, 2, 'C')
+                return a.dtype
 
         return typer
 

@@ -622,10 +622,23 @@ ll_char_p = ll_char.as_pointer()
 ll_void_p = ll_char_p
 intp_t = cgutils.intp_t
 
-@builtin
-@implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array))
-def dot_2(context, builder, sig, args):
-    def dot_2_impl(a, b):
+def get_blas_kind(dtype):
+    return {
+        types.float32: 's',
+        types.float64: 'd',
+        types.complex64: 'c',
+        types.complex128: 'z',
+        }[dtype]
+
+# TODO check scipy.linalg.cython_blas is available
+
+def make_constant_slot(context, builder, ty, val):
+    const = context.get_constant_generic(builder, ty, val)
+    return cgutils.alloca_once_value(builder, const)
+
+def dot_2_mm(context, builder, sig, args):
+
+    def dot_impl(a, b):
         m, k = a.shape
         _k, n = b.shape
         if k != _k:
@@ -634,8 +647,57 @@ def dot_2(context, builder, sig, args):
         out = numpy.empty((m, n), a.dtype)
         return numpy.dot(a, b, out)
 
-    res = context.compile_internal(builder, dot_2_impl, sig, args)
+    res = context.compile_internal(builder, dot_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+def dot_2_vv(context, builder, sig, args):
+    aty, bty = sig.args
+    dtype = sig.return_type
+    a = make_array(aty)(context, builder, args[0])
+    b = make_array(bty)(context, builder, args[1])
+    n, = cgutils.unpack_tuple(builder, a.shape)
+
+    def check_args(a, b):
+        m, = a.shape
+        n, = b.shape
+        if m != n:
+            raise ValueError("incompatible array shapes for np.dot(a, b): "
+                             "a.shape != b.shape")
+
+    context.compile_internal(builder, check_args,
+                             signature(types.none, *sig.args), args)
+    out = cgutils.alloca_once(builder, context.get_value_type(dtype))
+
+    fnty = ir.FunctionType(ir.IntType(32),
+                           [ll_char, ll_char, intp_t,        # kind, conjugate, n
+                            ll_void_p, ll_void_p, ll_void_p, # a, b, out
+                           ])
+    fn = builder.module.get_or_insert_function(fnty, name="numba_xxdot")
+
+    kind = get_blas_kind(dtype)
+    kind_val = ir.Constant(ll_char, ord(kind))
+
+    # TODO check error return
+    builder.call(fn, (kind_val, cgutils.false_byte, n,
+                      builder.bitcast(a.data, ll_void_p),
+                      builder.bitcast(b.data, ll_void_p),
+                      builder.bitcast(out, ll_void_p)))
+
+    return builder.load(out)
+
+
+@builtin
+@implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array))
+def dot_2(context, builder, sig, args):
+    ndims = set(x.ndim for x in sig.args[:2])
+    if ndims == set([2]):
+        return dot_2_mm(context, builder, sig, args)
+    elif ndims == set([1, 2]):
+        return dot_2_vm(context, builder, sig, args)
+    elif ndims == set([1]):
+        return dot_2_vv(context, builder, sig, args)
+    else:
+        assert 0
 
 @builtin
 @implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array),
@@ -644,7 +706,6 @@ def dot_3(context, builder, sig, args):
     xty, yty, outty = sig.args
     assert outty == sig.return_type
     dtype = xty.dtype
-    #ll_dtype = context.get_value_type(dtype)
 
     x = make_array(xty)(context, builder, args[0])
     y = make_array(yty)(context, builder, args[1])
@@ -668,7 +729,7 @@ def dot_3(context, builder, sig, args):
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
 
-    fnty = ir.FunctionType(ir.VoidType(),
+    fnty = ir.FunctionType(ir.IntType(32),
                            [ll_char,                       # kind
                             ll_char_p, ll_char_p,          # transa, transb
                             intp_t, intp_t, intp_t,        # m, n, k
@@ -678,12 +739,8 @@ def dot_3(context, builder, sig, args):
                            ])
     fn = builder.module.get_or_insert_function(fnty, name="numba_xxgemm")
 
-    def make_constant_slot(ty, val):
-        const = context.get_constant_generic(builder, ty, val)
-        return cgutils.alloca_once_value(builder, const)
-
-    alpha = make_constant_slot(dtype, 1.0)
-    beta = make_constant_slot(dtype, 0.0)
+    alpha = make_constant_slot(context, builder, dtype, 1.0)
+    beta = make_constant_slot(context, builder, dtype, 0.0)
 
     trans = context.insert_const_string(builder.module, "t")
     notrans = context.insert_const_string(builder.module, "n")
@@ -705,14 +762,10 @@ def dot_3(context, builder, sig, args):
     transb, ldb, data_b = get_array_param(xty, x_shapes, x.data)
     _, ldc, data_c = get_array_param(outty, out_shapes, out.data)
 
-    kind = {
-        types.float32: 's',
-        types.float64: 'd',
-        types.complex64: 'c',
-        types.complex128: 'z',
-        }[dtype]
+    kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
 
+    # TODO check error return
     builder.call(fn, (kind_val, transa, transb, n, m, k,
                       builder.bitcast(alpha, ll_void_p), data_a, lda,
                       data_b, ldb, builder.bitcast(beta, ll_void_p),
