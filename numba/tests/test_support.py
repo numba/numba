@@ -85,9 +85,9 @@ class TestAssertPreciseEqual(TestCase):
 
     def test_abs_tol_parse(self):
         # check invalid values in abs_tol kwarg raises
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             self.eq(np.float64(1e-17), np.float64(1e-17), abs_tol="invalid")
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             self.eq(np.float64(1), np.float64(2), abs_tol=int(7))
 
     def test_float_values(self):

@@ -167,7 +167,7 @@ class TestNPFunctions(TestCase):
         # Testing sinc(1.) leads to sin(pi)/pi, which is below machine
         # precision in practice on most machines. Small floating point
         # differences in sin() etc. may lead to large differences in the result
-        # that are at a range that in accessible using standard width
+        # that are at a range that is inaccessible using standard width
         # floating point representations.
         # e.g. Assume float64 type.
         # sin(pi) ~= 1e-16, but should be zero

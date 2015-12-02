@@ -314,9 +314,8 @@ class TestCase(unittest.TestCase):
             elif isinstance(abs_tol, float):
                 rtol = abs_tol
             else:
-                self.fail(
-                    self._formatMessage(
-                        msg, "abs_tol is not \"eps\" or a float"))
+                raise ValueError("abs_tol is not \"eps\" or a float, found %s"
+                    % abs_tol)
             if abs(first - second) < rtol:
                 return
 
