@@ -99,6 +99,19 @@ def activelanepermute_wavewidth(src, laneid, identity, useidentity):
     raise _stub_error
 
 
+def ds_permute(src_lane, dest_lane):
+    """
+    AMDGCN forwards permute (push semantics)
+    """
+    raise _stub_error
+
+
+def ds_bpermute(src_lane, dest_lane):
+    """
+    AMDGCN backwards permute (pull semantics)
+    """
+    raise _stub_error
+
 
 class Stub(object):
     """A stub object to represent special objects which is meaningless

@@ -150,14 +150,13 @@ def device_scan(tid, data, temp, inclusive):
 
     return warp_scan_res, prefixsum
 
-
 @hsa.jit(device=True)
 def shuffle_up(val, width):
     tid = hsa.get_local_id(0)
     hsa.wavebarrier()
-    res = hsa.activelanepermute_wavewidth(val, tid - width, 0, False)
+    idx = (tid + width) % _WARPSIZE
+    res = hsa.ds_permute(idx, val)
     return res
-
 
 @hsa.jit(device=True)
 def shuf_wave_inclusive_scan(val):
@@ -314,6 +313,7 @@ class TestScan(unittest.TestCase):
 
 
 class TestFasterScan(unittest.TestCase):
+
     def test_single_block(self):
         @hsa.jit
         def scan_block(data, sums):
@@ -388,21 +388,21 @@ class TestFasterScan(unittest.TestCase):
             np.testing.assert_equal(expected[-1], sums[nd])
             self.assertEqual(0, data[0])
 
-
 class TestShuffleScan(unittest.TestCase):
-    def test_shuffle(self):
+
+    def test_shuffle_ds_permute(self):
         @hsa.jit
         def foo(inp, mask, out):
             tid = hsa.get_local_id(0)
-            out[tid] = hsa.activelanepermute_wavewidth(inp[tid], mask[tid], 0,
-                                                       False)
+            out[tid] = hsa.ds_permute(inp[tid], mask[tid])
 
         inp = np.arange(64, dtype=np.intp)
+        np.random.seed(0)
         for i in range(10):
             mask = np.random.randint(0, inp.size, inp.size).astype(np.uint32)
             out = np.zeros_like(inp)
             foo[1, 64](inp, mask, out)
-            np.testing.assert_equal(inp[mask], out)
+        np.testing.assert_equal(inp[mask], out)
 
     def test_shuffle_up(self):
         @hsa.jit
@@ -430,7 +430,7 @@ class TestShuffleScan(unittest.TestCase):
         inp = np.arange(64, dtype=np.intp)
         out = np.zeros_like(inp)
         foo[1, 64](inp, out)
-        np.testing.assert_equal(out, inp.cumsum())
+        np.testing.assert_equal(inp.cumsum(), out)
 
     def test_shuf_device_inclusive_scan(self):
         @hsa.jit
@@ -443,7 +443,7 @@ class TestShuffleScan(unittest.TestCase):
         out = np.zeros_like(inp)
 
         foo[1, inp.size](inp, out)
-        np.testing.assert_equal(out, np.cumsum(inp))
+        np.testing.assert_equal(np.cumsum(inp), out)
 
 if __name__ == '__main__':
     unittest.main()

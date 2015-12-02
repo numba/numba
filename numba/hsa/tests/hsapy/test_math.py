@@ -15,6 +15,9 @@ class TestMath(unittest.TestCase):
         low_res = {
             (math.gamma, np.float64): 1e-14,
             (math.lgamma, np.float64): 1e-13,
+            (math.asin, np.float64): 1e-9,
+            (math.acos, np.float64): 4e-9,
+            (math.sqrt, np.float64): 2e-8,
         }
         default = 1e-15 if ty == np.float64 else 1e-6
         return low_res.get((math_fn, ty), default)
@@ -169,8 +172,6 @@ class TestMath(unittest.TestCase):
         for fn in funcs:
             self._generic_test_unary(fn, np.vectorize(fn))
 
-    @unittest.skipIf(True, "gamma() freezing computer on Carrizo (Kaveri may "
-                           "crash the process but no harm to system)")
     def test_gamma(self):
         funcs = [math.gamma, math.lgamma]
         for fn in funcs:

@@ -6,6 +6,7 @@ import numba.unittest_support as unittest
 
 
 class TestPositioning(unittest.TestCase):
+
     def test_kernel_jit(self):
         @hsa.jit
         def udt(output):

@@ -9,13 +9,23 @@ import atexit
 import os
 import ctypes
 import struct
+import traceback
 import weakref
-from collections import Sequence
+import logging
+from contextlib import contextmanager
+
+from collections import Sequence, defaultdict, deque
 from numba.utils import total_ordering
+from numba import mviewbuf
 from numba import utils
 from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
-from . import enums, drvapi
+from . import enums, enums_ext, drvapi
+from numba.utils import longint as long
+import numpy as np
+
+
+_logger = logging.getLogger(__name__)
 
 
 class HsaKernelTimedOut(HsaDriverError):
@@ -29,7 +39,7 @@ def _device_type_to_string(device):
         return 'Unknown'
 
 
-DEFAULT_HSA_DRIVER = '/opt/hsa/lib/libhsa-runtime64.so'
+DEFAULT_HSA_DRIVER = '/opt/rocm/lib/libhsa-runtime64.so'
 
 
 def _find_driver():
@@ -189,6 +199,7 @@ class Driver(object):
         self._agent_map = None
         self._programs = {}
         self._recycler = Recycler()
+        self._active_streams = weakref.WeakSet()
 
     def _initialize_api(self):
         if self.is_initialized:
@@ -203,9 +214,15 @@ class Driver(object):
         else:
             @atexit.register
             def shutdown():
-                for agent in self.agents:
-                    agent.release()
-                self._recycler.drain()
+                try:
+                    for agent in self.agents:
+                        agent.release()
+                except AttributeError:
+                    # this is because no agents initialised
+                    #  so self.agents isn't present
+                    pass
+                else:
+                    self._recycler.drain()
 
     def _initialize_agents(self):
         if self._agent_map is not None:
@@ -246,12 +263,12 @@ class Driver(object):
         return Program(program)
 
     def create_signal(self, initial_value, consumers=None):
-        if consumers is not None:
-            consumers_len = len(consumers)
-            consumers_type = drvapi.hsa_agent_t * consumers_len
-            consumers = consumers_type(*[c._id for c in consumers])
-        else:
-            consumers_len = 0
+        if consumers is None:
+            consumers = tuple(self.agents)
+
+        consumers_len = len(consumers)
+        consumers_type = drvapi.hsa_agent_t * consumers_len
+        consumers = consumers_type(*[c._id for c in consumers])
 
         result = drvapi.hsa_signal_t()
         self.hsa_signal_create(initial_value, consumers_len, consumers,
@@ -310,8 +327,8 @@ class Driver(object):
 
         def driver_wrapper(fn):
             def wrapped(*args, **kwargs):
+                _logger.debug('call driver api: %s', fname)
                 return fn(*args, **kwargs)
-
             return wrapped
 
         retval = driver_wrapper(libfn)
@@ -342,9 +359,22 @@ class Driver(object):
         return list(filter(lambda a: a.is_component, reversed(sorted(
             self.agents))))
 
+    def create_stream(self):
+        st = Stream()
+        self._active_streams.add(st)
+        return st
+
+    def implicit_sync(self):
+        """
+        Implicit synchronization for all asynchronous streams
+        across all devices.
+        """
+        _logger.info("implicit sync")
+        for st in self._active_streams:
+            st.synchronize()
+
 
 hsa = Driver()
-
 
 class HsaWrapper(object):
     def __getattr__(self, fname):
@@ -370,7 +400,6 @@ class HsaWrapper(object):
         return sorted(set(dir(type(self)) +
                           self.__dict__.keys() +
                           self._hsa_properties.keys()))
-
 
 @total_ordering
 class Agent(HsaWrapper):
@@ -420,6 +449,7 @@ class Agent(HsaWrapper):
         self._recycler = hsa._recycler
         self._queues = set()
         self._initialize_regions()
+        self._initialize_mempools()
 
     @property
     def device(self):
@@ -433,6 +463,10 @@ class Agent(HsaWrapper):
     def regions(self):
         return self._regions
 
+    @property
+    def mempools(self):
+        return self._mempools
+
     def _initialize_regions(self):
         region_ids = []
 
@@ -445,11 +479,24 @@ class Agent(HsaWrapper):
         self._regions = _RegionList([MemRegion.instance_for(self, region_id)
                                      for region_id in region_ids])
 
+    def _initialize_mempools(self):
+        mempool_ids = []
+
+        def on_region(_id, ctxt=None):
+            mempool_ids.append(_id)
+            return enums.HSA_STATUS_SUCCESS
+
+        callback = drvapi.HSA_AMD_AGENT_ITERATE_MEMORY_POOLS_CALLBACK(on_region)
+        hsa.hsa_amd_agent_iterate_memory_pools(self._id, callback, None)
+        self._mempools = _RegionList([MemPool.instance_for(self, mempool_id)
+                                     for mempool_id in mempool_ids])
+
     def _create_queue(self, size, callback=None, data=None,
                       private_segment_size=None, group_segment_size=None,
                       queue_type=None):
         assert queue_type is not None
         assert size <= self.queue_max_size
+
         cb_typ = drvapi.HSA_QUEUE_CALLBACK_FUNC
         cb = ctypes.cast(None, cb_typ) if callback is None else cb_typ(callback)
         result = ctypes.POINTER(drvapi.hsa_queue_t)()
@@ -540,6 +587,93 @@ class _RegionList(Sequence):
         return self._all[idx]
 
 
+class MemPool(HsaWrapper):
+    """Abstracts a HSA mem pool.
+
+    This will wrap and provide an OO interface for hsa_amd_memory_pool_t
+    C-API elements
+    """
+    _hsa_info_function = 'hsa_amd_memory_pool_get_info'
+
+    _hsa_properties = {
+        'segment': (
+            enums_ext.HSA_AMD_MEMORY_POOL_INFO_SEGMENT,
+            drvapi.hsa_amd_segment_t
+        ),
+        '_flags': (
+            enums_ext.HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS,
+            ctypes.c_uint32
+        ),
+        'size': (enums_ext.HSA_AMD_MEMORY_POOL_INFO_SIZE,
+                    ctypes.c_size_t),
+        'alloc_allowed': (enums_ext.HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED,
+                            ctypes.c_bool),
+        'alloc_granule': (enums_ext.HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE,
+                            ctypes.c_size_t),
+        'alloc_alignment': (enums_ext.HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT,
+                            ctypes.c_size_t),
+        'accessible_by_all': (enums_ext.HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL,
+                            ctypes.c_bool),
+    }
+
+    _segment_name_map = {
+        enums_ext.HSA_AMD_SEGMENT_GLOBAL: 'global',
+        enums_ext.HSA_AMD_SEGMENT_READONLY: 'readonly',
+        enums_ext.HSA_AMD_SEGMENT_PRIVATE: 'private',
+        enums_ext.HSA_AMD_SEGMENT_GROUP: 'group',
+    }
+
+    def __init__(self, agent, pool):
+        """Do not instantiate MemPool objects directly, use the factory class
+        method 'instance_for' to ensure MemPool identity"""
+        self._id = pool
+        self._owner_agent = agent
+        self._as_parameter_ = self._id
+
+    @property
+    def kind(self):
+        return self._segment_name_map[self.segment]
+
+    @property
+    def agent(self):
+        return self._owner_agent
+
+    def supports(self, check_flag):
+        """
+            Determines if a given feature is supported by this MemRegion.
+            Feature flags are found in "./enums_exp.py" under:
+                * hsa_amd_memory_pool_global_flag_t
+                Params:
+                check_flag: Feature flag to test
+        """
+        if self.kind == 'global':
+            return self._flags & check_flag
+        else:
+            return False
+
+    def allocate(self, nbytes):
+        assert self.alloc_allowed
+        #assert nbytes <= self.alloc_max_size this appears to not exist
+        assert nbytes >= 0
+        buff = ctypes.c_void_p()
+        flags = ctypes.c_uint32(0) # From API docs "Must be 0"!
+        hsa.hsa_amd_memory_pool_allocate(self._id, nbytes, flags, ctypes.byref(buff))
+        if buff.value is None:
+            raise HsaDriverError("Failed to allocate from {}".format(self))
+        return buff
+
+    _instance_dict = {}
+
+    @classmethod
+    def instance_for(cls, owner, _id):
+        try:
+            return cls._instance_dict[_id]
+        except KeyError:
+            new_instance = cls(owner, _id)
+            cls._instance_dict[_id] = new_instance
+            return new_instance
+
+
 class MemRegion(HsaWrapper):
     """Abstracts a HSA memory region.
 
@@ -553,18 +687,20 @@ class MemRegion(HsaWrapper):
         ),
         '_flags': (
             enums.HSA_REGION_INFO_GLOBAL_FLAGS,
-            drvapi.hsa_region_flag_t
+            drvapi.hsa_region_global_flag_t
         ),
+        'host_accessible': (enums_ext.HSA_AMD_REGION_INFO_HOST_ACCESSIBLE,
+                            ctypes.c_bool),
         'size': (enums.HSA_REGION_INFO_SIZE,
-                 ctypes.c_size_t),
+                    ctypes.c_size_t),
         'alloc_max_size': (enums.HSA_REGION_INFO_ALLOC_MAX_SIZE,
-                           ctypes.c_size_t),
+                            ctypes.c_size_t),
         'alloc_alignment': (enums.HSA_REGION_INFO_RUNTIME_ALLOC_ALIGNMENT,
                             ctypes.c_size_t),
         'alloc_granule': (enums.HSA_REGION_INFO_RUNTIME_ALLOC_GRANULE,
-                          ctypes.c_size_t),
+                            ctypes.c_size_t),
         'alloc_allowed': (enums.HSA_REGION_INFO_RUNTIME_ALLOC_ALLOWED,
-                          ctypes.c_bool),
+                            ctypes.c_bool),
     }
 
     _segment_name_map = {
@@ -579,31 +715,36 @@ class MemRegion(HsaWrapper):
         method 'instance_for' to ensure MemRegion identity"""
         self._id = region_id
         self._owner_agent = agent
-        self._kind = self._segment_name_map[self.segment]
+        self._as_parameter_ = self._id
 
     @property
     def kind(self):
-        return self._kind
+        return self._segment_name_map[self.segment]
 
     @property
     def agent(self):
         return self._owner_agent
 
-    @property
-    def supports_kernargs(self):
+    def supports(self, check_flag):
+        """
+            Determines if a given feature is supported by this MemRegion.
+            Feature flags are found in "./enums.py" under:
+                * hsa_region_global_flag_t
+                Params:
+                check_flag: Feature flag to test
+        """
         if self.kind == 'global':
-            return self._flags & enums.HSA_REGION_GLOBAL_FLAG_KERNARG
+            return self._flags & check_flag
         else:
             return False
 
-    def allocate(self, ctypes_type):
+    def allocate(self, nbytes):
         assert self.alloc_allowed
-        alloc_size = ctypes.sizeof(ctypes_type)
-        assert alloc_size <= self.alloc_max_size
+        assert nbytes <= self.alloc_max_size
+        assert nbytes >= 0
         buff = ctypes.c_void_p()
-        hsa.hsa_memory_allocate(self._id, alloc_size,
-                                ctypes.byref(buff))
-        return ctypes_type.from_address(buff.value)
+        hsa.hsa_memory_allocate(self._id, nbytes, ctypes.byref(buff))
+        return buff
 
     def free(self, ptr):
         hsa.hsa_memory_free(ptr)
@@ -635,10 +776,56 @@ class Queue(object):
     def __getattr__(self, fname):
         return getattr(self._id.contents, fname)
 
+    @contextmanager
+    def _get_packet(self, packet_type):
+        # Write AQL packet at the calculated queue index address
+        queue_struct = self._id.contents
+        queue_mask = queue_struct.size - 1
+        assert (ctypes.sizeof(packet_type) ==
+                ctypes.sizeof(drvapi.hsa_kernel_dispatch_packet_t))
+        packet_array_t = (packet_type * queue_struct.size)
+
+        # Obtain the current queue write index
+        index = hsa.hsa_queue_add_write_index_acq_rel(self._id, 1)
+
+        while True:
+            read_offset = hsa.hsa_queue_load_read_index_acquire(self._id)
+            if read_offset <= index < read_offset + queue_struct.size:
+                break
+
+        queue_offset = index & queue_mask
+        queue = packet_array_t.from_address(queue_struct.base_address)
+        packet = queue[queue_offset]
+
+        # zero init
+        ctypes.memset(ctypes.addressof(packet), 0, ctypes.sizeof(packet_type))
+        yield packet
+        # Increment write index
+        # Ring the doorbell
+        hsa.hsa_signal_store_release(self._id.contents.doorbell_signal, index)
+
+    def insert_barrier(self, dep_signal):
+        with self._get_packet(drvapi.hsa_barrier_and_packet_t) as packet:
+            # Populate packet
+            packet.dep_signal0 = dep_signal._id
+
+            header = 0
+            header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE
+            header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE
+            header |= enums.HSA_PACKET_TYPE_BARRIER_AND << enums.HSA_PACKET_HEADER_TYPE
+            header |= 1 << enums.HSA_PACKET_HEADER_BARRIER
+
+            # Original example calls for an atomic store.
+            # Since we are on x86, store of aligned 16 bit is atomic.
+            # The C code is
+            # __atomic_store_n((uint16_t*)(&dispatch_packet->header), header, __ATOMIC_RELEASE);
+            packet.header = header
+
     def dispatch(self, symbol, kernargs,
                  workgroup_size=None,
                  grid_size=None,
                  signal=None):
+        _logger.info("dispatch %s", symbol.name)
         dims = len(workgroup_size)
         assert dims == len(grid_size)
         assert 0 < dims <= 3
@@ -646,67 +833,49 @@ class Queue(object):
         if workgroup_size > tuple(self._agent.workgroup_max_dim)[:dims]:
             msg = "workgroupsize is too big {0} > {1}"
             raise HsaDriverError(msg.format(workgroup_size,
-                                tuple(self._agent.workgroup_max_dim)[:dims]))
+                                 tuple(self._agent.workgroup_max_dim)[:dims]))
         s = signal if signal is not None else hsa.create_signal(1)
 
         # Note: following vector_copy.c
+        with self._get_packet(drvapi.hsa_kernel_dispatch_packet_t) as packet:
 
-        # Obtain the current queue write index
-        index = hsa.hsa_queue_load_write_index_relaxed(self._id)
+            # Populate packet
+            packet.setup |= dims << enums.HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS
 
-        # Write AQL packet at the calculated queue index address
-        queue_struct = self._id.contents
-        queue_mask = queue_struct.size - 1
+            packet.workgroup_size_x = workgroup_size[0]
+            packet.workgroup_size_y = workgroup_size[1] if dims > 1 else 1
+            packet.workgroup_size_z = workgroup_size[2] if dims > 2 else 1
 
-        dispatch_packet_t = drvapi.hsa_kernel_dispatch_packet_t
-        packet_array_t = (dispatch_packet_t * queue_struct.size)
+            packet.grid_size_x = grid_size[0]
+            packet.grid_size_y = grid_size[1] if dims > 1 else 1
+            packet.grid_size_z = grid_size[2] if dims > 2 else 1
 
-        queue_offset = index & queue_mask
-        queue = packet_array_t.from_address(queue_struct.base_address)
+            packet.completion_signal = s._id
 
-        packet = queue[queue_offset]
+            packet.kernel_object = symbol.kernel_object
 
-        # Populate packet
-        packet.setup |= dims << enums.HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS
+            packet.kernarg_address = (0 if kernargs is None
+                                      else kernargs.value)
 
-        packet.workgroup_size_x = workgroup_size[0]
-        packet.workgroup_size_y = workgroup_size[1] if dims > 1 else 1
-        packet.workgroup_size_z = workgroup_size[2] if dims > 2 else 1
+            packet.private_segment_size = symbol.private_segment_size
+            packet.group_segment_size = symbol.group_segment_size
 
-        packet.grid_size_x = grid_size[0]
-        packet.grid_size_y = grid_size[1] if dims > 1 else 1
-        packet.grid_size_z = grid_size[2] if dims > 2 else 1
+            header = 0
+            header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE
+            header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE
+            header |= enums.HSA_PACKET_TYPE_KERNEL_DISPATCH << enums.HSA_PACKET_HEADER_TYPE
 
-        packet.completion_signal = s._id
-
-        packet.kernel_object = symbol.kernel_object
-
-        packet.kernarg_address = (0 if kernargs is None
-                                  else ctypes.addressof(kernargs))
-
-        packet.private_segment_size = symbol.private_segment_size
-        packet.group_segment_size = symbol.group_segment_size
-
-        header = 0
-        header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE
-        header |= enums.HSA_FENCE_SCOPE_SYSTEM << enums.HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE
-        header |= enums.HSA_PACKET_TYPE_KERNEL_DISPATCH << enums.HSA_PACKET_HEADER_TYPE
-
-        # Original example calls for an atomic store.
-        # Since we are on x86, store of aligned 16 bit is atomic.
-        # The C code is
-        # __atomic_store_n((uint16_t*)(&dispatch_packet->header), header, __ATOMIC_RELEASE);
-        packet.header = header
-
-        # Increment write index
-        hsa.hsa_queue_store_write_index_relaxed(self._id, index + 1)
-        # Ring the doorbell
-        hsa.hsa_signal_store_relaxed(self._id.contents.doorbell_signal, index)
+            # Original example calls for an atomic store.
+            # Since we are on x86, store of aligned 16 bit is atomic.
+            # The C code is
+            # __atomic_store_n((uint16_t*)(&dispatch_packet->header), header, __ATOMIC_RELEASE);
+            packet.header = header
 
         # Wait on the dispatch completion signal
 
         # synchronous if no signal was provided
         if signal is None:
+            _logger.info('wait for sychronous kernel to complete')
             timeout = 10
             if not s.wait_until_ne_one(timeout=timeout):
                 msg = "Kernel timed out after {timeout} second"
@@ -741,8 +910,8 @@ class Signal(object):
     def load_relaxed(self):
         return hsa.hsa_signal_load_relaxed(self._id)
 
-    def load_acquired(self):
-        return hsa.hsa_signal_load_acquired(self._id)
+    def load_acquire(self):
+        return hsa.hsa_signal_load_acquire(self._id)
 
     def wait_until_ne_one(self, timeout=None):
         """
@@ -756,9 +925,11 @@ class Signal(object):
         else:
             # timeout as seconds
             expire = timeout * hsa.timestamp_frequency * mhz
+
+        # XXX: use active wait instead of blocked seem to avoid hang in docker
         hsa.hsa_signal_wait_acquire(self._id, enums.HSA_SIGNAL_CONDITION_NE,
                                     one, expire,
-                                    enums.HSA_WAIT_STATE_BLOCKED)
+                                    enums.HSA_WAIT_STATE_ACTIVE)
         return self.load_relaxed() != one
 
 
@@ -791,16 +962,47 @@ class Program(object):
     def __init__(self, model=enums.HSA_MACHINE_MODEL_LARGE,
                  profile=enums.HSA_PROFILE_FULL,
                  rounding_mode=enums.HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT,
-                 options=None):
+                 options=None, version_major=1, version_minor=0):
         self._id = drvapi.hsa_ext_program_t()
         assert options is None
-        hsa.hsa_ext_program_create(model, profile, rounding_mode,
-                                   options, ctypes.byref(self._id))
+
+        def check_fptr_return(hsa_status):
+            if hsa_status is not enums.HSA_STATUS_SUCCESS:
+                msg = ctypes.c_char_p()
+                hsa.hsa_status_string(hsa_status, ctypes.byref(msg))
+                _logger.info(msg.value.decode("utf-8"))
+                exit(-hsa_status)
+
+        support = ctypes.c_bool(0)
+        hsa.hsa_system_extension_supported(enums.HSA_EXTENSION_FINALIZER,
+                                           version_major,
+                                           version_minor,
+                                           ctypes.byref(support))
+
+        assert support.value, ('HSA system extension %s.%s not supported' %
+                (version_major, version_minor))
+
+        # struct of function pointers
+        self._ftabl = drvapi.hsa_ext_finalizer_1_00_pfn_t()
+
+        # populate struct
+        hsa.hsa_system_get_extension_table(enums.HSA_EXTENSION_FINALIZER,
+                                           version_major,
+                                           version_minor,
+                                           ctypes.byref(self._ftabl))
+
+        ret = self._ftabl.hsa_ext_program_create(model, profile,
+                                    rounding_mode, options,
+                                    ctypes.byref(self._id))
+
+        check_fptr_return(ret)
+
         self._as_parameter_ = self._id
-        utils.finalize(self, hsa.hsa_ext_program_destroy, self._id)
+        utils.finalize(self, self._ftabl.hsa_ext_program_destroy,
+                       self._id)
 
     def add_module(self, module):
-        hsa.hsa_ext_program_add_module(self._id, module._id)
+        self._ftabl.hsa_ext_program_add_module(self._id, module._id)
 
     def finalize(self, isa, callconv=0, options=None):
         """
@@ -810,7 +1012,7 @@ class Program(object):
         control_directives = drvapi.hsa_ext_control_directives_t()
         ctypes.memset(ctypes.byref(control_directives), 0,
                       ctypes.sizeof(control_directives))
-        hsa.hsa_ext_program_finalize(self._id,
+        self._ftabl.hsa_ext_program_finalize(self._id,
                                      isa,
                                      callconv,
                                      control_directives,
@@ -853,7 +1055,7 @@ class Executable(object):
                                           name.encode('ascii')),
                                       agent._id, 0,
                                       ctypes.byref(symbol))
-        return Symbol(symbol)
+        return Symbol(name, symbol)
 
 
 class Symbol(HsaWrapper):
@@ -877,8 +1079,109 @@ class Symbol(HsaWrapper):
         ),
     }
 
-    def __init__(self, symbol_id):
+    def __init__(self, name, symbol_id):
         self._id = symbol_id
+        self.name = name
+
+
+class MemoryPointer(object):
+    __hsa_memory__ = True
+
+    def __init__(self, context, pointer, size, finalizer=None):
+        assert isinstance(context, Context)
+        self.context = context
+        self.device_pointer = pointer
+        self.size = size
+        self._hsa_memsize_ = size
+        self.finalizer = finalizer
+        self.is_managed = finalizer is not None
+        self.is_alive = True
+        self.refct = 0
+
+    def __del__(self):
+        try:
+            if self.is_managed and self.is_alive:
+                self.finalizer()
+        except:
+            traceback.print_exc()
+
+    def own(self):
+        return OwnedPointer(weakref.proxy(self))
+
+    def free(self):
+        """
+        Forces the device memory to the trash.
+        """
+        if self.is_managed:
+            if not self.is_alive:
+                raise RuntimeError("Freeing dead memory")
+            self.finalizer()
+            self.is_alive = False
+
+    def view(self):
+        pointer = self.device_pointer.value
+        view = MemoryPointer(self.context, pointer, self.size)
+        return OwnedPointer(weakref.proxy(self), view)
+
+    @property
+    def device_ctypes_pointer(self):
+        return self.device_pointer
+
+    def allow_access_to(self, *agents):
+        """
+        Grant access to given *agents*.
+        Upon return, only the listed-agents and the owner agent have direct
+        access to this pointer.
+        """
+        ct = len(agents)
+        if ct == 0:
+            return
+        agent_array = (ct * drvapi.hsa_agent_t)(*[a._id for a in agents])
+        hsa.hsa_amd_agents_allow_access(ct, agent_array, None,
+                                        self.device_pointer)
+
+
+class HostMemory(mviewbuf.MemAlloc):
+    def __init__(self, context, owner, pointer, size):
+        self.context = context
+        self.owned = owner
+        self.size = size
+        self.host_pointer = pointer
+        self.handle = self.host_pointer
+
+        # For buffer interface
+        self._buflen_ = self.size
+        self._bufptr_ = self.host_pointer.value
+
+    def own(self):
+        return self
+
+
+class OwnedPointer(object):
+    def __init__(self, memptr, view=None):
+        self._mem = memptr
+        self._mem.refct += 1
+        if view is None:
+            self._view = self._mem
+        else:
+            assert not view.is_managed
+            self._view = view
+
+    def __del__(self):
+        try:
+            self._mem.refct -= 1
+            assert self._mem.refct >= 0
+            if self._mem.refct == 0:
+                self._mem.free()
+        except ReferenceError:
+            pass
+        except:
+            traceback.print_exc()
+
+    def __getattr__(self, fname):
+        """Proxy MemoryPointer methods
+        """
+        return getattr(self._view, fname)
 
 
 class Context(object):
@@ -886,11 +1189,34 @@ class Context(object):
     A context is associated with a component
     """
 
+    """
+    Parameters:
+    agent the agent, and instance of the class Agent
+    """
+
+    # a weak set of active Stream objects
+    _active_streams = weakref.WeakSet()
+
     def __init__(self, agent):
         self._agent = weakref.proxy(agent)
-        qs = agent.queue_max_size
-        defq = self._agent.create_queue_multi(qs, callback=self._callback)
-        self._defaultqueue = defq.owned()
+
+        if self._agent.is_component:  # only components have queues
+            qs = agent.queue_max_size
+            defq = self._agent.create_queue_multi(qs, callback=self._callback)
+            self._defaultqueue = defq.owned()
+
+        self.allocations = utils.UniqueDict()
+        # get pools
+        coarse_flag = enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED
+        fine_flag = enums_ext.HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED
+        alloc_mps = [mp for mp in agent.mempools.globals if mp.alloc_allowed]
+        self._coarsegrain_mempool = None
+        self._finegrain_mempool = None
+        for mp in alloc_mps:
+            if mp.supports(coarse_flag):
+                self._coarsegrain_mempool = mp
+            if mp.supports(fine_flag):
+                self._finegrain_mempool = mp
 
     def _callback(self, status, queue):
         drvapi._check_error(status, queue)
@@ -903,3 +1229,354 @@ class Context(object):
     @property
     def agent(self):
         return self._agent
+
+    @property
+    def coarsegrain_mempool(self):
+        if self._coarsegrain_mempool is None:
+            msg = 'coarsegrain mempool is not available in {}'.format(self._agent)
+            raise ValueError(msg)
+        return self._coarsegrain_mempool
+
+    @property
+    def finegrain_mempool(self):
+        if self._finegrain_mempool is None:
+            msg = 'finegrain mempool is not available in {}'.format(self._agent)
+            raise ValueError(msg)
+        return self._finegrain_mempool
+
+    def memalloc(self, nbytes, memTypeFlags=None, hostAccessible=True):
+        """
+        Allocates memory.
+        Parameters:
+        nbytes the number of bytes to allocate.
+        memTypeFlags the flags for which the memory region must have support,\
+                     due to the inherent rawness of the underlying call, the\
+                     validity of the flag is not checked, cf. C language.
+        hostAccessible boolean as to whether the region in which the\
+                       allocation takes place should be host accessible
+        """
+        hw = self._agent.device
+        all_reg = self._agent.regions
+        flag_ok_r = list() # regions which pass the memTypeFlags test
+        regions = list()
+
+        # don't support DSP
+        if hw == "GPU" or hw == "CPU":
+            # check user requested flags
+            if memTypeFlags is not None:
+                for r in all_reg:
+                    count = 0
+                    for flags in memTypeFlags:
+                        if r.supports(flags):
+                            count += 1
+                    if count == len(memTypeFlags):
+                        flag_ok_r.append(r)
+            else:
+                flag_ok_r = all_reg
+
+            # check system required flags for allocation
+            for r in flag_ok_r:
+                # check the mem region is coarse grained if dGPU present
+                # TODO: this probably ought to explicitly check for a dGPU.
+                if (hw == "GPU" and
+                        not r.supports(enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED)):
+                    continue
+                # check accessibility criteria
+                if hostAccessible:
+                    if r.host_accessible:
+                        regions.append(r)
+                else:
+                    if not r.host_accessible:
+                        regions.append(r)
+
+        else:
+            raise RuntimeError("Unknown device type string \"%s\"" % hw)
+
+        assert len(regions) > 0, "No suitable memory regions found."
+
+        # walk though valid regions trying to malloc until there's none left
+        mem = None
+        for region_id in regions:
+            try:
+                mem = MemRegion.instance_for(self._agent, region_id)\
+                        .allocate(nbytes)
+            except HsaApiError: # try next memory region if an allocation fails
+                pass
+            else: # allocation succeeded, stop looking for memory
+                break
+
+        if mem is None:
+            raise RuntimeError("Memory allocation failed. No agent/region \
+              combination could meet allocation restraints \
+              (hardware = %s, size = %s, flags = %s)." % \
+              ( hw, nbytes, memTypeFlags))
+
+        fin = _make_mem_finalizer(hsa.hsa_memory_free)
+        ret = MemoryPointer(weakref.proxy(self), mem, nbytes,
+                            finalizer=fin(self, mem))
+        if mem.value is None:
+            raise RuntimeError("MemoryPointer has no value")
+        self.allocations[mem.value] = ret
+        return ret.own()
+
+    def mempoolalloc(self, nbytes, allow_access_to=(), finegrain=False):
+        """
+        Allocates memory in a memory pool.
+        Parameters:
+        *nbytes* the number of bytes to allocate.
+        *allow_acces_to*
+        *finegrain*
+        """
+        mempool = (self.finegrain_mempool
+                   if finegrain
+                   else self.coarsegrain_mempool)
+
+        buff = mempool.allocate(nbytes)
+        fin = _make_mem_finalizer(hsa.hsa_amd_memory_pool_free)
+        mp = MemoryPointer(weakref.proxy(self), buff, nbytes,
+                           finalizer=fin(self, buff))
+        mp.allow_access_to(*allow_access_to)
+        self.allocations[buff.value] = mp
+        return mp.own()
+
+    def memhostalloc(self, size, finegrain, allow_access_to):
+        mem = self.mempoolalloc(size, allow_access_to=allow_access_to,
+                                finegrain=finegrain)
+        return HostMemory(weakref.proxy(self), owner=mem,
+                          pointer=mem.device_pointer, size=mem.size)
+
+
+class Stream(object):
+    """
+    An asynchronous stream for async API
+    """
+    def __init__(self):
+        self._signals = deque()
+        self._callbacks = defaultdict(list)
+
+    def _add_signal(self, signal):
+        """
+        Add a signal that corresponds to an async task.
+        """
+        # XXX: too many pending signals seem to cause async copy to hang
+        if len(self._signals) > 100:
+            self._sync(50)
+        self._signals.append(signal)
+
+    def _add_callback(self, callback):
+        assert callable(callback)
+        self._callbacks[self._get_last_signal()].append(callback)
+
+    def _get_last_signal(self):
+        """
+        Get the last signal.
+        """
+        return self._signals[-1] if self._signals else None
+
+    def synchronize(self):
+        """
+        Synchronize the stream.
+        """
+        self._sync(len(self._signals))
+
+    def _sync(self, limit):
+        ct = 0
+        while self._signals:
+            if ct >= limit:
+                break
+            sig = self._signals.popleft()
+            if sig.load_relaxed() == 1:
+                sig.wait_until_ne_one()
+            for cb in self._callbacks[sig]:
+                cb()
+            del self._callbacks[sig]
+            ct += 1
+
+
+def _make_mem_finalizer(dtor):
+    """
+    finalises memory
+    Parameters:
+    dtor a function that will delete/free held memory from a reference
+
+    Returns:
+    Finalising function
+    """
+    def mem_finalize(context, handle):
+        allocations = context.allocations
+        sync = hsa.implicit_sync
+
+        def core():
+            _logger.info("Current allocations: %s", allocations)
+            if allocations:
+                _logger.info("Attempting delete on %s" % handle.value)
+                del allocations[handle.value]
+            sync()  # implicit sync
+            dtor(handle)
+        return core
+
+    return mem_finalize
+
+def device_pointer(obj):
+    "Get the device pointer as an integer"
+    return device_ctypes_pointer(obj).value
+
+
+def device_ctypes_pointer(obj):
+    "Get the ctypes object for the device pointer"
+    if obj is None:
+        return c_void_p(0)
+    require_device_memory(obj)
+    return obj.device_ctypes_pointer
+
+
+def is_device_memory(obj):
+    """All HSA dGPU memory object is recognized as an instance with the
+    attribute "__hsa_memory__" defined and its value evaluated to True.
+
+    All HSA memory object should also define an attribute named
+    "device_pointer" which value is an int(or long) object carrying the pointer
+    value of the device memory address.  This is not tested in this method.
+    """
+    return getattr(obj, '__hsa_memory__', False)
+
+
+def require_device_memory(obj):
+    """A sentry for methods that accept HSA memory object.
+    """
+    if not is_device_memory(obj):
+        raise Exception("Not a HSA memory object.")
+
+
+def host_pointer(obj):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous
+    completes.
+    """
+    if isinstance(obj, (int, long)):
+        return obj
+
+    forcewritable = isinstance(obj, np.void)
+    return mviewbuf.memoryview_get_buffer(obj, forcewritable)
+
+
+def host_to_dGPU(context, dst, src, size):
+    """
+    Copy data from a host memory region to a dGPU.
+    Parameters:
+    context the dGPU context
+    dst a pointer to the destination location in dGPU memory
+    src a pointer to the source location in host memory
+    size the size (in bytes) of data to transfer
+    """
+    _logger.info("CPU->dGPU")
+    if size < 0:
+        raise ValueError("Invalid size given: %s" % size)
+
+    hsa.hsa_memory_copy(device_pointer(dst), host_pointer(src), size)
+
+
+def dGPU_to_host(context, dst, src, size):
+    """
+    Copy data from a host memory region to a dGPU.
+    Parameters:
+    context the dGPU context
+    dst a pointer to the destination location in dGPU memory
+    src a pointer to the source location in host memory
+    size the size (in bytes) of data to transfer
+    """
+    _logger.info("dGPU->CPU")
+    if size < 0:
+        raise ValueError("Invalid size given: %s" % size)
+
+    hsa.hsa_memory_copy(host_pointer(dst), device_pointer(src), size)
+
+
+def dGPU_to_dGPU(context, dst, src, size):
+    _logger.info("dGPU->dGPU")
+    if size < 0:
+        raise ValueError("Invalid size given: %s" % size)
+
+    hsa.hsa_memory_copy(device_pointer(dst), device_pointer(src), size)
+
+
+def async_host_to_dGPU(dst_ctx, src_ctx, dst, src, size, stream):
+    _logger.info("Async CPU->dGPU")
+    async_copy_dgpu(dst_ctx=dst_ctx, src_ctx=src_ctx,
+                    src=host_pointer(src), dst=device_pointer(dst),
+                    size=size, stream=stream)
+
+
+def async_dGPU_to_host(dst_ctx, src_ctx, dst, src, size, stream):
+    _logger.info("Async dGPU->CPU")
+    async_copy_dgpu(dst_ctx=dst_ctx, src_ctx=src_ctx,
+                    dst=host_pointer(dst), src=device_pointer(src),
+                    size=size, stream=stream)
+
+
+def async_dGPU_to_dGPU(dst_ctx, src_ctx, dst, src, size, stream):
+    _logger.info("Async dGPU->dGPU")
+    async_copy_dgpu(dst_ctx=dst_ctx, src_ctx=src_ctx,
+                    dst=device_pointer(dst), src=device_pointer(src),
+                    size=size, stream=stream)
+
+
+def async_copy_dgpu(dst_ctx, src_ctx, dst, src, size, stream):
+    if size < 0:
+        raise ValueError("Invalid size given: %s" % size)
+
+    completion_signal = hsa.create_signal(1)
+    dependent_signal = stream._get_last_signal()
+
+    if dependent_signal is not None:
+        dsignal = drvapi.hsa_signal_t(dependent_signal._id)
+        signals = (1, ctypes.byref(dsignal), completion_signal)
+    else:
+        signals = (0, None, completion_signal)
+
+    hsa.hsa_amd_memory_async_copy(dst, dst_ctx._agent._id,
+                                  src, src_ctx._agent._id,
+                                  size, *signals)
+
+    stream._add_signal(completion_signal)
+
+
+# Known Hardware
+known_dgpus = frozenset([b'Fiji'])
+known_apus = frozenset([b'Spectre'])
+known_cpus = frozenset([b'Kaveri'])
+
+def apu_present():
+    """
+    Returns true if an APU is present on the current machine.
+    """
+    # Find the nodes to which the agents claim to belong.
+    # If the number of nodes is different to the number of
+    # agents then some agents must share a node -> APU!
+    nodes = set()
+    for a in hsa.agents:
+        nodes.add(getattr(a, "node"))
+    return len(hsa.agents) != len(nodes)
+
+
+def dgpu_count():
+    """
+    Returns the number of discrete GPUs present on the current machine.
+
+    This can be overridden by setting the environment variable
+    `NUMBA_HSA_DGPUS_PRESENT` to a positive integer.
+    """
+    if config.NUMBA_HSA_DGPUS_PRESENT > 0:
+        return config.NUMBA_HSA_DGPUS_PRESENT
+    else:
+        ngpus = 0
+        for a in hsa.agents:
+            if a.is_component and a.device == 'GPU':
+                ngpus += 1
+        return ngpus
+
+"""
+True if a dGPU is present in the current machine.
+"""
+dgpu_present = dgpu_count() > 0

@@ -3,62 +3,110 @@
 from __future__ import print_function, absolute_import
 import sys
 from subprocess import check_call
+import subprocess
 import tempfile
 import os
+import re
 from collections import namedtuple
 
 from numba import config
-from .utils import adapt_llvm_version
-from .config import BUILTIN_PATH
+from .common import AMDGCNModule
+from .config import ROCM_BC_PATH
+from . import TRIPLE
+from datetime import datetime
 
 _real_check_call = check_call
 
+NOISY_CMDLINE = False
 
 def check_call(*args, **kwargs):
-    print('CMD: ' + ';'.join(args), file=sys.stdout)
-    return _real_check_call(*args, **kwargs)
+    # This is so that time is stamped against invocation
+    # such that correlations can be looked for against messages in the
+    # sys and kernel logs.
+    if NOISY_CMDLINE:
+        print(datetime.now().strftime("%b %d %H:%M:%S") ,file=sys.stdout )
+        print('CMD: ' + ';'.join(args), file=sys.stdout)
+        pipe = subprocess.STDOUT
+    else:
+        pipe = subprocess.DEVNULL
+    try:
+        ret = _real_check_call(*args, stderr=pipe, **kwargs)
+    except subprocess.CalledProcessError as e:
+        print(e)
+        raise(e)
+    return ret
 
 
 class CmdLine(object):
-    CMD_OPT = ("$HSAILBIN/opt "
-               "-O3 "
-               # "-gpu "
-               # "-whole "
-               "-verify "
-               "-S "
-               "-o {fout} "
-               "{fin}")
+    def __init__(self):
+        self._binary_path = os.environ.get('HSAILBIN', None)
+        def _setup_path(tool):
+            if self._binary_path is not None:
+                return os.path.join(self._binary_path, tool)
+            else:
+                return tool
+        self._triple = TRIPLE
 
-    CMD_VERIFY = ("$HSAILBIN/opt "
-                  "-verify "
-                  "-S "
-                  "-o {fout} "
-                  "{fin}")
+        self.opt = _setup_path("opt")
+        self.llc = _setup_path("llc")
+        self.llvm_link = _setup_path("llvm-link")
+        self.ld_lld = _setup_path("ld.lld")
+        self.triple_flag = "-mtriple %s" % self._triple
+        self.target_cpu = "-mcpu=fiji"
 
-    CMD_GEN_HSAIL = ("$HSAILBIN/llc -O2 "
-                     "-march=hsail64 "
-                     "-filetype=asm "
-                     "-o {fout} "
-                     "{fin}")
+        self.CMD_OPT = ' '.join([
+                self.opt,
+                "-O3",
+                self.triple_flag,
+                self.target_cpu,
+                "-disable-simplify-libcalls",
+                "-verify",
+                "-S",
+                "-o {fout}",
+                "{fin}"])
 
-    CMD_GEN_BRIG = ("$HSAILBIN/llc -O2 "
-                    "-march=hsail64 "
-                    "-filetype=obj "
-                    "-o {fout} "
-                    "{fin}")
+        self.CMD_VERIFY = ' '.join([
+                    self.opt,
+                    "-verify",
+                    self.triple_flag,
+                    self.target_cpu,
+                    "-S",
+                    "-o {fout}",
+                    "{fin}"])
 
-    CMD_LINK_BUILTINS = ("$HSAILBIN/llvm-link "
-                         # "-prelink-opt "
-                         "-S "
-                         "-o {fout} "
-                         "{fin} "
-                         "{lib}")
+        self.CMD_GEN_HSAIL = ' '.join([self.llc,
+                        "-O2",
+                        self.triple_flag,
+                        self.target_cpu,
+                        "-filetype=asm",
+                        "-o {fout}",
+                        "{fin}"])
 
-    CMD_LINK_LIBS = ("$HSAILBIN/llvm-link "
-                     # "-prelink-opt "
-                     "-S "
-                     "-o {fout} "
-                     "{fin} ")
+        self.CMD_GEN_BRIG = ' '.join([self.llc,
+                        "-O2",
+                        self.triple_flag,
+                        self.target_cpu,
+                        "-filetype=obj",
+                        "-o {fout}",
+                        "{fin}"])
+
+        self.CMD_LINK_BUILTINS = ' '.join([
+                            self.llvm_link,
+                            "-S",
+                            "-o {fout}",
+                            "{fin}",
+                            "{lib}"])
+
+        self.CMD_LINK_LIBS = ' '.join([self.llvm_link,
+                        "-S",
+                        "-o {fout}",
+                        "{fin}"])
+
+        self.CMD_LINK_BRIG = ' '.join([self.ld_lld,
+                        "-shared",
+                        "-o {fout}",
+                        "{fin}"])
+
 
     def verify(self, ipath, opath):
         check_call(self.CMD_VERIFY.format(fout=opath, fin=ipath), shell=True)
@@ -72,18 +120,16 @@ class CmdLine(object):
     def generate_brig(self, ipath, opath):
         check_call(self.CMD_GEN_BRIG.format(fout=opath, fin=ipath), shell=True)
 
-    def link_builtins(self, ipath, opath):
-        cmd = self.CMD_LINK_BUILTINS.format(fout=opath, fin=ipath,
-                                            lib=BUILTIN_PATH)
-        check_call(cmd, shell=True)
-
     def link_libs(self, ipath, libpaths, opath):
         cmdline = self.CMD_LINK_LIBS.format(fout=opath, fin=ipath)
         cmdline += ' '.join(["{0}".format(lib) for lib in libpaths])
         check_call(cmdline, shell=True)
 
+    def link_brig(self, ipath, opath):
+        check_call(self.CMD_LINK_BRIG.format(fout=opath, fin=ipath), shell=True)
 
-class Module(object):
+
+class Module(AMDGCNModule):
     def __init__(self):
         """
         Setup
@@ -92,17 +138,17 @@ class Module(object):
         self._tempfiles = []
         self._linkfiles = []
         self._cmd = CmdLine()
-        self._finalized = False
+        AMDGCNModule.__init__(self)
 
     def __del__(self):
         return
         self.close()
 
     def close(self):
-        # Remove all temporary files
+       # Remove all temporary files
         for afile in self._tempfiles:
             os.unlink(afile)
-        # Remove directory
+        #Remove directory
         os.rmdir(self._tmpdir)
 
     def _create_temp_file(self, name, mode='wb'):
@@ -116,15 +162,11 @@ class Module(object):
         self._tempfiles.append(path)
         return path
 
-    def _preprocess(self, llvmir):
-        return adapt_llvm_version(llvmir)
-
     def load_llvm(self, llvmir):
         """
         Load LLVM with HSAIL SPIR spec
         """
         # Preprocess LLVM IR
-        # Because HLC does not handle dot in LLVM variable names
         llvmir = self._preprocess(llvmir)
 
         # Create temp file to store the input file
@@ -142,11 +184,24 @@ class Module(object):
 
         self._linkfiles.append(fout)
 
-    def finalize(self):
+    def link_builtins(self, ipath, opath):
+
+        # progressively link in all the bitcodes
+        for bc in self.bitcodes:
+            if bc != self.bitcodes[-1]:
+                tmp_opath = opath + bc.replace('/', '_').replace('.','_')
+            else:
+                tmp_opath = opath
+            lib = os.path.join(ROCM_BC_PATH, bc)
+            cmd = self._cmd.CMD_LINK_BUILTINS.format(fout=tmp_opath, fin=ipath, lib=lib)
+            check_call(cmd, shell=True)
+            ipath = tmp_opath
+
+    def generateGCN(self):
         """
-        Finalize module and return the HSAIL code
+        Generate GCN from a module and also return the HSAIL code.
         """
-        assert not self._finalized, "Module finalized already"
+        assert not self._finalized, "Module already has GCN generated"
 
         # Link dependencies libraries
         llvmfile = self._linkfiles[0]
@@ -157,7 +212,7 @@ class Module(object):
 
         # Link library with the builtin modules
         linked_path = self._track_temp_file("linked-path")
-        self._cmd.link_builtins(ipath=pre_builtin_path, opath=linked_path)
+        self.link_builtins(ipath=pre_builtin_path, opath=linked_path)
 
         # Optimize
         opt_path = self._track_temp_file("optimized-llvm-ir")
@@ -167,13 +222,17 @@ class Module(object):
             with open(opt_path, 'rb') as fin:
                 print(fin.read().decode('ascii'))
 
-        # Finalize the llvm to HSAIL
-        hsail_path = self._track_temp_file("finalized-hsail")
+        # Compile the llvm to HSAIL
+        hsail_path = self._track_temp_file("create-hsail")
         self._cmd.generate_hsail(ipath=opt_path, opath=hsail_path)
 
-        # Finalize the llvm to BRIG
-        brig_path = self._track_temp_file("finalized-brig")
+        # Compile the llvm to BRIG
+        brig_path = self._track_temp_file("create-brig")
         self._cmd.generate_brig(ipath=opt_path, opath=brig_path)
+
+        # link
+        end_brig_path = self._track_temp_file("linked-brig")
+        self._cmd.link_brig(ipath = brig_path, opath=end_brig_path)
 
         self._finalized = True
 
@@ -182,7 +241,7 @@ class Module(object):
             hsail = fin.read().decode('ascii')
 
         # Read BRIG
-        with open(brig_path, 'rb') as fin:
+        with open(end_brig_path, 'rb') as fin:
             brig = fin.read()
 
         if config.DUMP_ASSEMBLY:

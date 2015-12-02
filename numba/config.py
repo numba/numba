@@ -301,6 +301,9 @@ class _EnvReloader(object):
         DEBUGINFO_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, 0)
         CUDA_DEBUGINFO_DEFAULT = _readenv("NUMBA_CUDA_DEBUGINFO", int, 0)
 
+        # Declare a dGPU is present
+        NUMBA_HSA_DGPUS_PRESENT = _readenv("NUMBA_HSA_DGPUS_PRESENT", int, 0)
+
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():
             if name.isupper():

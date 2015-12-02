@@ -6,46 +6,44 @@ from numba import unittest_support as unittest
 from numba import hsa, intp
 
 WAVESIZE = 64
-WAVESIZE_BITS = 6
-
 
 @hsa.jit(device=True)
 def wave_reduce(val):
-    tmp = val
     tid = hsa.get_local_id(0)
-    laneid = tid & (WAVESIZE - 1)
-
+    laneid = tid % WAVESIZE
+    
     width = WAVESIZE // 2
-
-    while width > 0:
-        hsa.wavebarrier()
-        other = hsa.activelanepermute_wavewidth(tmp, laneid + width, 0, False)
+    while width:
         if laneid < width:
-            tmp += other
-
-        width //= 2
+            val[laneid] += val[laneid + width]
+            val[laneid + width] = -1 # debug
+        hsa.wavebarrier()
+        width = width // 2
 
     # First thread has the result
     hsa.wavebarrier()
-    return hsa.activelanepermute_wavewidth(tmp, 0, 0, False)
-
+    return val[0]
 
 @hsa.jit
 def kernel_warp_reduce(inp, out):
-    idx = hsa.get_global_id(0)
+    idx = hsa.get_group_id(0)
     val = inp[idx]
     out[idx] = wave_reduce(val)
 
+@hsa.jit
+def kernel_flat_reduce(inp, out):
+    out[0] = wave_reduce(inp)
 
 class TestReduction(unittest.TestCase):
+
     def template_wave_reduce_int(self, dtype):
         numblk = 2
-        inp = np.arange(numblk * WAVESIZE, dtype=dtype)
-        out = np.zeros_like(inp)
+        inp = np.arange(numblk * WAVESIZE, dtype=dtype).reshape(numblk, WAVESIZE)
+        inp_cpy = np.copy(inp)
+        out = np.zeros((numblk,))
         kernel_warp_reduce[numblk, WAVESIZE](inp, out)
 
-        np.testing.assert_equal(out[:WAVESIZE], inp[:WAVESIZE].sum())
-        np.testing.assert_equal(out[WAVESIZE:], inp[WAVESIZE:].sum())
+        np.testing.assert_equal(out, inp_cpy.sum(axis=1))
 
     def test_wave_reduce_intp(self):
         self.template_wave_reduce_int(np.intp)
@@ -56,17 +54,24 @@ class TestReduction(unittest.TestCase):
     def template_wave_reduce_real(self, dtype):
         numblk = 2
         inp = np.linspace(0, 1, numblk * WAVESIZE).astype(dtype)
-        out = np.zeros_like(inp)
+        inp = inp.reshape(numblk, WAVESIZE)
+        inp_cpy = np.copy(inp)
+        out = np.zeros((numblk,))
         kernel_warp_reduce[numblk, WAVESIZE](inp, out)
 
-        np.testing.assert_allclose(out[:WAVESIZE], inp[:WAVESIZE].sum())
-        np.testing.assert_allclose(out[WAVESIZE:], inp[WAVESIZE:].sum())
+        np.testing.assert_allclose(out, inp_cpy.sum(axis=1))
 
     def test_wave_reduce_float64(self):
         self.template_wave_reduce_real(np.float64)
 
     def test_wave_reduce_float32(self):
         self.template_wave_reduce_real(np.float32)
+
+    def test_flat_reduce(self):
+        inp = np.arange(WAVESIZE) # destroyed in kernel
+        out = np.zeros((1,))
+        kernel_flat_reduce[1, WAVESIZE](inp, out)
+        np.testing.assert_allclose(out[0], np.arange(WAVESIZE).sum())
 
 
 if __name__ == '__main__':

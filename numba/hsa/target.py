@@ -15,7 +15,7 @@ from . import codegen
 from .hlc import DATALAYOUT
 
 CC_SPIR_KERNEL = "spir_kernel"
-CC_SPIR_FUNC = "spir_func"
+CC_SPIR_FUNC = ""
 
 
 # -----------------------------------------------------------------------------
@@ -37,11 +37,13 @@ VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 
 
 # Address spaces
-SPIR_PRIVATE_ADDRSPACE = 0
+SPIR_GENERIC_ADDRSPACE = 0
 SPIR_GLOBAL_ADDRSPACE = 1
-SPIR_CONSTANT_ADDRSPACE = 2
+SPIR_REGION_ADDRSPACE = 2
+SPIR_CONSTANT_ADDRSPACE = 4
 SPIR_LOCAL_ADDRSPACE = 3
-SPIR_GENERIC_ADDRSPACE = 4
+SPIR_PRIVATE_ADDRSPACE = 5
+SPIR_CONSTANT_32BIT_ADDRSPACE = 6
 
 SPIR_VERSION = (2, 0)
 
@@ -68,7 +70,7 @@ class HSATargetContext(BaseContext):
 
     def init(self):
         self._internal_codegen = codegen.JITHSACodegen("numba.hsa.jit")
-        self._target_data = DATALAYOUT[utils.MACHINE_BITS]
+        self._target_data = ll.create_target_data(DATALAYOUT[utils.MACHINE_BITS])
         # Override data model manager
         self.data_model_manager = hsa_data_model_manager
 
@@ -84,6 +86,10 @@ class HSATargetContext(BaseContext):
 
     def codegen(self):
         return self._internal_codegen
+
+    @property
+    def target_data(self):
+        return self._target_data
 
     def mangler(self, name, argtypes):
         def repl(m):

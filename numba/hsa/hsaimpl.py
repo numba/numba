@@ -6,6 +6,7 @@ from functools import reduce
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
+from llvmlite import ir
 
 from numba.targets.imputils import Registry
 from numba import cgutils
@@ -155,8 +156,7 @@ def mem_fence_impl(context, builder, sig, args):
 def wavebarrier_impl(context, builder, sig, args):
     assert not args
     fnty = Type.function(Type.void(), [])
-    fn = builder.module.get_or_insert_function(fnty, name="__hsail_wavebarrier")
-    fn.calling_convention = target.CC_SPIR_FUNC
+    fn = builder.module.declare_intrinsic('llvm.amdgcn.wave.barrier', fnty=fnty)
     builder.call(fn, [])
     return _void_value
 
@@ -182,6 +182,24 @@ def activelanepermute_wavewidth_impl(context, builder, sig, args):
     result = builder.call(fn, [cast(src), laneid, cast(identity), use_ident])
     return builder.bitcast(result, context.get_value_type(elem_type))
 
+def _gen_ds_permute(intrinsic_name):
+    def _impl(context, builder, sig, args):
+        """
+        args are (index, src)
+        """
+        assert sig.args[0] == sig.args[1]
+        idx, src = args
+        i32 = Type.int(32)
+        fnty = Type.function(i32, [i32, i32])
+        fn = builder.module.declare_intrinsic(intrinsic_name, fnty=fnty)
+        # the args are byte addressable, VGPRs are 4 wide so mul idx by 4
+        four = lc.Constant.int(i32, 4)
+        idx = builder.mul(idx, four)
+        return builder.call(fn, (idx, src))
+    return _impl
+
+lower(stubs.ds_permute, types.int32, types.int32)(_gen_ds_permute('llvm.amdgcn.ds.permute'))
+lower(stubs.ds_bpermute, types.int32, types.int32)(_gen_ds_permute('llvm.amdgcn.ds.bpermute'))
 
 @lower(stubs.atomic.add, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.add, types.Array,
@@ -237,7 +255,6 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
             raise ValueError("array length <= 0")
         else:
             gvmem.linkage = lc.LINKAGE_INTERNAL
-            gvmem.initializer = lc.Constant.null(laryty)
 
         if dtype not in types.number_domain:
             raise TypeError("unsupported type: %s" % dtype)

@@ -1,13 +1,22 @@
 from __future__ import print_function, absolute_import
 import copy
 from collections import namedtuple
+import re
+
+import numpy as np
 
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
 from .hlc import hlc
-from .hsadrv import devices, driver
+from .hsadrv import devices, driver, enums, drvapi
+from .hsadrv.error import HsaKernelLaunchError
+from . import gcn_occupancy
+from numba.hsa.hsadrv.driver import hsa, dgpu_present
+from .hsadrv import devicearray
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
+from numba import config
+
 
 def compile_hsa(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the HSA backend.
@@ -205,26 +214,40 @@ class _CachedProgram(object):
     def get(self):
         ctx = devices.get_context()
         result = self._cache.get(ctx)
-        # The program has not been finalized for this device
+        # The program does not exist as GCN yet.
         if result is None:
-            # Finalize
-            symbol = '&{0}'.format(self._entry_name)
+
+            # generate GCN
+            symbol = '{0}'.format(self._entry_name)
             agent = ctx.agent
 
-            brig_module = driver.BrigModule(self._binary)
-            prog = driver.Program()
-            prog.add_module(brig_module)
-            code = prog.finalize(agent.isa)
-            del prog
+            ba = bytearray(self._binary)
+            bblob = ctypes.c_byte * len(self._binary)
+            bas = bblob.from_buffer(ba)
+
+            code_ptr = drvapi.hsa_code_object_t()
+            driver.hsa.hsa_code_object_deserialize(
+                    ctypes.addressof(bas),
+                    len(self._binary),
+                    None,
+                    ctypes.byref(code_ptr)
+                    )
+
+            code = driver.CodeObject(code_ptr)
 
             ex = driver.Executable()
             ex.load(agent, code)
             ex.freeze()
             symobj = ex.get_symbol(agent, symbol)
-            kernarg_region = [r for r in agent.regions.globals
-                              if r.supports_kernargs][0]
+            regions = agent.regions.globals
+            for reg in regions:
+                if reg.host_accessible:
+                    if reg.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG):
+                        kernarg_region = reg
+                        break
+            assert kernarg_region is not None
 
-            # Cache the finalized program
+            # Cache the GCN program
             result = _CacheEntry(symbol=symobj, executable=ex,
                                  kernarg_region=kernarg_region)
             self._cache[ctx] = result
@@ -239,18 +262,41 @@ class HSAKernel(HSAKernelBase):
     def __init__(self, llvm_module, name, argtypes):
         super(HSAKernel, self).__init__()
         self._llvm_module = llvm_module
-        self.assembly, self.binary = self._finalize()
+        self.assembly, self.binary = self._generateGCN()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
         self._argloc = []
-        # cached finalized program
+        # cached program
         self._cacheprog = _CachedProgram(entry_name=self.entry_name,
                                          binary=self.binary)
+        self._parse_kernel_resource()
 
-    def _finalize(self):
+    def _parse_kernel_resource(self):
+        """
+        Temporary workaround for register limit
+        """
+        m = re.search(r"\bwavefront_sgpr_count\s*=\s*(\d+)", self.assembly)
+        self._wavefront_sgpr_count = int(m.group(1))
+        m = re.search(r"\bworkitem_vgpr_count\s*=\s*(\d+)", self.assembly)
+        self._workitem_vgpr_count = int(m.group(1))
+
+    def _sentry_resource_limit(self):
+        # only check resource factprs if either sgpr or vgpr is non-zero
+        if (self._wavefront_sgpr_count > 0 or self._workitem_vgpr_count > 0):
+            group_size = np.prod(self.local_size)
+            limits = gcn_occupancy.get_limiting_factors(
+                group_size=group_size,
+                vgpr_per_workitem=self._workitem_vgpr_count,
+                sgpr_per_wave=self._wavefront_sgpr_count)
+            if limits.reasons:
+                fmt = 'insufficient resources to launch kernel due to:\n{}'
+                msg = fmt.format('\n'.join(limits.suggestions))
+                raise HsaKernelLaunchError(msg)
+
+    def _generateGCN(self):
         hlcmod = hlc.Module()
         hlcmod.load_llvm(str(self._llvm_module))
-        return hlcmod.finalize()
+        return hlcmod.generateGCN()
 
     def bind(self):
         """
@@ -258,19 +304,26 @@ class HSAKernel(HSAKernelBase):
         """
         ctx, entry = self._cacheprog.get()
         if entry.symbol.kernarg_segment_size > 0:
-            kernarg_type = (ctypes.c_byte * entry.symbol.kernarg_segment_size)
-            kernargs = entry.kernarg_region.allocate(kernarg_type)
+            sz = ctypes.sizeof(ctypes.c_byte) *\
+                entry.symbol.kernarg_segment_size
+            kernargs = entry.kernarg_region.allocate(sz)
         else:
             kernargs = None
+
         return ctx, entry.symbol, kernargs, entry.kernarg_region
 
     def __call__(self, *args):
+        self._sentry_resource_limit()
+
         ctx, symbol, kernargs, kernarg_region = self.bind()
 
         # Unpack pyobject values into ctypes scalar values
         expanded_values = []
+
+        # contains lambdas to execute on return
+        retr = []
         for ty, val in zip(self.argument_types, args):
-            _unpack_argument(ty, val, expanded_values)
+            _unpack_argument(ty, val, expanded_values, retr)
 
         # Insert kernel arguments
         base = 0
@@ -280,39 +333,62 @@ class HSAKernel(HSAKernelBase):
             pad = _calc_padding_for_alignment(align, base)
             base += pad
             # Move to offset
-            offseted = ctypes.addressof(kernargs) + base
+            offseted = kernargs.value + base
             asptr = ctypes.cast(offseted, ctypes.POINTER(type(av)))
             # Assign value
             asptr[0] = av
             # Increment offset
             base += align
 
-        assert (kernargs is None or
-                base <= ctypes.sizeof(kernargs)), "Kernel argument size is invalid"
-
         # Actual Kernel launch
         qq = ctx.default_queue
 
+        if self.stream is None:
+            hsa.implicit_sync()
+
         # Dispatch
+        signal = None
+        if self.stream is not None:
+            signal = hsa.create_signal(1)
+            qq.insert_barrier(self.stream._get_last_signal())
+
         qq.dispatch(symbol, kernargs, workgroup_size=self.local_size,
-                    grid_size=self.global_size)
+                    grid_size=self.global_size, signal=signal)
+
+        if self.stream is not None:
+            self.stream._add_signal(signal)
+
+        # retrieve auto converted arrays
+        for wb in retr:
+            wb()
 
         # Free kernel region
         if kernargs is not None:
-            kernarg_region.free(kernargs)
+            if self.stream is None:
+                kernarg_region.free(kernargs)
+            else:
+                self.stream._add_callback(lambda: kernarg_region.free(kernargs))
 
 
-def _unpack_argument(ty, val, kernelargs):
+def _unpack_argument(ty, val, kernelargs, retr):
     """
     Convert arguments to ctypes and append to kernelargs
     """
     if isinstance(ty, types.Array):
         c_intp = ctypes.c_ssize_t
+        # if a dgpu is present, move the data to the device.
+        if dgpu_present:
+            devary, conv = devicearray.auto_device(val, devices.get_context())
+            if conv:
+                retr.append(lambda: devary.copy_to_host(val))
+            data = devary.device_ctypes_pointer
+        else:
+            data = ctypes.c_void_p(val.ctypes.data)
+
 
         meminfo = parent = ctypes.c_void_p(0)
         nitems = c_intp(val.size)
         itemsize = c_intp(val.dtype.itemsize)
-        data = ctypes.c_void_p(val.ctypes.data)
         kernelargs.append(meminfo)
         kernelargs.append(parent)
         kernelargs.append(nitems)

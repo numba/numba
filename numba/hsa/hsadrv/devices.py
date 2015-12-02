@@ -1,10 +1,10 @@
 """
-Expose each GPU devices directly
+Expose each GPU device directly
 """
 from __future__ import print_function, absolute_import, division
 import functools
 from numba import servicelib
-from .driver import hsa as driver
+from .driver import hsa as driver, Context as _Context
 
 
 class _culist(object):
@@ -97,8 +97,22 @@ class CU(object):
             self._context = None
 
 
+_cpu_context = None
+
+
+def get_cpu_context():
+    global _cpu_context
+    if _cpu_context is None:
+        cpu_agent = [a for a in driver.agents if not a.is_component][0]
+        _cpu_context = _Context(cpu_agent)
+    return _cpu_context
+
+
 def get_gpu(i):
     return cus[i]
+
+def get_num_gpus():
+    return len(cus)
 
 
 _custack = servicelib.TLStack()
@@ -114,14 +128,18 @@ def _get_device(devnum=0):
 
 def get_context(devnum=0):
     """Get the current device or use a device by device number, and
-    return the CUDA context.
+    return the HSA context.
     """
     return _get_device(devnum=devnum).associate_context()
 
 
+def get_all_contexts():
+    return [get_context(i) for i in range(get_num_gpus())]
+
+
 def require_context(fn):
     """
-    A decorator to ensure a context for the CUDA subsystem
+    A decorator to ensure a context for the HSA subsystem
     """
 
     @functools.wraps(fn)
