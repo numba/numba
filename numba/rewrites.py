@@ -14,7 +14,7 @@ class Rewrite(object):
         self.args = args
         self.kws = kws
 
-    def match(self, block, typemap, calltypes):
+    def match(self, label, block, typemap, calltypes):
         '''Overload this method to check an IR block for matching terms in the
         rewrite.
         '''
@@ -57,7 +57,7 @@ class RewriteRegistry(object):
             work_list = list(blocks.items())
             while work_list:
                 key, block = work_list.pop()
-                matches = rewrite.match(block, pipeline.typemap,
+                matches = rewrite.match(key, block, pipeline.typemap,
                                         pipeline.calltypes)
                 if matches:
                     if config.DUMP_IR:

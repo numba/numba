@@ -13,7 +13,7 @@ from numba.targets import cmathimpl, operatorimpl
 from numba.typing import cmathdecl, operatordecl
 from numba.funcdesc import transform_arg_name
 from .cudadrv import nvvm
-from . import codegen, nvvmutils
+from . import codegen, nvvmutils, npydecl
 
 
 # -----------------------------------------------------------------------------
@@ -28,6 +28,7 @@ class CUDATypingContext(typing.BaseContext):
         self.install(cudamath.registry)
         self.install(cmathdecl.registry)
         self.install(operatordecl.registry)
+        self.install(npydecl.registry)
 
 # -----------------------------------------------------------------------------
 # Implementation
@@ -38,6 +39,7 @@ VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
+    enable_array_intern = True
 
     # Overrides
     def create_module(self, name):

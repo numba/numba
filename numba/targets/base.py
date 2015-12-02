@@ -162,6 +162,9 @@ class BaseContext(object):
     # Error model for various operations (only FP exceptions currently)
     error_model = None
 
+    # Rewrite passes
+    enable_array_intern = False
+
     def __init__(self, typing_context):
         _load_global_helpers()
         self.address_size = utils.MACHINE_BITS

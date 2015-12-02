@@ -32,6 +32,9 @@ test = testing.test
 # Try to initialize cuda
 from . import cuda
 
+# Initialize array internization rewrite pass
+import numba.array_intern   # import time side-effects
+
 
 __all__ = """
 jit
