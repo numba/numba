@@ -38,7 +38,8 @@ before_install:
   - PY_MAJOR_MINOR=${TRAVIS_PYTHON_VERSION:0:3}
   # Setup environment
   - conda update --yes conda
-  - conda create -n travisci --yes python=$PY_MAJOR_MINOR $NUMPY cffi pip
+  # Scipy and CFFI are optional dependencies, but exercised in the test suite
+  - conda create -n travisci --yes python=$PY_MAJOR_MINOR $NUMPY cffi pip scipy
   - source activate travisci
   - CONDA_INSTALL="conda install --yes -q"
   - PIP_INSTALL="pip install -q"
