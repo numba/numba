@@ -48,8 +48,8 @@ class TestProduct(TestCase):
     def check_func_out(self, pyfunc, cfunc, args, out):
         expected = np.copy(out)
         got = np.copy(out)
-        self.assertIs(pyfunc(*args, expected), expected)
-        self.assertIs(cfunc(*args, got), got)
+        self.assertIs(pyfunc(*args, out=expected), expected)
+        self.assertIs(cfunc(*args, out=got), got)
         self.assertPreciseEqual(got, expected)
 
     def assert_mismatching_sizes(self, cfunc, args, is_out=False):
@@ -202,18 +202,21 @@ class TestProduct(TestCase):
         """
         self.check_dot_mm(dot2, dot3, "np.dot()")
 
+    @needs_matmul
     def test_matmul_vv(self):
         """
         Test vector @ vector
         """
         self.check_dot_vv(matmul_usecase, "'@'")
 
+    @needs_matmul
     def test_matmul_vm(self):
         """
         Test vector @ matrix and matrix @ vector
         """
         self.check_dot_vm(matmul_usecase, None, "'@'")
 
+    @needs_matmul
     def test_matmul_mm(self):
         """
         Test matrix @ matrix
