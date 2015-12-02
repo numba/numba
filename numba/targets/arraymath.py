@@ -742,6 +742,7 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
 
 @builtin
 @implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array))
+@implement('@', types.Kind(types.Array), types.Kind(types.Array))
 def dot_2(context, builder, sig, args):
     ensure_blas()
 

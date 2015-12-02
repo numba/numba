@@ -8,12 +8,12 @@ import warnings
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import types, typeinfer, utils
+from numba import types, typeinfer, utils, errors
 from numba.config import PYVERSION
 from .support import TestCase
-from numba.tests.true_div_usecase import truediv_usecase, itruediv_usecase
-from numba.tests.matmul_usecase import (matmul_usecase, imatmul_usecase,
-                                        DumbMatrix)
+from .true_div_usecase import truediv_usecase, itruediv_usecase
+from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,
+                             needs_matmul)
 import numba.unittest_support as unittest
 
 Noflags = Flags()
@@ -23,9 +23,6 @@ force_pyobj_flags.set("enable_pyobject")
 
 force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
-
-needs_matmul = unittest.skipIf(matmul_usecase is None,
-                               "the matrix multiplication needs Python 3.5+")
 
 
 class LiteralOperatorImpl(object):
@@ -918,6 +915,28 @@ class TestOperators(TestCase):
     @needs_matmul
     def test_imatmul(self):
         self.check_matmul_objmode(self.op.imatmul_usecase, inplace=True)
+
+    @needs_matmul
+    def check_matmul_npm(self, pyfunc):
+        arrty = types.Array(types.float32, 1, 'C')
+        cres = compile_isolated(pyfunc, (arrty, arrty), flags=Noflags)
+        cfunc = cres.entry_point
+        a = np.float32([1, 2])
+        b = np.float32([3, 4])
+        got = cfunc(a, b)
+        self.assertPreciseEqual(got, np.dot(a, b))
+        # Never inplace
+        self.assertIsNot(got, a)
+        self.assertIsNot(got, b)
+
+    @needs_matmul
+    def test_matmul_npm(self):
+        self.check_matmul_npm(self.op.matmul_usecase)
+
+    @needs_matmul
+    def test_imatmul_npm(self):
+        with self.assertTypingError() as raises:
+            self.check_matmul_npm(self.op.imatmul_usecase)
 
     #
     # Bitwise operators

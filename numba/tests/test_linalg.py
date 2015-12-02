@@ -8,6 +8,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, errors
 from .support import TestCase
+from .matmul_usecase import matmul_usecase, needs_matmul
 
 
 def dot2(a, b):
@@ -20,9 +21,9 @@ def vdot(a, b):
     return np.vdot(a, b)
 
 
-class TestDot(TestCase):
+class TestProduct(TestCase):
     """
-    Tests for np.dot()
+    Tests for dot products.
     """
 
     dtypes = (np.float64, np.float32, np.complex128, np.complex64)
@@ -58,10 +59,10 @@ class TestDot(TestCase):
                "incompatible array sizes")
         self.assertIn(msg, str(raises.exception))
 
-    def assert_mismatching_dtypes(self, cfunc, args, func_name="np.dot"):
+    def assert_mismatching_dtypes(self, cfunc, args, func_name="np.dot()"):
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(*args)
-        self.assertIn("%s() arguments must all have the same dtype"
+        self.assertIn("%s arguments must all have the same dtype"
                       % (func_name,),
                       str(raises.exception))
 
@@ -86,18 +87,15 @@ class TestDot(TestCase):
         """
         Test vector * vector np.dot()
         """
-        self.check_dot_vv(dot2, "np.dot")
+        self.check_dot_vv(dot2, "np.dot()")
 
     def test_vdot(self):
         """
         Test np.vdot()
         """
-        self.check_dot_vv(vdot, "np.vdot")
+        self.check_dot_vv(vdot, "np.vdot()")
 
-    def test_dot_vm(self):
-        """
-        Test vector * matrix and matrix * vector np.dot()
-        """
+    def check_dot_vm(self, pyfunc2, pyfunc3, func_name):
         m, n = 2, 3
 
         def samples(m, n):
@@ -110,44 +108,49 @@ class TestDot(TestCase):
                 b = self.sample_vector(n, dtype)
                 yield a, b
 
-        pyfunc2 = dot2
         cfunc2 = jit(nopython=True)(pyfunc2)
-        pyfunc3 = dot3
-        cfunc3 = jit(nopython=True)(pyfunc3)
+        if pyfunc3 is not None:
+            cfunc3 = jit(nopython=True)(pyfunc3)
         for a, b in samples(m, n):
             self.check_func(pyfunc2, cfunc2, (a, b))
             self.check_func(pyfunc2, cfunc2, (b, a.T))
-        for a, b in samples(m, n):
-            out = np.empty(m, dtype=a.dtype)
-            self.check_func_out(pyfunc3, cfunc3, (a, b), out)
-            self.check_func_out(pyfunc3, cfunc3, (b, a.T), out)
+        if pyfunc3 is not None:
+            for a, b in samples(m, n):
+                out = np.empty(m, dtype=a.dtype)
+                self.check_func_out(pyfunc3, cfunc3, (a, b), out)
+                self.check_func_out(pyfunc3, cfunc3, (b, a.T), out)
 
         # Mismatching sizes
         a = self.sample_matrix(m, n - 1, np.float64)
         b = self.sample_vector(n, np.float64)
         self.assert_mismatching_sizes(cfunc2, (a, b))
         self.assert_mismatching_sizes(cfunc2, (b, a.T))
-        out = np.empty(m, np.float64)
-        self.assert_mismatching_sizes(cfunc3, (a, b, out))
-        self.assert_mismatching_sizes(cfunc3, (b, a.T, out))
-        a = self.sample_matrix(m, m, np.float64)
-        b = self.sample_vector(m, np.float64)
-        out = np.empty(m - 1, np.float64)
-        self.assert_mismatching_sizes(cfunc3, (a, b, out), is_out=True)
-        self.assert_mismatching_sizes(cfunc3, (b, a.T, out), is_out=True)
+        if pyfunc3 is not None:
+            out = np.empty(m, np.float64)
+            self.assert_mismatching_sizes(cfunc3, (a, b, out))
+            self.assert_mismatching_sizes(cfunc3, (b, a.T, out))
+            a = self.sample_matrix(m, m, np.float64)
+            b = self.sample_vector(m, np.float64)
+            out = np.empty(m - 1, np.float64)
+            self.assert_mismatching_sizes(cfunc3, (a, b, out), is_out=True)
+            self.assert_mismatching_sizes(cfunc3, (b, a.T, out), is_out=True)
         # Mismatching dtypes
         a = self.sample_matrix(m, n, np.float32)
         b = self.sample_vector(n, np.float64)
-        self.assert_mismatching_dtypes(cfunc2, (a, b))
-        a = self.sample_matrix(m, n, np.float64)
-        b = self.sample_vector(n, np.float64)
-        out = np.empty(m, np.float32)
-        self.assert_mismatching_dtypes(cfunc3, (a, b, out))
+        self.assert_mismatching_dtypes(cfunc2, (a, b), func_name)
+        if pyfunc3 is not None:
+            a = self.sample_matrix(m, n, np.float64)
+            b = self.sample_vector(n, np.float64)
+            out = np.empty(m, np.float32)
+            self.assert_mismatching_dtypes(cfunc3, (a, b, out), func_name)
 
-    def test_dot_mm(self):
+    def test_dot_vm(self):
         """
-        Test matrix * matrix np.dot()
+        Test vector * matrix and matrix * vector np.dot()
         """
+        self.check_dot_vm(dot2, dot3, "np.dot()")
+
+    def check_dot_mm(self, pyfunc2, pyfunc3, func_name):
         m, n, k = 2, 3, 4
 
         def samples(m, n, k):
@@ -160,37 +163,62 @@ class TestDot(TestCase):
                 b = self.sample_matrix(k, n, dtype)
                 yield a, b
 
-        pyfunc2 = dot2
         cfunc2 = jit(nopython=True)(pyfunc2)
         for a, b in samples(m, n, k):
             self.check_func(pyfunc2, cfunc2, (a, b))
             self.check_func(pyfunc2, cfunc2, (b.T, a.T))
-        pyfunc3 = dot3
-        cfunc3 = jit(nopython=True)(pyfunc3)
-        for a, b in samples(m, n, k):
-            out = np.empty((m, n), dtype=a.dtype)
-            self.check_func_out(pyfunc3, cfunc3, (a, b), out)
-            out = np.empty((n, m), dtype=a.dtype)
-            self.check_func_out(pyfunc3, cfunc3, (b.T, a.T), out)
+        if pyfunc3 is not None:
+            cfunc3 = jit(nopython=True)(pyfunc3)
+            for a, b in samples(m, n, k):
+                out = np.empty((m, n), dtype=a.dtype)
+                self.check_func_out(pyfunc3, cfunc3, (a, b), out)
+                out = np.empty((n, m), dtype=a.dtype)
+                self.check_func_out(pyfunc3, cfunc3, (b.T, a.T), out)
 
         # Mismatching sizes
         a = self.sample_matrix(m, k - 1, np.float64)
         b = self.sample_matrix(k, n, np.float64)
         self.assert_mismatching_sizes(cfunc2, (a, b))
-        out = np.empty((m, n), np.float64)
-        self.assert_mismatching_sizes(cfunc3, (a, b, out))
-        a = self.sample_matrix(m, k, np.float64)
-        b = self.sample_matrix(k, n, np.float64)
-        out = np.empty((m, n - 1), np.float64)
-        self.assert_mismatching_sizes(cfunc3, (a, b, out), is_out=True)
+        if pyfunc3 is not None:
+            out = np.empty((m, n), np.float64)
+            self.assert_mismatching_sizes(cfunc3, (a, b, out))
+            a = self.sample_matrix(m, k, np.float64)
+            b = self.sample_matrix(k, n, np.float64)
+            out = np.empty((m, n - 1), np.float64)
+            self.assert_mismatching_sizes(cfunc3, (a, b, out), is_out=True)
         # Mismatching dtypes
         a = self.sample_matrix(m, k, np.float32)
         b = self.sample_matrix(k, n, np.float64)
-        self.assert_mismatching_dtypes(cfunc2, (a, b))
-        a = self.sample_matrix(m, k, np.float64)
-        b = self.sample_matrix(k, n, np.float64)
-        out = np.empty((m, n), np.float32)
-        self.assert_mismatching_dtypes(cfunc3, (a, b, out))
+        self.assert_mismatching_dtypes(cfunc2, (a, b), func_name)
+        if pyfunc3 is not None:
+            a = self.sample_matrix(m, k, np.float64)
+            b = self.sample_matrix(k, n, np.float64)
+            out = np.empty((m, n), np.float32)
+            self.assert_mismatching_dtypes(cfunc3, (a, b, out), func_name)
+
+    def test_dot_mm(self):
+        """
+        Test matrix * matrix np.dot()
+        """
+        self.check_dot_mm(dot2, dot3, "np.dot()")
+
+    def test_matmul_vv(self):
+        """
+        Test vector @ vector
+        """
+        self.check_dot_vv(matmul_usecase, "'@'")
+
+    def test_matmul_vm(self):
+        """
+        Test vector @ matrix and matrix @ vector
+        """
+        self.check_dot_vm(matmul_usecase, None, "'@'")
+
+    def test_matmul_mm(self):
+        """
+        Test matrix @ matrix
+        """
+        self.check_dot_mm(matmul_usecase, None, "'@'")
 
 
 if __name__ == '__main__':

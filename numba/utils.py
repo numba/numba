@@ -75,6 +75,7 @@ operator_map = [
     ('truediv', 'itruediv', '/'),
     ('mod', 'imod', '%'),
     ('pow', 'ipow', '**'),
+    ('matmul', 'imatmul', '@'),
     ('and_', 'iand', '&'),
     ('or_', 'ior', '|'),
     ('xor', 'ixor', '^'),
