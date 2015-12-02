@@ -637,20 +637,57 @@ def make_constant_slot(context, builder, ty, val):
     return cgutils.alloca_once_value(builder, const)
 
 def dot_2_mm(context, builder, sig, args):
-
+    """
+    np.dot(matrix, matrix)
+    """
     def dot_impl(a, b):
         m, k = a.shape
         _k, n = b.shape
         if k != _k:
-            raise ValueError("incompatible array shapes for np.dot(a, b): "
-                             "a.shape[1] != b.shape[0]")
+            raise ValueError("incompatible array sizes for np.dot(a, b) "
+                             "(vector * vector)")
         out = numpy.empty((m, n), a.dtype)
         return numpy.dot(a, b, out)
 
     res = context.compile_internal(builder, dot_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
+def dot_2_vm(context, builder, sig, args):
+    """
+    np.dot(vector, matrix)
+    """
+    def dot_impl(a, b):
+        m, = a.shape
+        _m, n = b.shape
+        if m != _m:
+            raise ValueError("incompatible array sizes for np.dot(a, b) "
+                             "(vector * matrix)")
+        out = numpy.empty((n, ), a.dtype)
+        return numpy.dot(a, b, out)
+
+    res = context.compile_internal(builder, dot_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+def dot_2_mv(context, builder, sig, args):
+    """
+    np.dot(matrix, vector)
+    """
+    def dot_impl(a, b):
+        m, n = a.shape
+        _n, = b.shape
+        if n != _n:
+            raise ValueError("incompatible array sizes for np.dot(a, b) "
+                             "(matrix * vector)")
+        out = numpy.empty((m, ), a.dtype)
+        return numpy.dot(a, b, out)
+
+    res = context.compile_internal(builder, dot_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 def dot_2_vv(context, builder, sig, args):
+    """
+    np.dot(vector, vector)
+    """
     aty, bty = sig.args
     dtype = sig.return_type
     a = make_array(aty)(context, builder, args[0])
@@ -661,8 +698,8 @@ def dot_2_vv(context, builder, sig, args):
         m, = a.shape
         n, = b.shape
         if m != n:
-            raise ValueError("incompatible array shapes for np.dot(a, b): "
-                             "a.shape != b.shape")
+            raise ValueError("incompatible array sizes for np.dot(a, b) "
+                             "(matrix * matrix)")
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
@@ -689,20 +726,109 @@ def dot_2_vv(context, builder, sig, args):
 @builtin
 @implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array))
 def dot_2(context, builder, sig, args):
-    ndims = set(x.ndim for x in sig.args[:2])
-    if ndims == set([2]):
+    ndims = [x.ndim for x in sig.args[:2]]
+    if ndims == [2, 2]:
         return dot_2_mm(context, builder, sig, args)
-    elif ndims == set([1, 2]):
+    elif ndims == [2, 1]:
+        return dot_2_mv(context, builder, sig, args)
+    elif ndims == [1, 2]:
         return dot_2_vm(context, builder, sig, args)
-    elif ndims == set([1]):
+    elif ndims == [1, 1]:
         return dot_2_vv(context, builder, sig, args)
     else:
         assert 0
 
-@builtin
-@implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
-def dot_3(context, builder, sig, args):
+
+def dot_3_vm(context, builder, sig, args):
+    """
+    np.dot(vector, matrix, out)
+    np.dot(matrix, vector, out)
+    """
+    xty, yty, outty = sig.args
+    assert outty == sig.return_type
+    dtype = xty.dtype
+
+    x = make_array(xty)(context, builder, args[0])
+    y = make_array(yty)(context, builder, args[1])
+    out = make_array(outty)(context, builder, args[2])
+    x_shapes = cgutils.unpack_tuple(builder, x.shape)
+    y_shapes = cgutils.unpack_tuple(builder, y.shape)
+    out_shapes = cgutils.unpack_tuple(builder, out.shape)
+    if xty.ndim < yty.ndim:
+        # Vector * matrix
+        # Asked for x * y, we will compute y.T * x
+        mty = yty
+        m, n = m_shapes = y_shapes
+        do_trans = yty.layout == 'F'
+        m_data, v_data = y.data, x.data
+
+        def check_args(a, b, out):
+            m, = a.shape
+            _m, n = b.shape
+            if m != _m:
+                raise ValueError("incompatible array sizes for np.dot(a, b) "
+                                 "(vector * matrix)")
+            if out.shape != (n,):
+                raise ValueError("incompatible output array size for np.dot(a, b, out) "
+                                 "(vector * matrix)")
+    else:
+        # Matrix * vector
+        # We will compute x * y
+        mty = xty
+        m, n = m_shapes = x_shapes
+        do_trans = xty.layout == 'C'
+        m_data, v_data = x.data, y.data
+
+        def check_args(a, b, out):
+            m, _n= a.shape
+            n, = b.shape
+            if n != _n:
+                raise ValueError("incompatible array sizes for np.dot(a, b) "
+                                 "(matrix * vector)")
+            if out.shape != (m,):
+                raise ValueError("incompatible output array size for np.dot(a, b, out) "
+                                 "(matrix * vector)")
+
+    context.compile_internal(builder, check_args,
+                             signature(types.none, *sig.args), args)
+
+    fnty = ir.FunctionType(ir.IntType(32),
+                           [ll_char, ll_char_p,               # kind, trans
+                            intp_t, intp_t,                   # m, n
+                            ll_void_p, ll_void_p, intp_t,     # alpha, a, lda
+                            ll_void_p, ll_void_p, ll_void_p,  # x, beta, y
+                           ])
+    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgemv")
+
+    alpha = make_constant_slot(context, builder, dtype, 1.0)
+    beta = make_constant_slot(context, builder, dtype, 0.0)
+
+    if mty.layout == 'F':
+        lda = m_shapes[0]
+    else:
+        m, n = n, m
+        lda = m_shapes[1]
+
+    kind = get_blas_kind(dtype)
+    kind_val = ir.Constant(ll_char, ord(kind))
+    trans = context.insert_const_string(builder.module,
+                                        "t" if do_trans else "n")
+
+    # TODO check error return
+    builder.call(fn, (kind_val, trans, m, n,
+                      builder.bitcast(alpha, ll_void_p),
+                      builder.bitcast(m_data, ll_void_p), lda,
+                      builder.bitcast(v_data, ll_void_p),
+                      builder.bitcast(beta, ll_void_p),
+                      builder.bitcast(out.data, ll_void_p)))
+
+    return impl_ret_borrowed(context, builder, sig.return_type, out._getvalue())
+
+
+def dot_3_mm(context, builder, sig, args):
+    """
+    np.dot(matrix, matrix, out)
+    """
     xty, yty, outty = sig.args
     assert outty == sig.return_type
     dtype = xty.dtype
@@ -720,11 +846,11 @@ def dot_3(context, builder, sig, args):
         m, k = a.shape
         _k, n = b.shape
         if k != _k:
-            raise ValueError("incompatible array shapes for np.dot(a, b, out): "
-                             "a.shape[1] != b.shape[0]")
+            raise ValueError("incompatible array sizes for np.dot(a, b) "
+                             "(matrix * matrix)")
         if out.shape != (m, n):
-            raise ValueError("incompatible output array shape for np.dot(a, b, out): "
-                             "out.shape != (a.shape[0], b.shape[1])")
+            raise ValueError("incompatible output array size for np.dot(a, b, out) "
+                             "(matrix * matrix)")
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
@@ -772,3 +898,16 @@ def dot_3(context, builder, sig, args):
                       data_c, ldc))
 
     return impl_ret_borrowed(context, builder, sig.return_type, out._getvalue())
+
+
+@builtin
+@implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array))
+def dot_3(context, builder, sig, args):
+    ndims = set(x.ndim for x in sig.args[:2])
+    if ndims == set([2]):
+        return dot_3_mm(context, builder, sig, args)
+    elif ndims == set([1, 2]):
+        return dot_3_vm(context, builder, sig, args)
+    else:
+        assert 0

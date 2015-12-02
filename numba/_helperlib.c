@@ -1337,6 +1337,10 @@ EMIT_GET_CBLAS_FUNC(dgemm)
 EMIT_GET_CBLAS_FUNC(sgemm)
 EMIT_GET_CBLAS_FUNC(cgemm)
 EMIT_GET_CBLAS_FUNC(zgemm)
+EMIT_GET_CBLAS_FUNC(dgemv)
+EMIT_GET_CBLAS_FUNC(sgemv)
+EMIT_GET_CBLAS_FUNC(cgemv)
+EMIT_GET_CBLAS_FUNC(zgemv)
 EMIT_GET_CBLAS_FUNC(ddot)
 EMIT_GET_CBLAS_FUNC(sdot)
 EMIT_GET_CBLAS_FUNC(cdotu)
@@ -1350,6 +1354,12 @@ typedef float (*sdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
 typedef double (*ddot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
 typedef npy_complex64 (*cdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
 typedef npy_complex128 (*zdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
+
+typedef void (*xxgemv_t)(char *trans, int *m, int *n,
+                         void *alpha, void *a, int *lda,
+                         void *x, int *incx, void *beta,
+                         void *y, int *incy);
+
 typedef void (*xxgemm_t)(char *transa, char *transb,
                          int *m, int *n, int *k,
                          void *alpha, void *a, int *lda,
@@ -1365,6 +1375,7 @@ typedef void (*xxgemm_t)(char *transa, char *transb,
     }
 
 
+/* Vector * vector: result = dx * dy */
 NUMBA_EXPORT_FUNC(int)
 numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
             void *result)
@@ -1417,6 +1428,49 @@ numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
     return 0;
 }
 
+/* Matrix * vector: y = alpha * a * x + beta * y */
+NUMBA_EXPORT_FUNC(int)
+numba_xxgemv(char kind, char *trans, Py_ssize_t m, Py_ssize_t n,
+             void *alpha, void *a, Py_ssize_t lda,
+             void *x, void *beta, void *y)
+{
+    /* TODO make sure this works in nogil mode */
+    void *raw_func = NULL;
+    int _m, _n;
+    int _lda;
+    int inc = 1;
+
+    switch (kind) {
+        case 'd':
+            raw_func = get_cblas_dgemv();
+            break;
+        case 's':
+            raw_func = get_cblas_sgemv();
+            break;
+        case 'c':
+            raw_func = get_cblas_cgemv();
+            break;
+        case 'z':
+            raw_func = get_cblas_zgemv();
+            break;
+        default:
+            PyErr_SetString(PyExc_ValueError,
+                            "invalid kind of *GEMV function");
+            return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    CHECK_SIZE(m)
+    CHECK_SIZE(n)
+    CHECK_SIZE(lda)
+
+    (*(xxgemv_t) raw_func)(trans, &_m, &_n, alpha, a, &_lda,
+                           x, &inc, beta, y, &inc);
+    return 0;
+}
+
+/* Matrix * matrix: c = alpha * a * b + beta * c */
 NUMBA_EXPORT_FUNC(int)
 numba_xxgemm(char kind, char *transa, char *transb,
              Py_ssize_t m, Py_ssize_t n, Py_ssize_t k,
