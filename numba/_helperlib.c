@@ -1281,7 +1281,8 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
 }
 
 /*
- * BLAS calling helpers
+ * BLAS calling helpers.  The helpers can be called without the GIL held.
+ * The caller is responsible for checking arguments (especially dimensions).
  */
 
 /* Fetch the address of the given CBLAS function, as exposed by
@@ -1328,8 +1329,11 @@ import_cblas_function(const char *function_name)
 #define EMIT_GET_CBLAS_FUNC(name)                            \
     static void *cblas_ ## name = NULL;                      \
     static void *get_cblas_ ## name(void) {                  \
-        if (cblas_ ## name == NULL)                          \
+        if (cblas_ ## name == NULL) {                        \
+            PyGILState_STATE st = PyGILState_Ensure();       \
             cblas_ ## name = import_cblas_function(# name);  \
+            PyGILState_Release(st);                          \
+        }                                                    \
         return cblas_ ## name;                               \
     }
 
@@ -1366,21 +1370,11 @@ typedef void (*xxgemm_t)(char *transa, char *transb,
                          void *b, int *ldb, void *beta,
                          void *c, int *ldc);
 
-#define CHECK_SIZE(varname)                                        \
-    _ ## varname = (int) varname;                                  \
-    if (_ ## varname != varname) {                                 \
-        PyErr_SetString(PyExc_OverflowError,                       \
-                        "array dimension does not fit in C int");  \
-        return -1;                                                 \
-    }
-
-
 /* Vector * vector: result = dx * dy */
 NUMBA_EXPORT_FUNC(int)
 numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
             void *result)
 {
-    /* TODO make sure this works in nogil mode */
     void *raw_func = NULL;
     int _n;
     int inc = 1;
@@ -1399,16 +1393,18 @@ numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
             raw_func = conjugate ? get_cblas_zdotc() : get_cblas_zdotu();
             break;
         default:
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of *DOT function");
+            {
+                PyGILState_STATE st = PyGILState_Ensure();
+                PyErr_SetString(PyExc_ValueError,
+                                "invalid kind of *DOT function");
+                PyGILState_Release(st);
+            }
             return -1;
     }
     if (raw_func == NULL)
         return -1;
 
-    CHECK_SIZE(n)
-
-#undef CHECK_INT
+    _n = (int) n;
 
     switch (kind) {
         case 'd':
@@ -1434,7 +1430,6 @@ numba_xxgemv(char kind, char *trans, Py_ssize_t m, Py_ssize_t n,
              void *alpha, void *a, Py_ssize_t lda,
              void *x, void *beta, void *y)
 {
-    /* TODO make sure this works in nogil mode */
     void *raw_func = NULL;
     int _m, _n;
     int _lda;
@@ -1454,16 +1449,20 @@ numba_xxgemv(char kind, char *trans, Py_ssize_t m, Py_ssize_t n,
             raw_func = get_cblas_zgemv();
             break;
         default:
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of *GEMV function");
+            {
+                PyGILState_STATE st = PyGILState_Ensure();
+                PyErr_SetString(PyExc_ValueError,
+                                "invalid kind of *GEMV function");
+                PyGILState_Release(st);
+            }
             return -1;
     }
     if (raw_func == NULL)
         return -1;
 
-    CHECK_SIZE(m)
-    CHECK_SIZE(n)
-    CHECK_SIZE(lda)
+    _m = (int) m;
+    _n = (int) n;
+    _lda = (int) lda;
 
     (*(xxgemv_t) raw_func)(trans, &_m, &_n, alpha, a, &_lda,
                            x, &inc, beta, y, &inc);
@@ -1478,7 +1477,6 @@ numba_xxgemm(char kind, char *transa, char *transb,
              void *b, Py_ssize_t ldb, void *beta,
              void *c, Py_ssize_t ldc)
 {
-    /* TODO make sure this works in nogil mode */
     void *raw_func = NULL;
     int _m, _n, _k;
     int _lda, _ldb, _ldc;
@@ -1497,26 +1495,29 @@ numba_xxgemm(char kind, char *transa, char *transb,
             raw_func = get_cblas_zgemm();
             break;
         default:
-            PyErr_SetString(PyExc_ValueError,
-                            "invalid kind of *GEMM function");
+            {
+                PyGILState_STATE st = PyGILState_Ensure();
+                PyErr_SetString(PyExc_ValueError,
+                                "invalid kind of *GEMM function");
+                PyGILState_Release(st);
+            }
             return -1;
     }
     if (raw_func == NULL)
         return -1;
 
-    CHECK_SIZE(m)
-    CHECK_SIZE(n)
-    CHECK_SIZE(k)
-    CHECK_SIZE(lda)
-    CHECK_SIZE(ldb)
-    CHECK_SIZE(ldc)
+    _m = (int) m;
+    _n = (int) n;
+    _k = (int) k;
+    _lda = (int) lda;
+    _ldb = (int) ldb;
+    _ldc = (int) ldc;
 
     (*(xxgemm_t) raw_func)(transa, transb, &_m, &_n, &_k, alpha, a, &_lda,
                            b, &_ldb, beta, c, &_ldc);
     return 0;
 }
 
-#undef CHECK_SIZE
 
 /* We use separate functions for datetime64 and timedelta64, to ensure
  * proper type checking.

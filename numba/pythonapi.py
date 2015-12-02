@@ -348,6 +348,7 @@ class PythonAPI(object):
     def fatal_error(self, msg):
         fnty = Type.function(Type.void(), [self.cstring])
         fn = self._get_function(fnty, name="Py_FatalError")
+        fn.attributes.add("noreturn")
         cstr = self.context.insert_const_string(self.module, msg)
         self.builder.call(fn, (cstr,))
 

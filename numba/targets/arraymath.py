@@ -630,11 +630,33 @@ def get_blas_kind(dtype):
         types.complex128: 'z',
         }[dtype]
 
-# TODO check scipy.linalg.cython_blas is available
+def ensure_blas():
+    try:
+        import scipy.linalg.cython_blas
+    except ImportError:
+        raise ImportError("scipy 0.16+ is required for linear algebra")
 
 def make_constant_slot(context, builder, ty, val):
     const = context.get_constant_generic(builder, ty, val)
     return cgutils.alloca_once_value(builder, const)
+
+def check_c_int(context, builder, n):
+    _maxint = 2**31 - 1
+
+    def impl(n):
+        if n > _maxint:
+            raise OverflowError("array size too large to fit in C int")
+
+    context.compile_internal(builder, impl,
+                             signature(types.none, types.intp), (n,))
+
+def check_blas_return(context, builder, res):
+    with builder.if_then(cgutils.is_not_null(builder, res), likely=False):
+        # Those errors shouldn't happen, it's easier to just abort the process
+        pyapi = context.get_python_api(builder)
+        pyapi.gil_ensure()
+        pyapi.fatal_error("BLAS wrapper returned with an error")
+
 
 def dot_2_mm(context, builder, sig, args):
     """
@@ -643,9 +665,6 @@ def dot_2_mm(context, builder, sig, args):
     def dot_impl(a, b):
         m, k = a.shape
         _k, n = b.shape
-        if k != _k:
-            raise ValueError("incompatible array sizes for np.dot(a, b) "
-                             "(vector * vector)")
         out = numpy.empty((m, n), a.dtype)
         return numpy.dot(a, b, out)
 
@@ -659,9 +678,6 @@ def dot_2_vm(context, builder, sig, args):
     def dot_impl(a, b):
         m, = a.shape
         _m, n = b.shape
-        if m != _m:
-            raise ValueError("incompatible array sizes for np.dot(a, b) "
-                             "(vector * matrix)")
         out = numpy.empty((n, ), a.dtype)
         return numpy.dot(a, b, out)
 
@@ -675,9 +691,6 @@ def dot_2_mv(context, builder, sig, args):
     def dot_impl(a, b):
         m, n = a.shape
         _n, = b.shape
-        if n != _n:
-            raise ValueError("incompatible array sizes for np.dot(a, b) "
-                             "(matrix * vector)")
         out = numpy.empty((m, ), a.dtype)
         return numpy.dot(a, b, out)
 
@@ -703,6 +716,8 @@ def dot_2_vv(context, builder, sig, args):
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
+    check_c_int(context, builder, n)
+
     out = cgutils.alloca_once(builder, context.get_value_type(dtype))
 
     fnty = ir.FunctionType(ir.IntType(32),
@@ -714,11 +729,11 @@ def dot_2_vv(context, builder, sig, args):
     kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
 
-    # TODO check error return
-    builder.call(fn, (kind_val, cgutils.false_byte, n,
-                      builder.bitcast(a.data, ll_void_p),
-                      builder.bitcast(b.data, ll_void_p),
-                      builder.bitcast(out, ll_void_p)))
+    res = builder.call(fn, (kind_val, cgutils.false_byte, n,
+                            builder.bitcast(a.data, ll_void_p),
+                            builder.bitcast(b.data, ll_void_p),
+                            builder.bitcast(out, ll_void_p)))
+    check_blas_return(context, builder, res)
 
     return builder.load(out)
 
@@ -726,6 +741,8 @@ def dot_2_vv(context, builder, sig, args):
 @builtin
 @implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array))
 def dot_2(context, builder, sig, args):
+    ensure_blas()
+
     ndims = [x.ndim for x in sig.args[:2]]
     if ndims == [2, 2]:
         return dot_2_mm(context, builder, sig, args)
@@ -791,6 +808,8 @@ def dot_3_vm(context, builder, sig, args):
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
+    check_c_int(context, builder, m)
+    check_c_int(context, builder, n)
 
     fnty = ir.FunctionType(ir.IntType(32),
                            [ll_char, ll_char_p,               # kind, trans
@@ -814,13 +833,13 @@ def dot_3_vm(context, builder, sig, args):
     trans = context.insert_const_string(builder.module,
                                         "t" if do_trans else "n")
 
-    # TODO check error return
-    builder.call(fn, (kind_val, trans, m, n,
-                      builder.bitcast(alpha, ll_void_p),
-                      builder.bitcast(m_data, ll_void_p), lda,
-                      builder.bitcast(v_data, ll_void_p),
-                      builder.bitcast(beta, ll_void_p),
-                      builder.bitcast(out.data, ll_void_p)))
+    res = builder.call(fn, (kind_val, trans, m, n,
+                            builder.bitcast(alpha, ll_void_p),
+                            builder.bitcast(m_data, ll_void_p), lda,
+                            builder.bitcast(v_data, ll_void_p),
+                            builder.bitcast(beta, ll_void_p),
+                            builder.bitcast(out.data, ll_void_p)))
+    check_blas_return(context, builder, res)
 
     return impl_ret_borrowed(context, builder, sig.return_type, out._getvalue())
 
@@ -854,6 +873,9 @@ def dot_3_mm(context, builder, sig, args):
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
+    check_c_int(context, builder, m)
+    check_c_int(context, builder, k)
+    check_c_int(context, builder, n)
 
     fnty = ir.FunctionType(ir.IntType(32),
                            [ll_char,                       # kind
@@ -891,11 +913,11 @@ def dot_3_mm(context, builder, sig, args):
     kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
 
-    # TODO check error return
-    builder.call(fn, (kind_val, transa, transb, n, m, k,
-                      builder.bitcast(alpha, ll_void_p), data_a, lda,
-                      data_b, ldb, builder.bitcast(beta, ll_void_p),
-                      data_c, ldc))
+    res = builder.call(fn, (kind_val, transa, transb, n, m, k,
+                            builder.bitcast(alpha, ll_void_p), data_a, lda,
+                            data_b, ldb, builder.bitcast(beta, ll_void_p),
+                            data_c, ldc))
+    check_blas_return(context, builder, res)
 
     return impl_ret_borrowed(context, builder, sig.return_type, out._getvalue())
 
@@ -904,6 +926,8 @@ def dot_3_mm(context, builder, sig, args):
 @implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array),
            types.Kind(types.Array))
 def dot_3(context, builder, sig, args):
+    ensure_blas()
+
     ndims = set(x.ndim for x in sig.args[:2])
     if ndims == set([2]):
         return dot_3_mm(context, builder, sig, args)
