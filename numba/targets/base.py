@@ -669,6 +669,10 @@ class BaseContext(object):
         return pair.second
 
     def cast(self, builder, val, fromty, toty):
+        if val.type != self.get_value_type(fromty):
+            raise TypeError("{0} != {1}; when casting to {2}".format(val.type,
+                                                self.get_value_type(fromty),
+                                                self.get_value_type(toty)))
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
 

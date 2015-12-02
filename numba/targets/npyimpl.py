@@ -139,7 +139,9 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
                                          inds=indices)
 
     def load_data(self, indices):
-        return self.builder.load(self._load_effective_address(indices))
+        model = self.context.data_model_manager[self.base_type]
+        ptr = self._load_effective_address(indices)
+        return model.load_from_data_pointer(self.builder, ptr)
 
     def store_data(self, indices, value):
         ctx = self.context
@@ -383,6 +385,8 @@ def _ufunc_db_function(ufunc):
                          for val, inty, outty in zip(args, osig.args,
                                                      isig.args)]
             res = self.fn(self.context, self.builder, isig, cast_args)
+            dmm = self.context.data_model_manager
+            res = dmm[isig.return_type].from_return(self.builder, res)
             return self.cast(res, isig.return_type, osig.return_type)
 
     return _KernelImpl
