@@ -15,7 +15,7 @@ from numba.utils import total_ordering
 from numba import utils
 from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
-from . import enums, drvapi
+from . import enums, enums_ext, drvapi
 
 
 class HsaKernelTimedOut(HsaDriverError):
@@ -553,8 +553,10 @@ class MemRegion(HsaWrapper):
         ),
         '_flags': (
             enums.HSA_REGION_INFO_GLOBAL_FLAGS,
-            drvapi.hsa_region_flag_t
+            drvapi.hsa_region_global_flag_t
         ),
+        'host_accessible': (enums_ext.HSA_AMD_REGION_INFO_HOST_ACCESSIBLE,
+                            ctypes.c_bool),
         'size': (enums.HSA_REGION_INFO_SIZE,
                  ctypes.c_size_t),
         'alloc_max_size': (enums.HSA_REGION_INFO_ALLOC_MAX_SIZE,
@@ -589,10 +591,16 @@ class MemRegion(HsaWrapper):
     def agent(self):
         return self._owner_agent
 
-    @property
-    def supports_kernargs(self):
+    def supports(self, check_flag):
+        """
+            Determines if a given feature is supported by this MemRegion.
+            Feature flags are found in "./enums.py" under:
+                * hsa_region_global_flag_t
+             Params:
+                check_flag: Feature flag to test
+        """
         if self.kind == 'global':
-            return self._flags & enums.HSA_REGION_GLOBAL_FLAG_KERNARG
+            return self._flags & check_flag
         else:
             return False
 

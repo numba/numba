@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import
 
 import numba.unittest_support as unittest
 from numba.hsa.hlc import hlc
+from numba.hsa.hsadrv import enums
 
 SPIR_SAMPLE = """
 ; ModuleID = 'kernel.out.bc'
@@ -72,7 +73,8 @@ class TestHLC(unittest.TestCase):
 
         sig = hsa.create_signal(1)
 
-        kernarg_region = [r for r in agent.regions if r.supports_kernargs][0]
+        kernarg_region = [r for r in agent.regions
+                if r.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG)][0]
 
         kernarg_types = (ctypes.c_void_p * 2)
         kernargs = kernarg_region.allocate(kernarg_types)
