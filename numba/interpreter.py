@@ -1012,6 +1012,9 @@ class Interpreter(object):
     def op_BINARY_POWER(self, inst, lhs, rhs, res):
         self._binop('**', lhs, rhs, res)
 
+    def op_BINARY_MATRIX_MULTIPLY(self, inst, lhs, rhs, res):
+        self._binop('@', lhs, rhs, res)
+
     def op_BINARY_LSHIFT(self, inst, lhs, rhs, res):
         self._binop('<<', lhs, rhs, res)
 
@@ -1050,6 +1053,9 @@ class Interpreter(object):
 
     def op_INPLACE_POWER(self, inst, lhs, rhs, res):
         self._inplace_binop('**', lhs, rhs, res)
+
+    def op_INPLACE_MATRIX_MULTIPLY(self, inst, lhs, rhs, res):
+        self._inplace_binop('@', lhs, rhs, res)
 
     def op_INPLACE_LSHIFT(self, inst, lhs, rhs, res):
         self._inplace_binop('<<', lhs, rhs, res)
