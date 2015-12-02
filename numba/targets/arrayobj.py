@@ -1078,6 +1078,12 @@ def array_reshape(context, builder, sig, args):
     ary = make_array(aryty)(context, builder, args[0])
 
     # XXX unknown dimension (-1) is unhandled
+    msg = "negative shape is not handled, yet"
+    for s in cgutils.unpack_tuple(builder, shape):
+        is_neg = builder.icmp_signed('<', s, lc.Constant.int(ll_intp, 0))
+        with cgutils.if_unlikely(builder, is_neg):
+            context.call_conv.return_user_exc(builder, NotImplementedError,
+                                              (msg,))
 
     # Check requested size
     newsize = lc.Constant.int(ll_intp, 1)
@@ -1114,6 +1120,26 @@ def array_reshape(context, builder, sig, args):
                    parent=ary.parent)
     res = ret._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+@builtin
+@implement('array.reshape', types.Kind(types.Array), types.VarArg(types.Any))
+def array_reshape_vararg(context, builder, sig, args):
+    # types
+    aryty = sig.args[0]
+    dimtys = sig.args[1:]
+    # values
+    ary = args[0]
+    dims = args[1:]
+    # coerce all types to intp
+    dims = [context.cast(builder, val, ty, types.intp)
+            for ty, val in zip(dimtys, dims)]
+    # make a tuple
+    shape = cgutils.pack_array(builder, dims, dims[0].type)
+
+    shapety = types.UniTuple(dtype=types.intp, count=len(dims))
+    new_sig = typing.signature(sig.return_type, aryty, shapety)
+    new_args = ary, shape
+    return array_reshape(context, builder, new_sig, new_args)
 
 
 def _change_dtype(context, builder, oldty, newty, ary):
