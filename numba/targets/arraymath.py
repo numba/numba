@@ -697,9 +697,10 @@ def dot_2_mv(context, builder, sig, args):
     res = context.compile_internal(builder, dot_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-def dot_2_vv(context, builder, sig, args):
+def dot_2_vv(context, builder, sig, args, conjugate=False):
     """
     np.dot(vector, vector)
+    np.vdot(vector, vector)
     """
     aty, bty = sig.args
     dtype = sig.return_type
@@ -728,8 +729,9 @@ def dot_2_vv(context, builder, sig, args):
 
     kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
+    conjugate = ir.Constant(ll_char, int(conjugate))
 
-    res = builder.call(fn, (kind_val, cgutils.false_byte, n,
+    res = builder.call(fn, (kind_val, conjugate, n,
                             builder.bitcast(a.data, ll_void_p),
                             builder.bitcast(b.data, ll_void_p),
                             builder.bitcast(out, ll_void_p)))
@@ -754,6 +756,13 @@ def dot_2(context, builder, sig, args):
         return dot_2_vv(context, builder, sig, args)
     else:
         assert 0
+
+@builtin
+@implement(numpy.vdot, types.Kind(types.Array), types.Kind(types.Array))
+def vdot(context, builder, sig, args):
+    ensure_blas()
+
+    return dot_2_vv(context, builder, sig, args, conjugate=True)
 
 
 def dot_3_vm(context, builder, sig, args):

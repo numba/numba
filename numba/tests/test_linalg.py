@@ -16,6 +16,9 @@ def dot2(a, b):
 def dot3(a, b, out):
     return np.dot(a, b, out=out)
 
+def vdot(a, b):
+    return np.vdot(a, b)
+
 
 class TestDot(TestCase):
     """
@@ -25,13 +28,13 @@ class TestDot(TestCase):
     dtypes = (np.float64, np.float32, np.complex128, np.complex64)
 
     def sample_vector(self, n, dtype):
-        if isinstance(dtype, np.complexfloating):
+        if issubclass(dtype, np.complexfloating):
             return np.linspace(-1j, 5 + 2j, n).astype(dtype)
         else:
             return np.linspace(-1, 5, n).astype(dtype)
 
     def sample_matrix(self, m, n, dtype):
-        if isinstance(dtype, np.complexfloating):
+        if issubclass(dtype, np.complexfloating):
             return np.linspace(-1j, 5 + 2j, m * n).reshape((m, n)).astype(dtype)
         else:
             return np.linspace(-1, 5, m * n).reshape((m, n)).astype(dtype)
@@ -55,18 +58,15 @@ class TestDot(TestCase):
                "incompatible array sizes")
         self.assertIn(msg, str(raises.exception))
 
-    def assert_mismatching_dtypes(self, cfunc, args):
+    def assert_mismatching_dtypes(self, cfunc, args, func_name="np.dot"):
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(*args)
-        self.assertIn("np.dot() arguments must all have the same dtype",
+        self.assertIn("%s() arguments must all have the same dtype"
+                      % (func_name,),
                       str(raises.exception))
 
-    def test_dot_vv(self):
-        """
-        Test vector * vector np.dot()
-        """
+    def check_dot_vv(self, pyfunc, func_name):
         n = 3
-        pyfunc = dot2
         cfunc = jit(nopython=True)(pyfunc)
         for dtype in self.dtypes:
             a = self.sample_vector(n, dtype)
@@ -80,7 +80,19 @@ class TestDot(TestCase):
         # Mismatching dtypes
         a = self.sample_vector(n, np.float32)
         b = self.sample_vector(n, np.float64)
-        self.assert_mismatching_dtypes(cfunc, (a, b))
+        self.assert_mismatching_dtypes(cfunc, (a, b), func_name=func_name)
+
+    def test_dot_vv(self):
+        """
+        Test vector * vector np.dot()
+        """
+        self.check_dot_vv(dot2, "np.dot")
+
+    def test_vdot(self):
+        """
+        Test np.vdot()
+        """
+        self.check_dot_vv(vdot, "np.vdot")
 
     def test_dot_vm(self):
         """

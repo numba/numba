@@ -729,6 +729,34 @@ class Dot(CallableTemplate):
 builtin_global(numpy.dot, types.Function(Dot))
 
 
+@builtin
+class VDot(CallableTemplate):
+    key = numpy.vdot
+
+    def generic(self):
+        def typer(a, b):
+            if not isinstance(a, types.Array) or not isinstance(b, types.Array):
+                return
+            if not all(x.ndim == 1 for x in (a, b)):
+                raise TypingError("np.vdot() only supported on 1-D arrays")
+            if not all(x.layout in 'CF' for x in (a, b)):
+                # Numpy seems to allow non-contiguous arguments, but we
+                # don't (we would need to copy before calling BLAS)
+                raise TypingError("np.vdot() only supported on "
+                                  "contiguous arrays")
+            if not all(x.dtype == a.dtype for x in (a, b)):
+                raise TypingError("np.vdot() arguments must all have "
+                                  "the same dtype")
+            if not isinstance(a.dtype, (types.Float, types.Complex)):
+                raise TypingError("np.vdot() only supported on "
+                                  "float and complex arrays")
+            return a.dtype
+
+        return typer
+
+builtin_global(numpy.vdot, types.Function(VDot))
+
+
 # -----------------------------------------------------------------------------
 # Miscellaneous functions
 
