@@ -150,6 +150,23 @@ The following methods of Numpy arrays are supported:
 Functions
 =========
 
+Linear algebra
+--------------
+
+Basic linear algebra is supported on 1-D and 2-D contiguous arrays of
+floating-point and complex numbers.
+
+* :func:`numpy.dot`
+* :func:`numpy.vdot`
+* On Python 3.5 and above, the matrix multiplication operator from
+  :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
+
+.. note::
+   The implementation of these functions needs Scipy 0.16+ to be installed.
+
+Other functions
+---------------
+
 The following top-level functions are supported:
 
 * :func:`numpy.arange`

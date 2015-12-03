@@ -27,6 +27,7 @@ PYTHON_OPMAP = {
     '//': "number_floordivide",
      '%': "number_remainder",
     '**': "number_power",
+     '@': "number_matrix_multiply",
     '<<': "number_lshift",
     '>>': "number_rshift",
      '&': "number_and",

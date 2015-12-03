@@ -1280,6 +1280,245 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
     return 1;
 }
 
+/*
+ * BLAS calling helpers.  The helpers can be called without the GIL held.
+ * The caller is responsible for checking arguments (especially dimensions).
+ */
+
+/* Fetch the address of the given CBLAS function, as exposed by
+   scipy.linalg.cython_blas. */
+static void *
+import_cblas_function(const char *function_name)
+{
+    PyObject *module, *capi, *cobj;
+    void *res = NULL;
+
+    module = PyImport_ImportModule("scipy.linalg.cython_blas");
+    if (module == NULL)
+        return NULL;
+    capi = PyObject_GetAttrString(module, "__pyx_capi__");
+    Py_DECREF(module);
+    if (capi == NULL)
+        return NULL;
+    cobj = PyMapping_GetItemString(capi, function_name);
+    Py_DECREF(capi);
+    if (cobj == NULL)
+        return NULL;
+#if PY_MAJOR_VERSION >= 3 || (PY_MINOR_VERSION >= 7)
+    {
+        /* 2.7+ => Cython exports a PyCapsule */
+        const char *capsule_name = PyCapsule_GetName(cobj);
+        if (capsule_name != NULL) {
+            res = PyCapsule_GetPointer(cobj, capsule_name);
+        }
+        Py_DECREF(cobj);
+    }
+#else
+    {
+        /* 2.6 => Cython exports a legacy PyCObject */
+        res = PyCObject_AsVoidPtr(cobj);
+        Py_DECREF(cobj);
+    }
+#endif
+    return res;
+}
+
+/* Fast getters caching the value of a function's address after
+   the first call to import_cblas_function(). */
+
+#define EMIT_GET_CBLAS_FUNC(name)                            \
+    static void *cblas_ ## name = NULL;                      \
+    static void *get_cblas_ ## name(void) {                  \
+        if (cblas_ ## name == NULL) {                        \
+            PyGILState_STATE st = PyGILState_Ensure();       \
+            cblas_ ## name = import_cblas_function(# name);  \
+            PyGILState_Release(st);                          \
+        }                                                    \
+        return cblas_ ## name;                               \
+    }
+
+EMIT_GET_CBLAS_FUNC(dgemm)
+EMIT_GET_CBLAS_FUNC(sgemm)
+EMIT_GET_CBLAS_FUNC(cgemm)
+EMIT_GET_CBLAS_FUNC(zgemm)
+EMIT_GET_CBLAS_FUNC(dgemv)
+EMIT_GET_CBLAS_FUNC(sgemv)
+EMIT_GET_CBLAS_FUNC(cgemv)
+EMIT_GET_CBLAS_FUNC(zgemv)
+EMIT_GET_CBLAS_FUNC(ddot)
+EMIT_GET_CBLAS_FUNC(sdot)
+EMIT_GET_CBLAS_FUNC(cdotu)
+EMIT_GET_CBLAS_FUNC(zdotu)
+EMIT_GET_CBLAS_FUNC(cdotc)
+EMIT_GET_CBLAS_FUNC(zdotc)
+
+#undef EMIT_GET_CBLAS_FUNC
+
+typedef float (*sdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
+typedef double (*ddot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
+typedef npy_complex64 (*cdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
+typedef npy_complex128 (*zdot_t)(int *n, void *dx, int *incx, void *dy, int *incy);
+
+typedef void (*xxgemv_t)(char *trans, int *m, int *n,
+                         void *alpha, void *a, int *lda,
+                         void *x, int *incx, void *beta,
+                         void *y, int *incy);
+
+typedef void (*xxgemm_t)(char *transa, char *transb,
+                         int *m, int *n, int *k,
+                         void *alpha, void *a, int *lda,
+                         void *b, int *ldb, void *beta,
+                         void *c, int *ldc);
+
+/* Vector * vector: result = dx * dy */
+NUMBA_EXPORT_FUNC(int)
+numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
+            void *result)
+{
+    void *raw_func = NULL;
+    int _n;
+    int inc = 1;
+
+    switch (kind) {
+        case 'd':
+            raw_func = get_cblas_ddot();
+            break;
+        case 's':
+            raw_func = get_cblas_sdot();
+            break;
+        case 'c':
+            raw_func = conjugate ? get_cblas_cdotc() : get_cblas_cdotu();
+            break;
+        case 'z':
+            raw_func = conjugate ? get_cblas_zdotc() : get_cblas_zdotu();
+            break;
+        default:
+            {
+                PyGILState_STATE st = PyGILState_Ensure();
+                PyErr_SetString(PyExc_ValueError,
+                                "invalid kind of *DOT function");
+                PyGILState_Release(st);
+            }
+            return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    _n = (int) n;
+
+    switch (kind) {
+        case 'd':
+            *(double *) result = (*(ddot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
+            break;
+        case 's':
+            *(float *) result = (*(sdot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
+            break;
+        case 'c':
+            *(npy_complex64 *) result = (*(cdot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
+            break;
+        case 'z':
+            *(npy_complex128 *) result = (*(zdot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
+            break;
+    }
+
+    return 0;
+}
+
+/* Matrix * vector: y = alpha * a * x + beta * y */
+NUMBA_EXPORT_FUNC(int)
+numba_xxgemv(char kind, char *trans, Py_ssize_t m, Py_ssize_t n,
+             void *alpha, void *a, Py_ssize_t lda,
+             void *x, void *beta, void *y)
+{
+    void *raw_func = NULL;
+    int _m, _n;
+    int _lda;
+    int inc = 1;
+
+    switch (kind) {
+        case 'd':
+            raw_func = get_cblas_dgemv();
+            break;
+        case 's':
+            raw_func = get_cblas_sgemv();
+            break;
+        case 'c':
+            raw_func = get_cblas_cgemv();
+            break;
+        case 'z':
+            raw_func = get_cblas_zgemv();
+            break;
+        default:
+            {
+                PyGILState_STATE st = PyGILState_Ensure();
+                PyErr_SetString(PyExc_ValueError,
+                                "invalid kind of *GEMV function");
+                PyGILState_Release(st);
+            }
+            return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    _m = (int) m;
+    _n = (int) n;
+    _lda = (int) lda;
+
+    (*(xxgemv_t) raw_func)(trans, &_m, &_n, alpha, a, &_lda,
+                           x, &inc, beta, y, &inc);
+    return 0;
+}
+
+/* Matrix * matrix: c = alpha * a * b + beta * c */
+NUMBA_EXPORT_FUNC(int)
+numba_xxgemm(char kind, char *transa, char *transb,
+             Py_ssize_t m, Py_ssize_t n, Py_ssize_t k,
+             void *alpha, void *a, Py_ssize_t lda,
+             void *b, Py_ssize_t ldb, void *beta,
+             void *c, Py_ssize_t ldc)
+{
+    void *raw_func = NULL;
+    int _m, _n, _k;
+    int _lda, _ldb, _ldc;
+
+    switch (kind) {
+        case 'd':
+            raw_func = get_cblas_dgemm();
+            break;
+        case 's':
+            raw_func = get_cblas_sgemm();
+            break;
+        case 'c':
+            raw_func = get_cblas_cgemm();
+            break;
+        case 'z':
+            raw_func = get_cblas_zgemm();
+            break;
+        default:
+            {
+                PyGILState_STATE st = PyGILState_Ensure();
+                PyErr_SetString(PyExc_ValueError,
+                                "invalid kind of *GEMM function");
+                PyGILState_Release(st);
+            }
+            return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    _m = (int) m;
+    _n = (int) n;
+    _k = (int) k;
+    _lda = (int) lda;
+    _ldb = (int) ldb;
+    _ldc = (int) ldc;
+
+    (*(xxgemm_t) raw_func)(transa, transb, &_m, &_n, &_k, alpha, a, &_lda,
+                           b, &_ldb, beta, c, &_ldc);
+    return 0;
+}
+
+
 /* We use separate functions for datetime64 and timedelta64, to ensure
  * proper type checking.
  */

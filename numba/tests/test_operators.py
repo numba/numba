@@ -8,10 +8,12 @@ import warnings
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import types, typeinfer, utils
+from numba import types, typeinfer, utils, errors
 from numba.config import PYVERSION
 from .support import TestCase
-from numba.tests.true_div_usecase import truediv_usecase, itruediv_usecase
+from .true_div_usecase import truediv_usecase, itruediv_usecase
+from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,
+                             needs_matmul, needs_blas)
 import numba.unittest_support as unittest
 
 Noflags = Flags()
@@ -72,6 +74,9 @@ class LiteralOperatorImpl(object):
 
     truediv_usecase = staticmethod(truediv_usecase)
     itruediv_usecase = staticmethod(itruediv_usecase)
+    if matmul_usecase:
+        matmul_usecase = staticmethod(matmul_usecase)
+        imatmul_usecase = staticmethod(imatmul_usecase)
 
     @staticmethod
     def mod_usecase(x, y):
@@ -250,6 +255,14 @@ class FunctionalOperatorImpl(object):
     @staticmethod
     def ipow_usecase(x, y):
         return operator.ipow(x, y)
+
+    @staticmethod
+    def matmul_usecase(x, y):
+        return operator.matmul(x, y)
+
+    @staticmethod
+    def imatmul_usecase(x, y):
+        return operator.imatmul(x, y)
 
     @staticmethod
     def bitshift_left_usecase(x, y):
@@ -873,6 +886,58 @@ class TestOperators(TestCase):
 
     def test_mod_complex_npm(self):
         self.test_mod_complex(flags=Noflags)
+
+    #
+    # Matrix multiplication
+    # (just check with simple values; computational tests are in test_linalg)
+    #
+
+    @needs_matmul
+    def check_matmul_objmode(self, pyfunc, inplace):
+        # Use dummy objects, to work with any Numpy / Scipy version
+        # (and because Numpy 1.10 doesn't implement "@=")
+        cres = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
+        cfunc = cres.entry_point
+        a = DumbMatrix(3)
+        b = DumbMatrix(4)
+        got = cfunc(a, b)
+        self.assertEqual(got.value, 12)
+        if inplace:
+            self.assertIs(got, a)
+        else:
+            self.assertIsNot(got, a)
+            self.assertIsNot(got, b)
+
+    @needs_matmul
+    def test_matmul(self):
+        self.check_matmul_objmode(self.op.matmul_usecase, inplace=False)
+
+    @needs_matmul
+    def test_imatmul(self):
+        self.check_matmul_objmode(self.op.imatmul_usecase, inplace=True)
+
+    @needs_blas
+    @needs_matmul
+    def check_matmul_npm(self, pyfunc):
+        arrty = types.Array(types.float32, 1, 'C')
+        cres = compile_isolated(pyfunc, (arrty, arrty), flags=Noflags)
+        cfunc = cres.entry_point
+        a = np.float32([1, 2])
+        b = np.float32([3, 4])
+        got = cfunc(a, b)
+        self.assertPreciseEqual(got, np.dot(a, b))
+        # Never inplace
+        self.assertIsNot(got, a)
+        self.assertIsNot(got, b)
+
+    @needs_matmul
+    def test_matmul_npm(self):
+        self.check_matmul_npm(self.op.matmul_usecase)
+
+    @needs_matmul
+    def test_imatmul_npm(self):
+        with self.assertTypingError() as raises:
+            self.check_matmul_npm(self.op.imatmul_usecase)
 
     #
     # Bitwise operators
