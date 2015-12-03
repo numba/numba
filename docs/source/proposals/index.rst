@@ -26,3 +26,5 @@ Other proposals
 
 .. toctree::
    :maxdepth: 1
+
+   extension-points.rst
