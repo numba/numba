@@ -41,7 +41,7 @@ def get_c_subarray(ary, i):
 def make_getitem_subarray(item):
     # This also exercises constant lookup from a closure variable
     def get_xx_subarray(ary, i):
-        return ary[i][item]
+        return ary[item][i]
     return get_xx_subarray
 
 getitem_a_subarray = make_getitem_subarray('a')

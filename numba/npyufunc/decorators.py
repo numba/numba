@@ -3,9 +3,9 @@ import inspect
 
 from . import _internal, dufunc
 from .ufuncbuilder import UFuncBuilder, GUFuncBuilder
-from .parallel import ParallelUFuncBuilder
+from .parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
 
-from numba.cuda.vectorizers import CUDAVectorize, CUDAGUFuncVectorize 
+from numba.cuda.vectorizers import CUDAVectorize, CUDAGUFuncVectorize
 from numba.targets.registry import TargetRegistry
 
 
@@ -26,7 +26,7 @@ class _BaseVectorize(object):
 
 class Vectorize(_BaseVectorize):
     target_registry = TargetRegistry({'cpu': UFuncBuilder,
-                                      'parallel': ParallelUFuncBuilder})
+                                      'parallel': ParallelUFuncBuilder,})
 
     def __new__(cls, func, **kws):
         identity = cls.get_identity(kws)
@@ -35,7 +35,8 @@ class Vectorize(_BaseVectorize):
 
 
 class GUVectorize(_BaseVectorize):
-    target_registry = TargetRegistry({'cpu': GUFuncBuilder})
+    target_registry = TargetRegistry({'cpu': GUFuncBuilder,
+                                      'parallel': ParallelGUFuncBuilder,})
 
     def __new__(cls, func, signature, **kws):
         identity = cls.get_identity(kws)

@@ -13,10 +13,17 @@ from .stubs import (
     barrier,
     mem_fence,
     shared,
+    wavebarrier,
+    activelanepermute_wavewidth,
 )
 
 from .decorators import (
     jit,
+)
+
+from .enums import (
+    CLK_LOCAL_MEM_FENCE,
+    CLK_GLOBAL_MEM_FENCE
 )
 
 from .hsadrv.driver import hsa as _hsadrv
