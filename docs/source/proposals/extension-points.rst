@@ -32,9 +32,17 @@ Proposed changes
 
 It would be nice for people to be able to implement a function
 in a single go, as if they were writing a ``@jit`` function.
-Let's take :func:`numpy.where` as an example.  We would like to be
-able to define several implementations and select between them at
+As an example, let's assume we want to make :func:`numpy.where`
+usable from :term:`nopython mode`.  We would like to be able
+to define several implementations and select between them at
 compile-time depending on the input types.
+
+The following example showcases a hypothetical API where we can
+register a function taking the argument types and returning a
+callable implementing the actual function for those types.
+The API should also be able to handle optional arguments, and
+the resulting implementation should support calling with named
+parameters.
 
 .. literalinclude:: np-where-override.py
 
