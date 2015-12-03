@@ -8,7 +8,6 @@ from numba import utils
 from numba import unittest_support as unittest
 from .support import TestCase, skip_on_numpy_16
 
-
 DBL_EPSILON = 2**-52
 FLT_EPSILON = 2**-23
 
@@ -84,6 +83,13 @@ class TestAssertPreciseEqual(TestCase):
                 self.ne(tp(-1), tp(1), prec=prec)
                 self.ne(tp(2**80), tp(1+2**80), prec=prec)
 
+    def test_abs_tol_parse(self):
+        # check invalid values in abs_tol kwarg raises
+        with self.assertRaises(ValueError):
+            self.eq(np.float64(1e-17), np.float64(1e-17), abs_tol="invalid")
+        with self.assertRaises(ValueError):
+            self.eq(np.float64(1), np.float64(2), abs_tol=int(7))
+
     def test_float_values(self):
         for tp in self.float_types:
             for prec in ['exact', 'single', 'double']:
@@ -128,6 +134,12 @@ class TestAssertPreciseEqual(TestCase):
                 self.ne(tp(a), tp(d), prec='double', ulps=2)
                 self.eq(tp(a), tp(c), prec='double', ulps=3)
                 self.eq(tp(a), tp(d), prec='double', ulps=3)
+            # test absolute tolerance based on eps
+            self.eq(tp(1e-16), tp(3e-16), prec='double', abs_tol="eps")
+            self.ne(tp(1e-16), tp(4e-16), prec='double', abs_tol="eps")
+            # test absolute tolerance based on value
+            self.eq(tp(1e-17), tp(1e-18), prec='double', abs_tol=1e-17)
+            self.ne(tp(1e-17), tp(3e-17), prec='double', abs_tol=1e-17)
 
     def test_float32_values_inexact(self):
         tp = np.float32
@@ -147,6 +159,13 @@ class TestAssertPreciseEqual(TestCase):
             self.ne(tp(a), tp(d), prec='single', ulps=2)
             self.eq(tp(a), tp(c), prec='single', ulps=3)
             self.eq(tp(a), tp(d), prec='single', ulps=3)
+        # test absolute tolerance based on eps
+        self.eq(tp(1e-7), tp(2e-7), prec='single', abs_tol="eps")
+        self.ne(tp(1e-7), tp(3e-7), prec='single', abs_tol="eps")
+        # test absolute tolerance based on value
+        self.eq(tp(1e-7), tp(1e-8), prec='single', abs_tol=1e-7)
+        self.ne(tp(1e-7), tp(3e-7), prec='single', abs_tol=1e-7)
+
 
     def test_complex_values(self):
         # Complex literals with signed zeros are confusing, better use
