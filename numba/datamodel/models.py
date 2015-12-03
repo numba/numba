@@ -1039,7 +1039,10 @@ class DeferredStructModel(CompositeModel):
         return self.set(builder, out, value)
 
     def from_return(self, builder, value):
-        return self.from_data(builder, value)
+        return value
+
+    def as_return(self, builder, value):
+        return value
 
     def get(self, builder, value):
         return builder.extract_value(value, [0])
@@ -1048,6 +1051,7 @@ class DeferredStructModel(CompositeModel):
         return builder.insert_value(value, content, [0])
 
     def make_uninitialized(self, kind='value'):
+        self._define()
         if kind == 'value':
             ty = self.get_value_type()
         else:
