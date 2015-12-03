@@ -201,13 +201,14 @@ class TestNPFunctions(TestCase):
                     ]
         x_types = [types.complex64, types.complex128] * (len(x_values) // 2)
         self.run_unary_complex(pyfunc, x_types, x_values, flags=flags,
-                               ignore_sign_on_zero=isoz, abs_tol=tol)
+                               ignore_sign_on_zero=isoz, abs_tol=tol, ulps=2)
+
 
         # complex domain vector context
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         self.run_unary_complex(pyfunc, x_types, x_values, flags=flags,
-                               ignore_sign_on_zero=isoz, abs_tol=tol)
+                               ignore_sign_on_zero=isoz, abs_tol=tol, ulps=2)
 
 
     def test_angle(self, flags=no_pyobj_flags):
