@@ -671,6 +671,120 @@ builtin_global(numpy.sort, types.Function(NdSort))
 
 
 # -----------------------------------------------------------------------------
+# Linear algebra
+
+
+class MatMulTyperMixin(object):
+
+    def matmul_typer(self, a, b, out=None):
+        """
+        Typer function for Numpy matrix multiplication.
+        """
+        if not isinstance(a, types.Array) or not isinstance(b, types.Array):
+            return
+        if not all(x.ndim in (1, 2) for x in (a, b)):
+            raise TypingError("%s only supported on 1-D and 2-D arrays"
+                              % (self.func_name, ))
+        # Output dimensionality
+        ndims = set([a.ndim, b.ndim])
+        if ndims == set([2]):
+            # M * M
+            out_ndim = 2
+        elif ndims == set([1, 2]):
+            # M* V and V * M
+            out_ndim = 1
+        elif ndims == set([1]):
+            # V * V
+            out_ndim = 0
+
+        if out is not None:
+            if out_ndim == 0:
+                raise TypeError("explicit output unsupported for vector * vector")
+            elif out.ndim != out_ndim:
+                raise TypeError("explicit output has incorrect dimensionality")
+            if not isinstance(out, types.Array) or out.layout != 'C':
+                raise TypeError("output must be a C-contiguous array")
+            all_args = (a, b, out)
+        else:
+            all_args = (a, b)
+
+        if not all(x.layout in 'CF' for x in (a, b)):
+            # Numpy seems to allow non-contiguous arguments, but we
+            # don't (we would need to copy before calling BLAS)
+            raise TypingError("%s only supported on "
+                              "contiguous arrays" % (self.func_name,))
+        if not all(x.dtype == a.dtype for x in all_args):
+            raise TypingError("%s arguments must all have "
+                              "the same dtype" % (self.func_name,))
+        if not isinstance(a.dtype, (types.Float, types.Complex)):
+            raise TypingError("%s only supported on "
+                              "float and complex arrays"
+                              % (self.func_name,))
+        if out:
+            return out
+        elif out_ndim > 0:
+            return types.Array(a.dtype, out_ndim, 'C')
+        else:
+            return a.dtype
+
+
+@builtin
+class Dot(MatMulTyperMixin, CallableTemplate):
+    key = numpy.dot
+    func_name = "np.dot()"
+
+    def generic(self):
+        def typer(a, b, out=None):
+            # NOTE: np.dot() and the '@' operator have distinct semantics
+            # for >2-D arrays, but we don't support them.
+            return self.matmul_typer(a, b, out)
+
+        return typer
+
+builtin_global(numpy.dot, types.Function(Dot))
+
+
+@builtin
+class VDot(CallableTemplate):
+    key = numpy.vdot
+
+    def generic(self):
+        def typer(a, b):
+            if not isinstance(a, types.Array) or not isinstance(b, types.Array):
+                return
+            if not all(x.ndim == 1 for x in (a, b)):
+                raise TypingError("np.vdot() only supported on 1-D arrays")
+            if not all(x.layout in 'CF' for x in (a, b)):
+                # Numpy seems to allow non-contiguous arguments, but we
+                # don't (we would need to copy before calling BLAS)
+                raise TypingError("np.vdot() only supported on "
+                                  "contiguous arrays")
+            if not all(x.dtype == a.dtype for x in (a, b)):
+                raise TypingError("np.vdot() arguments must all have "
+                                  "the same dtype")
+            if not isinstance(a.dtype, (types.Float, types.Complex)):
+                raise TypingError("np.vdot() only supported on "
+                                  "float and complex arrays")
+            return a.dtype
+
+        return typer
+
+builtin_global(numpy.vdot, types.Function(VDot))
+
+
+@builtin
+class MatMul(MatMulTyperMixin, AbstractTemplate):
+    key = "@"
+    func_name = "'@'"
+
+    def generic(self, args, kws):
+        assert not kws
+        restype = self.matmul_typer(*args)
+        if restype is not None:
+            return signature(restype, *args)
+
+
+# -----------------------------------------------------------------------------
 # Miscellaneous functions
 
 @builtin

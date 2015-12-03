@@ -6,8 +6,9 @@ from __future__ import print_function, absolute_import, division
 
 import math
 
+from llvmlite import ir
 import llvmlite.llvmpy.core as lc
-from llvmlite.llvmpy.core import Constant
+from llvmlite.llvmpy.core import Constant, Type
 
 import numpy
 from numba import types, cgutils, typing
@@ -611,3 +612,346 @@ def any_where(context, builder, sig, args):
 
     res = context.compile_internal(builder, scalar_where_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+#----------------------------------------------------------------------------
+# Linear algebra
+
+ll_char = ir.IntType(8)
+ll_char_p = ll_char.as_pointer()
+ll_void_p = ll_char_p
+intp_t = cgutils.intp_t
+
+def get_blas_kind(dtype):
+    return {
+        types.float32: 's',
+        types.float64: 'd',
+        types.complex64: 'c',
+        types.complex128: 'z',
+        }[dtype]
+
+def ensure_blas():
+    try:
+        import scipy.linalg.cython_blas
+    except ImportError:
+        raise ImportError("scipy 0.16+ is required for linear algebra")
+
+def make_constant_slot(context, builder, ty, val):
+    const = context.get_constant_generic(builder, ty, val)
+    return cgutils.alloca_once_value(builder, const)
+
+def check_c_int(context, builder, n):
+    _maxint = 2**31 - 1
+
+    def impl(n):
+        if n > _maxint:
+            raise OverflowError("array size too large to fit in C int")
+
+    context.compile_internal(builder, impl,
+                             signature(types.none, types.intp), (n,))
+
+def check_blas_return(context, builder, res):
+    with builder.if_then(cgutils.is_not_null(builder, res), likely=False):
+        # Those errors shouldn't happen, it's easier to just abort the process
+        pyapi = context.get_python_api(builder)
+        pyapi.gil_ensure()
+        pyapi.fatal_error("BLAS wrapper returned with an error")
+
+
+def dot_2_mm(context, builder, sig, args):
+    """
+    np.dot(matrix, matrix)
+    """
+    def dot_impl(a, b):
+        m, k = a.shape
+        _k, n = b.shape
+        out = numpy.empty((m, n), a.dtype)
+        return numpy.dot(a, b, out)
+
+    res = context.compile_internal(builder, dot_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+def dot_2_vm(context, builder, sig, args):
+    """
+    np.dot(vector, matrix)
+    """
+    def dot_impl(a, b):
+        m, = a.shape
+        _m, n = b.shape
+        out = numpy.empty((n, ), a.dtype)
+        return numpy.dot(a, b, out)
+
+    res = context.compile_internal(builder, dot_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+def dot_2_mv(context, builder, sig, args):
+    """
+    np.dot(matrix, vector)
+    """
+    def dot_impl(a, b):
+        m, n = a.shape
+        _n, = b.shape
+        out = numpy.empty((m, ), a.dtype)
+        return numpy.dot(a, b, out)
+
+    res = context.compile_internal(builder, dot_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+def dot_2_vv(context, builder, sig, args, conjugate=False):
+    """
+    np.dot(vector, vector)
+    np.vdot(vector, vector)
+    """
+    aty, bty = sig.args
+    dtype = sig.return_type
+    a = make_array(aty)(context, builder, args[0])
+    b = make_array(bty)(context, builder, args[1])
+    n, = cgutils.unpack_tuple(builder, a.shape)
+
+    def check_args(a, b):
+        m, = a.shape
+        n, = b.shape
+        if m != n:
+            raise ValueError("incompatible array sizes for np.dot(a, b) "
+                             "(vector * vector)")
+
+    context.compile_internal(builder, check_args,
+                             signature(types.none, *sig.args), args)
+    check_c_int(context, builder, n)
+
+    out = cgutils.alloca_once(builder, context.get_value_type(dtype))
+
+    fnty = ir.FunctionType(ir.IntType(32),
+                           [ll_char, ll_char, intp_t,        # kind, conjugate, n
+                            ll_void_p, ll_void_p, ll_void_p, # a, b, out
+                           ])
+    fn = builder.module.get_or_insert_function(fnty, name="numba_xxdot")
+
+    kind = get_blas_kind(dtype)
+    kind_val = ir.Constant(ll_char, ord(kind))
+    conjugate = ir.Constant(ll_char, int(conjugate))
+
+    res = builder.call(fn, (kind_val, conjugate, n,
+                            builder.bitcast(a.data, ll_void_p),
+                            builder.bitcast(b.data, ll_void_p),
+                            builder.bitcast(out, ll_void_p)))
+    check_blas_return(context, builder, res)
+
+    return builder.load(out)
+
+
+@builtin
+@implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array))
+@implement('@', types.Kind(types.Array), types.Kind(types.Array))
+def dot_2(context, builder, sig, args):
+    """
+    np.dot(a, b)
+    a @ b
+    """
+    ensure_blas()
+
+    ndims = [x.ndim for x in sig.args[:2]]
+    if ndims == [2, 2]:
+        return dot_2_mm(context, builder, sig, args)
+    elif ndims == [2, 1]:
+        return dot_2_mv(context, builder, sig, args)
+    elif ndims == [1, 2]:
+        return dot_2_vm(context, builder, sig, args)
+    elif ndims == [1, 1]:
+        return dot_2_vv(context, builder, sig, args)
+    else:
+        assert 0
+
+@builtin
+@implement(numpy.vdot, types.Kind(types.Array), types.Kind(types.Array))
+def vdot(context, builder, sig, args):
+    """
+    np.vdot(a, b)
+    """
+    ensure_blas()
+
+    return dot_2_vv(context, builder, sig, args, conjugate=True)
+
+
+def dot_3_vm(context, builder, sig, args):
+    """
+    np.dot(vector, matrix, out)
+    np.dot(matrix, vector, out)
+    """
+    xty, yty, outty = sig.args
+    assert outty == sig.return_type
+    dtype = xty.dtype
+
+    x = make_array(xty)(context, builder, args[0])
+    y = make_array(yty)(context, builder, args[1])
+    out = make_array(outty)(context, builder, args[2])
+    x_shapes = cgutils.unpack_tuple(builder, x.shape)
+    y_shapes = cgutils.unpack_tuple(builder, y.shape)
+    out_shapes = cgutils.unpack_tuple(builder, out.shape)
+    if xty.ndim < yty.ndim:
+        # Vector * matrix
+        # Asked for x * y, we will compute y.T * x
+        mty = yty
+        m, n = m_shapes = y_shapes
+        do_trans = yty.layout == 'F'
+        m_data, v_data = y.data, x.data
+
+        def check_args(a, b, out):
+            m, = a.shape
+            _m, n = b.shape
+            if m != _m:
+                raise ValueError("incompatible array sizes for np.dot(a, b) "
+                                 "(vector * matrix)")
+            if out.shape != (n,):
+                raise ValueError("incompatible output array size for np.dot(a, b, out) "
+                                 "(vector * matrix)")
+    else:
+        # Matrix * vector
+        # We will compute x * y
+        mty = xty
+        m, n = m_shapes = x_shapes
+        do_trans = xty.layout == 'C'
+        m_data, v_data = x.data, y.data
+
+        def check_args(a, b, out):
+            m, _n= a.shape
+            n, = b.shape
+            if n != _n:
+                raise ValueError("incompatible array sizes for np.dot(a, b) "
+                                 "(matrix * vector)")
+            if out.shape != (m,):
+                raise ValueError("incompatible output array size for np.dot(a, b, out) "
+                                 "(matrix * vector)")
+
+    context.compile_internal(builder, check_args,
+                             signature(types.none, *sig.args), args)
+    check_c_int(context, builder, m)
+    check_c_int(context, builder, n)
+
+    fnty = ir.FunctionType(ir.IntType(32),
+                           [ll_char, ll_char_p,               # kind, trans
+                            intp_t, intp_t,                   # m, n
+                            ll_void_p, ll_void_p, intp_t,     # alpha, a, lda
+                            ll_void_p, ll_void_p, ll_void_p,  # x, beta, y
+                           ])
+    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgemv")
+
+    alpha = make_constant_slot(context, builder, dtype, 1.0)
+    beta = make_constant_slot(context, builder, dtype, 0.0)
+
+    if mty.layout == 'F':
+        lda = m_shapes[0]
+    else:
+        m, n = n, m
+        lda = m_shapes[1]
+
+    kind = get_blas_kind(dtype)
+    kind_val = ir.Constant(ll_char, ord(kind))
+    trans = context.insert_const_string(builder.module,
+                                        "t" if do_trans else "n")
+
+    res = builder.call(fn, (kind_val, trans, m, n,
+                            builder.bitcast(alpha, ll_void_p),
+                            builder.bitcast(m_data, ll_void_p), lda,
+                            builder.bitcast(v_data, ll_void_p),
+                            builder.bitcast(beta, ll_void_p),
+                            builder.bitcast(out.data, ll_void_p)))
+    check_blas_return(context, builder, res)
+
+    return impl_ret_borrowed(context, builder, sig.return_type, out._getvalue())
+
+
+def dot_3_mm(context, builder, sig, args):
+    """
+    np.dot(matrix, matrix, out)
+    """
+    xty, yty, outty = sig.args
+    assert outty == sig.return_type
+    dtype = xty.dtype
+
+    x = make_array(xty)(context, builder, args[0])
+    y = make_array(yty)(context, builder, args[1])
+    out = make_array(outty)(context, builder, args[2])
+    x_shapes = cgutils.unpack_tuple(builder, x.shape)
+    y_shapes = cgutils.unpack_tuple(builder, y.shape)
+    out_shapes = cgutils.unpack_tuple(builder, out.shape)
+    m, k = x_shapes
+    _k, n = y_shapes
+
+    def check_args(a, b, out):
+        m, k = a.shape
+        _k, n = b.shape
+        if k != _k:
+            raise ValueError("incompatible array sizes for np.dot(a, b) "
+                             "(matrix * matrix)")
+        if out.shape != (m, n):
+            raise ValueError("incompatible output array size for np.dot(a, b, out) "
+                             "(matrix * matrix)")
+
+    context.compile_internal(builder, check_args,
+                             signature(types.none, *sig.args), args)
+    check_c_int(context, builder, m)
+    check_c_int(context, builder, k)
+    check_c_int(context, builder, n)
+
+    fnty = ir.FunctionType(ir.IntType(32),
+                           [ll_char,                       # kind
+                            ll_char_p, ll_char_p,          # transa, transb
+                            intp_t, intp_t, intp_t,        # m, n, k
+                            ll_void_p, ll_void_p, intp_t,  # alpha, a, lda
+                            ll_void_p, intp_t, ll_void_p,  # b, ldb, beta
+                            ll_void_p, intp_t,             # c, ldc
+                           ])
+    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgemm")
+
+    alpha = make_constant_slot(context, builder, dtype, 1.0)
+    beta = make_constant_slot(context, builder, dtype, 0.0)
+
+    trans = context.insert_const_string(builder.module, "t")
+    notrans = context.insert_const_string(builder.module, "n")
+
+    # Since out is C-contiguous, compute a * b = y.T * x.T
+    assert outty.layout == 'C'
+
+    def get_array_param(ty, shapes, data):
+        return (
+                # Transpose if layout different from result's
+                notrans if ty.layout == outty.layout else trans,
+                # Size of the inner dimension in physical array order
+                shapes[1] if ty.layout == 'C' else shapes[0],
+                # The data pointer, unit-less
+                builder.bitcast(data, ll_void_p),
+                )
+
+    transa, lda, data_a = get_array_param(yty, y_shapes, y.data)
+    transb, ldb, data_b = get_array_param(xty, x_shapes, x.data)
+    _, ldc, data_c = get_array_param(outty, out_shapes, out.data)
+
+    kind = get_blas_kind(dtype)
+    kind_val = ir.Constant(ll_char, ord(kind))
+
+    res = builder.call(fn, (kind_val, transa, transb, n, m, k,
+                            builder.bitcast(alpha, ll_void_p), data_a, lda,
+                            data_b, ldb, builder.bitcast(beta, ll_void_p),
+                            data_c, ldc))
+    check_blas_return(context, builder, res)
+
+    return impl_ret_borrowed(context, builder, sig.return_type, out._getvalue())
+
+
+@builtin
+@implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array))
+def dot_3(context, builder, sig, args):
+    """
+    np.dot(a, b, out)
+    """
+    ensure_blas()
+
+    ndims = set(x.ndim for x in sig.args[:2])
+    if ndims == set([2]):
+        return dot_3_mm(context, builder, sig, args)
+    elif ndims == set([1, 2]):
+        return dot_3_vm(context, builder, sig, args)
+    else:
+        assert 0
