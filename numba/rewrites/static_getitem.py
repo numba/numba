@@ -15,19 +15,17 @@ class RewriteConstGetitems(Rewrite):
         self.block = block
         # Detect all getitem expressions and find which ones can be
         # rewritten
-        for inst in block.body:
-            if isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr):
-                expr = inst.value
-                if expr.op == 'getitem':
-                    try:
-                        defn = interp.get_definition(expr.index)
-                    except KeyError:
-                        continue
-                    try:
-                        const = defn.infer_constant()
-                    except TypeError:
-                        continue
-                    getitems.append((expr, const))
+        for expr in block.find_exprs(op='getitem'):
+            if expr.op == 'getitem':
+                try:
+                    defn = interp.get_definition(expr.index)
+                except KeyError:
+                    continue
+                try:
+                    const = defn.infer_constant()
+                except TypeError:
+                    continue
+                getitems.append((expr, const))
 
         return len(getitems) > 0
 
@@ -55,17 +53,16 @@ class RewriteConstSetitems(Rewrite):
         self.block = block
         # Detect all setitem statements and find which ones can be
         # rewritten
-        for inst in block.body:
-            if isinstance(inst, ir.SetItem):
-                try:
-                    defn = interp.get_definition(inst.index)
-                except KeyError:
-                    continue
-                try:
-                    const = defn.infer_constant()
-                except TypeError:
-                    continue
-                setitems[inst] = const
+        for inst in block.find_insts(ir.SetItem):
+            try:
+                defn = interp.get_definition(inst.index)
+            except KeyError:
+                continue
+            try:
+                const = defn.infer_constant()
+            except TypeError:
+                continue
+            setitems[inst] = const
 
         return len(setitems) > 0
 

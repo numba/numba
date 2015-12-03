@@ -136,11 +136,12 @@ class TestRaising(TestCase):
     def check_reraise(self, flags):
         pyfunc = reraise
         cres = compile_isolated(pyfunc, (), flags=flags)
+        cfunc = cres.entry_point
         with self.assertRaises(ZeroDivisionError):
             try:
                 1/0
             except ZeroDivisionError as e:
-                pyfunc()
+                cfunc()
 
     def test_reraise_objmode(self):
         self.check_reraise(flags=force_pyobj_flags)
