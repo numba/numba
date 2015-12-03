@@ -283,6 +283,7 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.idiv` (Python 2 only)
 * :func:`operator.ifloordiv`
 * :func:`operator.ilshift`
+* :func:`operator.imatmul` (Python 3.5 and above)
 * :func:`operator.imod`
 * :func:`operator.imul`
 * :func:`operator.invert`
@@ -295,6 +296,7 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.le`
 * :func:`operator.lshift`
 * :func:`operator.lt`
+* :func:`operator.matmul` (Python 3.5 and above)
 * :func:`operator.mod`
 * :func:`operator.mul`
 * :func:`operator.ne`

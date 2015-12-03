@@ -19,6 +19,8 @@ def matmulcore(A, B, C):
 
 
 class TestGUFunc(unittest.TestCase):
+    target = 'cpu'
+
     def test_numba(self):
         jit_matmulcore = jit((float32[:, :], float32[:, :], float32[:,:]))(matmulcore)
 
@@ -31,12 +33,13 @@ class TestGUFunc(unittest.TestCase):
 
         self.assertTrue((C == Gold).all())
 
-    def test_gufunc(self):
-        gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', target='cpu')
+    def test_gufunc(self, target='cpu'):
+        gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
+                             target=self.target)
         gufunc.add(argtypes=[float32[:, :], float32[:, :], float32[:, :]])
         gufunc = gufunc.build_ufunc()
 
-        matrix_ct = 1001 # an odd number to test thread/block division in CUDA
+        matrix_ct = 1001
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
         B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
 
@@ -45,11 +48,16 @@ class TestGUFunc(unittest.TestCase):
 
         self.assertTrue(np.allclose(C, Gold))
 
+class TestGUFuncParallel(TestGUFunc):
+    target = 'parallel'
+
+
 
 class TestGUVectorizeScalar(unittest.TestCase):
     """
     Nothing keeps user from out-of-bound memory access
     """
+    target = 'cpu'
 
     def test_scalar_output(self):
         """
@@ -57,7 +65,8 @@ class TestGUVectorizeScalar(unittest.TestCase):
         a pointer to the output location.
         """
 
-        @guvectorize(['void(int32[:], int32[:])'], '(n)->()')
+        @guvectorize(['void(int32[:], int32[:])'], '(n)->()',
+                     target=self.target, nopython=True)
         def sum_row(inp, out):
             tmp = 0.
             for i in range(inp.shape[0]):
@@ -77,10 +86,11 @@ class TestGUVectorizeScalar(unittest.TestCase):
 
     def test_scalar_input(self):
 
-        @guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)')
+        @guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)',
+                     target=self.target, nopython=True)
         def foo(inp, n, out):
             for i in range(inp.shape[0]):
-                out[i] = inp[i] * n[()]
+                out[i] = inp[i] * n[0]
 
         inp = np.arange(3 * 10, dtype=np.int32).reshape(10, 3)
         # out = np.empty_like(inp)
@@ -95,7 +105,8 @@ class TestGUVectorizeScalar(unittest.TestCase):
                 out[i] = n * (inp[i] + 1)
 
         my_gufunc = guvectorize(['int32[:], int32, int32[:]'],
-                                '(n),()->(n)')(pyfunc)
+                                '(n),()->(n)',
+                                target=self.target)(pyfunc)
 
         # test single core loop execution
         arr = np.arange(10).astype(np.int32)
@@ -118,7 +129,8 @@ class TestGUVectorizeScalar(unittest.TestCase):
 
     def test_scalar_input_core_type_error(self):
         with self.assertRaises(TypeError) as raises:
-            @guvectorize(['int32[:], int32, int32[:]'], '(n),(n)->(n)')
+            @guvectorize(['int32[:], int32, int32[:]'], '(n),(n)->(n)',
+                         target=self.target)
             def pyfunc(a, b, c):
                 pass
         self.assertEqual("scalar type int32 given for non scalar argument #2",
@@ -126,12 +138,16 @@ class TestGUVectorizeScalar(unittest.TestCase):
 
     def test_ndim_mismatch(self):
         with self.assertRaises(TypeError) as raises:
-            @guvectorize(['int32[:], int32[:]'], '(m,n)->(n)')
+            @guvectorize(['int32[:], int32[:]'], '(m,n)->(n)',
+                         target=self.target)
             def pyfunc(a, b):
                 pass
         self.assertEqual("type and shape signature mismatch for arg #1",
                          str(raises.exception))
 
+
+class TestGUVectorizeScalarParallel(TestGUVectorizeScalar):
+    target = 'parallel'
 
 if __name__ == '__main__':
     unittest.main()

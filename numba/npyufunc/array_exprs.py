@@ -12,7 +12,7 @@ from ..targets import npyimpl
 from .dufunc import DUFunc
 
 
-@rewrites.register_rewrite
+@rewrites.register_rewrite('after-inference')
 class RewriteArrayExprs(rewrites.Rewrite):
     '''The RewriteArrayExprs class is responsible for finding array
     expressions in Numba intermediate representation code, and
@@ -26,7 +26,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
         if 'arrayexpr' not in special_ops:
             special_ops['arrayexpr'] = _lower_array_expr
 
-    def match(self, block, typemap, calltypes):
+    def match(self, interp, block, typemap, calltypes):
         '''Using typing and a basic block, search the basic block for array
         expressions.  Returns True when one or more matches were
         found, False otherwise.
@@ -179,7 +179,8 @@ class RewriteArrayExprs(rewrites.Rewrite):
         replace_map, dead_vars, used_vars = self._handle_matches()
         # Part 2: Using the information above, rewrite the target
         # basic block.
-        result = ir.Block(self.crnt_block.scope, self.crnt_block.loc)
+        result = self.crnt_block.copy()
+        result.clear()
         delete_map = {}
         for instr in self.crnt_block.body:
             if isinstance(instr, ir.Assign):

@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+from collections import namedtuple
+import contextlib
 import itertools
 import math
 import sys
@@ -17,9 +19,50 @@ enable_pyobj_flags.set("enable_pyobject")
 force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
 
+Point = namedtuple('Point', ('a', 'b'))
 
-def identity_func(l):
-    return l
+
+def noop(x):
+    pass
+
+def unbox_usecase(x):
+    """
+    Expect a list of numbers
+    """
+    res = 0
+    for v in x:
+        res += v
+    return res
+
+def unbox_usecase2(x):
+    """
+    Expect a list of tuples
+    """
+    res = 0
+    for v in x:
+        res += len(v)
+    return res
+
+def unbox_usecase3(x):
+    """
+    Expect a (number, list of numbers) tuple.
+    """
+    a, b = x
+    res = a
+    for v in b:
+        res += v
+    return res
+
+def unbox_usecase4(x):
+    """
+    Expect a (number, list of tuples) tuple.
+    """
+    a, b = x
+    res = a
+    for v in b:
+        res += len(v)
+    return res
+
 
 def create_list(x, y, z):
     return [x, y, z]
@@ -674,6 +717,59 @@ class TestLists(MemoryLeakMixin, TestCase):
         pyfunc = bool_list_usecase
         cfunc = jit(nopython=True)(pyfunc)
         self.assertPreciseEqual(cfunc(), pyfunc())
+
+
+class TestUnboxing(MemoryLeakMixin, TestCase):
+    """
+    Test unboxing of Python lists into native Numba lists.
+    """
+
+    @contextlib.contextmanager
+    def assert_type_error(self, msg):
+        with self.assertRaises(TypeError) as raises:
+            yield
+        if msg is not None:
+            self.assertRegexpMatches(str(raises.exception), msg)
+
+    def check_unary(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arg):
+            expected = pyfunc(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+        return check
+
+    def test_numbers(self):
+        check = self.check_unary(unbox_usecase)
+        check([1, 2])
+        check([1j, 2.5])
+
+    def test_tuples(self):
+        check = self.check_unary(unbox_usecase2)
+        check([(1, 2), (3, 4)])
+        check([(1, 2j), (3, 4j)])
+        check([(), (), ()])
+
+    def test_list_inside_tuple(self):
+        check = self.check_unary(unbox_usecase3)
+        check((1, [2, 3, 4]))
+
+    def test_list_of_tuples_inside_tuple(self):
+        check = self.check_unary(unbox_usecase4)
+        check((1, [(2,), (3,)]))
+
+    def test_errors(self):
+        # See #1545: error checking should ensure the list is homogenous
+        msg = "can't convert complex to (int|long)"
+        pyfunc = noop
+        cfunc = jit(nopython=True)(pyfunc)
+        with self.assert_type_error(msg):
+            cfunc([1, 2j])
+        # Same when the list is nested in a tuple or namedtuple
+        with self.assert_type_error(msg):
+            cfunc((1, [1, 2j]))
+        with self.assert_type_error(msg):
+            cfunc(Point(1, [1, 2j]))
 
 
 class TestListReflection(MemoryLeakMixin, TestCase):

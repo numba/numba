@@ -14,6 +14,7 @@ from numba.itanium_mangler import mangle_c, mangle, mangle_type
 from . import target
 from . import stubs
 from . import hlc
+from . import enums
 
 registry = Registry()
 register = registry.register
@@ -131,10 +132,21 @@ def get_local_size_impl(context, builder, sig, args):
 
 @register
 @implement(stubs.barrier, types.uint32)
-def barrier_impl(context, builder, sig, args):
+def barrier_one_arg_impl(context, builder, sig, args):
     [flags] = args
     barrier = _declare_function(context, builder, 'barrier', sig,
                                 ['unsigned int'])
+    builder.call(barrier, [flags])
+    return _void_value
+
+@register
+@implement(stubs.barrier)
+def barrier_no_arg_impl(context, builder, sig, args):
+    assert not args
+    sig = types.void(types.uint32)
+    barrier = _declare_function(context, builder, 'barrier', sig,
+                                ['unsigned int'])
+    flags = context.get_constant(types.uint32, enums.CLK_GLOBAL_MEM_FENCE)
     builder.call(barrier, [flags])
     return _void_value
 
@@ -147,6 +159,40 @@ def mem_fence_impl(context, builder, sig, args):
                                 ['unsigned int'])
     builder.call(mem_fence, [flags])
     return _void_value
+
+
+@register
+@implement(stubs.wavebarrier)
+def wavebarrier_impl(context, builder, sig, args):
+    assert not args
+    fnty = Type.function(Type.void(), [])
+    fn = builder.module.get_or_insert_function(fnty, name="__hsail_wavebarrier")
+    fn.calling_convention = target.CC_SPIR_FUNC
+    builder.call(fn, [])
+    return _void_value
+
+@register
+@implement(stubs.activelanepermute_wavewidth,
+           types.Any, types.uint32, types.Any, types.bool_)
+def activelanepermute_wavewidth_impl(context, builder, sig, args):
+    [src, laneid, identity, use_ident] = args
+    assert sig.args[0] == sig.args[2]
+    elem_type = sig.args[0]
+    bitwidth = elem_type.bitwidth
+    intbitwidth = Type.int(bitwidth)
+    i32 = Type.int(32)
+    i1 = Type.int(1)
+    name = "__hsail_activelanepermute_wavewidth_b{0}".format(bitwidth)
+
+    fnty = Type.function(intbitwidth, [intbitwidth, i32, intbitwidth, i1])
+    fn = builder.module.get_or_insert_function(fnty, name=name)
+    fn.calling_convention = target.CC_SPIR_FUNC
+
+    def cast(val):
+        return builder.bitcast(val, intbitwidth)
+
+    result = builder.call(fn, [cast(src), laneid, cast(identity), use_ident])
+    return builder.bitcast(result, context.get_value_type(elem_type))
 
 
 @register

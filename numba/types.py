@@ -159,6 +159,21 @@ class RawPointer(Dummy):
     """
 
 
+class Const(Dummy):
+    """
+    A compile-time constant, for (internal) use when a type is needed for
+    lookup.
+    """
+
+    def __init__(self, value):
+        self.value = value
+        super(Const, self).__init__("const(%r)" % (value,))
+
+    @property
+    def key(self):
+        return type(self.value), self.value
+
+
 class Kind(Type):
     def __init__(self, of):
         if not isinstance(of, type) or not issubclass(of, Type):

@@ -1,15 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import namedtuple
-import itertools
 
-from numba import types, intrinsics
-from numba.utils import PYVERSION
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    AbstractTemplate, builtin_global, builtin,
-                                    builtin_attr, signature, bound_function,
-                                    make_callable_template)
-
+from numba import types
+from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
+                                    builtin, builtin_attr, signature,
+                                    bound_function)
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -256,20 +252,46 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.reshape")
     def resolve_reshape(self, ary, args, kws):
+        def sentry_shape_scalar(ty):
+            if ty in types.number_domain:
+                # Guard against non integer type
+                if not isinstance(ty, types.Integer):
+                    raise TypeError("reshape() arg cannot be {0}".format(ty))
+                return True
+            else:
+                return False
+
         assert not kws
-        shape, = args
-        shape = normalize_shape(shape)
-        if shape is None:
-            return
-        if ary.layout == "C":
-            # Given order='C' (the only supported value), a C-contiguous
-            # array is always returned for a C-contiguous input.
-            layout = "C"
+        if ary.layout not in 'CF':
+            # only work for contiguous array
+            raise TypeError("reshape() supports contiguous array only")
+
+        if len(args) == 1:
+            # single arg
+            shape, = args
+
+            if sentry_shape_scalar(shape):
+                ndim = 1
+            else:
+                shape = normalize_shape(shape)
+                if shape is None:
+                    return
+                ndim = shape.count
+            retty = ary.copy(ndim=ndim)
+            return signature(retty, shape)
+
+        elif len(args) == 0:
+            # no arg
+            raise TypeError("reshape() take at least one arg")
+
         else:
-            layout = "A"
-        ndim = shape.count if isinstance(shape, types.BaseTuple) else 1
-        retty = ary.copy(ndim=ndim)
-        return signature(retty, shape)
+            # vararg case
+            if any(not sentry_shape_scalar(a) for a in args):
+                raise TypeError("reshape({0}) is not supported".format(
+                    ', '.join(args)))
+
+            retty = ary.copy(ndim=len(args))
+            return signature(retty, *args)
 
     @bound_function("array.sort")
     def resolve_sort(self, ary, args, kws):
@@ -292,6 +314,53 @@ class ArrayAttribute(AttributeTemplate):
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
                 return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
+
+
+@builtin
+class StaticGetItemArray(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for record and structured arrays
+        ary, idx = args
+        if (isinstance(ary, types.Array) and isinstance(idx, str) and
+            isinstance(ary.dtype, types.Record)):
+            if idx in ary.dtype.fields:
+                return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+
+
+@builtin_attr
+class RecordAttribute(AttributeTemplate):
+    key = types.Record
+
+    def generic_resolve(self, record, attr):
+        ret = record.typeof(attr)
+        assert ret
+        return ret
+
+@builtin
+class StaticGetItemRecord(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for records
+        record, idx = args
+        if isinstance(record, types.Record) and isinstance(idx, str):
+            ret = record.typeof(idx)
+            assert ret
+            return ret
+
+@builtin
+class StaticSetItemRecord(AbstractTemplate):
+    key = "static_setitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for record and structured arrays
+        record, idx, value = args
+        if isinstance(record, types.Record) and isinstance(idx, str):
+            expectedty = record.typeof(idx)
+            if self.context.can_convert(value, expectedty) is not None:
+                return signature(types.void, record, types.Const(idx), value)
 
 
 @builtin_attr
