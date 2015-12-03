@@ -316,6 +316,53 @@ class ArrayAttribute(AttributeTemplate):
                 return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
 
 
+@builtin
+class StaticGetItemArray(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for record and structured arrays
+        ary, idx = args
+        if (isinstance(ary, types.Array) and isinstance(idx, str) and
+            isinstance(ary.dtype, types.Record)):
+            if idx in ary.dtype.fields:
+                return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+
+
+@builtin_attr
+class RecordAttribute(AttributeTemplate):
+    key = types.Record
+
+    def generic_resolve(self, record, attr):
+        ret = record.typeof(attr)
+        assert ret
+        return ret
+
+@builtin
+class StaticGetItemRecord(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for records
+        record, idx = args
+        if isinstance(record, types.Record) and isinstance(idx, str):
+            ret = record.typeof(idx)
+            assert ret
+            return ret
+
+@builtin
+class StaticSetItemRecord(AbstractTemplate):
+    key = "static_setitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for record and structured arrays
+        record, idx, value = args
+        if isinstance(record, types.Record) and isinstance(idx, str):
+            expectedty = record.typeof(idx)
+            if self.context.can_convert(value, expectedty) is not None:
+                return signature(types.void, record, types.Const(idx), value)
+
+
 @builtin_attr
 class ArrayCTypesAttribute(AttributeTemplate):
     key = types.ArrayCTypes

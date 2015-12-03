@@ -55,7 +55,8 @@ The operations supported on scalar Numpy numbers are the same as on the
 equivalent built-in types such as ``int`` or ``float``.  You can use
 a type's constructor to convert from a different type or width.
 
-Structured scalars support attribute getting and setting.
+Structured scalars support attribute getting and setting, as well as
+member lookup using constant strings.
 
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_

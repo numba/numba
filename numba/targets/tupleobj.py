@@ -207,3 +207,12 @@ def getitem_unituple(context, builder, sig, args):
     res = phinode
     assert sig.return_type == tupty.dtype
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+@builtin
+@implement('static_getitem', types.Kind(types.BaseTuple), types.Kind(types.Const))
+def static_getitem_tuple(context, builder, sig, args):
+    tup, idx = args
+    assert isinstance(idx, int)
+    res = builder.extract_value(tup, idx)
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
