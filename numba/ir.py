@@ -129,8 +129,15 @@ class Expr(Inst):
         self.op = op
         self.loc = loc
         self._kws = kws
-        for k, v in kws.items():
-            setattr(self, k, v)
+
+    def __getattr__(self, name):
+        return self._kws[name]
+
+    def __setattr__(self, name, value):
+        if name in ('op', 'loc', '_kws'):
+            self.__dict__[name] = value
+        else:
+            self._kws[name] = value
 
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):
@@ -210,9 +217,10 @@ class Expr(Inst):
         return cls(op=op, loc=loc, value=value, index=index)
 
     @classmethod
-    def static_getitem(cls, value, index, loc):
+    def static_getitem(cls, value, index, index_var, loc):
         op = 'static_getitem'
-        return cls(op=op, loc=loc, value=value, index=index)
+        return cls(op=op, loc=loc, value=value, index=index,
+                   index_var=index_var)
 
     @classmethod
     def cast(cls, value, loc):
@@ -255,6 +263,22 @@ class SetItem(Stmt):
 
     def __repr__(self):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
+
+
+class StaticSetItem(Stmt):
+    """
+    target[constant index] = value
+    """
+
+    def __init__(self, target, index, index_var, value, loc):
+        self.target = target
+        self.index = index
+        self.index_var = index_var
+        self.value = value
+        self.loc = loc
+
+    def __repr__(self):
+        return '%s[%r] = %s' % (self.target, self.index, self.value)
 
 
 class DelItem(Stmt):
@@ -391,6 +415,9 @@ class Arg(object):
 
     def __repr__(self):
         return 'arg(%d, name=%s)' % (self.index, self.name)
+
+    def infer_constant(self):
+        raise TypeError("cannot make a constant of %s" % (self,))
 
 
 class Const(object):
@@ -577,6 +604,11 @@ class Block(object):
         self.body = []
         self.loc = loc
 
+    def copy(self):
+        block = Block(self.scope, self.loc)
+        block.body = self.body[:]
+        return block
+
     def prepend(self, inst):
         assert isinstance(inst, Stmt)
         self.body.insert(0, inst)
@@ -588,6 +620,9 @@ class Block(object):
     def remove(self, inst):
         assert isinstance(inst, Stmt)
         del self.body[self.body.index(inst)]
+
+    def clear(self):
+        del self.body[:]
 
     def dump(self, file=sys.stdout):
         for inst in self.body:
