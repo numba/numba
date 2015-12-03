@@ -9,6 +9,9 @@ class RewriteConstRaises(Rewrite):
     where `value` is the result of instantiating an exception with
     constant arguments
     into `static_raise(exception_type, constant args)`.
+
+    This allows lowering in nopython mode, where one can't instantiate
+    exception instances from runtime data.
     """
 
     def _is_exception_type(self, const):
