@@ -8,7 +8,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, errors
 from .support import TestCase
-from .matmul_usecase import matmul_usecase, needs_matmul
+from .matmul_usecase import matmul_usecase, needs_matmul, needs_blas
 
 
 def dot2(a, b):
@@ -66,6 +66,7 @@ class TestProduct(TestCase):
                       % (func_name,),
                       str(raises.exception))
 
+    @needs_blas
     def check_dot_vv(self, pyfunc, func_name):
         n = 3
         cfunc = jit(nopython=True)(pyfunc)
@@ -95,6 +96,7 @@ class TestProduct(TestCase):
         """
         self.check_dot_vv(vdot, "np.vdot()")
 
+    @needs_blas
     def check_dot_vm(self, pyfunc2, pyfunc3, func_name):
         m, n = 2, 3
 
@@ -150,6 +152,7 @@ class TestProduct(TestCase):
         """
         self.check_dot_vm(dot2, dot3, "np.dot()")
 
+    @needs_blas
     def check_dot_mm(self, pyfunc2, pyfunc3, func_name):
         m, n, k = 2, 3, 4
 

@@ -13,7 +13,7 @@ from numba.config import PYVERSION
 from .support import TestCase
 from .true_div_usecase import truediv_usecase, itruediv_usecase
 from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,
-                             needs_matmul)
+                             needs_matmul, needs_blas)
 import numba.unittest_support as unittest
 
 Noflags = Flags()
@@ -894,7 +894,7 @@ class TestOperators(TestCase):
 
     @needs_matmul
     def check_matmul_objmode(self, pyfunc, inplace):
-        # Use dummy objects, to work with any Numpy version
+        # Use dummy objects, to work with any Numpy / Scipy version
         # (and because Numpy 1.10 doesn't implement "@=")
         cres = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
         cfunc = cres.entry_point
@@ -916,6 +916,7 @@ class TestOperators(TestCase):
     def test_imatmul(self):
         self.check_matmul_objmode(self.op.imatmul_usecase, inplace=True)
 
+    @needs_blas
     @needs_matmul
     def check_matmul_npm(self, pyfunc):
         arrty = types.Array(types.float32, 1, 'C')
