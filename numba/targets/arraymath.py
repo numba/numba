@@ -744,6 +744,10 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
 @implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array))
 @implement('@', types.Kind(types.Array), types.Kind(types.Array))
 def dot_2(context, builder, sig, args):
+    """
+    np.dot(a, b)
+    a @ b
+    """
     ensure_blas()
 
     ndims = [x.ndim for x in sig.args[:2]]
@@ -761,6 +765,9 @@ def dot_2(context, builder, sig, args):
 @builtin
 @implement(numpy.vdot, types.Kind(types.Array), types.Kind(types.Array))
 def vdot(context, builder, sig, args):
+    """
+    np.vdot(a, b)
+    """
     ensure_blas()
 
     return dot_2_vv(context, builder, sig, args, conjugate=True)
@@ -936,6 +943,9 @@ def dot_3_mm(context, builder, sig, args):
 @implement(numpy.dot, types.Kind(types.Array), types.Kind(types.Array),
            types.Kind(types.Array))
 def dot_3(context, builder, sig, args):
+    """
+    np.dot(a, b, out)
+    """
     ensure_blas()
 
     ndims = set(x.ndim for x in sig.args[:2])
