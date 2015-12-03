@@ -19,7 +19,8 @@ from numba.targets.imputils import (user_function, user_generator,
                                     builtin_registry, impl_attribute,
                                     impl_ret_borrowed)
 from . import (
-    arrayobj, builtins, iterators, rangeobj, optional, slicing, tupleobj)
+    arrayobj, arraymath, builtins, iterators, rangeobj, optional, slicing,
+    tupleobj)
 from numba import datamodel
 
 try:
