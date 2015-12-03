@@ -13,7 +13,7 @@ the fine-grain scheduling is hidden from the programmer instead of programming
 with SIMD vectors as a data structure.  In HSA, the code you write will be
 executed by multiple threads at once (often hundreds or thousands).  Your
 solution will
-be modeled by defining a thread hierarchy of *NDRange*, *workgroup* and
+be modeled by defining a thread hierarchy of *grid*, *workgroup* and
 *workitem*.
 
 Numba's HSA support exposes facilities to declare and manage this
@@ -29,10 +29,10 @@ GPU hardware uses the machine's main memory (or host memory in
 CUDA term) directly.  Therefore, you will not need ``to_device()`` and
 ``copy_to_host()`` in HSA programming.
 
-Here's a quick mapping of the CUDA terms to HSA (opencl terms):
+Here's a quick mapping of the CUDA terms to HSA:
 * workitem is CUDA threads
 * workgroup is CUDA thread block
-* NDrange is CUDA grid
+* grid is CUDA grid
 
 
 Kernel declaration
@@ -48,7 +48,7 @@ code.  It gives it two fundamental characteristics:
 * kernels explicitly declare their thread hierarchy when called: i.e.
   the number of workgroups and the number of workitems per workgroup
   (note that while a kernel is compiled once, it can be called multiple
-  times with different workgroup sizes or NDrange sizes).
+  times with different workgroup sizes or grid sizes).
 
 At first sight, writing a HSA kernel with Numba looks very much like
 writing a :term:`JIT function` for the CPU::
@@ -75,7 +75,7 @@ A kernel is typically launched in the following way::
 We notice two steps here:
 
 * Instantiate the kernel proper, by specifying a number of workgroup
-  (or "workgroup per ndrange"), and a number of workitems per workgroup.  The
+  (or "workgroup per grid"), and a number of workitems per workgroup.  The
   product of the two will give the total number of workitem launched.  Kernel
   instantiation is done by taking the compiled kernel function
   (here ``increment_by_one``) and indexing it with a tuple of integers.
@@ -97,11 +97,11 @@ workitem per workgroup) is often crucial:
 * On the hardware side, the workgroup size must be large enough for full
    occupation of execution units.
 
-Multi-dimensional workgroup and ndrange
+Multi-dimensional workgroup and grid
 ---------------------------------------
 
 To help deal with multi-dimensional arrays, HSA allows you to specify
-multi-dimensional workgroups and ndranges.  In the example above, you could
+multi-dimensional workgroups and grids.  In the example above, you could
 make ``itempergroup`` and ``groupperrange`` tuples of one, two
 or three integers.  Compared to 1D declarations of equivalent sizes,
 this doesn't change anything to the efficiency or behaviour of generated
@@ -117,14 +117,14 @@ to know which array element(s) it is responsible for (complex algorithms
 may define more complex responsibilities, but the underlying principle
 is the same).
 
-One way is for the thread to determines its position in the ndrange and
+One way is for the thread to determines its position in the grid and
 workgroup and manually compute the corresponding array position::
 
     @hsa.jit
     def increment_by_one(an_array):
         # workitem id in a 1D workgroup
         tx = hsa.get_local_id(0)
-        # workgroup id in a 1D ndrange
+        # workgroup id in a 1D grid
         ty = hsa.get_group_id(0)
         # workgroup size, i.e. number of workitem per workgroup
         bw = hsa.get_local_size(0)
@@ -163,13 +163,13 @@ position of the current workitem within that geometry.
 
    Takes the index of the dimension being queried
 
-   Returns the workgroup ID in the ndrange of workgroup launched a kernel.
+   Returns the workgroup ID in the grid of workgroup launched a kernel.
 
 .. function:: numba.hsa.get_global_id(dim)
 
    Takes the index of the dimension being queried
 
    Returns the global workitem ID for the given dimension.  Unlike `numba.hsa
-   .get_local_id()`, this number is unique for all workitems in a NDrange.
+   .get_local_id()`, this number is unique for all workitems in a grid.
 
 

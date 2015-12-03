@@ -513,12 +513,6 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_sin_ufunc_npm(self):
         self.test_sin_ufunc(flags=no_pyobj_flags)
 
-    def test_sinc_ufunc(self, flags=enable_pyobj_flags):
-        self.unary_ufunc_test(np.sin, flags=flags, kinds='cf')
-
-    def test_sinc_ufunc_npm(self):
-        self.test_sin_ufunc(flags=no_pyobj_flags)
-
     def test_cos_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.cos, flags=flags, kinds='cf')
 
@@ -634,7 +628,6 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     def test_radians_ufunc_npm(self):
         self.test_radians_ufunc(flags=no_pyobj_flags)
-
 
     ############################################################################
     # Bit-twiddling Functions

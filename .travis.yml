@@ -23,7 +23,8 @@ before_install:
   - export PATH=$HOME/miniconda3/bin:$PATH
   # Setup environment
   - conda update --yes conda
-  - conda create -n travisci --yes python=$PYTHON $NUMPY cffi pip
+  # Scipy and CFFI are optional dependencies, but exercised in the test suite
+  - conda create -n travisci --yes python=$PYTHON $NUMPY cffi pip scipy
   - source activate travisci
   - CONDA_INSTALL="conda install --yes -q"
   - PIP_INSTALL="pip install -q"
