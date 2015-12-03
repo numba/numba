@@ -53,6 +53,15 @@ def other_function(x, y):
 def get_global_objmode(x):
     return K * x
 
+import numpy as np
+import numpy.random as nprand
+
+@jit(nopython=True)
+def get_renamed_module(x):
+    nprand.seed(42)
+    return np.cos(x), nprand.random()
+
+
 def closure_calling_other_function(x):
     @jit(nopython=True)
     def inner(y, z):
