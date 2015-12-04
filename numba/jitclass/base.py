@@ -53,10 +53,15 @@ def ctor({args}):
 
 
 class JitClassType(type):
+    """
+    The type of any jitclass.
+    """
     def __new__(cls, name, bases, dct):
         if len(bases) != 1:
             raise TypeError("must have exactly one base class")
         [base] = bases
+        if isinstance(base, JitClassType):
+            raise TypeError("cannot subclass from a jitclass")
         assert 'class_type' in dct, 'missing "class_type" attr'
         outcls = type.__new__(cls, name, bases, dct)
         outcls._set_init()

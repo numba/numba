@@ -232,6 +232,14 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         vec = Vector2(1, 2)
         self.assertIsInstance(vec, Vector2)
 
+    def test_subclassing(self):
+        Vector2 = self._make_Vector2()
+        with self.assertRaises(TypeError) as raises:
+            class SubV(Vector2):
+                pass
+        self.assertEqual(str(raises.exception),
+                         "cannot subclass from a jitclass")
+
 
 class TestImmutableJitClass(TestCase, MemoryLeakMixin):
 
