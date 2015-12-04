@@ -43,9 +43,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
             self.array_assigns = array_assigns
             const_assigns = {}
             self.const_assigns = const_assigns
-            assignments = (instr
-                           for instr in block.body
-                           if isinstance(instr, ir.Assign))
+            assignments = block.find_insts(ir.Assign)
             for instr in assignments:
                 target_name = instr.target.name
                 expr = instr.value
