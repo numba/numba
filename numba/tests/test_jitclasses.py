@@ -1,5 +1,8 @@
+from __future__ import absolute_import, print_function
+import ctypes
 import numpy as np
-from numba import float32, int32, boolean, deferred_type, optional
+from numba import (float32, float64, int16, int32, boolean, deferred_type,
+                   optional)
 from numba import njit
 from numba import unittest_support as unittest
 from numba.jitclass import jitclass
@@ -223,6 +226,33 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         del second
         self.assertEqual(first._meminfo.refcount, 1)
 
+    def test_c_structure(self):
+        spec = OrderedDict()
+        spec['a'] = int32
+        spec['b'] = int16
+        spec['c'] = float64
+
+        @jitclass(spec)
+        class Struct(object):
+            def __init__(self, a, b, c):
+                self.a = a
+                self.b = b
+                self.c = c
+
+        st = Struct(0xabcd, 0xef, 3.1415)
+
+        class CStruct(ctypes.Structure):
+            _fields_ = [
+                ('a', ctypes.c_int32),
+                ('b', ctypes.c_int16),
+                ('c', ctypes.c_double),
+            ]
+
+        ptr = ctypes.c_void_p(st._dataptr)
+        cstruct = ctypes.cast(ptr, ctypes.POINTER(CStruct))[0]
+        self.assertEqual(cstruct.a, st.a)
+        self.assertEqual(cstruct.b, st.b)
+        self.assertEqual(cstruct.c, st.c)
 
 if __name__ == '__main__':
     unittest.main()
