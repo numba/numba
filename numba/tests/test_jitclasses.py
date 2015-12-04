@@ -8,6 +8,32 @@ from .support import TestCase, MemoryLeakMixin
 
 
 class TestJitClass(TestCase, MemoryLeakMixin):
+
+    def _check_spec(self, spec):
+        @jitclass(spec)
+        class Test(object):
+            def __init__(self):
+                pass
+
+        clsty = Test.class_type.instance_type
+        names = list(clsty.struct.keys())
+        values = list(clsty.struct.values())
+        self.assertEqual(names[0], 'x')
+        self.assertEqual(names[1], 'y')
+        self.assertEqual(values[0], int32)
+        self.assertEqual(values[1], float32)
+
+    def test_ordereddict_spec(self):
+        spec = OrderedDict()
+        spec['x'] = int32
+        spec['y'] = float32
+        self._check_spec(spec)
+
+    def test_list_spec(self):
+        spec = [('x', int32),
+                ('y', float32)]
+        self._check_spec(spec)
+
     def test_jit_class_1(self):
         spec = OrderedDict()
         spec['x'] = float32
@@ -114,7 +140,8 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         obj = Float2AndArray(1, 2, arr)
         self.assertEqual(obj._meminfo.refcount, 1)
         self.assertEqual(obj._meminfo.data, obj._dataptr)
-        self.assertEqual(obj._numba_type_.class_type, Float2AndArray.class_type)
+        self.assertEqual(obj._numba_type_.class_type,
+                         Float2AndArray.class_type)
         # Use jit class instance in numba
         other = idenity(obj)
         self.assertEqual(obj._meminfo.refcount, 2)

@@ -1,6 +1,7 @@
 from __future__ import absolute_import, print_function
 import types as pytypes
 import inspect
+from collections import OrderedDict, Sequence
 from numba import types
 from numba.targets.registry import CPUTarget
 from numba import njit
@@ -71,6 +72,9 @@ class JitClassType(object):
 
 
 def register_class_type(cls, spec, class_ctor, builder):
+    if isinstance(spec, Sequence):
+        spec = OrderedDict(spec)
+
     # TODO: copy methods from base classes
     clsdct = cls.__dict__
     methods = dict((k, v) for k, v in clsdct.items()
