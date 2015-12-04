@@ -113,12 +113,6 @@ class BaseContext(object):
             return func.get_call_type(self, args, kws)
 
     def resolve_getattr(self, value, attr):
-        if isinstance(value, types.Optional):
-            return self.resolve_getattr(value.type, attr)
-
-        if isinstance(value, types.DeferredType):
-            return self.resolve_getattr(value.get(), attr)
-
         try:
             attrinfo = self.attributes[value]
         except KeyError:
