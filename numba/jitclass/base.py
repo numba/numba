@@ -13,6 +13,9 @@ from llvmlite import ir as llvmir
 from numba.six import exec_
 
 
+##############################################################################
+# Data model
+
 class InstanceModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
         cls_data_ty = types.ClassDataType(fe_typ)
@@ -38,6 +41,9 @@ class InstanceDataModel(models.StructModel):
 default_manager.register(types.ClassInstanceType, InstanceModel)
 default_manager.register(types.ClassDataType, InstanceDataModel)
 default_manager.register(types.ClassType, models.OpaqueModel)
+
+##############################################################################
+# Class object
 
 _ctor_template = """
 def ctor({args}):
@@ -71,7 +77,22 @@ class JitClassType(object):
         return "<numba.jitclass of {0}>".format(self.cls)
 
 
+##############################################################################
+# Registration utils
+
+
 def register_class_type(cls, spec, class_ctor, builder):
+    """
+    Internal function to create a jitclass.
+
+    Args
+    ----
+    cls: the original class object (used as the prototype)
+    spec: the structural specification contains the field types.
+    class_ctor: the numba type to represent the jitclass
+    builder: the internal jitclass builder
+    """
+    # Normalize spec
     if isinstance(spec, Sequence):
         spec = OrderedDict(spec)
 
@@ -99,6 +120,9 @@ def register_class_type(cls, spec, class_ctor, builder):
 
 
 class ClassBuilder(object):
+    """
+    A jitclass builder for mutable jitclasses.
+    """
     instance_type_class = types.ClassInstanceType
 
     def __init__(self, class_type, jitmethods, methods, typer, backend):
@@ -109,6 +133,9 @@ class ClassBuilder(object):
         self.backend = backend
 
     def register(self):
+        """
+        Register to the frontend and backend.
+        """
         outer = self
 
         class ConstructorTemplate(templates.AbstractTemplate):
