@@ -52,7 +52,7 @@ def _get_function_globals_for_reduction(func):
     for k, v in globs.items():
         # Make modules picklable by name
         if isinstance(v, ModuleType):
-            globs[k] = _ModuleRef(k)
+            globs[k] = _ModuleRef(v.__name__)
     # Remember the module name so that the function gets a proper __module__
     # when rebuilding.  This is used to recreate the environment.
     globs['__name__'] = func.__module__

@@ -72,6 +72,9 @@ build_c_helpers_dict(void)
     declmethod(get_list_private_data);
     declmethod(set_list_private_data);
     declmethod(reset_list_private_data);
+    declmethod(xxgemm);
+    declmethod(xxgemv);
+    declmethod(xxdot);
 
     declpointer(py_random_state);
     declpointer(np_random_state);

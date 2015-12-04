@@ -5,8 +5,12 @@ from numba.cuda.testing import unittest
 
 
 def foo(ary):
-    if cuda.threadIdx.x == 1:
-        ary.shape[-1]
+    x = cuda.threadIdx.x
+    if x == 1:
+        # NOTE: indexing with a out-of-bounds constant can fail at
+        # compile-time instead (because the getitem is rewritten as a static_getitem)
+        # XXX: -1 is actually a valid index for a non-empty tuple...
+        ary.shape[-x]
 
 
 class TestException(unittest.TestCase):

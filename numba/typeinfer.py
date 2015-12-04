@@ -236,18 +236,32 @@ class PairSecondConstraint(object):
 
 
 class StaticGetItemConstraint(object):
-    def __init__(self, target, value, index, loc):
+    def __init__(self, target, value, index, index_var, loc):
         self.target = target
         self.value = value
         self.index = index
+        if index_var is not None:
+            self.fallback = IntrinsicCallConstraint(target, 'getitem',
+                                                    (value, index_var), {},
+                                                    None, loc)
+        else:
+            self.fallback = None
         self.loc = loc
 
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
         oset = typevars[self.target]
-        for tp in typevars[self.value.name].get():
-            if isinstance(tp, types.BaseTuple):
-                typeinfer.add_type(self.target, tp.types[self.index])
+        for ty in typevars[self.value.name].get():
+            itemty = typeinfer.context.resolve_static_getitem(value=ty,
+                                                              index=self.index)
+            if itemty is not None:
+                typeinfer.add_type(self.target, itemty)
+            elif self.fallback is not None:
+                self.fallback(typeinfer)
+
+    def get_call_signature(self):
+        # The signature is only needed for the fallback case in lowering
+        return self.fallback and self.fallback.get_call_signature()
 
 
 class CallConstraint(object):
@@ -280,7 +294,7 @@ class CallConstraint(object):
         if self.vararg is not None:
             argtypes.append(typevars[self.vararg.name])
 
-        if not (a.defined for a in argtypes):
+        if not all(a.defined for a in argtypes):
             # Cannot resolve call type until all argument types are known
             return
 
@@ -368,15 +382,50 @@ class SetItemConstraint(object):
 
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
-        targettys = typevars[self.target.name].get()
-        idxtys = typevars[self.index.name].get()
-        valtys = typevars[self.value.name].get()
+        if not all(typevars[var.name].defined
+                   for var in (self.target, self.index, self.value)):
+            return
+        targetty = typevars[self.target.name].getone()
+        idxty = typevars[self.index.name].getone()
+        valty = typevars[self.value.name].getone()
 
-        for ty, it, vt in itertools.product(targettys, idxtys, valtys):
-            if not typeinfer.context.resolve_setitem(target=ty,
-                                                     index=it, value=vt):
-                raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
-                                  (ty, it, vt), loc=self.loc)
+        sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
+        if sig is None:
+            raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
+                              (targetty, idxty, valty), loc=self.loc)
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
+
+
+class StaticSetItemConstraint(object):
+    def __init__(self, target, index, index_var, value, loc):
+        self.target = target
+        self.index = index
+        self.index_var = index_var
+        self.value = value
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
+        if not all(typevars[var.name].defined
+                   for var in (self.target, self.index_var, self.value)):
+            return
+        targetty = typevars[self.target.name].getone()
+        idxty = typevars[self.index_var.name].getone()
+        valty = typevars[self.value.name].getone()
+
+        sig = typeinfer.context.resolve_static_setitem(targetty, self.index, valty)
+        if sig is None:
+            sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
+        if sig is None:
+            raise TypingError("Cannot resolve setitem: %s[%r] = %s" %
+                              (targetty, self.index, valty), loc=self.loc)
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
 
 
 class DelItemConstraint(object):
@@ -387,13 +436,20 @@ class DelItemConstraint(object):
 
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
-        targettys = typevars[self.target.name].get()
-        idxtys = typevars[self.index.name].get()
+        if not all(typevars[var.name].defined
+                   for var in (self.target, self.index)):
+            return
+        targetty = typevars[self.target.name].getone()
+        idxty = typevars[self.index.name].getone()
 
-        for ty, it in itertools.product(targettys, idxtys):
-            if not typeinfer.context.resolve_delitem(target=ty, index=it):
-                raise TypingError("Cannot resolve delitem: %s[%s]" %
-                                  (ty, it), loc=self.loc)
+        sig = typeinfer.context.resolve_delitem(targetty, idxty)
+        if sig is None:
+            raise TypingError("Cannot resolve delitem: %s[%s]" %
+                              (targetty, idxty), loc=self.loc)
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
 
 
 class SetAttrConstraint(object):
@@ -405,15 +461,20 @@ class SetAttrConstraint(object):
 
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
-        targettys = typevars[self.target.name].get()
-        valtys = typevars[self.value.name].get()
+        if not all(typevars[var.name].defined
+                   for var in (self.target, self.value)):
+            return
+        targetty = typevars[self.target.name].getone()
+        valty = typevars[self.value.name].getone()
 
-        for ty, vt in itertools.product(targettys, valtys):
-            if not typeinfer.context.resolve_setattr(target=ty,
-                                                     attr=self.attr,
-                                                     value=vt):
-                raise TypingError("Cannot resolve setattr: (%s).%s = %s" %
-                                  (ty, self.attr, vt), loc=self.loc)
+        sig = typeinfer.context.resolve_setattr(targetty, self.attr, valty)
+        if sig is None:
+            raise TypingError("Cannot resolve setattr: (%s).%s = %s" %
+                              (targetty, self.attr, valty), loc=self.loc)
+        self.signature = sig
+
+    def get_call_signature(self):
+        return self.signature
 
 
 class TypeVarMap(dict):
@@ -452,12 +513,10 @@ class TypeInferer(object):
         self.return_type = None
         # Set of assumed immutable globals
         self.assumed_immutables = set()
-        # Track all calls
-        self.usercalls = []
-        self.intrcalls = []
-        self.delitemcalls = []
-        self.setitemcalls = []
-        self.setattrcalls = []
+        # Track all calls and associated constraints
+        self.calls = []
+        # The inference result of the above calls
+        self.calltypes = utils.UniqueDict()
         # Target var -> constraint with refine hook
         self.refine_map = {}
 
@@ -516,6 +575,9 @@ class TypeInferer(object):
             return
         unified = tv.add_type(tp)
         self.propagate_refined_type(var, unified)
+
+    def add_calltype(self, inst, signature):
+        self.calltypes[inst] = signature
 
     def copy_type(self, src_var, dest_var):
         unified = self.typevars[dest_var].union(self.typevars[src_var])
@@ -578,49 +640,12 @@ class TypeInferer(object):
 
     def get_function_types(self, typemap):
         """
-        Fill and return a calltypes map using the inferred `typemap`.
+        Fill and return the calltypes map.
         """
         # XXX why can't this be done on the fly?
-        calltypes = utils.UniqueDict()
-        for call, constraint in self.intrcalls:
+        calltypes = self.calltypes
+        for call, constraint in self.calls:
             calltypes[call] = constraint.get_call_signature()
-
-        for call, args, kws, vararg in self.usercalls:
-            if isinstance(call.func, ir.Intrinsic):
-                signature = call.func.type
-            else:
-                fnty = typemap[call.func.name]
-
-                args = tuple(typemap[a.name] for a in args)
-                kws = dict((kw, typemap[var.name]) for (kw, var) in kws)
-                if vararg is not None:
-                    tp = typemap[vararg.name]
-                    assert isinstance(tp, types.BaseTuple)
-                    args = args + tp.types
-                signature = self.context.resolve_function_type(fnty, args, kws)
-                assert signature is not None, (fnty, args, kws, vararg)
-            calltypes[call] = signature
-
-        for inst in self.delitemcalls:
-            target = typemap[inst.target.name]
-            index = typemap[inst.index.name]
-            signature = self.context.resolve_delitem(target, index)
-            calltypes[inst] = signature
-
-        for inst in self.setitemcalls:
-            target = typemap[inst.target.name]
-            index = typemap[inst.index.name]
-            value = typemap[inst.value.name]
-            signature = self.context.resolve_setitem(target, index, value)
-            calltypes[inst] = signature
-
-        for inst in self.setattrcalls:
-            target = typemap[inst.target.name]
-            attr = inst.attr
-            value = typemap[inst.value.name]
-            signature = self.context.resolve_setattr(target, attr, value)
-            calltypes[inst] = signature
-
         return calltypes
 
     def get_return_type(self, typemap):
@@ -651,13 +676,15 @@ class TypeInferer(object):
             self.typeof_assign(inst)
         elif isinstance(inst, ir.SetItem):
             self.typeof_setitem(inst)
+        elif isinstance(inst, ir.StaticSetItem):
+            self.typeof_static_setitem(inst)
         elif isinstance(inst, ir.DelItem):
             self.typeof_delitem(inst)
         elif isinstance(inst, ir.SetAttr):
             self.typeof_setattr(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
-        elif isinstance(inst, ir.Raise):
+        elif isinstance(inst, ir.StaticRaise):
             pass
         else:
             raise NotImplementedError(inst)
@@ -666,19 +693,27 @@ class TypeInferer(object):
         constraint = SetItemConstraint(target=inst.target, index=inst.index,
                                        value=inst.value, loc=inst.loc)
         self.constraints.append(constraint)
-        self.setitemcalls.append(inst)
+        self.calls.append((inst, constraint))
+
+    def typeof_static_setitem(self, inst):
+        constraint = StaticSetItemConstraint(target=inst.target,
+                                             index=inst.index,
+                                             index_var=inst.index_var,
+                                             value=inst.value, loc=inst.loc)
+        self.constraints.append(constraint)
+        self.calls.append((inst, constraint))
 
     def typeof_delitem(self, inst):
         constraint = DelItemConstraint(target=inst.target, index=inst.index,
                                        loc=inst.loc)
         self.constraints.append(constraint)
-        self.delitemcalls.append(inst)
+        self.calls.append((inst, constraint))
 
     def typeof_setattr(self, inst):
         constraint = SetAttrConstraint(target=inst.target, attr=inst.attr,
                                        value=inst.value, loc=inst.loc)
         self.constraints.append(constraint)
-        self.setattrcalls.append(inst)
+        self.calls.append((inst, constraint))
 
     def typeof_assign(self, inst):
         value = inst.value
@@ -758,9 +793,9 @@ class TypeInferer(object):
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
             if isinstance(expr.func, ir.Intrinsic):
-                restype = expr.func.type.return_type
-                self.add_type(target.name, restype)
-                self.usercalls.append((inst.value, expr.args, expr.kws, None))
+                sig = expr.func.type
+                self.add_type(target.name, sig.return_type)
+                self.add_calltype(expr, sig)
             else:
                 self.typeof_call(inst, target, expr)
         elif expr.op in ('getiter', 'iternext'):
@@ -788,11 +823,12 @@ class TypeInferer(object):
         elif expr.op == 'static_getitem':
             constraint = StaticGetItemConstraint(target.name, value=expr.value,
                                                  index=expr.index,
+                                                 index_var=expr.index_var,
                                                  loc=expr.loc)
             self.constraints.append(constraint)
+            self.calls.append((inst.value, constraint))
         elif expr.op == 'getitem':
-            self.typeof_intrinsic_call(inst, target, expr.op, expr.value,
-                                       expr.index)
+            self.typeof_intrinsic_call(inst, target, 'getitem', expr.value, expr.index)
         elif expr.op == 'getattr':
             constraint = GetAttrConstraint(target.name, attr=expr.attr,
                                            value=expr.value, loc=inst.loc,
@@ -817,13 +853,13 @@ class TypeInferer(object):
         constraint = CallConstraint(target.name, call.func.name, call.args,
                                     call.kws, call.vararg, loc=inst.loc)
         self.constraints.append(constraint)
-        self.usercalls.append((inst.value, call.args, call.kws, call.vararg))
+        self.calls.append((inst.value, constraint))
 
     def typeof_intrinsic_call(self, inst, target, func, *args):
         constraint = IntrinsicCallConstraint(target.name, func, args,
                                              kws=(), vararg=None, loc=inst.loc)
         self.constraints.append(constraint)
-        self.intrcalls.append((inst.value, constraint))
+        self.calls.append((inst.value, constraint))
 
 
 class NullDebug(object):

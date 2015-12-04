@@ -119,11 +119,6 @@ class BaseContext(object):
         if isinstance(value, types.DeferredType):
             return self.resolve_getattr(value.get(), attr)
 
-        if isinstance(value, types.Record):
-            ret = value.typeof(attr)
-            assert ret
-            return ret
-
         try:
             attrinfo = self.attributes[value]
         except KeyError:
@@ -152,7 +147,20 @@ class BaseContext(object):
             expectedty = self.attributes[target].resolve(target, attr)
             return templates.signature(types.void, target, expectedty)
 
+    def resolve_static_getitem(self, value, index):
+        assert not isinstance(index, types.Type), index
+        args = value, index
+        kws = ()
+        return self.resolve_function_type("static_getitem", args, kws)
+
+    def resolve_static_setitem(self, target, index, value):
+        assert not isinstance(index, types.Type), index
+        args = target, index, value
+        kws = ()
+        return self.resolve_function_type("static_setitem", args, kws)
+
     def resolve_setitem(self, target, index, value):
+        assert isinstance(index, types.Type), index
         args = target, index, value
         kws = ()
         return self.resolve_function_type("setitem", args, kws)
@@ -454,4 +462,3 @@ class Context(BaseContext):
         self.install(operatordecl.registry)
         self.install(randomdecl.registry)
         self.install(cffi_utils.registry)
-

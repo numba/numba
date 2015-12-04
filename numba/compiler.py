@@ -285,9 +285,12 @@ class Pipeline(object):
         self.return_type = return_type
         self.flags = flags
         self.locals = locals
+        # Results of various steps of the compilation pipeline
         self.bc = None
         self.func_attr = None
         self.lifted = None
+        self.typemap = None
+        self.calltypes = None
 
         self.status = _CompileStatus(
             can_fallback=self.flags.enable_pyobject,
@@ -462,18 +465,32 @@ class Pipeline(object):
             legalize_return_type(self.return_type, self.interp,
                                  self.targetctx)
 
+    def stage_generic_rewrites(self):
+        """
+        Perform any intermediate representation rewrites before type
+        inference.
+        """
+        assert self.interp
+        with self.fallback_context('Internal error in pre-inference rewriting '
+                                   'pass encountered during compilation of '
+                                   'function "%s"' % (self.func_attr.name,)):
+            rewrites.rewrite_registry.apply('before-inference',
+                                            self, self.interp)
+
     def stage_nopython_rewrites(self):
         """
-        Perform any intermediate representation rewrites.
+        Perform any intermediate representation rewrites after type
+        inference.
         """
         # Ensure we have an IR container (interp), and type information.
         assert self.interp
         assert isinstance(getattr(self, 'typemap', None), dict)
         assert isinstance(getattr(self, 'calltypes', None), dict)
-        with self.fallback_context('Internal error in rewriting pass '
-                                   'encountered during compilation of '
+        with self.fallback_context('Internal error in post-inference rewriting '
+                                   'pass encountered during compilation of '
                                    'function "%s"' % (self.func_attr.name,)):
-            rewrites.rewrite_registry.apply(self, self.interp.blocks)
+            rewrites.rewrite_registry.apply('after-inference',
+                                            self, self.interp)
 
     def stage_annotate_type(self):
         """
@@ -610,6 +627,8 @@ class Pipeline(object):
         if not self.flags.force_pyobject:
             pm.create_pipeline("nopython")
             pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
+            if not self.flags.no_rewrites:
+                pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
             if not self.flags.no_rewrites:

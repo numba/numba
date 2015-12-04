@@ -80,6 +80,12 @@ def _make_bytecode_table():
             ('STORE_MAP', 0),
         ]
 
+    if sys.version_info[:2] >= (3, 5):   # python 3.5+
+        version_specific += [
+            ('BINARY_MATRIX_MULTIPLY', 0),
+            ('INPLACE_MATRIX_MULTIPLY', 0),
+        ]
+
     bytecodes = [
         # opname, operandlen
         ('BINARY_ADD', 0),
