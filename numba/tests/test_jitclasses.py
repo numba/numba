@@ -114,8 +114,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         obj = Float2AndArray(1, 2, arr)
         self.assertEqual(obj._meminfo.refcount, 1)
         self.assertEqual(obj._meminfo.data, obj._dataptr)
-        self.assertEqual(obj._typ.class_type, Float2AndArray.class_type)
-
+        self.assertEqual(obj._numba_type_.class_type, Float2AndArray.class_type)
         # Use jit class instance in numba
         other = idenity(obj)
         self.assertEqual(obj._meminfo.refcount, 2)

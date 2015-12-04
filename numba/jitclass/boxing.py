@@ -6,7 +6,6 @@ from __future__ import print_function, absolute_import
 from numba import types, cgutils
 from numba.pythonapi import box, unbox, NativeValue
 from numba.runtime.nrt import MemInfo
-from numba.typing.typeof import typeof_impl
 from numba import njit
 from numba.six import exec_
 from llvmlite import ir
@@ -102,7 +101,7 @@ class Box(object):
     """
     A box for numba created jit-class instance
     """
-    __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_typ'
+    __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_numba_type_'
 
     def __new__(cls, meminfoptr, dataptr, typ):
         if cls is not Box:
@@ -113,12 +112,7 @@ class Box(object):
         self._meminfo = MemInfo(meminfoptr)
         self._meminfoptr = meminfoptr
         self._dataptr = dataptr
-        self._typ = typ
-
-
-@typeof_impl.register(Box)
-def _typeof_box(val, c):
-    return val._typ
+        self._numba_type_ = typ
 
 
 ###############################################################################
