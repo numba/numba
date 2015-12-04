@@ -122,20 +122,16 @@ logic, the problem can become a dependent typing problem if types are assigned
 conditionally depending on the value. (Very few languages implement dependent
 typing and those that does are mostly theorem provers.)
 
-User API
-~~~~~~~~
-
-
-Typing function using an OrderedDict
-------------------------------------
+Example: typing function using an OrderedDict
+---------------------------------------------
 
 .. code-block:: python
 
     spec = OrderedDict()
-    spec['x'] = x
-    spec['y'] = y
+    spec['x'] = numba.int32
+    spec['y'] = numba.float32
 
-    @jit(spec)
+    @jitclass(spec)
     class Vec(object):
         def __init__(self, x, y):
             self.x = x
@@ -145,7 +141,60 @@ Typing function using an OrderedDict
             self.x += dx
             self.y += dy
 
+Example: typing function using an list of 2-tuples
+--------------------------------------------------
+
+.. code-block:: python
+
+    spec = [('x', numba.int32),
+            ('y', numba.float32)]
+
+    @jitclass(spec)
+    class Vec(object):
+        ...
+
 Usage from the Interpreter
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-(todo: to the interpreter, jit-classes are like C-extension-type)
+When constructing a new instance of a jitclass, a "box" is created that wraps
+the underlying jitclass instance from numba.  Attributes and methods are
+accessible from the interpreter.  The actual implementation will be in numba
+compiled code.  Any Python object is converted to its native
+representation for consumption in numba.  Similarly, the returned value is
+converted to its Python representation.  As a result, there may be overhead
+in manipulating jitclass instances in the interpreter.
+
+Support for property, staticmethod and classmethod
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The use of ``property`` is accepted for getter and setter only.  Delter is not
+supported.
+
+The use of ``staticmethod`` is not supported.
+
+The use of ``classmethod`` is not supported.
+
+Supported targets
+~~~~~~~~~~~~~~~~~~
+
+Only the CPU target (including the parallel target) is supported.
+GPUs (e.g. CUDA and HSA) targets are supported via an immutable version of the
+jitclass instance, which will be described in a separate NBEP.
+
+
+Other properties
+~~~~~~~~~~~~~~~~
+
+Given:
+
+.. code-block:: python
+
+    spec = [('x', numba.int32),
+            ('y', numba.float32)]
+
+    @jitclass(spec)
+    class Vec(object):
+        ...
+
+* ``isinstance(Vec(1, 2), Vec)`` is True.
+* ``type(Vec(1, 2))`` may not be ``type(Vec)```.
