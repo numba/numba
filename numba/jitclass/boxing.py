@@ -68,6 +68,7 @@ def _generate_method(name, func):
 
 _cache_specialized_box = {}
 
+
 def _specialize_box(typ):
     """
     Create a subclass of Box that is specialized to the jitclass.

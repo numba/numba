@@ -1429,7 +1429,8 @@ class ClassType(Opaque):
 
     def __init__(self, class_def, struct, methods):
         self.class_def = class_def
-        name = "{0}.{1}#{2}".format(self.name_prefix, class_def, id(class_def))
+        name = "{0}.{1}#{2}".format(self.name_prefix, class_def.__name__,
+                                    id(class_def))
         super(ClassType, self).__init__(name)
         self.instance_type = self.instance_type_class(self, struct, methods)
 

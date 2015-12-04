@@ -11,6 +11,7 @@ from numba.targets import imputils
 from numba import cgutils
 from llvmlite import ir as llvmir
 from numba.six import exec_
+from . import boxing
 
 
 ##############################################################################
@@ -51,35 +52,41 @@ def ctor({args}):
 """
 
 
-class JitClassType(object):
-    def __init__(self, cls, class_type, init):
-        self.cls = cls
-        self.class_type = class_type
+class JitClassType(type):
+    def __new__(cls, name, bases, dct):
+        if len(bases) != 1:
+            raise TypeError("must have exactly one base class")
+        [base] = bases
+        assert 'class_type' in dct, 'missing "class_type" attr'
+        outcls = type.__new__(cls, name, bases, dct)
+        outcls._set_init()
+        return outcls
 
+    def _set_init(cls):
         # make ctor
+        init = cls.class_type.instance_type.methods['__init__']
         argspec = inspect.getargspec(init)
         assert not argspec.varargs, 'varargs not supported'
         assert not argspec.keywords, 'keywords not supported'
         assert not argspec.defaults, 'defaults not supported'
         args = ', '.join(argspec.args[1:])
-
         ctor_source = _ctor_template.format(args=args)
-        glbls = {"__numba_cls_": self}
+        glbls = {"__numba_cls_": cls}
         exec_(ctor_source, glbls)
         ctor = glbls['ctor']
+        cls._ctor = njit(ctor)
 
-        self._ctor = njit(ctor)
+    def __instancecheck__(cls, instance):
+        if isinstance(instance, boxing.Box):
+            return instance._numba_type_.class_type is cls.class_type
+        return False
 
-    def __call__(self, *args, **kwargs):
-        return self._ctor(*args, **kwargs)
-
-    def __repr__(self):
-        return "<numba.jitclass of {0}>".format(self.cls)
+    def __call__(cls, *args, **kwargs):
+        return cls._ctor(*args, **kwargs)
 
 
 ##############################################################################
 # Registration utils
-
 
 def register_class_type(cls, spec, class_ctor, builder):
     """
@@ -102,7 +109,7 @@ def register_class_type(cls, spec, class_ctor, builder):
                    if isinstance(v, pytypes.FunctionType))
 
     class_type = class_ctor(cls, spec, methods)
-    cls = JitClassType(cls, class_type, methods['__init__'])
+    cls = JitClassType(cls.__name__, (cls,), dict(class_type=class_type))
 
     jitmethods = {}
     for k, v in methods.items():

@@ -57,9 +57,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         return Float2AndArray
 
-    def test_jit_class_1(self):
-        Float2AndArray = self._make_Float2AndArray()
-
+    def _make_Vector2(self):
         spec = OrderedDict()
         spec['x'] = int32
         spec['y'] = int32
@@ -69,6 +67,12 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def __init__(self, x, y):
                 self.x = x
                 self.y = y
+
+        return Vector2
+
+    def test_jit_class_1(self):
+        Float2AndArray = self._make_Float2AndArray()
+        Vector2 = self._make_Vector2()
 
         @njit
         def bar(obj):
@@ -87,37 +91,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(a, 123 + 1 + 123 + 2)
         self.assertEqual(b, 3 + 4)
         self.assertPreciseEqual(c, inp)
-
-    def test_byval_struct(self):
-        # A JIT-Struct is a immutable copy
-        spec = OrderedDict()
-        spec['x'] = float32
-        spec['y'] = float32
-
-        @jitclass(spec, immutable=True)
-        class Vector(object):
-            def __init__(self, x, y):
-                self.x = x
-                self.y = y
-
-            def bad_method(self):
-                # Error due to immutability when used
-                self.x = 1
-
-            def good_method(self, y):
-                return Vector(self.x, self.y + y)
-
-        @njit
-        def foo():
-            vec = Vector(1, 2)
-            vec2 = vec.good_method(3)
-            return vec.x, vec.y, vec2.x, vec2.y
-
-        x1, y1, x2, y2 = foo()
-        self.assertEqual(x1, 1)
-        self.assertEqual(y1, 2)
-        self.assertEqual(x2, x1)
-        self.assertEqual(y2, y1 + 3)
 
     def test_jitclass_usage_from_python(self):
         Float2AndArray = self._make_Float2AndArray()
@@ -253,6 +226,46 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(cstruct.a, st.a)
         self.assertEqual(cstruct.b, st.b)
         self.assertEqual(cstruct.c, st.c)
+
+    def test_isinstance(self):
+        Vector2 = self._make_Vector2()
+        vec = Vector2(1, 2)
+        self.assertIsInstance(vec, Vector2)
+
+
+class TestImmutableJitClass(TestCase, MemoryLeakMixin):
+
+    def test_byval_struct(self):
+        # A JIT-Struct is a immutable copy
+        spec = OrderedDict()
+        spec['x'] = float32
+        spec['y'] = float32
+
+        @jitclass(spec, immutable=True)
+        class Vector(object):
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+            def bad_method(self):
+                # Error due to immutability when used
+                self.x = 1
+
+            def good_method(self, y):
+                return Vector(self.x, self.y + y)
+
+        @njit
+        def foo():
+            vec = Vector(1, 2)
+            vec2 = vec.good_method(3)
+            return vec.x, vec.y, vec2.x, vec2.y
+
+        x1, y1, x2, y2 = foo()
+        self.assertEqual(x1, 1)
+        self.assertEqual(y1, 2)
+        self.assertEqual(x2, x1)
+        self.assertEqual(y2, y1 + 3)
+
 
 if __name__ == '__main__':
     unittest.main()
