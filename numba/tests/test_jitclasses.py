@@ -253,6 +253,20 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         obj = Test(123)
         self.assertEqual(obj.what(), 123)
 
+    def test_globals(self):
+
+        class Mine(object):
+            constant = 123
+
+            def __init__(self):
+                pass
+
+        with self.assertRaises(TypeError) as raises:
+            jitclass(())(Mine)
+
+        self.assertEqual(str(raises.exception),
+                         "class members are not yet supported: constant")
+
 
 class TestImmutableJitClass(TestCase, MemoryLeakMixin):
 

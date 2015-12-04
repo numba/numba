@@ -115,9 +115,17 @@ def register_class_type(cls, spec, class_ctor, builder):
 
     methods = dict((k, v) for k, v in clsdct.items()
                    if isinstance(v, pytypes.FunctionType))
+    others = dict((k, v) for k, v in clsdct.items() if k not in methods)
+    docstring = others.pop('__doc__', "")
+    _drop_ignored_attrs(others)
+    if others:
+        msg = "class members are not yet supported: {0}"
+        members = ', '.join(others.keys())
+        raise TypeError(msg.format(members))
 
     class_type = class_ctor(cls, spec, methods)
-    cls = JitClassType(cls.__name__, (cls,), dict(class_type=class_type))
+    cls = JitClassType(cls.__name__, (cls,), dict(class_type=class_type,
+                                                  __doc__=docstring))
 
     jitmethods = {}
     for k, v in methods.items():
@@ -133,6 +141,21 @@ def register_class_type(cls, spec, class_ctor, builder):
 
     return cls
 
+
+def _drop_ignored_attrs(dct):
+    # ignore anything defined by object
+    drop = set(['__weakref__',
+                '__module__',
+                '__dict__'])
+    for k, v in dct.items():
+        if isinstance(v, (pytypes.BuiltinFunctionType,
+                          pytypes.BuiltinMethodType)):
+            drop.add(k)
+        elif getattr(v, '__objclass__', None) is object:
+            drop.add(k)
+
+    for k in drop:
+        del dct[k]
 
 class ClassBuilder(object):
     """
