@@ -34,7 +34,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 ('y', float32)]
         self._check_spec(spec)
 
-    def test_jit_class_1(self):
+    def _make_Float2AndArray(self):
         spec = OrderedDict()
         spec['x'] = float32
         spec['y'] = float32
@@ -50,6 +50,12 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def add(self, val):
                 self.x += val
                 self.y += val
+                return val
+
+        return Float2AndArray
+
+    def test_jit_class_1(self):
+        Float2AndArray = self._make_Float2AndArray()
 
         spec = OrderedDict()
         spec['x'] = int32
@@ -111,22 +117,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(y2, y1 + 3)
 
     def test_jitclass_usage_from_python(self):
-        spec = OrderedDict()
-        spec['x'] = float32
-        spec['y'] = float32
-        spec['arr'] = float32[:]
-
-        @jitclass(spec)
-        class Float2AndArray(object):
-            def __init__(self, x, y, arr):
-                self.x = x
-                self.y = y
-                self.arr = arr
-
-            def add(self, val):
-                self.x += val
-                self.y += val
-                return val
+        Float2AndArray = self._make_Float2AndArray()
 
         @njit
         def idenity(obj):
