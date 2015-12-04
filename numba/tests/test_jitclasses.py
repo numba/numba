@@ -240,6 +240,19 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(str(raises.exception),
                          "cannot subclass from a jitclass")
 
+    def test_base_class(self):
+        class Base(object):
+            def what(self):
+                return self.attr
+
+        @jitclass([('attr', int32)])
+        class Test(Base):
+            def __init__(self, attr):
+                self.attr = attr
+
+        obj = Test(123)
+        self.assertEqual(obj.what(), 123)
+
 
 class TestImmutableJitClass(TestCase, MemoryLeakMixin):
 
