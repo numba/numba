@@ -1,9 +1,9 @@
 ===================
-NBEP 2: JIT Classes
+NBEP 3: JIT Classes
 ===================
 
 :Author: Siu Kwan Lam
-:Date: Sept 2015
+:Date: Dec 2015
 :Status: Draft
 
 Introduction
@@ -122,64 +122,20 @@ logic, the problem can become a dependent typing problem if types are assigned
 conditionally depending on the value. (Very few languages implement dependent
 typing and those that does are mostly theorem provers.)
 
-Alternatively, we can let user provide the typing logic.  For example, user
-can supply a function that runs in the type domain::
-
-    def get_type(x, y):
-        dct = OrderedDict()
-        if x == int32:
-            dct['x'] = float32
-        else:
-            raise TypeError
-        dct['y'] = y
-        return dct
-
-    class Foo:
-        def __init__(self, x, y):
-            self.a = x
-            self.b = y
-
-The ``get_type`` takes the same arguments as the ``__init__`` of Foo but in
-the type domain (e.g. ``get_type(typeof(x), typeof(y)``).  In the function,
-the type of each attributes is decided.  The ``get_type`` function requires
-``x`` to be of ``int32`` and uses ``float32`` for attribute ``a``.  Attribute
-``b`` can be of any type and it is the same as the type of ``y``.  This scheme
-will support generic classes without the need of solving a difficult type
-inference problem.
-
-
-Immutable class: jit-struct
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Jit-classes are flexible and they can be too flexible.  The flexibility
-requires runtime assistance that is not available or inefficient in more
-some hardware, such as the GPGPU targets.  One way to limit the flexibility
-is to enforce immutability. We call this a *jit-struct*.  Python has immutable
-containers such as the tuple.  A jit-struct will behave like a jit-class with
-a restriction that disallow mutating any attributes after instantiation.
-In other words, mutation of attributes is only allowed inside ``__init__``.
-
-This can be easily done by changing the type of ``self`` argument passed to
-the ``__init__``.  A jit-struct instance is a pass-by-value structure with
-the exception during instantiation that a pass-by-reference structure is passed
-to ``__init__``.
-
 User API
 ~~~~~~~~
 
 
-Typing function as external function
+Typing function using an OrderedDict
 ------------------------------------
 
 .. code-block:: python
 
-    def spec(x, y):
-        dct = OrderedDict()
-        dct['x'] = x
-        dct['y'] = y
-        return dct
+    spec = OrderedDict()
+    spec['x'] = x
+    spec['y'] = y
 
-    @jit(spec, immutable=False)
+    @jit(spec)
     class Vec(object):
         def __init__(self, x, y):
             self.x = x
@@ -188,33 +144,8 @@ Typing function as external function
         def add(self, dx, dy):
             self.x += dx
             self.y += dy
-
-Typing function as static method
---------------------------------
-
-.. code-block:: python
-
-    @jit(immutable=False)
-    class Vec(object):
-        @staticmethod
-        def __type_inference__(x, y):
-            dct = OrderedDict()
-            dct['x'] = x
-            dct['y'] = y
-            return dct
-
-        def __init__(self, x, y):
-            self.x = x
-            self.y = y
-
-        def add(self, dx, dy):
-            self.x += dx
-            self.y += dy
-
-
 
 Usage from the Interpreter
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 (todo: to the interpreter, jit-classes are like C-extension-type)
-
