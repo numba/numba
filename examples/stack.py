@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
-from collections import OrderedDict
+
 import gc
+from numba.utils import OrderedDict
 from numba import njit
 from numba.jitclass import jitclass
 from numba import deferred_type, intp, optional

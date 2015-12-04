@@ -1,5 +1,5 @@
 from __future__ import print_function, absolute_import
-from collections import OrderedDict
+from numba.utils import OrderedDict
 import numpy as np
 from numba import njit
 from numba.jitclass import jitclass

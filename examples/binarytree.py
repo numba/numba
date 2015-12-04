@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import
 import random
 import gc
-from collections import OrderedDict
+from numba.utils import OrderedDict
 from numba import njit
 from numba.jitclass import jitclass
 from numba import int32, deferred_type, optional

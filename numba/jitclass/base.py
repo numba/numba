@@ -1,7 +1,8 @@
 from __future__ import absolute_import, print_function
 import types as pytypes
 import inspect
-from collections import OrderedDict, Sequence
+from numba.utils import OrderedDict
+from collections import Sequence
 from numba import types
 from numba.targets.registry import CPUTarget
 from numba import njit
