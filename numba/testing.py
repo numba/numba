@@ -2,8 +2,10 @@ from __future__ import print_function, division, absolute_import
 
 import sys
 import os
+import warnings
+import time
+import gc
 import functools
-import argparse
 import collections
 import contextlib
 import cProfile
@@ -32,8 +34,9 @@ class TestLister(object):
         self._test_list = _flatten_suite(test)
         for t in self._test_list:
             print(t.id())
-        print('%d tests found'%len(self._test_list))
+        print('%d tests found' % len(self._test_list))
         return result
+
 
 class SerialSuite(unittest.TestSuite):
     """A simple marker to make sure tests in this suite are run serially.
@@ -52,13 +55,14 @@ class SerialSuite(unittest.TestSuite):
             test._numba_parallel_test_ = True
             super(SerialSuite, self).addTest(test)
 
+
 def load_testsuite(loader, dir):
     """Find tests in 'dir'."""
 
     suite = unittest.TestSuite()
-    files=[]
+    files = []
     for f in os.listdir(dir):
-        path=join(dir, f)
+        path = join(dir, f)
         if os.path.isfile(path) and fnmatch(f, 'test_*.py'):
             files.append(f)
         elif os.path.isfile(join(path, '__init__.py')):
@@ -71,9 +75,10 @@ def load_testsuite(loader, dir):
         suite.addTests(loader.loadTestsFromName(f))
     return suite
 
+
 class TestLoader(loader.TestLoader):
 
-    _top_level_dir=dirname(dirname(__file__))
+    _top_level_dir = dirname(dirname(__file__))
 
     def discover(self, start_dir, pattern='test*.py', top_level_dir=None):
         """Upstream discover doesn't consider top-level 'load_tests' functions.
@@ -89,7 +94,7 @@ class TestLoader(loader.TestLoader):
                 if load_tests:
                     return load_tests(self, [], pattern)
             except case.SkipTest as e:
-                return _make_skipped_test(name, e, self.suiteClass)
+                return loader._make_skipped_test(name, e, self.suiteClass)
             else:
                 return super(TestLoader, self).discover(start_dir, pattern, top)
         else:
@@ -102,7 +107,6 @@ class TestLoader(loader.TestLoader):
             except:
                 pass
             return super(TestLoader, self).discover(start_dir, pattern, top)
-
 
 
 # "unittest.main" is really the TestProgram class!
@@ -308,12 +312,13 @@ class RefleakTestResult(runner.TextTestResult):
         # These checkers return False on success, True on failure
         def check_rc_deltas(deltas):
             return any(deltas)
+
         def check_alloc_deltas(deltas):
             # At least 1/3rd of 0s
             if 3 * deltas.count(0) < len(deltas):
                 return True
             # Nothing else than 1s, 0s and -1s
-            if not set(deltas) <= set((1,0,-1)):
+            if not set(deltas) <= set((1, 0, -1)):
                 return True
             return False
 
@@ -352,6 +357,7 @@ def _flatten_suite(test):
         return tests
     else:
         return [test]
+
 
 class ParallelTestResult(runner.TextTestResult):
     """
@@ -474,6 +480,7 @@ def _split_nonparallel_tests(test):
     else:
         ptests = [test]
     return ptests, stests
+
 
 class ParallelTestRunner(runner.TextTestRunner):
     """
