@@ -128,6 +128,7 @@ NRT_MemInfo *NRT_MemInfo_alloc_safe(size_t size);
 /*
  * Similar to NRT_MemInfo_alloc_safe but with a custom dtor.
  */
+VISIBILITY_HIDDEN
 NRT_MemInfo* NRT_MemInfo_alloc_dtor_safe(size_t size, NRT_dtor_function dtor);
 
 /*
