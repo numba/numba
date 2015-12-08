@@ -11,7 +11,7 @@ from . import arrayobj
 registry = Registry()
 
 @registry.register
-@implement('ffi.from_buffer', types.Kind(types.Array))
+@implement('ffi.from_buffer', types.Array)
 def from_buffer(context, builder, sig, args):
     assert len(sig.args) == 1
     assert len(args) == 1

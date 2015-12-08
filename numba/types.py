@@ -174,18 +174,6 @@ class Const(Dummy):
         return type(self.value), self.value
 
 
-class Kind(Type):
-    def __init__(self, of):
-        if not isinstance(of, type) or not issubclass(of, Type):
-            raise TypeError("expected a Type subclass, got %r" % (of,))
-        self.of = of
-        super(Kind, self).__init__("kind(%s)" % of)
-
-    @property
-    def key(self):
-        return self.of
-
-
 class VarArg(Type):
     """
     Special type representing a variable number of arguments at the

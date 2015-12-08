@@ -404,7 +404,7 @@ def register_unary_ufunc_kernel(ufunc, kernel):
     _any = types.Any
 
     # (array or scalar, out=array)
-    register(implement(ufunc, _any, types.Kind(types.Array))(unary_ufunc))
+    register(implement(ufunc, _any, types.Array)(unary_ufunc))
     # (array or scalar)
     register(implement(ufunc, _any)(unary_ufunc_no_explicit_output))
 
@@ -422,7 +422,7 @@ def register_binary_ufunc_kernel(ufunc, kernel):
     _any = types.Any
 
     # (array or scalar, array o scalar, out=array)
-    register(implement(ufunc, _any, _any, types.Kind(types.Array))(binary_ufunc))
+    register(implement(ufunc, _any, _any, types.Array)(binary_ufunc))
     # (scalar, scalar)
     register(implement(ufunc, _any, _any)(binary_ufunc_no_explicit_output))
 
@@ -433,7 +433,7 @@ def register_unary_operator_kernel(operator, kernel):
     def lower_unary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
-    _arr_kind = types.Kind(types.Array)
+    _arr_kind = types.Array
     register(implement(operator, _arr_kind)(lower_unary_operator))
 
 
@@ -452,7 +452,7 @@ def register_binary_operator_kernel(operator, kernel):
                                   explicit_output=True)
 
     _any = types.Any
-    _arr_kind = types.Kind(types.Array)
+    _arr_kind = types.Array
     formal_sigs = [(_arr_kind, _arr_kind), (_any, _arr_kind), (_arr_kind, _any)]
     for sig in formal_sigs:
         register(implement(operator, *sig)(lower_binary_operator))
@@ -474,7 +474,7 @@ for ufunc in ufunc_db.get_ufuncs():
 
 
 @register
-@implement('+', types.Kind(types.Array))
+@implement('+', types.Array)
 def array_positive_impl(context, builder, sig, args):
     '''Lowering function for +(array) expressions.  Defined here
     (numba.targets.npyimpl) since the remaining array-operator

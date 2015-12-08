@@ -202,8 +202,8 @@ def random_impl(context, builder, sig, args):
 
 
 @register
-@implement("random.gauss", types.Kind(types.Float), types.Kind(types.Float))
-@implement("random.normalvariate", types.Kind(types.Float), types.Kind(types.Float))
+@implement("random.gauss", types.Float, types.Float)
+@implement("random.normalvariate", types.Float, types.Float)
 def gauss_impl(context, builder, sig, args):
     res = _gauss_impl(context, builder, sig, args, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -213,8 +213,8 @@ def gauss_impl(context, builder, sig, args):
 @implement("np.random.randn")
 @implement("np.random.standard_normal")
 @implement("np.random.normal")
-@implement("np.random.normal", types.Kind(types.Float))
-@implement("np.random.normal", types.Kind(types.Float), types.Kind(types.Float))
+@implement("np.random.normal", types.Float)
+@implement("np.random.normal", types.Float, types.Float)
 def np_gauss_impl(context, builder, sig, args):
     sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
     res = _gauss_impl(context, builder, sig, args, "np")
@@ -275,7 +275,7 @@ def _gauss_impl(context, builder, sig, args, state):
                         builder.fmul(sigma, builder.load(ret)))
 
 @register
-@implement("random.getrandbits", types.Kind(types.Integer))
+@implement("random.getrandbits", types.Integer)
 def getrandbits_impl(context, builder, sig, args):
     nbits, = args
     too_large = builder.icmp_unsigned(">=", nbits, const_int(65))
@@ -334,7 +334,7 @@ def _randrange_impl(context, builder, start, stop, step, state):
 
 
 @register
-@implement("random.randrange", types.Kind(types.Integer))
+@implement("random.randrange", types.Integer)
 def randrange_impl_1(context, builder, sig, args):
     stop, = args
     start = ir.Constant(stop.type, 0)
@@ -343,7 +343,7 @@ def randrange_impl_1(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("random.randrange", types.Kind(types.Integer), types.Kind(types.Integer))
+@implement("random.randrange", types.Integer, types.Integer)
 def randrange_impl_2(context, builder, sig, args):
     start, stop = args
     step = ir.Constant(start.type, 1)
@@ -351,15 +351,15 @@ def randrange_impl_2(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("random.randrange", types.Kind(types.Integer),
-           types.Kind(types.Integer), types.Kind(types.Integer))
+@implement("random.randrange", types.Integer,
+           types.Integer, types.Integer)
 def randrange_impl_3(context, builder, sig, args):
     start, stop, step = args
     res = _randrange_impl(context, builder, start, stop, step, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("random.randint", types.Kind(types.Integer), types.Kind(types.Integer))
+@implement("random.randint", types.Integer, types.Integer)
 def randint_impl_1(context, builder, sig, args):
     start, stop = args
     step = ir.Constant(start.type, 1)
@@ -368,7 +368,7 @@ def randint_impl_1(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("np.random.randint", types.Kind(types.Integer))
+@implement("np.random.randint", types.Integer)
 def randint_impl_2(context, builder, sig, args):
     stop, = args
     start = ir.Constant(stop.type, 0)
@@ -377,7 +377,7 @@ def randint_impl_2(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("np.random.randint", types.Kind(types.Integer), types.Kind(types.Integer))
+@implement("np.random.randint", types.Integer, types.Integer)
 def randrange_impl_2(context, builder, sig, args):
     start, stop = args
     step = ir.Constant(start.type, 1)
@@ -385,13 +385,13 @@ def randrange_impl_2(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("random.uniform", types.Kind(types.Float), types.Kind(types.Float))
+@implement("random.uniform", types.Float, types.Float)
 def uniform_impl(context, builder, sig, args):
     res = uniform_impl(context, builder, sig, args, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("np.random.uniform", types.Kind(types.Float), types.Kind(types.Float))
+@implement("np.random.uniform", types.Float, types.Float)
 def uniform_impl(context, builder, sig, args):
     res = uniform_impl(context, builder, sig, args, "np")
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -404,7 +404,7 @@ def uniform_impl(context, builder, sig, args, state):
     return builder.fadd(a, builder.fmul(width, r))
 
 @register
-@implement("random.triangular", types.Kind(types.Float), types.Kind(types.Float))
+@implement("random.triangular", types.Float, types.Float)
 def triangular_impl_2(context, builder, sig, args):
     fltty = sig.return_type
     low, high = args
@@ -425,16 +425,16 @@ def triangular_impl_2(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("random.triangular", types.Kind(types.Float),
-           types.Kind(types.Float), types.Kind(types.Float))
+@implement("random.triangular", types.Float,
+           types.Float, types.Float)
 def triangular_impl_3(context, builder, sig, args):
     low, high, mode = args
     res = _triangular_impl_3(context, builder, sig, low, high, mode, "py")
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("np.random.triangular", types.Kind(types.Float),
-           types.Kind(types.Float), types.Kind(types.Float))
+@implement("np.random.triangular", types.Float,
+           types.Float, types.Float)
 def triangular_impl_3(context, builder, sig, args):
     low, mode, high = args
     res = _triangular_impl_3(context, builder, sig, low, high, mode, "np")
@@ -463,15 +463,15 @@ def _triangular_impl_3(context, builder, sig, low, high, mode, state):
 
 @register
 @implement("random.gammavariate",
-           types.Kind(types.Float), types.Kind(types.Float))
+           types.Float, types.Float)
 def gammavariate_impl(context, builder, sig, args):
     res = _gammavariate_impl(context, builder, sig, args, random.random)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("np.random.standard_gamma", types.Kind(types.Float))
-@implement("np.random.gamma", types.Kind(types.Float))
-@implement("np.random.gamma", types.Kind(types.Float), types.Kind(types.Float))
+@implement("np.random.standard_gamma", types.Float)
+@implement("np.random.gamma", types.Float)
+@implement("np.random.gamma", types.Float, types.Float)
 def gammavariate_impl(context, builder, sig, args):
     sig, args = _fill_defaults(context, builder, sig, args, (None, 1.0))
     res = _gammavariate_impl(context, builder, sig, args, np.random.random)
@@ -548,7 +548,7 @@ def _gammavariate_impl(context, builder, sig, args, _random):
 
 @register
 @implement("random.betavariate",
-           types.Kind(types.Float), types.Kind(types.Float))
+           types.Float, types.Float)
 def betavariate_impl(context, builder, sig, args):
     res = _betavariate_impl(context, builder, sig, args,
                              random.gammavariate)
@@ -556,7 +556,7 @@ def betavariate_impl(context, builder, sig, args):
 
 @register
 @implement("np.random.beta",
-           types.Kind(types.Float), types.Kind(types.Float))
+           types.Float, types.Float)
 def betavariate_impl(context, builder, sig, args):
     res = _betavariate_impl(context, builder, sig, args,
                              np.random.gamma)
@@ -581,7 +581,7 @@ def _betavariate_impl(context, builder, sig, args, gamma):
 
 @register
 @implement("random.expovariate",
-           types.Kind(types.Float))
+           types.Float)
 def expovariate_impl(context, builder, sig, args):
     _random = random.random
     _log = math.log
@@ -601,7 +601,7 @@ def expovariate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("np.random.exponential", types.Kind(types.Float))
+@implement("np.random.exponential", types.Float)
 def exponential_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -629,8 +629,8 @@ def exponential_impl(context, builder, sig, args):
 
 @register
 @implement("np.random.lognormal")
-@implement("np.random.lognormal", types.Kind(types.Float))
-@implement("np.random.lognormal", types.Kind(types.Float), types.Kind(types.Float))
+@implement("np.random.lognormal", types.Float)
+@implement("np.random.lognormal", types.Float, types.Float)
 def np_lognormal_impl(context, builder, sig, args):
     sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
     res = _lognormvariate_impl(context, builder, sig, args,
@@ -639,7 +639,7 @@ def np_lognormal_impl(context, builder, sig, args):
 
 @register
 @implement("random.lognormvariate",
-           types.Kind(types.Float), types.Kind(types.Float))
+           types.Float, types.Float)
 def lognormvariate_impl(context, builder, sig, args):
     res = _lognormvariate_impl(context, builder, sig, args, random.gauss)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -655,7 +655,7 @@ def _lognormvariate_impl(context, builder, sig, args, _gauss):
 
 
 @register
-@implement("random.paretovariate", types.Kind(types.Float))
+@implement("random.paretovariate", types.Float)
 def paretovariate_impl(context, builder, sig, args):
     _random = random.random
 
@@ -670,7 +670,7 @@ def paretovariate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("np.random.pareto", types.Kind(types.Float))
+@implement("np.random.pareto", types.Float)
 def pareto_impl(context, builder, sig, args):
     _random = np.random.random
 
@@ -684,7 +684,7 @@ def pareto_impl(context, builder, sig, args):
 
 @register
 @implement("random.weibullvariate",
-           types.Kind(types.Float), types.Kind(types.Float))
+           types.Float, types.Float)
 def weibullvariate_impl(context, builder, sig, args):
     _random = random.random
     _log = math.log
@@ -700,7 +700,7 @@ def weibullvariate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("np.random.weibull", types.Kind(types.Float))
+@implement("np.random.weibull", types.Float)
 def weibull_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -715,14 +715,14 @@ def weibull_impl(context, builder, sig, args):
 
 @register
 @implement("random.vonmisesvariate",
-           types.Kind(types.Float), types.Kind(types.Float))
+           types.Float, types.Float)
 def vonmisesvariate_impl(context, builder, sig, args):
     res = _vonmisesvariate_impl(context, builder, sig, args, random.random)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
 @implement("np.random.vonmises",
-           types.Kind(types.Float), types.Kind(types.Float))
+           types.Float, types.Float)
 def vonmisesvariate_impl(context, builder, sig, args):
     res = _vonmisesvariate_impl(context, builder, sig, args, np.random.random)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -780,7 +780,7 @@ def _vonmisesvariate_impl(context, builder, sig, args, _random):
 
 
 @register
-@implement("np.random.binomial", types.Kind(types.Integer), types.Kind(types.Float))
+@implement("np.random.binomial", types.Integer, types.Float)
 def binomial_impl(context, builder, sig, args):
     intty = sig.return_type
     _random = np.random.random
@@ -818,7 +818,7 @@ def binomial_impl(context, builder, sig, args):
 
 
 @register
-@implement("np.random.chisquare", types.Kind(types.Float))
+@implement("np.random.chisquare", types.Float)
 def chisquare_impl(context, builder, sig, args):
 
     def chisquare_impl(df):
@@ -829,7 +829,7 @@ def chisquare_impl(context, builder, sig, args):
 
 
 @register
-@implement("np.random.f", types.Kind(types.Float), types.Kind(types.Float))
+@implement("np.random.f", types.Float, types.Float)
 def f_impl(context, builder, sig, args):
 
     def f_impl(num, denom):
@@ -841,7 +841,7 @@ def f_impl(context, builder, sig, args):
 
 
 @register
-@implement("np.random.geometric", types.Kind(types.Float))
+@implement("np.random.geometric", types.Float)
 def geometric_impl(context, builder, sig, args):
     _random = np.random.random
     intty = sig.return_type
@@ -868,7 +868,7 @@ def geometric_impl(context, builder, sig, args):
 
 
 @register
-@implement("np.random.gumbel", types.Kind(types.Float), types.Kind(types.Float))
+@implement("np.random.gumbel", types.Float, types.Float)
 def gumbel_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -882,8 +882,8 @@ def gumbel_impl(context, builder, sig, args):
 
 
 @register
-@implement("np.random.hypergeometric", types.Kind(types.Integer),
-           types.Kind(types.Integer), types.Kind(types.Integer))
+@implement("np.random.hypergeometric", types.Integer,
+           types.Integer, types.Integer)
 def hypergeometric_impl(context, builder, sig, args):
     _random = np.random.random
     _floor = math.floor
@@ -910,8 +910,8 @@ def hypergeometric_impl(context, builder, sig, args):
 
 @register
 @implement("np.random.laplace")
-@implement("np.random.laplace", types.Kind(types.Float))
-@implement("np.random.laplace", types.Kind(types.Float), types.Kind(types.Float))
+@implement("np.random.laplace", types.Float)
+@implement("np.random.laplace", types.Float, types.Float)
 def laplace_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -930,8 +930,8 @@ def laplace_impl(context, builder, sig, args):
 
 @register
 @implement("np.random.logistic")
-@implement("np.random.logistic", types.Kind(types.Float))
-@implement("np.random.logistic", types.Kind(types.Float), types.Kind(types.Float))
+@implement("np.random.logistic", types.Float)
+@implement("np.random.logistic", types.Float, types.Float)
 def logistic_impl(context, builder, sig, args):
     _random = np.random.random
     _log = math.log
@@ -945,7 +945,7 @@ def logistic_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("np.random.logseries", types.Kind(types.Float))
+@implement("np.random.logseries", types.Float)
 def logseries_impl(context, builder, sig, args):
     intty = sig.return_type
     _random = np.random.random
@@ -977,7 +977,7 @@ def logseries_impl(context, builder, sig, args):
 
 
 @register
-@implement("np.random.negative_binomial", types.int64, types.Kind(types.Float))
+@implement("np.random.negative_binomial", types.int64, types.Float)
 def negative_binomial_impl(context, builder, sig, args):
     _gamma = np.random.gamma
     _poisson = np.random.poisson
@@ -996,7 +996,7 @@ def negative_binomial_impl(context, builder, sig, args):
 
 @register
 @implement("np.random.poisson")
-@implement("np.random.poisson", types.Kind(types.Float))
+@implement("np.random.poisson", types.Float)
 def poisson_impl(context, builder, sig, args):
     state_ptr = get_np_state_ptr(context, builder)
 
@@ -1058,7 +1058,7 @@ def poisson_impl(context, builder, sig, args):
 
 
 @register
-@implement("np.random.power", types.Kind(types.Float))
+@implement("np.random.power", types.Float)
 def power_impl(context, builder, sig, args):
 
     def power_impl(a):
@@ -1073,7 +1073,7 @@ def power_impl(context, builder, sig, args):
 
 @register
 @implement("np.random.rayleigh")
-@implement("np.random.rayleigh", types.Kind(types.Float))
+@implement("np.random.rayleigh", types.Float)
 def rayleigh_impl(context, builder, sig, args):
     _random = np.random.random
 
@@ -1100,7 +1100,7 @@ def cauchy_impl(context, builder, sig, args):
 
 
 @register
-@implement("np.random.standard_t", types.Kind(types.Float))
+@implement("np.random.standard_t", types.Float)
 def standard_t_impl(context, builder, sig, args):
 
     def standard_t_impl(df):
@@ -1114,7 +1114,7 @@ def standard_t_impl(context, builder, sig, args):
 
 
 @register
-@implement("np.random.wald", types.Kind(types.Float), types.Kind(types.Float))
+@implement("np.random.wald", types.Float, types.Float)
 def wald_impl(context, builder, sig, args):
 
     def wald_impl(mean, scale):
@@ -1137,7 +1137,7 @@ def wald_impl(context, builder, sig, args):
 
 
 @register
-@implement("np.random.zipf", types.Kind(types.Float))
+@implement("np.random.zipf", types.Float)
 def zipf_impl(context, builder, sig, args):
     _random = np.random.random
     intty = sig.return_type
@@ -1160,13 +1160,13 @@ def zipf_impl(context, builder, sig, args):
 
 
 @register
-@implement("random.shuffle", types.Kind(types.Buffer))
+@implement("random.shuffle", types.Buffer)
 def shuffle_impl(context, builder, sig, args):
     res = _shuffle_impl(context, builder, sig, args, random.randrange)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement("np.random.shuffle", types.Kind(types.Buffer))
+@implement("np.random.shuffle", types.Buffer)
 def shuffle_impl(context, builder, sig, args):
     res = _shuffle_impl(context, builder, sig, args, np.random.randint)
     return impl_ret_untracked(context, builder, sig.return_type, res)

@@ -9,7 +9,7 @@ from numba.targets.imputils import (
 
 
 @builtin
-@implement('getiter', types.Kind(types.IteratorType))
+@implement('getiter', types.IteratorType)
 def iterator_getiter(context, builder, sig, args):
     [it] = args
     return impl_ret_borrowed(context, builder, sig.return_type, it)
@@ -26,8 +26,8 @@ def make_enumerate_cls(enum_type):
 
 
 @builtin
-@implement(enumerate, types.Kind(types.IterableType))
-@implement(enumerate, types.Kind(types.IterableType), types.Kind(types.Integer))
+@implement(enumerate, types.IterableType)
+@implement(enumerate, types.IterableType, types.Integer)
 def make_enumerate_object(context, builder, sig, args):
     assert len(args) == 1 or len(args) == 2 # enumerate(it) or enumerate(it, start)
     srcty = sig.args[0]
@@ -54,7 +54,7 @@ def make_enumerate_object(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement('iternext', types.Kind(types.EnumerateType))
+@implement('iternext', types.EnumerateType)
 @iternext_impl
 def iternext_enumerate(context, builder, sig, args, result):
     [enumty] = sig.args
@@ -104,7 +104,7 @@ def make_zip_object(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement('iternext', types.Kind(types.ZipType))
+@implement('iternext', types.ZipType)
 @iternext_impl
 def iternext_zip(context, builder, sig, args, result):
     [zip_type] = sig.args
@@ -135,7 +135,7 @@ def iternext_zip(context, builder, sig, args, result):
 # generator implementation
 
 @builtin
-@implement('iternext', types.Kind(types.Generator))
+@implement('iternext', types.Generator)
 @iternext_impl
 def iternext_zip(context, builder, sig, args, result):
     genty, = sig.args
