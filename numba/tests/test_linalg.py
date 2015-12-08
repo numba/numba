@@ -29,16 +29,16 @@ class TestProduct(TestCase):
     dtypes = (np.float64, np.float32, np.complex128, np.complex64)
 
     def sample_vector(self, n, dtype):
+        # Be careful to generate only exactly representable float values,
+        # to avoid rounding discrepancies between Numpy and Numba
+        base = np.arange(n)
         if issubclass(dtype, np.complexfloating):
-            return np.linspace(-1j, 5 + 2j, n).astype(dtype)
+            return (base * (1 - 0.5j) + 2j).astype(dtype)
         else:
-            return np.linspace(-1, 5, n).astype(dtype)
+            return (base * 0.5 - 1).astype(dtype)
 
     def sample_matrix(self, m, n, dtype):
-        if issubclass(dtype, np.complexfloating):
-            return np.linspace(-1j, 5 + 2j, m * n).reshape((m, n)).astype(dtype)
-        else:
-            return np.linspace(-1, 5, m * n).reshape((m, n)).astype(dtype)
+        return self.sample_vector(m * n, dtype).reshape((m, n))
 
     def check_func(self, pyfunc, cfunc, args):
         expected = pyfunc(*args)
@@ -154,7 +154,6 @@ class TestProduct(TestCase):
 
     @needs_blas
     def check_dot_mm(self, pyfunc2, pyfunc3, func_name):
-        m, n, k = 2, 3, 4
 
         def samples(m, n, k):
             for order_a, order_b in product('CF', 'CF'):
@@ -167,18 +166,28 @@ class TestProduct(TestCase):
                 yield a, b
 
         cfunc2 = jit(nopython=True)(pyfunc2)
-        for a, b in samples(m, n, k):
-            self.check_func(pyfunc2, cfunc2, (a, b))
-            self.check_func(pyfunc2, cfunc2, (b.T, a.T))
         if pyfunc3 is not None:
             cfunc3 = jit(nopython=True)(pyfunc3)
+
+        # Test generic matrix * matrix as well as "degenerate" cases
+        # where one of the outer dimensions is 1 (i.e. really represents
+        # a vector, which may select a different implementation)
+        for m, n, k in [(2, 3, 4),  # Generic matrix * matrix
+                        (1, 3, 4),  # 2d vector * matrix
+                        (1, 1, 4),  # 2d vector * 2d vector
+                        ]:
             for a, b in samples(m, n, k):
-                out = np.empty((m, n), dtype=a.dtype)
-                self.check_func_out(pyfunc3, cfunc3, (a, b), out)
-                out = np.empty((n, m), dtype=a.dtype)
-                self.check_func_out(pyfunc3, cfunc3, (b.T, a.T), out)
+                self.check_func(pyfunc2, cfunc2, (a, b))
+                self.check_func(pyfunc2, cfunc2, (b.T, a.T))
+            if pyfunc3 is not None:
+                for a, b in samples(m, n, k):
+                    out = np.empty((m, n), dtype=a.dtype)
+                    self.check_func_out(pyfunc3, cfunc3, (a, b), out)
+                    out = np.empty((n, m), dtype=a.dtype)
+                    self.check_func_out(pyfunc3, cfunc3, (b.T, a.T), out)
 
         # Mismatching sizes
+        m, n, k = 2, 3, 4
         a = self.sample_matrix(m, k - 1, np.float64)
         b = self.sample_matrix(k, n, np.float64)
         self.assert_mismatching_sizes(cfunc2, (a, b))

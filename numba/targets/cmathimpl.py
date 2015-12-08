@@ -33,7 +33,7 @@ def is_finite(builder, z):
 
 
 @register
-@implement(cmath.isnan, types.Kind(types.Complex))
+@implement(cmath.isnan, types.Complex)
 def isnan_float_impl(context, builder, sig, args):
     [typ] = sig.args
     [value] = args
@@ -43,7 +43,7 @@ def isnan_float_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement(cmath.isinf, types.Kind(types.Complex))
+@implement(cmath.isinf, types.Complex)
 def isinf_float_impl(context, builder, sig, args):
     [typ] = sig.args
     [value] = args
@@ -55,7 +55,7 @@ def isinf_float_impl(context, builder, sig, args):
 
 if utils.PYVERSION >= (3, 2):
     @register
-    @implement(cmath.isfinite, types.Kind(types.Complex))
+    @implement(cmath.isfinite, types.Complex)
     def isfinite_float_impl(context, builder, sig, args):
         [typ] = sig.args
         [value] = args
@@ -66,7 +66,7 @@ if utils.PYVERSION >= (3, 2):
 
 
 @register
-@implement(cmath.rect, types.Kind(types.Float), types.Kind(types.Float))
+@implement(cmath.rect, types.Float, types.Float)
 def rect_impl(context, builder, sig, args):
     [r, phi] = args
     # We can't call math.isfinite() inside rect() below because it
@@ -124,7 +124,7 @@ NAN = float('nan')
 INF = float('inf')
 
 @register
-@implement(cmath.exp, types.Kind(types.Complex))
+@implement(cmath.exp, types.Complex)
 @intrinsic_complex_unary
 def exp_impl(x, y, x_is_finite, y_is_finite):
     """cmath.exp(x + y j)"""
@@ -166,7 +166,7 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
             return complex(r, r)
 
 @register
-@implement(cmath.log, types.Kind(types.Complex))
+@implement(cmath.log, types.Complex)
 @intrinsic_complex_unary
 def log_impl(x, y, x_is_finite, y_is_finite):
     """cmath.log(x + y j)"""
@@ -176,7 +176,7 @@ def log_impl(x, y, x_is_finite, y_is_finite):
 
 
 @register
-@implement(cmath.log, types.Kind(types.Complex), types.Kind(types.Complex))
+@implement(cmath.log, types.Complex, types.Complex)
 def log_base_impl(context, builder, sig, args):
     """cmath.log(z, base)"""
     [z, base] = args
@@ -189,7 +189,7 @@ def log_base_impl(context, builder, sig, args):
 
 
 @register
-@implement(cmath.log10, types.Kind(types.Complex))
+@implement(cmath.log10, types.Complex)
 def log10_impl(context, builder, sig, args):
     LN_10 = 2.302585092994045684
 
@@ -205,14 +205,14 @@ def log10_impl(context, builder, sig, args):
 
 
 @register
-@implement(cmath.phase, types.Kind(types.Complex))
+@implement(cmath.phase, types.Complex)
 @intrinsic_complex_unary
 def phase_impl(x, y, x_is_finite, y_is_finite):
     """cmath.phase(x + y j)"""
     return math.atan2(y, x)
 
 @register
-@implement(cmath.polar, types.Kind(types.Complex))
+@implement(cmath.polar, types.Complex)
 @intrinsic_complex_unary
 def polar_impl(x, y, x_is_finite, y_is_finite):
     """cmath.polar(x + y j)"""
@@ -220,7 +220,7 @@ def polar_impl(x, y, x_is_finite, y_is_finite):
 
 
 @register
-@implement(cmath.sqrt, types.Kind(types.Complex))
+@implement(cmath.sqrt, types.Complex)
 def sqrt_impl(context, builder, sig, args):
     # We risk spurious overflow for components >= FLT_MAX / (1 + sqrt(2)).
     THRES = mathimpl.FLT_MAX / (1 + math.sqrt(2))
@@ -272,7 +272,7 @@ def sqrt_impl(context, builder, sig, args):
 
 
 @register
-@implement(cmath.cos, types.Kind(types.Complex))
+@implement(cmath.cos, types.Complex)
 def cos_impl(context, builder, sig, args):
     def cos_impl(z):
         """cmath.cos(z) = cmath.cosh(z j)"""
@@ -282,7 +282,7 @@ def cos_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 @register
-@implement(cmath.cosh, types.Kind(types.Complex))
+@implement(cmath.cosh, types.Complex)
 def cosh_impl(context, builder, sig, args):
     def cosh_impl(z):
         """cmath.cosh(z)"""
@@ -312,7 +312,7 @@ def cosh_impl(context, builder, sig, args):
 
 
 @register
-@implement(cmath.sin, types.Kind(types.Complex))
+@implement(cmath.sin, types.Complex)
 def sin_impl(context, builder, sig, args):
     def sin_impl(z):
         """cmath.sin(z) = -j * cmath.sinh(z j)"""
@@ -323,7 +323,7 @@ def sin_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 @register
-@implement(cmath.sinh, types.Kind(types.Complex))
+@implement(cmath.sinh, types.Complex)
 def sinh_impl(context, builder, sig, args):
     def sinh_impl(z):
         """cmath.sinh(z)"""
@@ -350,7 +350,7 @@ def sinh_impl(context, builder, sig, args):
 
 
 @register
-@implement(cmath.tan, types.Kind(types.Complex))
+@implement(cmath.tan, types.Complex)
 def tan_impl(context, builder, sig, args):
     def tan_impl(z):
         """cmath.tan(z) = -j * cmath.tanh(z j)"""
@@ -361,7 +361,7 @@ def tan_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 @register
-@implement(cmath.tanh, types.Kind(types.Complex))
+@implement(cmath.tanh, types.Complex)
 def tanh_impl(context, builder, sig, args):
     def tanh_impl(z):
         """cmath.tanh(z)"""
@@ -390,7 +390,7 @@ def tanh_impl(context, builder, sig, args):
 
 
 @register
-@implement(cmath.acos, types.Kind(types.Complex))
+@implement(cmath.acos, types.Complex)
 def acos_impl(context, builder, sig, args):
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
@@ -417,7 +417,7 @@ def acos_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 @register
-@implement(cmath.acosh, types.Kind(types.Complex))
+@implement(cmath.acosh, types.Complex)
 def acosh_impl(context, builder, sig, args):
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
@@ -444,7 +444,7 @@ def acosh_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 @register
-@implement(cmath.asinh, types.Kind(types.Complex))
+@implement(cmath.asinh, types.Complex)
 def asinh_impl(context, builder, sig, args):
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
@@ -469,7 +469,7 @@ def asinh_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 @register
-@implement(cmath.asin, types.Kind(types.Complex))
+@implement(cmath.asin, types.Complex)
 def asin_impl(context, builder, sig, args):
     def asin_impl(z):
         """cmath.asin(z) = -j * cmath.asinh(z j)"""
@@ -480,7 +480,7 @@ def asin_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 @register
-@implement(cmath.atan, types.Kind(types.Complex))
+@implement(cmath.atan, types.Complex)
 def atan_impl(context, builder, sig, args):
     def atan_impl(z):
         """cmath.atan(z) = -j * cmath.atanh(z j)"""
@@ -495,7 +495,7 @@ def atan_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 @register
-@implement(cmath.atanh, types.Kind(types.Complex))
+@implement(cmath.atanh, types.Complex)
 def atanh_impl(context, builder, sig, args):
     LN_4 = math.log(4)
     THRES_LARGE = math.sqrt(mathimpl.FLT_MAX / 4)
