@@ -105,6 +105,8 @@ def impl_attribute_generic(ty):
 
 def builtin_cast(fromty, toty):
     """
+    Decorator marking the decorated function as implementing
+    an implicit conversion between the given types.
     """
     def wrapper(impl):
         builtin_registry.register_cast(impl, (fromty, toty))

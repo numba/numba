@@ -225,11 +225,11 @@ def static_getitem_tuple(context, builder, sig, args):
 def tuple_to_tuple(context, builder, fromty, toty, val):
     if (isinstance(fromty, types.BaseNamedTuple)
         or isinstance(toty, types.BaseNamedTuple)):
-        # Disallow by typing layer
+        # Disallowed by typing layer
         raise NotImplementedError
 
     if len(fromty) != len(toty):
-        # Disallow by typing layer
+        # Disallowed by typing layer
         raise NotImplementedError
 
     olditems = cgutils.unpack_tuple(builder, val, len(fromty))
