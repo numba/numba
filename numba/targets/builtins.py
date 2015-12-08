@@ -512,7 +512,7 @@ builtin(implement('is',
 
 
 @builtin_attr
-@impl_attribute_generic(types.Kind(types.Optional))
+@impl_attribute_generic(types.Optional)
 def optional_getattr(context, builder, typ, value, attr):
     inner_type = typ.type
     val = context.cast(builder, value, typ, inner_type)
@@ -521,7 +521,7 @@ def optional_getattr(context, builder, typ, value, attr):
 
 
 @builtin_attr
-@impl_attribute_generic(types.Kind(types.DeferredType))
+@impl_attribute_generic(types.DeferredType)
 def deferred_getattr(context, builder, typ, value, attr):
     inner_type = typ.get()
     val = context.cast(builder, value, typ, inner_type)

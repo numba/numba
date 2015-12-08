@@ -120,7 +120,7 @@ class Box(object):
 # Implement box/unbox for call wrapper
 
 @box(types.ClassInstanceType)
-def _box_class_instance(c, typ, val):
+def _box_class_instance(typ, val, c):
     meminfo, dataptr = cgutils.unpack_tuple(c.builder, val)
 
     lluintp = c.context.get_data_type(types.uintp)
@@ -152,7 +152,7 @@ def _box_class_instance(c, typ, val):
 
 
 @unbox(types.ClassInstanceType)
-def _unbox_class_instance(c, typ, val):
+def _unbox_class_instance(typ, val, c):
     struct_cls = cgutils.create_struct_proxy(typ)
     inst = struct_cls(c.context, c.builder)
 
@@ -177,7 +177,7 @@ def _unbox_class_instance(c, typ, val):
 
 
 @unbox(types.ImmutableClassRefType)
-def _unbox_immutable_class_ref(c, typ, val):
+def _unbox_immutable_class_ref(typ, val, c):
     # XXX: not implemented
     struct_cls = cgutils.create_struct_proxy(typ.instance_type)
     ret = struct_cls(c.context, c.builder)._getpointer()
@@ -185,7 +185,7 @@ def _unbox_immutable_class_ref(c, typ, val):
 
 
 @unbox(types.ImmutableClassInstanceType)
-def _unbox_immutable_class_instance(c, typ, val):
+def _unbox_immutable_class_instance(typ, val, c):
     # XXX: not implemented
     struct_cls = cgutils.create_struct_proxy(typ)
     ret = struct_cls(c.context, c.builder)._getvalue()
@@ -193,6 +193,6 @@ def _unbox_immutable_class_instance(c, typ, val):
 
 
 @box(types.ImmutableClassInstanceType)
-def _box_immutable_class_instance(c, typ, val):
+def _box_immutable_class_instance(typ, val, c):
     # XXX: not implemented
     return ir.Constant(c.pyapi.pyobj, None)
