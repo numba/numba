@@ -219,28 +219,28 @@ unary_math_extern(math.trunc, "truncf", "trunc", True)
 
 
 @register
-@implement(math.isnan, types.Kind(types.Float))
+@implement(math.isnan, types.Float)
 def isnan_float_impl(context, builder, sig, args):
     [val] = args
     res = is_nan(builder, val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement(math.isnan, types.Kind(types.Integer))
+@implement(math.isnan, types.Integer)
 def isnan_int_impl(context, builder, sig, args):
     res = cgutils.false_bit
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @register
-@implement(math.isinf, types.Kind(types.Float))
+@implement(math.isinf, types.Float)
 def isinf_float_impl(context, builder, sig, args):
     [val] = args
     res = is_inf(builder, val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @register
-@implement(math.isinf, types.Kind(types.Integer))
+@implement(math.isinf, types.Integer)
 def isinf_int_impl(context, builder, sig, args):
     res = cgutils.false_bit
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -248,14 +248,14 @@ def isinf_int_impl(context, builder, sig, args):
 
 if utils.PYVERSION >= (3, 2):
     @register
-    @implement(math.isfinite, types.Kind(types.Float))
+    @implement(math.isfinite, types.Float)
     def isfinite_float_impl(context, builder, sig, args):
         [val] = args
         res = is_finite(builder, val)
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
     @register
-    @implement(math.isfinite, types.Kind(types.Integer))
+    @implement(math.isfinite, types.Integer)
     def isfinite_int_impl(context, builder, sig, args):
         res = cgutils.true_bit
         return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -290,7 +290,7 @@ def copysign_f64_impl(context, builder, sig, args):
 
 
 @register
-@implement(math.frexp, types.Kind(types.Float))
+@implement(math.frexp, types.Float)
 def frexp_impl(context, builder, sig, args):
     val, = args
     fltty = context.get_data_type(sig.args[0])
@@ -308,7 +308,7 @@ def frexp_impl(context, builder, sig, args):
 
 
 @register
-@implement(math.ldexp, types.Kind(types.Float), types.intc)
+@implement(math.ldexp, types.Float, types.intc)
 def ldexp_impl(context, builder, sig, args):
     val, exp = args
     fltty, intty = map(context.get_data_type, sig.args)
@@ -392,7 +392,7 @@ def hypot_u64_impl(context, builder, sig, args):
 
 
 @register
-@implement(math.hypot, types.Kind(types.Float), types.Kind(types.Float))
+@implement(math.hypot, types.Float, types.Float)
 def hypot_float_impl(context, builder, sig, args):
     def hypot(x, y):
         if math.isinf(x):
@@ -464,6 +464,6 @@ for ty in types.unsigned_domain:
 for ty in types.signed_domain:
     register(implement(math.pow, types.float64, ty)(builtins.int_power_impl))
 
-ty = types.Kind(types.Float)
+ty = types.Float
 register(implement(math.pow, ty, ty)(builtins.real_power_impl))
 

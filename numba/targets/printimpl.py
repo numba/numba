@@ -15,7 +15,7 @@ register = registry.register
 
 
 @register
-@implement(types.print_item_type, types.Kind(types.Integer))
+@implement(types.print_item_type, types.Integer)
 def int_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -30,7 +30,7 @@ def int_print_impl(context, builder, sig, args):
 
 
 @register
-@implement(types.print_item_type, types.Kind(types.Float))
+@implement(types.print_item_type, types.Float)
 def real_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -43,7 +43,7 @@ def real_print_impl(context, builder, sig, args):
 
 
 @register
-@implement(types.print_item_type, types.Kind(types.CharSeq))
+@implement(types.print_item_type, types.CharSeq)
 def print_charseq(context, builder, sig, args):
     [tx] = sig.args
     [x] = args

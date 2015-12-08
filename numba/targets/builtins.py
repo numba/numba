@@ -116,8 +116,8 @@ def int_divmod(context, builder, x, y):
 
 
 @builtin
-@implement('/?', types.Kind(types.Integer), types.Kind(types.Integer))
-@implement('//', types.Kind(types.Integer), types.Kind(types.Integer))
+@implement('/?', types.Integer, types.Integer)
+@implement('//', types.Integer, types.Integer)
 def int_floordiv_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -146,7 +146,7 @@ def int_floordiv_impl(context, builder, sig, args):
 
 
 @builtin
-@implement('/', types.Kind(types.Integer), types.Kind(types.Integer))
+@implement('/', types.Integer, types.Integer)
 def int_truediv_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -159,7 +159,7 @@ def int_truediv_impl(context, builder, sig, args):
 
 
 @builtin
-@implement('%', types.Kind(types.Integer), types.Kind(types.Integer))
+@implement('%', types.Integer, types.Integer)
 def int_rem_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -426,7 +426,7 @@ builtin(implement('~', types.boolean)(bool_invert_impl))
 
 
 def _implement_integer_operators():
-    ty = types.Kind(types.Integer)
+    ty = types.Integer
 
     builtin(implement('+', ty, ty)(int_add_impl))
     builtin(implement('-', ty, ty)(int_sub_impl))
@@ -505,10 +505,10 @@ builtin(implement('is', types.none, types.none)(
 
 # Optional is None
 builtin(implement('is',
-                  types.Kind(types.Optional), types.none)(optional_is_none))
+                  types.Optional, types.none)(optional_is_none))
 
 builtin(implement('is',
-                  types.none, types.Kind(types.Optional))(optional_is_none))
+                  types.none, types.Optional)(optional_is_none))
 
 
 @builtin_attr
@@ -809,7 +809,7 @@ def real_sign_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-ty = types.Kind(types.Float)
+ty = types.Float
 
 builtin(implement('+', ty, ty)(real_add_impl))
 builtin(implement('-', ty, ty)(real_sub_impl))
@@ -860,7 +860,7 @@ def get_complex_info(ty):
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Complex), "real")
+@impl_attribute(types.Complex, "real")
 def complex_real_impl(context, builder, typ, value):
     cplx_cls = context.make_complex(typ)
     cplx = cplx_cls(context, builder, value=value)
@@ -868,7 +868,7 @@ def complex_real_impl(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Complex), "imag")
+@impl_attribute(types.Complex, "imag")
 def complex_imag_impl(context, builder, typ, value):
     cplx_cls = context.make_complex(typ)
     cplx = cplx_cls(context, builder, value=value)
@@ -876,7 +876,7 @@ def complex_imag_impl(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 @builtin
-@implement("complex.conjugate", types.Kind(types.Complex))
+@implement("complex.conjugate", types.Complex)
 def complex_conjugate_impl(context, builder, sig, args):
     from . import mathimpl
     cplx_cls = context.make_complex(sig.args[0])
@@ -896,9 +896,9 @@ def real_conjugate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, args[0])
 
 for cls in (types.Float, types.Integer):
-    builtin_attr(impl_attribute(types.Kind(cls), "real")(real_real_impl))
-    builtin_attr(impl_attribute(types.Kind(cls), "imag")(real_imag_impl))
-    builtin(implement("complex.conjugate", types.Kind(cls))(real_conjugate_impl))
+    builtin_attr(impl_attribute(cls, "real")(real_real_impl))
+    builtin_attr(impl_attribute(cls, "imag")(real_imag_impl))
+    builtin(implement("complex.conjugate", cls)(real_conjugate_impl))
 
 
 @builtin
@@ -1081,7 +1081,7 @@ def complex_abs_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-ty = types.Kind(types.Complex)
+ty = types.Complex
 
 builtin(implement("+", ty, ty)(complex_add_impl))
 builtin(implement("-", ty, ty)(complex_sub_impl))
@@ -1118,19 +1118,19 @@ def bool_as_bool(context, builder, sig, args):
     return val
 
 @builtin
-@implement(bool, types.Kind(types.Integer))
+@implement(bool, types.Integer)
 def int_as_bool(context, builder, sig, args):
     [val] = args
     return builder.icmp_unsigned('!=', val, ir.Constant(val.type, 0))
 
 @builtin
-@implement(bool, types.Kind(types.Float))
+@implement(bool, types.Float)
 def float_as_bool(context, builder, sig, args):
     [val] = args
     return builder.fcmp(lc.FCMP_UNE, val, ir.Constant(val.type, 0.0))
 
 @builtin
-@implement(bool, types.Kind(types.Complex))
+@implement(bool, types.Complex)
 def complex_as_bool(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
@@ -1143,7 +1143,7 @@ def complex_as_bool(context, builder, sig, args):
 
 
 for ty in (types.Integer, types.Float, types.Complex):
-    builtin(implement('not', types.Kind(ty))(number_not_impl))
+    builtin(implement('not', ty)(number_not_impl))
 
 builtin(implement('not', types.boolean)(number_not_impl))
 
@@ -1154,7 +1154,7 @@ def make_pair(first_type, second_type):
 
 
 @builtin
-@implement('getitem', types.Kind(types.CPointer), types.Kind(types.Integer))
+@implement('getitem', types.CPointer, types.Integer)
 def getitem_cpointer(context, builder, sig, args):
     base_ptr, idx = args
     elem_ptr = builder.gep(base_ptr, [idx])
@@ -1163,7 +1163,7 @@ def getitem_cpointer(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.CPointer), types.Kind(types.Integer),
+@implement('setitem', types.CPointer, types.Integer,
            types.Any)
 def setitem_cpointer(context, builder, sig, args):
     base_ptr, idx, val = args
@@ -1244,7 +1244,7 @@ def _round_intrinsic(tp):
         return "llvm.round.f%d" % (tp.bitwidth,)
 
 @builtin
-@implement(round, types.Kind(types.Float))
+@implement(round, types.Float)
 def round_impl_unary(context, builder, sig, args):
     fltty = sig.args[0]
     llty = context.get_value_type(fltty)
@@ -1258,7 +1258,7 @@ def round_impl_unary(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
-@implement(round, types.Kind(types.Float), types.Kind(types.Integer))
+@implement(round, types.Float, types.Integer)
 def round_impl_binary(context, builder, sig, args):
     fltty = sig.args[0]
     # Allow calling the intrinsic from the Python implementation below.
@@ -1360,7 +1360,7 @@ def math_e_impl(context, builder, typ, value):
 # -----------------------------------------------------------------------------
 
 @builtin
-@implement(intrinsics.array_ravel, types.Kind(types.Array))
+@implement(intrinsics.array_ravel, types.Array)
 def array_ravel_impl(context, builder, sig, args):
     [arrty] = sig.args
     [arr] = args

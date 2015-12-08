@@ -166,7 +166,7 @@ class _EnvReloader(object):
         # Disable HSA support
         DISABLE_HSA = _readenv("NUMBA_DISABLE_HSA", int, 0)
         # Inject the configuration values into the module globals
-        for name, value in locals().items():
+        for name, value in locals().copy().items():
             if name.isupper():
                 globals()[name] = value
 

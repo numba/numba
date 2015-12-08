@@ -97,10 +97,10 @@ class Overloads(object):
         elif types.Any == formal:
             # formal argument is any
             return True
-        elif (isinstance(formal, types.Kind) and
-                  isinstance(actual, formal.of)):
-            # formal argument is a kind and the actual argument
-            # is of that kind
+        elif (isinstance(formal, type) and
+              isinstance(actual, formal)):
+            # formal argument is a type class matching actual argument
+            assert issubclass(formal, types.Type)
             return True
 
     def append(self, impl, sig):
@@ -613,7 +613,7 @@ class BaseContext(object):
             raise TypeError("{0} != {1}; when casting to {2}".format(val.type,
                                                 self.get_value_type(fromty),
                                                 self.get_value_type(toty)))
-        if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
+        if fromty == toty or toty == types.Any:
             return val
 
         elif isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
