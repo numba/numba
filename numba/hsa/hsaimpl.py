@@ -196,10 +196,10 @@ def activelanepermute_wavewidth_impl(context, builder, sig, args):
 
 
 @register
-@implement(stubs.atomic.add, types.Kind(types.Array), types.intp, types.Any)
-@implement(stubs.atomic.add, types.Kind(types.Array),
-           types.Kind(types.UniTuple), types.Any)
-@implement(stubs.atomic.add, types.Kind(types.Array), types.Kind(types.Tuple),
+@implement(stubs.atomic.add, types.Array, types.intp, types.Any)
+@implement(stubs.atomic.add, types.Array,
+           types.UniTuple, types.Any)
+@implement(stubs.atomic.add, types.Array, types.Tuple,
            types.Any)
 def hsail_atomic_add_tuple(context, builder, sig, args):
     aryty, indty, valty = sig.args
@@ -228,7 +228,7 @@ def hsail_atomic_add_tuple(context, builder, sig, args):
 
 
 @register
-@implement('hsail.smem.alloc', types.Kind(types.UniTuple), types.Any)
+@implement('hsail.smem.alloc', types.UniTuple, types.Any)
 def hsail_smem_alloc_array(context, builder, sig, args):
     shape, dtype = args
     return _generic_array(context, builder, shape=shape, dtype=dtype,

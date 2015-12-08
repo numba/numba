@@ -209,7 +209,7 @@ def make_arrayiter_cls(iterator_type):
     return cgutils.create_struct_proxy(iterator_type)
 
 @builtin
-@implement('getiter', types.Kind(types.Buffer))
+@implement('getiter', types.Buffer)
 def getiter_array(context, builder, sig, args):
     [arrayty] = sig.args
     [array] = args
@@ -242,7 +242,7 @@ def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
     return load_item(context, builder, arrayty, ptr)
 
 @builtin
-@implement('iternext', types.Kind(types.ArrayIterator))
+@implement('iternext', types.ArrayIterator)
 @iternext_impl
 def iternext_array(context, builder, sig, args, result):
     [iterty] = sig.args
@@ -364,7 +364,7 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
 
 
 @builtin
-@implement('getitem', types.Kind(types.Buffer), types.Kind(types.Integer))
+@implement('getitem', types.Buffer, types.Integer)
 def getitem_arraynd_intp(context, builder, sig, args):
     aryty, idxty = sig.args
     ary, idx = args
@@ -389,7 +389,7 @@ def getitem_arraynd_intp(context, builder, sig, args):
 
 
 @builtin
-@implement('getitem', types.Kind(types.Buffer), types.slice3_type)
+@implement('getitem', types.Buffer, types.slice3_type)
 def getitem_array1d_slice(context, builder, sig, args):
     aryty, idxty = sig.args
     ary, idx = args
@@ -402,7 +402,7 @@ def getitem_array1d_slice(context, builder, sig, args):
 
 
 @builtin
-@implement('getitem', types.Kind(types.Buffer), types.Kind(types.BaseTuple))
+@implement('getitem', types.Buffer, types.BaseTuple)
 def getitem_array_tuple(context, builder, sig, args):
     aryty, tupty = sig.args
     ary, tup = args
@@ -433,7 +433,7 @@ def getitem_array_tuple(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.Buffer), types.Any, types.Any)
+@implement('setitem', types.Buffer, types.Any, types.Any)
 def setitem_array(context, builder, sig, args):
     """
     array[a] = scalar_or_array
@@ -472,7 +472,7 @@ def setitem_array(context, builder, sig, args):
 
 
 @builtin
-@implement(types.len_type, types.Kind(types.Buffer))
+@implement(types.len_type, types.Buffer)
 def array_len(context, builder, sig, args):
     (aryty,) = sig.args
     (ary,) = args
@@ -918,7 +918,7 @@ def fancy_getitem(context, builder, sig, args,
 
 
 @builtin
-@implement('getitem', types.Kind(types.Buffer), types.Kind(types.Array))
+@implement('getitem', types.Buffer, types.Array)
 def fancy_getitem_array(context, builder, sig, args):
     aryty, idxty = sig.args
     ary, idx = args
@@ -1011,7 +1011,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 # Shape / layout altering
 
 @builtin
-@implement('array.transpose', types.Kind(types.Array))
+@implement('array.transpose', types.Array)
 def array_transpose(context, builder, sig, args):
     return array_T(context, builder, sig.args[0], args[0])
 
@@ -1033,7 +1033,7 @@ def array_T(context, builder, typ, value):
         res = ret._getvalue()
     return impl_ret_borrowed(context, builder, typ, res)
 
-builtin_attr(impl_attribute(types.Kind(types.Array), 'T')(array_T))
+builtin_attr(impl_attribute(types.Array, 'T')(array_T))
 
 
 def _attempt_nocopy_reshape(context, builder, aryty, ary, newnd, newshape,
@@ -1065,7 +1065,7 @@ def _attempt_nocopy_reshape(context, builder, aryty, ary, newnd, newshape,
     return res
 
 @builtin
-@implement('array.reshape', types.Kind(types.Array), types.Kind(types.BaseTuple))
+@implement('array.reshape', types.Array, types.BaseTuple)
 def array_reshape(context, builder, sig, args):
     aryty = sig.args[0]
     retty = sig.return_type
@@ -1122,7 +1122,7 @@ def array_reshape(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @builtin
-@implement('array.reshape', types.Kind(types.Array), types.VarArg(types.Any))
+@implement('array.reshape', types.Array, types.VarArg(types.Any))
 def array_reshape_vararg(context, builder, sig, args):
     # types
     aryty = sig.args[0]
@@ -1269,7 +1269,7 @@ def _change_dtype(context, builder, oldty, newty, ary):
 
 
 @builtin
-@implement('array.view', types.Kind(types.Array), types.Kind(types.DTypeSpec))
+@implement('array.view', types.Array, types.DTypeSpec)
 def array_view(context, builder, sig, args):
     aryty = sig.args[0]
     retty = sig.return_type
@@ -1301,14 +1301,14 @@ def array_view(context, builder, sig, args):
 # Array attributes
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Array), "dtype", types.Kind(types.DType))
+@impl_attribute(types.Array, "dtype", types.DType)
 def array_dtype(context, builder, typ, value):
     res = context.get_dummy_value()
     return impl_ret_untracked(context, builder, typ, res)
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Array), "shape", types.Kind(types.UniTuple))
-@impl_attribute(types.Kind(types.MemoryView), "shape", types.Kind(types.UniTuple))
+@impl_attribute(types.Array, "shape", types.UniTuple)
+@impl_attribute(types.MemoryView, "shape", types.UniTuple)
 def array_shape(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -1317,8 +1317,8 @@ def array_shape(context, builder, typ, value):
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Array), "strides", types.Kind(types.UniTuple))
-@impl_attribute(types.Kind(types.MemoryView), "strides", types.Kind(types.UniTuple))
+@impl_attribute(types.Array, "strides", types.UniTuple)
+@impl_attribute(types.MemoryView, "strides", types.UniTuple)
 def array_strides(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -1327,15 +1327,15 @@ def array_strides(context, builder, typ, value):
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Array), "ndim", types.intp)
-@impl_attribute(types.Kind(types.MemoryView), "ndim", types.intp)
+@impl_attribute(types.Array, "ndim", types.intp)
+@impl_attribute(types.MemoryView, "ndim", types.intp)
 def array_ndim(context, builder, typ, value):
     res = context.get_constant(types.intp, typ.ndim)
     return impl_ret_untracked(context, builder, typ, res)
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Array), "size", types.intp)
+@impl_attribute(types.Array, "size", types.intp)
 def array_size(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -1344,8 +1344,8 @@ def array_size(context, builder, typ, value):
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Array), "itemsize", types.intp)
-@impl_attribute(types.Kind(types.MemoryView), "itemsize", types.intp)
+@impl_attribute(types.Array, "itemsize", types.intp)
+@impl_attribute(types.MemoryView, "itemsize", types.intp)
 def array_itemsize(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -1354,7 +1354,7 @@ def array_itemsize(context, builder, typ, value):
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.MemoryView), "nbytes", types.intp)
+@impl_attribute(types.MemoryView, "nbytes", types.intp)
 def array_nbytes(context, builder, typ, value):
     """
     nbytes = size * itemsize
@@ -1367,34 +1367,34 @@ def array_nbytes(context, builder, typ, value):
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.MemoryView), "contiguous", types.boolean)
+@impl_attribute(types.MemoryView, "contiguous", types.boolean)
 def array_contiguous(context, builder, typ, value):
     res = context.get_constant(types.boolean, typ.is_contig)
     return impl_ret_untracked(context, builder, typ, res)
 
 @builtin_attr
-@impl_attribute(types.Kind(types.MemoryView), "c_contiguous", types.boolean)
+@impl_attribute(types.MemoryView, "c_contiguous", types.boolean)
 def array_c_contiguous(context, builder, typ, value):
     res = context.get_constant(types.boolean, typ.is_c_contig)
     return impl_ret_untracked(context, builder, typ, res)
 
 @builtin_attr
-@impl_attribute(types.Kind(types.MemoryView), "f_contiguous", types.boolean)
+@impl_attribute(types.MemoryView, "f_contiguous", types.boolean)
 def array_f_contiguous(context, builder, typ, value):
     res = context.get_constant(types.boolean, typ.is_f_contig)
     return impl_ret_untracked(context, builder, typ, res)
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.MemoryView), "readonly", types.boolean)
+@impl_attribute(types.MemoryView, "readonly", types.boolean)
 def array_readonly(context, builder, typ, value):
     res = context.get_constant(types.boolean, not typ.mutable)
     return impl_ret_untracked(context, builder, typ, res)
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Array), "ctypes",
-                types.Kind(types.ArrayCTypes))
+@impl_attribute(types.Array, "ctypes",
+                types.ArrayCTypes)
 def array_ctypes(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -1409,14 +1409,14 @@ def array_ctypes(context, builder, typ, value):
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Array), "flags", types.Kind(types.ArrayFlags))
+@impl_attribute(types.Array, "flags", types.ArrayFlags)
 def array_flags(context, builder, typ, value):
     res = context.get_dummy_value()
     return impl_ret_untracked(context, builder, typ, res)
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.ArrayCTypes), "data", types.uintp)
+@impl_attribute(types.ArrayCTypes, "data", types.uintp)
 def array_ctypes_data(context, builder, typ, value):
     ctinfo_type = cgutils.create_struct_proxy(typ)
     ctinfo = ctinfo_type(context, builder, value=value)
@@ -1425,15 +1425,15 @@ def array_ctypes_data(context, builder, typ, value):
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.ArrayFlags), "contiguous", types.boolean)
-@impl_attribute(types.Kind(types.ArrayFlags), "c_contiguous", types.boolean)
+@impl_attribute(types.ArrayFlags, "contiguous", types.boolean)
+@impl_attribute(types.ArrayFlags, "c_contiguous", types.boolean)
 def array_ctypes_data(context, builder, typ, value):
     val = typ.array_type.layout == 'C'
     res = context.get_constant(types.boolean, val)
     return impl_ret_untracked(context, builder, typ, res)
 
 @builtin_attr
-@impl_attribute(types.Kind(types.ArrayFlags), "f_contiguous", types.boolean)
+@impl_attribute(types.ArrayFlags, "f_contiguous", types.boolean)
 def array_ctypes_data(context, builder, typ, value):
     layout = typ.array_type.layout
     val = layout == 'F' if typ.array_type.ndim > 1 else layout in 'CF'
@@ -1445,7 +1445,7 @@ def array_ctypes_data(context, builder, typ, value):
 # Structured / record lookup
 
 @builtin_attr
-@impl_attribute_generic(types.Kind(types.Array))
+@impl_attribute_generic(types.Array)
 def array_record_getattr(context, builder, typ, value, attr):
     """
     Generic getattr() implementation for record arrays: fetch the given
@@ -1484,13 +1484,13 @@ def array_record_getattr(context, builder, typ, value, attr):
     return impl_ret_borrowed(context, builder, typ, res)
 
 @builtin
-@implement('static_getitem', types.Kind(types.Array), types.Kind(types.Const))
+@implement('static_getitem', types.Array, types.Const)
 def array_record_getitem(context, builder, sig, args):
     return array_record_getattr(context, builder, sig.args[0], args[0], args[1])
 
 
 @builtin_attr
-@impl_attribute_generic(types.Kind(types.Record))
+@impl_attribute_generic(types.Record)
 def record_getattr(context, builder, typ, value, attr):
     """
     Generic getattr() implementation for records: fetch the given
@@ -1531,7 +1531,7 @@ def record_getattr(context, builder, typ, value, attr):
         return impl_ret_borrowed(context, builder, typ, res)
 
 @builtin
-@implement('static_getitem', types.Kind(types.Record), types.Kind(types.Const))
+@implement('static_getitem', types.Record, types.Const)
 def record_getitem(context, builder, sig, args):
     """
     Record.__getitem__ redirects to getattr()
@@ -1540,7 +1540,7 @@ def record_getitem(context, builder, sig, args):
     return impl(context, builder, sig.args[0], args[0], args[1])
 
 @builtin
-@implement('static_setitem', types.Kind(types.Record), types.Kind(types.Const), types.Any)
+@implement('static_setitem', types.Record, types.Const, types.Any)
 def record_setitem(context, builder, sig, args):
     """
     Record.__setitem__ redirects to setattr()
@@ -1557,7 +1557,7 @@ def record_setitem(context, builder, sig, args):
 # Comparisons
 
 @builtin
-@implement('is', types.Kind(types.Array), types.Kind(types.Array))
+@implement('is', types.Array, types.Array)
 def array_is(context, builder, sig, args):
     aty, bty = sig.args
     if aty != bty:
@@ -1895,7 +1895,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
 
 @builtin_attr
-@impl_attribute(types.Kind(types.Array), "flat", types.Kind(types.NumpyFlatType))
+@impl_attribute(types.Array, "flat", types.NumpyFlatType)
 def make_array_flatiter(context, builder, arrty, arr):
     flatitercls = make_array_flat_cls(types.NumpyFlatType(arrty))
     flatiter = flatitercls(context, builder)
@@ -1913,7 +1913,7 @@ def make_array_flatiter(context, builder, arrty, arr):
 
 
 @builtin
-@implement('iternext', types.Kind(types.NumpyFlatType))
+@implement('iternext', types.NumpyFlatType)
 @iternext_impl
 def iternext_numpy_flatiter(context, builder, sig, args, result):
     [flatiterty] = sig.args
@@ -1930,7 +1930,7 @@ def iternext_numpy_flatiter(context, builder, sig, args, result):
 
 
 @builtin
-@implement('getitem', types.Kind(types.NumpyFlatType), types.Kind(types.Integer))
+@implement('getitem', types.NumpyFlatType, types.Integer)
 def iternext_numpy_getitem(context, builder, sig, args):
     flatiterty = sig.args[0]
     flatiter, index = args
@@ -1947,7 +1947,7 @@ def iternext_numpy_getitem(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.NumpyFlatType), types.Kind(types.Integer),
+@implement('setitem', types.NumpyFlatType, types.Integer,
            types.Any)
 def iternext_numpy_getitem(context, builder, sig, args):
     flatiterty = sig.args[0]
@@ -1965,7 +1965,7 @@ def iternext_numpy_getitem(context, builder, sig, args):
 
 
 @builtin
-@implement(numpy.ndenumerate, types.Kind(types.Array))
+@implement(numpy.ndenumerate, types.Array)
 def make_array_ndenumerate(context, builder, sig, args):
     arrty, = sig.args
     arr, = args
@@ -1985,7 +1985,7 @@ def make_array_ndenumerate(context, builder, sig, args):
 
 
 @builtin
-@implement('iternext', types.Kind(types.NumpyNdEnumerateType))
+@implement('iternext', types.NumpyNdEnumerateType)
 @iternext_impl
 def iternext_numpy_nditer(context, builder, sig, args, result):
     [nditerty] = sig.args
@@ -2002,7 +2002,7 @@ def iternext_numpy_nditer(context, builder, sig, args, result):
 
 
 @builtin
-@implement(numpy.ndindex, types.VarArg(types.Kind(types.Integer)))
+@implement(numpy.ndindex, types.VarArg(types.Integer))
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(*shape)"""
     shape = [context.cast(builder, arg, argty, types.intp)
@@ -2016,7 +2016,7 @@ def make_array_ndindex(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.ndindex, types.Kind(types.BaseTuple))
+@implement(numpy.ndindex, types.BaseTuple)
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(shape)"""
     ndim = sig.return_type.ndim
@@ -2038,7 +2038,7 @@ def make_array_ndindex(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @builtin
-@implement('iternext', types.Kind(types.NumpyNdIndexType))
+@implement('iternext', types.NumpyNdIndexType)
 @iternext_impl
 def iternext_numpy_ndindex(context, builder, sig, args, result):
     [nditerty] = sig.args
@@ -2165,7 +2165,7 @@ def numpy_empty_nd(context, builder, sig, args):
 
 @builtin
 @implement(numpy.empty_like, types.Any)
-@implement(numpy.empty_like, types.Any, types.Kind(types.DTypeSpec))
+@implement(numpy.empty_like, types.Any, types.DTypeSpec)
 def numpy_empty_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
@@ -2184,7 +2184,7 @@ def numpy_zeros_nd(context, builder, sig, args):
 
 @builtin
 @implement(numpy.zeros_like, types.Any)
-@implement(numpy.zeros_like, types.Any, types.Kind(types.DTypeSpec))
+@implement(numpy.zeros_like, types.Any, types.DTypeSpec)
 def numpy_zeros_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
@@ -2207,7 +2207,7 @@ if numpy_version >= (1, 8):
         return impl_ret_new_ref(context, builder, sig.return_type, res)
 
     @builtin
-    @implement(numpy.full, types.Any, types.Any, types.Kind(types.DTypeSpec))
+    @implement(numpy.full, types.Any, types.Any, types.DTypeSpec)
     def numpy_full_dtype_nd(context, builder, sig, args):
 
         def full(shape, value, dtype):
@@ -2235,7 +2235,7 @@ if numpy_version >= (1, 8):
 
 
     @builtin
-    @implement(numpy.full_like, types.Any, types.Any, types.Kind(types.DTypeSpec))
+    @implement(numpy.full_like, types.Any, types.Any, types.DTypeSpec)
     def numpy_full_like_nd(context, builder, sig, args):
 
         def full_like(arr, value, dtype):
@@ -2264,7 +2264,7 @@ def numpy_ones_nd(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.ones, types.Any, types.Kind(types.DTypeSpec))
+@implement(numpy.ones, types.Any, types.DTypeSpec)
 def numpy_ones_dtype_nd(context, builder, sig, args):
 
     def ones(shape, dtype):
@@ -2290,7 +2290,7 @@ def numpy_ones_like_nd(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.ones_like, types.Any, types.Kind(types.DTypeSpec))
+@implement(numpy.ones_like, types.Any, types.DTypeSpec)
 def numpy_ones_like_dtype_nd(context, builder, sig, args):
 
     def ones_like(arr, dtype):
@@ -2304,7 +2304,7 @@ def numpy_ones_like_dtype_nd(context, builder, sig, args):
 
 
 @builtin
-@implement(numpy.identity, types.Kind(types.Integer))
+@implement(numpy.identity, types.Integer)
 def numpy_identity(context, builder, sig, args):
 
     def identity(n):
@@ -2317,7 +2317,7 @@ def numpy_identity(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.identity, types.Kind(types.Integer), types.Kind(types.DTypeSpec))
+@implement(numpy.identity, types.Integer, types.DTypeSpec)
 def numpy_identity(context, builder, sig, args):
 
     def identity(n, dtype):
@@ -2331,7 +2331,7 @@ def numpy_identity(context, builder, sig, args):
 
 
 @builtin
-@implement(numpy.eye, types.Kind(types.Integer))
+@implement(numpy.eye, types.Integer)
 def numpy_eye(context, builder, sig, args):
 
     def eye(n):
@@ -2341,7 +2341,7 @@ def numpy_eye(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer))
+@implement(numpy.eye, types.Integer, types.Integer)
 def numpy_eye(context, builder, sig, args):
 
     def eye(n, m):
@@ -2351,8 +2351,8 @@ def numpy_eye(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
-           types.Kind(types.Integer))
+@implement(numpy.eye, types.Integer, types.Integer,
+           types.Integer)
 def numpy_eye(context, builder, sig, args):
 
     def eye(n, m, k):
@@ -2362,8 +2362,8 @@ def numpy_eye(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.eye, types.Kind(types.Integer), types.Kind(types.Integer),
-           types.Kind(types.Integer), types.Kind(types.DTypeSpec))
+@implement(numpy.eye, types.Integer, types.Integer,
+           types.Integer, types.DTypeSpec)
 def numpy_eye(context, builder, sig, args):
 
     def eye(n, m, k, dtype):
@@ -2383,7 +2383,7 @@ def numpy_eye(context, builder, sig, args):
 
 
 @builtin
-@implement(numpy.arange, types.Kind(types.Number))
+@implement(numpy.arange, types.Number)
 def numpy_arange_1(context, builder, sig, args):
     dtype = as_dtype(sig.return_type.dtype)
 
@@ -2394,7 +2394,7 @@ def numpy_arange_1(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number))
+@implement(numpy.arange, types.Number, types.Number)
 def numpy_arange_2(context, builder, sig, args):
     dtype = as_dtype(sig.return_type.dtype)
 
@@ -2406,8 +2406,8 @@ def numpy_arange_2(context, builder, sig, args):
 
 
 @builtin
-@implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number),
-           types.Kind(types.Number))
+@implement(numpy.arange, types.Number, types.Number,
+           types.Number)
 def numpy_arange_3(context, builder, sig, args):
     dtype = as_dtype(sig.return_type.dtype)
 
@@ -2418,8 +2418,8 @@ def numpy_arange_3(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.arange, types.Kind(types.Number), types.Kind(types.Number),
-           types.Kind(types.Number), types.Kind(types.DTypeSpec))
+@implement(numpy.arange, types.Number, types.Number,
+           types.Number, types.DTypeSpec)
 def numpy_arange_4(context, builder, sig, args):
 
     if any(isinstance(a, types.Complex) for a in sig.args):
@@ -2450,7 +2450,7 @@ def numpy_arange_4(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.linspace, types.Kind(types.Number), types.Kind(types.Number))
+@implement(numpy.linspace, types.Number, types.Number)
 def numpy_linspace_2(context, builder, sig, args):
 
     def linspace(start, stop):
@@ -2460,8 +2460,8 @@ def numpy_linspace_2(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @builtin
-@implement(numpy.linspace, types.Kind(types.Number), types.Kind(types.Number),
-           types.Kind(types.Integer))
+@implement(numpy.linspace, types.Number, types.Number,
+           types.Integer)
 def numpy_linspace_3(context, builder, sig, args):
     dtype = as_dtype(sig.return_type.dtype)
 
@@ -2479,7 +2479,7 @@ def numpy_linspace_3(context, builder, sig, args):
 
 
 @builtin
-@implement("array.copy", types.Kind(types.Array))
+@implement("array.copy", types.Array)
 def array_copy(context, builder, sig, args):
     arytype = sig.args[0]
     ary = make_array(arytype)(context, builder, value=args[0])
@@ -2529,8 +2529,8 @@ def array_copy(context, builder, sig, args):
 
 
 @builtin
-@implement(numpy.frombuffer, types.Kind(types.Buffer))
-@implement(numpy.frombuffer, types.Kind(types.Buffer), types.Kind(types.DTypeSpec))
+@implement(numpy.frombuffer, types.Buffer)
+@implement(numpy.frombuffer, types.Buffer, types.DTypeSpec)
 def np_frombuffer(context, builder, sig, args):
     bufty = sig.args[0]
     aryty = sig.return_type
@@ -2592,7 +2592,7 @@ def load_sorts():
 
 
 @builtin
-@implement("array.sort", types.Kind(types.Array))
+@implement("array.sort", types.Array)
 def array_sort(context, builder, sig, args):
     load_sorts()
 
@@ -2610,7 +2610,7 @@ def array_sort(context, builder, sig, args):
 
 
 @builtin
-@implement(numpy.sort, types.Kind(types.Array))
+@implement(numpy.sort, types.Array)
 def np_sort(context, builder, sig, args):
 
     def np_sort_impl(a):

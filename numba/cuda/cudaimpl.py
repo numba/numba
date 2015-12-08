@@ -101,7 +101,7 @@ for sreg in nvvmutils.SREG_MAPPING.keys():
 # -----------------------------------------------------------------------------
 
 @register
-@implement('ptx.cmem.arylike', types.Kind(types.Array))
+@implement('ptx.cmem.arylike', types.Array)
 def ptx_cmem_arylike(context, builder, sig, args):
     lmod = builder.module
     [arr] = args
@@ -180,7 +180,7 @@ def ptx_smem_alloc_intp(context, builder, sig, args):
 
 
 @register
-@implement('ptx.smem.alloc', types.Kind(types.UniTuple), types.Any)
+@implement('ptx.smem.alloc', types.UniTuple, types.Any)
 def ptx_smem_alloc_array(context, builder, sig, args):
     shape, dtype = args
     return _generic_array(context, builder, shape=shape, dtype=dtype,
@@ -200,7 +200,7 @@ def ptx_lmem_alloc_intp(context, builder, sig, args):
 
 
 @register
-@implement('ptx.lmem.alloc', types.Kind(types.UniTuple), types.Any)
+@implement('ptx.lmem.alloc', types.UniTuple, types.Any)
 def ptx_lmem_alloc_array(context, builder, sig, args):
     shape, dtype = args
     return _generic_array(context, builder, shape=shape, dtype=dtype,
@@ -258,7 +258,7 @@ def ptx_threadfence_device(context, builder, sig, args):
 
 
 @register
-@implement(stubs.atomic.add, types.Kind(types.Array), types.intp, types.Any)
+@implement(stubs.atomic.add, types.Array, types.intp, types.Any)
 def ptx_atomic_add_intp(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, ind, val = args
@@ -283,10 +283,10 @@ def ptx_atomic_add_intp(context, builder, sig, args):
 
 
 @register
-@implement(stubs.atomic.add, types.Kind(types.Array),
-           types.Kind(types.UniTuple), types.Any)
-@implement(stubs.atomic.add, types.Kind(types.Array),
-           types.Kind(types.Tuple), types.Any)
+@implement(stubs.atomic.add, types.Array,
+           types.UniTuple, types.Any)
+@implement(stubs.atomic.add, types.Array,
+           types.Tuple, types.Any)
 def ptx_atomic_add_tuple(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, inds, val = args
@@ -317,7 +317,7 @@ def ptx_atomic_add_tuple(context, builder, sig, args):
 
 
 @register
-@implement(stubs.atomic.max, types.Kind(types.Array), types.intp, types.Any)
+@implement(stubs.atomic.max, types.Array, types.intp, types.Any)
 def ptx_atomic_max_intp(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, ind, val = args
@@ -339,10 +339,10 @@ def ptx_atomic_max_intp(context, builder, sig, args):
 
 
 @register
-@implement(stubs.atomic.max, types.Kind(types.Array),
-           types.Kind(types.Tuple), types.Any)
-@implement(stubs.atomic.max, types.Kind(types.Array),
-           types.Kind(types.UniTuple), types.Any)
+@implement(stubs.atomic.max, types.Array,
+           types.Tuple, types.Any)
+@implement(stubs.atomic.max, types.Array,
+           types.UniTuple, types.Any)
 def ptx_atomic_max_tuple(context, builder, sig, args):
     aryty, indty, valty = sig.args
     ary, inds, val = args
