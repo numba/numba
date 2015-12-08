@@ -14,8 +14,9 @@ import numpy
 from numba import types, cgutils, typing
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
-from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute, impl_attribute_generic,
+from numba.targets.imputils import (builtin, builtin_attr, builtin_cast,
+                                    implement, impl_attribute,
+                                    impl_attribute_generic,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
@@ -2619,3 +2620,13 @@ def np_sort(context, builder, sig, args):
         return res
 
     return context.compile_internal(builder, np_sort_impl, sig, args)
+
+
+# -----------------------------------------------------------------------------
+# Implicit cast
+
+@builtin_cast(types.Array, types.Array)
+def array_to_array(context, builder, fromty, toty, val):
+    # Type inference should have prevented illegal array casting.
+    assert toty.layout == 'A'
+    return val

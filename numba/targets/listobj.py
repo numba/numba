@@ -8,9 +8,10 @@ import math
 
 from llvmlite import ir
 from numba import types, cgutils, typing
-from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute, impl_attribute_generic,
-                                    iternext_impl, impl_ret_borrowed,
+from numba.targets.imputils import (builtin, builtin_attr, builtin_cast,
+                                    implement, impl_attribute,
+                                    impl_attribute_generic, iternext_impl,
+                                    impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.utils import cached_property
 from . import quicksort, slicing
@@ -1022,3 +1023,13 @@ def sorted_impl(context, builder, sig, args):
         return lst
 
     return context.compile_internal(builder, sorted_impl, sig, args)
+
+
+# -----------------------------------------------------------------------------
+# Implicit casting
+
+@builtin_cast(types.List, types.List)
+def list_to_list(context, builder, fromty, toty, val):
+    # Casting from non-reflected to reflected
+    assert fromty.dtype == toty.dtype
+    return val
