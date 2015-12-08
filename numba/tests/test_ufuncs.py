@@ -629,7 +629,6 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_radians_ufunc_npm(self):
         self.test_radians_ufunc(flags=no_pyobj_flags)
 
-
     ############################################################################
     # Bit-twiddling Functions
 

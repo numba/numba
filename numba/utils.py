@@ -95,6 +95,8 @@ operator_map = [
 
 if not IS_PY3:
     operator_map.append(('div', 'idiv', '/?'))
+if sys.version_info >= (3, 5):
+    operator_map.append(('matmul', 'imatmul', '@'))
 
 # Map of known in-place operators to their corresponding copying operators
 inplace_map = dict((op + '=', op)

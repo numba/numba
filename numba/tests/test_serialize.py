@@ -90,6 +90,13 @@ class TestDispatcherPickling(TestCase):
         # Same with an object mode function
         self.run_with_protocols(self.check_call, dyn_func_objmode, 36, (6,))
 
+    def test_renamed_module(self):
+        # Issue #1559: using a renamed module (e.g. `import numpy as np`)
+        # should not fail serializing
+        expected = get_renamed_module(0.0)
+        self.run_with_protocols(self.check_call, get_renamed_module,
+                                expected, (0.0,))
+
     def test_other_process(self):
         """
         Check that reconstructing doesn't depend on resources already

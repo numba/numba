@@ -159,16 +159,19 @@ class RawPointer(Dummy):
     """
 
 
-class Kind(Type):
-    def __init__(self, of):
-        if not isinstance(of, type) or not issubclass(of, Type):
-            raise TypeError("expected a Type subclass, got %r" % (of,))
-        self.of = of
-        super(Kind, self).__init__("kind(%s)" % of)
+class Const(Dummy):
+    """
+    A compile-time constant, for (internal) use when a type is needed for
+    lookup.
+    """
+
+    def __init__(self, value):
+        self.value = value
+        super(Const, self).__init__("const(%r)" % (value,))
 
     @property
     def key(self):
-        return self.of
+        return type(self.value), self.value
 
 
 class VarArg(Type):

@@ -263,7 +263,7 @@ class PythonAPI(object):
         fnty = Type.function(Type.void(), [self.pyobj])
         fn = self._get_function(fnty, name="numba_do_raise")
         if exc is None:
-            exc = self.get_null_object()
+            exc = self.make_none()
         return self.builder.call(fn, (exc,))
 
     def err_set_object(self, exctype, excval):
@@ -348,6 +348,7 @@ class PythonAPI(object):
     def fatal_error(self, msg):
         fnty = Type.function(Type.void(), [self.cstring])
         fn = self._get_function(fnty, name="Py_FatalError")
+        fn.attributes.add("noreturn")
         cstr = self.context.insert_const_string(self.module, msg)
         self.builder.call(fn, (cstr,))
 
@@ -566,6 +567,10 @@ class PythonAPI(object):
 
     def number_remainder(self, lhs, rhs, inplace=False):
         return self._call_number_operator("Remainder", lhs, rhs, inplace=inplace)
+
+    def number_matrix_multiply(self, lhs, rhs, inplace=False):
+        assert PYVERSION >= (3, 5)
+        return self._call_number_operator("MatrixMultiply", lhs, rhs, inplace=inplace)
 
     def number_lshift(self, lhs, rhs, inplace=False):
         return self._call_number_operator("Lshift", lhs, rhs, inplace=inplace)
@@ -1204,7 +1209,7 @@ class PythonAPI(object):
             raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
         c = _UnboxContext(self.context, self.builder, self)
-        return impl(c, typ, obj)
+        return impl(typ, obj, c)
 
     def from_native_return(self, typ, val, env_manager):
         assert not isinstance(typ, types.Optional), "callconv should have " \
@@ -1219,7 +1224,7 @@ class PythonAPI(object):
             raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
 
         c = _BoxContext(self.context, self.builder, self, env_manager)
-        return impl(c, typ, val)
+        return impl(typ, val, c)
 
     def reflect_native_value(self, typ, val, env_manager=None):
         """
@@ -1234,7 +1239,7 @@ class PythonAPI(object):
         is_error = cgutils.alloca_once_value(self.builder, cgutils.false_bit)
         c = _ReflectContext(self.context, self.builder, self, env_manager,
                             is_error)
-        impl(c, typ, val)
+        impl(typ, val, c)
         return self.builder.load(c.is_error)
 
     def to_native_generator(self, obj, typ):

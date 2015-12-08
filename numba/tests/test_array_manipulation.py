@@ -115,9 +115,29 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='F')
         self.assertIn("incompatible shape for array", str(raises.exception))
         with self.assertTypingError() as raises:
+            # The following will leak due to lack of post exception cleanup
             self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='A')
         self.assertIn("reshape() supports contiguous array only",
                       str(raises.exception))
+        # Disable leak check for the last `test_reshape_array_to_1d` call.
+        self.disable_leak_check()
+
+    @unittest.expectedFailure
+    def test_reshape_array_to_1d_leak_error_npm(self):
+        """
+        Rerun the test in ``test_reshape_array_to_1d_npm`` that will cause
+        a leak error.
+        """
+        with self.assertRaises(NotImplementedError) as raises:
+            self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='F')
+        self.assertIn("incompatible shape for array", str(raises.exception))
+        # The leak check is not captured by the expectedFailure.
+        # We need to disable it because `test_reshape_array_to_1d` will leak
+        # due to the lack of post exception cleanup
+        self.disable_leak_check()
+        # The following checks for memory leak and it will fail.
+        # This will trigger the expectedFailure
+        self.assert_no_memory_leak()
 
     def test_flatten_array(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)

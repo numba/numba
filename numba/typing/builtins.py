@@ -474,6 +474,16 @@ class TupleBool(AbstractTemplate):
             return signature(types.boolean, val)
 
 
+@builtin
+class StaticGetItemTuple(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        tup, idx = args
+        if isinstance(tup, types.BaseTuple) and isinstance(idx, int):
+            return tup.types[idx]
+
+
 #-------------------------------------------------------------------------------
 
 @builtin_attr

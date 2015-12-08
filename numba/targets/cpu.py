@@ -173,7 +173,6 @@ class CPUTargetOptions(TargetOptions):
         "nogil": bool,
         "forceobj": bool,
         "looplift": bool,
-        "wraparound": bool,
         "boundcheck": bool,
         "_nrt": bool,
         "no_rewrites": bool,

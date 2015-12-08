@@ -113,11 +113,6 @@ class BaseContext(object):
             return func.get_call_type(self, args, kws)
 
     def resolve_getattr(self, value, attr):
-        if isinstance(value, types.Record):
-            ret = value.typeof(attr)
-            assert ret
-            return ret
-
         try:
             attrinfo = self.attributes[value]
         except KeyError:
@@ -143,7 +138,20 @@ class BaseContext(object):
             if self.can_convert(value, expectedty) is not None:
                 return templates.signature(types.void, target, value)
 
+    def resolve_static_getitem(self, value, index):
+        assert not isinstance(index, types.Type), index
+        args = value, index
+        kws = ()
+        return self.resolve_function_type("static_getitem", args, kws)
+
+    def resolve_static_setitem(self, target, index, value):
+        assert not isinstance(index, types.Type), index
+        args = target, index, value
+        kws = ()
+        return self.resolve_function_type("static_setitem", args, kws)
+
     def resolve_setitem(self, target, index, value):
+        assert isinstance(index, types.Type), index
         args = target, index, value
         kws = ()
         return self.resolve_function_type("setitem", args, kws)

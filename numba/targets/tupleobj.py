@@ -20,7 +20,7 @@ def namedtuple_constructor(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 @builtin
-@implement(types.len_type, types.Kind(types.BaseTuple))
+@implement(types.len_type, types.BaseTuple)
 def tuple_len(context, builder, sig, args):
     tupty, = sig.args
     retty = sig.return_type
@@ -28,7 +28,7 @@ def tuple_len(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
-@implement(bool, types.Kind(types.BaseTuple))
+@implement(bool, types.BaseTuple)
 def tuple_bool(context, builder, sig, args):
     tupty, = sig.args
     if len(tupty):
@@ -58,7 +58,7 @@ def tuple_cmp_ordered(context, builder, op, sig, args):
     return builder.load(res)
 
 @builtin
-@implement('==', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+@implement('==', types.BaseTuple, types.BaseTuple)
 def tuple_eq(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
@@ -74,38 +74,38 @@ def tuple_eq(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
-@implement('!=', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+@implement('!=', types.BaseTuple, types.BaseTuple)
 def tuple_ne(context, builder, sig, args):
     res = builder.not_(tuple_eq(context, builder, sig, args))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
-@implement('<', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+@implement('<', types.BaseTuple, types.BaseTuple)
 def tuple_lt(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '<', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
-@implement('<=', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+@implement('<=', types.BaseTuple, types.BaseTuple)
 def tuple_le(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '<=', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
-@implement('>', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+@implement('>', types.BaseTuple, types.BaseTuple)
 def tuple_gt(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '>', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
-@implement('>=', types.Kind(types.BaseTuple), types.Kind(types.BaseTuple))
+@implement('>=', types.BaseTuple, types.BaseTuple)
 def tuple_ge(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '>=', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @builtin_attr
-@impl_attribute_generic(types.Kind(types.BaseNamedTuple))
+@impl_attribute_generic(types.BaseNamedTuple)
 def namedtuple_getattr(context, builder, typ, value, attr):
     """
     Fetch a namedtuple's field.
@@ -127,8 +127,8 @@ def make_unituple_iter(tupiter):
 
 
 @builtin
-@implement('getiter', types.Kind(types.UniTuple))
-@implement('getiter', types.Kind(types.NamedUniTuple))
+@implement('getiter', types.UniTuple)
+@implement('getiter', types.NamedUniTuple)
 def getiter_unituple(context, builder, sig, args):
     [tupty] = sig.args
     [tup] = args
@@ -148,7 +148,7 @@ def getiter_unituple(context, builder, sig, args):
 
 
 @builtin
-@implement('iternext', types.Kind(types.UniTupleIter))
+@implement('iternext', types.UniTupleIter)
 @iternext_impl
 def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
@@ -176,8 +176,8 @@ def iternext_unituple(context, builder, sig, args, result):
 
 
 @builtin
-@implement('getitem', types.Kind(types.UniTuple), types.intp)
-@implement('getitem', types.Kind(types.NamedUniTuple), types.intp)
+@implement('getitem', types.UniTuple, types.intp)
+@implement('getitem', types.NamedUniTuple, types.intp)
 def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
@@ -206,4 +206,13 @@ def getitem_unituple(context, builder, sig, args):
     builder.position_at_end(bbend)
     res = phinode
     assert sig.return_type == tupty.dtype
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+@builtin
+@implement('static_getitem', types.BaseTuple, types.Const)
+def static_getitem_tuple(context, builder, sig, args):
+    tup, idx = args
+    assert isinstance(idx, int)
+    res = builder.extract_value(tup, idx)
     return impl_ret_borrowed(context, builder, sig.return_type, res)

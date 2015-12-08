@@ -428,14 +428,23 @@ class NdConstructorLike(CallableTemplate):
     """
 
     def generic(self):
-        def typer(arr, dtype=None):
-            if dtype is None:
-                nb_dtype = arr.dtype
-            else:
+        """
+        np.empty_like(array) -> empty array of the same shape and layout
+        np.empty_like(scalar) -> empty 0-d array of the scalar type
+        """
+        def typer(arg, dtype=None):
+            if dtype is not None:
                 nb_dtype = _parse_dtype(dtype)
+            elif isinstance(arg, types.Array):
+                nb_dtype = arg.dtype
+            else:
+                nb_dtype = arg
             if nb_dtype is not None:
-                layout = arr.layout if arr.layout != 'A' else 'C'
-                return arr.copy(dtype=nb_dtype, layout=layout)
+                if isinstance(arg, types.Array):
+                    layout = arg.layout if arg.layout != 'A' else 'C'
+                    return arg.copy(dtype=nb_dtype, layout=layout)
+                else:
+                    return types.Array(nb_dtype, 0, 'C')
 
         return typer
 
@@ -503,13 +512,22 @@ if numpy_version >= (1, 8):
         return_new_reference = True
 
         def generic(self):
-            def typer(arr, fill_value, dtype=None):
-                if dtype is None:
-                    nb_dtype = arr.dtype
-                else:
+            """
+            np.full_like(array, val) -> array of the same shape and layout
+            np.full_like(scalar, val) -> 0-d array of the scalar type
+            """
+            def typer(arg, fill_value, dtype=None):
+                if dtype is not None:
                     nb_dtype = _parse_dtype(dtype)
+                elif isinstance(arg, types.Array):
+                    nb_dtype = arg.dtype
+                else:
+                    nb_dtype = arg
                 if nb_dtype is not None:
-                    return arr.copy(dtype=nb_dtype)
+                    if isinstance(arg, types.Array):
+                        return arg.copy(dtype=nb_dtype)
+                    else:
+                        return types.Array(dtype=nb_dtype, ndim=0, layout='C')
 
             return typer
 
@@ -653,6 +671,120 @@ builtin_global(numpy.sort, types.Function(NdSort))
 
 
 # -----------------------------------------------------------------------------
+# Linear algebra
+
+
+class MatMulTyperMixin(object):
+
+    def matmul_typer(self, a, b, out=None):
+        """
+        Typer function for Numpy matrix multiplication.
+        """
+        if not isinstance(a, types.Array) or not isinstance(b, types.Array):
+            return
+        if not all(x.ndim in (1, 2) for x in (a, b)):
+            raise TypingError("%s only supported on 1-D and 2-D arrays"
+                              % (self.func_name, ))
+        # Output dimensionality
+        ndims = set([a.ndim, b.ndim])
+        if ndims == set([2]):
+            # M * M
+            out_ndim = 2
+        elif ndims == set([1, 2]):
+            # M* V and V * M
+            out_ndim = 1
+        elif ndims == set([1]):
+            # V * V
+            out_ndim = 0
+
+        if out is not None:
+            if out_ndim == 0:
+                raise TypeError("explicit output unsupported for vector * vector")
+            elif out.ndim != out_ndim:
+                raise TypeError("explicit output has incorrect dimensionality")
+            if not isinstance(out, types.Array) or out.layout != 'C':
+                raise TypeError("output must be a C-contiguous array")
+            all_args = (a, b, out)
+        else:
+            all_args = (a, b)
+
+        if not all(x.layout in 'CF' for x in (a, b)):
+            # Numpy seems to allow non-contiguous arguments, but we
+            # don't (we would need to copy before calling BLAS)
+            raise TypingError("%s only supported on "
+                              "contiguous arrays" % (self.func_name,))
+        if not all(x.dtype == a.dtype for x in all_args):
+            raise TypingError("%s arguments must all have "
+                              "the same dtype" % (self.func_name,))
+        if not isinstance(a.dtype, (types.Float, types.Complex)):
+            raise TypingError("%s only supported on "
+                              "float and complex arrays"
+                              % (self.func_name,))
+        if out:
+            return out
+        elif out_ndim > 0:
+            return types.Array(a.dtype, out_ndim, 'C')
+        else:
+            return a.dtype
+
+
+@builtin
+class Dot(MatMulTyperMixin, CallableTemplate):
+    key = numpy.dot
+    func_name = "np.dot()"
+
+    def generic(self):
+        def typer(a, b, out=None):
+            # NOTE: np.dot() and the '@' operator have distinct semantics
+            # for >2-D arrays, but we don't support them.
+            return self.matmul_typer(a, b, out)
+
+        return typer
+
+builtin_global(numpy.dot, types.Function(Dot))
+
+
+@builtin
+class VDot(CallableTemplate):
+    key = numpy.vdot
+
+    def generic(self):
+        def typer(a, b):
+            if not isinstance(a, types.Array) or not isinstance(b, types.Array):
+                return
+            if not all(x.ndim == 1 for x in (a, b)):
+                raise TypingError("np.vdot() only supported on 1-D arrays")
+            if not all(x.layout in 'CF' for x in (a, b)):
+                # Numpy seems to allow non-contiguous arguments, but we
+                # don't (we would need to copy before calling BLAS)
+                raise TypingError("np.vdot() only supported on "
+                                  "contiguous arrays")
+            if not all(x.dtype == a.dtype for x in (a, b)):
+                raise TypingError("np.vdot() arguments must all have "
+                                  "the same dtype")
+            if not isinstance(a.dtype, (types.Float, types.Complex)):
+                raise TypingError("np.vdot() only supported on "
+                                  "float and complex arrays")
+            return a.dtype
+
+        return typer
+
+builtin_global(numpy.vdot, types.Function(VDot))
+
+
+@builtin
+class MatMul(MatMulTyperMixin, AbstractTemplate):
+    key = "@"
+    func_name = "'@'"
+
+    def generic(self, args, kws):
+        assert not kws
+        restype = self.matmul_typer(*args)
+        if restype is not None:
+            return signature(restype, *args)
+
+
+# -----------------------------------------------------------------------------
 # Miscellaneous functions
 
 @builtin
@@ -736,20 +868,65 @@ class Where(AbstractTemplate):
         assert not kws
 
         if len(args) == 1:
-            # np.where(cond) is the same as np.nonzero(cond)
+            # 0-dim arrays return one result array
             ary = args[0]
             ndim = max(ary.ndim, 1)
             retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
             return signature(retty, ary)
 
         elif len(args) == 3:
+            # NOTE: contrary to Numpy, we only support homogenous arguments
             cond, x, y = args
-            if (cond.ndim == x.ndim == y.ndim and
-                x.dtype == y.dtype):
-                retty = types.Array(x.dtype, x.ndim, x.layout)
-                return signature(retty, *args)
+            if isinstance(cond, types.Array):
+                # array where()
+                if (cond.ndim == x.ndim == y.ndim and
+                    x.dtype == y.dtype):
+                    retty = types.Array(x.dtype, x.ndim, x.layout)
+                    return signature(retty, *args)
+            else:
+                # scalar where()
+                if not isinstance(x, types.Array) and x == y:
+                    retty = types.Array(x, 0, 'C')
+                    return signature(retty, *args)
 
 builtin_global(numpy.where, types.Function(Where))
+
+
+@builtin
+class Sinc(AbstractTemplate):
+    key = numpy.sinc
+
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        arg = args[0]
+        supported_scalars = (types.Float, types.Complex)
+        if (isinstance(arg, supported_scalars) or
+              (isinstance(arg, types.Array) and
+               isinstance(arg.dtype, supported_scalars))):
+            return signature(arg, arg)
+
+builtin_global(numpy.sinc, types.Function(Sinc))
+
+
+class AngleCtor(CallableTemplate):
+    """
+    Typing template for np.angle()
+    """
+    def generic(self):
+        def typer(ref, deg = False):
+            if isinstance(ref, types.Array):
+                return ref.copy(dtype=ref.underlying_float)
+            else:
+                return types.float64
+        return typer
+
+@builtin
+class Angle(AngleCtor):
+    key = numpy.angle
+
+
+builtin_global(numpy.angle, types.Function(Angle))
 
 
 builtin_global(numpy, types.Module(numpy))
