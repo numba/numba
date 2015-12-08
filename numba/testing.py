@@ -2,8 +2,10 @@ from __future__ import print_function, division, absolute_import
 
 import sys
 import os
+import warnings
+import time
+import gc
 import functools
-import argparse
 import collections
 import contextlib
 import cProfile
@@ -32,21 +34,35 @@ class TestLister(object):
         self._test_list = _flatten_suite(test)
         for t in self._test_list:
             print(t.id())
-        print('%d tests found'%len(self._test_list))
+        print('%d tests found' % len(self._test_list))
         return result
-        
+
+
 class SerialSuite(unittest.TestSuite):
-    """A simple marker to make sure tests in this suite are run serially."""
-    
-    pass
+    """A simple marker to make sure tests in this suite are run serially.
+
+    Note: As the suite to going through the internal of unittest,
+          It may get unpacked and stuff into a plain TestSuite.
+          We need to set an attribute on the TestCase object to mark the
+          TestCase has a parallel test.
+    """
+
+    def addTest(self, test):
+        if not isinstance(test, unittest.TestCase):
+            for t in test:
+                self.addTest(t)
+        else:
+            test._numba_parallel_test_ = True
+            super(SerialSuite, self).addTest(test)
+
 
 def load_testsuite(loader, dir):
     """Find tests in 'dir'."""
-    
+
     suite = unittest.TestSuite()
-    files=[]
+    files = []
     for f in os.listdir(dir):
-        path=join(dir, f)
+        path = join(dir, f)
         if os.path.isfile(path) and fnmatch(f, 'test_*.py'):
             files.append(f)
         elif os.path.isfile(join(path, '__init__.py')):
@@ -59,10 +75,11 @@ def load_testsuite(loader, dir):
         suite.addTests(loader.loadTestsFromName(f))
     return suite
 
+
 class TestLoader(loader.TestLoader):
 
-    _top_level_dir=dirname(dirname(__file__))
-    
+    _top_level_dir = dirname(dirname(__file__))
+
     def discover(self, start_dir, pattern='test*.py', top_level_dir=None):
         """Upstream discover doesn't consider top-level 'load_tests' functions.
         If we find load_tests in start_dir, deal with it here. Otherwise
@@ -77,7 +94,7 @@ class TestLoader(loader.TestLoader):
                 if load_tests:
                     return load_tests(self, [], pattern)
             except case.SkipTest as e:
-                return _make_skipped_test(name, e, self.suiteClass)
+                return loader._make_skipped_test(name, e, self.suiteClass)
             else:
                 return super(TestLoader, self).discover(start_dir, pattern, top)
         else:
@@ -90,7 +107,6 @@ class TestLoader(loader.TestLoader):
             except:
                 pass
             return super(TestLoader, self).discover(start_dir, pattern, top)
-            
 
 
 # "unittest.main" is really the TestProgram class!
@@ -111,7 +127,7 @@ class NumbaTestProgram(unittest.main):
     profile = False
     multiprocess = False
     list = False
-    
+
     def __init__(self, *args, **kwargs):
         # Disable interpreter fallback if we are running the test suite
         if config.COMPATIBILITY_MODE:
@@ -168,15 +184,15 @@ class NumbaTestProgram(unittest.main):
             # We aren't interested in informational messages / warnings when
             # running with '-q'.
             self.buffer = True
-            
+
     def _do_discovery(self, argv, Loader=None):
         """Upstream _do_discovery doesn't find our load_tests() functions."""
 
         loader = TestLoader() if Loader is None else Loader()
         topdir = abspath(dirname(dirname(__file__)))
         tests = loader.discover(join(topdir, 'numba/tests'), '*.py', topdir)
-        self.test = SerialSuite(tests)
-        
+        self.test = unittest.TestSuite(tests)
+
     def runTests(self):
         if self.refleak:
             self.testRunner = RefleakTestRunner
@@ -296,12 +312,13 @@ class RefleakTestResult(runner.TextTestResult):
         # These checkers return False on success, True on failure
         def check_rc_deltas(deltas):
             return any(deltas)
+
         def check_alloc_deltas(deltas):
             # At least 1/3rd of 0s
             if 3 * deltas.count(0) < len(deltas):
                 return True
             # Nothing else than 1s, 0s and -1s
-            if not set(deltas) <= set((1,0,-1)):
+            if not set(deltas) <= set((1, 0, -1)):
                 return True
             return False
 
@@ -340,6 +357,7 @@ def _flatten_suite(test):
         return tests
     else:
         return [test]
+
 
 class ParallelTestResult(runner.TextTestResult):
     """
@@ -452,16 +470,17 @@ def _split_nonparallel_tests(test):
     """split test suite into parallel and serial tests."""
     ptests = []
     stests = []
-    if isinstance(test, SerialSuite):
-        stests.extend(_flatten_suite(test))
-    elif isinstance(test, unittest.TestSuite):
+    if isinstance(test, unittest.TestSuite):
         for t in test:
             p, s = _split_nonparallel_tests(t)
             ptests.extend(p)
             stests.extend(s)
+    elif getattr(test, "_numba_parallel_test_", False):
+        stests.extend(_flatten_suite(test))
     else:
         ptests = [test]
     return ptests, stests
+
 
 class ParallelTestRunner(runner.TextTestRunner):
     """
