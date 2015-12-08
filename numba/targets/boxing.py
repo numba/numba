@@ -15,12 +15,12 @@ from . import listobj
 #
 
 @box(types.Boolean)
-def box_bool(c, typ, val):
+def box_bool(typ, val, c):
     longval = c.builder.zext(val, c.pyapi.long)
     return c.pyapi.bool_from_long(longval)
 
 @unbox(types.Boolean)
-def unbox_boolean(c, typ, obj):
+def unbox_boolean(typ, obj, c):
     istrue = c.pyapi.object_istrue(obj)
     zero = ir.Constant(istrue.type, 0)
     val = c.builder.icmp_signed('!=', istrue, zero)
@@ -28,7 +28,7 @@ def unbox_boolean(c, typ, obj):
 
 
 @box(types.Integer)
-def box_integer(c, typ, val):
+def box_integer(typ, val, c):
     if typ.signed:
         ival = c.builder.sext(val, c.pyapi.longlong)
         return c.pyapi.long_from_longlong(ival)
@@ -37,7 +37,7 @@ def box_integer(c, typ, val):
         return c.pyapi.long_from_ulonglong(ullval)
 
 @unbox(types.Integer)
-def unbox_integer(c, typ, obj):
+def unbox_integer(typ, obj, c):
     ll_type = c.context.get_argument_type(typ)
     val = cgutils.alloca_once(c.builder, ll_type)
     longobj = c.pyapi.number_long(obj)
@@ -53,7 +53,7 @@ def unbox_integer(c, typ, obj):
 
 
 @box(types.Float)
-def box_float(c, typ, val):
+def box_float(typ, val, c):
     if typ == types.float32:
         dbval = c.builder.fpext(val, c.pyapi.double)
     else:
@@ -62,7 +62,7 @@ def box_float(c, typ, val):
     return c.pyapi.float_from_double(dbval)
 
 @unbox(types.Float)
-def unbox_float(c, typ, obj):
+def unbox_float(typ, obj, c):
     fobj = c.pyapi.number_float(obj)
     dbval = c.pyapi.float_as_double(fobj)
     c.pyapi.decref(fobj)
@@ -76,7 +76,7 @@ def unbox_float(c, typ, obj):
 
 
 @box(types.Complex)
-def box_complex(c, typ, val):
+def box_complex(typ, val, c):
     cmplxcls = c.context.make_complex(typ)
     cval = cmplxcls(c.context, c.builder, value=val)
 
@@ -89,7 +89,7 @@ def box_complex(c, typ, val):
     return c.pyapi.complex_from_doubles(freal, fimag)
 
 @unbox(types.Complex)
-def unbox_complex(c, typ, obj):
+def unbox_complex(typ, obj, c):
     c128cls = c.context.make_complex(types.complex128)
     c128 = c128cls(c.context, c.builder)
     ok = c.pyapi.complex_adaptor(obj, c128._getpointer())
@@ -113,37 +113,37 @@ def unbox_complex(c, typ, obj):
 
 
 @box(types.NoneType)
-def box_none(c, typ, val):
+def box_none(typ, val, c):
     return c.pyapi.make_none()
 
 @unbox(types.NoneType)
 @unbox(types.EllipsisType)
-def unbox_none(c, typ, val):
+def unbox_none(typ, val, c):
     return NativeValue(c.context.get_dummy_value())
 
 
 @box(types.NPDatetime)
-def box_npdatetime(c, typ, val):
+def box_npdatetime(typ, val, c):
     return c.pyapi.create_np_datetime(val, typ.unit_code)
 
 @unbox(types.NPDatetime)
-def unbox_npdatetime(c, typ, obj):
+def unbox_npdatetime(typ, obj, c):
     val = c.pyapi.extract_np_datetime(obj)
     return NativeValue(val, is_error=c.pyapi.c_api_error())
 
 
 @box(types.NPTimedelta)
-def box_nptimedelta(c, typ, val):
+def box_nptimedelta(typ, val, c):
     return c.pyapi.create_np_timedelta(val, typ.unit_code)
 
 @unbox(types.NPTimedelta)
-def unbox_nptimedelta(c, typ, obj):
+def unbox_nptimedelta(typ, obj, c):
     val = c.pyapi.extract_np_timedelta(obj)
     return NativeValue(val, is_error=c.pyapi.c_api_error())
 
 
 @box(types.RawPointer)
-def box_raw_pointer(c, typ, val):
+def box_raw_pointer(typ, val, c):
     """
     Convert a raw pointer to a Python int.
     """
@@ -157,7 +157,7 @@ def box_raw_pointer(c, typ, val):
 #
 
 @box(types.Record)
-def box_record(c, typ, val):
+def box_record(typ, val, c):
     # Note we will create a copy of the record
     # This is the only safe way.
     size = ir.Constant(ir.IntType(32), val.type.pointee.count)
@@ -165,7 +165,7 @@ def box_record(c, typ, val):
     return c.pyapi.recreate_record(ptr, size, typ.dtype, c.env_manager)
 
 @unbox(types.Record)
-def unbox_record(c, typ, obj):
+def unbox_record(typ, obj, c):
     buf = c.pyapi.alloca_buffer()
     ptr = c.pyapi.extract_record_data(obj, buf)
     is_error = cgutils.is_null(c.builder, ptr)
@@ -179,7 +179,7 @@ def unbox_record(c, typ, obj):
 
 
 @box(types.CharSeq)
-def box_charseq(c, typ, val):
+def box_charseq(typ, val, c):
     rawptr = cgutils.alloca_once_value(c.builder, value=val)
     strptr = c.builder.bitcast(rawptr, c.pyapi.cstring)
     fullsize = c.context.get_constant(types.intp, typ.count)
@@ -212,7 +212,7 @@ def box_charseq(c, typ, val):
     return c.pyapi.bytes_from_string_and_size(strptr, strlen)
 
 @unbox(types.CharSeq)
-def unbox_charseq(c, typ, obj):
+def unbox_charseq(typ, obj, c):
     lty = c.context.get_value_type(typ)
     ok, buffer, size = c.pyapi.string_as_string_and_size(obj)
 
@@ -240,7 +240,7 @@ def unbox_charseq(c, typ, obj):
 
 
 @unbox(types.Optional)
-def unbox_optional(c, typ, obj):
+def unbox_optional(typ, obj, c):
     """
     Convert object *obj* to a native optional structure.
     """
@@ -274,7 +274,7 @@ def unbox_optional(c, typ, obj):
 
 
 @unbox(types.Slice3Type)
-def unbox_slice(c, typ, obj):
+def unbox_slice(typ, obj, c):
     """
     Convert object *obj* to a native slice structure.
     """
@@ -296,7 +296,7 @@ def unbox_slice(c, typ, obj):
 # the given native value.
 
 @box(types.Array)
-def box_array(c, typ, val):
+def box_array(typ, val, c):
     nativearycls = c.context.make_array(typ)
     nativeary = nativearycls(c.context, c.builder, value=val)
     if c.context.enable_nrt:
@@ -311,7 +311,7 @@ def box_array(c, typ, val):
         return parent
 
 @unbox(types.Buffer)
-def unbox_buffer(c, typ, obj):
+def unbox_buffer(typ, obj, c):
     """
     Convert a Py_buffer-providing object to a native array structure.
     """
@@ -337,7 +337,7 @@ def unbox_buffer(c, typ, obj):
                        cleanup=cleanup)
 
 @unbox(types.Array)
-def unbox_array(c, typ, obj):
+def unbox_array(typ, obj, c):
     """
     Convert a Numpy array object to a native array structure.
     """
@@ -361,7 +361,7 @@ def unbox_array(c, typ, obj):
 
 @box(types.Tuple)
 @box(types.UniTuple)
-def box_tuple(c, typ, val):
+def box_tuple(typ, val, c):
     """
     Convert native array or structure *val* to a tuple object.
     """
@@ -376,12 +376,12 @@ def box_tuple(c, typ, val):
 
 @box(types.NamedTuple)
 @box(types.NamedUniTuple)
-def box_namedtuple(c, typ, val):
+def box_namedtuple(typ, val, c):
     """
     Convert native array or structure *val* to a namedtuple object.
     """
     cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
-    tuple_obj = box_tuple(c, typ, val)
+    tuple_obj = box_tuple(typ, val, c)
     obj = c.pyapi.call(cls_obj, tuple_obj)
     c.pyapi.decref(cls_obj)
     c.pyapi.decref(tuple_obj)
@@ -389,7 +389,7 @@ def box_namedtuple(c, typ, val):
 
 
 @unbox(types.BaseTuple)
-def unbox_tuple(c, typ, obj):
+def unbox_tuple(typ, obj, c):
     """
     Convert tuple *obj* to a native array (if homogenous) or structure.
     """
@@ -420,7 +420,7 @@ def unbox_tuple(c, typ, obj):
 
 
 @box(types.List)
-def box_list(c, typ, val):
+def box_list(typ, val, c):
     """
     Convert native list *val* to a list object.
     """
@@ -453,7 +453,7 @@ def box_list(c, typ, val):
 
 
 @unbox(types.List)
-def unbox_list(c, typ, obj):
+def unbox_list(typ, obj, c):
     """
     Convert list *obj* to a native list.
 
@@ -518,7 +518,7 @@ def unbox_list(c, typ, obj):
 
 
 @reflect(types.List)
-def reflect_list(c, typ, val):
+def reflect_list(typ, val, c):
     """
     Reflect the native list's contents into the Python object.
     """
@@ -566,33 +566,33 @@ def reflect_list(c, typ, val):
 #
 
 @box(types.Generator)
-def box_generator(c, typ, val):
+def box_generator(typ, val, c):
     return c.pyapi.from_native_generator(val, typ, c.env_manager.env_ptr)
 
 @unbox(types.Generator)
-def unbox_generator(c, typ, obj):
+def unbox_generator(typ, obj, c):
     return c.pyapi.to_native_generator(obj, typ)
 
 
 @box(types.DType)
-def box_dtype(c, typ, val):
+def box_dtype(typ, val, c):
     np_dtype = numpy_support.as_dtype(typ.dtype)
     return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
 
 
 @box(types.PyObject)
 @box(types.Object)
-def box_pyobject(c, typ, val):
+def box_pyobject(typ, val, c):
     return val
 
 @unbox(types.PyObject)
 @unbox(types.Object)
-def unbox_pyobject(c, typ, obj):
+def unbox_pyobject(typ, obj, c):
     return NativeValue(obj)
 
 
 @unbox(types.ExternalFunctionPointer)
-def unbox_funcptr(c, typ, obj):
+def unbox_funcptr(typ, obj, c):
     if typ.get_pointer is None:
         raise NotImplementedError(typ)
 
