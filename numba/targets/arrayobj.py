@@ -1065,6 +1065,40 @@ def _attempt_nocopy_reshape(context, builder, aryty, ary, newnd, newshape,
                             ary.itemsize, is_f_order])
     return res
 
+
+def normalize_reshape_value(origsize, shape):
+    num_neg_value = 0
+    for s in shape:
+        if s < 0:
+            num_neg_value += 1
+
+    if num_neg_value == 0:
+        total_size = 1
+        for s in shape:
+            total_size *= s
+
+        if origsize != total_size:
+            raise ValueError("total size of new array must be unchanged")
+
+    elif num_neg_value == 1:
+        # infer negative dimension
+        known_size = 1
+        inferred_ax = 0
+        for ax, s in enumerate(shape):
+            if s > 0:
+                known_size *= s
+            else:
+                inferred_ax = ax
+
+        if origsize % known_size > 0:
+            raise ValueError("total size of new array must be unchanged")
+        else:
+            shape[inferred_ax] = origsize // known_size
+
+    else:
+        raise ValueError("multiple negative shape value")
+
+
 @builtin
 @implement('array.reshape', types.Array, types.BaseTuple)
 def array_reshape(context, builder, sig, args):
@@ -1078,29 +1112,36 @@ def array_reshape(context, builder, sig, args):
 
     ary = make_array(aryty)(context, builder, args[0])
 
-    # XXX unknown dimension (-1) is unhandled
-    msg = "negative shape is not handled, yet"
-    for s in cgutils.unpack_tuple(builder, shape):
-        is_neg = builder.icmp_signed('<', s, lc.Constant.int(ll_intp, 0))
-        with cgutils.if_unlikely(builder, is_neg):
-            context.call_conv.return_user_exc(builder, NotImplementedError,
-                                              (msg,))
+    # Create a shape array (no heap allocation)
+    shape_ary_ty = types.Array(dtype=shapety.dtype, ndim=1, layout='C')
 
-    # Check requested size
-    newsize = lc.Constant.int(ll_intp, 1)
-    for s in cgutils.unpack_tuple(builder, shape):
-        newsize = builder.mul(newsize, s)
+    newshape = cgutils.alloca_once(builder, ll_shape)
+    builder.store(shape, newshape)
+
+    shape_ary = make_array(shape_ary_ty)(context, builder)
+    shape_itemsize = context.get_constant(types.intp,
+                                          context.get_abi_sizeof(ll_intp))
+    populate_array(shape_ary,
+                   data=builder.bitcast(newshape, ll_intp.as_pointer()),
+                   shape=[context.get_constant(types.intp, shapety.count)],
+                   strides=[shape_itemsize],
+                   itemsize=shape_itemsize,
+                   meminfo=None)
+
+    # Compute the original array size
     size = lc.Constant.int(ll_intp, 1)
     for s in cgutils.unpack_tuple(builder, ary.shape):
         size = builder.mul(size, s)
-    fail = builder.icmp_unsigned('!=', size, newsize)
-    with builder.if_then(fail):
-        msg = "total size of new array must be unchanged"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
+    # Call our normalizer which will fix the shape array in case of negative
+    # shape value
+    context.compile_internal(builder, normalize_reshape_value,
+                             typing.signature(types.void,
+                                              types.uintp, shape_ary_ty),
+                             [size, shape_ary._getvalue()])
+
+    # Perform reshape (nocopy)
     newnd = shapety.count
-    newshape = cgutils.alloca_once(builder, ll_shape)
-    builder.store(shape, newshape)
     newstrides = cgutils.alloca_once(builder, ll_shape)
 
     ok = _attempt_nocopy_reshape(context, builder, aryty, ary, newnd,
