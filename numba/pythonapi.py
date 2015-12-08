@@ -1209,7 +1209,7 @@ class PythonAPI(object):
             raise NotImplementedError("cannot convert %s to native value" % (typ,))
 
         c = _UnboxContext(self.context, self.builder, self)
-        return impl(c, typ, obj)
+        return impl(typ, obj, c)
 
     def from_native_return(self, typ, val, env_manager):
         assert not isinstance(typ, types.Optional), "callconv should have " \
@@ -1224,7 +1224,7 @@ class PythonAPI(object):
             raise NotImplementedError("cannot convert native %s to Python object" % (typ,))
 
         c = _BoxContext(self.context, self.builder, self, env_manager)
-        return impl(c, typ, val)
+        return impl(typ, val, c)
 
     def reflect_native_value(self, typ, val, env_manager=None):
         """
@@ -1239,7 +1239,7 @@ class PythonAPI(object):
         is_error = cgutils.alloca_once_value(self.builder, cgutils.false_bit)
         c = _ReflectContext(self.context, self.builder, self, env_manager,
                             is_error)
-        impl(c, typ, val)
+        impl(typ, val, c)
         return self.builder.load(c.is_error)
 
     def to_native_generator(self, obj, typ):
