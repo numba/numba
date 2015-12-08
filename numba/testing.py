@@ -509,9 +509,10 @@ class ParallelTestRunner(runner.TextTestRunner):
             # Kill the still active workers
             pool.terminate()
             pool.join()
-        stests = SerialSuite(self._stests)
-        stests.run(result)
-        return result
+        if not result.shouldStop:
+            stests = SerialSuite(self._stests)
+            stests.run(result)
+            return result
 
     def _run_parallel_tests(self, result, pool, child_runner):
         remaining_ids = set(t.id() for t in self._ptests)
@@ -531,6 +532,7 @@ class ParallelTestRunner(runner.TextTestRunner):
             result.add_results(child_result)
             remaining_ids.discard(child_result.test_id)
             if child_result.shouldStop:
+                result.shouldStop = True
                 return
 
     def run(self, test):
