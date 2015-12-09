@@ -273,7 +273,7 @@ def unbox_optional(typ, obj, c):
                        cleanup=cleanup)
 
 
-@unbox(types.Slice3Type)
+@unbox(types.SliceType)
 def unbox_slice(typ, obj, c):
     """
     Convert object *obj* to a native slice structure.
@@ -281,11 +281,11 @@ def unbox_slice(typ, obj, c):
     from . import slicing
     ok, start, stop, step = \
         c.pyapi.slice_as_ints(obj, slicing.get_defaults(c.context))
-    slice3 = slicing.Slice(c.context, c.builder)
-    slice3.start = start
-    slice3.stop = stop
-    slice3.step = step
-    return NativeValue(slice3._getvalue(), is_error=c.builder.not_(ok))
+    sli = slicing.make_slice(c.context, c.builder, typ)
+    sli.start = start
+    sli.stop = stop
+    sli.step = step
+    return NativeValue(sli._getvalue(), is_error=c.builder.not_(ok))
 
 
 #

@@ -48,11 +48,11 @@ class Abs(ConcreteTemplate):
 class Slice(ConcreteTemplate):
     key = types.slice_type
     cases = [
-        signature(types.slice3_type),
-        signature(types.slice3_type, types.none, types.none),
-        signature(types.slice3_type, types.none, types.intp),
-        signature(types.slice3_type, types.intp, types.none),
-        signature(types.slice3_type, types.intp, types.intp),
+        signature(types.slice2_type),
+        signature(types.slice2_type, types.none, types.none),
+        signature(types.slice2_type, types.none, types.intp),
+        signature(types.slice2_type, types.intp, types.none),
+        signature(types.slice2_type, types.intp, types.intp),
         signature(types.slice3_type, types.intp, types.intp, types.intp),
         signature(types.slice3_type, types.none, types.intp, types.intp),
         signature(types.slice3_type, types.intp, types.none, types.intp),
@@ -413,8 +413,8 @@ def normalize_1d_index(index):
     Normalize the *index* type (an integer or slice) for indexing a 1D
     sequence.
     """
-    if index == types.slice3_type:
-        return types.slice3_type
+    if isinstance(index, types.SliceType):
+        return index
 
     elif isinstance(index, types.Integer):
         return types.intp if index.signed else types.uintp
@@ -542,7 +542,7 @@ class NumberAttribute(AttributeTemplate):
 
 @builtin_attr
 class SliceAttribute(AttributeTemplate):
-    key = types.slice3_type
+    key = types.SliceType
 
     def resolve_start(self, ty):
         return types.intp

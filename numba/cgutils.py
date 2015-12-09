@@ -722,13 +722,6 @@ def guard_null(context, builder, value, exc_tuple):
         exc_args = exc_tuple[1:] or None
         context.call_conv.return_user_exc(builder, exc, exc_args)
 
-def guard_invalid_slice(context, builder, slicestruct):
-    """
-    Guard against *slicestruct* having a zero step (and raise ValueError).
-    """
-    guard_null(context, builder, slicestruct.step,
-               (ValueError, "slice step cannot be zero"))
-
 def guard_memory_error(context, builder, pointer, msg=None):
     """
     Guard against *pointer* being NULL (and raise a MemoryError).

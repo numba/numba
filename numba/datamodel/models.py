@@ -840,13 +840,14 @@ class UniTupleIter(StructModel):
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
 
-@register_default(types.Slice3Type)
-class Slice3(StructModel):
+@register_default(types.SliceType)
+class SliceModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('start', types.intp),
                    ('stop', types.intp),
-                   ('step', types.intp)]
-        super(Slice3, self).__init__(dmm, fe_type, members)
+                   ('step', types.intp),
+                   ]
+        super(SliceModel, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.NPDatetime)

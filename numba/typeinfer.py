@@ -759,7 +759,8 @@ class TypeInferer(object):
         self.add_type(target.name, types.none)
 
     def sentry_modified_builtin(self, inst, gvar):
-        """Ensure that builtins are modified.
+        """
+        Ensure that builtins are not modified.
         """
         if (gvar.name in ('range', 'xrange') and
                     gvar.value not in utils.RANGE_ITER_OBJECTS):
