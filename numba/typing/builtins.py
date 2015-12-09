@@ -18,28 +18,18 @@ builtin_global(print, types.print_type)
 
 
 @builtin
-class Print(ConcreteTemplate):
-    key = types.print_type
-    intcases = [signature(types.none, ty) for ty in types.integer_domain]
-    realcases = [signature(types.none, ty) for ty in types.real_domain]
-    cases = intcases + realcases
-
-
-@builtin
-class PrintOthers(AbstractTemplate):
+class Print(AbstractTemplate):
     key = types.print_type
 
-    def accepted_types(self, ty):
-        if ty in types.integer_domain or ty in types.real_domain:
-            return True
-
-        if isinstance(ty, types.CharSeq):
+    def is_accepted_type(self, ty):
+        if isinstance(ty, (types.Integer, types.Boolean, types.Float,
+                           types.CharSeq)):
             return True
 
     def generic(self, args, kws):
         assert not kws, "kwargs to print is not supported."
         for a in args:
-            if not self.accepted_types(a):
+            if not self.is_accepted_type(a):
                 raise TypeError("Type %s is not printable." % a)
         return signature(types.none, *args)
 
