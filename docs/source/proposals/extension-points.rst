@@ -84,6 +84,9 @@ classes, e.g.::
 The ``typeof_impl`` specialization must return a Numba type instance,
 or None if the value failed typing.
 
+(when one controls the class being type-inferred, an alternative
+to ``typeof_impl`` is to define a ``_numba_type_`` property on the class)
+
 In the rarer case where the new type can denote various Python classes
 that are impossible to enumerate, one must insert a manual check in the
 fallback implementation of the ``typeof_impl`` generic function.
