@@ -43,6 +43,18 @@ def real_print_impl(context, builder, sig, args):
 
 
 @register
+@implement(types.print_item_type, types.Boolean)
+def bool_print_impl(context, builder, sig, args):
+    [x] = args
+    py = context.get_python_api(builder)
+    boolobj = py.bool_from_bool(x)
+    py.print_object(boolobj)
+    py.decref(boolobj)
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@register
 @implement(types.print_item_type, types.CharSeq)
 def print_charseq(context, builder, sig, args):
     [tx] = sig.args
