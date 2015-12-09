@@ -38,7 +38,7 @@ def get_array_index_type(ary, idx):
                 raise TypeError("only one ellipsis allowed in array index "
                                 "(got %s)" % (idx,))
             ellipsis_met = True
-        elif ty is types.slice3_type:
+        elif isinstance(ty, types.SliceType):
             pass
         elif isinstance(ty, types.Integer):
             # Normalize integer index

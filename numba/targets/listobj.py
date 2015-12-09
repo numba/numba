@@ -453,11 +453,11 @@ def setitem_list(context, builder, sig, args):
 
 
 @builtin
-@implement('getitem', types.List, types.slice3_type)
+@implement('getitem', types.List, types.SliceType)
 def getslice_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
-    slice = slicing.Slice(context, builder, value=args[1])
-    cgutils.guard_invalid_slice(context, builder, slice)
+    slice = slicing.make_slice(context, builder, sig.args[1], args[1])
+    slicing.guard_invalid_slice(context, builder, sig.args[1], slice)
     inst.fix_slice(slice)
 
     # Allocate result and populate it
@@ -477,13 +477,13 @@ def getslice_list(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
 
 @builtin
-@implement('setitem', types.List, types.slice3_type, types.Any)
+@implement('setitem', types.List, types.SliceType, types.Any)
 def setitem_list(context, builder, sig, args):
     dest = ListInstance(context, builder, sig.args[0], args[0])
-    slice = slicing.Slice(context, builder, value=args[1])
     src = ListInstance(context, builder, sig.args[2], args[2])
 
-    cgutils.guard_invalid_slice(context, builder, slice)
+    slice = slicing.make_slice(context, builder, sig.args[1], args[1])
+    slicing.guard_invalid_slice(context, builder, sig.args[1], slice)
     dest.fix_slice(slice)
 
     src_size = src.size
@@ -538,12 +538,12 @@ def setitem_list(context, builder, sig, args):
 
 
 @builtin
-@implement('delitem', types.List, types.slice3_type)
+@implement('delitem', types.List, types.SliceType)
 def setitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
-    slice = slicing.Slice(context, builder, value=args[1])
+    slice = slicing.make_slice(context, builder, sig.args[1], args[1])
 
-    cgutils.guard_invalid_slice(context, builder, slice)
+    slicing.guard_invalid_slice(context, builder, sig.args[1], slice)
     inst.fix_slice(slice)
 
     slice_len = slicing.get_slice_length(builder, slice)

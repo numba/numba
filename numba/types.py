@@ -1396,8 +1396,17 @@ class ExceptionInstance(Phantom):
         return self.exc_class
 
 
-class Slice3Type(Type):
-    pass
+class SliceType(Type):
+
+    def __init__(self, name, members):
+        assert members in (2, 3)
+        self.members = members
+        self.has_step = members >= 3
+        super(SliceType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.members
 
 
 # Short names
@@ -1453,8 +1462,8 @@ range_state32_type = RangeType(int32)
 range_state64_type = RangeType(int64)
 unsigned_range_state64_type = RangeType(uint64)
 
-# slice2_type = Type('slice2_type')
-slice3_type = Slice3Type('slice3_type')
+slice2_type = SliceType('slice<a:b>', 2)
+slice3_type = SliceType('slice<a:b:c>', 3)
 
 signed_domain = frozenset([int8, int16, int32, int64])
 unsigned_domain = frozenset([uint8, uint16, uint32, uint64])

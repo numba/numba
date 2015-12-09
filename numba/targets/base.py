@@ -33,31 +33,6 @@ GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
 
-LTYPEMAP = {
-    types.pyobject: PYOBJECT,
-
-    types.boolean: Type.int(8),
-
-    types.uint8: Type.int(8),
-    types.uint16: Type.int(16),
-    types.uint32: Type.int(32),
-    types.uint64: Type.int(64),
-
-    types.int8: Type.int(8),
-    types.int16: Type.int(16),
-    types.int32: Type.int(32),
-    types.int64: Type.int(64),
-
-    types.float32: Type.float(),
-    types.float64: Type.double(),
-}
-
-STRUCT_TYPES = {
-    types.complex64: builtins.Complex64,
-    types.complex128: builtins.Complex128,
-    types.slice3_type: slicing.Slice,
-}
-
 
 class Overloads(object):
     def __init__(self):

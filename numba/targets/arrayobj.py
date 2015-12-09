@@ -300,9 +300,9 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
                 ax += 1
             continue
         # Regular index value
-        if idxty == types.slice3_type:
-            slice = slicing.Slice(context, builder, value=indexval)
-            cgutils.guard_invalid_slice(context, builder, slice)
+        if isinstance(idxty, types.SliceType):
+            slice = slicing.make_slice(context, builder, idxty, value=indexval)
+            slicing.guard_invalid_slice(context, builder, idxty, slice)
             slicing.fix_slice(builder, slice, shapes[ax])
             output_indices.append(slice.start)
             sh = slicing.get_slice_length(builder, slice)
@@ -389,7 +389,7 @@ def getitem_arraynd_intp(context, builder, sig, args):
 
 
 @builtin
-@implement('getitem', types.Buffer, types.slice3_type)
+@implement('getitem', types.Buffer, types.SliceType)
 def getitem_array1d_slice(context, builder, sig, args):
     aryty, idxty = sig.args
     ary, idx = args
@@ -737,12 +737,13 @@ class SliceIndexer(Indexer):
     Compute indices along a slice.
     """
 
-    def __init__(self, context, builder, aryty, ary, dim, slice):
+    def __init__(self, context, builder, aryty, ary, dim, idxty, slice):
         self.context = context
         self.builder = builder
         self.aryty = aryty
         self.ary = ary
         self.dim = dim
+        self.idxty = idxty
         self.slice = slice
         self.ll_intp = self.context.get_value_type(types.intp)
         self.zero = Constant.int(self.ll_intp, 0)
@@ -752,7 +753,8 @@ class SliceIndexer(Indexer):
         builder = self.builder
         # Fix slice for the dimension's size
         self.dim_size = builder.extract_value(self.ary.shape, self.dim)
-        cgutils.guard_invalid_slice(self.context, builder, self.slice)
+        slicing.guard_invalid_slice(self.context, builder, self.idxty,
+                                    self.slice)
         slicing.fix_slice(builder, self.slice, self.dim_size)
         self.is_step_negative = cgutils.is_neg_int(builder, self.slice.step)
         # Create loop entities
@@ -821,9 +823,10 @@ class FancyIndexer(object):
                 continue
 
             # Regular index value
-            if idxty == types.slice3_type:
-                slice = slicing.Slice(context, builder, value=indexval)
-                indexer = SliceIndexer(context, builder, aryty, ary, ax, slice)
+            if isinstance(idxty, types.SliceType):
+                slice = slicing.make_slice(context, builder, idxty, indexval)
+                indexer = SliceIndexer(context, builder, aryty, ary, ax,
+                                       idxty, slice)
                 indexers.append(indexer)
             elif isinstance(idxty, types.Integer):
                 ind = fix_integer_index(context, builder, idxty, indexval,
