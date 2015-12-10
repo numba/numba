@@ -250,8 +250,18 @@ destination type being :class:`types.Boolean`).
 Proposed changes
 ''''''''''''''''
 
-Implicit conversion could use some kind of generic function, with multiple
-dispatch based on the source and destination types.
+Add a generic function for implicit conversion, with multiple dispatch
+based on the source and destination types.  Here is an example showing
+how to write a float-to-integer conversion::
+
+   @builtin_cast(types.Float, types.Integer)
+   def float_to_integer(context, builder, fromty, toty, val):
+       lty = context.get_value_type(toty)
+       if toty.signed:
+           return builder.fptosi(val, lty)
+       else:
+           return builder.fptoui(val, lty)
+
 
 Implementation of an operation
 ------------------------------
@@ -277,8 +287,8 @@ And here is how calling ``len()`` on a tuple value is implemented::
 Proposed changes
 ''''''''''''''''
 
-No changes required.  Perhaps review and streamine the API (drop the
-requirement to write ``types.Kind(...)`` explicitly?).
+Perhaps review and streamine the API.  Drop the requirement to
+write ``types.Kind(...)`` explicitly.
 
 
 Conversion from / to Python objects
