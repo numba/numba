@@ -201,9 +201,8 @@ full signature)
 Proposed changes
 ''''''''''''''''
 
-If we expose some of this, should we streamline the API first?
-The class-based API can feel clumsy, one could instead imagine
-a functional API for some of the template kinds:
+The class-based API can feel clumsy, we could add  a functional API for
+some of the template kinds:
 
 .. code-block:: python
 
