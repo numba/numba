@@ -184,11 +184,6 @@ class ClassBuilder(object):
                 ctor = outer.jitmethods['__init__']
 
                 instance_type = outer.class_type.instance_type
-                if instance_type not in defined_types:
-                    defined_types.add(instance_type)
-                    outer.implement_frontend(instance_type)
-                    outer.implement_backend(instance_type)
-
                 boundargs = (instance_type.get_reference_type(),) + args
                 template, args, kws = ctor.get_call_template(boundargs, kws)
                 sig = template(self.context).apply(args, kws)
@@ -196,6 +191,10 @@ class ClassBuilder(object):
                 return out
 
         self.typer.insert_function(ConstructorTemplate(self.typer))
+
+        instance_type = outer.class_type.instance_type
+        outer.implement_frontend(instance_type)
+        outer.implement_backend(instance_type)
 
     def implement_frontend(self, instance_type):
         self.implement_attribute_typing(instance_type)
@@ -354,6 +353,3 @@ class ClassBuilder(object):
             out = context.call_internal(builder, cres.fndesc, sig, args)
             return imputils.impl_ret_new_ref(context, builder,
                                              sig.return_type, out)
-
-
-defined_types = set()
