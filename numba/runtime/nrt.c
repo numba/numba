@@ -217,7 +217,7 @@ void *nrt_allocate_meminfo_and_data(size_t size, NRT_MemInfo **mi_out) {
 
 static
 void nrt_internal_custom_dtor_safe(void *ptr, size_t size, void *info) {
-    NRT_dtor_function dtor = (NRT_dtor_function*)info;
+    NRT_dtor_function dtor = info;
     NRT_Debug(nrt_debug_print("nrt_internal_custom_dtor_safe %p, %p\n",
                               ptr, info));
     if (dtor) {
