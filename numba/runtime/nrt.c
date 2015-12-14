@@ -62,13 +62,6 @@ struct MemSys {
 static NRT_MemSys TheMSys;
 
 
-typedef struct {
-    size_t allocated_size;
-    NRT_dtor_function dtor;
-} DtorInfo;
-
-
-
 void NRT_MemSys_init(void) {
     memset(&TheMSys, 0, sizeof(NRT_MemSys));
     /* Bind to libc allocator */
@@ -206,8 +199,7 @@ size_t NRT_MemInfo_refcount(NRT_MemInfo *mi) {
 }
 
 static
-void nrt_internal_dtor_safe(void *ptr, void *info) {
-    size_t size = (size_t) info;
+void nrt_internal_dtor_safe(void *ptr, size_t size, void *info) {
     NRT_Debug(nrt_debug_print("nrt_internal_dtor_safe %p, %p\n", ptr, info));
     /* See NRT_MemInfo_alloc_safe() */
     memset(ptr, 0xDE, MIN(size, 256));
@@ -224,16 +216,15 @@ void *nrt_allocate_meminfo_and_data(size_t size, NRT_MemInfo **mi_out) {
 
 
 static
-void nrt_internal_custom_dtor_safe(void *ptr, void *info) {
-    DtorInfo *dtor_info = (DtorInfo*)info;
+void nrt_internal_custom_dtor_safe(void *ptr, size_t size, void *info) {
+    NRT_dtor_function dtor = (NRT_dtor_function*)info;
     NRT_Debug(nrt_debug_print("nrt_internal_custom_dtor_safe %p, %p\n",
                               ptr, info));
-    if (dtor_info->dtor) {
-        dtor_info->dtor(ptr, NULL);
+    if (dtor) {
+        dtor(ptr, size, NULL);
     }
 
-    nrt_internal_dtor_safe(ptr, (void*)dtor_info->allocated_size);
-    free(info);
+    nrt_internal_dtor_safe(ptr, size, NULL);
 }
 
 
@@ -258,21 +249,12 @@ NRT_MemInfo *NRT_MemInfo_alloc_safe(size_t size) {
 
 NRT_MemInfo* NRT_MemInfo_alloc_dtor_safe(size_t size, NRT_dtor_function dtor) {
     NRT_MemInfo *mi;
-    DtorInfo *dtor_info;
     void *data = nrt_allocate_meminfo_and_data(size, &mi);
-
-    /* Allocate space for destructor information.
-       TODO: merge the allocation into the data buffer
-    */
-    dtor_info = (DtorInfo*)malloc(sizeof(DtorInfo));
-    dtor_info->allocated_size = size;
-    dtor_info->dtor = dtor;
-
     /* Only fill up a couple cachelines with debug markers, to minimize
        overhead. */
     memset(data, 0xCB, MIN(size, 256));
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_dtor_safe %p %zu\n", data, size));
-    NRT_MemInfo_init(mi, data, size, nrt_internal_custom_dtor_safe, dtor_info);
+    NRT_MemInfo_init(mi, data, size, nrt_internal_custom_dtor_safe, dtor);
     return mi;
 }
 
@@ -330,7 +312,7 @@ void NRT_MemInfo_call_dtor(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("nrt_meminfo_call_dtor %p\n", mi));
     if (mi->dtor && !TheMSys.shutting)
         /* We have a destructor and the system is not shutting down */
-        mi->dtor(mi->data, mi->dtor_info);
+        mi->dtor(mi->data, mi->size, mi->dtor_info);
     /* Clear and release MemInfo */
     NRT_MemInfo_destroy(mi);
 }
@@ -363,7 +345,7 @@ void NRT_MemInfo_dump(NRT_MemInfo *mi, FILE *out) {
  */
 
 static void
-nrt_varsize_dtor(void *ptr, void *info) {
+nrt_varsize_dtor(void *ptr, size_t size, void *info) {
     NRT_Debug(nrt_debug_print("nrt_buffer_dtor %p\n", ptr));
     NRT_Free(ptr);
 }

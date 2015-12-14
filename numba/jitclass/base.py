@@ -242,11 +242,10 @@ class ClassBuilder(object):
 
     def implement_constructor(self, registry, instance_type, ctor_nargs):
         def imp_dtor(context, module):
+            llvoidptr = context.get_value_type(types.voidptr)
+            llsize = context.get_value_type(types.uintp)
             dtor_ftype = llvmir.FunctionType(llvmir.VoidType(),
-                                             [context.get_value_type(
-                                                 types.voidptr),
-                                                 context.get_value_type(
-                                                     types.voidptr)])
+                                             [llvoidptr, llsize, llvoidptr])
 
             fname = "_Dtor.{0}".format(instance_type.name)
             dtor_fn = module.get_or_insert_function(dtor_ftype,

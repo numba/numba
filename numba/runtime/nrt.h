@@ -19,7 +19,7 @@ All functions described here are threadsafe.
 #endif
 
 /* TypeDefs */
-typedef void (*NRT_dtor_function)(void *ptr, void *info);
+typedef void (*NRT_dtor_function)(void *ptr, size_t size, void *info);
 typedef size_t (*NRT_atomic_inc_dec_func)(size_t *ptr);
 typedef int (*NRT_atomic_cas_func)(void * volatile *ptr, void *cmp, void *repl,
                                    void **oldptr);
