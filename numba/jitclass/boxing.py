@@ -110,6 +110,8 @@ class Box(object):
         return object.__new__(_specialize_box(typ))
 
     def __init__(self, meminfoptr, dataptr, typ):
+        # MemInfo is used to acquire a reference to `meminfoptr`.
+        # When the MemInfo is destroyed, the reference is released.
         self._meminfo = MemInfo(meminfoptr)
         self._meminfoptr = meminfoptr
         self._dataptr = dataptr
