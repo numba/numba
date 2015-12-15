@@ -1,3 +1,7 @@
+"""
+This example demonstrates jitclasses and deferred types for writing a
+singly-linked-list.
+"""
 from __future__ import print_function, absolute_import
 from numba.utils import OrderedDict
 import numpy as np
@@ -33,8 +37,14 @@ node_type.define(LinkedNode.class_type.instance_type)
 
 @njit
 def fill_array(arr):
+    """
+    Fills the array with n, n - 1, n - 2 and so on
+    First we populate a linked list with values 1 ... n
+    Then, we traverse the the linked list in reverse and put the value
+    into the array from the index.
+    """
     head = make_linked_node(0)
-    for i in range(1, arr.size):
+    for i in range(1, 1 + arr.size):
         head = head.prepend(i)
 
     c = 0
@@ -45,21 +55,15 @@ def fill_array(arr):
 
 
 def runme():
-    arr = np.zeros(100000, dtype=np.int32)
+    arr = np.zeros(10, dtype=np.int32)
     fill_array(arr)
-
-    # print(arr)
+    print("== Result ==")
+    print(arr)
+    # Check answer
+    np.testing.assert_equal(arr, 1 + np.arange(arr.size, dtype=arr.dtype)[::-1])
 
 
 if __name__ == '__main__':
     runme()
+    print("== Print memory allocation information == ")
     print(rtsys.get_allocation_stats())
-    # Pure python: 104ms
-    # jitclass: 2.23s
-    # jitclass + make_linked_node: 2.15s
-    # jitclass + make_linked_node + fill_array: 34.7ms
-
-    # Pure python: 87.3ms
-    # jitclass: 892ms
-    # jitclass + make_linked_node: 871ms
-    # jitclass + make_linked_node + fill_array: 36.1ms
