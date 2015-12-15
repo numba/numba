@@ -104,11 +104,6 @@ class Box(object):
     """
     __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_numba_type_'
 
-    def __new__(cls, meminfoptr, dataptr, typ):
-        if cls is not Box:
-            raise TypeError("cannot extend from specialized box")
-        return object.__new__(_specialize_box(typ))
-
     def __init__(self, meminfoptr, dataptr, typ):
         # MemInfo is used to acquire a reference to `meminfoptr`.
         # When the MemInfo is destroyed, the reference is released.
@@ -137,8 +132,9 @@ def _box_class_instance(typ, val, c):
     # XXX: relies on runtime address
     int_addr_typ = c.context.get_constant(types.uintp, id(typ))
 
-    int_addr_boxcls = c.context.get_constant(types.uintp,
-                                             id(Box))
+    box_subclassed = _specialize_box(typ)
+    # Note: the ``box_subclassed`` is kept alive by the cache
+    int_addr_boxcls = c.context.get_constant(types.uintp, id(box_subclassed))
 
     typ_obj = c.builder.inttoptr(int_addr_typ, c.pyapi.pyobj)
     box_cls = c.builder.inttoptr(int_addr_boxcls, c.pyapi.pyobj)
