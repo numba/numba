@@ -30,6 +30,8 @@ hsa_region_info_t = ctypes.c_int # enum
 hsa_executable_state_t = ctypes.c_int # enum
 hsa_executable_symbol_info_t = ctypes.c_int # enum
 
+hsa_ext_program_info_t = ctypes.c_int # enum
+
 hsa_signal_value_t = ctypes.c_uint64 if enums.HSA_LARGE_MODEL else ctypes.c_uint32
 
 hsa_signal_t = ctypes.c_uint64
@@ -287,8 +289,66 @@ HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC = ctypes.CFUNCTYPE(
     hsa_region_t, # region
     ctypes.py_object) # this is a c_void_p used to wrap a python object
 
+# callbacks?! function pointers, that are used in the
+# "hsa_ext_finalizer_1_00_pfn_t" struct of pointers
+HSA_EXT_PROGRAM_CREATE_FPTR = ctypes.CFUNCTYPE(
+        hsa_status_t, # return value
+        hsa_machine_model_t, # machine_model
+        hsa_profile_t, # profile
+        hsa_default_float_rounding_mode_t, # default_float_rounding_mode
+        _PTR(ctypes.c_char), # options
+        _PTR(hsa_ext_program_t)) # program
 
-# Function used by API calls returning hsa_status_t to check for errors ########
+HSA_EXT_PROGRAM_DESTROY_FPTR  = ctypes.CFUNCTYPE(
+        hsa_status_t, # return value
+        hsa_ext_program_t) # program
+
+HSA_EXT_PROGRAM_ADD_MODULE_FPTR = ctypes.CFUNCTYPE(
+        hsa_status_t, # return value
+        hsa_ext_program_t, # program
+        hsa_ext_module_t) # module
+
+HSA_EXT_PROGRAM_ITERATE_MODULES_CALLBACK_FUNC = ctypes.CFUNCTYPE(
+        hsa_status_t, # return
+        hsa_ext_program_t, # program
+        hsa_ext_module_t, # module
+        ctypes.c_void_p) # data
+
+HSA_EXT_PROGRAM_ITERATE_MODULES_FPTR = ctypes.CFUNCTYPE(
+        hsa_status_t, # return value
+        hsa_ext_program_t, # program
+        HSA_EXT_PROGRAM_ITERATE_MODULES_CALLBACK_FUNC, # callback
+        ctypes.c_void_p) # data
+
+HSA_EXT_PROGRAM_GET_INFO_FPTR = ctypes.CFUNCTYPE(
+        hsa_status_t, # return value
+        hsa_ext_program_t, # program
+        hsa_ext_program_info_t, # attribute
+        ctypes.c_void_p) # value
+
+HSA_EXT_PROGRAM_FINALIZE_FPTR = ctypes.CFUNCTYPE(
+        hsa_status_t, # return value
+        hsa_ext_program_t, # program
+        hsa_isa_t, # isa
+        ctypes.c_int32, # call_convention
+        hsa_ext_control_directives_t, # control_directives
+        _PTR(ctypes.c_char), #options
+        hsa_code_object_type_t, #code_object_type
+        _PTR(hsa_code_object_t)) # code_object
+
+# this struct holds function pointers
+class hsa_ext_finalizer_1_00_pfn_t(ctypes.Structure):
+    _fields_ = [
+               ('hsa_ext_program_create', HSA_EXT_PROGRAM_CREATE_FPTR),
+               ('hsa_ext_program_destroy', HSA_EXT_PROGRAM_DESTROY_FPTR),
+               ('hsa_ext_program_add_module', HSA_EXT_PROGRAM_ADD_MODULE_FPTR),
+               ('hsa_ext_program_iterate_modules',
+                   HSA_EXT_PROGRAM_ITERATE_MODULES_FPTR),
+               ('hsa_ext_program_get_info', HSA_EXT_PROGRAM_GET_INFO_FPTR),
+               ('hsa_ext_program_finalize', HSA_EXT_PROGRAM_FINALIZE_FPTR)
+    ]
+
+# Function used by API calls returning hsa_status_t to check for errors #######
 
 def _build_reverse_error_warn_maps():
     err_map = utils.UniqueDict()
@@ -341,6 +401,28 @@ API_PROTOTYPES = {
     'hsa_system_get_info': {
         'restype': hsa_status_t,
         'argtypes': [hsa_system_info_t, ctypes.c_void_p],
+        'errcheck': _check_error
+    },
+
+    # hsa_status_t HSA_API hsa_system_extension_supported(uint16_t, uint16_t,
+    #                                                     uint16_t, bool *);
+    'hsa_system_extension_supported': {
+        'restype': hsa_status_t,
+        'argtypes': [ctypes.c_uint16,      # extension
+                     ctypes.c_uint16,      # version_major
+                     ctypes.c_uint16,      # version_minor
+                     _PTR(ctypes.c_bool)], # result
+        'errcheck': _check_error
+    },
+
+    # hsa_status_t hsa_system_get_extension_table(uint16_t, uint16_t,
+    #                                             uint16_t, void *);
+    'hsa_system_get_extension_table': {
+        'restype': hsa_status_t,
+        'argtypes': [ctypes.c_uint16,  # extension
+                     ctypes.c_uint16,  # version_major
+                     ctypes.c_uint16,  # version_minor
+                     ctypes.c_void_p], # result
         'errcheck': _check_error
     },
 

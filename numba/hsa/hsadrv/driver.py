@@ -799,16 +799,48 @@ class Program(object):
     def __init__(self, model=enums.HSA_MACHINE_MODEL_LARGE,
                  profile=enums.HSA_PROFILE_FULL,
                  rounding_mode=enums.HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT,
-                 options=None):
+                 options=None, version_major=1, version_minor=0):
         self._id = drvapi.hsa_ext_program_t()
         assert options is None
-        hsa.hsa_ext_program_create(model, profile, rounding_mode,
-                                   options, ctypes.byref(self._id))
+
+        def check_fptr_return(hsa_status):
+            if hsa_status is not enums.HSA_STATUS_SUCCESS:
+                msg = ctypes.c_char_p()
+                hsa.hsa_status_string(hsa_status, ctypes.byref(msg))
+                print(msg.value.decode("utf-8"))
+                exit(-hsa_status)
+
+
+        support = ctypes.c_bool(0)
+        hsa.hsa_system_extension_supported(enums.HSA_EXTENSION_FINALIZER,
+                                           version_major,
+                                           version_minor,
+                                           ctypes.byref(support))
+
+        assert support.value == True, ('HSA system extension %s.%s not supported' %
+                (version_major, version_minor))
+
+        # struct of function pointers
+        self._ftabl = drvapi.hsa_ext_finalizer_1_00_pfn_t()
+
+        # populate struct
+        hsa.hsa_system_get_extension_table(enums.HSA_EXTENSION_FINALIZER,
+                                           version_major,
+                                           version_minor,
+                                           ctypes.byref(self._ftabl))
+
+        ret = self._ftabl.hsa_ext_program_create(model, profile,
+                                    rounding_mode, options,
+                                    ctypes.byref(self._id))
+
+        check_fptr_return(ret)
+
         self._as_parameter_ = self._id
-        utils.finalize(self, hsa.hsa_ext_program_destroy, self._id)
+        utils.finalize(self, self._ftabl.hsa_ext_program_destroy,
+                self._id)
 
     def add_module(self, module):
-        hsa.hsa_ext_program_add_module(self._id, module._id)
+        self._ftabl.hsa_ext_program_add_module(self._id, module._id)
 
     def finalize(self, isa, callconv=0, options=None):
         """
@@ -818,7 +850,7 @@ class Program(object):
         control_directives = drvapi.hsa_ext_control_directives_t()
         ctypes.memset(ctypes.byref(control_directives), 0,
                       ctypes.sizeof(control_directives))
-        hsa.hsa_ext_program_finalize(self._id,
+        self._ftabl.hsa_ext_program_finalize(self._id,
                                      isa,
                                      callconv,
                                      control_directives,
