@@ -1,11 +1,18 @@
-from __future__ import print_function, absolute_import
+"""
+This example demonstrates jitclasses and deferred type.
+This is an extension to the simpler singly-linked-list example in
+``linkedlist.py``.
+Here, we make a better interface in the Stack class that encapsuate the
+underlying linked-list.
+"""
 
-import gc
+from __future__ import print_function, absolute_import
 from numba.utils import OrderedDict
 from numba import njit
 from numba.jitclass import jitclass
 from numba import deferred_type, intp, optional
 from numba.runtime import rtsys
+
 
 linkednode_spec = OrderedDict()
 linkednode_type = deferred_type()
@@ -53,7 +60,10 @@ data_type.define(intp)
 
 
 @njit
-def test_pushpop(size):
+def pushpop(size):
+    """
+    Creates a list of decending numbers from size-1 to 0.
+    """
     stack = Stack()
 
     for i in range(size):
@@ -66,36 +76,37 @@ def test_pushpop(size):
     return out
 
 
-def baseline_pushpop(size):
-    stack = []
-    for i in range(size):
-        stack.append(i)
-
-    out = []
-    while stack:
-        out.append(stack.pop())
-
-    return out
+def test_pushpop(size):
+    """
+    Test basic push pop operation on a Stack object
+    """
+    result = pushpop(size)
+    print("== Result ==")
+    print(result)
+    assert result == list(reversed(range(size)))
 
 
 def test_exception():
+    """
+    Test exception raised from a jit method
+    """
     stack = Stack()
     stack.push(1)
     assert 1 == stack.pop()
     try:
-        # Leaks
+        # Unfortunately, numba will leak when an exception is thrown.
         stack.pop()
     except ValueError as e:
         assert 'empty' == str(e)
 
 
 def runme():
-    size = 1000
+    size = 24
     test_pushpop(size)
     test_exception()
 
 
 if __name__ == '__main__':
     runme()
-    gc.collect()
+    print("== Print memory allocation information == ")
     print(rtsys.get_allocation_stats())
