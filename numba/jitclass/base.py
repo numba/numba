@@ -124,13 +124,13 @@ def register_class_type(cls, spec, class_ctor, builder):
         members = ', '.join(others.keys())
         raise TypeError(msg.format(members))
 
-    class_type = class_ctor(cls, spec, methods)
-    cls = JitClassType(cls.__name__, (cls,), dict(class_type=class_type,
-                                                  __doc__=docstring))
-
     jitmethods = {}
     for k, v in methods.items():
         jitmethods[k] = njit(v)
+
+    class_type = class_ctor(cls, spec, jitmethods)
+    cls = JitClassType(cls.__name__, (cls,), dict(class_type=class_type,
+                                                  __doc__=docstring))
 
     # Register resolution of the class object
     typer = CPUTarget.typing_context
@@ -138,7 +138,7 @@ def register_class_type(cls, spec, class_ctor, builder):
 
     # Register class
     backend = CPUTarget.target_context
-    builder(class_type, jitmethods, methods, typer, backend).register()
+    builder(class_type, methods, typer, backend).register()
 
     return cls
 
@@ -158,32 +158,44 @@ def _drop_ignored_attrs(dct):
     for k in drop:
         del dct[k]
 
+
 class ClassBuilder(object):
     """
     A jitclass builder for mutable jitclasses.
     """
     instance_type_class = types.ClassInstanceType
+    per_backend_registry = {}
 
-    def __init__(self, class_type, jitmethods, methods, typer, backend):
+    def __init__(self, class_type, methods, typer, backend):
         self.class_type = class_type
-        self.jitmethods = jitmethods
         self.methods = methods
         self.typer = typer
         self.backend = backend
+        self.register_once_per_class()
+
+    def register_once_per_class(self):
+        registry = imputils.Registry()
+        if (type(self), self.backend) not in self.per_backend_registry:
+            self.implement_constructor(registry)
+            self.implement_attribute(registry)
+            self.backend.insert_func_defn(registry.functions)
+            self.backend.insert_attr_defn(registry.attributes)
+            self.per_backend_registry[type(self), self.backend] = registry
 
     def register(self):
         """
         Register to the frontend and backend.
         """
-        outer = self
+        # outer = self
+
+        class_type = self.class_type
+        instance_type = class_type.instance_type
 
         class ConstructorTemplate(templates.AbstractTemplate):
-            key = outer.class_type
+            key = class_type
 
             def generic(self, args, kws):
-                ctor = outer.jitmethods['__init__']
-
-                instance_type = outer.class_type.instance_type
+                ctor = instance_type.jitmethods['__init__']
                 boundargs = (instance_type.get_reference_type(),) + args
                 template, args, kws = ctor.get_call_template(boundargs, kws)
                 sig = template(self.context).apply(args, kws)
@@ -191,17 +203,13 @@ class ClassBuilder(object):
                 return out
 
         self.typer.insert_function(ConstructorTemplate(self.typer))
-
-        instance_type = outer.class_type.instance_type
-        outer.implement_frontend(instance_type)
-        outer.implement_backend(instance_type)
+        self.implement_frontend(instance_type)
+        self.implement_backend(instance_type)
 
     def implement_frontend(self, instance_type):
         self.implement_attribute_typing(instance_type)
 
     def implement_attribute_typing(self, instance_type):
-        outer = self
-
         class ClassAttribute(templates.AttributeTemplate):
             key = instance_type
 
@@ -213,8 +221,8 @@ class ClassBuilder(object):
                 if attr in instance.struct:
                     return instance.struct[attr]
 
-                elif attr in instance.methods:
-                    meth = outer.jitmethods[attr]
+                elif attr in instance.jitmethods:
+                    meth = instance_type.jitmethods[attr]
 
                     class MethodTemplate(templates.AbstractTemplate):
                         key = (instance_type, attr)
@@ -236,119 +244,119 @@ class ClassBuilder(object):
 
     def implement_backend(self, instance_type):
         registry = imputils.Registry()
-        ctor_nargs = len(self.jitmethods['__init__']._pysig.parameters) - 1
-        self.implement_constructor(registry, instance_type, ctor_nargs)
-        self.register_attributes_methods(registry, instance_type)
-
-    def implement_constructor(self, registry, instance_type, ctor_nargs):
-        def imp_dtor(context, module):
-            llvoidptr = context.get_value_type(types.voidptr)
-            llsize = context.get_value_type(types.uintp)
-            dtor_ftype = llvmir.FunctionType(llvmir.VoidType(),
-                                             [llvoidptr, llsize, llvoidptr])
-
-            fname = "_Dtor.{0}".format(instance_type.name)
-            dtor_fn = module.get_or_insert_function(dtor_ftype,
-                                                    name=fname)
-            if dtor_fn.is_declaration:
-                # Define
-                builder = llvmir.IRBuilder(dtor_fn.append_basic_block())
-
-                alloc_fe_type = instance_type.get_data_type()
-                alloc_type = context.get_value_type(alloc_fe_type)
-
-                data_struct = cgutils.create_struct_proxy(alloc_fe_type)
-
-                ptr = builder.bitcast(dtor_fn.args[0], alloc_type.as_pointer())
-                data = data_struct(context, builder, ref=ptr)
-
-                context.nrt_decref(builder, alloc_fe_type, data._getvalue())
-
-                builder.ret_void()
-
-            return dtor_fn
-
-        @registry.register
-        @imputils.implement(self.class_type, *([types.Any] * ctor_nargs))
-        def ctor_impl(context, builder, sig, args):
-            # Allocate the instance
-            inst_typ = sig.return_type
-            alloc_type = context.get_data_type(inst_typ.get_data_type())
-            alloc_size = context.get_abi_sizeof(alloc_type)
-
-            meminfo = context.nrt_meminfo_alloc_dtor(
-                builder,
-                context.get_constant(types.uintp, alloc_size),
-                imp_dtor(context, builder.module),
-            )
-            data_pointer = context.nrt_meminfo_data(builder, meminfo)
-            data_pointer = builder.bitcast(data_pointer,
-                                           alloc_type.as_pointer())
-
-            # Nullify all data
-            builder.store(cgutils.get_null_value(alloc_type),
-                          data_pointer)
-
-            inst_struct_typ = cgutils.create_struct_proxy(inst_typ)
-            inst_struct = inst_struct_typ(context, builder)
-            inst_struct.meminfo = meminfo
-            inst_struct.data = data_pointer
-
-            # Call the __init__
-            # TODO: extract the following into a common util
-            init_sig = (sig.return_type,) + sig.args
-
-            init = self.jitmethods['__init__']
-            init.compile(init_sig)
-            cres = init._compileinfos[init_sig]
-            realargs = [inst_struct._getvalue()] + list(args)
-            context.call_internal(builder, cres.fndesc, types.void(*init_sig),
-                                  realargs)
-
-            # Prepare reutrn value
-            ret = inst_struct._getvalue()
-
-            # Add function to link
-            codegen = context.codegen()
-            codegen.add_linking_library(cres.library)
-
-            return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)
-
-    def register_attributes_methods(self, registry, instance_type):
-        # Add attributes
-        for attr in instance_type.struct:
-            self.implement_attribute(registry, instance_type, attr)
-
-        # Add methods
-        for meth in instance_type.methods:
-            self.implement_method(registry, instance_type, meth)
-
+        self.register_methods(registry, instance_type)
         self.backend.insert_func_defn(registry.functions)
         self.backend.insert_attr_defn(registry.attributes)
 
-    def implement_attribute(self, registry, instance_type, attr):
-        @registry.register_attr
-        @imputils.impl_attribute(instance_type, attr)
-        def imp(context, builder, typ, value):
-            inst_struct = cgutils.create_struct_proxy(typ)
-            inst = inst_struct(context, builder, value=value)
-            data_pointer = inst.data
-            data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
-                                                      kind='data')
-            data = data_struct(context, builder, ref=data_pointer)
-            return imputils.impl_ret_borrowed(context, builder,
-                                              typ.struct[attr],
-                                              getattr(data, attr))
+    @classmethod
+    def implement_constructor(cls, registry):
+        registry.register(ctor_impl)
+
+    def register_methods(self, registry, instance_type):
+        # Add methods
+        for meth in instance_type.jitmethods:
+            self.implement_method(registry, instance_type, meth)
+
+    @classmethod
+    def implement_attribute(cls, registry):
+        registry.register_attr(attr_impl)
 
     def implement_method(self, registry, instance_type, attr):
-        nargs = len(self.jitmethods[attr]._pysig.parameters)
-
+        # TODO: we should be able to refactor this so that the registration
+        #       can be at the top-level instead of at per instance type.
         @registry.register
-        @imputils.implement((instance_type, attr), *([types.Any] * nargs))
+        @imputils.implement((instance_type, attr), types.VarArg(types.Any))
         def imp(context, builder, sig, args):
-            method = self.jitmethods[attr]
+            method = instance_type.jitmethods[attr]
             method.compile(sig)
             cres = method._compileinfos[sig.args]
             out = context.call_internal(builder, cres.fndesc, sig, args)
             return imputils.impl_ret_new_ref(context, builder,
                                              sig.return_type, out)
+
+
+@imputils.impl_attribute_generic(types.ClassInstanceType)
+def attr_impl(context, builder, typ, value, attr):
+    inst_struct = cgutils.create_struct_proxy(typ)
+    inst = inst_struct(context, builder, value=value)
+    data_pointer = inst.data
+    data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
+                                              kind='data')
+    data = data_struct(context, builder, ref=data_pointer)
+    return imputils.impl_ret_borrowed(context, builder,
+                                      typ.struct[attr],
+                                      getattr(data, attr))
+
+
+def imp_dtor(context, module, instance_type):
+    llvoidptr = context.get_value_type(types.voidptr)
+    llsize = context.get_value_type(types.uintp)
+    dtor_ftype = llvmir.FunctionType(llvmir.VoidType(),
+                                     [llvoidptr, llsize, llvoidptr])
+
+    fname = "_Dtor.{0}".format(instance_type.name)
+    dtor_fn = module.get_or_insert_function(dtor_ftype,
+                                            name=fname)
+    if dtor_fn.is_declaration:
+        # Define
+        builder = llvmir.IRBuilder(dtor_fn.append_basic_block())
+
+        alloc_fe_type = instance_type.get_data_type()
+        alloc_type = context.get_value_type(alloc_fe_type)
+
+        data_struct = cgutils.create_struct_proxy(alloc_fe_type)
+
+        ptr = builder.bitcast(dtor_fn.args[0], alloc_type.as_pointer())
+        data = data_struct(context, builder, ref=ptr)
+
+        context.nrt_decref(builder, alloc_fe_type, data._getvalue())
+
+        builder.ret_void()
+
+    return dtor_fn
+
+
+@imputils.implement(types.ClassType, types.VarArg(types.Any))
+def ctor_impl(context, builder, sig, args):
+    # Allocate the instance
+    inst_typ = sig.return_type
+    alloc_type = context.get_data_type(inst_typ.get_data_type())
+    alloc_size = context.get_abi_sizeof(alloc_type)
+
+    meminfo = context.nrt_meminfo_alloc_dtor(
+        builder,
+        context.get_constant(types.uintp, alloc_size),
+        imp_dtor(context, builder.module, inst_typ),
+    )
+    data_pointer = context.nrt_meminfo_data(builder, meminfo)
+    data_pointer = builder.bitcast(data_pointer,
+                                   alloc_type.as_pointer())
+
+    # Nullify all data
+    builder.store(cgutils.get_null_value(alloc_type),
+                  data_pointer)
+
+    inst_struct_typ = cgutils.create_struct_proxy(inst_typ)
+    inst_struct = inst_struct_typ(context, builder)
+    inst_struct.meminfo = meminfo
+    inst_struct.data = data_pointer
+
+    # Call the __init__
+    # TODO: extract the following into a common util
+    init_sig = (sig.return_type,) + sig.args
+
+    init = inst_typ.jitmethods['__init__']
+    init.compile(init_sig)
+    cres = init._compileinfos[init_sig]
+    realargs = [inst_struct._getvalue()] + list(args)
+    context.call_internal(builder, cres.fndesc, types.void(*init_sig),
+                          realargs)
+
+    # Prepare reutrn value
+    ret = inst_struct._getvalue()
+
+    # Add function to link
+    codegen = context.codegen()
+    codegen.add_linking_library(cres.library)
+
+    return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)

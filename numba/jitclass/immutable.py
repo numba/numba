@@ -50,54 +50,59 @@ class ImmutableClassBuilder(ClassBuilder):
                                          instance_type.get_reference_type())
         self.typer.insert_attributes(refattrspec)
 
-    def implement_constructor(self, registry, instance_type, ctor_nargs):
-        @registry.register
-        @imputils.implement(self.class_type, *([types.Any] * ctor_nargs))
-        def ctor_impl(context, builder, sig, args):
-            # Allocate the instance
-            inst_typ = sig.return_type
+    @classmethod
+    def implement_constructor(cls, registry):
+        registry.register(ctor_impl)
 
-            inst_struct_typ = cgutils.create_struct_proxy(inst_typ)
-            inst_struct = inst_struct_typ(context, builder)
-
-            # Call the __init__
-            # TODO: extract the following into a common util
-            init_sig = (sig.return_type.get_reference_type(),) + sig.args
-
-            init = self.jitmethods['__init__']
-            init.compile(init_sig)
-            cres = init._compileinfos[init_sig]
-            realargs = [inst_struct._getpointer()] + list(args)
-            context.call_internal(builder, cres.fndesc, types.void(*init_sig),
-                                  realargs)
-
-            # Prepare return value
-            ret = inst_struct._getvalue()
-
-            # Add function to link
-            codegen = context.codegen()
-            codegen.add_linking_library(cres.library)
-
-            return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)
-
-    def implement_attribute(self, registry, instance_type, attr):
-        @registry.register_attr
-        @imputils.impl_attribute(instance_type, attr)
-        def imp(context, builder, typ, value):
-            inst_struct = cgutils.create_struct_proxy(typ)
-            inst = inst_struct(context, builder, value=value)
-            return imputils.impl_ret_borrowed(context, builder,
-                                              typ.struct[attr],
-                                              getattr(inst, attr))
-
-        @registry.register_attr
-        @imputils.impl_attribute(instance_type.get_reference_type(), attr)
-        def imp(context, builder, typ, value):
-            inst_struct = cgutils.create_struct_proxy(typ)
-            inst = inst_struct(context, builder, ref=value)
-            return imputils.impl_ret_borrowed(context, builder,
-                                              typ.struct[attr],
-                                              getattr(inst, attr))
+    @classmethod
+    def implement_attribute(cls, registry):
+        registry.register_attr(immutable_attr_impl)
+        registry.register_attr(mutable_attr_impl)
 
 
-defined_types = set()
+
+@imputils.impl_attribute_generic(types.ImmutableClassInstanceType)
+def immutable_attr_impl(context, builder, typ, value, attr):
+    inst_struct = cgutils.create_struct_proxy(typ)
+    inst = inst_struct(context, builder, value=value)
+    return imputils.impl_ret_borrowed(context, builder,
+                                      typ.struct[attr],
+                                      getattr(inst, attr))
+
+
+@imputils.impl_attribute_generic(types.ImmutableClassRefType)
+def mutable_attr_impl(context, builder, typ, value, attr):
+    inst_struct = cgutils.create_struct_proxy(typ)
+    inst = inst_struct(context, builder, ref=value)
+    return imputils.impl_ret_borrowed(context, builder,
+                                      typ.struct[attr],
+                                      getattr(inst, attr))
+
+
+@imputils.implement(types.ImmutableClassType, types.VarArg(types.Any))
+def ctor_impl(context, builder, sig, args):
+    # Allocate the instance
+    inst_typ = sig.return_type
+
+    inst_struct_typ = cgutils.create_struct_proxy(inst_typ)
+    inst_struct = inst_struct_typ(context, builder)
+
+    # Call the __init__
+    # TODO: extract the following into a common util
+    init_sig = (sig.return_type.get_reference_type(),) + sig.args
+
+    init = inst_typ.jitmethods['__init__']
+    init.compile(init_sig)
+    cres = init._compileinfos[init_sig]
+    realargs = [inst_struct._getpointer()] + list(args)
+    context.call_internal(builder, cres.fndesc, types.void(*init_sig),
+                          realargs)
+
+    # Prepare return value
+    ret = inst_struct._getvalue()
+
+    # Add function to link
+    codegen = context.codegen()
+    codegen.add_linking_library(cres.library)
+
+    return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)
