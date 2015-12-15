@@ -1,6 +1,10 @@
+"""
+This is a more complicated jitclasses example.
+Here, we implement a binarytree and iterative preorder and inorder traversal
+function using a handwritten stack.
+"""
 from __future__ import print_function, absolute_import
 import random
-import gc
 from numba.utils import OrderedDict
 from numba import njit
 from numba.jitclass import jitclass
@@ -59,6 +63,9 @@ def make_stack(data):
 
 @njit
 def list_preorder(node):
+    """
+    Returns a list of the data by preorder traversing the tree
+    """
     out = []
 
     stack = make_stack(node)
@@ -78,6 +85,10 @@ def list_preorder(node):
 
 @njit
 def list_inorder(node):
+    """
+    Returns a list of the data by inorder traversing the tree
+    """
+
     out = []
 
     done = False
@@ -103,6 +114,9 @@ def list_inorder(node):
 
 
 def build_random_tree(size):
+    """
+    Create a randomly constructred tree that is fairly balanced
+    """
     root = TreeNode(0)
 
     for i in range(1, size):
@@ -124,19 +138,41 @@ def build_random_tree(size):
     return root
 
 
-def runme(node):
-    # node = TreeNode(1)
-    # node.left = TreeNode(2)
-    # node.right = TreeNode(3)
-    # node.right.left = TreeNode(4)
-    # node.right.right = TreeNode(5)
-    preorder = list_preorder(node)
-    inorder = list_inorder(node)
+def build_simple_tree():
+    """
+    Create a simple tree
+    """
+    node = TreeNode(1)
+    node.left = TreeNode(2)
+    node.right = TreeNode(3)
+    node.right.left = TreeNode(4)
+    node.right.right = TreeNode(5)
+    return node
+
+
+def run(tree):
+    preorder = list_preorder(tree)
+    print("== Preorder == ")
+    print(preorder)
+
+    inorder = list_inorder(tree)
+    print("== Inorder == ")
+    print(inorder)
 
     return preorder, inorder
 
 
+def runme():
+    print("== Simple Tree ==")
+    preorder, inorder = run(build_simple_tree())
+    assert preorder == [1, 2, 3, 4, 5]
+    assert inorder == [2, 1, 4, 3, 5]
+
+    print("== Big Random Tree ==")
+    run(build_random_tree(100))
+
+
 if __name__ == '__main__':
-    runme(build_random_tree(1000))
-    gc.collect()
+    runme()
+    print("== Print memory allocation information == ")
     print(rtsys.get_allocation_stats())
