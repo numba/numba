@@ -30,7 +30,6 @@ class ImmutableClassBuilder(ClassBuilder):
     instance_type_class = types.ImmutableClassInstanceType
 
     def implement_frontend(self, instance_type):
-        self.implement_attribute_typing(instance_type)
         self.register_byref_attribute_typing(instance_type)
 
     def register_byref_attribute_typing(self, instance_type):

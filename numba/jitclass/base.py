@@ -165,6 +165,7 @@ class ClassBuilder(object):
     """
     instance_type_class = types.ClassInstanceType
     per_backend_registry = {}
+    per_frontend_registry = {}
 
     def __init__(self, class_type, methods, typer, backend):
         self.class_type = class_type
@@ -175,6 +176,11 @@ class ClassBuilder(object):
 
     def register_once_per_class(self):
         registry = imputils.Registry()
+
+        if (type(self), self.typer) not in self.per_frontend_registry:
+            self.implement_attribute_typing(self.typer)
+            self.per_frontend_registry[type(self), self.typer] = registry
+
         if (type(self), self.backend) not in self.per_backend_registry:
             self.implement_constructor(registry)
             self.implement_attribute(registry)
@@ -186,8 +192,6 @@ class ClassBuilder(object):
         """
         Register to the frontend and backend.
         """
-        # outer = self
-
         class_type = self.class_type
         instance_type = class_type.instance_type
 
@@ -207,40 +211,14 @@ class ClassBuilder(object):
         self.implement_backend(instance_type)
 
     def implement_frontend(self, instance_type):
-        self.implement_attribute_typing(instance_type)
+        pass
 
-    def implement_attribute_typing(self, instance_type):
-        class ClassAttribute(templates.AttributeTemplate):
-            key = instance_type
-
-            def __init__(self, context, instance):
-                self.instance = instance
-                super(ClassAttribute, self).__init__(context)
-
-            def generic_resolve(self, instance, attr):
-                if attr in instance.struct:
-                    return instance.struct[attr]
-
-                elif attr in instance.jitmethods:
-                    meth = instance_type.jitmethods[attr]
-
-                    class MethodTemplate(templates.AbstractTemplate):
-                        key = (instance_type, attr)
-
-                        def generic(self, args, kws):
-                            args = (instance,) + tuple(args)
-                            template, args, kws = meth.get_call_template(args,
-                                                                         kws)
-                            sig = template(self.context).apply(args, kws)
-                            sig = templates.signature(sig.return_type,
-                                                      *sig.args[1:],
-                                                      recvr=sig.args[0])
-                            return sig
-
-                    return types.BoundFunction(MethodTemplate, instance)
-
-        attrspec = ClassAttribute(self.typer, instance_type)
-        self.typer.insert_attributes(attrspec)
+    @classmethod
+    def implement_attribute_typing(cls, typer):
+        newcls = type("ClassAttribute", (ClassAttribute,),
+                      dict(key=cls.instance_type_class))
+        attrspec = newcls(typer, cls.instance_type_class)
+        typer.insert_attributes(attrspec)
 
     def implement_backend(self, instance_type):
         registry = imputils.Registry()
@@ -273,6 +251,34 @@ class ClassBuilder(object):
             out = context.call_internal(builder, cres.fndesc, sig, args)
             return imputils.impl_ret_new_ref(context, builder,
                                              sig.return_type, out)
+
+
+class ClassAttribute(templates.AttributeTemplate):
+    def __init__(self, context, instance):
+        self.instance = instance
+        super(ClassAttribute, self).__init__(context)
+
+    def generic_resolve(self, instance, attr):
+        if attr in instance.struct:
+            return instance.struct[attr]
+
+        elif attr in instance.jitmethods:
+            meth = instance.jitmethods[attr]
+
+            class MethodTemplate(templates.AbstractTemplate):
+                key = (instance, attr)
+
+                def generic(self, args, kws):
+                    args = (instance,) + tuple(args)
+                    template, args, kws = meth.get_call_template(args,
+                                                                 kws)
+                    sig = template(self.context).apply(args, kws)
+                    sig = templates.signature(sig.return_type,
+                                              *sig.args[1:],
+                                              recvr=sig.args[0])
+                    return sig
+
+            return types.BoundFunction(MethodTemplate, instance)
 
 
 @imputils.impl_attribute_generic(types.ClassInstanceType)
