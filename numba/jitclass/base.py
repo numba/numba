@@ -165,22 +165,23 @@ class ClassBuilder(object):
     """
     instance_type_class = types.ClassInstanceType
     per_backend_registry = {}
-    per_frontend_registry = {}
+    registered_typer = set()
 
     def __init__(self, class_type, methods, typer, backend):
         self.class_type = class_type
         self.methods = methods
         self.typer = typer
         self.backend = backend
+        self.register_once_per_typer()
         self.register_once_per_class()
+
+    def register_once_per_typer(self):
+        if self.typer not in self.registered_typer:
+            self.implement_attribute_typing(self.typer)
+            self.registered_typer.add(self.typer)
 
     def register_once_per_class(self):
         registry = imputils.Registry()
-
-        if (type(self), self.typer) not in self.per_frontend_registry:
-            self.implement_attribute_typing(self.typer)
-            self.per_frontend_registry[type(self), self.typer] = registry
-
         if (type(self), self.backend) not in self.per_backend_registry:
             self.implement_constructor(registry)
             self.implement_attribute(registry)
@@ -215,10 +216,7 @@ class ClassBuilder(object):
 
     @classmethod
     def implement_attribute_typing(cls, typer):
-        newcls = type("ClassAttribute", (ClassAttribute,),
-                      dict(key=cls.instance_type_class))
-        attrspec = newcls(typer, cls.instance_type_class)
-        typer.insert_attributes(attrspec)
+        typer.insert_attributes(ClassAttribute(typer))
 
     def implement_backend(self, instance_type):
         registry = imputils.Registry()
@@ -254,9 +252,7 @@ class ClassBuilder(object):
 
 
 class ClassAttribute(templates.AttributeTemplate):
-    def __init__(self, context, instance):
-        self.instance = instance
-        super(ClassAttribute, self).__init__(context)
+    key = types.ClassInstanceType
 
     def generic_resolve(self, instance, attr):
         if attr in instance.struct:
