@@ -237,14 +237,7 @@ NRT_MemInfo *NRT_MemInfo_alloc(size_t size) {
 }
 
 NRT_MemInfo *NRT_MemInfo_alloc_safe(size_t size) {
-    NRT_MemInfo *mi;
-    void *data = nrt_allocate_meminfo_and_data(size, &mi);
-    /* Only fill up a couple cachelines with debug markers, to minimize
-       overhead. */
-    memset(data, 0xCB, MIN(size, 256));
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe %p %zu\n", data, size));
-    NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe, (void*)size);
-    return mi;
+    return NRT_MemInfo_alloc_dtor_safe(size, NULL);
 }
 
 NRT_MemInfo* NRT_MemInfo_alloc_dtor_safe(size_t size, NRT_dtor_function dtor) {
