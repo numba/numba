@@ -239,7 +239,6 @@ class ClassBuilder(object):
     def implement_frontend(self, instance_type):
         pass
 
-
     @classmethod
     def implement_attribute_typing(cls, typingctx):
         typingctx.insert_attributes(ClassAttribute(typingctx))
@@ -331,7 +330,8 @@ def attr_impl(context, builder, typ, value, attr):
                                     [value])
         return imputils.impl_ret_new_ref(context, builder, cres.signature, out)
 
-    raise AssertionError('attribute {0!r} not implemented'.format(attr))
+    raise NotImplementedError('attribute {0!r} not implemented'.format(attr))
+
 
 def imp_dtor(context, module, instance_type):
     llvoidptr = context.get_value_type(types.voidptr)

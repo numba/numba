@@ -20,7 +20,7 @@ from numba.targets.imputils import (user_function, user_generator,
                                     impl_ret_borrowed)
 from . import (
     arrayobj, arraymath, builtins, iterators, rangeobj, optional, slicing,
-    tupleobj)
+    tupleobj, imputils)
 from numba import datamodel
 
 try:
@@ -447,24 +447,37 @@ class BaseContext(object):
 
         elif isinstance(typ, types.ClassInstanceType):
             def imp(context, builder, sig, args):
-                instance_struct = cgutils.create_struct_proxy(typ)
-                [this, val] = args
-                inst = instance_struct(context, builder, value=this)
-                data_ptr = inst.data
-                data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
-                                                          kind='data')
-                data = data_struct(context, builder, ref=data_ptr)
+                if attr in typ.struct:
+                    instance_struct = cgutils.create_struct_proxy(typ)
+                    [this, val] = args
+                    inst = instance_struct(context, builder, value=this)
+                    data_ptr = inst.data
+                    data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
+                                                              kind='data')
+                    data = data_struct(context, builder, ref=data_ptr)
 
-                # Get old value
-                attr_type = typ.struct[attr]
-                oldvalue = getattr(data, attr)
+                    # Get old value
+                    attr_type = typ.struct[attr]
+                    oldvalue = getattr(data, attr)
 
-                # Store n
-                setattr(data, attr, val)
-                context.nrt_incref(builder, attr_type, val)
+                    # Store n
+                    setattr(data, attr, val)
+                    context.nrt_incref(builder, attr_type, val)
 
-                # Delete old value
-                context.nrt_decref(builder, attr_type, oldvalue)
+                    # Delete old value
+                    context.nrt_decref(builder, attr_type, oldvalue)
+                elif attr in typ.jitprops:
+                    setter = typ.jitprops[attr]['set']
+                    setter.compile(sig)
+                    cres = setter._compileinfos[sig.args]
+                    out = context.call_internal(builder, cres.fndesc,
+                                                cres.signature, args)
+                    return imputils.impl_ret_new_ref(context, builder,
+                                                     cres.signature, out)
+
+                else:
+                    msg = 'attribute {0!r} not implemented'.format(attr)
+                    raise NotImplementedError(msg)
 
             return _wrap_impl(imp, self, sig)
 

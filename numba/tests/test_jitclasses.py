@@ -279,11 +279,30 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
             @value.setter
             def value(self, val):
-                self.attr = val
+                self.attr = val - 1
 
         foo = Foo(123)
         self.assertEqual(foo.attr, 123)
+        # Getter
         self.assertEqual(foo.value, 123 + 1)
+        # Setter
+        foo.value = 789
+        self.assertEqual(foo.attr, 789 - 1)
+        self.assertEqual(foo.value, 789)
+
+        # Test nopython mode usage of getter and setter
+        @njit
+        def bar(foo, val):
+            a = foo.value
+            foo.value = val
+            b = foo.value
+            c = foo.attr
+            return a, b, c
+
+        a, b, c = bar(foo, 567)
+        self.assertEqual(a, 789)
+        self.assertEqual(b, 567)
+        self.assertEqual(c, 567 - 1)
 
 
 class TestImmutableJitClass(TestCase, MemoryLeakMixin):
