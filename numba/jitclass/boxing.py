@@ -86,6 +86,16 @@ def _specialize_box(typ):
             getter = _generate_getter(field)
             setter = _generate_setter(field)
             dct[field] = property(getter, setter)
+    # Inject properties as class properties
+    for field, impdct in typ.jitprops.items():
+        if not field.startswith('_'):
+            getter = None
+            setter = None
+            if 'get' in impdct:
+                getter = _generate_getter(field)
+            if 'set' in impdct:
+                setter = _generate_setter(field)
+            dct[field] = property(getter, setter)
     # Inject methods as class members
     for name, func in typ.methods.items():
         if not name.startswith('_'):

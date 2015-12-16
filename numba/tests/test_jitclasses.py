@@ -267,6 +267,24 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(str(raises.exception),
                          "class members are not yet supported: constant")
 
+    def test_user_getter_setter(self):
+        @jitclass([('attr', int32)])
+        class Foo(object):
+            def __init__(self, attr):
+                self.attr = attr
+
+            @property
+            def value(self):
+                return self.attr + 1
+
+            @value.setter
+            def value(self, val):
+                self.attr = val
+
+        foo = Foo(123)
+        self.assertEqual(foo.attr, 123)
+        self.assertEqual(foo.value, 123 + 1)
+
 
 class TestImmutableJitClass(TestCase, MemoryLeakMixin):
 

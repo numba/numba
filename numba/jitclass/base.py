@@ -116,7 +116,11 @@ def register_class_type(cls, spec, class_ctor, builder):
 
     methods = dict((k, v) for k, v in clsdct.items()
                    if isinstance(v, pytypes.FunctionType))
-    others = dict((k, v) for k, v in clsdct.items() if k not in methods)
+    props = dict((k, v) for k, v in clsdct.items()
+                 if isinstance(v, property))
+
+    others = dict((k, v) for k, v in clsdct.items()
+                  if k not in methods and k not in props)
     docstring = others.pop('__doc__', "")
     _drop_ignored_attrs(others)
     if others:
@@ -124,11 +128,25 @@ def register_class_type(cls, spec, class_ctor, builder):
         members = ', '.join(others.keys())
         raise TypeError(msg.format(members))
 
+    for k, v in props.items():
+        if v.fdel is not None:
+            raise TypeError("delter is not supported: {0}".format(k))
+
     jitmethods = {}
     for k, v in methods.items():
         jitmethods[k] = njit(v)
 
-    class_type = class_ctor(cls, ConstructorTemplate, spec, jitmethods)
+    jitprops = {}
+    for k, v in props.items():
+        dct = {}
+        if v.fget:
+            dct['get'] = njit(v.fget)
+        if v.fset:
+            dct['set'] = njit(v.fset)
+        jitprops[k] = dct
+    class_type = class_ctor(cls, ConstructorTemplate, spec, jitmethods,
+                            jitprops)
+
     cls = JitClassType(cls.__name__, (cls,), dict(class_type=class_type,
                                                   __doc__=docstring))
 
@@ -221,6 +239,7 @@ class ClassBuilder(object):
     def implement_frontend(self, instance_type):
         pass
 
+
     @classmethod
     def implement_attribute_typing(cls, typingctx):
         typingctx.insert_attributes(ClassAttribute(typingctx))
@@ -283,19 +302,36 @@ class ClassAttribute(templates.AttributeTemplate):
 
             return types.BoundFunction(MethodTemplate, instance)
 
+        elif attr in instance.jitprops:
+            impdct = instance.jitprops[attr]
+            getter = impdct['get']
+            template, args, kws = getter.get_call_template([instance], {})
+            sig = template(self.context).apply(args, kws)
+            return sig.return_type
+
 
 @imputils.impl_attribute_generic(types.ClassInstanceType)
 def attr_impl(context, builder, typ, value, attr):
-    inst_struct = cgutils.create_struct_proxy(typ)
-    inst = inst_struct(context, builder, value=value)
-    data_pointer = inst.data
-    data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
-                                              kind='data')
-    data = data_struct(context, builder, ref=data_pointer)
-    return imputils.impl_ret_borrowed(context, builder,
-                                      typ.struct[attr],
-                                      getattr(data, attr))
+    if attr in typ.struct:
+        inst_struct = cgutils.create_struct_proxy(typ)
+        inst = inst_struct(context, builder, value=value)
+        data_pointer = inst.data
+        data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
+                                                  kind='data')
+        data = data_struct(context, builder, ref=data_pointer)
+        return imputils.impl_ret_borrowed(context, builder,
+                                          typ.struct[attr],
+                                          getattr(data, attr))
+    elif attr in typ.jitprops:
+        getter = typ.jitprops[attr]['get']
+        sig = tuple([typ])
+        getter.compile(sig)
+        cres = getter._compileinfos[sig]
+        out = context.call_internal(builder, cres.fndesc, cres.signature,
+                                    [value])
+        return imputils.impl_ret_new_ref(context, builder, cres.signature, out)
 
+    raise AssertionError('attribute {0!r} not implemented'.format(attr))
 
 def imp_dtor(context, module, instance_type):
     llvoidptr = context.get_value_type(types.voidptr)
