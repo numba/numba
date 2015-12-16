@@ -1489,16 +1489,6 @@ class ImmutableClassRefType(Type):
             "*{0}".format(instance_type.name))
 
 
-# Utils
-
-def is_int_tuple(x):
-    if isinstance(x, Tuple):
-        return all(i in integer_domain for i in x.types)
-    elif isinstance(x, UniTuple):
-        return x.dtype in integer_domain
-    else:
-        return False
-
 # Short names
 
 pyobject = PyObject('pyobject')
