@@ -45,9 +45,9 @@ class ImmutableClassBuilder(ClassBuilder):
                 if attr in structdct:
                     return structdct[attr]
 
-        refattrspec = RefStructAttribute(self.typer,
+        refattrspec = RefStructAttribute(self.typingctx,
                                          instance_type.get_reference_type())
-        self.typer.insert_attributes(refattrspec)
+        self.typingctx.insert_attributes(refattrspec)
 
     @classmethod
     def implement_constructor(cls, registry):
@@ -57,7 +57,6 @@ class ImmutableClassBuilder(ClassBuilder):
     def implement_attribute(cls, registry):
         registry.register_attr(immutable_attr_impl)
         registry.register_attr(mutable_attr_impl)
-
 
 
 @imputils.impl_attribute_generic(types.ImmutableClassInstanceType)

@@ -133,12 +133,12 @@ def register_class_type(cls, spec, class_ctor, builder):
                                                   __doc__=docstring))
 
     # Register resolution of the class object
-    typer = CPUTarget.typing_context
-    typer.insert_global(cls, class_type)
+    typingctx = CPUTarget.typing_context
+    typingctx.insert_global(cls, class_type)
 
     # Register class
-    backend = CPUTarget.target_context
-    builder(class_type, methods, typer, backend).register()
+    targetctx = CPUTarget.target_context
+    builder(class_type, methods, typingctx, targetctx).register()
 
     return cls
 
@@ -164,30 +164,30 @@ class ClassBuilder(object):
     A jitclass builder for mutable jitclasses.
     """
     instance_type_class = types.ClassInstanceType
-    per_backend_registry = {}
-    registered_typer = set()
+    registered_targetctx = {}
+    registered_typingctx = set()
 
-    def __init__(self, class_type, methods, typer, backend):
+    def __init__(self, class_type, methods, typingctx, targetctx):
         self.class_type = class_type
         self.methods = methods
-        self.typer = typer
-        self.backend = backend
-        self.register_once_per_typer()
+        self.typingctx = typingctx
+        self.targetctx = targetctx
+        self.register_once_per_typingctx()
         self.register_once_per_class()
 
-    def register_once_per_typer(self):
-        if self.typer not in self.registered_typer:
-            self.implement_attribute_typing(self.typer)
-            self.registered_typer.add(self.typer)
+    def register_once_per_typingctx(self):
+        if self.typingctx not in self.registered_typingctx:
+            self.implement_attribute_typing(self.typingctx)
+            self.registered_typingctx.add(self.typingctx)
 
     def register_once_per_class(self):
         registry = imputils.Registry()
-        if (type(self), self.backend) not in self.per_backend_registry:
+        if (type(self), self.targetctx) not in self.registered_targetctx:
             self.implement_constructor(registry)
             self.implement_attribute(registry)
-            self.backend.insert_func_defn(registry.functions)
-            self.backend.insert_attr_defn(registry.attributes)
-            self.per_backend_registry[type(self), self.backend] = registry
+            self.targetctx.insert_func_defn(registry.functions)
+            self.targetctx.insert_attr_defn(registry.attributes)
+            self.registered_targetctx[type(self), self.targetctx] = registry
 
     def register(self):
         """
@@ -207,7 +207,7 @@ class ClassBuilder(object):
                 out = templates.signature(instance_type, *sig.args[1:])
                 return out
 
-        self.typer.insert_function(ConstructorTemplate(self.typer))
+        self.typingctx.insert_function(ConstructorTemplate(self.typingctx))
         self.implement_frontend(instance_type)
         self.implement_backend(instance_type)
 
@@ -215,14 +215,14 @@ class ClassBuilder(object):
         pass
 
     @classmethod
-    def implement_attribute_typing(cls, typer):
-        typer.insert_attributes(ClassAttribute(typer))
+    def implement_attribute_typing(cls, typingctx):
+        typingctx.insert_attributes(ClassAttribute(typingctx))
 
     def implement_backend(self, instance_type):
         registry = imputils.Registry()
         self.register_methods(registry, instance_type)
-        self.backend.insert_func_defn(registry.functions)
-        self.backend.insert_attr_defn(registry.attributes)
+        self.targetctx.insert_func_defn(registry.functions)
+        self.targetctx.insert_attr_defn(registry.attributes)
 
     @classmethod
     def implement_constructor(cls, registry):
