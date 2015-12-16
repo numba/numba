@@ -121,6 +121,12 @@ def register_class_type(cls, spec, class_ctor, builder):
 
     others = dict((k, v) for k, v in clsdct.items()
                   if k not in methods and k not in props)
+
+    # Check for name shadowing
+    shadowed = (set(methods) | set(props)) & set(spec)
+    if shadowed:
+        raise NameError("name shadowing: {0}".format(', '.join(shadowed)))
+
     docstring = others.pop('__doc__', "")
     _drop_ignored_attrs(others)
     if others:
@@ -130,7 +136,7 @@ def register_class_type(cls, spec, class_ctor, builder):
 
     for k, v in props.items():
         if v.fdel is not None:
-            raise TypeError("delter is not supported: {0}".format(k))
+            raise TypeError("deleter is not supported: {0}".format(k))
 
     jitmethods = {}
     for k, v in methods.items():
@@ -144,6 +150,8 @@ def register_class_type(cls, spec, class_ctor, builder):
         if v.fset:
             dct['set'] = njit(v.fset)
         jitprops[k] = dct
+
+    # Instantiate class type
     class_type = class_ctor(cls, ConstructorTemplate, spec, jitmethods,
                             jitprops)
 

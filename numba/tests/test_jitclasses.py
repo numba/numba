@@ -304,6 +304,44 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(b, 567)
         self.assertEqual(c, 567 - 1)
 
+    def test_user_deleter_error(self):
+        class Foo(object):
+            def __init__(self):
+                pass
+
+            @property
+            def value(self):
+                return 1
+
+            @value.deleter
+            def value(self):
+                pass
+
+        with self.assertRaises(TypeError) as raises:
+            jitclass([])(Foo)
+        self.assertEqual(str(raises.exception),
+                         "deleter is not supported: value")
+
+    def test_name_shadowing_error(self):
+        class Foo(object):
+            def __init__(self):
+                pass
+
+            @property
+            def my_property(self):
+                pass
+
+            def my_method(self):
+                pass
+
+        with self.assertRaises(NameError) as raises:
+            jitclass([('my_property', int32)])(Foo)
+        self.assertEqual(str(raises.exception), 'name shadowing: my_property')
+
+        with self.assertRaises(NameError) as raises:
+            jitclass([('my_method', int32)])(Foo)
+        self.assertEqual(str(raises.exception), 'name shadowing: my_method')
+
 
 class TestImmutableJitClass(TestCase, MemoryLeakMixin):
 
