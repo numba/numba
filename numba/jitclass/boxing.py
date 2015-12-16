@@ -78,7 +78,8 @@ def _specialize_box(typ):
     # Check cache
     if typ in _cache_specialized_box:
         return _cache_specialized_box[typ]
-    dct = {'__slots__': ()}
+    dct = {'__slots__': (),
+           '_numba_type_': typ}
     # Inject attributes as class properties
     for field in typ.struct:
         if not field.startswith('_'):
@@ -102,15 +103,14 @@ class Box(object):
     """
     A box for numba created jit-class instance
     """
-    __slots__ = '_meminfo', '_meminfoptr', '_dataptr', '_numba_type_'
+    __slots__ = '_meminfo', '_meminfoptr', '_dataptr'
 
-    def __init__(self, meminfoptr, dataptr, typ):
+    def __init__(self, meminfoptr, dataptr):
         # MemInfo is used to acquire a reference to `meminfoptr`.
         # When the MemInfo is destroyed, the reference is released.
         self._meminfo = MemInfo(meminfoptr)
         self._meminfoptr = meminfoptr
         self._dataptr = dataptr
-        self._numba_type_ = typ
 
 
 ###############################################################################
@@ -129,17 +129,13 @@ def _box_class_instance(typ, val, c):
                                              c.builder.ptrtoint(dataptr,
                                                                 lluintp))
 
-    # XXX: relies on runtime address
-    int_addr_typ = c.context.get_constant(types.uintp, id(typ))
-
     box_subclassed = _specialize_box(typ)
     # Note: the ``box_subclassed`` is kept alive by the cache
     int_addr_boxcls = c.context.get_constant(types.uintp, id(box_subclassed))
 
-    typ_obj = c.builder.inttoptr(int_addr_typ, c.pyapi.pyobj)
     box_cls = c.builder.inttoptr(int_addr_boxcls, c.pyapi.pyobj)
 
-    args = [addr_meminfo, addr_dataptr, typ_obj]
+    args = [addr_meminfo, addr_dataptr]
     res = c.pyapi.call_function_objargs(box_cls, args)
 
     # Clean up
