@@ -1432,7 +1432,8 @@ class ClassInstanceType(Type):
 
 class ClassType(Callable, Opaque):
     """
-    Represents the type of the class.
+    Represents the type of the class. When the type of a class is called,
+    it's constructor is invoked.
     """
     mutable = True
     name_prefix = "jitclass"
@@ -1457,6 +1458,11 @@ class ClassType(Callable, Opaque):
 
 
 class DeferredType(Type):
+    """
+    Represents a type that will be defined later.  It must be defined
+    before it is materialized (used in the compiler).  Once defined, it
+    behaves exactly as the type it is defining.
+    """
     def __init__(self):
         self._define = None
         name = "{0}#{1}".format(type(self).__name__, id(self))
@@ -1479,6 +1485,12 @@ class DeferredType(Type):
 
 
 class ClassDataType(Type):
+    """
+    Internal only.
+    Represents the data of the instance.  The representation of
+    ClassInstanceType contains a pointer to a ClassDataType which represents
+    a C structure that contains all the data fields of the class instance.
+    """
     def __init__(self, classtyp):
         self.class_type = classtyp
         name = "data.{0}".format(self.class_type.name)
@@ -1486,6 +1498,9 @@ class ClassDataType(Type):
 
 
 class ImmutableClassInstanceType(ClassInstanceType):
+    """
+    Represents an immutable version of the ClassInstanceType.
+    """
     mutable = False
     name_prefix = 'immutable.instance'
 
@@ -1494,12 +1509,19 @@ class ImmutableClassInstanceType(ClassInstanceType):
 
 
 class ImmutableClassType(ClassType):
+    """
+    Represents an immutable version of the ClassType.
+    """
     mutable = False
     name_prefix = "immjitclass"
     instance_type_class = ImmutableClassInstanceType
 
 
 class ImmutableClassRefType(Type):
+    """
+    Represents a reference to an ImmutableClassInstanceType for use in the
+    constructor, the only place when the `self` object is mutable.
+    """
     def __init__(self, instance_type):
         self.instance_type = instance_type
         super(ImmutableClassRefType, self).__init__(

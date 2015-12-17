@@ -188,11 +188,19 @@ class ClassBuilder(object):
         self.register_once_per_class()
 
     def register_once_per_typingctx(self):
+        """
+        Register information to the typing context.
+        The registration is executed once for typing context.
+        """
         if self.typingctx not in self.registered_typingctx:
             self.implement_attribute_typing(self.typingctx)
             self.registered_typingctx.add(self.typingctx)
 
     def register_once_per_class(self):
+        """
+        Register code-generation information to the target context.
+        The registration is executed once per (class, targetcontext)
+        """
         registry = imputils.Registry()
         if (type(self), self.targetctx) not in self.registered_targetctx:
             self.implement_constructor(registry)
