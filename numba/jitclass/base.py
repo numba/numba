@@ -128,7 +128,7 @@ def register_class_type(cls, spec, class_ctor, builder):
     for k, v in methods.items():
         jitmethods[k] = njit(v)
 
-    class_type = class_ctor(cls, spec, jitmethods)
+    class_type = class_ctor(cls, ConstructorTemplate, spec, jitmethods)
     cls = JitClassType(cls.__name__, (cls,), dict(class_type=class_type,
                                                   __doc__=docstring))
 
@@ -141,6 +141,18 @@ def register_class_type(cls, spec, class_ctor, builder):
     builder(class_type, methods, typingctx, targetctx).register()
 
     return cls
+
+
+class ConstructorTemplate(templates.AbstractTemplate):
+    def generic(self, args, kws):
+        # Redirect resolution to __init__
+        instance_type = self.key.instance_type
+        ctor = instance_type.jitmethods['__init__']
+        boundargs = (instance_type.get_reference_type(),) + args
+        template, args, kws = ctor.get_call_template(boundargs, kws)
+        sig = template(self.context).apply(args, kws)
+        out = templates.signature(instance_type, *sig.args[1:])
+        return out
 
 
 def _drop_ignored_attrs(dct):
@@ -195,19 +207,6 @@ class ClassBuilder(object):
         """
         class_type = self.class_type
         instance_type = class_type.instance_type
-
-        class ConstructorTemplate(templates.AbstractTemplate):
-            key = class_type
-
-            def generic(self, args, kws):
-                ctor = instance_type.jitmethods['__init__']
-                boundargs = (instance_type.get_reference_type(),) + args
-                template, args, kws = ctor.get_call_template(boundargs, kws)
-                sig = template(self.context).apply(args, kws)
-                out = templates.signature(instance_type, *sig.args[1:])
-                return out
-
-        self.typingctx.insert_function(ConstructorTemplate(self.typingctx))
         self.implement_frontend(instance_type)
         self.implement_backend(instance_type)
 

@@ -1401,6 +1401,10 @@ class Slice3Type(Type):
 
 
 class ClassInstanceType(Type):
+    """
+    Represents an instance of a class.  It will be the return-type of the
+    constructor of the class.
+    """
     mutable = True
     name_prefix = "instance"
 
@@ -1426,17 +1430,30 @@ class ClassInstanceType(Type):
         return self.class_type.class_def.__name__
 
 
-class ClassType(Opaque):
+class ClassType(Callable, Opaque):
+    """
+    Represents the type of the class.
+    """
     mutable = True
     name_prefix = "jitclass"
     instance_type_class = ClassInstanceType
 
-    def __init__(self, class_def, struct, jitmethods):
+    def __init__(self, class_def, ctor_template_cls, struct, jitmethods):
         self.class_def = class_def
+        self.ctor_template = self._specialize_template(ctor_template_cls)
         name = "{0}.{1}#{2}".format(self.name_prefix, class_def.__name__,
                                     id(class_def))
         super(ClassType, self).__init__(name)
         self.instance_type = self.instance_type_class(self, struct, jitmethods)
+
+    def get_call_type(self, context, args, kws):
+        return self.ctor_template(context).apply(args, kws)
+
+    def get_call_signatures(self):
+        return (), True
+
+    def _specialize_template(self, basecls):
+        return type(basecls.__name__, (basecls,), dict(key=self))
 
 
 class DeferredType(Type):
