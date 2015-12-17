@@ -12,8 +12,6 @@ import os
 import subprocess
 import sys
 
-from numba.utils import finalize
-
 
 _configs = {
     # DLL suffix, Python C extension suffix
