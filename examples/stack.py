@@ -9,7 +9,7 @@ underlying linked-list.
 from __future__ import print_function, absolute_import
 from numba.utils import OrderedDict
 from numba import njit
-from numba.jitclass import jitclass
+from numba import jitclass
 from numba import deferred_type, intp, optional
 from numba.runtime import rtsys
 

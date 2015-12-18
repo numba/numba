@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import
 from numba.utils import OrderedDict
 import numpy as np
 from numba import njit
-from numba.jitclass import jitclass
+from numba import jitclass
 from numba import int32, deferred_type, optional
 from numba.runtime import rtsys
 

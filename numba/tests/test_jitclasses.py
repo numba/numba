@@ -5,7 +5,7 @@ from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
 from numba import njit
 from numba import unittest_support as unittest
-from numba.jitclass import jitclass
+from numba import jitclass
 from numba.utils import OrderedDict
 from .support import TestCase, MemoryLeakMixin
 
