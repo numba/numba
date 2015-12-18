@@ -114,14 +114,14 @@ def _get_device(devnum=0):
 
 def get_context(devnum=0):
     """Get the current device or use a device by device number, and
-    return the CUDA context.
+    return the HSA context.
     """
     return _get_device(devnum=devnum).associate_context()
 
 
 def require_context(fn):
     """
-    A decorator to ensure a context for the CUDA subsystem
+    A decorator to ensure a context for the HSA subsystem
     """
 
     @functools.wraps(fn)

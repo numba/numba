@@ -216,6 +216,9 @@ class _EnvReloader(object):
         NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
                                      NUMBA_DEFAULT_NUM_THREADS)
 
+        # Declare a dGPU is present
+        NUMBA_HSA_DGPU_PRESENT = _readenv("NUMBA_HSA_DGPU_PRESENT", int, 0)
+
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():
             if name.isupper():

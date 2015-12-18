@@ -5,11 +5,49 @@ import ctypes
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.hsa.hsadrv.driver import hsa, Queue, Program, Executable, BrigModule
+from numba.hsa.hsadrv.driver import hsa, Queue, Program, Executable,\
+                                    BrigModule, Context
 from numba.hsa.hsadrv import drvapi
 from numba.hsa.hsadrv import enums
 from numba.hsa.hsadrv import enums_ext
 
+from numba import config
+
+def apu_present():
+    """
+    Returns true if an APU is present on the current machine.
+    """
+    # Find the nodes to which the agents claim to belong.
+    # If the number of nodes is different to the number of
+    # agents then some agents must share a node -> APU!
+    nodes = set()
+    for a in hsa.agents:
+        nodes.add(getattr(a, "node"))
+    return len(hsa.agents) != len(nodes)
+
+
+def dgpu_count():
+    """
+    Returns the number of discrete GPUs present on the current machine.
+
+    This can be overridden by setting the environment variable
+    `NUMBA_HSA_DGPU_PRESENT` to a positive integer.
+    """
+    if config.NUMBA_HSA_DGPU_PRESENT:
+        return config.NUMBA_HSA_DGPU_PRESENT
+    else:
+
+        known_dgpus = frozenset([b'Fiji'])
+        known_apus = frozenset([b'Spectre'])
+        known_cpus = frozenset([b'Kaveri'])
+
+        ngpus = 0
+        for a in hsa.agents:
+            name = getattr(a, "name").lower()
+            for g in known_dgpus:
+                if g.lower() in name:
+                    ngpus += 1
+        return ngpus
 
 class TestLowLevelApi(unittest.TestCase):
     """This test checks that all the functions defined in drvapi
@@ -124,35 +162,6 @@ class TestMemory(_TestBase):
         for i in range(src.size):
             self.assertEqual(ptr[i], src[i])
         hsa.hsa_memory_free(ptr)
-
-    def apu_present():
-        """
-        Returns true if an APU is present on the current machine.
-        """
-        # Find the nodes to which the agents claim to belong.
-        # If the number of nodes is different to the number of
-        # agents then some agents must share a node -> APU!
-        nodes = set()
-        for a in hsa.agents:
-            nodes.add(getattr(a, "node"))
-        return len(hsa.agents) != len(nodes)
-
-    def dgpu_count():
-        """
-        Returns the number of discrete GPUs present on the current machine.
-        """
-        known_dgpus = frozenset([b'Fiji'])
-        known_apus = frozenset([b'Spectre'])
-        known_cpus = frozenset([b'Kaveri'])
-
-        ngpus = 0
-        for a in hsa.agents:
-            name = getattr(a, "name").lower()
-            for g in known_dgpus:
-                if g.lower() in name:
-                    ngpus += 1
-        return ngpus
-
 
     @unittest.skipIf(dgpu_count() == 0, "no discrete GPU present")
     def test_coarse_grained_allocate(self):
@@ -388,6 +397,49 @@ class TestMemory(_TestBase):
         hsa.hsa_memory_free(host_out_ptr)
         hsa.hsa_memory_free(gpu_in_ptr)
         hsa.hsa_memory_free(gpu_out_ptr)
+
+class TestContext(_TestBase):
+    """Tests the Context class behaviour is correct."""
+
+    def test_memalloc(self):
+        """
+            Tests Context.memalloc() for a given, in the parlance of HSA,\
+            `component`. Testing includes specialisations for the supported
+            components of dGPUs and APUs.
+        """
+        n = 10 # things to alloc
+        mblk = ctypes.c_double * n
+
+        # run if a dGPU is present
+        if(dgpu_count() > 0):
+            # find a host accessible region
+            dGPU_agent = self.gpu
+            CPU_agent = self.cpu
+            gpu_ctx = Context(dGPU_agent)
+            cpu_ctx = Context(CPU_agent)
+            gpu_only_mem = gpu_ctx.memalloc(mblk, hostAccessible=False)
+
+            # ensure the right sort of memory has been allocated
+            self.assertFalse(gpu_only_mem.host_accessible)
+            self.assertTrue(gpu_only_mem.supports(\
+                enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED))
+            self.assertTrue(gpu_only_mem.size==ctypes.sizeof(mblk))
+
+            ha_mem = gpu_ctx.memalloc(mblk, hostAccessible=True)
+
+            # on dGPU systems, all host mem is host accessible
+            cpu_mem = cpu_ctx.memalloc(mblk, hostAccessible=True)
+            # Test writing to allocated area
+            src = np.random.random(n).astype(np.float64)
+            hsa.hsa_memory_copy(cpu_mem, src.ctypes.data, src.nbytes)
+            hsa.hsa_memory_copy(ha_mem, cpu_mem, src.nbytes)
+            hsa.hsa_memory_copy(gpu_only_mem, ha_mem, src.nbytes)
+
+            # clear
+
+        else: #TODO: write APU variant
+            pass
+
 
 
 if __name__ == '__main__':
