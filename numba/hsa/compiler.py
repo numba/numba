@@ -5,7 +5,7 @@ from collections import namedtuple
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
 from .hlc import hlc
-from .hsadrv import devices, driver
+from .hsadrv import devices, driver, enums
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
 
@@ -222,7 +222,7 @@ class _CachedProgram(object):
             ex.freeze()
             symobj = ex.get_symbol(agent, symbol)
             kernarg_region = [r for r in agent.regions.globals
-                              if r.supports_kernargs][0]
+                        if r.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG)][0]
 
             # Cache the finalized program
             result = _CacheEntry(symbol=symobj, executable=ex,
