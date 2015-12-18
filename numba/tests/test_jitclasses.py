@@ -343,6 +343,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(str(raises.exception), 'name shadowing: my_method')
 
 
+@unittest.skipIf(True, 'immutable jitclasses are disabled')
 class TestImmutableJitClass(TestCase, MemoryLeakMixin):
 
     def test_byval_struct(self):
