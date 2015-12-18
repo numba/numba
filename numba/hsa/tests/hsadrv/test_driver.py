@@ -258,14 +258,15 @@ class TestMemory(_TestBase):
         from numba.hsa.hsadrv.driver import BrigModule, Program, hsa,\
                 Executable
 
-        def get_brig_file():
-            basedir = os.path.dirname(__file__)
+        def get_brig_file(basedir=None):
+            if basedir == None:
+                basedir = os.path.dirname(__file__)
             path = os.path.join(basedir, 'vector_copy_dgpu_example.brig')
             assert os.path.isfile(path)
             return path
 
         # get a brig file
-        brig_file = get_brig_file()
+        brig_file = get_brig_file('/srv/data/hsa')
         brig_module = BrigModule.from_file(brig_file)
         self.assertGreater(len(brig_module), 0)
 
