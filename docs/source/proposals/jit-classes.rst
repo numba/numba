@@ -197,4 +197,4 @@ Given:
         ...
 
 * ``isinstance(Vec(1, 2), Vec)`` is True.
-* ``type(Vec(1, 2))`` may not be ``type(Vec)```.
+* ``type(Vec(1, 2))`` may not be ``Vec``.
