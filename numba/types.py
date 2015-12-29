@@ -1500,37 +1500,6 @@ class ClassDataType(Type):
         super(ClassDataType, self).__init__(name)
 
 
-class ImmutableClassInstanceType(ClassInstanceType):
-    """
-    Represents an immutable version of the ClassInstanceType.
-    """
-    mutable = False
-    name_prefix = 'immutable.instance'
-
-    def get_reference_type(self):
-        return ImmutableClassRefType(self)
-
-
-class ImmutableClassType(ClassType):
-    """
-    Represents an immutable version of the ClassType.
-    """
-    mutable = False
-    name_prefix = "immjitclass"
-    instance_type_class = ImmutableClassInstanceType
-
-
-class ImmutableClassRefType(Type):
-    """
-    Represents a reference to an ImmutableClassInstanceType for use in the
-    constructor, the only place when the `self` object is mutable.
-    """
-    def __init__(self, instance_type):
-        self.instance_type = instance_type
-        super(ImmutableClassRefType, self).__init__(
-            "*{0}".format(instance_type.name))
-
-
 # Short names
 
 pyobject = PyObject('pyobject')

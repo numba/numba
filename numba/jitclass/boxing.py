@@ -179,24 +179,3 @@ def _unbox_class_instance(typ, val, c):
     # XXX: cleanup to reversed the incref
     return NativeValue(ret, is_error=c.pyapi.c_api_error())
 
-
-@unbox(types.ImmutableClassRefType)
-def _unbox_immutable_class_ref(typ, val, c):
-    # XXX: not implemented
-    struct_cls = cgutils.create_struct_proxy(typ.instance_type)
-    ret = struct_cls(c.context, c.builder)._getpointer()
-    return NativeValue(ret)
-
-
-@unbox(types.ImmutableClassInstanceType)
-def _unbox_immutable_class_instance(typ, val, c):
-    # XXX: not implemented
-    struct_cls = cgutils.create_struct_proxy(typ)
-    ret = struct_cls(c.context, c.builder)._getvalue()
-    return NativeValue(ret)
-
-
-@box(types.ImmutableClassInstanceType)
-def _box_immutable_class_instance(typ, val, c):
-    # XXX: not implemented
-    return ir.Constant(c.pyapi.pyobj, None)

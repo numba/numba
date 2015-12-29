@@ -481,24 +481,6 @@ class BaseContext(object):
 
             return _wrap_impl(imp, self, sig)
 
-        elif isinstance(typ, types.ImmutableClassRefType):
-            def imp(context, builder, sig, args):
-                instance_struct = cgutils.create_struct_proxy(typ.instance_type)
-                [this, val] = args
-                inst = instance_struct(context, builder, ref=this)
-
-                # Get old value
-                attr_type = typ.instance_type.struct[attr]
-                oldvalue = getattr(inst, attr)
-
-                # Store value
-                setattr(inst, attr, val)
-
-                # Delete old value
-                context.nrt_decref(builder, attr_type, oldvalue)
-
-            return _wrap_impl(imp, self, sig)
-
     def get_function(self, fn, sig):
         """
         Return the implementation of function *fn* for signature *sig*.

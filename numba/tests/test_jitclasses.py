@@ -343,40 +343,5 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(str(raises.exception), 'name shadowing: my_method')
 
 
-@unittest.skipIf(True, 'immutable jitclasses are disabled')
-class TestImmutableJitClass(TestCase, MemoryLeakMixin):
-
-    def test_byval_struct(self):
-        # A JIT-Struct is a immutable copy
-        spec = OrderedDict()
-        spec['x'] = float32
-        spec['y'] = float32
-
-        @jitclass(spec, immutable=True)
-        class Vector(object):
-            def __init__(self, x, y):
-                self.x = x
-                self.y = y
-
-            def bad_method(self):
-                # Error due to immutability when used
-                self.x = 1
-
-            def good_method(self, y):
-                return Vector(self.x, self.y + y)
-
-        @njit
-        def foo():
-            vec = Vector(1, 2)
-            vec2 = vec.good_method(3)
-            return vec.x, vec.y, vec2.x, vec2.y
-
-        x1, y1, x2, y2 = foo()
-        self.assertEqual(x1, 1)
-        self.assertEqual(y1, 2)
-        self.assertEqual(x2, x1)
-        self.assertEqual(y2, y1 + 3)
-
-
 if __name__ == '__main__':
     unittest.main()
