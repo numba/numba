@@ -176,6 +176,5 @@ def _unbox_class_instance(typ, val, c):
 
     c.context.nrt_incref(c.builder, typ, ret)
 
-    # XXX: cleanup to reversed the incref
     return NativeValue(ret, is_error=c.pyapi.c_api_error())
 
