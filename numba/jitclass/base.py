@@ -277,9 +277,8 @@ class ClassBuilder(object):
         @imputils.implement((instance_type, attr), types.VarArg(types.Any))
         def imp(context, builder, sig, args):
             method = instance_type.jitmethods[attr]
-            method.compile(sig)
-            cres = method._compileinfos[sig.args]
-            out = context.call_internal(builder, cres.fndesc, sig, args)
+            call = self.targetctx.get_function(types.Dispatcher(method), sig)
+            out = call(builder, args)
             return imputils.impl_ret_new_ref(context, builder,
                                              sig.return_type, out)
 
@@ -331,12 +330,12 @@ def attr_impl(context, builder, typ, value, attr):
                                           getattr(data, attr))
     elif attr in typ.jitprops:
         getter = typ.jitprops[attr]['get']
-        sig = tuple([typ])
-        getter.compile(sig)
-        cres = getter._compileinfos[sig]
-        out = context.call_internal(builder, cres.fndesc, cres.signature,
-                                    [value])
-        return imputils.impl_ret_new_ref(context, builder, cres.signature, out)
+        sig = templates.signature(None, typ)
+        dispatcher = types.Dispatcher(getter)
+        sig = dispatcher.get_call_type(context.typing_context, [typ], {})
+        call = context.get_function(dispatcher, sig)
+        out = call(builder, [value])
+        return imputils.impl_ret_new_ref(context, builder, sig.return_type, out)
 
     raise NotImplementedError('attribute {0!r} not implemented'.format(attr))
 
