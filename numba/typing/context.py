@@ -4,7 +4,7 @@ from collections import defaultdict
 import types as pytypes
 import weakref
 
-from numba import types
+from numba import types, errors
 from numba.typeconv import Conversion, rules
 from . import templates
 from .typeof import typeof, Purpose
@@ -137,6 +137,18 @@ class BaseContext(object):
             expectedty = target.typeof(attr)
             if self.can_convert(value, expectedty) is not None:
                 return templates.signature(types.void, target, value)
+        elif target in self.attributes:
+            expectedty = self.attributes[target].resolve(target, attr)
+            return templates.signature(types.void, target, expectedty)
+        else:
+            for cls in type(target).__mro__:
+                if cls in self.attributes:
+                    try:
+                        expectedty = self.attributes[cls].resolve(target, attr)
+                    except errors.UntypedAttributeError:
+                        pass
+                    else:
+                        return templates.signature(types.void, target, expectedty)
 
     def resolve_static_getitem(self, value, index):
         assert not isinstance(index, types.Type), index
@@ -414,7 +426,7 @@ class BaseContext(object):
         """
         if first == second:
             return first
-        
+
         if first is types.undefined:
             return second
         elif second is types.undefined:
@@ -453,4 +465,3 @@ class Context(BaseContext):
         self.install(operatordecl.registry)
         self.install(randomdecl.registry)
         self.install(cffi_utils.registry)
-

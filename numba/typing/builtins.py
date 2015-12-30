@@ -800,3 +800,22 @@ class TypeBuiltin(AbstractTemplate):
 
 
 builtin_global(type, types.Function(TypeBuiltin))
+
+
+#------------------------------------------------------------------------------
+
+@builtin_attr
+class OptionalAttribute(AttributeTemplate):
+    key = types.Optional
+
+    def generic_resolve(self, optional, attr):
+        return self.context.resolve_getattr(optional.type, attr)
+
+#------------------------------------------------------------------------------
+
+@builtin_attr
+class DeferredAttribute(AttributeTemplate):
+    key = types.DeferredType
+
+    def generic_resolve(self, deferred, attr):
+        return self.context.resolve_getattr(deferred.get(), attr)

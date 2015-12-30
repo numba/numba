@@ -1525,7 +1525,7 @@ def array_record_getattr(context, builder, typ, value, attr):
                    meminfo=array.meminfo,
                    parent=array.parent)
     res = rary._getvalue()
-    return impl_ret_borrowed(context, builder, typ, res)
+    return impl_ret_borrowed(context, builder, resty, res)
 
 @builtin
 @implement('static_getitem', types.Array, types.Const)

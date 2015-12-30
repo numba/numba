@@ -136,6 +136,42 @@ class TestOptional(unittest.TestCase):
         y = numpy.array([0xabcd], dtype=numpy.int32)
         self.assertEqual(cfunc(y), pyfunc(y))
 
+    def test_optional_array_attribute(self):
+        """
+        Check that we can access attribute of an optional
+        """
+        def pyfunc(arr, do_it):
+            opt = None
+            if do_it:  # forces `opt` to be an optional of arr
+                opt = arr
+            return opt.shape[0]
+
+        cfunc = njit(pyfunc)
+        arr = numpy.arange(5)
+        self.assertEqual(pyfunc(arr, True), cfunc(arr, True))
+
+    def test_assign_to_optional(self):
+        """
+        Check that we can assign to a variable of optional type
+        """
+        @njit
+        def make_optional(val, get_none):
+            if get_none:
+                ret = None
+            else:
+                ret = val
+            return ret
+
+        @njit
+        def foo(val, run_second):
+            a = make_optional(val, True)
+            if run_second:
+                a = make_optional(val, False)
+            return a
+
+        self.assertIsNone(foo(123, False))
+        self.assertEqual(foo(231, True), 231)
+
 
 if __name__ == '__main__':
     unittest.main()

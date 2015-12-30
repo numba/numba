@@ -1409,6 +1409,106 @@ class SliceType(Type):
         return self.members
 
 
+class ClassInstanceType(Type):
+    """
+    Represents an instance of a class.  It will be the return-type of the
+    constructor of the class.
+    """
+    mutable = True
+    name_prefix = "instance"
+
+    def __init__(self, class_type, struct, jitmethods, jitprops):
+        self.class_type = class_type
+        self.struct = struct
+        parameters = tuple((k, v) for k, v in self.struct.items())
+        self.jitmethods = jitmethods
+        self.jitprops = jitprops
+        self.methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
+        name = "{0}.{1}!{2}".format(self.name_prefix,
+                                    self.class_type.name,
+                                    parameters)
+        super(ClassInstanceType, self).__init__(name)
+
+    def get_data_type(self):
+        return ClassDataType(self)
+
+    def get_reference_type(self):
+        return self
+
+    @property
+    def classname(self):
+        return self.class_type.class_def.__name__
+
+
+class ClassType(Callable, Opaque):
+    """
+    Represents the type of the class. When the type of a class is called,
+    it's constructor is invoked.
+    """
+    mutable = True
+    name_prefix = "jitclass"
+    instance_type_class = ClassInstanceType
+
+    def __init__(self, class_def, ctor_template_cls, struct, jitmethods,
+                 jitprops):
+        self.class_def = class_def
+        self.ctor_template = self._specialize_template(ctor_template_cls)
+        name = "{0}.{1}#{2}".format(self.name_prefix, class_def.__name__,
+                                    id(class_def))
+        super(ClassType, self).__init__(name)
+        self.instance_type = self.instance_type_class(self, struct, jitmethods,
+                                                      jitprops)
+
+    def get_call_type(self, context, args, kws):
+        return self.ctor_template(context).apply(args, kws)
+
+    def get_call_signatures(self):
+        return (), True
+
+    def _specialize_template(self, basecls):
+        return type(basecls.__name__, (basecls,), dict(key=self))
+
+
+class DeferredType(Type):
+    """
+    Represents a type that will be defined later.  It must be defined
+    before it is materialized (used in the compiler).  Once defined, it
+    behaves exactly as the type it is defining.
+    """
+    def __init__(self):
+        self._define = None
+        name = "{0}#{1}".format(type(self).__name__, id(self))
+        super(DeferredType, self).__init__(name)
+
+    def get(self):
+        if self._define is None:
+            raise RuntimeError("deferred type not defined")
+        return self._define
+
+    def define(self, typ):
+        if self._define is not None:
+            raise TypeError("deferred type already defined")
+        if not isinstance(typ, Type):
+            raise TypeError("arg is not a Type; got: {0}".format(type(typ)))
+        self._define = typ
+
+    def unify(self, typingctx, other):
+        return typingctx.unify_pairs(self.get(), other)
+
+
+class ClassDataType(Type):
+    """
+    Internal only.
+    Represents the data of the instance.  The representation of
+    ClassInstanceType contains a pointer to a ClassDataType which represents
+    a C structure that contains all the data fields of the class instance.
+    """
+    def __init__(self, classtyp):
+        self.class_type = classtyp
+        name = "data.{0}".format(self.class_type.name)
+        super(ClassDataType, self).__init__(name)
+
+
 # Short names
 
 pyobject = PyObject('pyobject')
@@ -1541,6 +1641,7 @@ def promote_numeric_type(ty):
 
     return res
 
+deferred_type = DeferredType
 
 __all__ = '''
 int8
@@ -1592,4 +1693,5 @@ c16
 optional
 ffi_forced_object
 ffi
+deferred_type
 '''.split()

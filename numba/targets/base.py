@@ -20,7 +20,7 @@ from numba.targets.imputils import (user_function, user_generator,
                                     impl_ret_borrowed)
 from . import (
     arrayobj, arraymath, builtins, iterators, rangeobj, optional, slicing,
-    tupleobj)
+    tupleobj, imputils)
 from numba import datamodel
 
 try:
@@ -420,6 +420,42 @@ class BaseContext(object):
 
             return _wrap_impl(imp, self, sig)
 
+        elif isinstance(typ, types.ClassInstanceType):
+            def imp(context, builder, sig, args):
+                if attr in typ.struct:
+                    instance_struct = cgutils.create_struct_proxy(typ)
+                    [this, val] = args
+                    inst = instance_struct(context, builder, value=this)
+                    data_ptr = inst.data
+                    data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
+                                                              kind='data')
+                    data = data_struct(context, builder, ref=data_ptr)
+
+                    # Get old value
+                    attr_type = typ.struct[attr]
+                    oldvalue = getattr(data, attr)
+
+                    # Store n
+                    setattr(data, attr, val)
+                    context.nrt_incref(builder, attr_type, val)
+
+                    # Delete old value
+                    context.nrt_decref(builder, attr_type, oldvalue)
+                elif attr in typ.jitprops:
+                    setter = typ.jitprops[attr]['set']
+                    setter.compile(sig)
+                    cres = setter._compileinfos[sig.args]
+                    out = context.call_internal(builder, cres.fndesc,
+                                                cres.signature, args)
+                    return imputils.impl_ret_new_ref(context, builder,
+                                                     cres.signature, out)
+
+                else:
+                    msg = 'attribute {0!r} not implemented'.format(attr)
+                    raise NotImplementedError(msg)
+
+            return _wrap_impl(imp, self, sig)
+
     def get_function(self, fn, sig):
         """
         Return the implementation of function *fn* for signature *sig*.
@@ -464,6 +500,7 @@ class BaseContext(object):
         return self.generators[genty][1]
 
     def get_bound_function(self, builder, obj, ty):
+        assert self.get_value_type(ty) == obj.type
         return obj
 
     def get_attribute(self, val, typ, attr):
@@ -542,6 +579,10 @@ class BaseContext(object):
         return pair.second
 
     def cast(self, builder, val, fromty, toty):
+        if val.type != self.get_value_type(fromty):
+            raise TypeError("{0} != {1}; when casting to {2}".format(val.type,
+                                                self.get_value_type(fromty),
+                                                self.get_value_type(toty)))
         if fromty == toty or toty == types.Any:
             return val
 
@@ -642,6 +683,29 @@ class BaseContext(object):
         elif fromty == types.none and isinstance(toty, types.Optional):
             return self.make_optional_none(builder, toty.type)
 
+        elif (isinstance(toty, types.Optional) and
+                  isinstance(fromty, types.Optional)):
+            optty = self.make_optional(fromty)
+            optval = optty(self, builder, value=val)
+            validbit = cgutils.as_bool_bit(builder, optval.valid)
+
+            outoptty = self.make_optional(toty)
+            outoptval = outoptty(self, builder)
+
+            with builder.if_else(validbit) as (is_valid, is_not_valid):
+                with is_valid:
+                    # Cast internal value
+                    outoptval.valid = cgutils.true_bit
+                    outoptval.data = self.cast(builder, optval.data,
+                                               fromty.type, toty.type)
+
+                with is_not_valid:
+                    outoptval.valid = cgutils.false_bit
+                    outoptval.data = cgutils.get_null_value(
+                        outoptval.data.type)
+
+            return outoptval._getvalue()
+
         elif isinstance(toty, types.Optional):
             casted = self.cast(builder, val, fromty, toty.type)
             return self.make_optional_value(builder, toty.type, casted)
@@ -654,7 +718,7 @@ class BaseContext(object):
                 msg = "expected %s, got None" % (fromty.type,)
                 self.call_conv.return_user_exc(builder, TypeError, (msg,))
 
-            return optval.data
+            return self.cast(builder, optval.data, fromty.type, toty)
 
         elif (isinstance(fromty, types.Array) and
               isinstance(toty, types.Array)):
@@ -677,6 +741,16 @@ class BaseContext(object):
 
         elif fromty in types.integer_domain and toty == types.voidptr:
             return builder.inttoptr(val, self.get_value_type(toty))
+
+        elif isinstance(toty, types.DeferredType):
+            actual = self.cast(builder, val, fromty, toty.get())
+            model = self.data_model_manager[toty]
+            return model.set(builder, model.make_uninitialized(), actual)
+
+        elif isinstance(fromty, types.DeferredType):
+            model = self.data_model_manager[fromty]
+            val = model.get(builder, val)
+            return self.cast(builder, val, fromty.get(), toty)
 
         raise NotImplementedError("cast", val, fromty, toty)
 
@@ -965,6 +1039,19 @@ class BaseContext(object):
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
+
+    def nrt_meminfo_alloc_dtor(self, builder, size, dtor):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        ll_void_ptr = self.get_value_type(types.voidptr)
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+                                   [self.get_value_type(types.intp),
+                                    ll_void_ptr])
+        fn = mod.get_or_insert_function(fnty,
+                                        name="NRT_MemInfo_alloc_dtor_safe")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [size, builder.bitcast(dtor, ll_void_ptr)])
 
     def nrt_meminfo_alloc_aligned(self, builder, size, align):
         """

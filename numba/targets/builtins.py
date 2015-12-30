@@ -511,6 +511,24 @@ builtin(implement('is',
                   types.none, types.Optional)(optional_is_none))
 
 
+@builtin_attr
+@impl_attribute_generic(types.Optional)
+def optional_getattr(context, builder, typ, value, attr):
+    inner_type = typ.type
+    val = context.cast(builder, value, typ, inner_type)
+    imp = context.get_attribute(val, inner_type, attr)
+    return imp(context, builder, inner_type, val, attr)
+
+
+@builtin_attr
+@impl_attribute_generic(types.DeferredType)
+def deferred_getattr(context, builder, typ, value, attr):
+    inner_type = typ.get()
+    val = context.cast(builder, value, typ, inner_type)
+    imp = context.get_attribute(val, inner_type, attr)
+    return imp(context, builder, inner_type, val, attr)
+
+
 def real_add_impl(context, builder, sig, args):
     res = builder.fadd(*args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
