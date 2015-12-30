@@ -89,10 +89,9 @@ Limitations
 
 * A jitclass class object is treated as a function (the constructor) inside
   a numba compiled function.
-* ``instance()`` only works in the interpreter.
+* ``isinstance()`` only works in the interpreter.
 * Manipulating jitclass instances in the interpreter is not optimized, yet.
-* Support for jitclasses are available on CPU only. (Note: support on GPU
-  devices is work-in-progress.)
+* Support for jitclasses are available on CPU only.
 
 
 The decorator: ``@jitclass``
