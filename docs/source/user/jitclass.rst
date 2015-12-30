@@ -92,6 +92,7 @@ Limitations
 * ``isinstance()`` only works in the interpreter.
 * Manipulating jitclass instances in the interpreter is not optimized, yet.
 * Support for jitclasses are available on CPU only.
+  (Note: Support for GPU devices is planned for a future release.)
 
 
 The decorator: ``@jitclass``
