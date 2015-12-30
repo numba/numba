@@ -273,7 +273,7 @@ def unbox_optional(typ, obj, c):
                        cleanup=cleanup)
 
 
-@unbox(types.Slice3Type)
+@unbox(types.SliceType)
 def unbox_slice(typ, obj, c):
     """
     Convert object *obj* to a native slice structure.
@@ -281,11 +281,11 @@ def unbox_slice(typ, obj, c):
     from . import slicing
     ok, start, stop, step = \
         c.pyapi.slice_as_ints(obj, slicing.get_defaults(c.context))
-    slice3 = slicing.Slice(c.context, c.builder)
-    slice3.start = start
-    slice3.stop = stop
-    slice3.step = step
-    return NativeValue(slice3._getvalue(), is_error=c.builder.not_(ok))
+    sli = slicing.make_slice(c.context, c.builder, typ)
+    sli.start = start
+    sli.stop = stop
+    sli.step = step
+    return NativeValue(sli._getvalue(), is_error=c.builder.not_(ok))
 
 
 #
@@ -615,3 +615,19 @@ def unbox_funcptr(typ, obj, c):
             c.pyapi.decref(intobj)
             c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
     return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
+
+@box(types.DeferredType)
+def box_deferred(typ, val, c):
+    out = c.pyapi.from_native_value(typ.get(),
+                                    c.builder.extract_value(val, [0]),
+                                    env_manager=c.env_manager)
+    return out
+
+
+@unbox(types.DeferredType)
+def unbox_deferred(typ, obj, c):
+    native_value= c.pyapi.to_native_value(typ.get(), obj)
+    model = c.context.data_model_manager[typ]
+    res = model.set(c.builder, model.make_uninitialized(), native_value.value)
+    return NativeValue(res, is_error=native_value.is_error,
+                       cleanup=native_value.cleanup)

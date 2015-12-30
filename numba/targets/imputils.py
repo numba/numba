@@ -127,6 +127,23 @@ def user_function(fndesc, libs):
             builder, func, fndesc.restype, fndesc.argtypes, args, env=None)
         with cgutils.if_unlikely(builder, status.is_error):
             context.call_conv.return_status_propagate(builder, status)
+        assert sig.return_type == fndesc.restype
+        # Reconstruct optional return type
+        if isinstance(sig.return_type, types.Optional):
+            value_type = sig.return_type.type
+            optional_none = context.make_optional_none(builder, value_type)
+            retvalptr = cgutils.alloca_once_value(builder, optional_none)
+            with builder.if_then(builder.not_(status.is_none)):
+                optional_value = context.make_optional_value(builder,
+                                                             value_type,
+                                                             retval)
+                builder.store(optional_value, retvalptr)
+            retval = builder.load(retvalptr)
+        # If the data representations don't match up
+        if retval.type != context.get_value_type(sig.return_type):
+            msg = "function returned {0} but expect {1}"
+            raise TypeError(msg.format(retval.type, sig.return_type))
+
         return impl_ret_new_ref(context, builder, fndesc.restype, retval)
 
     imp.signature = typing.signature(fndesc.restype, *fndesc.argtypes)

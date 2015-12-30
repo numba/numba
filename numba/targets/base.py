@@ -20,7 +20,7 @@ from numba.targets.imputils import (user_function, user_generator,
                                     impl_ret_borrowed)
 from . import (
     arrayobj, arraymath, builtins, iterators, rangeobj, optional, slicing,
-    tupleobj)
+    tupleobj, imputils)
 from numba import datamodel
 
 try:
@@ -32,31 +32,6 @@ except NotImplementedError:
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
-
-LTYPEMAP = {
-    types.pyobject: PYOBJECT,
-
-    types.boolean: Type.int(8),
-
-    types.uint8: Type.int(8),
-    types.uint16: Type.int(16),
-    types.uint32: Type.int(32),
-    types.uint64: Type.int(64),
-
-    types.int8: Type.int(8),
-    types.int16: Type.int(16),
-    types.int32: Type.int(32),
-    types.int64: Type.int(64),
-
-    types.float32: Type.float(),
-    types.float64: Type.double(),
-}
-
-STRUCT_TYPES = {
-    types.complex64: builtins.Complex64,
-    types.complex128: builtins.Complex128,
-    types.slice3_type: slicing.Slice,
-}
 
 
 class Overloads(object):
@@ -451,6 +426,42 @@ class BaseContext(object):
 
             return _wrap_impl(imp, self, sig)
 
+        elif isinstance(typ, types.ClassInstanceType):
+            def imp(context, builder, sig, args):
+                if attr in typ.struct:
+                    instance_struct = cgutils.create_struct_proxy(typ)
+                    [this, val] = args
+                    inst = instance_struct(context, builder, value=this)
+                    data_ptr = inst.data
+                    data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
+                                                              kind='data')
+                    data = data_struct(context, builder, ref=data_ptr)
+
+                    # Get old value
+                    attr_type = typ.struct[attr]
+                    oldvalue = getattr(data, attr)
+
+                    # Store n
+                    setattr(data, attr, val)
+                    context.nrt_incref(builder, attr_type, val)
+
+                    # Delete old value
+                    context.nrt_decref(builder, attr_type, oldvalue)
+                elif attr in typ.jitprops:
+                    setter = typ.jitprops[attr]['set']
+                    setter.compile(sig)
+                    cres = setter._compileinfos[sig.args]
+                    out = context.call_internal(builder, cres.fndesc,
+                                                cres.signature, args)
+                    return imputils.impl_ret_new_ref(context, builder,
+                                                     cres.signature, out)
+
+                else:
+                    msg = 'attribute {0!r} not implemented'.format(attr)
+                    raise NotImplementedError(msg)
+
+            return _wrap_impl(imp, self, sig)
+
     def get_function(self, fn, sig):
         """
         Return the implementation of function *fn* for signature *sig*.
@@ -495,6 +506,7 @@ class BaseContext(object):
         return self._generators[genty][1]
 
     def get_bound_function(self, builder, obj, ty):
+        assert self.get_value_type(ty) == obj.type
         return obj
 
     def get_attribute(self, val, typ, attr):
@@ -873,6 +885,19 @@ class BaseContext(object):
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
+
+    def nrt_meminfo_alloc_dtor(self, builder, size, dtor):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        ll_void_ptr = self.get_value_type(types.voidptr)
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+                                   [self.get_value_type(types.intp),
+                                    ll_void_ptr])
+        fn = mod.get_or_insert_function(fnty,
+                                        name="NRT_MemInfo_alloc_dtor_safe")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [size, builder.bitcast(dtor, ll_void_ptr)])
 
     def nrt_meminfo_alloc_aligned(self, builder, size, align):
         """

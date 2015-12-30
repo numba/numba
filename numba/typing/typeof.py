@@ -129,7 +129,7 @@ def _typeof_list(val, c):
 
 @typeof_impl.register(slice)
 def _typeof_slice(val, c):
-    return types.slice3_type
+    return types.slice2_type if val.step in (None, 1) else types.slice3_type
 
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):

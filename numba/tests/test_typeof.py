@@ -164,6 +164,14 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         ty = typeof("abc")
         self.assertEqual(ty, types.string)
 
+    def test_slices(self):
+        for args in [(1,), (1, 2), (1, 2, 1), (1, 2, None)]:
+            v = slice(*args)
+            self.assertIs(typeof(v), types.slice2_type)
+        for args in [(1, 2, 2), (1, 2, -1), (None, None, -2)]:
+            v = slice(*args)
+            self.assertIs(typeof(v), types.slice3_type)
+
     def test_tuples(self):
         v = (1, 2)
         self.assertEqual(typeof(v), types.UniTuple(types.intp, 2))

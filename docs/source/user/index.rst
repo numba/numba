@@ -8,6 +8,7 @@ User Manual
    installing.rst
    jit.rst
    vectorize.rst
+   jitclass.rst
    pycc.rst
    troubleshoot.rst
    faq.rst

@@ -52,7 +52,9 @@ def module_getattr_folding(constants, block):
                 if rhs.op == 'getattr':
                     if rhs.value.name in constants:
                         base = constants[rhs.value.name]
-                        constants[inst.target.name] = getattr(base, rhs.attr)
+                        if hasattr(base, rhs.attr):
+                            constants[inst.target.name] = getattr(base,
+                                                                  rhs.attr)
 
                 elif rhs.op == 'build_tuple':
                     if all(i.name in constants for i in rhs.items):

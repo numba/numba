@@ -511,6 +511,36 @@ builtin(implement('is',
                   types.none, types.Optional)(optional_is_none))
 
 
+@builtin_attr
+@impl_attribute_generic(types.Optional)
+def optional_getattr(context, builder, typ, value, attr):
+    inner_type = typ.type
+    val = context.cast(builder, value, typ, inner_type)
+    imp = context.get_attribute(val, inner_type, attr)
+    return imp(context, builder, inner_type, val, attr)
+
+
+@builtin_attr
+@impl_attribute_generic(types.DeferredType)
+def deferred_getattr(context, builder, typ, value, attr):
+    inner_type = typ.get()
+    val = context.cast(builder, value, typ, inner_type)
+    imp = context.get_attribute(val, inner_type, attr)
+    return imp(context, builder, inner_type, val, attr)
+
+@builtin_cast(types.Any, types.DeferredType)
+def any_to_deferred(context, builder, fromty, toty, val):
+    actual = context.cast(builder, val, fromty, toty.get())
+    model = context.data_model_manager[toty]
+    return model.set(builder, model.make_uninitialized(), actual)
+
+@builtin_cast(types.DeferredType, types.Any)
+def deferred_to_any(context, builder, fromty, toty, val):
+    model = context.data_model_manager[fromty]
+    val = model.get(builder, val)
+    return context.cast(builder, val, fromty.get(), toty)
+
+
 def real_add_impl(context, builder, sig, args):
     res = builder.fadd(*args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -1401,6 +1431,7 @@ def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, Type.int())
     return context.cast(builder, asint, types.int32, toty)
+
 
 # -----------------------------------------------------------------------------
 

@@ -26,6 +26,9 @@ from .npyufunc import vectorize, guvectorize
 # Re export from_dtype
 from .numpy_support import from_dtype
 
+# Re export jitclass
+from .jitclass import jitclass
+
 # Re-export test entrypoint
 test = testing.test
 
@@ -43,6 +46,7 @@ export
 exportmany
 cuda
 from_dtype
+jitclass
 """.split() + types.__all__ + special.__all__ + errors.__all__
 
 

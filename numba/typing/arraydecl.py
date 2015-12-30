@@ -38,7 +38,7 @@ def get_array_index_type(ary, idx):
                 raise TypeError("only one ellipsis allowed in array index "
                                 "(got %s)" % (idx,))
             ellipsis_met = True
-        elif ty is types.slice3_type:
+        elif isinstance(ty, types.SliceType):
             pass
         elif isinstance(ty, types.Integer):
             # Normalize integer index
@@ -66,6 +66,10 @@ def get_array_index_type(ary, idx):
 
     # Check indices and result dimensionality
     all_indices = left_indices + right_indices
+    if ellipsis_met:
+        assert right_indices[0] is types.ellipsis
+        del right_indices[0]
+
     n_indices = len(all_indices) - ellipsis_met
     if n_indices > ary.ndim:
         raise TypeError("cannot index %s with %d indices: %s"
@@ -90,6 +94,26 @@ def get_array_index_type(ary, idx):
 
         # Infer layout
         layout = ary.layout
+
+        def keeps_contiguity(ty, is_innermost):
+            # A slice can only keep an array contiguous if it is the
+            # innermost index and it is not strided
+            return (ty is types.ellipsis or isinstance(ty, types.Integer)
+                    or (is_innermost and isinstance(ty, types.SliceType)
+                        and not ty.has_step))
+
+        def check_contiguity(outer_indices):
+            """
+            Whether indexing with the given indices (from outer to inner in
+            physical layout order) can keep an array contiguous.
+            """
+            for ty in outer_indices[:-1]:
+                if not keeps_contiguity(ty, False):
+                    return False
+            if outer_indices and not keeps_contiguity(outer_indices[-1], True):
+                return False
+            return True
+
         if layout == 'C':
             # Integer indexing on the left keeps the array C-contiguous
             if n_indices == ary.ndim:
@@ -98,12 +122,8 @@ def get_array_index_type(ary, idx):
                 right_indices = []
             if right_indices:
                 layout = 'A'
-            else:
-                for ty in left_indices:
-                    if ty is not types.ellipsis and not isinstance(ty, types.Integer):
-                        # Slicing cannot guarantee to keep the array contiguous
-                        layout = 'A'
-                        break
+            elif not check_contiguity(left_indices):
+                layout = 'A'
         elif layout == 'F':
             # Integer indexing on the right keeps the array F-contiguous
             if n_indices == ary.ndim:
@@ -112,12 +132,8 @@ def get_array_index_type(ary, idx):
                 left_indices = []
             if left_indices:
                 layout = 'A'
-            else:
-                for ty in right_indices:
-                    if ty is not types.ellipsis and not isinstance(ty, types.Integer):
-                        # Slicing cannot guarantee to keep the array contiguous
-                        layout = 'A'
-                        break
+            elif not check_contiguity(right_indices[::-1]):
+                layout = 'A'
 
         res = ary.copy(ndim=ndim, layout=layout)
 

@@ -47,7 +47,7 @@ class GetItemSequence(AbstractTemplate):
         seq, idx = args
         if isinstance(seq, types.Sequence):
             idx = normalize_1d_index(idx)
-            if idx == types.slice3_type:
+            if isinstance(idx, types.SliceType):
                 return signature(seq, seq, idx)
             elif isinstance(idx, types.Integer):
                 return signature(seq.dtype, seq, idx)
@@ -60,7 +60,7 @@ class SetItemSequence(AbstractTemplate):
         seq, idx, value = args
         if isinstance(seq, types.MutableSequence):
             idx = normalize_1d_index(idx)
-            if idx == types.slice3_type:
+            if isinstance(idx, types.SliceType):
                 return signature(types.none, seq, idx, seq)
             elif isinstance(idx, types.Integer):
                 return signature(types.none, seq, idx, seq.dtype)

@@ -49,7 +49,11 @@ class LinkerError(RuntimeError):
 class CudaAPIError(CudaDriverError):
     def __init__(self, code, msg):
         self.code = code
-        super(CudaAPIError, self).__init__(msg)
+        self.msg = msg
+        super(CudaAPIError, self).__init__(code, msg)
+
+    def __str__(self):
+        return "[%s] %s" % (self.code, self.msg)
 
 
 def find_driver():
