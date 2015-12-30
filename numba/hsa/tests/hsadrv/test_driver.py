@@ -13,6 +13,12 @@ from numba.hsa.hsadrv import enums_ext
 
 from numba import config
 
+# hardware
+known_dgpus = frozenset([b'Fiji'])
+known_apus = frozenset([b'Spectre'])
+known_cpus = frozenset([b'Kaveri'])
+
+
 def apu_present():
     """
     Returns true if an APU is present on the current machine.
@@ -36,17 +42,13 @@ def dgpu_count():
     if config.NUMBA_HSA_DGPU_PRESENT:
         return config.NUMBA_HSA_DGPU_PRESENT
     else:
-
-        known_dgpus = frozenset([b'Fiji'])
-        known_apus = frozenset([b'Spectre'])
-        known_cpus = frozenset([b'Kaveri'])
-
         ngpus = 0
         for a in hsa.agents:
-            name = getattr(a, "name").lower()
-            for g in known_dgpus:
-                if g.lower() in name:
-                    ngpus += 1
+            if a.is_component:
+                name = getattr(a, "name").lower()
+                for g in known_dgpus:
+                    if g.lower() in name:
+                        ngpus += 1
         return ngpus
 
 class TestLowLevelApi(unittest.TestCase):
@@ -416,7 +418,6 @@ class TestContext(_TestBase):
             dGPU_agent = self.gpu
             CPU_agent = self.cpu
             gpu_ctx = Context(dGPU_agent)
-            cpu_ctx = Context(CPU_agent)
             gpu_only_mem = gpu_ctx.memalloc(mblk, hostAccessible=False)
 
             # ensure the right sort of memory has been allocated

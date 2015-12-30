@@ -930,10 +930,14 @@ class Context(object):
     agent the agent, and instance of the class Agent
     """
     def __init__(self, agent):
+        if not agent.is_component: # only components support dispatch
+            raise ValueError("Agent supplied to Context ctor does not "+\
+                                "support kernel dispatch. Agent is %s" % agent)
         self._agent = weakref.proxy(agent)
-        qs = agent.queue_max_size
-        #defq = self._agent.create_queue_multi(qs, callback=self._callback)
-        #self._defaultqueue = defq.owned()
+        self._hw = self._agent.device
+        qs = self._agent.queue_max_size
+        defq = self._agent.create_queue_multi(qs, callback=self._callback)
+        self._defaultqueue = defq.owned()
         self.allocations = utils.UniqueDict()
 
     def _callback(self, status, queue):
@@ -959,13 +963,12 @@ class Context(object):
         hostAccessible boolean as to whether the region in which the\
                        allocation takes place should be host accessible
         """
-        hw = self._agent.device
         all_reg = self._agent.regions
         flag_ok_r = list() # regions which pass the memTypeFlags test
         regions = list()
 
         # don't support DSP
-        if hw == "GPU" or hw == "CPU":
+        if self._hw == "GPU" or self._hw == "CPU":
             # check user requested flags
             if(memTypeFlags is not None):
                 for r in regions:
@@ -981,7 +984,7 @@ class Context(object):
             # check system required flags for allocation
             for r in flag_ok_r:
                 # check the mem region is coarse grained if dGPU present
-                if (hw == "GPU" and not\
+                if (self._hw == "GPU" and not\
                     r.supports(enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED)):
                     continue
                 # check accessibility criteria
@@ -1003,8 +1006,8 @@ class Context(object):
         mem = None
         for region_id in regions:
             try:
-                mem = MemRegion.instance_for(self._agent, region_id).\
-                        allocate(ctypes_type)
+                mem = MemRegion.instance_for(self._agent, region_id)\
+                        .allocate(ctypes_type)
             except HsaApiError: # try next memory region if an allocation fails
                 pass
             else: # allocation succeeded, stop looking for memory
