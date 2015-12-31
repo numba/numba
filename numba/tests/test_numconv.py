@@ -7,7 +7,6 @@ from numba import types
 
 def template(fromty, toty):
     def closure(self):
-        1/0
         def cast(x):
             y = x
             return y
