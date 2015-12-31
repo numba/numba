@@ -7,4 +7,4 @@ import numba.testing as testing
 
 if __name__ == "__main__":
     result = testing.run_tests(sys.argv)
-    sys.exit(0 if result else 1)
+    sys.exit(0 if result.wasSuccessful() else 1)

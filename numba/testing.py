@@ -581,9 +581,8 @@ def run_tests(argv=None, xmloutput=None, verbosity=1, nomultiproc=False):
 
 
 def test(*args, **kwargs):
-
     return run_tests(argv=['<main>'] + list(args), **kwargs).wasSuccessful()
 
 
 if __name__ == "__main__":
-    sys.exit(0 if run_tests(sys.argv) else 1)
+    sys.exit(0 if run_tests(sys.argv).wasSuccessful() else 1)
