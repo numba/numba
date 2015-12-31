@@ -7,9 +7,9 @@ from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from .imputils import (builtin, builtin_attr, implement, impl_attribute,
-                       impl_attribute_generic, iternext_impl,
-                       impl_ret_borrowed, impl_ret_untracked)
+from .imputils import (builtin, builtin_attr, builtin_cast, implement,
+                       impl_attribute, impl_attribute_generic,
+                       iternext_impl, impl_ret_borrowed, impl_ret_untracked)
 from . import optional
 from .. import typing, types, cgutils, utils, intrinsics
 
@@ -527,6 +527,18 @@ def deferred_getattr(context, builder, typ, value, attr):
     val = context.cast(builder, value, typ, inner_type)
     imp = context.get_attribute(val, inner_type, attr)
     return imp(context, builder, inner_type, val, attr)
+
+@builtin_cast(types.Any, types.DeferredType)
+def any_to_deferred(context, builder, fromty, toty, val):
+    actual = context.cast(builder, val, fromty, toty.get())
+    model = context.data_model_manager[toty]
+    return model.set(builder, model.make_uninitialized(), actual)
+
+@builtin_cast(types.DeferredType, types.Any)
+def deferred_to_any(context, builder, fromty, toty, val):
+    model = context.data_model_manager[fromty]
+    val = model.get(builder, val)
+    return context.cast(builder, val, fromty.get(), toty)
 
 
 def real_add_impl(context, builder, sig, args):
@@ -1174,19 +1186,6 @@ def setitem_cpointer(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 
 @builtin
-@implement(types.NumberClass, types.Any)
-def number_constructor(context, builder, sig, args):
-    """
-    Convert any number to any other.
-    """
-    [val] = args
-    [valty] = sig.args
-    return context.cast(builder, val, valty, sig.return_type)
-
-
-#-------------------------------------------------------------------------------
-
-@builtin
 @implement(max, types.VarArg(types.Any))
 def max_impl(context, builder, sig, args):
     argtys = sig.args
@@ -1294,6 +1293,7 @@ def round_impl_binary(context, builder, sig, args):
 
 
 #-------------------------------------------------------------------------------
+# Numeric constructors
 
 @builtin
 @implement(int, types.Any)
@@ -1341,6 +1341,97 @@ def complex_impl(context, builder, sig, args):
     cmplx.imag = imag
     res = cmplx._getvalue()
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@builtin
+@implement(types.NumberClass, types.Any)
+def number_constructor(context, builder, sig, args):
+    """
+    Convert any number to any other.
+    """
+    [val] = args
+    [valty] = sig.args
+    return context.cast(builder, val, valty, sig.return_type)
+
+
+#-------------------------------------------------------------------------------
+# Implicit casts between numerics
+
+@builtin_cast(types.Integer, types.Integer)
+def integer_to_integer(context, builder, fromty, toty, val):
+    if toty.bitwidth == fromty.bitwidth:
+        # Just a change of signedness
+        return val
+    elif toty.bitwidth < fromty.bitwidth:
+        # Downcast
+        return builder.trunc(val, context.get_value_type(toty))
+    elif fromty.signed:
+        # Signed upcast
+        return builder.sext(val, context.get_value_type(toty))
+    else:
+        # Unsigned upcast
+        return builder.zext(val, context.get_value_type(toty))
+
+@builtin_cast(types.Integer, types.voidptr)
+def integer_to_voidptr(context, builder, fromty, toty, val):
+    return builder.inttoptr(val, context.get_value_type(toty))
+
+@builtin_cast(types.Float, types.Float)
+def float_to_float(context, builder, fromty, toty, val):
+    lty = context.get_value_type(toty)
+    if fromty.bitwidth < toty.bitwidth:
+        return builder.fpext(val, lty)
+    else:
+        return builder.fptrunc(val, lty)
+
+@builtin_cast(types.Integer, types.Float)
+def integer_to_float(context, builder, fromty, toty, val):
+    lty = context.get_value_type(toty)
+    if fromty.signed:
+        return builder.sitofp(val, lty)
+    else:
+        return builder.uitofp(val, lty)
+
+@builtin_cast(types.Float, types.Integer)
+def float_to_integer(context, builder, fromty, toty, val):
+    lty = context.get_value_type(toty)
+    if toty.signed:
+        return builder.fptosi(val, lty)
+    else:
+        return builder.fptoui(val, lty)
+
+@builtin_cast(types.Float, types.Complex)
+@builtin_cast(types.Integer, types.Complex)
+def non_complex_to_complex(context, builder, fromty, toty, val):
+    real = context.cast(builder, val, fromty, toty.underlying_float)
+    imag = context.get_constant(toty.underlying_float, 0)
+
+    cmplx = context.make_complex(toty)(context, builder)
+    cmplx.real = real
+    cmplx.imag = imag
+    return cmplx._getvalue()
+
+@builtin_cast(types.Complex, types.Complex)
+def complex_to_complex(context, builder, fromty, toty, val):
+    srccls, srcty = get_complex_info(fromty)
+    dstcls, dstty = get_complex_info(toty)
+
+    src = srccls(context, builder, value=val)
+    dst = dstcls(context, builder)
+    dst.real = context.cast(builder, src.real, srcty, dstty)
+    dst.imag = context.cast(builder, src.imag, srcty, dstty)
+    return dst._getvalue()
+
+@builtin_cast(types.Any, types.Boolean)
+def any_to_boolean(context, builder, fromty, toty, val):
+    return context.is_true(builder, fromty, val)
+
+@builtin_cast(types.Boolean, types.Any)
+def boolean_to_any(context, builder, fromty, toty, val):
+    # Casting from boolean to anything first casts to int32
+    asint = builder.zext(val, Type.int())
+    return context.cast(builder, asint, types.int32, toty)
+
 
 # -----------------------------------------------------------------------------
 

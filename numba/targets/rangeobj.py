@@ -5,8 +5,8 @@ Implementation of the range object for fixed-size integers.
 import llvmlite.llvmpy.core as lc
 
 from numba import types, cgutils
-from numba.targets.imputils import (builtin, implement, iterator_impl,
-                                    impl_ret_untracked)
+from numba.targets.imputils import (builtin, builtin_cast, implement,
+                                    iterator_impl, impl_ret_untracked)
 
 
 def make_range_iterator(typ):
@@ -149,3 +149,11 @@ make_range_impl(types.range_state32_type, types.range_iter32_type, types.int32)
 make_range_impl(types.range_state64_type, types.range_iter64_type, types.int64)
 make_range_impl(types.unsigned_range_state64_type, types.unsigned_range_iter64_type,
                 types.uint64)
+
+
+@builtin_cast(types.RangeType, types.RangeType)
+def range_to_range(context, builder, fromty, toty, val):
+    olditems = cgutils.unpack_tuple(builder, val, 3)
+    items = [context.cast(builder, v, fromty.dtype, toty.dtype)
+             for v in olditems]
+    return cgutils.make_anonymous_struct(builder, items)

@@ -7,7 +7,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import jit, types
+from numba import jit, types, errors
 from .support import TestCase, MemoryLeakMixin
 
 
@@ -72,6 +72,9 @@ def make_point_nrt(n):
 
 def type_usecase(tup, *args):
     return type(tup)(*args)
+
+def identity(tup):
+    return tup
 
 
 class TestTupleReturn(TestCase):
@@ -338,6 +341,34 @@ class TestNamedTupleNRT(TestCase, MemoryLeakMixin):
             got = cfunc(arg)
             self.assertIs(type(got), type(expected))
             self.assertPreciseEqual(got, expected)
+
+
+class TestConversions(TestCase):
+    """
+    Test implicit conversions between tuple types.
+    """
+
+    def check_conversion(self, fromty, toty, val):
+        pyfunc = identity
+        cr = compile_isolated(pyfunc, (fromty,), toty)
+        cfunc = cr.entry_point
+        res = cfunc(val)
+        self.assertEqual(res, val)
+
+    def test_conversions(self):
+        check = self.check_conversion
+        fromty = types.UniTuple(types.int32, 2)
+        check(fromty, types.UniTuple(types.float32, 2), (4, 5))
+        check(fromty, types.Tuple((types.float32, types.int16)), (4, 5))
+        aty = types.UniTuple(types.int32, 0)
+        bty = types.Tuple(())
+        check(aty, bty, ())
+        check(bty, aty, ())
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.Tuple((types.float32,)), (4, 5))
+        self.assertIn("No conversion from (int32 x 2) to (float32 x 1)",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':

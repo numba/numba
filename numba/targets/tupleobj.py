@@ -5,8 +5,8 @@ Implementation of tuple objects
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 
-from .imputils import (builtin, builtin_attr, implement, impl_attribute,
-                       impl_attribute_generic, iternext_impl,
+from .imputils import (builtin, builtin_attr, builtin_cast, implement,
+                       impl_attribute, impl_attribute_generic, iternext_impl,
                        impl_ret_borrowed, impl_ret_untracked)
 from .. import typing, types, cgutils
 
@@ -216,3 +216,23 @@ def static_getitem_tuple(context, builder, sig, args):
     assert isinstance(idx, int)
     res = builder.extract_value(tup, idx)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+#------------------------------------------------------------------------------
+# Implicit conversion
+
+@builtin_cast(types.BaseTuple, types.BaseTuple)
+def tuple_to_tuple(context, builder, fromty, toty, val):
+    if (isinstance(fromty, types.BaseNamedTuple)
+        or isinstance(toty, types.BaseNamedTuple)):
+        # Disallowed by typing layer
+        raise NotImplementedError
+
+    if len(fromty) != len(toty):
+        # Disallowed by typing layer
+        raise NotImplementedError
+
+    olditems = cgutils.unpack_tuple(builder, val, len(fromty))
+    items = [context.cast(builder, v, f, t)
+             for v, f, t in zip(olditems, fromty, toty)]
+    return context.make_tuple(builder, toty, items)
