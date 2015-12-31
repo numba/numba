@@ -919,6 +919,31 @@ class Symbol(HsaWrapper):
     def __init__(self, symbol_id):
         self._id = symbol_id
 
+class OwnedPointer(object):
+    def __init__(self, memptr, view=None):
+        self._mem = memptr
+        self._mem.refct += 1
+        if view is None:
+            self._view = self._mem
+        else:
+            assert not view.is_managed
+            self._view = view
+
+    def __del__(self):
+        try:
+            self._mem.refct -= 1
+            assert self._mem.refct >= 0
+            if self._mem.refct == 0:
+                self._mem.free()
+        except ReferenceError:
+            pass
+        except:
+            traceback.print_exc()
+
+    def __getattr__(self, fname):
+        """Proxy MemoryPointer methods
+        """
+        return getattr(self._view, fname)
 
 class Context(object):
     """
@@ -930,14 +955,10 @@ class Context(object):
     agent the agent, and instance of the class Agent
     """
     def __init__(self, agent):
-        if not agent.is_component: # only components support dispatch
-            raise ValueError("Agent supplied to Context ctor does not "+\
-                                "support kernel dispatch. Agent is %s" % agent)
         self._agent = weakref.proxy(agent)
-        self._hw = self._agent.device
-        qs = self._agent.queue_max_size
-        defq = self._agent.create_queue_multi(qs, callback=self._callback)
-        self._defaultqueue = defq.owned()
+        qs = agent.queue_max_size
+        #defq = self._agent.create_queue_multi(qs, callback=self._callback)
+        #self._defaultqueue = defq.owned()
         self.allocations = utils.UniqueDict()
 
     def _callback(self, status, queue):
@@ -963,12 +984,13 @@ class Context(object):
         hostAccessible boolean as to whether the region in which the\
                        allocation takes place should be host accessible
         """
+        hw = self._agent.device
         all_reg = self._agent.regions
         flag_ok_r = list() # regions which pass the memTypeFlags test
         regions = list()
 
         # don't support DSP
-        if self._hw == "GPU" or self._hw == "CPU":
+        if hw == "GPU" or hw == "CPU":
             # check user requested flags
             if(memTypeFlags is not None):
                 for r in regions:
@@ -984,7 +1006,8 @@ class Context(object):
             # check system required flags for allocation
             for r in flag_ok_r:
                 # check the mem region is coarse grained if dGPU present
-                if (self._hw == "GPU" and not\
+                # TODO: this probably ought to explicitly check for a dGPU.
+                if (hw == "GPU" and not\
                     r.supports(enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED)):
                     continue
                 # check accessibility criteria
@@ -1019,8 +1042,24 @@ class Context(object):
               (hardware = %s, size = %s, flags = %s)." % \
               ( hw, ctypes_type, memTypeFlags))
 
-        # TODO: probably ought to keep a register of
-        # hash[device, ptr] -> allocation
-        # so the register can be walked to free allocated and clean up
+        self.allocations[mem.value] = mem
+        return OwnedPointer(mem)
 
-        return mem
+
+def host_to_dGPU(context, dst, src, size):
+    """
+    Copy data from a host memory region to a dGPU.
+    Parameters:
+    context the dGPU context
+    dst a pointer to the destination location in dGPU memory
+    src a pointer to the source location in host memory
+    size the size (in bytes) of data to transfer
+    """
+    if size < 0:
+        raise ValueError("Invalid size given: %s" % size)
+
+    # dst and src are 2 pointers to memory
+    # Allocate a host accessible buffer for the transfer
+    blob = ctypes.c_byte*size
+    buf = context.memalloc(blob)
+

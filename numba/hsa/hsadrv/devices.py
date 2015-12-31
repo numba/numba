@@ -1,5 +1,5 @@
 """
-Expose each GPU devices directly
+Expose each GPU device directly
 """
 from __future__ import print_function, absolute_import, division
 import functools
