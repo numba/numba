@@ -24,14 +24,6 @@ class TestNumberConversion(unittest.TestCase):
     """
     # NOTE: more implicit tests are in test_numberctor
 
-    def _test_template(self, realty, intty):
-        def cast(x):
-            y = x
-            return y
-
-        cres = compile_isolated(cast, args=[realty], return_type=intty)
-        self.assertAlmostEqual(cres.entry_point(1.), 1)
-
     @classmethod
     def automatic_populate(cls):
         tys = types.integer_domain | types.real_domain
