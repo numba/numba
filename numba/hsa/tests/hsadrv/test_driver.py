@@ -155,14 +155,16 @@ class TestMemory(_TestBase):
         # Test allocating at the kernel argument region
         kernarg_region = kernarg_regions[0]
         nelem = 10
-        ptr = kernarg_region.allocate(ctypes.c_float * nelem)
+        ptr = kernarg_region.allocate(ctypes.sizeof(ctypes.c_float) * nelem)
         self.assertNotEqual(ctypes.addressof(ptr), 0,
                             "pointer must not be NULL")
         # Test writing to it
         src = np.random.random(nelem).astype(np.float32)
         ctypes.memmove(ptr, src.ctypes.data, src.nbytes)
+
+        ref = (ctypes.c_float * nelem).from_address(ptr.value)
         for i in range(src.size):
-            self.assertEqual(ptr[i], src[i])
+            self.assertEqual(ref[i], src[i])
         hsa.hsa_memory_free(ptr)
 
     @unittest.skipIf(dgpu_count() == 0, "no discrete GPU present")
@@ -205,18 +207,19 @@ class TestMemory(_TestBase):
 
         # allocation
         cpu_region = cpu_coarse_regions[0]
-        cpu_ptr = cpu_region.allocate(ctypes.c_float * nelem)
+        cpu_ptr = cpu_region.allocate(ctypes.sizeof(ctypes.c_float) * nelem)
         self.assertNotEqual(ctypes.addressof(cpu_ptr), 0,
                 "pointer must not be NULL")
 
         gpu_only_region = gpu_only_coarse_regions[0]
-        gpu_only_ptr = gpu_only_region.allocate(ctypes.c_float * nelem)
+        gpu_only_ptr = gpu_only_region.allocate(ctypes.sizeof(ctypes.c_float) *
+                nelem)
         self.assertNotEqual(ctypes.addressof(gpu_only_ptr), 0,
                 "pointer must not be NULL")
 
         gpu_host_accessible_region = gpu_host_accessible_coarse_regions[0]
         gpu_host_accessible_ptr = gpu_host_accessible_region.allocate(
-                ctypes.c_float * nelem)
+                ctypes.sizeof(ctypes.c_float) * nelem)
         self.assertNotEqual(ctypes.addressof(gpu_host_accessible_ptr), 0,
                 "pointer must not be NULL")
 
@@ -227,11 +230,14 @@ class TestMemory(_TestBase):
         hsa.hsa_memory_copy(gpu_only_ptr, gpu_host_accessible_ptr, src.nbytes)
 
         # check write is correct
+        cpu_ref = (ctypes.c_float * nelem).from_address(cpu_ptr.value)
         for i in range(src.size):
-            self.assertEqual(cpu_ptr[i], src[i])
+            self.assertEqual(cpu_ref[i], src[i])
 
+        gpu_ha_ref = (ctypes.c_float * nelem).\
+            from_address(gpu_host_accessible_ptr.value)
         for i in range(src.size):
-            self.assertEqual(gpu_host_accessible_ptr[i], src[i])
+            self.assertEqual(gpu_ha_ref[i], src[i])
 
         # zero out host accessible GPU memory and CPU memory
         z0 = np.zeros(nelem).astype(np.float32)
@@ -240,17 +246,17 @@ class TestMemory(_TestBase):
 
         # check zeroing is correct
         for i in range(z0.size):
-            self.assertEqual(cpu_ptr[i], z0[i])
+            self.assertEqual(cpu_ref[i], z0[i])
 
         for i in range(z0.size):
-            self.assertEqual(gpu_host_accessible_ptr[i], z0[i])
+            self.assertEqual(gpu_ha_ref[i], z0[i])
 
         # copy back the data from the GPU
         hsa.hsa_memory_copy(gpu_host_accessible_ptr, gpu_only_ptr, src.nbytes)
 
         # check the copy back is ok
         for i in range(src.size):
-            self.assertEqual(gpu_host_accessible_ptr[i], src[i])
+            self.assertEqual(gpu_ha_ref[i], src[i])
 
         # free
         hsa.hsa_memory_free(cpu_ptr)
@@ -330,13 +336,12 @@ class TestMemory(_TestBase):
         z0 = np.zeros_like(src)
 
         # alloc host accessible memory
+        nbytes = ctypes.sizeof(ctypes.c_float) * nelem
         gpu_host_accessible_region = gpu_host_accessible_coarse_regions[0]
-        host_in_ptr = gpu_host_accessible_region.allocate(ctypes.c_float *
-                                                            nelem)
+        host_in_ptr = gpu_host_accessible_region.allocate(nbytes)
         self.assertNotEqual(ctypes.addressof(host_in_ptr), 0,
                 "pointer must not be NULL")
-        host_out_ptr = gpu_host_accessible_region.allocate(ctypes.c_float *
-                                                            nelem)
+        host_out_ptr = gpu_host_accessible_region.allocate(nbytes)
         self.assertNotEqual(ctypes.addressof(host_out_ptr), 0,
                 "pointer must not be NULL")
 
@@ -346,10 +351,10 @@ class TestMemory(_TestBase):
 
         # alloc gpu only memory
         gpu_only_region = gpu_only_coarse_regions[0]
-        gpu_in_ptr = gpu_only_region.allocate(ctypes.c_float * nelem)
+        gpu_in_ptr = gpu_only_region.allocate(nbytes)
         self.assertNotEqual(ctypes.addressof(gpu_in_ptr), 0,
                 "pointer must not be NULL")
-        gpu_out_ptr = gpu_only_region.allocate(ctypes.c_float * nelem)
+        gpu_out_ptr = gpu_only_region.allocate(nbytes)
         self.assertNotEqual(ctypes.addressof(gpu_out_ptr), 0,
                 "pointer must not be NULL")
 
@@ -410,7 +415,7 @@ class TestContext(_TestBase):
             components of dGPUs and APUs.
         """
         n = 10 # things to alloc
-        mblk = ctypes.c_double * n
+        nbytes = ctypes.sizeof(ctypes.c_double) * n
 
         # run if a dGPU is present
         if(dgpu_count() > 0):
@@ -418,23 +423,18 @@ class TestContext(_TestBase):
             dGPU_agent = self.gpu
             CPU_agent = self.cpu
             gpu_ctx = Context(dGPU_agent)
-            gpu_only_mem = gpu_ctx.memalloc(mblk, hostAccessible=False)
-
-            # ensure the right sort of memory has been allocated
-            self.assertFalse(gpu_only_mem.host_accessible)
-            self.assertTrue(gpu_only_mem.supports(\
-                enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED))
-            self.assertTrue(gpu_only_mem.size==ctypes.sizeof(mblk))
-
-            ha_mem = gpu_ctx.memalloc(mblk, hostAccessible=True)
+            gpu_only_mem = gpu_ctx.memalloc(nbytes, hostAccessible=False)
+            ha_mem = gpu_ctx.memalloc(nbytes, hostAccessible=True)
 
             # on dGPU systems, all host mem is host accessible
-            cpu_mem = cpu_ctx.memalloc(mblk, hostAccessible=True)
+            cpu_ctx = Context(CPU_agent)
+            cpu_mem = cpu_ctx.memalloc(nbytes, hostAccessible=True)
+
             # Test writing to allocated area
             src = np.random.random(n).astype(np.float64)
-            hsa.hsa_memory_copy(cpu_mem, src.ctypes.data, src.nbytes)
-            hsa.hsa_memory_copy(ha_mem, cpu_mem, src.nbytes)
-            hsa.hsa_memory_copy(gpu_only_mem, ha_mem, src.nbytes)
+            hsa.hsa_memory_copy(cpu_mem.device_pointer, src.ctypes.data, src.nbytes)
+            hsa.hsa_memory_copy(ha_mem.device_pointer, cpu_mem.device_pointer, src.nbytes)
+            hsa.hsa_memory_copy(gpu_only_mem.device_pointer, ha_mem.device_pointer, src.nbytes)
 
             # clear
 

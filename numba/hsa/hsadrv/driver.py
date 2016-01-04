@@ -603,14 +603,13 @@ class MemRegion(HsaWrapper):
         else:
             return False
 
-    def allocate(self, ctypes_type):
+    def allocate(self, nbytes):
         assert self.alloc_allowed
-        alloc_size = ctypes.sizeof(ctypes_type)
-        assert alloc_size <= self.alloc_max_size
+        assert nbytes <= self.alloc_max_size
+        assert nbytes >= 0
         buff = ctypes.c_void_p()
-        hsa.hsa_memory_allocate(self._id, alloc_size,
-                                ctypes.byref(buff))
-        return ctypes_type.from_address(buff.value)
+        hsa.hsa_memory_allocate(self._id, nbytes, ctypes.byref(buff))
+        return buff
 
     def free(self, ptr):
         hsa.hsa_memory_free(ptr)
@@ -919,6 +918,56 @@ class Symbol(HsaWrapper):
     def __init__(self, symbol_id):
         self._id = symbol_id
 
+class MemoryPointer(object):
+    __hsa_memory__ = True
+
+    def __init__(self, context, pointer, size, finalizer=None):
+        self.context = context
+        self.device_pointer = pointer
+        self.size = size
+        self._hsa_memsize_ = size
+        self.finalizer = finalizer
+        self.is_managed = finalizer is not None
+        self.is_alive = True
+        self.refct = 0
+
+    def __del__(self):
+        try:
+            if self.is_managed and self.is_alive:
+                self.finalizer()
+        except:
+            traceback.print_exc()
+
+    def own(self):
+        return OwnedPointer(weakref.proxy(self))
+
+    def free(self):
+        """
+        Forces the device memory to the trash.
+        """
+        if self.is_managed:
+            if not self.is_alive:
+                raise RuntimeError("Freeing dead memory")
+            self.finalizer()
+            self.is_alive = False
+
+#    def memset(self, byte, count=None, stream=0):
+#        count = self.size if count is None else count
+#        if stream:
+#            driver.cuMemsetD8Async(self.device_pointer, byte, count,
+#                                   stream.handle)
+#        else:
+#            driver.cuMemsetD8(self.device_pointer, byte, count)
+
+    def view(self):
+        pointer = self.device_pointer.value
+        view = MemoryPointer(self.context, pointer, self.size)
+        return OwnedPointer(weakref.proxy(self), view)
+
+    @property
+    def device_ctypes_pointer(self):
+        return self.device_pointer
+
 class OwnedPointer(object):
     def __init__(self, memptr, view=None):
         self._mem = memptr
@@ -944,6 +993,7 @@ class OwnedPointer(object):
         """Proxy MemoryPointer methods
         """
         return getattr(self._view, fname)
+
 
 class Context(object):
     """
@@ -973,11 +1023,11 @@ class Context(object):
     def agent(self):
         return self._agent
 
-    def memalloc(self, ctypes_type, memTypeFlags=None, hostAccessible=True):
+    def memalloc(self, nbytes, memTypeFlags=None, hostAccessible=True):
         """
         Allocates memory.
         Parameters:
-        ctypes_type the number of elements scaled on c_type to allocate
+        nbytes the number of bytes to allocate.
         memTypeFlags the flags for which the memory region must have support,\
                      due to the inherent rawness of the underlying call, the\
                      validity of the flag is not checked, cf. C language.
@@ -1030,7 +1080,7 @@ class Context(object):
         for region_id in regions:
             try:
                 mem = MemRegion.instance_for(self._agent, region_id)\
-                        .allocate(ctypes_type)
+                        .allocate(nbytes)
             except HsaApiError: # try next memory region if an allocation fails
                 pass
             else: # allocation succeeded, stop looking for memory
@@ -1040,10 +1090,13 @@ class Context(object):
             raise RuntimeError("Memory allocation failed. No agent/region \
               combination could meet allocation restraints \
               (hardware = %s, size = %s, flags = %s)." % \
-              ( hw, ctypes_type, memTypeFlags))
-
-        self.allocations[mem.value] = mem
-        return OwnedPointer(mem)
+              ( hw, nbytes, memTypeFlags))
+        ret = MemoryPointer(weakref.proxy(self), mem,  nbytes)
+        if mem.value == None:
+            import pdb; pdb.set_trace()
+            raise RuntimeError("MemoryPointer has no value")
+        self.allocations[mem.value] = ret
+        return ret.own()
 
 
 def host_to_dGPU(context, dst, src, size):
@@ -1051,8 +1104,8 @@ def host_to_dGPU(context, dst, src, size):
     Copy data from a host memory region to a dGPU.
     Parameters:
     context the dGPU context
-    dst a pointer to the destination location in dGPU memory
-    src a pointer to the source location in host memory
+    dst an OwnedPointer to the destination location in dGPU memory
+    src an OwnedPointer to the source location in host memory
     size the size (in bytes) of data to transfer
     """
     if size < 0:
@@ -1061,5 +1114,11 @@ def host_to_dGPU(context, dst, src, size):
     # dst and src are 2 pointers to memory
     # Allocate a host accessible buffer for the transfer
     blob = ctypes.c_byte*size
-    buf = context.memalloc(blob)
+    buf = context.memalloc(blob, memTypeFlags=\
+            enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED, hostAccessible=True)
+    # Copy src->buf
+    hsa.hsa_memory_copy(buf.get(), src.get(), size)
+    # Copy buf->dst
+    hsa.hsa_memory_copy(dst.get(), buf.get(), size)
+
 

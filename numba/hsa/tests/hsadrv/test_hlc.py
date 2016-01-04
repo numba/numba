@@ -113,35 +113,39 @@ class TestHLC(unittest.TestCase):
             self.assertGreater(len(gpu_only_coarse_regions), 0)
             self.assertGreater(len(gpu_host_accessible_coarse_regions), 0)
 
+            # data size
+            nbytes = ctypes.sizeof(ctypes.c_float) * nelem
+
             # alloc host accessible memory
             gpu_host_accessible_region = gpu_host_accessible_coarse_regions[0]
-            host_in_ptr = gpu_host_accessible_region.allocate(ctypes.c_float *
-                                                                nelem)
-            self.assertNotEqual(ctypes.addressof(host_in_ptr), 0,
+            host_in_ptr = gpu_host_accessible_region.allocate(nbytes)
+            self.assertNotEqual(host_in_ptr.value, None,
                     "pointer must not be NULL")
-            host_out_ptr = gpu_host_accessible_region.allocate(ctypes.c_float *
-                                                                nelem)
-            self.assertNotEqual(ctypes.addressof(host_out_ptr), 0,
+            host_out_ptr = gpu_host_accessible_region.allocate(nbytes)
+            self.assertNotEqual(host_out_ptr.value, None,
                     "pointer must not be NULL")
 
             # init mem with data
             hsa.hsa_memory_copy(host_in_ptr, src.ctypes.data, src.nbytes)
+
+            f=(ctypes.c_float*nelem).from_address(host_in_ptr.value)
+            print("orig = %f, PTR=%f"%(src[0],f[0]))
+
             hsa.hsa_memory_copy(host_out_ptr, dst.ctypes.data, dst.nbytes)
 
             # alloc gpu only memory
             gpu_only_region = gpu_only_coarse_regions[0]
-            gpu_in_ptr = gpu_only_region.allocate(ctypes.c_float * nelem)
-            self.assertNotEqual(ctypes.addressof(gpu_in_ptr), 0,
+            gpu_in_ptr = gpu_only_region.allocate(nbytes)
+            self.assertNotEqual(gpu_in_ptr.value, None,
                     "pointer must not be NULL")
-            gpu_out_ptr = gpu_only_region.allocate(ctypes.c_float * nelem)
-            self.assertNotEqual(ctypes.addressof(gpu_out_ptr), 0,
+            gpu_out_ptr = gpu_only_region.allocate(nbytes)
+            self.assertNotEqual(gpu_out_ptr.value, None,
                     "pointer must not be NULL")
 
             # copy memory from host accessible location to gpu only
             hsa.hsa_memory_copy(gpu_in_ptr, host_in_ptr, src.nbytes)
 
              # Do kernargs
-
 
             # Find a coarse region (for better performance on dGPU) in which
             # to place kernargs. NOTE: This violates the HSA spec
@@ -154,31 +158,37 @@ class TestHLC(unittest.TestCase):
 
             kernarg_region = kernarg_regions[0]
 
-            kernarg_ptr = kernarg_region.allocate(2 * ctypes.c_void_p)
-                                                   # ^- that is not nice
+            kernarg_ptr = kernarg_region.allocate(
+                    2 * ctypes.sizeof(ctypes.c_void_p))
+
             self.assertNotEqual(ctypes.addressof(kernarg_ptr), 0,
                     "pointer must not be NULL")
 
             # wire in gpu memory
-            kernarg_ptr[0] = ctypes.addressof(gpu_in_ptr)
-            kernarg_ptr[1] = ctypes.addressof(gpu_out_ptr)
+            argref = (2 * ctypes.c_size_t).from_address(kernarg_ptr.value)
+            argref[0] = gpu_in_ptr.value
+            argref[1] = gpu_out_ptr.value
 
-            kernargs = kernarg_ptr
+            kernargs = argref
 
         else:
             kernarg_region = [r for r in agent.regions
                     if r.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG)][0]
 
-            kernarg_types = (ctypes.c_void_p * 2)
-            kernargs = kernarg_region.allocate(kernarg_types)
 
-            kernargs[0] = src.ctypes.data
-            kernargs[1] = dst.ctypes.data
+            kernarg_ptr = kernarg_region.allocate(
+                    2 * ctypes.sizeof(ctypes.c_void_p))
+
+            argref = (2 * ctypes.c_size_t).from_address(kernarg_ptr.value)
+            argref[0] = src.ctypes.data
+            argref[1] = dst.ctypes.data
 
             hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
             hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
-            hsa.hsa_memory_register(ctypes.byref(kernargs),
-                                ctypes.sizeof(kernargs))
+            hsa.hsa_memory_register(ctypes.byref(argref),
+                                ctypes.sizeof(argref))
+
+            kernargs = argref
 
         queue = agent.create_queue_single(32)
         queue.dispatch(sym, kernargs, workgroup_size=(1,),
