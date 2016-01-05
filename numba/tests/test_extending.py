@@ -15,11 +15,11 @@ from .support import TestCase, captured_stdout
 
 from numba.extending import (typeof_impl, type_callable,
                              builtin, builtin_cast,
-                             implement, overlay,
+                             implement, overload,
                              models, register_model,
                              box, unbox, NativeValue,
                              make_attribute_wrapper,
-                             overlay_attribute)
+                             overload_attribute)
 from numba.typing.templates import (
     ConcreteTemplate, signature, builtin as typing_builtin)
 
@@ -115,8 +115,8 @@ def call_where(cond, x, y):
     return where(cond, y=y, x=x)
 
 
-@overlay(where)
-def overlay_where_arrays(cond, x, y):
+@overload(where)
+def overload_where_arrays(cond, x, y):
     """
     Implement where() for arrays.
     """
@@ -157,11 +157,11 @@ def overlay_where_arrays(cond, x, y):
 
         return where_impl
 
-# We can define another overlay function for the same function, they
+# We can define another overload function for the same function, they
 # will be tried in turn until one succeeds.
 
-@overlay(where)
-def overlay_where_scalars(cond, x, y):
+@overload(where)
+def overload_where_scalars(cond, x, y):
     """
     Implement where() for scalars.
     """
@@ -183,8 +183,8 @@ def overlay_where_scalars(cond, x, y):
 
 # Overlay an already defined built-in function
 
-@overlay(len)
-def overlay_len_dummy(arg):
+@overload(len)
+def overload_len_dummy(arg):
     if isinstance(arg, MyDummyType):
         def len_impl(arg):
             return 13
@@ -317,7 +317,7 @@ def box_index(typ, val, c):
     indexobj = c.pyapi.call_function_objargs(classobj, (arrayobj,))
     return indexobj
 
-@overlay_attribute(IndexType, 'is_monotonic_increasing')
+@overload_attribute(IndexType, 'is_monotonic_increasing')
 def index_is_monotonic_increasing(typ):
     def getter(index):
         data = index._data
@@ -420,7 +420,7 @@ class TestPandasLike(TestCase):
 
     def test_is_monotonic(self):
         # The is_monotonic_increasing attribute is exposed with
-        # overlay_attribute()
+        # overload_attribute()
         cfunc = jit(nopython=True)(is_monotonic_usecase)
         for values, expected in [([8, 42, 5], False),
                                  ([5, 8, 42], True),
@@ -437,7 +437,7 @@ class TestHighLevelExtending(TestCase):
 
     def test_where(self):
         """
-        Test implementing a function with @overlay.
+        Test implementing a function with @overload.
         """
         pyfunc = call_where
         cfunc = jit(nopython=True)(pyfunc)
@@ -460,7 +460,7 @@ class TestHighLevelExtending(TestCase):
 
     def test_len(self):
         """
-        Test re-implementing len() for a custom type with @overlay.
+        Test re-implementing len() for a custom type with @overload.
         """
         cfunc = jit(nopython=True)(len_usecase)
         self.assertPreciseEqual(cfunc(MyDummy()), 13)
@@ -468,7 +468,7 @@ class TestHighLevelExtending(TestCase):
 
     def test_print(self):
         """
-        Test re-implementing print() for a custom type with @overlay.
+        Test re-implementing print() for a custom type with @overload.
         """
         cfunc = jit(nopython=True)(print_usecase)
         with captured_stdout():

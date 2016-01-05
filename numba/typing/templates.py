@@ -246,22 +246,22 @@ class ConcreteTemplate(FunctionTemplate):
         return self._select(cases, args, kws)
 
 
-class _OverlayFunctionTemplate(AbstractTemplate):
+class _OverloadFunctionTemplate(AbstractTemplate):
     """
-    A base class of templates for @overlay functions.
+    A base class of templates for overload functions.
     """
 
     def generic(self, args, kws):
         """
-        Type the overlaid function by compiling the appropriate
+        Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
         cache_key = self.context, args, tuple(kws.items())
         try:
             disp = self._impl_cache[cache_key]
         except KeyError:
-            # Get the overlay implementation for the given types
-            pyfunc = self._overlay_func(*args, **kws)
+            # Get the overload implementation for the given types
+            pyfunc = self._overload_func(*args, **kws)
             if pyfunc is None:
                 # No implementation => fail typing
                 self._impl_cache[cache_key] = None
@@ -276,7 +276,7 @@ class _OverlayFunctionTemplate(AbstractTemplate):
         disp_type = types.Dispatcher(disp)
         sig = disp_type.get_call_type(self.context, args, kws)
         # Store the compiled overload for use in the lowering phase
-        self._overloads[sig.args] = disp_type.get_overload(sig)
+        self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
 
     def get_impl_key(self, sig):
@@ -284,18 +284,18 @@ class _OverlayFunctionTemplate(AbstractTemplate):
         Return the key for looking up the implementation for the given
         signature on the target context.
         """
-        return self._overloads[sig.args]
+        return self._compiled_overloads[sig.args]
 
 
-def make_overlay_template(func, overlay_func):
+def make_overload_template(func, overload_func):
     """
-    Make a template class for function *func* overlaid by *overlay_func*.
+    Make a template class for function *func* overloaded by *overload_func*.
     """
     func_name = getattr(func, '__name__', str(func))
-    name = "OverlayTemplate_%s" % (func_name,)
-    base = _OverlayFunctionTemplate
-    dct = dict(key=func, _overlay_func=staticmethod(overlay_func),
-               _impl_cache={}, _overloads={})
+    name = "OverloadTemplate_%s" % (func_name,)
+    base = _OverloadFunctionTemplate
+    dct = dict(key=func, _overload_func=staticmethod(overload_func),
+               _impl_cache={}, _compiled_overloads={})
     return type(base)(name, (base,), dct)
 
 
@@ -320,20 +320,20 @@ class AttributeTemplate(object):
     generic_resolve = NotImplemented
 
 
-class _OverlayAttributeTemplate(AttributeTemplate):
+class _OverloadAttributeTemplate(AttributeTemplate):
     """
-    A base class of templates for @overlay_attribute functions.
+    A base class of templates for @overload_attribute functions.
     """
 
     def _resolve(self, typ, attr):
-        # Attribute-specific overlay
+        # Attribute-specific overload
         if self._attr == attr:
             cache_key = self.context, typ, attr
             try:
                 disp = self._impl_cache[cache_key]
             except KeyError:
-                # Get the overlay implementation for the given type
-                pyfunc = self._overlay_func(typ)
+                # Get the overload implementation for the given type
+                pyfunc = self._overload_func(typ)
                 if pyfunc is None:
                     # No implementation => fail typing
                     self._impl_cache[cache_key] = None
@@ -363,16 +363,16 @@ class _OverlayAttributeTemplate(AttributeTemplate):
             return sig.return_type
 
 
-def make_overlay_attribute_template(typ, attr, overlay_func):
+def make_overload_attribute_template(typ, attr, overload_func):
     """
-    Make a template class for attribute *attr* of *typ* overlaid by
-    *overlay_func*.
+    Make a template class for attribute *attr* of *typ* overloaded by
+    *overload_func*.
     """
     assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
-    name = "OverlayTemplate_%s_%s" % (typ, attr)
-    base = _OverlayAttributeTemplate
+    name = "OverloadTemplate_%s_%s" % (typ, attr)
+    base = _OverloadAttributeTemplate
     dct = dict(key=typ, _attr=attr, _impl_cache={},
-               _overlay_func=staticmethod(overlay_func),
+               _overload_func=staticmethod(overload_func),
                )
     return type(base)(name, (base,), dct)
 

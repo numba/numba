@@ -39,35 +39,35 @@ def type_callable(func):
     return decorate
 
 
-def overlay(func):
+def overload(func):
     """
     TODO docstring
     """
-    # XXX Should overlay() return a jitted wrapper calling the
+    # XXX Should overload() return a jitted wrapper calling the
     # function?  This way it would also be usable from pure Python
     # code, like a regular jitted function
-    from .typing.templates import make_overlay_template, builtin_global
+    from .typing.templates import make_overload_template, builtin_global
 
-    def decorate(overlay_func):
-        template = make_overlay_template(func, overlay_func)
+    def decorate(overload_func):
+        template = make_overload_template(func, overload_func)
         ty = types.Function(template)
         if hasattr(func, '__module__'):
             builtin_global(func, ty)
-        return overlay_func
+        return overload_func
 
     return decorate
 
 
-def overlay_attribute(typ, attr):
+def overload_attribute(typ, attr):
     """
     TODO docstring
     """
-    from .typing.templates import make_overlay_attribute_template, builtin_attr
+    from .typing.templates import make_overload_attribute_template, builtin_attr
 
-    def decorate(overlay_func):
-        template = make_overlay_attribute_template(typ, attr, overlay_func)
+    def decorate(overload_func):
+        template = make_overload_attribute_template(typ, attr, overload_func)
         builtin_attr(template)
-        return overlay_func
+        return overload_func
 
     return decorate
 
