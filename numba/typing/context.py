@@ -323,9 +323,6 @@ class BaseContext(object):
         key = ft.key
         self._functions[key].append(ft)
 
-    def insert_overloaded(self, overloaded):
-        self._insert_global(overloaded, types.Dispatcher(overloaded))
-
     def insert_user_function(self, fn, ft):
         """Insert a user function.
 

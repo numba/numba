@@ -415,24 +415,24 @@ class Dispatcher(WeakType, Callable, Dummy):
     Type class for @jit-compiled functions.
     """
 
-    def __init__(self, overloaded):
-        self._store_object(overloaded)
-        super(Dispatcher, self).__init__("Dispatcher(%s)" % overloaded)
+    def __init__(self, dispatcher):
+        self._store_object(dispatcher)
+        super(Dispatcher, self).__init__("Dispatcher(%s)" % dispatcher)
 
     def get_call_type(self, context, args, kws):
-        template, args, kws = self.overloaded.get_call_template(args, kws)
+        template, args, kws = self.dispatcher.get_call_template(args, kws)
         sig = template(context).apply(args, kws)
         sig.pysig = self.pysig
         return sig
 
     def get_call_signatures(self):
-        sigs = self.overloaded.nopython_signatures
+        sigs = self.dispatcher.nopython_signatures
         return sigs, True
 
     @property
-    def overloaded(self):
+    def dispatcher(self):
         """
-        A strong reference to the underlying Dispatcher instance.
+        A strong reference to the underlying numba.dispatcher.Dispatcher instance.
         """
         return self._get_object()
 
@@ -441,13 +441,13 @@ class Dispatcher(WeakType, Callable, Dummy):
         """
         A inspect.Signature object corresponding to this type.
         """
-        return self.overloaded._pysig
+        return self.dispatcher._pysig
 
     def get_overload(self, sig):
         """
         Get the compiled overload for the given signature.
         """
-        return self.overloaded.get_overload(sig.args)
+        return self.dispatcher.get_overload(sig.args)
 
     def get_impl_key(self, sig):
         """

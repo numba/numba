@@ -25,7 +25,7 @@ class TestWrapper(unittest.TestCase):
         """
         cr = compiler.compile_isolated(overhead, [types.int32])
         cfunc = cr.entry_point
-        disp = registry.CPUOverloaded(overhead)
+        disp = registry.CPUDispatcher(overhead)
         disp.add_overload(cr)
 
         x = 321
@@ -51,7 +51,7 @@ class TestWrapper(unittest.TestCase):
         """
         cr = compiler.compile_isolated(array_overhead, [types.int32[::1]])
         cfunc = cr.entry_point
-        disp = registry.CPUOverloaded(array_overhead)
+        disp = registry.CPUDispatcher(array_overhead)
         disp.add_overload(cr)
 
         self.assertEqual(cr.signature.args[0].layout, 'C')
@@ -80,7 +80,7 @@ class TestWrapper(unittest.TestCase):
         """
         cr = compiler.compile_isolated(add, [types.int32])
         cfunc = cr.entry_point
-        disp = registry.CPUOverloaded(add)
+        disp = registry.CPUDispatcher(add)
         disp.add_overload(cr)
 
         x = 321

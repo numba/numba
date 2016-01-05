@@ -117,7 +117,7 @@ _LowerResult = namedtuple("_LowerResult", [
 def get_function_attributes(func):
     '''
     Extract the function attributes from a Python function or object with
-    *py_func* attribute, such as CPUOverloaded.
+    *py_func* attribute, such as CPUDispatcher.
 
     Returns an instance of FunctionAttributes.
     '''

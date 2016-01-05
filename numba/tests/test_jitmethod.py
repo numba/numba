@@ -1,9 +1,11 @@
 import numba.unittest_support as unittest
+
+import numpy as np
+
 from numba import config, jit, types
 from numba.compiler import compile_isolated
-from numba.decorators import DisableJitWrapper
+from numba.decorators import _DisableJitWrapper
 from numba.tests.support import override_config
-import numpy as np
 
 
 class TestJITMethod(unittest.TestCase):
@@ -51,7 +53,7 @@ class TestDisabledJIT(unittest.TestCase):
             def method(x):
                 return x
 
-        self.assertIsInstance(method, DisableJitWrapper)
+        self.assertIsInstance(method, _DisableJitWrapper)
         self.assertIsNotNone(method.py_func)
         self.assertEqual(10, method(10))
 
@@ -61,7 +63,7 @@ class TestDisabledJIT(unittest.TestCase):
             def method(x):
                 return x
 
-        self.assertIsInstance(method, DisableJitWrapper)
+        self.assertIsInstance(method, _DisableJitWrapper)
         self.assertIsNotNone(method.py_func)
         self.assertEqual(10, method(10))
 

@@ -25,7 +25,7 @@ from numba.six import create_bound_method, next
 from .config import NumbaWarning
 
 
-class _OverloadedBase(_dispatcher.Dispatcher):
+class _DispatcherBase(_dispatcher.Dispatcher):
     """
     Common base class for dispatcher Implementations.
     """
@@ -250,7 +250,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         return tp
 
 
-class Overloaded(_OverloadedBase):
+class Dispatcher(_DispatcherBase):
     """
     Implementation of user-facing dispatcher objects (i.e. created using
     the @jit decorator).
@@ -276,7 +276,7 @@ class Overloaded(_OverloadedBase):
         pysig = utils.pysignature(py_func)
         arg_count = len(pysig.parameters)
 
-        _OverloadedBase.__init__(self, arg_count, py_func, pysig)
+        _DispatcherBase.__init__(self, arg_count, py_func, pysig)
 
         functools.update_wrapper(self, py_func)
 
@@ -284,7 +284,7 @@ class Overloaded(_OverloadedBase):
         self.locals = locals
         self._cache = NullCache()
 
-        self.typingctx.insert_overloaded(self)
+        self.typingctx.insert_global(self, types.Dispatcher(self))
 
     def enable_caching(self):
         self._cache = FunctionCache(self.py_func)
@@ -313,7 +313,7 @@ class Overloaded(_OverloadedBase):
     @classmethod
     def _rebuild(cls, func_reduced, locals, targetoptions, can_compile, sigs):
         """
-        Rebuild an Overloaded instance after it was __reduce__'d.
+        Rebuild an Dispatcher instance after it was __reduce__'d.
         """
         py_func = serialize._rebuild_function(*func_reduced)
         self = cls(py_func, locals, targetoptions)
@@ -374,7 +374,7 @@ class Overloaded(_OverloadedBase):
             self._can_compile = old_can_compile
 
 
-class LiftedLoop(_OverloadedBase):
+class LiftedLoop(_DispatcherBase):
     """
     Implementation of the hidden dispatcher objects used for lifted loop
     (a lifted loop is really compiled as a separate function).
@@ -385,7 +385,7 @@ class LiftedLoop(_OverloadedBase):
         self.typingctx = typingctx
         self.targetctx = targetctx
 
-        _OverloadedBase.__init__(self, bytecode.arg_count, bytecode.func,
+        _DispatcherBase.__init__(self, bytecode.arg_count, bytecode.func,
                                  bytecode.pysig)
 
         self.locals = locals
@@ -400,7 +400,7 @@ class LiftedLoop(_OverloadedBase):
 
     def compile(self, sig):
         with self._compile_lock:
-            # FIXME this is mostly duplicated from Overloaded
+            # XXX this is mostly duplicated from Dispatcher.
             flags = self.flags
             args, return_type = sigutils.normalize_signature(sig)
 
