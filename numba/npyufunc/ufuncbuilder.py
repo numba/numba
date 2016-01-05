@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
 import warnings
 import inspect
+
 import numpy as np
 
 from numba.decorators import jit
-from numba.targets.registry import target_registry
+from numba.targets.registry import dispatcher_registry
 from numba.targets.options import TargetOptions
 from numba import utils, compiler, types, sigutils
 from numba.numpy_support import as_dtype
@@ -66,7 +68,7 @@ class UFuncDispatcher(object):
         return cres
 
 
-target_registry['npyufunc'] = UFuncDispatcher
+dispatcher_registry['npyufunc'] = UFuncDispatcher
 
 # Utility functions
 

@@ -118,7 +118,7 @@ class TestLoopLifting(TestCase):
     def assert_lifted_native(self, cres):
         # Check if we have lifted in nopython mode
         jitloop = cres.lifted[0]
-        [loopcres] = jitloop._compileinfos.values()
+        [loopcres] = jitloop.overloads.values()
         self.assertTrue(loopcres.fndesc.native)  # Lifted function is native
 
     def check_lift_ok(self, pyfunc, argtypes, args):

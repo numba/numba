@@ -7,7 +7,7 @@ from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
 
 from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
-                             from_dtype)
+                             from_dtype, resolve_output_type)
 from ..numpy_support import version as numpy_version
 
 from ..errors import TypingError
@@ -27,6 +27,15 @@ class NumpyModuleAttribute(AttributeTemplate):
 class Numpy_rules_ufunc(AbstractTemplate):
     @classmethod
     def _handle_inputs(cls, ufunc, args, kws):
+        """
+        Process argument types to a given *ufunc*.
+        Returns a (base types, explicit outputs, ndims, layout) tuple where:
+        - `base types` is a tuple of scalar types for each input
+        - `explicit outputs` is a tuple of explicit output types (arrays)
+        - `ndims` is the number of dimensions of the loop and also of
+          any outputs, explicit or implicit
+        - `layout` is the layout for any implicit output to be allocated
+        """
         nin = ufunc.nin
         nout = ufunc.nout
         nargs = ufunc.nargs
@@ -47,30 +56,32 @@ class Numpy_rules_ufunc(AbstractTemplate):
             raise TypingError(msg=msg.format(ufunc.__name__, len(args), nargs))
 
 
-        arg_ndims = [a.ndim if isinstance(a, types.Array) else 0 for a in args]
+        arg_ndims = [a.ndim if isinstance(a, types.ArrayCompatible) else 0
+                     for a in args]
         ndims = max(arg_ndims)
 
         # explicit outputs must be arrays (no explicit scalar return values supported)
         explicit_outputs = args[nin:]
 
         # all the explicit outputs must match the number max number of dimensions
-        if not all((d == ndims for d in arg_ndims[nin:])):
+        if not all(d == ndims for d in arg_ndims[nin:]):
             msg = "ufunc '{0}' called with unsuitable explicit output arrays."
             raise TypingError(msg=msg.format(ufunc.__name__))
 
-        if not all((isinstance(output, types.Array) for output in explicit_outputs)):
+        if not all(isinstance(output, types.ArrayCompatible)
+                   for output in explicit_outputs):
             msg = "ufunc '{0}' called with an explicit output that is not an array"
             raise TypingError(msg=msg.format(ufunc.__name__))
 
         # find the kernel to use, based only in the input types (as does NumPy)
-        base_types = [x.dtype if isinstance(x, types.Array) else x
+        base_types = [x.dtype if isinstance(x, types.ArrayCompatible) else x
                       for x in args]
 
         # Figure out the output array layout, if needed.
         layout = None
         if ndims > 0 and (len(explicit_outputs) < ufunc.nout):
             layout = 'C'
-            layouts = [x.layout if isinstance(x, types.Array) else ''
+            layouts = [x.layout if isinstance(x, types.ArrayCompatible) else ''
                        for x in args]
 
             # Prefer C contig if any array is C contig.
@@ -120,6 +131,8 @@ class Numpy_rules_ufunc(AbstractTemplate):
                 assert layout is not None
                 ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout=layout)
                            for ret_ty in ret_tys]
+                ret_tys = [resolve_output_type(self.context, args, ret_ty)
+                           for ret_ty in ret_tys]
             out.extend(ret_tys)
 
         # note: although the previous code should support multiple return values, only one
@@ -140,7 +153,7 @@ class UnaryPositiveArray(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-        if len(args) == 1 and isinstance(args[0], types.Array):
+        if len(args) == 1 and isinstance(args[0], types.ArrayCompatible):
             arg_ty = args[0]
             return arg_ty.copy()(arg_ty)
 
@@ -216,7 +229,7 @@ class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
         # (for example int8[:] += int16[:] should use an int8[:] output,
         #  not int16[:])
         lhs, rhs = args
-        if not isinstance(lhs, types.Array):
+        if not isinstance(lhs, types.ArrayCompatible):
             return
         args = args + (lhs,)
         sig = super(NumpyRulesInplaceArrayOperator, self).generic(args, kws)
@@ -237,7 +250,7 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
 
     def generic(self, args, kws):
         assert not kws
-        if len(args) == 1 and isinstance(args[0], types.Array):
+        if len(args) == 1 and isinstance(args[0], types.ArrayCompatible):
             return super(NumpyRulesUnaryArrayOperator, self).generic(args, kws)
 
 

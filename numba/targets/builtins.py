@@ -378,6 +378,9 @@ def bool_invert_impl(context, builder, sig, args):
 
 
 def int_sign_impl(context, builder, sig, args):
+    """
+    np.sign(int)
+    """
     [x] = args
     POS = Constant.int(x.type, 1)
     NEG = Constant.int(x.type, -1)
@@ -443,9 +446,7 @@ def _implement_integer_operators():
 
     builtin(implement('-', ty)(int_negate_impl))
     builtin(implement('+', ty)(int_positive_impl))
-    builtin(implement(types.neg_type, ty)(int_negate_impl))
     builtin(implement('~', ty)(int_invert_impl))
-    builtin(implement(types.sign_type, ty)(int_sign_impl))
 
     builtin(implement('**', ty, ty)(int_power_impl))
     builtin(implement(pow, ty, ty)(int_power_impl))
@@ -457,16 +458,16 @@ def _implement_integer_operators():
         builtin(implement('>=', ty, ty)(int_uge_impl))
         builtin(implement('**', types.float64, ty)(int_power_impl))
         builtin(implement(pow, types.float64, ty)(int_power_impl))
-        builtin(implement(types.abs_type, ty)(uint_abs_impl))
+        builtin(implement(abs, ty)(uint_abs_impl))
 
     for ty in types.signed_domain:
         builtin(implement('<', ty, ty)(int_slt_impl))
         builtin(implement('<=', ty, ty)(int_sle_impl))
         builtin(implement('>', ty, ty)(int_sgt_impl))
         builtin(implement('>=', ty, ty)(int_sge_impl))
-        builtin(implement(types.abs_type, ty)(int_abs_impl))
         builtin(implement('**', types.float64, ty)(int_power_impl))
         builtin(implement(pow, types.float64, ty)(int_power_impl))
+        builtin(implement(abs, ty)(int_abs_impl))
 
 _implement_integer_operators()
 
@@ -795,6 +796,9 @@ def real_positive_impl(context, builder, sig, args):
 
 
 def real_sign_impl(context, builder, sig, args):
+    """
+    np.sign(float)
+    """
     [x] = args
     POS = Constant.real(x.type, 1)
     NEG = Constant.real(x.type, -1)
@@ -840,12 +844,10 @@ builtin(implement('<=', ty, ty)(real_le_impl))
 builtin(implement('>', ty, ty)(real_gt_impl))
 builtin(implement('>=', ty, ty)(real_ge_impl))
 
-builtin(implement(types.abs_type, ty)(real_abs_impl))
+builtin(implement(abs, ty)(real_abs_impl))
 
 builtin(implement('-', ty)(real_negate_impl))
 builtin(implement('+', ty)(real_positive_impl))
-builtin(implement(types.neg_type, ty)(real_negate_impl))
-builtin(implement(types.sign_type, ty)(real_sign_impl))
 
 del ty
 
@@ -1107,7 +1109,7 @@ builtin(implement("+", ty)(complex_positive_impl))
 builtin(implement('==', ty, ty)(complex_eq_impl))
 builtin(implement('!=', ty, ty)(complex_ne_impl))
 
-builtin(implement(types.abs_type, ty)(complex_abs_impl))
+builtin(implement(abs, ty)(complex_abs_impl))
 
 del ty
 

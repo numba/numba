@@ -33,7 +33,8 @@ class TestFuncLifetime(TestCase):
         Get the single implementation (a C function object) of a dispatcher.
         """
         self.assertEqual(len(dispatcher.overloads), 1)
-        return list(dispatcher.overloads.values())[0]
+        cres = list(dispatcher.overloads.values())[0]
+        return cres.entry_point
 
     def check_local_func_lifetime(self, **jitargs):
         def f(x):

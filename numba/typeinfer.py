@@ -19,7 +19,7 @@ import itertools
 import traceback
 
 from numba import ir, types, utils, config, six
-from .errors import TypingError
+from .errors import TypingError, UntypedAttributeError
 
 
 class TypeVar(object):
@@ -323,8 +323,7 @@ class CallConstraint(object):
             and sig.recvr != fnty.this):
             refined_this = context.unify_pairs(sig.recvr, fnty.this)
             if refined_this.is_precise():
-                refined_fnty = types.BoundFunction(fnty.template,
-                                                   this=refined_this)
+                refined_fnty = fnty.copy(this=refined_this)
                 typeinfer.propagate_refined_type(self.func, refined_fnty)
 
         self.signature = sig
@@ -350,12 +349,9 @@ class GetAttrConstraint(object):
         typevars = typeinfer.typevars
         valtys = typevars[self.value.name].get()
         for ty in valtys:
-            try:
-                attrty = typeinfer.context.resolve_getattr(value=ty, attr=self.attr)
-            except KeyError:
-                args = (self.attr, ty, self.value.name, self.inst)
-                msg = "Unknown attribute '%s' for %s %s %s" % args
-                raise TypingError(msg, loc=self.inst.loc)
+            attrty = typeinfer.context.resolve_getattr(ty, self.attr)
+            if attrty is None:
+                raise UntypedAttributeError(ty, self.attr, loc=self.inst.loc)
             else:
                 typeinfer.add_type(self.target, attrty)
         typeinfer.refine_map[self.target] = self

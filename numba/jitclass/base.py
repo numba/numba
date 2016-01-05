@@ -398,17 +398,12 @@ def ctor_impl(context, builder, sig, args):
     init_sig = (sig.return_type,) + sig.args
 
     init = inst_typ.jitmethods['__init__']
-    init.compile(init_sig)
-    cres = init._compileinfos[init_sig]
+    disp_type = types.Dispatcher(init)
+    call = context.get_function(disp_type, types.void(*init_sig))
     realargs = [inst_struct._getvalue()] + list(args)
-    context.call_internal(builder, cres.fndesc, types.void(*init_sig),
-                          realargs)
+    call(builder, realargs)
 
-    # Prepare reutrn value
+    # Prepare return value
     ret = inst_struct._getvalue()
-
-    # Add function to link
-    codegen = context.codegen()
-    codegen.add_linking_library(cres.library)
 
     return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)

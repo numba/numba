@@ -111,9 +111,9 @@ class TestTypes(TestCase):
         a = types.Dispatcher(d)
         b = types.Dispatcher(d)
         c = types.Dispatcher(e)
-        self.assertIs(a.overloaded, d)
-        self.assertIs(b.overloaded, d)
-        self.assertIs(c.overloaded, e)
+        self.assertIs(a.dispatcher, d)
+        self.assertIs(b.dispatcher, d)
+        self.assertIs(c.dispatcher, e)
         # Equality of alive references
         self.assertTrue(a == b)
         self.assertFalse(a != b)
@@ -136,11 +136,11 @@ class TestTypes(TestCase):
         d = e = None
         gc.collect()
         with self.assertRaises(ReferenceError):
-            a.overloaded
+            a.dispatcher
         with self.assertRaises(ReferenceError):
-            b.overloaded
+            b.dispatcher
         with self.assertRaises(ReferenceError):
-            c.overloaded
+            c.dispatcher
         # Dead references are always unequal
         self.assertFalse(a == b)
         self.assertFalse(a == c)

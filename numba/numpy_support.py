@@ -5,7 +5,7 @@ import re
 
 import numpy
 
-from . import types, config, npdatetime
+from . import errors, types, config, npdatetime
 from .targets import ufunc_db
 
 
@@ -163,6 +163,37 @@ def map_layout(val):
     else:
         layout = 'A'
     return layout
+
+
+def resolve_output_type(context, inputs, formal_output):
+    """
+    Given the array-compatible input types to an operation (e.g. ufunc),
+    and the operation's formal output type (a types.Array instance),
+    resolve the actual output type using the typing *context*.
+
+    This uses a mechanism compatible with Numpy's __array_priority__ /
+    __array_wrap__.
+    """
+    max_prio = float('-inf')
+    selected_input = None
+    for ty in inputs:
+        # Ties are broken by choosing the first winner, as in Numpy
+        if isinstance(ty, types.ArrayCompatible) and ty.array_priority > max_prio:
+            selected_input = ty
+            max_prio = ty.array_priority
+
+    assert selected_input is not None
+    args = selected_input, formal_output
+    sig = context.resolve_function_type('__array_wrap__', args, {})
+    if sig is None:
+        if max_prio == types.Array.array_priority:
+            # If it's the same priority as a regular array, assume we
+            # should return the output unchanged.
+            # (we can't define __array_wrap__ explicitly for types.Buffer,
+            #  as that would be inherited by most array-compatible objects)
+            return formal_output
+        raise errors.TypingError("__array_wrap__ failed for %s" % (args,))
+    return sig.return_type
 
 
 def supported_ufunc_loop(ufunc, loop):

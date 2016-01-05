@@ -34,6 +34,9 @@ def tuple_index(tup, idx):
 def len_usecase(tup):
     return len(tup)
 
+def add_usecase(a, b):
+    return a + b
+
 def eq_usecase(a, b):
     return a == b
 
@@ -165,6 +168,19 @@ class TestOperations(TestCase):
         cr = compile_isolated(pyfunc,
                               [types.Tuple(())])
         self.assertPreciseEqual(cr.entry_point(()), pyfunc(()))
+
+    def test_add(self):
+        pyfunc = add_usecase
+        samples = [(types.Tuple(()), ()),
+                   (types.UniTuple(types.int32, 0), ()),
+                   (types.UniTuple(types.int32, 1), (42,)),
+                   (types.Tuple((types.int64, types.float32)), (3, 4.5)),
+                   ]
+        for (ta, a), (tb, b) in itertools.product(samples, samples):
+            cr = compile_isolated(pyfunc, (ta, tb))
+            expected = pyfunc(a, b)
+            got = cr.entry_point(a, b)
+            self.assertPreciseEqual(got, expected, msg=(ta, tb))
 
     def _test_compare(self, pyfunc):
         def eq(pyfunc, cfunc, args):

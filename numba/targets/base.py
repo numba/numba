@@ -17,7 +17,7 @@ from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     builtin_registry, impl_attribute,
-                                    impl_ret_borrowed)
+                                    impl_ret_borrowed, RegistryLoader)
 from . import (
     arrayobj, arraymath, builtins, iterators, rangeobj, optional, slicing,
     tupleobj, imputils)
@@ -34,9 +34,18 @@ PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
 
 
-class Overloads(object):
+class OverloadSelector(object):
+    """
+    An object matching an actual signature against a registry of formal
+    signatures and choosing the best candidate, if any.
+
+    In the current implementation:
+    - a "signature" is a tuple of type classes or type instances
+    - the "best candidate" is simply the first match
+    """
+
     def __init__(self):
-        # A list of (args tuple, implementation)
+        # A list of (formal args tuple, value)
         self.versions = []
 
     def find(self, sig):
@@ -78,8 +87,11 @@ class Overloads(object):
             assert issubclass(formal, types.Type)
             return True
 
-    def append(self, impl, sig):
-        self.versions.append((sig, impl))
+    def append(self, value, sig):
+        """
+        Add a formal signature and its associated value.
+        """
+        self.versions.append((sig, value))
 
 
 @utils.runonce
@@ -139,17 +151,19 @@ class BaseContext(object):
 
     def __init__(self, typing_context):
         _load_global_helpers()
+
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
 
-        self._defns = defaultdict(Overloads)
-        self._attrs = defaultdict(Overloads)
-        self._casts = Overloads()
+        # A list of installed registries
+        self._registries = {}
+        # Declarations loaded from registries and other sources
+        self._defns = defaultdict(OverloadSelector)
+        self._attrs = defaultdict(OverloadSelector)
+        self._casts = OverloadSelector()
+        # Other declarations
         self._generators = {}
         self.special_ops = {}
-
-        self.install_registry(builtin_registry)
-
         self.cached_internal_func = {}
 
         self.data_model_manager = datamodel.default_manager
@@ -161,7 +175,19 @@ class BaseContext(object):
         """
         For subclasses to add initializer
         """
-        pass
+
+    def refresh(self):
+        """
+        Refresh context with new declarations from known registries.
+        Useful for third-party extensions.
+        """
+        self.install_registry(builtin_registry)
+        self.load_additional_registries()
+
+    def load_additional_registries(self):
+        """
+        Load target-specific registries.  Can be overriden by subclasses.
+        """
 
     def get_arg_packer(self, fe_args):
         return datamodel.ArgPacker(self.data_model_manager, fe_args)
@@ -186,9 +212,14 @@ class BaseContext(object):
         Install a *registry* (a imputils.Registry instance) of function
         and attribute implementations.
         """
-        self.insert_func_defn(registry.functions)
-        self.insert_attr_defn(registry.attributes)
-        self._insert_cast_defn(registry.casts)
+        try:
+            loader = self._registries[registry]
+        except KeyError:
+            loader = RegistryLoader(registry)
+            self._registries[registry] = loader
+        self.insert_func_defn(loader.new_functions())
+        self.insert_attr_defn(loader.new_attributes())
+        self._insert_cast_defn(loader.new_casts())
 
     def insert_func_defn(self, defns):
         for impl, func_sigs in defns:
@@ -429,6 +460,7 @@ class BaseContext(object):
         elif isinstance(typ, types.ClassInstanceType):
             def imp(context, builder, sig, args):
                 if attr in typ.struct:
+                    # It's a struct member
                     instance_struct = cgutils.create_struct_proxy(typ)
                     [this, val] = args
                     inst = instance_struct(context, builder, value=this)
@@ -448,13 +480,13 @@ class BaseContext(object):
                     # Delete old value
                     context.nrt_decref(builder, attr_type, oldvalue)
                 elif attr in typ.jitprops:
+                    # It's a user-defined property, compile its setter
                     setter = typ.jitprops[attr]['set']
-                    setter.compile(sig)
-                    cres = setter._compileinfos[sig.args]
-                    out = context.call_internal(builder, cres.fndesc,
-                                                cres.signature, args)
-                    return imputils.impl_ret_new_ref(context, builder,
-                                                     cres.signature, out)
+                    disp_type = types.Dispatcher(setter)
+                    sig = disp_type.get_call_type(self.typing_context,
+                                                  sig.args, {})
+                    call = self.get_function(disp_type, sig)
+                    return call(builder, args)
 
                 else:
                     msg = 'attribute {0!r} not implemented'.format(attr)
@@ -467,8 +499,9 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
-        if isinstance(fn, (types.Function)):
-            key = fn.template.key
+        if isinstance(fn, (types.Function, types.BoundFunction,
+                           types.Dispatcher)):
+            key = fn.get_impl_key(sig)
 
             if isinstance(key, MethodType):
                 overloads = self._defns[key.im_func]
@@ -480,9 +513,6 @@ class BaseContext(object):
             else:
                 overloads = self._defns[key]
 
-        elif isinstance(fn, types.Dispatcher):
-            key = fn.overloaded.get_overload(sig.args)
-            overloads = self._defns[key]
         else:
             key = fn
             overloads = self._defns[key]

@@ -1,6 +1,7 @@
 """
-Contains function decorators and target_registry
+Define @jit and related decorators.
 """
+
 from __future__ import print_function, division, absolute_import
 import warnings
 
@@ -23,7 +24,7 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
-class DisableJitWrapper(object):
+class _DisableJitWrapper(object):
     def __init__(self, py_func):
         self.py_func = py_func
 
@@ -151,13 +152,13 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
 
 
 def _jit(sigs, locals, target, cache, targetoptions):
-    dispatcher = registry.target_registry[target]
+    dispatcher = registry.dispatcher_registry[target]
 
     def wrapper(func):
         if config.ENABLE_CUDASIM and target == 'cuda':
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
-            return DisableJitWrapper(func)
+            return _DisableJitWrapper(func)
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions)
         if cache:
@@ -183,5 +184,3 @@ def njit(*args, **kws):
         warnings.warn('forceobj is set for njit and is ignored', RuntimeWarning)
     kws.update({'nopython': True})
     return jit(*args, **kws)
-
-

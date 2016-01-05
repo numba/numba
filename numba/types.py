@@ -212,21 +212,106 @@ class Macro(Type):
 
 
 class Function(Callable, Opaque):
+    """
+    Base type class for some function types.
+    """
+
     def __init__(self, template):
-        self.template = template
-        name = "%s(%s)" % (self.__class__.__name__, template.key)
+        if isinstance(template, (list, tuple)):
+            self.templates = tuple(template)
+            keys = set(temp.key for temp in self.templates)
+            if len(keys) != 1:
+                raise ValueError("incompatible templates: keys = %s"
+                                 % (this,))
+            self.typing_key, = keys
+        else:
+            self.templates = (template,)
+            self.typing_key = template.key
+        self._impl_keys = {}
+        name = "%s(%s)" % (self.__class__.__name__, self.typing_key)
         super(Function, self).__init__(name)
 
     @property
     def key(self):
-        return self.template
+        return self.typing_key, self.templates
+
+    def augment(self, other):
+        """
+        Augment this function type with the other function types' templates,
+        so as to support more input types.
+        """
+        if type(other) is type(self) and other.typing_key == self.typing_key:
+            return type(self)(self.templates + other.templates)
+
+    def get_impl_key(self, sig):
+        """
+        Get the implementation key (used by the target context) for the
+        given signature.
+        """
+        return self._impl_keys[sig.args]
+
+    def get_call_type(self, context, args, kws):
+        for temp_cls in self.templates:
+            temp = temp_cls(context)
+            sig = temp.apply(args, kws)
+            if sig is not None:
+                self._impl_keys[sig.args] = temp.get_impl_key(sig)
+                return sig
+
+    def get_call_signatures(self):
+        sigs = []
+        is_param = False
+        for temp in self.templates:
+            sigs += getattr(temp, 'cases', [])
+            is_param = is_param or hasattr(temp, 'generic')
+        return sigs, is_param
+
+
+class BoundFunction(Callable, Opaque):
+    """
+    A function with an implicit first argument (denoted as *this* below).
+    """
+
+    def __init__(self, template, this):
+        # Create a derived template with an attribute *this*
+        newcls = type(template.__name__ + '.' + str(this), (template,),
+                      dict(this=this))
+        self.template = newcls
+        self.typing_key = self.template.key
+        self.this = this
+        name = "%s(%s for %s)" % (self.__class__.__name__,
+                                  self.typing_key, self.this)
+        super(BoundFunction, self).__init__(name)
+
+    def unify(self, typingctx, other):
+        if (isinstance(other, BoundFunction) and
+            self.typing_key == other.typing_key):
+            this = typingctx.unify_pairs(self.this, other.this)
+            if this != pyobject:
+                # XXX is it right that both template instances are distinct?
+                return self.copy(this=this)
+
+    def copy(self, this):
+        return type(self)(self.template, this)
+
+    @property
+    def key(self):
+        return self.typing_key, self.this
+
+    def get_impl_key(self, sig):
+        """
+        Get the implementation key (used by the target context) for the
+        given signature.
+        """
+        return self.typing_key
 
     def get_call_type(self, context, args, kws):
         return self.template(context).apply(args, kws)
 
     def get_call_signatures(self):
         sigs = getattr(self.template, 'cases', [])
-        return sigs, hasattr(self.template, 'generic')
+        is_param = hasattr(self.template, 'generic')
+        return sigs, is_param
 
 
 class NamedTupleClass(Callable, Opaque):
@@ -326,25 +411,28 @@ class WeakType(Type):
 
 
 class Dispatcher(WeakType, Callable, Dummy):
+    """
+    Type class for @jit-compiled functions.
+    """
 
-    def __init__(self, overloaded):
-        self._store_object(overloaded)
-        super(Dispatcher, self).__init__("Dispatcher(%s)" % overloaded)
+    def __init__(self, dispatcher):
+        self._store_object(dispatcher)
+        super(Dispatcher, self).__init__("Dispatcher(%s)" % dispatcher)
 
     def get_call_type(self, context, args, kws):
-        template, args, kws = self.overloaded.get_call_template(args, kws)
+        template, args, kws = self.dispatcher.get_call_template(args, kws)
         sig = template(context).apply(args, kws)
         sig.pysig = self.pysig
         return sig
 
     def get_call_signatures(self):
-        sigs = self.overloaded.nopython_signatures
+        sigs = self.dispatcher.nopython_signatures
         return sigs, True
 
     @property
-    def overloaded(self):
+    def dispatcher(self):
         """
-        A strong reference to the underlying Dispatcher instance.
+        A strong reference to the underlying numba.dispatcher.Dispatcher instance.
         """
         return self._get_object()
 
@@ -353,7 +441,19 @@ class Dispatcher(WeakType, Callable, Dummy):
         """
         A inspect.Signature object corresponding to this type.
         """
-        return self.overloaded._pysig
+        return self.dispatcher._pysig
+
+    def get_overload(self, sig):
+        """
+        Get the compiled overload for the given signature.
+        """
+        return self.dispatcher.get_overload(sig.args)
+
+    def get_impl_key(self, sig):
+        """
+        Get the implementation key for the given signature.
+        """
+        return self.get_overload(sig)
 
 
 class ExternalFunctionPointer(Function):
@@ -397,7 +497,7 @@ class ExternalFunctionPointer(Function):
 
 class ExternalFunction(Function):
     """
-    A named native function (resolvable by LLVM).
+    A named native function (resolvable by LLVM) accepting an explicit signature.
     For internal use only.
     """
 
@@ -431,27 +531,6 @@ class NumbaFunction(Function):
     @property
     def key(self):
         return self.fndesc.unique_name, self.sig
-
-
-class BoundFunction(Function):
-    def __init__(self, template, this):
-        self.this = this
-        # Create a derived template with an attribute *this*
-        newcls = type(template.__name__ + '.' + str(this), (template,),
-                      dict(this=this))
-        super(BoundFunction, self).__init__(newcls)
-
-    def unify(self, typingctx, other):
-        if (isinstance(other, BoundFunction) and
-            self.template.key == other.template.key):
-            this = typingctx.unify_pairs(self.this, other.this)
-            if this != pyobject:
-                # XXX is it right that both template instances are distinct?
-                return BoundFunction(self.template, this)
-
-    @property
-    def key(self):
-        return self.template.key, self.this
 
 
 class Pair(Type):
@@ -715,7 +794,7 @@ class ArrayIterator(SimpleIteratorType):
         super(ArrayIterator, self).__init__(name, yield_type)
 
 
-class Buffer(IterableType):
+class Buffer(IterableType, ArrayCompatible):
     """
     Type class for objects providing the buffer protocol.
     Derived classes exist for more specific cases.
@@ -747,6 +826,10 @@ class Buffer(IterableType):
     @property
     def iterator_type(self):
         return ArrayIterator(self)
+
+    @property
+    def as_array(self):
+        return self
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
@@ -1545,15 +1628,6 @@ float64 = Float('float64')
 
 complex64 = Complex('complex64', float32)
 complex128 = Complex('complex128', float64)
-
-len_type = Phantom('len')
-range_type = Phantom('range')
-slice_type = Phantom('slice')
-abs_type = Phantom('abs')
-neg_type = Phantom('neg')
-print_type = Phantom('print')
-print_item_type = Phantom('print-item')
-sign_type = Phantom('sign')
 
 range_iter32_type = RangeIteratorType(int32)
 range_iter64_type = RangeIteratorType(int64)

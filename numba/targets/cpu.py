@@ -46,6 +46,10 @@ class CPUContext(BaseContext):
         externals.c_math_functions.install(self)
         externals.c_numpy_functions.install(self)
 
+        # Initialize NRT runtime
+        rtsys.initialize(self)
+
+    def load_additional_registries(self):
         # Add target specific implementations
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
@@ -54,9 +58,6 @@ class CPUContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
-
-        # Initialize NRT runtime
-        rtsys.initialize(self)
 
     @property
     def target_data(self):

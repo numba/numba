@@ -170,7 +170,9 @@ class TimedeltaCmpGE(TimedeltaOrderedCmpOp):
 
 @builtin
 class TimedeltaAbs(TimedeltaUnaryOp):
-    key = types.abs_type
+    key = abs
+
+builtin_global(abs, types.Function(TimedeltaAbs))
 
 
 # datetime64 operations
