@@ -156,7 +156,7 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
     _ScalarHelper or _ArrayHelper) class to handle the argument.
     using the polymorphic interface of the Helper classes, scalar
     and array cases can be handled with the same code"""
-    if isinstance(tyinp, types.Array):
+    if isinstance(tyinp, types.ArrayCompatible):
         ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
         shape   = cgutils.unpack_tuple(bld, ary.shape, tyinp.ndim)
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
@@ -279,7 +279,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
                  for arg, tyarg in zip(args, sig.args)]
     if not explicit_output:
         ret_ty = sig.return_type
-        if isinstance(ret_ty, types.Array):
+        if isinstance(ret_ty, types.ArrayCompatible):
             output = _build_array(context, builder, ret_ty, arguments)
         else:
             output = _prepare_argument(

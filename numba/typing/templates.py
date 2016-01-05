@@ -142,6 +142,14 @@ class FunctionTemplate(object):
         selected = self.context.resolve_overload(self.key, cases, args, kws)
         return selected
 
+    def get_impl_key(self, sig):
+        """
+        Return the key for looking up the implementation for the given
+        signature on the target context.
+        """
+        # Lookup the key on the type, to avoid binding it with `self`.
+        return type(self).key
+
 
 class AbstractTemplate(FunctionTemplate):
     """
@@ -238,15 +246,65 @@ class ConcreteTemplate(FunctionTemplate):
         return self._select(cases, args, kws)
 
 
+class _OverlayFunctionTemplate(AbstractTemplate):
+    """
+    A base class of templates for @overlay functions.
+    """
+
+    def generic(self, args, kws):
+        """
+        Type the overlaid function by compiling the appropriate
+        implementation for the given args.
+        """
+        cache_key = self.context, args, tuple(kws.items())
+        try:
+            disp = self._impl_cache[cache_key]
+        except KeyError:
+            # Get the overlay implementation for the given types
+            pyfunc = self._overlay_func(*args, **kws)
+            if pyfunc is None:
+                # No implementation => fail typing
+                self._impl_cache[cache_key] = None
+                return
+            from numba import jit
+            disp = self._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
+        else:
+            if disp is None:
+                return
+
+        # Compile and type it for the given types
+        disp_type = types.Dispatcher(disp)
+        sig = disp_type.get_call_type(self.context, args, kws)
+        # Store the compiled overload for use in the lowering phase
+        self._overloads[sig.args] = disp_type.get_overload(sig)
+        return sig
+
+    def get_impl_key(self, sig):
+        """
+        Return the key for looking up the implementation for the given
+        signature on the target context.
+        """
+        return self._overloads[sig.args]
+
+
+def make_overlay_template(func, overlay_func):
+    """
+    Make a template class for function *func* overlaid by *overlay_func*.
+    """
+    func_name = getattr(func, '__name__', str(func))
+    name = "OverlayTemplate_%s" % (func_name,)
+    base = _OverlayFunctionTemplate
+    dct = dict(key=func, _overlay_func=staticmethod(overlay_func),
+               _impl_cache={}, _overloads={})
+    return type(base)(name, (base,), dct)
+
+
 class AttributeTemplate(object):
     def __init__(self, context):
         self.context = context
 
     def resolve(self, value, attr):
-        ret = self._resolve(value, attr)
-        if ret is None:
-            raise UntypedAttributeError(value=value, attr=attr)
-        return ret
+        return self._resolve(value, attr)
 
     def _resolve(self, value, attr):
         fn = getattr(self, "resolve_%s" % attr, None)
@@ -260,6 +318,63 @@ class AttributeTemplate(object):
             return fn(value)
 
     generic_resolve = NotImplemented
+
+
+class _OverlayAttributeTemplate(AttributeTemplate):
+    """
+    A base class of templates for @overlay_attribute functions.
+    """
+
+    def _resolve(self, typ, attr):
+        # Attribute-specific overlay
+        if self._attr == attr:
+            cache_key = self.context, typ, attr
+            try:
+                disp = self._impl_cache[cache_key]
+            except KeyError:
+                # Get the overlay implementation for the given type
+                pyfunc = self._overlay_func(typ)
+                if pyfunc is None:
+                    # No implementation => fail typing
+                    self._impl_cache[cache_key] = None
+                    return
+
+                from numba import jit
+                from numba.targets.imputils import impl_attribute, builtin_attr
+
+                disp = self._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
+
+                # Register an implementation on the target(s), calling
+                # the compiled user-supplied function
+                @builtin_attr
+                @impl_attribute(typ, attr)
+                def getattr_impl(context, builder, typ, value):
+                    disp_type = types.Dispatcher(disp)
+                    # `sig` is computed below
+                    call = context.get_function(disp_type, sig)
+                    return call(builder, (value,))
+            else:
+                if disp is None:
+                    return
+
+            # Compile and type it for the given types
+            disp_type = types.Dispatcher(disp)
+            sig = disp_type.get_call_type(self.context, (typ,), {})
+            return sig.return_type
+
+
+def make_overlay_attribute_template(typ, attr, overlay_func):
+    """
+    Make a template class for attribute *attr* of *typ* overlaid by
+    *overlay_func*.
+    """
+    assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
+    name = "OverlayTemplate_%s_%s" % (typ, attr)
+    base = _OverlayAttributeTemplate
+    dct = dict(key=typ, _attr=attr, _impl_cache={},
+               _overlay_func=staticmethod(overlay_func),
+               )
+    return type(base)(name, (base,), dct)
 
 
 def bound_function(template_key):
@@ -302,6 +417,11 @@ class MacroTemplate(object):
 # -----------------------------
 
 class Registry(object):
+    """
+    A registry of typing declarations.  The registry stores such declarations
+    for functions, attributes and globals.
+    """
+
     def __init__(self):
         self.functions = []
         self.attributes = []
@@ -340,6 +460,39 @@ class Registry(object):
             self.register_global(global_value, wrapper_type(Template))
             return cls
         return decorate
+
+
+class RegistryLoader(object):
+    """
+    An incremental loader for a registry.  Each new call to new_functions(),
+    etc. will iterate over the not yet seen registrations.
+
+    The reason for this object is multiple:
+    - there can be several contexts
+    - each context wants to install all registrations
+    - registrations can be added after the first installation, so contexts
+      must be able to get the "new" installations
+
+    Therefore each context maintains its own loaders for each existing
+    registry, without duplicating the registries themselves.
+    """
+
+    def __init__(self, registry):
+        self._functions = utils.stream_list(registry.functions)
+        self._attributes = utils.stream_list(registry.attributes)
+        self._globals = utils.stream_list(registry.globals)
+
+    def new_functions(self):
+        for item in next(self._functions):
+            yield item
+
+    def new_attributes(self):
+        for item in next(self._attributes):
+            yield item
+
+    def new_globals(self):
+        for item in next(self._globals):
+            yield item
 
 
 builtin_registry = Registry()

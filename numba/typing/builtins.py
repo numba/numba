@@ -9,17 +9,24 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     builtin_attr, signature, bound_function,
                                     make_callable_template)
 
-for obj in RANGE_ITER_OBJECTS:
-    builtin_global(obj, types.range_type)
-builtin_global(len, types.len_type)
-builtin_global(slice, types.slice_type)
-builtin_global(abs, types.abs_type)
-builtin_global(print, types.print_type)
-
 
 @builtin
 class Print(AbstractTemplate):
-    key = types.print_type
+    key = print
+
+    def generic(self, args, kws):
+        for a in args:
+            sig = self.context.resolve_function_type("print_item", (a,), {})
+            if sig is None:
+                raise TypeError("Type %s is not printable." % a)
+            assert sig.return_type is types.none
+        return signature(types.none, *args)
+
+builtin_global(print, types.Function(Print))
+
+@builtin
+class PrintItem(AbstractTemplate):
+    key = "print_item"
 
     def is_accepted_type(self, ty):
         if isinstance(ty, (types.Integer, types.Boolean, types.Float,
@@ -27,26 +34,26 @@ class Print(AbstractTemplate):
             return True
 
     def generic(self, args, kws):
-        assert not kws, "kwargs to print is not supported."
-        for a in args:
-            if not self.is_accepted_type(a):
-                raise TypeError("Type %s is not printable." % a)
-        return signature(types.none, *args)
+        arg, = args
+        if self.is_accepted_type(arg):
+            return signature(types.none, *args)
 
 
 @builtin
 class Abs(ConcreteTemplate):
-    key = types.abs_type
+    key = abs
     int_cases = [signature(ty, ty) for ty in types.signed_domain]
     real_cases = [signature(ty, ty) for ty in types.real_domain]
     complex_cases = [signature(ty.underlying_float, ty)
                      for ty in types.complex_domain]
     cases = int_cases + real_cases + complex_cases
 
+builtin_global(abs, types.Function(Abs))
+
 
 @builtin
 class Slice(ConcreteTemplate):
-    key = types.slice_type
+    key = slice
     cases = [
         signature(types.slice2_type),
         signature(types.slice2_type, types.none, types.none),
@@ -59,10 +66,12 @@ class Slice(ConcreteTemplate):
         signature(types.slice3_type, types.none, types.none, types.intp),
     ]
 
+builtin_global(slice, types.Function(Slice))
+
 
 @builtin
 class Range(ConcreteTemplate):
-    key = types.range_type
+    key = range
     cases = [
         signature(types.range_state32_type, types.int32),
         signature(types.range_state32_type, types.int32, types.int32),
@@ -77,6 +86,8 @@ class Range(ConcreteTemplate):
         signature(types.unsigned_range_state64_type, types.uint64, types.uint64,
                   types.uint64),
     ]
+
+builtin_global(range, types.Function(Range))
 
 
 @builtin
@@ -373,6 +384,19 @@ class TupleLe(TupleCompare):
 class TupleLt(TupleCompare):
     key = '<'
 
+@builtin
+class TupleAdd(AbstractTemplate):
+    key = '+'
+
+    def generic(self, args, kws):
+        if len(args) == 2:
+            a, b = args
+            if (isinstance(a, types.BaseTuple) and isinstance(b, types.BaseTuple)
+                and not isinstance(a, types.BaseNamedTuple)
+                and not isinstance(b, types.BaseNamedTuple)):
+                res = types.BaseTuple.from_types(tuple(a) + tuple(b))
+                return signature(res, a, b)
+
 
 # Register default implementations of binary inplace operators for
 # immutable types.
@@ -444,13 +468,15 @@ class SetItemCPointer(AbstractTemplate):
 
 @builtin
 class Len(AbstractTemplate):
-    key = types.len_type
+    key = len
 
     def generic(self, args, kws):
         assert not kws
         (val,) = args
         if isinstance(val, (types.Buffer, types.BaseTuple)):
             return signature(types.intp, val)
+
+builtin_global(len, types.Function(Len))
 
 
 @builtin
@@ -791,11 +817,8 @@ class TypeBuiltin(AbstractTemplate):
         assert not kws
         if len(args) == 1:
             # One-argument type() -> return the __class__
-            try:
-                classty = self.context.resolve_getattr(args[0], "__class__")
-            except KeyError:
-                return
-            else:
+            classty = self.context.resolve_getattr(args[0], "__class__")
+            if classty is not None:
                 return signature(classty, *args)
 
 

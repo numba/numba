@@ -268,6 +268,8 @@ class Pipeline(object):
                  locals):
         # Make sure the environment is reloaded
         config.reload_config()
+        typingctx.refresh()
+        targetctx.refresh()
 
         self.typingctx = typingctx
 

@@ -58,10 +58,33 @@ def make_array(array_type):
     Return the Structure representation of the given *array_type*
     (an instance of types.Array).
     """
-    base = cgutils.create_struct_proxy(array_type)
-    ndim = array_type.ndim
+    try:
+        real_array_type = array_type.as_array
+    except AttributeError:
+        real_array_type = array_type
+    base = cgutils.create_struct_proxy(real_array_type)
+    ndim = real_array_type.ndim
+    # XXX calling __array_wrap__ is necessary for non-trivial array-compatible types
 
     class ArrayStruct(base):
+
+        def _make_refs(self, ref):
+            sig = signature(real_array_type, array_type)
+            try:
+                array_impl = self._context.get_function('__array__', sig)
+            except NotImplementedError:
+                return super(ArrayStruct, self)._make_refs(ref)
+
+            # Return a wrapped structure and its unwrapped reference
+            datamodel = self._context.data_model_manager[array_type]
+            be_type = self._get_be_type(datamodel)
+            if ref is None:
+                outer_ref = cgutils.alloca_once(self._builder, be_type, zfill=True)
+            else:
+                outer_ref = ref
+            ref = array_impl(self._builder, (outer_ref,))
+            return outer_ref, ref
+
         @property
         def shape(self):
             """
@@ -473,7 +496,7 @@ def setitem_array(context, builder, sig, args):
 
 
 @builtin
-@implement(types.len_type, types.Buffer)
+@implement(len, types.Buffer)
 def array_len(context, builder, sig, args):
     (aryty,) = sig.args
     (ary,) = args

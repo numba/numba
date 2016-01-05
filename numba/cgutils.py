@@ -94,16 +94,28 @@ class _StructProxy(object):
         self._be_type = self._get_be_type(self._datamodel)
         assert not is_pointer(self._be_type)
 
-        if ref is not None:
-            assert value is None
-            if ref.type.pointee != self._be_type:
-                raise AssertionError("bad ref type: expected %s, got %s"
-                                     % (self._be_type.as_pointer(), ref.type))
-            self._value = ref
-        else:
-            self._value = alloca_once(self._builder, self._be_type, zfill=True)
-            if value is not None:
-                self._builder.store(value, self._value)
+        outer_ref, ref = self._make_refs(ref)
+        if ref.type.pointee != self._be_type:
+            raise AssertionError("bad ref type: expected %s, got %s"
+                                 % (self._be_type.as_pointer(), ref.type))
+
+        if value is not None:
+            if value.type != outer_ref.type.pointee:
+                raise AssertionError("bad value type: expected %s, got %s"
+                                     % (outer_ref.type.pointee, value.type))
+            self._builder.store(value, outer_ref)
+
+        self._value = ref
+        self._outer_ref = outer_ref
+
+    def _make_refs(self, ref):
+        """
+        Return an (outer ref, value ref) pair.  By default, these are
+        the same pointers, but a derived class may override this.
+        """
+        if ref is None:
+            ref = alloca_once(self._builder, self._be_type, zfill=True)
+        return ref, ref
 
     def _get_be_type(self, datamodel):
         raise NotImplementedError
@@ -177,13 +189,13 @@ class _StructProxy(object):
         """
         Return the LLVM pointer to the underlying structure.
         """
-        return self._value
+        return self._outer_ref
 
     def _getvalue(self):
         """
         Load and return the value of the underlying LLVM structure.
         """
-        return self._builder.load(self._value)
+        return self._builder.load(self._outer_ref)
 
     def _setvalue(self, value):
         """Store the value in this structure"""

@@ -395,7 +395,7 @@ def list_constructor(context, builder, sig, args):
 # Various operations
 
 @builtin
-@implement(types.len_type, types.List)
+@implement(len, types.List)
 def list_len(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     return inst.size

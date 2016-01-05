@@ -399,6 +399,13 @@ class StructModel(CompositeModel):
             self._fields = self._members = ()
         self._models = tuple([self._dmm.lookup(t) for t in self._members])
 
+    def get_member_fe_type(self, name):
+        """
+        StructModel-specific: get the Numba type of the field named *name*.
+        """
+        pos = self.get_field_position(name)
+        return self._members[pos]
+
     def get_value_type(self):
         elems = [t.get_value_type() for t in self._models]
         return ir.LiteralStructType(elems)

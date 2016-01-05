@@ -21,13 +21,16 @@ class InSequence(AbstractTemplate):
 
 @builtin
 class SequenceLen(AbstractTemplate):
-    key = types.len_type
+    key = len
 
     def generic(self, args, kws):
         assert not kws
         (val,) = args
         if isinstance(val, (types.Sequence)):
             return signature(types.intp, val)
+
+builtin_global(len, types.Function(SequenceLen))
+
 
 @builtin
 class SequenceBool(AbstractTemplate):

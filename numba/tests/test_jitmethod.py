@@ -27,9 +27,9 @@ class TestJITMethod(unittest.TestCase):
             np.array([15, 15, 15, 15, 15], dtype=np.float32))
 
         # Check that loop lifting in nopython mode was successful
-        [cres] = something.method._compileinfos.values()
+        [cres] = something.method.overloads.values()
         jitloop = cres.lifted[0]
-        [loopcres] = jitloop._compileinfos.values()
+        [loopcres] = jitloop.overloads.values()
         self.assertTrue(loopcres.fndesc.native)
 
     def test_unbound_jit_method(self):

@@ -21,7 +21,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
     RangeState = cgutils.create_struct_proxy(range_state_type)
 
     @builtin
-    @implement(types.range_type, int_type)
+    @implement(range, int_type)
     def range1_impl(context, builder, sig, args):
         """
         range(stop: int) -> range object
@@ -37,7 +37,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
                                   state._getvalue())
 
     @builtin
-    @implement(types.range_type, int_type, int_type)
+    @implement(range, int_type, int_type)
     def range2_impl(context, builder, sig, args):
         """
         range(start: int, stop: int) -> range object
@@ -53,7 +53,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
                                   state._getvalue())
 
     @builtin
-    @implement(types.range_type, int_type, int_type, int_type)
+    @implement(range, int_type, int_type, int_type)
     def range3_impl(context, builder, sig, args):
         """
         range(start: int, stop: int, step: int) -> range object

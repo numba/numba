@@ -7,13 +7,13 @@ from __future__ import print_function, absolute_import, division
 import inspect
 import functools
 
-from .. import typing, cgutils, types
+from .. import typing, cgutils, types, utils
 
-
-# Global registries for implementations of builtin operations
-# (functions, attributes, type casts)
 
 class Registry(object):
+    """
+    A registry of function and attribute implementations.
+    """
     def __init__(self):
         self.functions = []
         self.attributes = []
@@ -35,6 +35,33 @@ class Registry(object):
     def register_cast(self, impl, sig):
         self.casts.append((impl, sig))
 
+
+class RegistryLoader(object):
+    """
+    An incremental loader for a registry.  Each new call to new_functions(),
+    etc. will iterate over the not yet seen registrations.
+    """
+
+    def __init__(self, registry):
+        self._functions = utils.stream_list(registry.functions)
+        self._attributes = utils.stream_list(registry.attributes)
+        self._casts = utils.stream_list(registry.casts)
+
+    def new_functions(self):
+        for item in next(self._functions):
+            yield item
+
+    def new_attributes(self):
+        for item in next(self._attributes):
+            yield item
+
+    def new_casts(self):
+        for item in next(self._casts):
+            yield item
+
+
+# Global registries for implementations of builtin operations
+# (functions, attributes, type casts)
 builtin_registry = Registry()
 builtin = builtin_registry.register
 builtin_attr = builtin_registry.register_attr
@@ -307,4 +334,3 @@ def impl_ret_untracked(ctx, builder, retty, ret):
     The return type is not a NRT object.
     """
     return ret
-

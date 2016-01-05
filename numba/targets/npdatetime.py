@@ -124,7 +124,7 @@ def timedelta_neg_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @builtin
-@implement(types.abs_type, types.NPTimedelta)
+@implement(abs, types.NPTimedelta)
 def timedelta_abs_impl(context, builder, sig, args):
     val, = args
     ret = alloc_timedelta_result(builder)
@@ -136,9 +136,10 @@ def timedelta_abs_impl(context, builder, sig, args):
     res = builder.load(ret)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(types.sign_type, types.NPTimedelta)
 def timedelta_sign_impl(context, builder, sig, args):
+    """
+    np.sign(timedelta64)
+    """
     val, = args
     ret = alloc_timedelta_result(builder)
     zero = Constant.int(TIMEDELTA64, 0)

@@ -140,7 +140,7 @@ def make_slice(context, builder, typ, value=None):
 
 
 @builtin
-@implement(types.slice_type, types.VarArg(types.Any))
+@implement(slice, types.VarArg(types.Any))
 def slice_constructor_impl(context, builder, sig, args):
     slice_args = []
     for ty, val, default in zip_longest(sig.args, args, get_defaults(context)):
