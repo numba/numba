@@ -24,27 +24,39 @@ public.
 High-level API
 ==============
 
-There is currently no high-level API for quick implementation of
-an existing function or type.
+There is currently no high-level API, making some use cases more
+complicated than they should be.
 
 Proposed changes
 ----------------
 
-It would be nice for people to be able to implement a function
-in a single go, as if they were writing a ``@jit`` function.
-As an example, let's assume we want to make :func:`numpy.where`
-usable from :term:`nopython mode`.  We would like to be able
-to define several implementations and select between them at
-compile-time depending on the input types.
+Implementing a function
+'''''''''''''''''''''''
 
-The following example showcases a hypothetical API where we can
-register a function taking the argument types and returning a
-callable implementing the actual function for those types.
-The API should also be able to handle optional arguments, and
-the resulting implementation should support calling with named
-parameters.
+We propose the addition of a ``@overload`` decorator allowing the
+implementation of a given function for use in :term:`nopython mode`.
+The overloading function has the same formal signature as the implemented
+function, and receives the actual argument types.  It should return a
+Python function implementing the overloaded function for the given types.
+
+The following example implements :func:`numpy.where` with
+this approach.
 
 .. literalinclude:: np-where-override.py
+
+It is also possible to implement functions already known to Numba, to
+support additional types.  The following example implements the
+built-in function :func:`len` with this approach::
+
+   @overload(len)
+   def tuple_len(x):
+      if isinstance(x, types.BaseTuple):
+         # The tuple length is known at compile-time, so simply reify it
+         # as a constant.
+         n = len(x)
+         def len_impl(x):
+            return n
+         return len_impl
 
 
 Typing
