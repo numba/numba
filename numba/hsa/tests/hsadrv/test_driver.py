@@ -339,10 +339,10 @@ class TestMemory(_TestBase):
         nbytes = ctypes.sizeof(ctypes.c_float) * nelem
         gpu_host_accessible_region = gpu_host_accessible_coarse_regions[0]
         host_in_ptr = gpu_host_accessible_region.allocate(nbytes)
-        self.assertNotEqual(ctypes.addressof(host_in_ptr), 0,
+        self.assertNotEqual(host_in_ptr.value, None,
                 "pointer must not be NULL")
         host_out_ptr = gpu_host_accessible_region.allocate(nbytes)
-        self.assertNotEqual(ctypes.addressof(host_out_ptr), 0,
+        self.assertNotEqual(host_out_ptr.value, None,
                 "pointer must not be NULL")
 
         # init mem with data
@@ -352,11 +352,10 @@ class TestMemory(_TestBase):
         # alloc gpu only memory
         gpu_only_region = gpu_only_coarse_regions[0]
         gpu_in_ptr = gpu_only_region.allocate(nbytes)
-        self.assertNotEqual(ctypes.addressof(gpu_in_ptr), 0,
-                "pointer must not be NULL")
+        self.assertNotEqual(gpu_in_ptr.value, None, "pointer must not be NULL")
         gpu_out_ptr = gpu_only_region.allocate(nbytes)
-        self.assertNotEqual(ctypes.addressof(gpu_out_ptr), 0,
-                "pointer must not be NULL")
+        self.assertNotEqual(gpu_out_ptr.value, None,
+            "pointer must not be NULL")
 
         # copy memory from host accessible location to gpu only
         hsa.hsa_memory_copy(gpu_in_ptr, host_in_ptr, src.nbytes)
@@ -375,14 +374,16 @@ class TestMemory(_TestBase):
         # use first region for args
         kernarg_region = kernarg_regions[0]
 
-        kernarg_ptr = kernarg_region.allocate(2 * ctypes.c_void_p)
-                                               # ^- that is not nice
-        self.assertNotEqual(ctypes.addressof(kernarg_ptr), 0,
-                "pointer must not be NULL")
+        kernarg_ptr = kernarg_region.allocate(
+                2 * ctypes.sizeof(ctypes.c_void_p))
+
+        self.assertNotEqual(kernarg_ptr, None, "pointer must not be NULL")
 
         # wire in gpu memory
-        kernarg_ptr[0] = ctypes.addressof(gpu_in_ptr)
-        kernarg_ptr[1] = ctypes.addressof(gpu_out_ptr)
+        argref = (2 * ctypes.c_size_t).from_address(kernarg_ptr.value)
+        argref[0] = gpu_in_ptr.value
+        argref[1] = gpu_out_ptr.value
+        kernarg_ptr = argref
 
         # signal
         sig = hsa.create_signal(1)
@@ -397,7 +398,8 @@ class TestMemory(_TestBase):
         hsa.hsa_memory_copy(host_out_ptr, gpu_out_ptr, src.nbytes)
 
         # check the data is recovered
-        np.testing.assert_equal(host_out_ptr, src)
+        ref = (nelem * ctypes.c_float).from_address(host_out_ptr.value)
+        np.testing.assert_equal(ref, src)
 
         # free
         hsa.hsa_memory_free(host_in_ptr)
