@@ -1417,12 +1417,8 @@ class ClassInstanceType(Type):
     mutable = True
     name_prefix = "instance"
 
-    def __init__(self, class_type, struct, jitmethods, jitprops):
+    def __init__(self, class_type):
         self.class_type = class_type
-        self.struct = struct
-        self.jitmethods = jitmethods
-        self.jitprops = jitprops
-        self.methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
         name = "{0}.{1}".format(self.name_prefix, self.class_type.name)
         super(ClassInstanceType, self).__init__(name)
 
@@ -1435,6 +1431,22 @@ class ClassInstanceType(Type):
     @property
     def classname(self):
         return self.class_type.class_def.__name__
+
+    @property
+    def jitprops(self):
+        return self.class_type.jitprops
+
+    @property
+    def jitmethods(self):
+        return self.class_type.jitmethods
+
+    @property
+    def struct(self):
+        return self.class_type.struct
+
+    @property
+    def methods(self):
+        return self.class_type.methods
 
 
 class ClassType(Callable, Opaque):
@@ -1449,13 +1461,16 @@ class ClassType(Callable, Opaque):
     def __init__(self, class_def, ctor_template_cls, struct, jitmethods,
                  jitprops):
         self.class_def = class_def
-        fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
         self.ctor_template = self._specialize_template(ctor_template_cls)
+        self.jitmethods = jitmethods
+        self.jitprops = jitprops
+        self.struct = struct
+        self.methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
+        fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
         name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, class_def.__name__,
                                            id(class_def), fielddesc)
         super(ClassType, self).__init__(name)
-        self.instance_type = self.instance_type_class(self, struct, jitmethods,
-                                                      jitprops)
+        self.instance_type = self.instance_type_class(self)
 
     def get_call_type(self, context, args, kws):
         return self.ctor_template(context).apply(args, kws)
