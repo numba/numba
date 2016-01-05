@@ -15,7 +15,7 @@ from . import collections
 registry = Registry()
 builtin = registry.register
 builtin_global = registry.register_global
-builtin_attr = registry.register_attr
+builtin_getattr = registry.register_attr
 
 
 class ListBuiltin(AbstractTemplate):
@@ -49,7 +49,7 @@ class SortedBuiltin(CallableTemplate):
 builtin_global(sorted, types.Function(SortedBuiltin))
 
 
-@builtin_attr
+@builtin_getattr
 class ListAttribute(AttributeTemplate):
     key = types.List
 

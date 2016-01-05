@@ -322,7 +322,7 @@ class NamedTupleClass(Callable, Opaque):
     def __init__(self, instance_class):
         self.instance_class = instance_class
         name = "class(%s)" % (instance_class)
-        super(NamedTupleClass, self).__init__(name, param=True)
+        super(NamedTupleClass, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
         # Overriden by the __call__ constructor resolution in typing.collections
@@ -344,7 +344,7 @@ class NumberClass(Callable, DTypeSpec, Opaque):
     def __init__(self, instance_type):
         self.instance_type = instance_type
         name = "class(%s)" % (instance_type,)
-        super(NumberClass, self).__init__(name, param=True)
+        super(NumberClass, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
         # Overriden by the __call__ constructor resolution in typing.builtins
@@ -560,7 +560,7 @@ class SimpleIterableType(IterableType):
 
     def __init__(self, name, iterator_type):
         self._iterator_type = iterator_type
-        super(SimpleIterableType, self).__init__(name, param=True)
+        super(SimpleIterableType, self).__init__(name)
 
     @property
     def iterator_type(self):
@@ -571,7 +571,7 @@ class SimpleIteratorType(IteratorType):
 
     def __init__(self, name, yield_type):
         self._yield_type = yield_type
-        super(SimpleIteratorType, self).__init__(name, param=True)
+        super(SimpleIteratorType, self).__init__(name)
 
     @property
     def yield_type(self):
@@ -583,7 +583,7 @@ class RangeType(SimpleIterableType):
     def __init__(self, dtype):
         self.dtype = dtype
         name = "range_state_%s" % (dtype,)
-        super(SimpleIterableType, self).__init__(name, param=True)
+        super(SimpleIterableType, self).__init__(name)
         self._iterator_type = RangeIteratorType(self.dtype)
 
     def unify(self, typingctx, other):
@@ -597,7 +597,7 @@ class RangeIteratorType(SimpleIteratorType):
 
     def __init__(self, dtype):
         name = "range_iter_%s" % (dtype,)
-        super(SimpleIteratorType, self).__init__(name, param=True)
+        super(SimpleIteratorType, self).__init__(name)
         self._yield_type = dtype
 
     def unify(self, typingctx, other):
@@ -719,7 +719,7 @@ class CharSeq(Type):
     def __init__(self, count):
         self.count = count
         name = "[char x %d]" % count
-        super(CharSeq, self).__init__(name, param=True)
+        super(CharSeq, self).__init__(name)
 
     @property
     def key(self):
@@ -732,7 +732,7 @@ class UnicodeCharSeq(Type):
     def __init__(self, count):
         self.count = count
         name = "[unichr x %d]" % count
-        super(UnicodeCharSeq, self).__init__(name, param=True)
+        super(UnicodeCharSeq, self).__init__(name)
 
     @property
     def key(self):
@@ -821,7 +821,7 @@ class Buffer(IterableType, ArrayCompatible):
             if readonly:
                 type_name = "readonly %s" % type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
-        super(Buffer, self).__init__(name, param=True)
+        super(Buffer, self).__init__(name)
 
     @property
     def iterator_type(self):
@@ -960,7 +960,7 @@ class ArrayCTypes(Type):
         # even though they are not implemented, yet.
         self.ndim = arytype.ndim
         name = "ArrayCTypes(ndim={0})".format(self.ndim)
-        super(ArrayCTypes, self).__init__(name, param=True)
+        super(ArrayCTypes, self).__init__(name)
 
     @property
     def key(self):
@@ -974,7 +974,7 @@ class ArrayFlags(Type):
     def __init__(self, arytype):
         self.array_type = arytype
         name = "ArrayFlags({0})".format(self.array_type)
-        super(ArrayFlags, self).__init__(name, param=True)
+        super(ArrayFlags, self).__init__(name)
 
     @property
     def key(self):
@@ -1116,7 +1116,7 @@ class UniTuple(BaseAnonymousTuple, _HomogenousTuple):
         self.dtype = dtype
         self.count = count
         name = "(%s x %d)" % (dtype, count)
-        super(UniTuple, self).__init__(name, param=True)
+        super(UniTuple, self).__init__(name)
 
     @property
     def key(self):
@@ -1173,7 +1173,7 @@ class Tuple(BaseAnonymousTuple, _HeterogenousTuple):
         self.types = tuple(types)
         self.count = len(self.types)
         name = "(%s)" % ', '.join(str(i) for i in self.types)
-        super(Tuple, self).__init__(name, param=True)
+        super(Tuple, self).__init__(name)
 
     @property
     def key(self):
@@ -1204,7 +1204,7 @@ class NamedUniTuple(_HomogenousTuple, BaseNamedTuple):
         self.fields = tuple(cls._fields)
         self.instance_class = cls
         name = "%s(%s x %d)" % (cls.__name__, dtype, count)
-        super(NamedUniTuple, self).__init__(name, param=True)
+        super(NamedUniTuple, self).__init__(name)
         self._iterator_type = UniTupleIter(self)
 
     @property
@@ -1220,7 +1220,7 @@ class NamedTuple(_HeterogenousTuple, BaseNamedTuple):
         self.fields = tuple(cls._fields)
         self.instance_class = cls
         name = "%s(%s)" % (cls.__name__, ', '.join(str(i) for i in self.types))
-        super(NamedTuple, self).__init__(name, param=True)
+        super(NamedTuple, self).__init__(name)
 
     @property
     def key(self):
@@ -1238,7 +1238,7 @@ class List(MutableSequence):
         self.reflected = reflected
         cls_name = "reflected list" if reflected else "list"
         name = "%s(%s)" % (cls_name, self.dtype)
-        super(List, self).__init__(name=name, param=True)
+        super(List, self).__init__(name=name)
 
     def copy(self, dtype=None, reflected=None):
         if dtype is None:
@@ -1297,7 +1297,7 @@ class ListPayload(Type):
     def __init__(self, list_type):
         self.list_type = list_type
         name = 'payload(%s)' % list_type
-        super(ListPayload, self).__init__(name, param=True)
+        super(ListPayload, self).__init__(name)
 
     @property
     def key(self):
@@ -1314,7 +1314,7 @@ class MemInfoPointer(Type):
     def __init__(self, dtype):
         self.dtype = dtype
         name = "memory-managed *%s" % dtype
-        super(MemInfoPointer, self).__init__(name, param=True)
+        super(MemInfoPointer, self).__init__(name)
 
     @property
     def key(self):
@@ -1330,7 +1330,7 @@ class CPointer(Type):
     def __init__(self, dtype):
         self.dtype = dtype
         name = "*%s" % dtype
-        super(CPointer, self).__init__(name, param=True)
+        super(CPointer, self).__init__(name)
 
     @property
     def key(self):
@@ -1355,7 +1355,7 @@ class EphemeralArray(Type):
         self.dtype = dtype
         self.count = count
         name = "*%s[%d]" % (dtype, count)
-        super(EphemeralArray, self).__init__(name, param=True)
+        super(EphemeralArray, self).__init__(name)
 
     @property
     def key(self):
@@ -1368,7 +1368,7 @@ class Object(Type):
     def __init__(self, clsobj):
         self.cls = clsobj
         name = "Object(%s)" % clsobj.__name__
-        super(Object, self).__init__(name, param=True)
+        super(Object, self).__init__(name)
 
     @property
     def key(self):
@@ -1381,7 +1381,7 @@ class Optional(Type):
         assert not isinstance(typ, (Optional, NoneType))
         self.type = typ
         name = "?%s" % typ
-        super(Optional, self).__init__(name, param=True)
+        super(Optional, self).__init__(name)
 
     @property
     def key(self):
@@ -1447,7 +1447,7 @@ class ExceptionClass(Callable, Phantom):
         assert issubclass(exc_class, BaseException)
         name = "%s" % (exc_class.__name__)
         self.exc_class = exc_class
-        super(ExceptionClass, self).__init__(name, param=True)
+        super(ExceptionClass, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
         return self.get_call_signatures()[0][0]
@@ -1472,7 +1472,7 @@ class ExceptionInstance(Phantom):
         assert issubclass(exc_class, BaseException)
         name = "%s(...)" % (exc_class.__name__,)
         self.exc_class = exc_class
-        super(ExceptionInstance, self).__init__(name, param=True)
+        super(ExceptionInstance, self).__init__(name)
 
     @property
     def key(self):
@@ -1485,7 +1485,7 @@ class SliceType(Type):
         assert members in (2, 3)
         self.members = members
         self.has_step = members >= 3
-        super(SliceType, self).__init__(name, param=True)
+        super(SliceType, self).__init__(name)
 
     @property
     def key(self):
@@ -1494,8 +1494,8 @@ class SliceType(Type):
 
 class ClassInstanceType(Type):
     """
-    Represents an instance of a class.  It will be the return-type of the
-    constructor of the class.
+    The type of a jitted class *instance*.  It will be the return-type
+    of the constructor of the class.
     """
     mutable = True
     name_prefix = "instance"
@@ -1534,8 +1534,8 @@ class ClassInstanceType(Type):
 
 class ClassType(Callable, Opaque):
     """
-    Represents the type of the class. When the type of a class is called,
-    it's constructor is invoked.
+    The type of the jitted class (not instance).  When the type of a class
+    is called, its constructor is invoked.
     """
     mutable = True
     name_prefix = "jitclass"

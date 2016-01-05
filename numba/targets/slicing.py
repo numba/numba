@@ -8,8 +8,7 @@ from llvmlite import ir
 
 from numba.six.moves import zip_longest
 from numba import cgutils, types, typing
-from .imputils import (builtin, builtin_attr, implement,
-                       impl_attribute, impl_attribute_generic,
+from .imputils import (lower_builtin, lower_getattr,
                        iternext_impl, impl_ret_borrowed,
                        impl_ret_new_ref, impl_ret_untracked)
 
@@ -139,8 +138,7 @@ def make_slice(context, builder, typ, value=None):
     return cls(context, builder, value=value)
 
 
-@builtin
-@implement(slice, types.VarArg(types.Any))
+@lower_builtin(slice, types.VarArg(types.Any))
 def slice_constructor_impl(context, builder, sig, args):
     slice_args = []
     for ty, val, default in zip_longest(sig.args, args, get_defaults(context)):
@@ -161,20 +159,17 @@ def slice_constructor_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin_attr
-@impl_attribute(types.SliceType, "start")
+@lower_getattr(types.SliceType, "start")
 def slice_start_impl(context, builder, typ, value):
     sli = make_slice(context, builder, typ, value)
     return sli.start
 
-@builtin_attr
-@impl_attribute(types.SliceType, "stop")
+@lower_getattr(types.SliceType, "stop")
 def slice_stop_impl(context, builder, typ, value):
     sli = make_slice(context, builder, typ, value)
     return sli.stop
 
-@builtin_attr
-@impl_attribute(types.SliceType, "step")
+@lower_getattr(types.SliceType, "step")
 def slice_step_impl(context, builder, typ, value):
     if typ.has_step:
         sli = make_slice(context, builder, typ, value)

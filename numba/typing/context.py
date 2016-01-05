@@ -259,11 +259,11 @@ class BaseContext(object):
         except KeyError:
             loader = templates.RegistryLoader(registry)
             self._registries[registry] = loader
-        for ftcls in loader.new_functions():
+        for ftcls in loader.new_registrations('functions'):
             self.insert_function(ftcls(self))
-        for ftcls in loader.new_attributes():
+        for ftcls in loader.new_registrations('attributes'):
             self.insert_attributes(ftcls(self))
-        for gv, gty in loader.new_globals():
+        for gv, gty in loader.new_registrations('globals'):
             try:
                 existing = self._lookup_global(gv)
             except KeyError:

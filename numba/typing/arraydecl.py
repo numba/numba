@@ -4,7 +4,7 @@ from collections import namedtuple
 
 from numba import types
 from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                    builtin, builtin_attr, signature,
+                                    builtin, builtin_getattr, signature,
                                     bound_function)
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
@@ -205,7 +205,7 @@ def normalize_shape(shape):
         return shape
 
 
-@builtin_attr
+@builtin_getattr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
 
@@ -345,7 +345,7 @@ class StaticGetItemArray(AbstractTemplate):
                 return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
 
 
-@builtin_attr
+@builtin_getattr
 class RecordAttribute(AttributeTemplate):
     key = types.Record
 
@@ -379,7 +379,7 @@ class StaticSetItemRecord(AbstractTemplate):
                 return signature(types.void, record, types.Const(idx), value)
 
 
-@builtin_attr
+@builtin_getattr
 class ArrayCTypesAttribute(AttributeTemplate):
     key = types.ArrayCTypes
 
@@ -387,7 +387,7 @@ class ArrayCTypesAttribute(AttributeTemplate):
         return types.uintp
 
 
-@builtin_attr
+@builtin_getattr
 class ArrayFlagsAttribute(AttributeTemplate):
     key = types.ArrayFlags
 
@@ -401,7 +401,7 @@ class ArrayFlagsAttribute(AttributeTemplate):
         return types.boolean
 
 
-@builtin_attr
+@builtin_getattr
 class NestedArrayAttribute(ArrayAttribute):
     key = types.NestedArray
 

@@ -4,18 +4,17 @@ This file implements print functionality for the CPU.
 from __future__ import print_function, absolute_import, division
 from llvmlite.llvmpy.core import Type
 from numba import types, typing, cgutils
-from numba.targets.imputils import implement, Registry, impl_ret_untracked
+from numba.targets.imputils import Registry, impl_ret_untracked
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 
 # FIXME: the current implementation relies on CPython API even in
 #        nopython mode.
 
 
-@register
-@implement("print_item", types.Integer)
+@lower("print_item", types.Integer)
 def int_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -29,8 +28,7 @@ def int_print_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement("print_item", types.Float)
+@lower("print_item", types.Float)
 def real_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -42,8 +40,7 @@ def real_print_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement("print_item", types.Boolean)
+@lower("print_item", types.Boolean)
 def bool_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -54,8 +51,7 @@ def bool_print_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement("print_item", types.CharSeq)
+@lower("print_item", types.CharSeq)
 def print_charseq(context, builder, sig, args):
     [tx] = sig.args
     [x] = args
@@ -71,8 +67,7 @@ def print_charseq(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement(print, types.VarArg(types.Any))
+@lower(print, types.VarArg(types.Any))
 def print_varargs(context, builder, sig, args):
     py = context.get_python_api(builder)
     for i, (argtype, argval) in enumerate(zip(sig.args, args)):

@@ -5,7 +5,8 @@ from numba import types
 
 # Exported symbols
 from .typing.typeof import typeof_impl
-from .targets.imputils import builtin, builtin_cast, implement, impl_attribute
+from .targets.imputils import (
+    lower_builtin, lower_getattr, lower_getattr_generic, lower_cast)
 from .datamodel import models, register_default as register_model
 from .pythonapi import box, unbox, reflect, NativeValue
 
@@ -41,7 +42,23 @@ def type_callable(func):
 
 def overload(func):
     """
-    TODO docstring
+    A decorator marking the decorated function as typing and implementing
+    *func* in nopython mode.
+
+    The decorated function will have the same formal parameters as *func*
+    and be passed the Numba types of those parameters.  It should return
+    a function implementing *func* for the given types.
+
+    Here is an example implementing len() for tuple types::
+
+        @overlay(len)
+        def tuple_len(seq):
+            if isinstance(seq, types.BaseTuple):
+                n = len(seq)
+                def len_impl(seq):
+                    return n
+                return len_impl
+
     """
     # XXX Should overload() return a jitted wrapper calling the
     # function?  This way it would also be usable from pure Python
@@ -60,13 +77,23 @@ def overload(func):
 
 def overload_attribute(typ, attr):
     """
-    TODO docstring
+    A decorator marking the decorated function as typing and implementing
+    attribute *attr* for the given Numba type in nopython mode.
+
+    Here is an example implementing .nbytes for array types::
+
+        @overload_attribute(types.Array, 'nbytes')
+        def array_nbytes(arr):
+            def get(arr):
+                return arr.size * arr.itemsize
+            return get
     """
-    from .typing.templates import make_overload_attribute_template, builtin_attr
+    # TODO implement setters
+    from .typing.templates import make_overload_attribute_template, builtin_getattr
 
     def decorate(overload_func):
         template = make_overload_attribute_template(typ, attr, overload_func)
-        builtin_attr(template)
+        builtin_getattr(template)
         return overload_func
 
     return decorate
@@ -79,11 +106,10 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
     The given *typeclass*'s model must be a StructModel subclass.
     """
     # XXX should this work for setters as well?
-    from .typing.templates import builtin_attr, AttributeTemplate
+    from .typing.templates import builtin_getattr, AttributeTemplate
     from .datamodel import default_manager
     from .datamodel.models import StructModel
-    from .targets.imputils import (builtin_attr as target_attr,
-                                   impl_attribute, impl_ret_borrowed)
+    from .targets.imputils import lower_getattr, impl_ret_borrowed
     from . import cgutils
 
     if not isinstance(typeclass, type) or not issubclass(typeclass, types.Type):
@@ -100,7 +126,7 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
                             "with a StructModel, but got %s" % (model,))
         return model.get_member_fe_type(struct_attr)
 
-    @builtin_attr
+    @builtin_getattr
     class StructAttribute(AttributeTemplate):
         key = typeclass
 
@@ -108,8 +134,7 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
             if attr == python_attr:
                 return get_attr_fe_type(typ)
 
-    @target_attr
-    @impl_attribute(typeclass, python_attr)
+    @lower_getattr(typeclass, python_attr)
     def struct_getattr_impl(context, builder, typ, val):
         val = cgutils.create_struct_proxy(typ)(context, builder, value=val)
         attrty = get_attr_fe_type(typ)

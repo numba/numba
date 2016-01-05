@@ -2,13 +2,13 @@ from __future__ import print_function, absolute_import, division
 import math
 import warnings
 
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import Registry
 from numba import types
 from numba.itanium_mangler import mangle
 from .hsaimpl import _declare_function
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 # -----------------------------------------------------------------------------
 
@@ -104,4 +104,4 @@ for name in _supported:
 
     for sig in sigs:
         fn = _mk_fn_decl(name, sig)
-        register(implement(key, *sig.args)(fn))
+        lower(key, *sig.args)(fn)

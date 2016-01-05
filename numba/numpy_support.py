@@ -165,6 +165,28 @@ def map_layout(val):
     return layout
 
 
+def select_array_wrapper(inputs):
+    """
+    Given the array-compatible input types to an operation (e.g. ufunc),
+    select the appropriate input for wrapping the operation output,
+    according to each input's __array_priority__.
+
+    An index into *inputs* is returned.
+    """
+    max_prio = float('-inf')
+    selected_input = None
+    selected_index = None
+    for index, ty in enumerate(inputs):
+        # Ties are broken by choosing the first winner, as in Numpy
+        if isinstance(ty, types.ArrayCompatible) and ty.array_priority > max_prio:
+            selected_input = ty
+            selected_index = index
+            max_prio = ty.array_priority
+
+    assert selected_index is not None
+    return selected_index
+
+
 def resolve_output_type(context, inputs, formal_output):
     """
     Given the array-compatible input types to an operation (e.g. ufunc),
@@ -174,19 +196,11 @@ def resolve_output_type(context, inputs, formal_output):
     This uses a mechanism compatible with Numpy's __array_priority__ /
     __array_wrap__.
     """
-    max_prio = float('-inf')
-    selected_input = None
-    for ty in inputs:
-        # Ties are broken by choosing the first winner, as in Numpy
-        if isinstance(ty, types.ArrayCompatible) and ty.array_priority > max_prio:
-            selected_input = ty
-            max_prio = ty.array_priority
-
-    assert selected_input is not None
+    selected_input = inputs[select_array_wrapper(inputs)]
     args = selected_input, formal_output
     sig = context.resolve_function_type('__array_wrap__', args, {})
     if sig is None:
-        if max_prio == types.Array.array_priority:
+        if selected_input.array_priority == types.Array.array_priority:
             # If it's the same priority as a regular array, assume we
             # should return the output unchanged.
             # (we can't define __array_wrap__ explicitly for types.Buffer,

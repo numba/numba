@@ -7,7 +7,7 @@ from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import Registry
 from numba import cgutils
 from numba import types
 from numba.itanium_mangler import mangle_c, mangle, mangle_type
@@ -17,7 +17,7 @@ from . import hlc
 from . import enums
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 _void_value = lc.Constant.null(lc.Type.pointer(lc.Type.int(8)))
 
@@ -61,8 +61,7 @@ def _declare_function(context, builder, name, sig, cargs,
     return fn
 
 
-@register
-@implement(stubs.get_global_id, types.uint32)
+@lower(stubs.get_global_id, types.uint32)
 def get_global_id_impl(context, builder, sig, args):
     [dim] = args
     get_global_id = _declare_function(context, builder, 'get_global_id', sig,
@@ -71,8 +70,7 @@ def get_global_id_impl(context, builder, sig, args):
     return context.cast(builder, res, types.uintp, types.intp)
 
 
-@register
-@implement(stubs.get_local_id, types.uint32)
+@lower(stubs.get_local_id, types.uint32)
 def get_local_id_impl(context, builder, sig, args):
     [dim] = args
     get_local_id = _declare_function(context, builder, 'get_local_id', sig,
@@ -81,8 +79,7 @@ def get_local_id_impl(context, builder, sig, args):
     return context.cast(builder, res, types.uintp, types.intp)
 
 
-@register
-@implement(stubs.get_group_id, types.uint32)
+@lower(stubs.get_group_id, types.uint32)
 def get_group_id_impl(context, builder, sig, args):
     [dim] = args
     get_group_id = _declare_function(context, builder, 'get_group_id', sig,
@@ -91,8 +88,7 @@ def get_group_id_impl(context, builder, sig, args):
     return context.cast(builder, res, types.uintp, types.intp)
 
 
-@register
-@implement(stubs.get_num_groups, types.uint32)
+@lower(stubs.get_num_groups, types.uint32)
 def get_num_groups_impl(context, builder, sig, args):
     [dim] = args
     get_num_groups = _declare_function(context, builder, 'get_num_groups', sig,
@@ -101,8 +97,7 @@ def get_num_groups_impl(context, builder, sig, args):
     return context.cast(builder, res, types.uintp, types.intp)
 
 
-@register
-@implement(stubs.get_work_dim)
+@lower(stubs.get_work_dim)
 def get_work_dim_impl(context, builder, sig, args):
     get_work_dim = _declare_function(context, builder, 'get_work_dim', sig,
                                      ["void"])
@@ -110,8 +105,7 @@ def get_work_dim_impl(context, builder, sig, args):
     return res
 
 
-@register
-@implement(stubs.get_global_size, types.uint32)
+@lower(stubs.get_global_size, types.uint32)
 def get_global_size_impl(context, builder, sig, args):
     [dim] = args
     get_global_size = _declare_function(context, builder, 'get_global_size',
@@ -120,8 +114,7 @@ def get_global_size_impl(context, builder, sig, args):
     return context.cast(builder, res, types.uintp, types.intp)
 
 
-@register
-@implement(stubs.get_local_size, types.uint32)
+@lower(stubs.get_local_size, types.uint32)
 def get_local_size_impl(context, builder, sig, args):
     [dim] = args
     get_local_size = _declare_function(context, builder, 'get_local_size',
@@ -130,8 +123,7 @@ def get_local_size_impl(context, builder, sig, args):
     return context.cast(builder, res, types.uintp, types.intp)
 
 
-@register
-@implement(stubs.barrier, types.uint32)
+@lower(stubs.barrier, types.uint32)
 def barrier_one_arg_impl(context, builder, sig, args):
     [flags] = args
     barrier = _declare_function(context, builder, 'barrier', sig,
@@ -139,8 +131,7 @@ def barrier_one_arg_impl(context, builder, sig, args):
     builder.call(barrier, [flags])
     return _void_value
 
-@register
-@implement(stubs.barrier)
+@lower(stubs.barrier)
 def barrier_no_arg_impl(context, builder, sig, args):
     assert not args
     sig = types.void(types.uint32)
@@ -151,8 +142,7 @@ def barrier_no_arg_impl(context, builder, sig, args):
     return _void_value
 
 
-@register
-@implement(stubs.mem_fence, types.uint32)
+@lower(stubs.mem_fence, types.uint32)
 def mem_fence_impl(context, builder, sig, args):
     [flags] = args
     mem_fence = _declare_function(context, builder, 'mem_fence', sig,
@@ -161,8 +151,7 @@ def mem_fence_impl(context, builder, sig, args):
     return _void_value
 
 
-@register
-@implement(stubs.wavebarrier)
+@lower(stubs.wavebarrier)
 def wavebarrier_impl(context, builder, sig, args):
     assert not args
     fnty = Type.function(Type.void(), [])
@@ -171,8 +160,7 @@ def wavebarrier_impl(context, builder, sig, args):
     builder.call(fn, [])
     return _void_value
 
-@register
-@implement(stubs.activelanepermute_wavewidth,
+@lower(stubs.activelanepermute_wavewidth,
            types.Any, types.uint32, types.Any, types.bool_)
 def activelanepermute_wavewidth_impl(context, builder, sig, args):
     [src, laneid, identity, use_ident] = args
@@ -195,11 +183,10 @@ def activelanepermute_wavewidth_impl(context, builder, sig, args):
     return builder.bitcast(result, context.get_value_type(elem_type))
 
 
-@register
-@implement(stubs.atomic.add, types.Array, types.intp, types.Any)
-@implement(stubs.atomic.add, types.Array,
+@lower(stubs.atomic.add, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.add, types.Array,
            types.UniTuple, types.Any)
-@implement(stubs.atomic.add, types.Array, types.Tuple,
+@lower(stubs.atomic.add, types.Array, types.Tuple,
            types.Any)
 def hsail_atomic_add_tuple(context, builder, sig, args):
     aryty, indty, valty = sig.args
@@ -227,8 +214,7 @@ def hsail_atomic_add_tuple(context, builder, sig, args):
     return builder.atomic_rmw("add", ptr, val, ordering='monotonic')
 
 
-@register
-@implement('hsail.smem.alloc', types.UniTuple, types.Any)
+@lower('hsail.smem.alloc', types.UniTuple, types.Any)
 def hsail_smem_alloc_array(context, builder, sig, args):
     shape, dtype = args
     return _generic_array(context, builder, shape=shape, dtype=dtype,

@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from .. import types, utils
 from .templates import (AttributeTemplate, ConcreteTemplate, AbstractTemplate,
-                        builtin_global, builtin, builtin_attr,
+                        builtin_global, builtin, builtin_getattr,
                         signature, bound_function, make_callable_template)
 from .builtins import normalize_1d_index
 
@@ -19,17 +19,14 @@ class InSequence(AbstractTemplate):
         if isinstance(seq, types.Sequence):
             return signature(types.boolean, seq.dtype, seq)
 
-@builtin
+@builtin_global(len)
 class SequenceLen(AbstractTemplate):
-    key = len
 
     def generic(self, args, kws):
         assert not kws
         (val,) = args
         if isinstance(val, (types.Sequence)):
             return signature(types.intp, val)
-
-builtin_global(len, types.Function(SequenceLen))
 
 
 @builtin
@@ -82,7 +79,7 @@ class DelItemSequence(AbstractTemplate):
 # --------------------------------------------------------------------------
 # named tuples
 
-@builtin_attr
+@builtin_getattr
 class NamedTupleAttribute(AttributeTemplate):
     key = types.BaseNamedTuple
 
@@ -98,7 +95,7 @@ class NamedTupleAttribute(AttributeTemplate):
         return tup[index]
 
 
-@builtin_attr
+@builtin_getattr
 class NamedTupleClassAttribute(AttributeTemplate):
     key = types.NamedTupleClass
 

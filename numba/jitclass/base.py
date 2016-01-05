@@ -1,8 +1,12 @@
 from __future__ import absolute_import, print_function
+
+from collections import Sequence
 import types as pytypes
 import inspect
+
+from llvmlite import ir as llvmir
+
 from numba.utils import OrderedDict
-from collections import Sequence
 from numba import types
 from numba.targets.registry import CPUTarget
 from numba import njit
@@ -10,7 +14,6 @@ from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils
-from llvmlite import ir as llvmir
 from numba.six import exec_
 from . import boxing
 
@@ -199,82 +202,38 @@ def _drop_ignored_attrs(dct):
 
 class ClassBuilder(object):
     """
-    A jitclass builder for mutable jitclasses.
+    A jitclass builder for a mutable jitclass.  This will register
+    typing and implementation hooks to the given typing and target contexts.
     """
-    instance_type_class = types.ClassInstanceType
-    registered_targetctx = {}
-    registered_typingctx = set()
+    class_impl_registry = imputils.Registry()
 
     def __init__(self, class_type, methods, typingctx, targetctx):
         self.class_type = class_type
         self.methods = methods
         self.typingctx = typingctx
         self.targetctx = targetctx
-        self.register_once_per_typingctx()
-        self.register_once_per_class()
-
-    def register_once_per_typingctx(self):
-        """
-        Register information to the typing context.
-        The registration is executed once for typing context.
-        """
-        if self.typingctx not in self.registered_typingctx:
-            self.implement_attribute_typing(self.typingctx)
-            self.registered_typingctx.add(self.typingctx)
-
-    def register_once_per_class(self):
-        """
-        Register code-generation information to the target context.
-        The registration is executed once per (class, targetcontext)
-        """
-        registry = imputils.Registry()
-        if (type(self), self.targetctx) not in self.registered_targetctx:
-            self.implement_constructor(registry)
-            self.implement_attribute(registry)
-            self.targetctx.insert_func_defn(registry.functions)
-            self.targetctx.insert_attr_defn(registry.attributes)
-            self.registered_targetctx[type(self), self.targetctx] = registry
+        self.impl_registry = imputils.Registry()
 
     def register(self):
         """
         Register to the frontend and backend.
         """
-        class_type = self.class_type
-        instance_type = class_type.instance_type
-        self.implement_frontend(instance_type)
-        self.implement_backend(instance_type)
+        # Register generic implementations for all jitclasses
+        self._register_methods(self.class_impl_registry,
+                               self.class_type.instance_type)
+        # NOTE other registrations are done at the top-level
+        # (see ctor_impl and attr_impl below)
+        self.targetctx.install_registry(self.class_impl_registry)
 
-    def implement_frontend(self, instance_type):
-        pass
-
-    @classmethod
-    def implement_attribute_typing(cls, typingctx):
-        typingctx.insert_attributes(ClassAttribute(typingctx))
-
-    def implement_backend(self, instance_type):
-        registry = imputils.Registry()
-        self.register_methods(registry, instance_type)
-        self.targetctx.insert_func_defn(registry.functions)
-        self.targetctx.insert_attr_defn(registry.attributes)
-
-    @classmethod
-    def implement_constructor(cls, registry):
-        registry.register(ctor_impl)
-
-    def register_methods(self, registry, instance_type):
-        # Add methods
+    def _register_methods(self, registry, instance_type):
+        """
+        Register method implementations for the given instance type.
+        """
         for meth in instance_type.jitmethods:
-            self.implement_method(registry, instance_type, meth)
+            self._implement_method(registry, instance_type, meth)
 
-    @classmethod
-    def implement_attribute(cls, registry):
-        registry.register_attr(attr_impl)
-
-    def implement_method(self, registry, instance_type, attr):
-        # TODO: we should be able to refactor this so that the registration
-        #       can be at the top-level instead of at per instance type.
-        @registry.register
-        @imputils.implement((instance_type, attr), types.VarArg(types.Any))
+    def _implement_method(self, registry, instance_type, attr):
+        @registry.lower((types.ClassInstanceType, attr), types.VarArg(types.Any))
         def imp(context, builder, sig, args):
             method = instance_type.jitmethods[attr]
             call = self.targetctx.get_function(types.Dispatcher(method), sig)
@@ -283,18 +242,21 @@ class ClassBuilder(object):
                                              sig.return_type, out)
 
 
+@templates.builtin_getattr
 class ClassAttribute(templates.AttributeTemplate):
     key = types.ClassInstanceType
 
     def generic_resolve(self, instance, attr):
         if attr in instance.struct:
+            # It's a struct field => the type is well-known
             return instance.struct[attr]
 
         elif attr in instance.jitmethods:
+            # It's a jitted method => typeinfer it
             meth = instance.jitmethods[attr]
 
             class MethodTemplate(templates.AbstractTemplate):
-                key = (instance, attr)
+                key = (self.key, attr)
 
                 def generic(self, args, kws):
                     args = (instance,) + tuple(args)
@@ -309,6 +271,7 @@ class ClassAttribute(templates.AttributeTemplate):
             return types.BoundFunction(MethodTemplate, instance)
 
         elif attr in instance.jitprops:
+            # It's a jitted property => typeinfer its getter
             impdct = instance.jitprops[attr]
             getter = impdct['get']
             template, args, kws = getter.get_call_template([instance], {})
@@ -316,9 +279,13 @@ class ClassAttribute(templates.AttributeTemplate):
             return sig.return_type
 
 
-@imputils.impl_attribute_generic(types.ClassInstanceType)
+@ClassBuilder.class_impl_registry.lower_getattr_generic(types.ClassInstanceType)
 def attr_impl(context, builder, typ, value, attr):
+    """
+    Generic getattr() for @jitclass instances.
+    """
     if attr in typ.struct:
+        # It's a struct field
         inst_struct = cgutils.create_struct_proxy(typ)
         inst = inst_struct(context, builder, value=value)
         data_pointer = inst.data
@@ -329,6 +296,7 @@ def attr_impl(context, builder, typ, value, attr):
                                           typ.struct[attr],
                                           getattr(data, attr))
     elif attr in typ.jitprops:
+        # It's a jitted property
         getter = typ.jitprops[attr]['get']
         sig = templates.signature(None, typ)
         dispatcher = types.Dispatcher(getter)
@@ -338,6 +306,47 @@ def attr_impl(context, builder, typ, value, attr):
         return imputils.impl_ret_new_ref(context, builder, sig.return_type, out)
 
     raise NotImplementedError('attribute {0!r} not implemented'.format(attr))
+
+
+@ClassBuilder.class_impl_registry.lower_setattr_generic(types.ClassInstanceType)
+def attr_impl(context, builder, sig, args, attr):
+    """
+    Generic setattr() for @jitclass instances.
+    """
+    typ, valty = sig.args
+    target, val = args
+
+    if attr in typ.struct:
+        # It's a struct member
+        instance_struct = cgutils.create_struct_proxy(typ)
+        inst = instance_struct(context, builder, value=target)
+        data_ptr = inst.data
+        data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
+                                                  kind='data')
+        data = data_struct(context, builder, ref=data_ptr)
+
+        # Get old value
+        attr_type = typ.struct[attr]
+        oldvalue = getattr(data, attr)
+
+        # Store n
+        setattr(data, attr, val)
+        context.nrt_incref(builder, attr_type, val)
+
+        # Delete old value
+        context.nrt_decref(builder, attr_type, oldvalue)
+
+    elif attr in typ.jitprops:
+        # It's a jitted property
+        setter = typ.jitprops[attr]['set']
+        disp_type = types.Dispatcher(setter)
+        sig = disp_type.get_call_type(context.typing_context,
+                                      (typ, valty), {})
+        call = context.get_function(disp_type, sig)
+        call(builder, (target, val))
+
+    else:
+        raise NotImplementedError('attribute {0!r} not implemented'.format(attr))
 
 
 def imp_dtor(context, module, instance_type):
@@ -368,8 +377,11 @@ def imp_dtor(context, module, instance_type):
     return dtor_fn
 
 
-@imputils.implement(types.ClassType, types.VarArg(types.Any))
+@ClassBuilder.class_impl_registry.lower(types.ClassType, types.VarArg(types.Any))
 def ctor_impl(context, builder, sig, args):
+    """
+    Generic constructor (__new__) for jitclasses.
+    """
     # Allocate the instance
     inst_typ = sig.return_type
     alloc_type = context.get_data_type(inst_typ.get_data_type())
@@ -393,7 +405,7 @@ def ctor_impl(context, builder, sig, args):
     inst_struct.meminfo = meminfo
     inst_struct.data = data_pointer
 
-    # Call the __init__
+    # Call the jitted __init__
     # TODO: extract the following into a common util
     init_sig = (sig.return_type,) + sig.args
 

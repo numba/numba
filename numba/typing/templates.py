@@ -6,6 +6,7 @@ from __future__ import print_function, division, absolute_import
 import functools
 from functools import reduce
 import operator
+import sys
 
 from .. import types, utils
 from ..errors import TypingError, UntypedAttributeError
@@ -340,14 +341,13 @@ class _OverloadAttributeTemplate(AttributeTemplate):
                     return
 
                 from numba import jit
-                from numba.targets.imputils import impl_attribute, builtin_attr
+                from numba.targets.imputils import lower_getattr
 
                 disp = self._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
 
                 # Register an implementation on the target(s), calling
                 # the compiled user-supplied function
-                @builtin_attr
-                @impl_attribute(typ, attr)
+                @lower_getattr(typ, attr)
                 def getattr_impl(context, builder, typ, value):
                     disp_type = types.Dispatcher(disp)
                     # `sig` is computed below
@@ -437,35 +437,54 @@ class Registry(object):
         self.attributes.append(item)
         return item
 
-    def register_global(self, v, t):
-        self.globals.append((v, t))
-
-    def resolves_global(self, global_value, wrapper_type=types.Function,
-                        typing_key=None):
+    def register_global(self, val=None, typ=None, **kwargs):
         """
-        Decorate a FunctionTemplate subclass so that it gets registered
-        as resolving *global_value* with the *wrapper_type* (by default
-        a types.Function).
+        Register the typing of a global value.
+        Functional usage with a Numba type::
+            register_global(value, typ)
 
-        Example use::
-            @resolves_global(math.fabs)
-            class Math(ConcreteTemplate):
-                cases = [signature(types.float64, types.float64)]
+        Decorator usage with a template class::
+            @register_global(value, typing_key=None)
+            class Template:
+                ...
         """
-        if typing_key is None:
-            typing_key = global_value
-        def decorate(cls):
-            class Template(cls):
-                key = typing_key
-            self.register_global(global_value, wrapper_type(Template))
-            return cls
-        return decorate
+        if typ is not None:
+            # register_global(val, typ)
+            assert val is not None
+            assert not kwargs
+            self.globals.append((val, typ))
+        else:
+            def decorate(cls, typing_key):
+                class Template(cls):
+                    key = typing_key
+                if callable(val):
+                    typ = types.Function(Template)
+                else:
+                    raise TypeError("cannot infer type for global value %r")
+                self.globals.append((val, typ))
+                return cls
+
+            # register_global(val, typing_key=None)(<template class>)
+            assert val is not None
+            typing_key = kwargs.pop('typing_key', val)
+            assert not kwargs
+            if typing_key is val:
+                # Check the value is globally reachable, as it is going
+                # to be used as the key.
+                mod = sys.modules[val.__module__]
+                if getattr(mod, val.__name__) is not val:
+                    raise ValueError("%r is not globally reachable as '%s.%s'"
+                                     % (mod, val.__module__, val.__name__))
+
+            def decorator(cls):
+                return decorate(cls, typing_key)
+            return decorator
 
 
-class RegistryLoader(object):
+class BaseRegistryLoader(object):
     """
-    An incremental loader for a registry.  Each new call to new_functions(),
-    etc. will iterate over the not yet seen registrations.
+    An incremental loader for a registry.  Each new call to
+    new_registrations() will iterate over the not yet seen registrations.
 
     The reason for this object is multiple:
     - there can be several contexts
@@ -478,24 +497,23 @@ class RegistryLoader(object):
     """
 
     def __init__(self, registry):
-        self._functions = utils.stream_list(registry.functions)
-        self._attributes = utils.stream_list(registry.attributes)
-        self._globals = utils.stream_list(registry.globals)
+        self._registrations = dict(
+            (name, utils.stream_list(getattr(registry, name)))
+            for name in self.registry_items)
 
-    def new_functions(self):
-        for item in next(self._functions):
+    def new_registrations(self, name):
+        for item in next(self._registrations[name]):
             yield item
 
-    def new_attributes(self):
-        for item in next(self._attributes):
-            yield item
 
-    def new_globals(self):
-        for item in next(self._globals):
-            yield item
+class RegistryLoader(BaseRegistryLoader):
+    """
+    An incremental loader for a typing registry.
+    """
+    registry_items = ('functions', 'attributes', 'globals')
 
 
 builtin_registry = Registry()
 builtin = builtin_registry.register
-builtin_attr = builtin_registry.register_attr
+builtin_getattr = builtin_registry.register_attr
 builtin_global = builtin_registry.register_global

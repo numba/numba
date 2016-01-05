@@ -10,7 +10,7 @@ from numba import npdatetime, types
 from numba.utils import PYVERSION
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
-                                    builtin_attr, signature)
+                                    builtin_getattr, signature)
 
 
 # timedelta64-only operations
@@ -168,11 +168,9 @@ class TimedeltaCmpGE(TimedeltaOrderedCmpOp):
     key = '>='
 
 
-@builtin
+@builtin_global(abs)
 class TimedeltaAbs(TimedeltaUnaryOp):
-    key = abs
-
-builtin_global(abs, types.Function(TimedeltaAbs))
+    pass
 
 
 # datetime64 operations

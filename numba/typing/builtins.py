@@ -6,13 +6,12 @@ from numba import types, intrinsics
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, operator_map
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
-                                    builtin_attr, signature, bound_function,
+                                    builtin_getattr, signature, bound_function,
                                     make_callable_template)
 
 
-@builtin
+@builtin_global(print)
 class Print(AbstractTemplate):
-    key = print
 
     def generic(self, args, kws):
         for a in args:
@@ -21,8 +20,6 @@ class Print(AbstractTemplate):
                 raise TypeError("Type %s is not printable." % a)
             assert sig.return_type is types.none
         return signature(types.none, *args)
-
-builtin_global(print, types.Function(Print))
 
 @builtin
 class PrintItem(AbstractTemplate):
@@ -39,19 +36,16 @@ class PrintItem(AbstractTemplate):
             return signature(types.none, *args)
 
 
-@builtin
+@builtin_global(abs)
 class Abs(ConcreteTemplate):
-    key = abs
     int_cases = [signature(ty, ty) for ty in types.signed_domain]
     real_cases = [signature(ty, ty) for ty in types.real_domain]
     complex_cases = [signature(ty.underlying_float, ty)
                      for ty in types.complex_domain]
     cases = int_cases + real_cases + complex_cases
 
-builtin_global(abs, types.Function(Abs))
 
-
-@builtin
+@builtin_global(slice)
 class Slice(ConcreteTemplate):
     key = slice
     cases = [
@@ -66,12 +60,9 @@ class Slice(ConcreteTemplate):
         signature(types.slice3_type, types.none, types.none, types.intp),
     ]
 
-builtin_global(slice, types.Function(Slice))
 
-
-@builtin
+@builtin_global(range)
 class Range(ConcreteTemplate):
-    key = range
     cases = [
         signature(types.range_state32_type, types.int32),
         signature(types.range_state32_type, types.int32, types.int32),
@@ -86,8 +77,6 @@ class Range(ConcreteTemplate):
         signature(types.unsigned_range_state64_type, types.uint64, types.uint64,
                   types.uint64),
     ]
-
-builtin_global(range, types.Function(Range))
 
 
 @builtin
@@ -231,11 +220,10 @@ class BinOpPower(ConcreteTemplate):
               for op in sorted(types.complex_domain)]
 
 
+@builtin_global(pow)
 class PowerBuiltin(BinOpPower):
     key = pow
     # TODO add 3 operand version
-
-builtin_global(pow, types.Function(PowerBuiltin))
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
@@ -466,7 +454,7 @@ class SetItemCPointer(AbstractTemplate):
             return signature(types.none, ptr, normalize_1d_index(idx), ptr.dtype)
 
 
-@builtin
+@builtin_global(len)
 class Len(AbstractTemplate):
     key = len
 
@@ -475,8 +463,6 @@ class Len(AbstractTemplate):
         (val,) = args
         if isinstance(val, (types.Buffer, types.BaseTuple)):
             return signature(types.intp, val)
-
-builtin_global(len, types.Function(Len))
 
 
 @builtin
@@ -502,7 +488,7 @@ class StaticGetItemTuple(AbstractTemplate):
 
 #-------------------------------------------------------------------------------
 
-@builtin_attr
+@builtin_getattr
 class MemoryViewAttribute(AttributeTemplate):
     key = types.MemoryView
 
@@ -538,7 +524,7 @@ class MemoryViewAttribute(AttributeTemplate):
 #-------------------------------------------------------------------------------
 
 
-@builtin_attr
+@builtin_getattr
 class BooleanAttribute(AttributeTemplate):
     key = types.Boolean
 
@@ -546,7 +532,7 @@ class BooleanAttribute(AttributeTemplate):
         return types.NumberClass(ty)
 
 
-@builtin_attr
+@builtin_getattr
 class NumberAttribute(AttributeTemplate):
     key = types.Number
 
@@ -566,7 +552,7 @@ class NumberAttribute(AttributeTemplate):
         return signature(ty)
 
 
-@builtin_attr
+@builtin_getattr
 class SliceAttribute(AttributeTemplate):
     key = types.SliceType
 
@@ -583,7 +569,7 @@ class SliceAttribute(AttributeTemplate):
 #-------------------------------------------------------------------------------
 
 
-@builtin_attr
+@builtin_getattr
 class NumberClassAttribute(AttributeTemplate):
     key = types.NumberClass
 
@@ -613,8 +599,8 @@ register_number_classes(builtin_global)
 #------------------------------------------------------------------------------
 
 
+@builtin_global(max)
 class Max(AbstractTemplate):
-    key = max
 
     def generic(self, args, kws):
         assert not kws
@@ -631,8 +617,8 @@ class Max(AbstractTemplate):
             return signature(retty, *args)
 
 
+@builtin_global(min)
 class Min(AbstractTemplate):
-    key = min
 
     def generic(self, args, kws):
         assert not kws
@@ -649,8 +635,8 @@ class Min(AbstractTemplate):
             return signature(retty, *args)
 
 
+@builtin_global(round)
 class Round(ConcreteTemplate):
-    key = round
     if PYVERSION < (3, 0):
         cases = [
             signature(types.float32, types.float32),
@@ -667,16 +653,11 @@ class Round(ConcreteTemplate):
     ]
 
 
-builtin_global(max, types.Function(Max))
-builtin_global(min, types.Function(Min))
-builtin_global(round, types.Function(Round))
-
-
 #------------------------------------------------------------------------------
 
 
+@builtin_global(bool)
 class Bool(AbstractTemplate):
-    key = bool
 
     def generic(self, args, kws):
         assert not kws
@@ -689,8 +670,8 @@ class Bool(AbstractTemplate):
         return self.context.resolve_function_type("is_true", args, kws)
 
 
+@builtin_global(int)
 class Int(AbstractTemplate):
-    key = int
 
     def generic(self, args, kws):
         assert not kws
@@ -703,8 +684,8 @@ class Int(AbstractTemplate):
             return signature(types.intp, arg)
 
 
+@builtin_global(float)
 class Float(AbstractTemplate):
-    key = float
 
     def generic(self, args, kws):
         assert not kws
@@ -724,8 +705,8 @@ class Float(AbstractTemplate):
             return signature(arg, arg)
 
 
+@builtin_global(complex)
 class Complex(AbstractTemplate):
-    key = complex
 
     def generic(self, args, kws):
         assert not kws
@@ -750,17 +731,10 @@ class Complex(AbstractTemplate):
                 return signature(types.complex128, real, imag)
 
 
-builtin_global(bool, types.Function(Bool))
-builtin_global(int, types.Function(Int))
-builtin_global(float, types.Function(Float))
-builtin_global(complex, types.Function(Complex))
-
-
 #------------------------------------------------------------------------------
 
-@builtin
+@builtin_global(enumerate)
 class Enumerate(AbstractTemplate):
-    key = enumerate
 
     def generic(self, args, kws):
         assert not kws
@@ -777,12 +751,8 @@ class Enumerate(AbstractTemplate):
             return signature(enumerate_type, *args)
 
 
-builtin_global(enumerate, types.Function(Enumerate))
-
-
-@builtin
+@builtin_global(zip)
 class Zip(AbstractTemplate):
-    key = zip
 
     def generic(self, args, kws):
         assert not kws
@@ -791,10 +761,7 @@ class Zip(AbstractTemplate):
             return signature(zip_type, *args)
 
 
-builtin_global(zip, types.Function(Zip))
-
-
-@builtin
+@builtin_global(intrinsics.array_ravel)
 class Intrinsic_array_ravel(AbstractTemplate):
     key = intrinsics.array_ravel
 
@@ -804,14 +771,11 @@ class Intrinsic_array_ravel(AbstractTemplate):
         if arr.layout in 'CF' and arr.ndim >= 1:
             return signature(arr.copy(ndim=1), arr)
 
-builtin_global(intrinsics.array_ravel, types.Function(Intrinsic_array_ravel))
-
 
 #------------------------------------------------------------------------------
 
-@builtin
+@builtin_global(type)
 class TypeBuiltin(AbstractTemplate):
-    key = type
 
     def generic(self, args, kws):
         assert not kws
@@ -822,12 +786,9 @@ class TypeBuiltin(AbstractTemplate):
                 return signature(classty, *args)
 
 
-builtin_global(type, types.Function(TypeBuiltin))
-
-
 #------------------------------------------------------------------------------
 
-@builtin_attr
+@builtin_getattr
 class OptionalAttribute(AttributeTemplate):
     key = types.Optional
 
@@ -836,7 +797,7 @@ class OptionalAttribute(AttributeTemplate):
 
 #------------------------------------------------------------------------------
 
-@builtin_attr
+@builtin_getattr
 class DeferredAttribute(AttributeTemplate):
     key = types.DeferredType
 

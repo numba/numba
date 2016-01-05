@@ -1,16 +1,17 @@
 from __future__ import print_function, absolute_import, division
+
 from llvmlite.llvmpy.core import Type, Constant
+
 from numba import types, typing, cgutils
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import Registry
 from . import nvvmutils
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 voidptr = Type.pointer(Type.int(8))
 
-@register
-@implement("print_item", types.Integer)
+@lower("print_item", types.Integer)
 def int_print_impl(context, builder, sig, args):
     [x] = args
     [srctype] = sig.args
@@ -30,8 +31,7 @@ def int_print_impl(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@register
-@implement("print_item", types.Float)
+@lower("print_item", types.Float)
 def real_print_impl(context, builder, sig, args):
     [x] = args
     [srctype] = sig.args
@@ -47,8 +47,7 @@ def real_print_impl(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@register
-@implement(print, types.VarArg(types.Any))
+@lower(print, types.VarArg(types.Any))
 def print_varargs(context, builder, sig, args):
     """This function is a generic 'print' wrapper for arbitrary types.
     It dispatches to the appropriate 'print' implementations above
