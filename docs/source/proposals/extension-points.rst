@@ -46,7 +46,7 @@ this approach.
 
 It is also possible to implement functions already known to Numba, to
 support additional types.  The following example implements the
-built-in function :func:`len` with this approach::
+built-in function :func:`len` for tuples with this approach::
 
    @overload(len)
    def tuple_len(x):
@@ -57,6 +57,9 @@ built-in function :func:`len` with this approach::
          def len_impl(x):
             return n
          return len_impl
+
+
+.. TODO: mention @overload_attribute
 
 
 Typing
@@ -213,7 +216,7 @@ full signature)
 Proposed changes
 ''''''''''''''''
 
-The class-based API can feel clumsy, we could add  a functional API for
+The class-based API can feel clumsy, we can add a functional API for
 some of the template kinds:
 
 .. code-block:: python
@@ -298,8 +301,8 @@ And here is how calling ``len()`` on a tuple value is implemented::
 Proposed changes
 ''''''''''''''''
 
-Perhaps review and streamine the API.  Drop the requirement to
-write ``types.Kind(...)`` explicitly.
+Review and streamine the API.  Drop the requirement to write
+``types.Kind(...)`` explicitly.
 
 
 Conversion from / to Python objects
