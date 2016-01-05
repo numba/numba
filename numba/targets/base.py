@@ -34,9 +34,18 @@ PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
 
 
-class Overloads(object):
+class OverloadSelector(object):
+    """
+    An object matching an actual signature against a registry of formal
+    signatures and choosing the best candidate, if any.
+
+    In the current implementation:
+    - a "signature" is a tuple of type classes or type instances
+    - the "best candidate" is simply the first match
+    """
+
     def __init__(self):
-        # A list of (args tuple, implementation)
+        # A list of (formal args tuple, value)
         self.versions = []
 
     def find(self, sig):
@@ -78,8 +87,11 @@ class Overloads(object):
             assert issubclass(formal, types.Type)
             return True
 
-    def append(self, impl, sig):
-        self.versions.append((sig, impl))
+    def append(self, value, sig):
+        """
+        Add a formal signature and its associated value.
+        """
+        self.versions.append((sig, value))
 
 
 @utils.runonce
@@ -146,9 +158,9 @@ class BaseContext(object):
         # A list of installed registries
         self._registries = {}
         # Declarations loaded from registries and other sources
-        self._defns = defaultdict(Overloads)
-        self._attrs = defaultdict(Overloads)
-        self._casts = Overloads()
+        self._defns = defaultdict(OverloadSelector)
+        self._attrs = defaultdict(OverloadSelector)
+        self._casts = OverloadSelector()
         # Other declarations
         self._generators = {}
         self.special_ops = {}
