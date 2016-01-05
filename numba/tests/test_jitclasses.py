@@ -3,7 +3,7 @@ import ctypes
 import numpy as np
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
-from numba import njit
+from numba import njit, typeof
 from numba import unittest_support as unittest
 from numba import jitclass
 from numba.utils import OrderedDict
@@ -341,6 +341,27 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         with self.assertRaises(NameError) as raises:
             jitclass([('my_method', int32)])(Foo)
         self.assertEqual(str(raises.exception), 'name shadowing: my_method')
+
+    def test_parameterized(self):
+        class MyClass(object):
+            def __init__(self, value):
+                self.value = value
+
+        def create_my_class(value):
+            cls = jitclass([('value', typeof(value))])(MyClass)
+            return cls(value)
+
+        a = create_my_class(123)
+        self.assertEqual(a.value, 123)
+
+        b = create_my_class(12.3)
+        self.assertEqual(b.value, 12.3)
+
+        c = create_my_class(np.array([123]))
+        np.testing.assert_equal(c.value, [123])
+
+        d = create_my_class(np.array([12.3]))
+        np.testing.assert_equal(d.value, [12.3])
 
 
 if __name__ == '__main__':

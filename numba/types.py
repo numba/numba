@@ -1420,13 +1420,10 @@ class ClassInstanceType(Type):
     def __init__(self, class_type, struct, jitmethods, jitprops):
         self.class_type = class_type
         self.struct = struct
-        parameters = tuple((k, v) for k, v in self.struct.items())
         self.jitmethods = jitmethods
         self.jitprops = jitprops
         self.methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
-        name = "{0}.{1}!{2}".format(self.name_prefix,
-                                    self.class_type.name,
-                                    parameters)
+        name = "{0}.{1}".format(self.name_prefix, self.class_type.name)
         super(ClassInstanceType, self).__init__(name)
 
     def get_data_type(self):
@@ -1452,9 +1449,10 @@ class ClassType(Callable, Opaque):
     def __init__(self, class_def, ctor_template_cls, struct, jitmethods,
                  jitprops):
         self.class_def = class_def
+        fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
         self.ctor_template = self._specialize_template(ctor_template_cls)
-        name = "{0}.{1}#{2}".format(self.name_prefix, class_def.__name__,
-                                    id(class_def))
+        name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, class_def.__name__,
+                                           id(class_def), fielddesc)
         super(ClassType, self).__init__(name)
         self.instance_type = self.instance_type_class(self, struct, jitmethods,
                                                       jitprops)
