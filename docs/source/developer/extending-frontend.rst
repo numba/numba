@@ -1,6 +1,6 @@
 
 ============================
-Extending the Numba Frontend
+Extending the Numba frontend
 ============================
 
 .. warning::
@@ -8,6 +8,11 @@ Extending the Numba Frontend
    External packages that rely on these APIs may break with new Numba releases.
    Their description is mostly useful in the context of extending Numba
    withing the Numba codebase.
+
+.. warning::
+   This part of the documentation is obsolete and will be rewritten
+   once the user-facing extension API stabilizes.
+
 
 Overview
 ========

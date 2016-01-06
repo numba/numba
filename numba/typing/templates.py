@@ -6,12 +6,19 @@ from __future__ import print_function, division, absolute_import
 import functools
 from functools import reduce
 import operator
+import sys
+from types import MethodType
 
 from .. import types, utils
 from ..errors import TypingError, UntypedAttributeError
 
 
 class Signature(object):
+    """
+    The signature of a function call or operation, i.e. its argument types
+    and return type.
+    """
+
     # XXX Perhaps the signature should be a BoundArguments, instead
     # of separate args and pysig...
     __slots__ = 'return_type', 'args', 'recvr', 'pysig'
@@ -52,7 +59,30 @@ class Signature(object):
 
     @property
     def is_method(self):
+        """
+        Whether this signature represents a bound method or a regular
+        function.
+        """
         return self.recvr is not None
+
+    def as_method(self):
+        """
+        Convert this signature to a bound method signature.
+        """
+        if self.recvr is not None:
+            return self
+        sig = signature(self.return_type, *self.args[1:],
+                        recvr=self.args[0])
+        return sig
+
+    def as_function(self):
+        """
+        Convert this signature to a regular function signature.
+        """
+        if self.recvr is None:
+            return self
+        sig = signature(self.return_type, *((self.recvr,) + self.args))
+        return sig
 
 
 def make_concrete_template(name, key, signatures):
@@ -147,8 +177,13 @@ class FunctionTemplate(object):
         Return the key for looking up the implementation for the given
         signature on the target context.
         """
-        # Lookup the key on the type, to avoid binding it with `self`.
-        return type(self).key
+        # Lookup the key on the class, to avoid binding it with `self`.
+        key = type(self).key
+        # On Python 2, we must also take care about unbound methods
+        if isinstance(key, MethodType):
+            assert key.im_self is None
+            key = key.im_func
+        return key
 
 
 class AbstractTemplate(FunctionTemplate):
@@ -300,11 +335,19 @@ def make_overload_template(func, overload_func):
 
 
 class AttributeTemplate(object):
+    _initialized = False
+
     def __init__(self, context):
         self.context = context
 
     def resolve(self, value, attr):
+        if not self._initialized:
+            self._do_init()
+            self._initialized = True
         return self._resolve(value, attr)
+
+    def _do_init(self):
+        pass
 
     def _resolve(self, value, attr):
         fn = getattr(self, "resolve_%s" % attr, None)
@@ -325,56 +368,123 @@ class _OverloadAttributeTemplate(AttributeTemplate):
     A base class of templates for @overload_attribute functions.
     """
 
-    def _resolve(self, typ, attr):
-        # Attribute-specific overload
-        if self._attr == attr:
-            cache_key = self.context, typ, attr
-            try:
-                disp = self._impl_cache[cache_key]
-            except KeyError:
-                # Get the overload implementation for the given type
-                pyfunc = self._overload_func(typ)
-                if pyfunc is None:
-                    # No implementation => fail typing
-                    self._impl_cache[cache_key] = None
-                    return
+    def _do_init(self):
+        """
+        Register attribute implementation.
+        """
+        from numba.targets.imputils import lower_getattr
+        attr = self._attr
 
-                from numba import jit
-                from numba.targets.imputils import impl_attribute, builtin_attr
-
-                disp = self._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
-
-                # Register an implementation on the target(s), calling
-                # the compiled user-supplied function
-                @builtin_attr
-                @impl_attribute(typ, attr)
-                def getattr_impl(context, builder, typ, value):
-                    disp_type = types.Dispatcher(disp)
-                    # `sig` is computed below
-                    call = context.get_function(disp_type, sig)
-                    return call(builder, (value,))
-            else:
-                if disp is None:
-                    return
-
-            # Compile and type it for the given types
+        @lower_getattr(self.key, attr)
+        def getattr_impl(context, builder, typ, value):
+            sig_args = (typ,)
+            sig_kws = {}
+            disp = self._get_dispatcher(typ, attr, sig_args, sig_kws)
             disp_type = types.Dispatcher(disp)
-            sig = disp_type.get_call_type(self.context, (typ,), {})
-            return sig.return_type
+            sig = disp_type.get_call_type(self.context, sig_args, sig_kws)
+            call = context.get_function(disp_type, sig)
+            return call(builder, (value,))
+
+    def _get_dispatcher(self, typ, attr, sig_args, sig_kws):
+        """
+        Get the compiled dispatcher implementing the attribute for
+        the given formal signature.
+        """
+        cache_key = self.context, typ, attr
+        try:
+            disp = self._impl_cache[cache_key]
+        except KeyError:
+            # Get the overload implementation for the given type
+            pyfunc = self._overload_func(*sig_args, **sig_kws)
+            if pyfunc is None:
+                # No implementation => fail typing
+                self._impl_cache[cache_key] = None
+                return
+
+            from numba import jit
+            disp = self._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
+        return disp
+
+    def _resolve_impl_sig(self, typ, attr, sig_args, sig_kws):
+        """
+        Compute the actual implementation sig for the given formal argument types.
+        """
+        disp = self._get_dispatcher(typ, attr, sig_args, sig_kws)
+        if disp is None:
+            return None
+
+        # Compile and type it for the given types
+        disp_type = types.Dispatcher(disp)
+        sig = disp_type.get_call_type(self.context, sig_args, sig_kws)
+        return sig
+
+    def _resolve(self, typ, attr):
+        if self._attr != attr:
+            return None
+
+        sig = self._resolve_impl_sig(typ, attr, (typ,), {})
+        return sig.return_type
 
 
-def make_overload_attribute_template(typ, attr, overload_func):
+class _OverloadMethodTemplate(_OverloadAttributeTemplate):
+    """
+    A base class of templates for @overload_method functions.
+    """
+
+    def _do_init(self):
+        """
+        Register generic method implementation.
+        """
+        from numba.targets.imputils import lower_builtin
+        attr = self._attr
+
+        @lower_builtin((self.key, attr), self.key, types.VarArg(types.Any))
+        def method_impl(context, builder, sig, args):
+            typ = sig.args[0]
+            disp = self._get_dispatcher(typ, attr, sig.args, {})
+            disp_type = types.Dispatcher(disp)
+            sig = disp_type.get_call_type(self.context, sig.args, {})
+            call = context.get_function(disp_type, sig)
+            return call(builder, args)
+
+    def _resolve(self, typ, attr):
+        if self._attr != attr:
+            return None
+
+        assert isinstance(typ, self.key)
+
+        class MethodTemplate(AbstractTemplate):
+            key = (self.key, attr)
+            def generic(_, args, kws):
+                args = (typ,) + args
+                sig = self._resolve_impl_sig(typ, attr, args, kws)
+                if sig is not None:
+                    return sig.as_method()
+
+        return types.BoundFunction(MethodTemplate, typ)
+
+
+def make_overload_attribute_template(typ, attr, overload_func,
+                                     base=_OverloadAttributeTemplate):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
     *overload_func*.
     """
     assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
     name = "OverloadTemplate_%s_%s" % (typ, attr)
-    base = _OverloadAttributeTemplate
     dct = dict(key=typ, _attr=attr, _impl_cache={},
                _overload_func=staticmethod(overload_func),
                )
     return type(base)(name, (base,), dct)
+
+
+def make_overload_method_template(typ, attr, overload_func):
+    """
+    Make a template class for method *attr* of *typ* overloaded by
+    *overload_func*.
+    """
+    return make_overload_attribute_template(typ, attr, overload_func,
+                                            base=_OverloadMethodTemplate)
 
 
 def bound_function(template_key):
@@ -437,35 +547,54 @@ class Registry(object):
         self.attributes.append(item)
         return item
 
-    def register_global(self, v, t):
-        self.globals.append((v, t))
-
-    def resolves_global(self, global_value, wrapper_type=types.Function,
-                        typing_key=None):
+    def register_global(self, val=None, typ=None, **kwargs):
         """
-        Decorate a FunctionTemplate subclass so that it gets registered
-        as resolving *global_value* with the *wrapper_type* (by default
-        a types.Function).
+        Register the typing of a global value.
+        Functional usage with a Numba type::
+            register_global(value, typ)
 
-        Example use::
-            @resolves_global(math.fabs)
-            class Math(ConcreteTemplate):
-                cases = [signature(types.float64, types.float64)]
+        Decorator usage with a template class::
+            @register_global(value, typing_key=None)
+            class Template:
+                ...
         """
-        if typing_key is None:
-            typing_key = global_value
-        def decorate(cls):
-            class Template(cls):
-                key = typing_key
-            self.register_global(global_value, wrapper_type(Template))
-            return cls
-        return decorate
+        if typ is not None:
+            # register_global(val, typ)
+            assert val is not None
+            assert not kwargs
+            self.globals.append((val, typ))
+        else:
+            def decorate(cls, typing_key):
+                class Template(cls):
+                    key = typing_key
+                if callable(val):
+                    typ = types.Function(Template)
+                else:
+                    raise TypeError("cannot infer type for global value %r")
+                self.globals.append((val, typ))
+                return cls
+
+            # register_global(val, typing_key=None)(<template class>)
+            assert val is not None
+            typing_key = kwargs.pop('typing_key', val)
+            assert not kwargs
+            if typing_key is val:
+                # Check the value is globally reachable, as it is going
+                # to be used as the key.
+                mod = sys.modules[val.__module__]
+                if getattr(mod, val.__name__) is not val:
+                    raise ValueError("%r is not globally reachable as '%s.%s'"
+                                     % (mod, val.__module__, val.__name__))
+
+            def decorator(cls):
+                return decorate(cls, typing_key)
+            return decorator
 
 
-class RegistryLoader(object):
+class BaseRegistryLoader(object):
     """
-    An incremental loader for a registry.  Each new call to new_functions(),
-    etc. will iterate over the not yet seen registrations.
+    An incremental loader for a registry.  Each new call to
+    new_registrations() will iterate over the not yet seen registrations.
 
     The reason for this object is multiple:
     - there can be several contexts
@@ -478,24 +607,23 @@ class RegistryLoader(object):
     """
 
     def __init__(self, registry):
-        self._functions = utils.stream_list(registry.functions)
-        self._attributes = utils.stream_list(registry.attributes)
-        self._globals = utils.stream_list(registry.globals)
+        self._registrations = dict(
+            (name, utils.stream_list(getattr(registry, name)))
+            for name in self.registry_items)
 
-    def new_functions(self):
-        for item in next(self._functions):
+    def new_registrations(self, name):
+        for item in next(self._registrations[name]):
             yield item
 
-    def new_attributes(self):
-        for item in next(self._attributes):
-            yield item
 
-    def new_globals(self):
-        for item in next(self._globals):
-            yield item
+class RegistryLoader(BaseRegistryLoader):
+    """
+    An incremental loader for a typing registry.
+    """
+    registry_items = ('functions', 'attributes', 'globals')
 
 
 builtin_registry = Registry()
-builtin = builtin_registry.register
-builtin_attr = builtin_registry.register_attr
-builtin_global = builtin_registry.register_global
+infer = builtin_registry.register
+infer_getattr = builtin_registry.register_attr
+infer_global = builtin_registry.register_global

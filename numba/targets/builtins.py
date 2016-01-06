@@ -7,15 +7,14 @@ from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from .imputils import (builtin, builtin_attr, builtin_cast, implement,
-                       impl_attribute, impl_attribute_generic,
-                       iternext_impl, impl_ret_borrowed, impl_ret_untracked)
+from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
+                       lower_cast, iternext_impl,
+                       impl_ret_borrowed, impl_ret_untracked)
 from . import optional
 from .. import typing, types, cgutils, utils, intrinsics
 
 
-@builtin
-@implement('is not', types.Any, types.Any)
+@lower_builtin('is not', types.Any, types.Any)
 def generic_is_not(context, builder, sig, args):
     """
     Implement `x is not y` as `not (x is y)`.
@@ -115,9 +114,8 @@ def int_divmod(context, builder, x, y):
     return resdiv, resmod
 
 
-@builtin
-@implement('/?', types.Integer, types.Integer)
-@implement('//', types.Integer, types.Integer)
+@lower_builtin('/?', types.Integer, types.Integer)
+@lower_builtin('//', types.Integer, types.Integer)
 def int_floordiv_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -145,8 +143,7 @@ def int_floordiv_impl(context, builder, sig, args):
                               builder.load(res))
 
 
-@builtin
-@implement('/', types.Integer, types.Integer)
+@lower_builtin('/', types.Integer, types.Integer)
 def int_truediv_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -158,8 +155,7 @@ def int_truediv_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement('%', types.Integer, types.Integer)
+@lower_builtin('%', types.Integer, types.Integer)
 def int_rem_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -419,55 +415,55 @@ def int_sign_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-builtin(implement('==', types.boolean, types.boolean)(int_eq_impl))
-builtin(implement('!=', types.boolean, types.boolean)(int_ne_impl))
-builtin(implement('<', types.boolean, types.boolean)(int_ult_impl))
-builtin(implement('<=', types.boolean, types.boolean)(int_ule_impl))
-builtin(implement('>', types.boolean, types.boolean)(int_ugt_impl))
-builtin(implement('>=', types.boolean, types.boolean)(int_uge_impl))
-builtin(implement('~', types.boolean)(bool_invert_impl))
+lower_builtin('==', types.boolean, types.boolean)(int_eq_impl)
+lower_builtin('!=', types.boolean, types.boolean)(int_ne_impl)
+lower_builtin('<', types.boolean, types.boolean)(int_ult_impl)
+lower_builtin('<=', types.boolean, types.boolean)(int_ule_impl)
+lower_builtin('>', types.boolean, types.boolean)(int_ugt_impl)
+lower_builtin('>=', types.boolean, types.boolean)(int_uge_impl)
+lower_builtin('~', types.boolean)(bool_invert_impl)
 
 
 def _implement_integer_operators():
     ty = types.Integer
 
-    builtin(implement('+', ty, ty)(int_add_impl))
-    builtin(implement('-', ty, ty)(int_sub_impl))
-    builtin(implement('*', ty, ty)(int_mul_impl))
-    builtin(implement('==', ty, ty)(int_eq_impl))
-    builtin(implement('!=', ty, ty)(int_ne_impl))
+    lower_builtin('+', ty, ty)(int_add_impl)
+    lower_builtin('-', ty, ty)(int_sub_impl)
+    lower_builtin('*', ty, ty)(int_mul_impl)
+    lower_builtin('==', ty, ty)(int_eq_impl)
+    lower_builtin('!=', ty, ty)(int_ne_impl)
 
-    builtin(implement('<<', ty, ty)(int_shl_impl))
-    builtin(implement('>>', ty, ty)(int_shr_impl))
+    lower_builtin('<<', ty, ty)(int_shl_impl)
+    lower_builtin('>>', ty, ty)(int_shr_impl)
 
-    builtin(implement('&', ty, ty)(int_and_impl))
-    builtin(implement('|', ty, ty)(int_or_impl))
-    builtin(implement('^', ty, ty)(int_xor_impl))
+    lower_builtin('&', ty, ty)(int_and_impl)
+    lower_builtin('|', ty, ty)(int_or_impl)
+    lower_builtin('^', ty, ty)(int_xor_impl)
 
-    builtin(implement('-', ty)(int_negate_impl))
-    builtin(implement('+', ty)(int_positive_impl))
-    builtin(implement('~', ty)(int_invert_impl))
+    lower_builtin('-', ty)(int_negate_impl)
+    lower_builtin('+', ty)(int_positive_impl)
+    lower_builtin('~', ty)(int_invert_impl)
 
-    builtin(implement('**', ty, ty)(int_power_impl))
-    builtin(implement(pow, ty, ty)(int_power_impl))
+    lower_builtin('**', ty, ty)(int_power_impl)
+    lower_builtin(pow, ty, ty)(int_power_impl)
 
     for ty in types.unsigned_domain:
-        builtin(implement('<', ty, ty)(int_ult_impl))
-        builtin(implement('<=', ty, ty)(int_ule_impl))
-        builtin(implement('>', ty, ty)(int_ugt_impl))
-        builtin(implement('>=', ty, ty)(int_uge_impl))
-        builtin(implement('**', types.float64, ty)(int_power_impl))
-        builtin(implement(pow, types.float64, ty)(int_power_impl))
-        builtin(implement(abs, ty)(uint_abs_impl))
+        lower_builtin('<', ty, ty)(int_ult_impl)
+        lower_builtin('<=', ty, ty)(int_ule_impl)
+        lower_builtin('>', ty, ty)(int_ugt_impl)
+        lower_builtin('>=', ty, ty)(int_uge_impl)
+        lower_builtin('**', types.float64, ty)(int_power_impl)
+        lower_builtin(pow, types.float64, ty)(int_power_impl)
+        lower_builtin(abs, ty)(uint_abs_impl)
 
     for ty in types.signed_domain:
-        builtin(implement('<', ty, ty)(int_slt_impl))
-        builtin(implement('<=', ty, ty)(int_sle_impl))
-        builtin(implement('>', ty, ty)(int_sgt_impl))
-        builtin(implement('>=', ty, ty)(int_sge_impl))
-        builtin(implement('**', types.float64, ty)(int_power_impl))
-        builtin(implement(pow, types.float64, ty)(int_power_impl))
-        builtin(implement(abs, ty)(int_abs_impl))
+        lower_builtin('<', ty, ty)(int_slt_impl)
+        lower_builtin('<=', ty, ty)(int_sle_impl)
+        lower_builtin('>', ty, ty)(int_sgt_impl)
+        lower_builtin('>=', ty, ty)(int_sge_impl)
+        lower_builtin('**', types.float64, ty)(int_power_impl)
+        lower_builtin(pow, types.float64, ty)(int_power_impl)
+        lower_builtin(abs, ty)(int_abs_impl)
 
 _implement_integer_operators()
 
@@ -501,41 +497,41 @@ def optional_is_not_none(context, builder, sig, args):
 
 
 # None is/not None
-builtin(implement('is', types.none, types.none)(
-    optional.always_return_true_impl))
+lower_builtin('is', types.none, types.none)(optional.always_return_true_impl)
 
 # Optional is None
-builtin(implement('is',
-                  types.Optional, types.none)(optional_is_none))
-
-builtin(implement('is',
-                  types.none, types.Optional)(optional_is_none))
+lower_builtin('is', types.Optional, types.none)(optional_is_none)
+lower_builtin('is', types.none, types.Optional)(optional_is_none)
 
 
-@builtin_attr
-@impl_attribute_generic(types.Optional)
+@lower_getattr_generic(types.Optional)
 def optional_getattr(context, builder, typ, value, attr):
+    """
+    Optional.__getattr__ => redirect to the wrapped type.
+    """
     inner_type = typ.type
     val = context.cast(builder, value, typ, inner_type)
-    imp = context.get_attribute(val, inner_type, attr)
+    imp = context.get_getattr(inner_type, attr)
     return imp(context, builder, inner_type, val, attr)
 
 
-@builtin_attr
-@impl_attribute_generic(types.DeferredType)
+@lower_getattr_generic(types.DeferredType)
 def deferred_getattr(context, builder, typ, value, attr):
+    """
+    Deferred.__getattr__ => redirect to the actual type.
+    """
     inner_type = typ.get()
     val = context.cast(builder, value, typ, inner_type)
-    imp = context.get_attribute(val, inner_type, attr)
+    imp = context.get_getattr(inner_type, attr)
     return imp(context, builder, inner_type, val, attr)
 
-@builtin_cast(types.Any, types.DeferredType)
+@lower_cast(types.Any, types.DeferredType)
 def any_to_deferred(context, builder, fromty, toty, val):
     actual = context.cast(builder, val, fromty, toty.get())
     model = context.data_model_manager[toty]
     return model.set(builder, model.make_uninitialized(), actual)
 
-@builtin_cast(types.DeferredType, types.Any)
+@lower_cast(types.DeferredType, types.Any)
 def deferred_to_any(context, builder, fromty, toty, val):
     model = context.data_model_manager[fromty]
     val = model.get(builder, val)
@@ -827,27 +823,27 @@ def real_sign_impl(context, builder, sig, args):
 
 ty = types.Float
 
-builtin(implement('+', ty, ty)(real_add_impl))
-builtin(implement('-', ty, ty)(real_sub_impl))
-builtin(implement('*', ty, ty)(real_mul_impl))
-builtin(implement('/?', ty, ty)(real_div_impl))
-builtin(implement('//', ty, ty)(real_floordiv_impl))
-builtin(implement('/', ty, ty)(real_div_impl))
-builtin(implement('%', ty, ty)(real_mod_impl))
-builtin(implement('**', ty, ty)(real_power_impl))
-builtin(implement(pow, ty, ty)(real_power_impl))
+lower_builtin('+', ty, ty)(real_add_impl)
+lower_builtin('-', ty, ty)(real_sub_impl)
+lower_builtin('*', ty, ty)(real_mul_impl)
+lower_builtin('/?', ty, ty)(real_div_impl)
+lower_builtin('//', ty, ty)(real_floordiv_impl)
+lower_builtin('/', ty, ty)(real_div_impl)
+lower_builtin('%', ty, ty)(real_mod_impl)
+lower_builtin('**', ty, ty)(real_power_impl)
+lower_builtin(pow, ty, ty)(real_power_impl)
 
-builtin(implement('==', ty, ty)(real_eq_impl))
-builtin(implement('!=', ty, ty)(real_ne_impl))
-builtin(implement('<', ty, ty)(real_lt_impl))
-builtin(implement('<=', ty, ty)(real_le_impl))
-builtin(implement('>', ty, ty)(real_gt_impl))
-builtin(implement('>=', ty, ty)(real_ge_impl))
+lower_builtin('==', ty, ty)(real_eq_impl)
+lower_builtin('!=', ty, ty)(real_ne_impl)
+lower_builtin('<', ty, ty)(real_lt_impl)
+lower_builtin('<=', ty, ty)(real_le_impl)
+lower_builtin('>', ty, ty)(real_gt_impl)
+lower_builtin('>=', ty, ty)(real_ge_impl)
 
-builtin(implement(abs, ty)(real_abs_impl))
+lower_builtin(abs, ty)(real_abs_impl)
 
-builtin(implement('-', ty)(real_negate_impl))
-builtin(implement('+', ty)(real_positive_impl))
+lower_builtin('-', ty)(real_negate_impl)
+lower_builtin('+', ty)(real_positive_impl)
 
 del ty
 
@@ -873,24 +869,21 @@ def get_complex_info(ty):
     return cmplxcls, ty.underlying_float
 
 
-@builtin_attr
-@impl_attribute(types.Complex, "real")
+@lower_getattr(types.Complex, "real")
 def complex_real_impl(context, builder, typ, value):
     cplx_cls = context.make_complex(typ)
     cplx = cplx_cls(context, builder, value=value)
     res = cplx.real
     return impl_ret_untracked(context, builder, typ, res)
 
-@builtin_attr
-@impl_attribute(types.Complex, "imag")
+@lower_getattr(types.Complex, "imag")
 def complex_imag_impl(context, builder, typ, value):
     cplx_cls = context.make_complex(typ)
     cplx = cplx_cls(context, builder, value=value)
     res = cplx.imag
     return impl_ret_untracked(context, builder, typ, res)
 
-@builtin
-@implement("complex.conjugate", types.Complex)
+@lower_builtin("complex.conjugate", types.Complex)
 def complex_conjugate_impl(context, builder, sig, args):
     from . import mathimpl
     cplx_cls = context.make_complex(sig.args[0])
@@ -910,14 +903,13 @@ def real_conjugate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, args[0])
 
 for cls in (types.Float, types.Integer):
-    builtin_attr(impl_attribute(cls, "real")(real_real_impl))
-    builtin_attr(impl_attribute(cls, "imag")(real_imag_impl))
-    builtin(implement("complex.conjugate", cls)(real_conjugate_impl))
+    lower_getattr(cls, "real")(real_real_impl)
+    lower_getattr(cls, "imag")(real_imag_impl)
+    lower_builtin("complex.conjugate", cls)(real_conjugate_impl)
 
 
-@builtin
-@implement("**", types.complex128, types.complex128)
-@implement(pow, types.complex128, types.complex128)
+@lower_builtin("**", types.complex128, types.complex128)
+@lower_builtin(pow, types.complex128, types.complex128)
 def complex128_power_impl(context, builder, sig, args):
     [ca, cb] = args
     a = Complex128(context, builder, value=ca)
@@ -1097,19 +1089,19 @@ def complex_abs_impl(context, builder, sig, args):
 
 ty = types.Complex
 
-builtin(implement("+", ty, ty)(complex_add_impl))
-builtin(implement("-", ty, ty)(complex_sub_impl))
-builtin(implement("*", ty, ty)(complex_mul_impl))
-builtin(implement("/?", ty, ty)(complex_div_impl))
-builtin(implement("/", ty, ty)(complex_div_impl))
-builtin(implement("-", ty)(complex_negate_impl))
-builtin(implement("+", ty)(complex_positive_impl))
+lower_builtin("+", ty, ty)(complex_add_impl)
+lower_builtin("-", ty, ty)(complex_sub_impl)
+lower_builtin("*", ty, ty)(complex_mul_impl)
+lower_builtin("/?", ty, ty)(complex_div_impl)
+lower_builtin("/", ty, ty)(complex_div_impl)
+lower_builtin("-", ty)(complex_negate_impl)
+lower_builtin("+", ty)(complex_positive_impl)
 # Complex modulo is deprecated in python3
 
-builtin(implement('==', ty, ty)(complex_eq_impl))
-builtin(implement('!=', ty, ty)(complex_ne_impl))
+lower_builtin('==', ty, ty)(complex_eq_impl)
+lower_builtin('!=', ty, ty)(complex_ne_impl)
 
-builtin(implement(abs, ty)(complex_abs_impl))
+lower_builtin(abs, ty)(complex_abs_impl)
 
 del ty
 
@@ -1125,26 +1117,22 @@ def number_not_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(bool, types.boolean)
+@lower_builtin(bool, types.boolean)
 def bool_as_bool(context, builder, sig, args):
     [val] = args
     return val
 
-@builtin
-@implement(bool, types.Integer)
+@lower_builtin(bool, types.Integer)
 def int_as_bool(context, builder, sig, args):
     [val] = args
     return builder.icmp_unsigned('!=', val, ir.Constant(val.type, 0))
 
-@builtin
-@implement(bool, types.Float)
+@lower_builtin(bool, types.Float)
 def float_as_bool(context, builder, sig, args):
     [val] = args
     return builder.fcmp(lc.FCMP_UNE, val, ir.Constant(val.type, 0.0))
 
-@builtin
-@implement(bool, types.Complex)
+@lower_builtin(bool, types.Complex)
 def complex_as_bool(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
@@ -1157,9 +1145,9 @@ def complex_as_bool(context, builder, sig, args):
 
 
 for ty in (types.Integer, types.Float, types.Complex):
-    builtin(implement('not', ty)(number_not_impl))
+    lower_builtin('not', ty)(number_not_impl)
 
-builtin(implement('not', types.boolean)(number_not_impl))
+lower_builtin('not', types.boolean)(number_not_impl)
 
 #------------------------------------------------------------------------------
 
@@ -1167,8 +1155,7 @@ def make_pair(first_type, second_type):
     return cgutils.create_struct_proxy(types.Pair(first_type, second_type))
 
 
-@builtin
-@implement('getitem', types.CPointer, types.Integer)
+@lower_builtin('getitem', types.CPointer, types.Integer)
 def getitem_cpointer(context, builder, sig, args):
     base_ptr, idx = args
     elem_ptr = builder.gep(base_ptr, [idx])
@@ -1176,8 +1163,7 @@ def getitem_cpointer(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement('setitem', types.CPointer, types.Integer,
+@lower_builtin('setitem', types.CPointer, types.Integer,
            types.Any)
 def setitem_cpointer(context, builder, sig, args):
     base_ptr, idx, val = args
@@ -1187,8 +1173,7 @@ def setitem_cpointer(context, builder, sig, args):
 
 #-------------------------------------------------------------------------------
 
-@builtin
-@implement(max, types.VarArg(types.Any))
+@lower_builtin(max, types.VarArg(types.Any))
 def max_impl(context, builder, sig, args):
     argtys = sig.args
     for a in argtys:
@@ -1212,8 +1197,7 @@ def max_impl(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, resval)
 
 
-@builtin
-@implement(min, types.VarArg(types.Any))
+@lower_builtin(min, types.VarArg(types.Any))
 def min_impl(context, builder, sig, args):
     argtys = sig.args
     for a in argtys:
@@ -1244,8 +1228,7 @@ def _round_intrinsic(tp):
     else:
         return "llvm.round.f%d" % (tp.bitwidth,)
 
-@builtin
-@implement(round, types.Float)
+@lower_builtin(round, types.Float)
 def round_impl_unary(context, builder, sig, args):
     fltty = sig.args[0]
     llty = context.get_value_type(fltty)
@@ -1258,8 +1241,7 @@ def round_impl_unary(context, builder, sig, args):
         res = builder.fptosi(res, context.get_value_type(sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(round, types.Float, types.Integer)
+@lower_builtin(round, types.Float, types.Integer)
 def round_impl_binary(context, builder, sig, args):
     fltty = sig.args[0]
     # Allow calling the intrinsic from the Python implementation below.
@@ -1297,8 +1279,7 @@ def round_impl_binary(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Numeric constructors
 
-@builtin
-@implement(int, types.Any)
+@lower_builtin(int, types.Any)
 def int_impl(context, builder, sig, args):
     [ty] = sig.args
     [val] = args
@@ -1306,8 +1287,7 @@ def int_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(float, types.Any)
+@lower_builtin(float, types.Any)
 def float_impl(context, builder, sig, args):
     [ty] = sig.args
     [val] = args
@@ -1315,8 +1295,7 @@ def float_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(complex, types.VarArg(types.Any))
+@lower_builtin(complex, types.VarArg(types.Any))
 def complex_impl(context, builder, sig, args):
     complex_type = sig.return_type
     float_type = complex_type.underlying_float
@@ -1345,8 +1324,7 @@ def complex_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(types.NumberClass, types.Any)
+@lower_builtin(types.NumberClass, types.Any)
 def number_constructor(context, builder, sig, args):
     """
     Convert any number to any other.
@@ -1359,7 +1337,7 @@ def number_constructor(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Implicit casts between numerics
 
-@builtin_cast(types.Integer, types.Integer)
+@lower_cast(types.Integer, types.Integer)
 def integer_to_integer(context, builder, fromty, toty, val):
     if toty.bitwidth == fromty.bitwidth:
         # Just a change of signedness
@@ -1374,11 +1352,11 @@ def integer_to_integer(context, builder, fromty, toty, val):
         # Unsigned upcast
         return builder.zext(val, context.get_value_type(toty))
 
-@builtin_cast(types.Integer, types.voidptr)
+@lower_cast(types.Integer, types.voidptr)
 def integer_to_voidptr(context, builder, fromty, toty, val):
     return builder.inttoptr(val, context.get_value_type(toty))
 
-@builtin_cast(types.Float, types.Float)
+@lower_cast(types.Float, types.Float)
 def float_to_float(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
     if fromty.bitwidth < toty.bitwidth:
@@ -1386,7 +1364,7 @@ def float_to_float(context, builder, fromty, toty, val):
     else:
         return builder.fptrunc(val, lty)
 
-@builtin_cast(types.Integer, types.Float)
+@lower_cast(types.Integer, types.Float)
 def integer_to_float(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
     if fromty.signed:
@@ -1394,7 +1372,7 @@ def integer_to_float(context, builder, fromty, toty, val):
     else:
         return builder.uitofp(val, lty)
 
-@builtin_cast(types.Float, types.Integer)
+@lower_cast(types.Float, types.Integer)
 def float_to_integer(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
     if toty.signed:
@@ -1402,8 +1380,8 @@ def float_to_integer(context, builder, fromty, toty, val):
     else:
         return builder.fptoui(val, lty)
 
-@builtin_cast(types.Float, types.Complex)
-@builtin_cast(types.Integer, types.Complex)
+@lower_cast(types.Float, types.Complex)
+@lower_cast(types.Integer, types.Complex)
 def non_complex_to_complex(context, builder, fromty, toty, val):
     real = context.cast(builder, val, fromty, toty.underlying_float)
     imag = context.get_constant(toty.underlying_float, 0)
@@ -1413,7 +1391,7 @@ def non_complex_to_complex(context, builder, fromty, toty, val):
     cmplx.imag = imag
     return cmplx._getvalue()
 
-@builtin_cast(types.Complex, types.Complex)
+@lower_cast(types.Complex, types.Complex)
 def complex_to_complex(context, builder, fromty, toty, val):
     srccls, srcty = get_complex_info(fromty)
     dstcls, dstty = get_complex_info(toty)
@@ -1424,11 +1402,11 @@ def complex_to_complex(context, builder, fromty, toty, val):
     dst.imag = context.cast(builder, src.imag, srcty, dstty)
     return dst._getvalue()
 
-@builtin_cast(types.Any, types.Boolean)
+@lower_cast(types.Any, types.Boolean)
 def any_to_boolean(context, builder, fromty, toty, val):
     return context.is_true(builder, fromty, val)
 
-@builtin_cast(types.Boolean, types.Any)
+@lower_cast(types.Boolean, types.Any)
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, Type.int())
@@ -1437,23 +1415,7 @@ def boolean_to_any(context, builder, fromty, toty, val):
 
 # -----------------------------------------------------------------------------
 
-@builtin_attr
-@impl_attribute(types.Module(math), "pi", types.float64)
-def math_pi_impl(context, builder, typ, value):
-    res = context.get_constant(types.float64, math.pi)
-    return impl_ret_untracked(context, builder, typ, res)
-
-
-@builtin_attr
-@impl_attribute(types.Module(math), "e", types.float64)
-def math_e_impl(context, builder, typ, value):
-    res = context.get_constant(types.float64, math.e)
-    return impl_ret_untracked(context, builder, typ, res)
-
-# -----------------------------------------------------------------------------
-
-@builtin
-@implement(intrinsics.array_ravel, types.Array)
+@lower_builtin(intrinsics.array_ravel, types.Array)
 def array_ravel_impl(context, builder, sig, args):
     [arrty] = sig.args
     [arr] = args
@@ -1483,8 +1445,7 @@ def array_ravel_impl(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-@builtin
-@implement(type, types.Any)
+@lower_builtin(type, types.Any)
 def type_impl(context, builder, sig, args):
     """
     One-argument type() builtin.

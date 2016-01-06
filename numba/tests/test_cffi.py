@@ -14,7 +14,8 @@ enable_pyobj_flags.set("enable_pyobject")
 no_pyobj_flags = Flags()
 
 
-@unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
+@unittest.skipUnless(cffi_support.SUPPORTED,
+                     "CFFI not supported -- please install the cffi module")
 class TestCFFI(TestCase):
 
     def test_type_map(self):

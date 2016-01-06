@@ -326,8 +326,6 @@ class Lower(BaseLower):
             assert signature is not None
             assert signature.args[0] == targetty
             impl = self.context.get_setattr(inst.attr, signature)
-            assert impl is not None, "missing impl for setattr " \
-                                     "({0}).{1}".format(targetty, inst.attr)
 
             # Convert argument to match
             value = self.context.cast(self.builder, value, valuety,
@@ -704,7 +702,7 @@ class Lower(BaseLower):
                 self.incref(resty, res)
                 return res
             else:
-                impl = self.context.get_attribute(val, ty, expr.attr)
+                impl = self.context.get_getattr(ty, expr.attr)
                 attrty = self.context.typing_context.resolve_getattr(ty,
                                                                      expr.attr)
 

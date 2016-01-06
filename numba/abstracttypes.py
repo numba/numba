@@ -7,6 +7,7 @@ import weakref
 import numpy
 
 from .six import add_metaclass
+from .utils import cached_property
 
 
 # Types are added to a global registry (_typecache) in order to assign
@@ -81,9 +82,8 @@ class Type(object):
 
     mutable = False
 
-    def __init__(self, name, param=False):
+    def __init__(self, name):
         self.name = name
-        self.is_parametric = param
 
     @property
     def key(self):
@@ -316,3 +316,17 @@ class ArrayCompatible(Type):
         The equivalent array type, for operations supporting array-compatible
         objects (such as ufuncs).
         """
+
+    # For compatibility with types.Array
+
+    @cached_property
+    def ndim(self):
+        return self.as_array.ndim
+
+    @cached_property
+    def layout(self):
+        return self.as_array.layout
+
+    @cached_property
+    def dtype(self):
+        return self.as_array.dtype

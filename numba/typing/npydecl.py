@@ -13,15 +13,9 @@ from ..numpy_support import version as numpy_version
 from ..errors import TypingError
 
 registry = Registry()
-builtin = registry.register
-builtin_global = registry.register_global
-builtin_attr = registry.register_attr
-
-
-@builtin_attr
-class NumpyModuleAttribute(AttributeTemplate):
-    # note: many unary ufuncs are added later on, using setattr
-    key = types.Module(numpy)
+infer = registry.register
+infer_global = registry.register_global
+infer_getattr = registry.register_attr
 
 
 class Numpy_rules_ufunc(AbstractTemplate):
@@ -55,7 +49,8 @@ class Numpy_rules_ufunc(AbstractTemplate):
             msg = "ufunc '{0}': too many arguments ({1} found, {2} maximum)"
             raise TypingError(msg=msg.format(ufunc.__name__, len(args), nargs))
 
-
+        args = [a.as_array if isinstance(a, types.ArrayCompatible) else a
+                for a in args]
         arg_ndims = [a.ndim if isinstance(a, types.ArrayCompatible) else 0
                      for a in args]
         ndims = max(arg_ndims)
@@ -142,7 +137,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         return signature(*out)
 
 
-@builtin
+@infer
 class UnaryPositiveArray(AbstractTemplate):
     '''Typing template class for +(array) expressions.  This operator is
     special because there is no Numpy ufunc associated with it; we
@@ -188,7 +183,7 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
     @classmethod
     def install_operations(cls):
         for op, ufunc_name in cls._op_map.items():
-            builtin(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
+            infer(type("NumpyRulesArrayOperator_" + ufunc_name, (cls,),
                          dict(key=op)))
 
     def generic(self, args, kws):
@@ -298,11 +293,11 @@ _unsupported = set([ 'frexp', # this one is tricky, as it has 2 returns
                      'modf',  # this one also has 2 returns
                  ])
 
-# a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
+# A list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
 # resolve method, but not register the ufunc itself
 _aliases = set(["bitwise_not", "mod", "abs"])
 
-#in python3 numpy.divide is mapped to numpy.true_divide
+# In python3 numpy.divide is mapped to numpy.true_divide
 if numpy.divide == numpy.true_divide:
     _aliases.add("divide")
 
@@ -312,12 +307,9 @@ def _numpy_ufunc(name):
         key = func
 
     typing_class.__name__ = "resolve_{0}".format(name)
-    # Add the resolve method to NumpyModuleAttribute
-    setattr(NumpyModuleAttribute, typing_class.__name__,
-            lambda s, m: types.Function(typing_class))
 
     if not name in _aliases:
-        builtin_global(func, types.Function(typing_class))
+        infer_global(func, types.Function(typing_class))
 
 all_ufuncs = sum([_math_operations, _trigonometric_functions,
                   _bit_twiddling_functions, _comparison_functions,
@@ -361,7 +353,7 @@ class Numpy_method_redirection(AbstractTemplate):
         # Resolve arguments on the bound function
         meth_sig = self.context.resolve_function_type(meth_ty, args[1:], kws)
         if meth_sig is not None:
-            return signature(meth_sig.return_type, meth_sig.recvr, *meth_sig.args)
+            return meth_sig.as_function()
 
 
 # Function to glue attributes onto the numpy-esque object
@@ -369,7 +361,7 @@ def _numpy_redirect(fname):
     numpy_function = getattr(numpy, fname)
     cls = type("Numpy_redirect_{0}".format(fname), (Numpy_method_redirection,),
                dict(key=numpy_function, method_name=fname))
-    builtin_global(numpy_function, types.Function(cls))
+    infer_global(numpy_function, types.Function(cls))
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'median', 'var', 'std',
              'cumsum', 'cumprod', 'argmin', 'argmax', 'nonzero']:
@@ -396,7 +388,7 @@ def register_number_classes(register_global):
         register_global(np_type, types.NumberClass(nb_type))
 
 
-register_number_classes(builtin_global)
+register_number_classes(infer_global)
 
 
 # -----------------------------------------------------------------------------
@@ -416,6 +408,9 @@ def _parse_dtype(dtype):
         return dtype.dtype
 
 
+@infer_global(numpy.empty)
+@infer_global(numpy.zeros)
+@infer_global(numpy.ones)
 class NdConstructor(CallableTemplate):
     """
     Typing template for np.empty(), .zeros(), .ones().
@@ -435,6 +430,8 @@ class NdConstructor(CallableTemplate):
         return typer
 
 
+@infer_global(numpy.empty_like)
+@infer_global(numpy.zeros_like)
 class NdConstructorLike(CallableTemplate):
     """
     Typing template for np.empty_like(), .zeros_like(), .ones_like().
@@ -462,49 +459,14 @@ class NdConstructorLike(CallableTemplate):
         return typer
 
 
-@builtin
-class NdEmpty(NdConstructor):
-    key = numpy.empty
-
-@builtin
-class NdZeros(NdConstructor):
-    key = numpy.zeros
-
-@builtin
-class NdOnes(NdConstructor):
-    key = numpy.ones
-    return_new_reference = True
-
-@builtin
-class NdEmptyLike(NdConstructorLike):
-    key = numpy.empty_like
-
-@builtin
-class NdZerosLike(NdConstructorLike):
-    key = numpy.zeros_like
-
-
-builtin_global(numpy.empty, types.Function(NdEmpty))
-builtin_global(numpy.zeros, types.Function(NdZeros))
-builtin_global(numpy.ones, types.Function(NdOnes))
-builtin_global(numpy.empty_like, types.Function(NdEmptyLike))
-builtin_global(numpy.zeros_like, types.Function(NdZerosLike))
-
 if numpy_version >= (1, 7):
     # In Numpy 1.6, ones_like() was a ufunc and had a different signature.
-    @builtin
-    class NdOnesLike(NdConstructorLike):
-        key = numpy.ones_like
-
-    builtin_global(numpy.ones_like, types.Function(NdOnesLike))
+    infer_global(numpy.ones_like)(NdConstructorLike)
 
 
 if numpy_version >= (1, 8):
-    @builtin
+    @infer_global(numpy.full)
     class NdFull(CallableTemplate):
-        key = numpy.full
-        return_new_reference = True
-
 
         def generic(self):
             def typer(shape, fill_value, dtype=None):
@@ -519,10 +481,8 @@ if numpy_version >= (1, 8):
 
             return typer
 
-    @builtin
+    @infer_global(numpy.full_like)
     class NdFullLike(CallableTemplate):
-        key = numpy.full_like
-        return_new_reference = True
 
         def generic(self):
             """
@@ -544,14 +504,9 @@ if numpy_version >= (1, 8):
 
             return typer
 
-    builtin_global(numpy.full, types.Function(NdFull))
-    builtin_global(numpy.full_like, types.Function(NdFullLike))
 
-
-@builtin
+@infer_global(numpy.identity)
 class NdIdentity(AbstractTemplate):
-    key = numpy.identity
-    return_new_reference = True
 
     def generic(self, args, kws):
         assert not kws
@@ -567,17 +522,13 @@ class NdIdentity(AbstractTemplate):
             return_type = types.Array(ndim=2, dtype=nb_dtype, layout='C')
             return signature(return_type, *args)
 
-builtin_global(numpy.identity, types.Function(NdIdentity))
-
 
 def _infer_dtype_from_inputs(inputs):
     return dtype
 
 
-@builtin
+@infer_global(numpy.eye)
 class NdEye(CallableTemplate):
-    key = numpy.eye
-    return_new_reference = True
 
     def generic(self):
         def typer(N, M=None, k=None, dtype=None):
@@ -590,13 +541,9 @@ class NdEye(CallableTemplate):
 
         return typer
 
-builtin_global(numpy.eye, types.Function(NdEye))
 
-
-@builtin
+@infer_global(numpy.arange)
 class NdArange(AbstractTemplate):
-    key = numpy.arange
-    return_new_reference = True
 
     def generic(self, args, kws):
         assert not kws
@@ -616,13 +563,9 @@ class NdArange(AbstractTemplate):
         return_type = types.Array(ndim=1, dtype=dtype, layout='C')
         return signature(return_type, *args)
 
-builtin_global(numpy.arange, types.Function(NdArange))
 
-
-@builtin
+@infer_global(numpy.linspace)
 class NdLinspace(AbstractTemplate):
-    key = numpy.linspace
-    return_new_reference = True
 
     def generic(self, args, kws):
         assert not kws
@@ -644,12 +587,9 @@ class NdLinspace(AbstractTemplate):
         return_type = types.Array(ndim=1, dtype=dtype, layout='C')
         return signature(return_type, *args)
 
-builtin_global(numpy.linspace, types.Function(NdLinspace))
 
-
-@builtin
+@infer_global(numpy.frombuffer)
 class NdFromBuffer(CallableTemplate):
-    key = numpy.frombuffer
 
     def generic(self):
         def typer(buffer, dtype=None):
@@ -666,12 +606,9 @@ class NdFromBuffer(CallableTemplate):
 
         return typer
 
-builtin_global(numpy.frombuffer, types.Function(NdFromBuffer))
 
-
-@builtin
+@infer_global(numpy.sort)
 class NdSort(CallableTemplate):
-    key = numpy.sort
 
     def generic(self):
         def typer(a):
@@ -679,8 +616,6 @@ class NdSort(CallableTemplate):
                 return a
 
         return typer
-
-builtin_global(numpy.sort, types.Function(NdSort))
 
 
 # -----------------------------------------------------------------------------
@@ -741,9 +676,8 @@ class MatMulTyperMixin(object):
             return a.dtype
 
 
-@builtin
+@infer_global(numpy.dot)
 class Dot(MatMulTyperMixin, CallableTemplate):
-    key = numpy.dot
     func_name = "np.dot()"
 
     def generic(self):
@@ -754,12 +688,9 @@ class Dot(MatMulTyperMixin, CallableTemplate):
 
         return typer
 
-builtin_global(numpy.dot, types.Function(Dot))
 
-
-@builtin
+@infer_global(numpy.vdot)
 class VDot(CallableTemplate):
-    key = numpy.vdot
 
     def generic(self):
         def typer(a, b):
@@ -782,10 +713,8 @@ class VDot(CallableTemplate):
 
         return typer
 
-builtin_global(numpy.vdot, types.Function(VDot))
 
-
-@builtin
+@infer
 class MatMul(MatMulTyperMixin, AbstractTemplate):
     key = "@"
     func_name = "'@'"
@@ -800,9 +729,8 @@ class MatMul(MatMulTyperMixin, AbstractTemplate):
 # -----------------------------------------------------------------------------
 # Miscellaneous functions
 
-@builtin
+@infer_global(numpy.ndenumerate)
 class NdEnumerate(AbstractTemplate):
-    key = numpy.ndenumerate
 
     def generic(self, args, kws):
         assert not kws
@@ -812,11 +740,9 @@ class NdEnumerate(AbstractTemplate):
             enumerate_type = types.NumpyNdEnumerateType(arr)
             return signature(enumerate_type, *args)
 
-builtin_global(numpy.ndenumerate, types.Function(NdEnumerate))
 
-@builtin
+@infer_global(numpy.ndindex)
 class NdIndex(AbstractTemplate):
-    key = numpy.ndindex
 
     def generic(self, args, kws):
         assert not kws
@@ -835,12 +761,12 @@ class NdIndex(AbstractTemplate):
             iterator_type = types.NumpyNdIndexType(len(shape))
             return signature(iterator_type, *args)
 
-builtin_global(numpy.ndindex, types.Function(NdIndex))
 
-
-@builtin
+# We use the same typing key for np.round() and np.around() to
+# re-use the implementations automatically.
+@infer_global(numpy.round)
+@infer_global(numpy.around, typing_key=numpy.round)
 class Round(AbstractTemplate):
-    key = numpy.round
 
     def generic(self, args, kws):
         assert not kws
@@ -869,13 +795,9 @@ class Round(AbstractTemplate):
                 or isinstance(out.dtype, types.Complex)):
                 return signature(out, *args)
 
-builtin_global(numpy.round, types.Function(Round))
-builtin_global(numpy.around, types.Function(Round))
 
-
-@builtin
+@infer_global(numpy.where)
 class Where(AbstractTemplate):
-    key = numpy.where
 
     def generic(self, args, kws):
         assert not kws
@@ -902,12 +824,9 @@ class Where(AbstractTemplate):
                     retty = types.Array(x, 0, 'C')
                     return signature(retty, *args)
 
-builtin_global(numpy.where, types.Function(Where))
 
-
-@builtin
+@infer_global(numpy.sinc)
 class Sinc(AbstractTemplate):
-    key = numpy.sinc
 
     def generic(self, args, kws):
         assert not kws
@@ -919,10 +838,9 @@ class Sinc(AbstractTemplate):
                isinstance(arg.dtype, supported_scalars))):
             return signature(arg, arg)
 
-builtin_global(numpy.sinc, types.Function(Sinc))
 
-
-class AngleCtor(CallableTemplate):
+@infer_global(numpy.angle)
+class Angle(CallableTemplate):
     """
     Typing template for np.angle()
     """
@@ -933,13 +851,3 @@ class AngleCtor(CallableTemplate):
             else:
                 return types.float64
         return typer
-
-@builtin
-class Angle(AngleCtor):
-    key = numpy.angle
-
-
-builtin_global(numpy.angle, types.Function(Angle))
-
-
-builtin_global(numpy, types.Module(numpy))

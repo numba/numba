@@ -218,9 +218,8 @@ class DUFunc(_internal._DUFunc):
             targetctx = self._dispatcher.targetdescr.target_context
         _any = types.Any
         _arr = types.Array
-        sig0 = _any(*((_any,) * self.ufunc.nin + (_arr,) * self.ufunc.nout))
-        sig1 = _any(*((_any,) * self.ufunc.nin))
-        targetctx.insert_func_defn([(self._lower_me, [
-            (self, sig0),
-            (self, sig1),
-        ])])
+        # Either all outputs are explicit or none of them are
+        sig0 = (_any,) * self.ufunc.nin + (_arr,) * self.ufunc.nout
+        sig1 = (_any,) * self.ufunc.nin
+        targetctx.insert_func_defn(
+            [(self._lower_me, self, sig) for sig in (sig0, sig1)])

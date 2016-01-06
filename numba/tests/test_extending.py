@@ -11,57 +11,22 @@ from numba import jit, types, errors, typeof, numpy_support, cgutils
 from numba.compiler import compile_isolated
 from .support import TestCase, captured_stdout
 
-# XXX target @builtin and typing @builtin conflict!
-
 from numba.extending import (typeof_impl, type_callable,
-                             builtin, builtin_cast,
-                             implement, overload,
+                             lower_builtin, lower_cast,
+                             overload, overload_attribute,
                              models, register_model,
                              box, unbox, NativeValue,
                              make_attribute_wrapper,
-                             overload_attribute)
+                             )
 from numba.typing.templates import (
-    ConcreteTemplate, signature, builtin as typing_builtin)
+    ConcreteTemplate, signature, infer)
+from numba.targets.imputils import impl_ret_borrowed
+
+# Pandas-like API implementation
+from .pdlike_usecase import Index, Series
 
 
-# Define a function's typing and implementation using the classical
-# two-step API
-
-def func1(x=None):
-    raise NotImplementedError
-
-@type_callable(func1)
-def type_func1(context):
-    def typer(x=None):
-        if x in (None, types.none):
-            # 0-arg or 1-arg with None
-            return types.int32
-        elif isinstance(x, types.Float):
-            # 1-arg with float
-            return x
-
-    return typer
-
-@builtin
-@implement(func1)
-@implement(func1, types.none)
-def func1_nullary(context, builder, sig, args):
-    return context.get_constant(sig.return_type, 42)
-
-@builtin
-@implement(func1, types.Float)
-def func1_unary(context, builder, sig, args):
-    def func1_impl(x):
-        return math.sqrt(2 * x)
-    return context.compile_internal(builder, func1_impl, sig, args)
-
-def call_func1_nullary():
-    return func1()
-
-def call_func1_unary(x):
-    return func1(x)
-
-
+# -----------------------------------------------------------------------
 # Define a custom type and an implicit cast on it
 
 class MyDummy(object):
@@ -81,7 +46,7 @@ mydummy = MyDummy()
 def typeof_mydummy(val, c):
     return mydummy_type
 
-@builtin_cast(MyDummyType, types.Number)
+@lower_cast(MyDummyType, types.Number)
 def mydummy_to_number(context, builder, fromty, toty, val):
     """
     Implicit conversion from MyDummy to int.
@@ -98,9 +63,56 @@ def unbox_index(typ, obj, c):
     return NativeValue(c.context.get_dummy_value())
 
 
-#
-# Define an overlaid function (combined API)
-#
+# -----------------------------------------------------------------------
+# Define a function's typing and implementation using the classical
+# two-step API
+
+def func1(x=None):
+    raise NotImplementedError
+
+@type_callable(func1)
+def type_func1(context):
+    def typer(x=None):
+        if x in (None, types.none):
+            # 0-arg or 1-arg with None
+            return types.int32
+        elif isinstance(x, types.Float):
+            # 1-arg with float
+            return x
+
+    return typer
+
+@lower_builtin(func1)
+@lower_builtin(func1, types.none)
+def func1_nullary(context, builder, sig, args):
+    return context.get_constant(sig.return_type, 42)
+
+@lower_builtin(func1, types.Float)
+def func1_unary(context, builder, sig, args):
+    def func1_impl(x):
+        return math.sqrt(2 * x)
+    return context.compile_internal(builder, func1_impl, sig, args)
+
+# We can do the same for a known internal operation, here "print_item"
+# which we extend to support MyDummyType.
+
+@infer
+class PrintDummy(ConcreteTemplate):
+    key = "print_item"
+    cases = [signature(types.none, mydummy_type)]
+
+@lower_builtin("print_item", MyDummyType)
+def print_dummy(context, builder, sig, args):
+    [x] = args
+    pyapi = context.get_python_api(builder)
+    strobj = pyapi.unserialize(pyapi.serialize_object("hello!"))
+    pyapi.print_object(strobj)
+    pyapi.decref(strobj)
+    return context.get_dummy_value()
+
+
+# -----------------------------------------------------------------------
+# Define an overloaded function (combined API)
 
 def where(cond, x, y):
     raise NotImplementedError
@@ -181,7 +193,8 @@ def overload_where_scalars(cond, x, y):
 
         return where_impl
 
-# Overlay an already defined built-in function
+# -----------------------------------------------------------------------
+# Overload an already defined built-in function, extending it for new types.
 
 @overload(len)
 def overload_len_dummy(arg):
@@ -191,147 +204,12 @@ def overload_len_dummy(arg):
 
         return len_impl
 
-@typing_builtin
-class PrintDummy(ConcreteTemplate):
-    key = "print_item"
-    cases = [signature(types.none, mydummy_type)]
 
-@builtin
-@implement("print_item", MyDummyType)
-def print_dummy(context, builder, sig, args):
-    [x] = args
-    pyapi = context.get_python_api(builder)
-    strobj = pyapi.unserialize(pyapi.serialize_object("hello!"))
-    pyapi.print_object(strobj)
-    pyapi.decref(strobj)
-    return context.get_dummy_value()
+def call_func1_nullary():
+    return func1()
 
-
-#
-# Minimal Pandas-inspired example
-#
-
-class Index(object):
-    """
-    A minimal pandas.Index-like object.
-    """
-
-    def __init__(self, data):
-        assert isinstance(data, np.ndarray)
-        assert data.ndim == 1
-        self._data = data
-
-    def __iter__(self):
-        return iter(self._data)
-
-    @property
-    def dtype(self):
-        return self._data.dtype
-
-    @property
-    def flags(self):
-        return self._data.flags
-
-
-class IndexType(types.Buffer):
-    """
-    The type class for Index objects.
-    """
-
-    def __init__(self, dtype, layout, pyclass):
-        self.pyclass = pyclass
-        super(IndexType, self).__init__(dtype, 1, layout)
-
-    @property
-    def key(self):
-        return self.pyclass, self.dtype, self.layout
-
-    @property
-    def as_array(self):
-        return types.Array(self.dtype, 1, self.layout)
-
-    def copy(self, dtype=None, ndim=1, layout=None):
-        assert ndim == 1
-        if dtype is None:
-            dtype = self.dtype
-        layout = layout or self.layout
-        return type(self)(dtype, layout, self.pyclass)
-
-
-@typeof_impl.register(Index)
-def typeof_index(val, c):
-    dtype = numpy_support.from_dtype(val.dtype)
-    layout = numpy_support.map_layout(val)
-    return IndexType(dtype, layout, type(val))
-
-@type_callable('__array_wrap__')
-def type_array_wrap(context):
-    def typer(input_type, result):
-        if isinstance(input_type, IndexType):
-            return input_type.copy(dtype=result.dtype,
-                                   ndim=result.ndim,
-                                   layout=result.layout)
-
-    return typer
-
-
-# Backend extensions for Index
-
-@register_model(IndexType)
-class IndexModel(models.StructModel):
-    def __init__(self, dmm, fe_type):
-        members = [('data', fe_type.as_array)]
-        models.StructModel.__init__(self, dmm, fe_type, members)
-
-make_attribute_wrapper(IndexType, 'data', '_data')
-
-def make_index(context, builder, typ, **kwargs):
-    return cgutils.create_struct_proxy(typ)(context, builder, **kwargs)
-
-@builtin
-@implement('__array__', IndexType)
-def index_as_array(context, builder, sig, args):
-    val = make_index(context, builder, sig.args[0], ref=args[0])
-    return val._get_ptr_by_name('data')
-
-@unbox(IndexType)
-def unbox_index(typ, obj, c):
-    """
-    Convert a Index object to a native index structure.
-    """
-    data = c.pyapi.object_getattr_string(obj, "_data")
-    index = make_index(c.context, c.builder, typ)
-    index.data = c.unbox(typ.as_array, data).value
-
-    return NativeValue(index._getvalue())
-
-@box(IndexType)
-def box_index(typ, val, c):
-    """
-    Convert a native index structure to a Index object.
-    """
-    # First build a Numpy array object, then wrap it in a Index
-    index = make_index(c.context, c.builder, typ, value=val)
-    classobj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.pyclass))
-    arrayobj = c.box(typ.as_array, index.data)
-    indexobj = c.pyapi.call_function_objargs(classobj, (arrayobj,))
-    return indexobj
-
-@overload_attribute(IndexType, 'is_monotonic_increasing')
-def index_is_monotonic_increasing(typ):
-    def getter(index):
-        data = index._data
-        if len(data) == 0:
-            return True
-        u = data[0]
-        for v in data:
-            if v < u:
-                return False
-            v = u
-        return True
-
-    return getter
-
+def call_func1_unary(x):
+    return func1(x)
 
 def len_usecase(x):
     return len(x)
@@ -348,8 +226,17 @@ def npyufunc_usecase(x):
 def get_data_usecase(x):
     return x._data
 
+def get_index_usecase(x):
+    return x._index
+
 def is_monotonic_usecase(x):
     return x.is_monotonic_increasing
+
+def make_series_usecase(data, index):
+    return Series(data, index)
+
+def clip_usecase(x, lo, hi):
+    return x.clip(lo, hi)
 
 
 class TestLowLevelExtending(TestCase):
@@ -386,6 +273,7 @@ class TestLowLevelExtending(TestCase):
 class TestPandasLike(TestCase):
     """
     Test implementing a pandas-like Index object.
+    Also stresses most of the high-level API.
     """
 
     def test_index_len(self):
@@ -411,14 +299,14 @@ class TestPandasLike(TestCase):
         self.assertIsInstance(ii, Index)
         self.assertPreciseEqual(ii._data, np.cos(np.sin(i._data)))
 
-    def test_get_data(self):
+    def test_index_get_data(self):
         # The _data attribute is exposed with make_attribute_wrapper()
         i = Index(np.int32([42, 8, -5]))
         cfunc = jit(nopython=True)(get_data_usecase)
         data = cfunc(i)
         self.assertIs(data, i._data)
 
-    def test_is_monotonic(self):
+    def test_index_is_monotonic(self):
         # The is_monotonic_increasing attribute is exposed with
         # overload_attribute()
         cfunc = jit(nopython=True)(is_monotonic_usecase)
@@ -428,6 +316,53 @@ class TestPandasLike(TestCase):
             i = Index(np.int32(values))
             got = cfunc(i)
             self.assertEqual(got, expected)
+
+    def test_series_len(self):
+        i = Index(np.int32([2, 4, 3]))
+        s = Series(np.float64([1.5, 4.0, 2.5]), i)
+        cfunc = jit(nopython=True)(len_usecase)
+        self.assertPreciseEqual(cfunc(s), 3)
+
+    def test_series_get_index(self):
+        i = Index(np.int32([2, 4, 3]))
+        s = Series(np.float64([1.5, 4.0, 2.5]), i)
+        cfunc = jit(nopython=True)(get_index_usecase)
+        got = cfunc(s)
+        self.assertIsInstance(got, Index)
+        self.assertIs(got._data, i._data)
+
+    def test_series_ufunc(self):
+        """
+        Check Numpy ufunc on an Series object.
+        """
+        i = Index(np.int32([42, 8, -5]))
+        s = Series(np.int64([1, 2, 3]), i)
+        cfunc = jit(nopython=True)(npyufunc_usecase)
+        ss = cfunc(s)
+        self.assertIsInstance(ss, Series)
+        self.assertIsInstance(ss._index, Index)
+        self.assertIs(ss._index._data, i._data)
+        self.assertPreciseEqual(ss._values, np.cos(np.sin(s._values)))
+
+    def test_series_constructor(self):
+        i = Index(np.int32([42, 8, -5]))
+        d = np.float64([1.5, 4.0, 2.5])
+        cfunc = jit(nopython=True)(make_series_usecase)
+        got = cfunc(d, i)
+        self.assertIsInstance(got, Series)
+        self.assertIsInstance(got._index, Index)
+        self.assertIs(got._index._data, i._data)
+        self.assertIs(got._values, d)
+
+    def test_series_clip(self):
+        i = Index(np.int32([42, 8, -5]))
+        s = Series(np.float64([1.5, 4.0, 2.5]), i)
+        cfunc = jit(nopython=True)(clip_usecase)
+        ss = cfunc(s, 1.6, 3.0)
+        self.assertIsInstance(ss, Series)
+        self.assertIsInstance(ss._index, Index)
+        self.assertIs(ss._index._data, i._data)
+        self.assertPreciseEqual(ss._values, np.float64([1.6, 3.0, 2.5]))
 
 
 class TestHighLevelExtending(TestCase):

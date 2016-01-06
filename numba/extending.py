@@ -5,7 +5,10 @@ from numba import types
 
 # Exported symbols
 from .typing.typeof import typeof_impl
-from .targets.imputils import builtin, builtin_cast, implement, impl_attribute
+from .typing.templates import infer, infer_getattr
+from .targets.imputils import (
+    lower_builtin, lower_getattr, lower_getattr_generic,
+    lower_setattr, lower_setattr_generic, lower_cast)
 from .datamodel import models, register_default as register_model
 from .pythonapi import box, unbox, reflect, NativeValue
 
@@ -16,7 +19,7 @@ def type_callable(func):
     *func* can be a callable object (probably a global) or a string
     denoting a built-in operation (such 'getitem' or '__array_wrap__')
     """
-    from .typing.templates import CallableTemplate, builtin, builtin_global
+    from .typing.templates import CallableTemplate, infer, infer_global
     if not callable(func) and not isinstance(func, str):
         raise TypeError("`func` should be a function or string")
     try:
@@ -32,27 +35,40 @@ def type_callable(func):
         bases = (CallableTemplate,)
         class_dict = dict(key=func, generic=generic)
         template = type(name, bases, class_dict)
-        builtin(template)
+        infer(template)
         if hasattr(func, '__module__'):
-            builtin_global(func, types.Function(template))
+            infer_global(func, types.Function(template))
 
     return decorate
 
 
 def overload(func):
     """
-    TODO docstring
+    A decorator marking the decorated function as typing and implementing
+    *func* in nopython mode.
+
+    The decorated function will have the same formal parameters as *func*
+    and be passed the Numba types of those parameters.  It should return
+    a function implementing *func* for the given types.
+
+    Here is an example implementing len() for tuple types::
+
+        @overload(len)
+        def tuple_len(seq):
+            if isinstance(seq, types.BaseTuple):
+                n = len(seq)
+                def len_impl(seq):
+                    return n
+                return len_impl
+
     """
-    # XXX Should overload() return a jitted wrapper calling the
-    # function?  This way it would also be usable from pure Python
-    # code, like a regular jitted function
-    from .typing.templates import make_overload_template, builtin_global
+    from .typing.templates import make_overload_template, infer_global
 
     def decorate(overload_func):
         template = make_overload_template(func, overload_func)
         ty = types.Function(template)
         if hasattr(func, '__module__'):
-            builtin_global(func, ty)
+            infer_global(func, ty)
         return overload_func
 
     return decorate
@@ -60,13 +76,51 @@ def overload(func):
 
 def overload_attribute(typ, attr):
     """
-    TODO docstring
+    A decorator marking the decorated function as typing and implementing
+    attribute *attr* for the given Numba type in nopython mode.
+
+    Here is an example implementing .nbytes for array types::
+
+        @overload_attribute(types.Array, 'nbytes')
+        def array_nbytes(arr):
+            def get(arr):
+                return arr.size * arr.itemsize
+            return get
     """
-    from .typing.templates import make_overload_attribute_template, builtin_attr
+    # TODO implement setters
+    from .typing.templates import make_overload_attribute_template
 
     def decorate(overload_func):
         template = make_overload_attribute_template(typ, attr, overload_func)
-        builtin_attr(template)
+        infer_getattr(template)
+        return overload_func
+
+    return decorate
+
+
+def overload_method(typ, attr):
+    """
+    A decorator marking the decorated function as typing and implementing
+    attribute *attr* for the given Numba type in nopython mode.
+
+    Here is an example implementing .take() for array types::
+
+        @overload_method(types.Array, 'take')
+        def array_take(arr, indices):
+            if isinstance(indices, types.Array):
+                def take_impl(arr, indices):
+                    n = indices.shape[0]
+                    res = np.empty(n, arr.dtype)
+                    for i in range(n):
+                        res[i] = arr[indices[i]]
+                    return res
+                return take_impl
+    """
+    from .typing.templates import make_overload_method_template
+
+    def decorate(overload_func):
+        template = make_overload_method_template(typ, attr, overload_func)
+        infer_getattr(template)
         return overload_func
 
     return decorate
@@ -78,12 +132,10 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
     as a read-only attribute named *python_attr*.
     The given *typeclass*'s model must be a StructModel subclass.
     """
-    # XXX should this work for setters as well?
-    from .typing.templates import builtin_attr, AttributeTemplate
+    from .typing.templates import AttributeTemplate
     from .datamodel import default_manager
     from .datamodel.models import StructModel
-    from .targets.imputils import (builtin_attr as target_attr,
-                                   impl_attribute, impl_ret_borrowed)
+    from .targets.imputils import impl_ret_borrowed
     from . import cgutils
 
     if not isinstance(typeclass, type) or not issubclass(typeclass, types.Type):
@@ -100,7 +152,7 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
                             "with a StructModel, but got %s" % (model,))
         return model.get_member_fe_type(struct_attr)
 
-    @builtin_attr
+    @infer_getattr
     class StructAttribute(AttributeTemplate):
         key = typeclass
 
@@ -108,8 +160,7 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
             if attr == python_attr:
                 return get_attr_fe_type(typ)
 
-    @target_attr
-    @impl_attribute(typeclass, python_attr)
+    @lower_getattr(typeclass, python_attr)
     def struct_getattr_impl(context, builder, typ, val):
         val = cgutils.create_struct_proxy(typ)(context, builder, value=val)
         attrty = get_attr_fe_type(typ)
