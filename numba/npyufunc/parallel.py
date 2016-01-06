@@ -398,12 +398,11 @@ def _make_cas_function():
 
     # Build & Link
     llmod = ll.parse_assembly(str(mod))
-    llfn = llmod.get_function(fn.name)
 
     target = ll.Target.from_default_triple()
     tm = target.create_target_machine()
     engine = ll.create_mcjit_compiler(llmod, tm)
-    ptr = engine.get_pointer_to_function(llfn)
+    ptr = engine.get_function_address(fn.name)
     return engine, ptr
 
 
