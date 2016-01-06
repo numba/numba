@@ -449,20 +449,11 @@ class BaseContext(object):
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
+        sig = sig.as_function()
         if isinstance(fn, (types.Function, types.BoundFunction,
                            types.Dispatcher)):
             key = fn.get_impl_key(sig)
-
-            if isinstance(key, MethodType):
-                overloads = self._defns[key.im_func]
-
-            elif sig.recvr:
-                sig = typing.signature(sig.return_type,
-                                       *((sig.recvr,) + sig.args))
-                overloads = self._defns[key]
-            else:
-                overloads = self._defns[key]
-
+            overloads = self._defns[key]
         else:
             key = fn
             overloads = self._defns[key]

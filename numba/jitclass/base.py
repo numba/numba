@@ -271,10 +271,7 @@ class ClassAttribute(templates.AttributeTemplate):
                     template, args, kws = meth.get_call_template(args,
                                                                  kws)
                     sig = template(self.context).apply(args, kws)
-                    sig = templates.signature(sig.return_type,
-                                              *sig.args[1:],
-                                              recvr=sig.args[0])
-                    return sig
+                    return sig.as_method()
 
             return types.BoundFunction(MethodTemplate, instance)
 

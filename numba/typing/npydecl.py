@@ -353,7 +353,7 @@ class Numpy_method_redirection(AbstractTemplate):
         # Resolve arguments on the bound function
         meth_sig = self.context.resolve_function_type(meth_ty, args[1:], kws)
         if meth_sig is not None:
-            return signature(meth_sig.return_type, meth_sig.recvr, *meth_sig.args)
+            return meth_sig.as_function()
 
 
 # Function to glue attributes onto the numpy-esque object

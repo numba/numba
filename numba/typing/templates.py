@@ -13,6 +13,11 @@ from ..errors import TypingError, UntypedAttributeError
 
 
 class Signature(object):
+    """
+    The signature of a function call or operation, i.e. its argument types
+    and return type.
+    """
+
     # XXX Perhaps the signature should be a BoundArguments, instead
     # of separate args and pysig...
     __slots__ = 'return_type', 'args', 'recvr', 'pysig'
@@ -53,7 +58,30 @@ class Signature(object):
 
     @property
     def is_method(self):
+        """
+        Whether this signature represents a bound method or a regular
+        function.
+        """
         return self.recvr is not None
+
+    def as_method(self):
+        """
+        Convert this signature to a bound method signature.
+        """
+        if self.recvr is not None:
+            return self
+        sig = signature(self.return_type, *self.args[1:],
+                        recvr=self.args[0])
+        return sig
+
+    def as_function(self):
+        """
+        Convert this signature to a regular function signature.
+        """
+        if self.recvr is None:
+            return self
+        sig = signature(self.return_type, *((self.recvr,) + self.args))
+        return sig
 
 
 def make_concrete_template(name, key, signatures):
@@ -424,11 +452,8 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             def generic(_, args, kws):
                 args = (typ,) + args
                 sig = self._resolve_impl_sig(typ, attr, args, kws)
-                if sig is not None and sig.recvr is None:
-                    # XXX factor this => sig.as_method()?
-                    sig = signature(sig.return_type, *sig.args[1:],
-                                    recvr=sig.args[0])
-                return sig
+                if sig is not None:
+                    return sig.as_method()
 
         return types.BoundFunction(MethodTemplate, typ)
 
