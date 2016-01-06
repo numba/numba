@@ -342,6 +342,34 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             jitclass([('my_method', int32)])(Foo)
         self.assertEqual(str(raises.exception), 'name shadowing: my_method')
 
+    def test_distinct_classes(self):
+        # Different classes with the same names shouldn't confuse the compiler
+        @jitclass([('x', int32)])
+        class Foo(object):
+            def __init__(self, x):
+                self.x = x + 2
+
+            def run(self):
+                return self.x + 1
+
+        FirstFoo = Foo
+
+        @jitclass([('x', int32)])
+        class Foo(object):
+            def __init__(self, x):
+                self.x = x - 2
+
+            def run(self):
+                return self.x - 1
+
+        SecondFoo = Foo
+        foo = FirstFoo(5)
+        self.assertEqual(foo.x, 7)
+        self.assertEqual(foo.run(), 8)
+        foo = SecondFoo(5)
+        self.assertEqual(foo.x, 3)
+        self.assertEqual(foo.run(), 2)
+
     def test_parameterized(self):
         class MyClass(object):
             def __init__(self, value):

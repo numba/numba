@@ -1512,6 +1512,10 @@ class ClassInstanceType(Type):
         return self
 
     @property
+    def key(self):
+        return self.class_type.key
+
+    @property
     def classname(self):
         return self.class_type.class_def.__name__
 

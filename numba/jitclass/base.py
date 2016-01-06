@@ -206,13 +206,13 @@ class ClassBuilder(object):
     typing and implementation hooks to the given typing and target contexts.
     """
     class_impl_registry = imputils.Registry()
+    implemented_methods = set()
 
     def __init__(self, class_type, methods, typingctx, targetctx):
         self.class_type = class_type
         self.methods = methods
         self.typingctx = typingctx
         self.targetctx = targetctx
-        self.impl_registry = imputils.Registry()
 
     def register(self):
         """
@@ -230,13 +230,21 @@ class ClassBuilder(object):
         Register method implementations for the given instance type.
         """
         for meth in instance_type.jitmethods:
-            self._implement_method(registry, instance_type, meth)
+            # There's no way to retrive the particular method name
+            # inside the implementation function, so we have to register a
+            # specific closure for each different name
+            if meth not in self.implemented_methods:
+                self._implement_method(registry, meth)
+                self.implemented_methods.add(meth)
 
-    def _implement_method(self, registry, instance_type, attr):
-        @registry.lower((types.ClassInstanceType, attr), types.VarArg(types.Any))
+    def _implement_method(self, registry, attr):
+        @registry.lower((types.ClassInstanceType, attr),
+                        types.ClassInstanceType, types.VarArg(types.Any))
         def imp(context, builder, sig, args):
+            instance_type = sig.args[0]
             method = instance_type.jitmethods[attr]
-            call = self.targetctx.get_function(types.Dispatcher(method), sig)
+            disp_type = types.Dispatcher(method)
+            call = context.get_function(types.Dispatcher(method), sig)
             out = call(builder, args)
             return imputils.impl_ret_new_ref(context, builder,
                                              sig.return_type, out)
