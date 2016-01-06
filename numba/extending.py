@@ -51,7 +51,7 @@ def overload(func):
 
     Here is an example implementing len() for tuple types::
 
-        @overlay(len)
+        @overload(len)
         def tuple_len(seq):
             if isinstance(seq, types.BaseTuple):
                 n = len(seq)

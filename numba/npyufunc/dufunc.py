@@ -218,7 +218,7 @@ class DUFunc(_internal._DUFunc):
             targetctx = self._dispatcher.targetdescr.target_context
         _any = types.Any
         _arr = types.Array
-        # Either all outputs are explicit or none of them is
+        # Either all outputs are explicit or none of them are
         sig0 = (_any,) * self.ufunc.nin + (_arr,) * self.ufunc.nout
         sig1 = (_any,) * self.ufunc.nin
         targetctx.insert_func_defn(
