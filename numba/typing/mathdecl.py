@@ -4,29 +4,29 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     signature, Registry)
 
 registry = Registry()
-builtin_global = registry.register_global
+infer_global = registry.register_global
 
 
-@builtin_global(math.exp)
-@builtin_global(math.fabs)
-@builtin_global(math.sqrt)
-@builtin_global(math.log)
-@builtin_global(math.log1p)
-@builtin_global(math.log10)
-@builtin_global(math.sin)
-@builtin_global(math.cos)
-@builtin_global(math.tan)
-@builtin_global(math.sinh)
-@builtin_global(math.cosh)
-@builtin_global(math.tanh)
-@builtin_global(math.asin)
-@builtin_global(math.acos)
-@builtin_global(math.atan)
-@builtin_global(math.asinh)
-@builtin_global(math.acosh)
-@builtin_global(math.atanh)
-@builtin_global(math.degrees)
-@builtin_global(math.radians)
+@infer_global(math.exp)
+@infer_global(math.fabs)
+@infer_global(math.sqrt)
+@infer_global(math.log)
+@infer_global(math.log1p)
+@infer_global(math.log10)
+@infer_global(math.sin)
+@infer_global(math.cos)
+@infer_global(math.tan)
+@infer_global(math.sinh)
+@infer_global(math.cosh)
+@infer_global(math.tanh)
+@infer_global(math.asin)
+@infer_global(math.acos)
+@infer_global(math.atan)
+@infer_global(math.asinh)
+@infer_global(math.acosh)
+@infer_global(math.atanh)
+@infer_global(math.degrees)
+@infer_global(math.radians)
 class Math_unary(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64),
@@ -37,10 +37,10 @@ class Math_unary(ConcreteTemplate):
 
 if utils.PYVERSION > (2, 6):
     for func in (math.erf, math.erfc, math.gamma, math.lgamma):
-        Math_unary = builtin_global(func)(Math_unary)
+        Math_unary = infer_global(func)(Math_unary)
 
 
-@builtin_global(math.atan2)
+@infer_global(math.atan2)
 class Math_atan2(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64, types.int64),
@@ -50,11 +50,11 @@ class Math_atan2(ConcreteTemplate):
     ]
 
 if utils.PYVERSION > (2, 6):
-    @builtin_global(math.expm1)
+    @infer_global(math.expm1)
     class Math_expm1(Math_unary):
         pass
 
-@builtin_global(math.trunc)
+@infer_global(math.trunc)
 class Math_converter(ConcreteTemplate):
     cases = [
         signature(types.intp, types.intp),
@@ -66,18 +66,18 @@ class Math_converter(ConcreteTemplate):
 
 # math.floor and math.ceil return float on 2.x, int on 3.x
 if utils.PYVERSION > (3, 0):
-    @builtin_global(math.floor)
-    @builtin_global(math.ceil)
+    @infer_global(math.floor)
+    @infer_global(math.ceil)
     class Math_floor_ceil(Math_converter):
         pass
 else:
-    @builtin_global(math.floor)
-    @builtin_global(math.ceil)
+    @infer_global(math.floor)
+    @infer_global(math.ceil)
     class Math_floor_ceil(Math_unary):
         pass
 
 
-@builtin_global(math.copysign)
+@infer_global(math.copysign)
 class Math_copysign(ConcreteTemplate):
     cases = [
         signature(types.float32, types.float32, types.float32),
@@ -85,7 +85,7 @@ class Math_copysign(ConcreteTemplate):
     ]
 
 
-@builtin_global(math.hypot)
+@infer_global(math.hypot)
 class Math_hypot(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64, types.int64),
@@ -95,8 +95,8 @@ class Math_hypot(ConcreteTemplate):
     ]
 
 
-@builtin_global(math.isinf)
-@builtin_global(math.isnan)
+@infer_global(math.isinf)
+@infer_global(math.isnan)
 class Math_predicate(ConcreteTemplate):
     cases = [
         signature(types.boolean, types.int64),
@@ -106,12 +106,12 @@ class Math_predicate(ConcreteTemplate):
     ]
 
 if utils.PYVERSION >= (3, 2):
-    @builtin_global(math.isfinite)
+    @infer_global(math.isfinite)
     class Math_isfinite(Math_predicate):
         pass
 
 
-@builtin_global(math.pow)
+@infer_global(math.pow)
 class Math_pow(ConcreteTemplate):
     cases = [
         signature(types.float64, types.float64, types.int64),
@@ -120,14 +120,14 @@ class Math_pow(ConcreteTemplate):
         signature(types.float64, types.float64, types.float64),
     ]
 
-@builtin_global(math.frexp)
+@infer_global(math.frexp)
 class Math_frexp(ConcreteTemplate):
     cases = [
         signature(types.Tuple((types.float64, types.intc)), types.float64),
         signature(types.Tuple((types.float32, types.intc)), types.float32),
     ]
 
-@builtin_global(math.ldexp)
+@infer_global(math.ldexp)
 class Math_ldexp(ConcreteTemplate):
     cases = [
         signature(types.float64, types.float64, types.intc),

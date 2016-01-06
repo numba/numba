@@ -250,7 +250,7 @@ class ClassBuilder(object):
                                              sig.return_type, out)
 
 
-@templates.builtin_getattr
+@templates.infer_getattr
 class ClassAttribute(templates.AttributeTemplate):
     key = types.ClassInstanceType
 

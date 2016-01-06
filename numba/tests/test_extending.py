@@ -19,7 +19,7 @@ from numba.extending import (typeof_impl, type_callable,
                              make_attribute_wrapper,
                              )
 from numba.typing.templates import (
-    ConcreteTemplate, signature, builtin as typing_builtin)
+    ConcreteTemplate, signature, infer)
 from numba.targets.imputils import impl_ret_borrowed
 
 # Pandas-like API implementation
@@ -96,7 +96,7 @@ def func1_unary(context, builder, sig, args):
 # We can do the same for a known internal operation, here "print_item"
 # which we extend to support MyDummyType.
 
-@typing_builtin
+@infer
 class PrintDummy(ConcreteTemplate):
     key = "print_item"
     cases = [signature(types.none, mydummy_type)]

@@ -5,8 +5,10 @@ from numba import types
 
 # Exported symbols
 from .typing.typeof import typeof_impl
+from .typing.templates import infer, infer_getattr
 from .targets.imputils import (
-    lower_builtin, lower_getattr, lower_getattr_generic, lower_cast)
+    lower_builtin, lower_getattr, lower_getattr_generic,
+    lower_setattr, lower_setattr_generic, lower_cast)
 from .datamodel import models, register_default as register_model
 from .pythonapi import box, unbox, reflect, NativeValue
 
@@ -17,7 +19,7 @@ def type_callable(func):
     *func* can be a callable object (probably a global) or a string
     denoting a built-in operation (such 'getitem' or '__array_wrap__')
     """
-    from .typing.templates import CallableTemplate, builtin, builtin_global
+    from .typing.templates import CallableTemplate, infer, infer_global
     if not callable(func) and not isinstance(func, str):
         raise TypeError("`func` should be a function or string")
     try:
@@ -33,9 +35,9 @@ def type_callable(func):
         bases = (CallableTemplate,)
         class_dict = dict(key=func, generic=generic)
         template = type(name, bases, class_dict)
-        builtin(template)
+        infer(template)
         if hasattr(func, '__module__'):
-            builtin_global(func, types.Function(template))
+            infer_global(func, types.Function(template))
 
     return decorate
 
@@ -60,13 +62,13 @@ def overload(func):
                 return len_impl
 
     """
-    from .typing.templates import make_overload_template, builtin_global
+    from .typing.templates import make_overload_template, infer_global
 
     def decorate(overload_func):
         template = make_overload_template(func, overload_func)
         ty = types.Function(template)
         if hasattr(func, '__module__'):
-            builtin_global(func, ty)
+            infer_global(func, ty)
         return overload_func
 
     return decorate
@@ -86,11 +88,11 @@ def overload_attribute(typ, attr):
             return get
     """
     # TODO implement setters
-    from .typing.templates import make_overload_attribute_template, builtin_getattr
+    from .typing.templates import make_overload_attribute_template
 
     def decorate(overload_func):
         template = make_overload_attribute_template(typ, attr, overload_func)
-        builtin_getattr(template)
+        infer_getattr(template)
         return overload_func
 
     return decorate
@@ -114,11 +116,11 @@ def overload_method(typ, attr):
                     return res
                 return take_impl
     """
-    from .typing.templates import make_overload_method_template, builtin_getattr
+    from .typing.templates import make_overload_method_template
 
     def decorate(overload_func):
         template = make_overload_method_template(typ, attr, overload_func)
-        builtin_getattr(template)
+        infer_getattr(template)
         return overload_func
 
     return decorate
@@ -130,11 +132,10 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
     as a read-only attribute named *python_attr*.
     The given *typeclass*'s model must be a StructModel subclass.
     """
-    # XXX should this work for setters as well?
-    from .typing.templates import builtin_getattr, AttributeTemplate
+    from .typing.templates import AttributeTemplate
     from .datamodel import default_manager
     from .datamodel.models import StructModel
-    from .targets.imputils import lower_getattr, impl_ret_borrowed
+    from .targets.imputils import impl_ret_borrowed
     from . import cgutils
 
     if not isinstance(typeclass, type) or not issubclass(typeclass, types.Type):
@@ -151,7 +152,7 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
                             "with a StructModel, but got %s" % (model,))
         return model.get_member_fe_type(struct_attr)
 
-    @builtin_getattr
+    @infer_getattr
     class StructAttribute(AttributeTemplate):
         key = typeclass
 

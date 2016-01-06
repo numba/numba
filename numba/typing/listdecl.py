@@ -13,9 +13,9 @@ from . import collections
 
 
 registry = Registry()
-builtin = registry.register
-builtin_global = registry.register_global
-builtin_getattr = registry.register_attr
+infer = registry.register
+infer_global = registry.register_global
+infer_getattr = registry.register_attr
 
 
 class ListBuiltin(AbstractTemplate):
@@ -29,7 +29,7 @@ class ListBuiltin(AbstractTemplate):
                 dtype = iterable.iterator_type.yield_type
                 return signature(types.List(dtype), iterable)
 
-builtin_global(list, types.Function(ListBuiltin))
+infer_global(list, types.Function(ListBuiltin))
 
 
 class SortedBuiltin(CallableTemplate):
@@ -46,10 +46,10 @@ class SortedBuiltin(CallableTemplate):
 
         return typer
 
-builtin_global(sorted, types.Function(SortedBuiltin))
+infer_global(sorted, types.Function(SortedBuiltin))
 
 
-@builtin_getattr
+@infer_getattr
 class ListAttribute(AttributeTemplate):
     key = types.List
 
@@ -154,7 +154,7 @@ class ListAttribute(AttributeTemplate):
                                    list)
 
 
-@builtin
+@infer
 class AddList(AbstractTemplate):
     key = "+"
 
@@ -166,7 +166,7 @@ class AddList(AbstractTemplate):
                 return signature(unified, a, b)
 
 
-@builtin
+@infer
 class InplaceAddList(AbstractTemplate):
     key = "+="
 
@@ -178,7 +178,7 @@ class InplaceAddList(AbstractTemplate):
                     return signature(a, a, b)
 
 
-@builtin
+@infer
 class MulList(AbstractTemplate):
     key = "*"
 
@@ -188,7 +188,7 @@ class MulList(AbstractTemplate):
             return signature(a, a, types.intp)
 
 
-@builtin
+@infer
 class InplaceMulList(MulList):
     key = "*="
 
@@ -204,26 +204,26 @@ class ListCompare(AbstractTemplate):
             if res is not None:
                 return signature(types.boolean, lhs, rhs)
 
-@builtin
+@infer
 class ListEq(ListCompare):
     key = '=='
 
-@builtin
+@infer
 class ListNe(ListCompare):
     key = '!='
 
-@builtin
+@infer
 class ListLt(ListCompare):
     key = '<'
 
-@builtin
+@infer
 class ListLe(ListCompare):
     key = '<='
 
-@builtin
+@infer
 class ListGt(ListCompare):
     key = '>'
 
-@builtin
+@infer
 class ListGe(ListCompare):
     key = '>='

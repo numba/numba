@@ -5,33 +5,32 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     signature, Registry)
 
 registry = Registry()
-builtin_attr = registry.register_attr
-builtin_global = registry.register_global
+infer_global = registry.register_global
 
 
-@builtin_global(math.acos)
-@builtin_global(math.acosh)
-@builtin_global(math.asin)
-@builtin_global(math.asinh)
-@builtin_global(math.atan)
-@builtin_global(math.atanh)
-@builtin_global(math.ceil)
-@builtin_global(math.cos)
-@builtin_global(math.cosh)
-@builtin_global(math.degrees)
-@builtin_global(math.exp)
-@builtin_global(math.fabs)
-@builtin_global(math.floor)
-@builtin_global(math.log)
-@builtin_global(math.log10)
-@builtin_global(math.log1p)
-@builtin_global(math.radians)
-@builtin_global(math.sin)
-@builtin_global(math.sinh)
-@builtin_global(math.sqrt)
-@builtin_global(math.tan)
-@builtin_global(math.tanh)
-@builtin_global(math.trunc)
+@infer_global(math.acos)
+@infer_global(math.acosh)
+@infer_global(math.asin)
+@infer_global(math.asinh)
+@infer_global(math.atan)
+@infer_global(math.atanh)
+@infer_global(math.ceil)
+@infer_global(math.cos)
+@infer_global(math.cosh)
+@infer_global(math.degrees)
+@infer_global(math.exp)
+@infer_global(math.fabs)
+@infer_global(math.floor)
+@infer_global(math.log)
+@infer_global(math.log10)
+@infer_global(math.log1p)
+@infer_global(math.radians)
+@infer_global(math.sin)
+@infer_global(math.sinh)
+@infer_global(math.sqrt)
+@infer_global(math.tan)
+@infer_global(math.tanh)
+@infer_global(math.trunc)
 class Math_unary(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64),
@@ -42,10 +41,10 @@ class Math_unary(ConcreteTemplate):
 
 
 if utils.PYVERSION > (2, 6):
-    builtin_global(math.expm1)(Math_unary)
+    infer_global(math.expm1)(Math_unary)
 
 
-@builtin_global(math.atan2)
+@infer_global(math.atan2)
 class Math_atan2(ConcreteTemplate):
     key = math.atan2
     cases = [
@@ -56,7 +55,7 @@ class Math_atan2(ConcreteTemplate):
     ]
 
 
-@builtin_global(math.hypot)
+@infer_global(math.hypot)
 class Math_hypot(ConcreteTemplate):
     key = math.hypot
     cases = [
@@ -67,8 +66,8 @@ class Math_hypot(ConcreteTemplate):
     ]
 
 
-@builtin_global(math.copysign)
-@builtin_global(math.fmod)
+@infer_global(math.copysign)
+@infer_global(math.fmod)
 class Math_binary(ConcreteTemplate):
     cases = [
         signature(types.float32, types.float32, types.float32),
@@ -76,7 +75,7 @@ class Math_binary(ConcreteTemplate):
     ]
 
 
-@builtin_global(math.pow)
+@infer_global(math.pow)
 class Math_pow(ConcreteTemplate):
     cases = [
         signature(types.float32, types.float32, types.float32),
@@ -86,8 +85,8 @@ class Math_pow(ConcreteTemplate):
     ]
 
 
-@builtin_global(math.isinf)
-@builtin_global(math.isnan)
+@infer_global(math.isinf)
+@infer_global(math.isnan)
 class Math_isnan(ConcreteTemplate):
     cases = [
         signature(types.boolean, types.int64),

@@ -4,7 +4,7 @@ from collections import namedtuple
 
 from numba import types
 from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                    builtin, builtin_getattr, signature,
+                                    infer, infer_getattr, signature,
                                     bound_function)
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
@@ -146,7 +146,7 @@ def get_array_index_type(ary, idx):
     return Indexing(idx, res, advanced)
 
 
-@builtin
+@infer
 class GetItemBuffer(AbstractTemplate):
     key = "getitem"
 
@@ -157,7 +157,7 @@ class GetItemBuffer(AbstractTemplate):
         if out is not None:
             return signature(out.result, ary, out.index)
 
-@builtin
+@infer
 class SetItemBuffer(AbstractTemplate):
     key = "setitem"
 
@@ -205,7 +205,7 @@ def normalize_shape(shape):
         return shape
 
 
-@builtin_getattr
+@infer_getattr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
 
@@ -332,7 +332,7 @@ class ArrayAttribute(AttributeTemplate):
                 return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
 
 
-@builtin
+@infer
 class StaticGetItemArray(AbstractTemplate):
     key = "static_getitem"
 
@@ -345,7 +345,7 @@ class StaticGetItemArray(AbstractTemplate):
                 return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
 
 
-@builtin_getattr
+@infer_getattr
 class RecordAttribute(AttributeTemplate):
     key = types.Record
 
@@ -354,7 +354,7 @@ class RecordAttribute(AttributeTemplate):
         assert ret
         return ret
 
-@builtin
+@infer
 class StaticGetItemRecord(AbstractTemplate):
     key = "static_getitem"
 
@@ -366,7 +366,7 @@ class StaticGetItemRecord(AbstractTemplate):
             assert ret
             return ret
 
-@builtin
+@infer
 class StaticSetItemRecord(AbstractTemplate):
     key = "static_setitem"
 
@@ -379,7 +379,7 @@ class StaticSetItemRecord(AbstractTemplate):
                 return signature(types.void, record, types.Const(idx), value)
 
 
-@builtin_getattr
+@infer_getattr
 class ArrayCTypesAttribute(AttributeTemplate):
     key = types.ArrayCTypes
 
@@ -387,7 +387,7 @@ class ArrayCTypesAttribute(AttributeTemplate):
         return types.uintp
 
 
-@builtin_getattr
+@infer_getattr
 class ArrayFlagsAttribute(AttributeTemplate):
     key = types.ArrayFlags
 
@@ -401,7 +401,7 @@ class ArrayFlagsAttribute(AttributeTemplate):
         return types.boolean
 
 
-@builtin_getattr
+@infer_getattr
 class NestedArrayAttribute(ArrayAttribute):
     key = types.NestedArray
 
@@ -474,7 +474,7 @@ install_array_method("argmin", generic_index)
 install_array_method("argmax", generic_index)
 
 
-@builtin
+@infer
 class CmpOpEqArray(AbstractTemplate):
     key = '=='
 

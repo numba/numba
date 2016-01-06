@@ -624,6 +624,6 @@ class RegistryLoader(BaseRegistryLoader):
 
 
 builtin_registry = Registry()
-builtin = builtin_registry.register
-builtin_getattr = builtin_registry.register_attr
-builtin_global = builtin_registry.register_global
+infer = builtin_registry.register
+infer_getattr = builtin_registry.register_attr
+infer_global = builtin_registry.register_global
