@@ -7,6 +7,7 @@ import functools
 from functools import reduce
 import operator
 import sys
+from types import MethodType
 
 from .. import types, utils
 from ..errors import TypingError, UntypedAttributeError
@@ -176,8 +177,13 @@ class FunctionTemplate(object):
         Return the key for looking up the implementation for the given
         signature on the target context.
         """
-        # Lookup the key on the type, to avoid binding it with `self`.
-        return type(self).key
+        # Lookup the key on the class, to avoid binding it with `self`.
+        key = type(self).key
+        # On Python 2, we must also take care about unbound methods
+        if isinstance(key, MethodType):
+            assert key.im_self is None
+            key = key.im_func
+        return key
 
 
 class AbstractTemplate(FunctionTemplate):
