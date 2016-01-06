@@ -60,9 +60,6 @@ def overload(func):
                 return len_impl
 
     """
-    # XXX Should overload() return a jitted wrapper calling the
-    # function?  This way it would also be usable from pure Python
-    # code, like a regular jitted function
     from .typing.templates import make_overload_template, builtin_global
 
     def decorate(overload_func):

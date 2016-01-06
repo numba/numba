@@ -45,7 +45,7 @@ class Registry(object):
         Decorate an implementation of __getattr__ for type *ty* and
         the attribute *attr*.
 
-        The decorated implementation has the signature
+        The decorated implementation will have the signature
         (context, builder, typ, val).
         """
         def decorate(impl):
@@ -57,7 +57,7 @@ class Registry(object):
         """
         Decorate the fallback implementation of __getattr__ for type *ty*.
 
-        The decorated implementation has the signature
+        The decorated implementation will have the signature
         (context, builder, typ, val, attr).  The implementation is
         called for attributes which haven't been explicitly registered
         with lower_getattr().
@@ -69,7 +69,7 @@ class Registry(object):
         Decorate an implementation of __setattr__ for type *ty* and
         the attribute *attr*.
 
-        The decorated implementation has the signature
+        The decorated implementation will have the signature
         (context, builder, sig, args).
         """
         def decorate(impl):
@@ -81,7 +81,7 @@ class Registry(object):
         """
         Decorate the fallback implementation of __setattr__ for type *ty*.
 
-        The decorated implementation has the signature
+        The decorated implementation will have the signature
         (context, builder, sig, args, attr).  The implementation is
         called for attributes which haven't been explicitly registered
         with lower_setattr().
@@ -93,7 +93,7 @@ class Registry(object):
         Decorate the implementation of implicit conversion between
         *fromty* and *toty*.
 
-        The decorated implementation has the signature
+        The decorated implementation will have the signature
         (context, builder, fromty, toty, val).
         """
         def decorate(impl):
