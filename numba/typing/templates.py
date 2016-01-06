@@ -301,11 +301,19 @@ def make_overload_template(func, overload_func):
 
 
 class AttributeTemplate(object):
+    _initialized = False
+
     def __init__(self, context):
         self.context = context
 
     def resolve(self, value, attr):
+        if not self._initialized:
+            self._do_init()
+            self._initialized = True
         return self._resolve(value, attr)
+
+    def _do_init(self):
+        pass
 
     def _resolve(self, value, attr):
         fn = getattr(self, "resolve_%s" % attr, None)
@@ -326,55 +334,126 @@ class _OverloadAttributeTemplate(AttributeTemplate):
     A base class of templates for @overload_attribute functions.
     """
 
-    def _resolve(self, typ, attr):
-        # Attribute-specific overload
-        if self._attr == attr:
-            cache_key = self.context, typ, attr
-            try:
-                disp = self._impl_cache[cache_key]
-            except KeyError:
-                # Get the overload implementation for the given type
-                pyfunc = self._overload_func(typ)
-                if pyfunc is None:
-                    # No implementation => fail typing
-                    self._impl_cache[cache_key] = None
-                    return
+    def _do_init(self):
+        """
+        Register attribute implementation.
+        """
+        from numba.targets.imputils import lower_getattr
+        attr = self._attr
 
-                from numba import jit
-                from numba.targets.imputils import lower_getattr
-
-                disp = self._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
-
-                # Register an implementation on the target(s), calling
-                # the compiled user-supplied function
-                @lower_getattr(typ, attr)
-                def getattr_impl(context, builder, typ, value):
-                    disp_type = types.Dispatcher(disp)
-                    # `sig` is computed below
-                    call = context.get_function(disp_type, sig)
-                    return call(builder, (value,))
-            else:
-                if disp is None:
-                    return
-
-            # Compile and type it for the given types
+        @lower_getattr(self.key, attr)
+        def getattr_impl(context, builder, typ, value):
+            sig_args = (typ,)
+            sig_kws = {}
+            disp = self._get_dispatcher(typ, attr, sig_args, sig_kws)
             disp_type = types.Dispatcher(disp)
-            sig = disp_type.get_call_type(self.context, (typ,), {})
-            return sig.return_type
+            sig = disp_type.get_call_type(self.context, sig_args, sig_kws)
+            call = context.get_function(disp_type, sig)
+            return call(builder, (value,))
+
+    def _get_dispatcher(self, typ, attr, sig_args, sig_kws):
+        """
+        Get the compiled dispatcher implementing the attribute for
+        the given formal signature.
+        """
+        cache_key = self.context, typ, attr
+        try:
+            disp = self._impl_cache[cache_key]
+        except KeyError:
+            # Get the overload implementation for the given type
+            pyfunc = self._overload_func(*sig_args, **sig_kws)
+            if pyfunc is None:
+                # No implementation => fail typing
+                self._impl_cache[cache_key] = None
+                return
+
+            from numba import jit
+            disp = self._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
+        return disp
+
+    def _resolve_impl_sig(self, typ, attr, sig_args, sig_kws):
+        """
+        Compute the actual implementation sig for the given formal argument types.
+        """
+        disp = self._get_dispatcher(typ, attr, sig_args, sig_kws)
+        if disp is None:
+            return None
+
+        # Compile and type it for the given types
+        disp_type = types.Dispatcher(disp)
+        sig = disp_type.get_call_type(self.context, sig_args, sig_kws)
+        return sig
+
+    def _resolve(self, typ, attr):
+        if self._attr != attr:
+            return None
+
+        sig = self._resolve_impl_sig(typ, attr, (typ,), {})
+        return sig.return_type
 
 
-def make_overload_attribute_template(typ, attr, overload_func):
+class _OverloadMethodTemplate(_OverloadAttributeTemplate):
+    """
+    A base class of templates for @overload_method functions.
+    """
+
+    def _do_init(self):
+        """
+        Register generic method implementation.
+        """
+        from numba.targets.imputils import lower_builtin
+        attr = self._attr
+
+        @lower_builtin((self.key, attr), self.key, types.VarArg(types.Any))
+        def method_impl(context, builder, sig, args):
+            typ = sig.args[0]
+            disp = self._get_dispatcher(typ, attr, sig.args, {})
+            disp_type = types.Dispatcher(disp)
+            sig = disp_type.get_call_type(self.context, sig.args, {})
+            call = context.get_function(disp_type, sig)
+            return call(builder, args)
+
+    def _resolve(self, typ, attr):
+        if self._attr != attr:
+            return None
+
+        assert isinstance(typ, self.key)
+
+        class MethodTemplate(AbstractTemplate):
+            key = (self.key, attr)
+            def generic(_, args, kws):
+                args = (typ,) + args
+                sig = self._resolve_impl_sig(typ, attr, args, kws)
+                if sig is not None and sig.recvr is None:
+                    # XXX factor this => sig.as_method()?
+                    sig = signature(sig.return_type, *sig.args[1:],
+                                    recvr=sig.args[0])
+                return sig
+
+        return types.BoundFunction(MethodTemplate, typ)
+
+
+def make_overload_attribute_template(typ, attr, overload_func,
+                                     base=_OverloadAttributeTemplate):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
     *overload_func*.
     """
     assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
     name = "OverloadTemplate_%s_%s" % (typ, attr)
-    base = _OverloadAttributeTemplate
     dct = dict(key=typ, _attr=attr, _impl_cache={},
                _overload_func=staticmethod(overload_func),
                )
     return type(base)(name, (base,), dct)
+
+
+def make_overload_method_template(typ, attr, overload_func):
+    """
+    Make a template class for method *attr* of *typ* overloaded by
+    *overload_func*.
+    """
+    return make_overload_attribute_template(typ, attr, overload_func,
+                                            base=_OverloadMethodTemplate)
 
 
 def bound_function(template_key):

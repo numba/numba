@@ -9,7 +9,7 @@ from numba.datamodel import models
 from numba.extending import (
     typeof_impl, type_callable, register_model,
     lower_builtin, box, unbox, NativeValue,
-    overload, overload_attribute, make_attribute_wrapper)
+    overload, overload_attribute, overload_method, make_attribute_wrapper)
 from numba.targets.imputils import impl_ret_borrowed
 
 
@@ -139,6 +139,16 @@ def type_array_wrap(context):
 
     return typer
 
+@type_callable(Series)
+def type_series_constructor(context):
+    def typer(data, index):
+        if isinstance(index, IndexType) and isinstance(data, types.Array):
+            assert data.layout == 'C'
+            assert data.ndim == 1
+            return SeriesType(data.dtype, index)
+
+    return typer
+
 
 # Backend extensions for Index and Series
 
@@ -190,6 +200,14 @@ def series_wrap_array(context, builder, sig, args):
     dest.values = args[1]
     dest.index = src.index
     return impl_ret_borrowed(context, builder, sig.return_type, dest._getvalue())
+
+@lower_builtin(Series, types.Array, IndexType)
+def pdseries_constructor(context, builder, sig, args):
+    data, index = args
+    series = make_series(context, builder, sig.return_type)
+    series.index = index
+    series.values = data
+    return impl_ret_borrowed(context, builder, sig.return_type, series._getvalue())
 
 
 @unbox(IndexType)
@@ -269,3 +287,20 @@ def series_len(series):
         def len_impl(series):
             return len(series._values)
         return len_impl
+
+@overload_method(SeriesType, 'clip')
+def series_clip(series, lower, upper):
+    """
+    Series.clip(...)
+    """
+    def clip_impl(series, lower, upper):
+        data = series._values.copy()
+        for i in range(len(data)):
+            v = data[i]
+            if v < lower:
+                data[i] = lower
+            elif v > upper:
+                data[i] = upper
+        return Series(data, series._index)
+
+    return clip_impl

@@ -13,10 +13,11 @@ from .support import TestCase, captured_stdout
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
-                             overload, models, register_model,
+                             overload, overload_attribute,
+                             models, register_model,
                              box, unbox, NativeValue,
                              make_attribute_wrapper,
-                             overload_attribute)
+                             )
 from numba.typing.templates import (
     ConcreteTemplate, signature, builtin as typing_builtin)
 from numba.targets.imputils import impl_ret_borrowed
@@ -231,6 +232,12 @@ def get_index_usecase(x):
 def is_monotonic_usecase(x):
     return x.is_monotonic_increasing
 
+def make_series_usecase(data, index):
+    return Series(data, index)
+
+def clip_usecase(x, lo, hi):
+    return x.clip(lo, hi)
+
 
 class TestLowLevelExtending(TestCase):
     """
@@ -266,6 +273,7 @@ class TestLowLevelExtending(TestCase):
 class TestPandasLike(TestCase):
     """
     Test implementing a pandas-like Index object.
+    Also stresses most of the high-level API.
     """
 
     def test_index_len(self):
@@ -335,6 +343,26 @@ class TestPandasLike(TestCase):
         self.assertIsInstance(ss._index, Index)
         self.assertIs(ss._index._data, i._data)
         self.assertPreciseEqual(ss._values, np.cos(np.sin(s._values)))
+
+    def test_series_constructor(self):
+        i = Index(np.int32([42, 8, -5]))
+        d = np.float64([1.5, 4.0, 2.5])
+        cfunc = jit(nopython=True)(make_series_usecase)
+        got = cfunc(d, i)
+        self.assertIsInstance(got, Series)
+        self.assertIsInstance(got._index, Index)
+        self.assertIs(got._index._data, i._data)
+        self.assertIs(got._values, d)
+
+    def test_series_clip(self):
+        i = Index(np.int32([42, 8, -5]))
+        s = Series(np.float64([1.5, 4.0, 2.5]), i)
+        cfunc = jit(nopython=True)(clip_usecase)
+        ss = cfunc(s, 1.6, 3.0)
+        self.assertIsInstance(ss, Series)
+        self.assertIsInstance(ss._index, Index)
+        self.assertIs(ss._index._data, i._data)
+        self.assertPreciseEqual(ss._values, np.float64([1.6, 3.0, 2.5]))
 
 
 class TestHighLevelExtending(TestCase):
