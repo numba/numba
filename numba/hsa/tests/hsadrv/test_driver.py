@@ -439,6 +439,16 @@ class TestContext(_TestBase):
             hsa.hsa_memory_copy(gpu_only_mem.device_pointer, ha_mem.device_pointer, src.nbytes)
 
             # clear
+            z0 = np.zeros_like(src)
+            hsa.hsa_memory_copy(ha_mem.device_pointer, z0.ctypes.data, z0.nbytes)
+            ref = (n * ctypes.c_double).from_address(ha_mem.device_pointer.value)
+            for k in range(n):
+                self.assertEqual(ref[k], 0)
+
+            # copy back from dGPU
+            hsa.hsa_memory_copy(ha_mem.device_pointer, gpu_only_mem.device_pointer, src.nbytes)
+            for k in range(n):
+                self.assertEqual(ref[k], src[k])
 
         else: #TODO: write APU variant
             pass

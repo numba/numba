@@ -6,8 +6,11 @@ from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
 from .hlc import hlc
 from .hsadrv import devices, driver, enums
+from numba.hsa.hsadrv.driver import hsa
+from .hsadrv import devicearray
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
+from numba import config
 
 def compile_hsa(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the HSA backend.
@@ -221,8 +224,15 @@ class _CachedProgram(object):
             ex.load(agent, code)
             ex.freeze()
             symobj = ex.get_symbol(agent, symbol)
-            kernarg_region = [r for r in agent.regions.globals
-                        if r.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG)][0]
+#            kernarg_region = [r for r in agent.regions.globals
+#                        if r.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG)][0]
+            regions = agent.regions.globals
+            for reg in regions:
+                if reg.host_accessible:
+                    if reg.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG):
+                        kernarg_region = reg
+                        break
+            assert kernarg_region is not None
 
             # Cache the finalized program
             result = _CacheEntry(symbol=symobj, executable=ex,
@@ -258,10 +268,12 @@ class HSAKernel(HSAKernelBase):
         """
         ctx, entry = self._cacheprog.get()
         if entry.symbol.kernarg_segment_size > 0:
-            kernarg_type = (ctypes.c_byte * entry.symbol.kernarg_segment_size)
-            kernargs = entry.kernarg_region.allocate(kernarg_type)
+            sz = ctypes.sizeof(ctypes.c_byte) *\
+                entry.symbol.kernarg_segment_size
+            kernargs = entry.kernarg_region.allocate(sz)
         else:
             kernargs = None
+
         return ctx, entry.symbol, kernargs, entry.kernarg_region
 
     def __call__(self, *args):
@@ -269,8 +281,11 @@ class HSAKernel(HSAKernelBase):
 
         # Unpack pyobject values into ctypes scalar values
         expanded_values = []
+
+        # contains lambdas to execute on return
+        retr = []
         for ty, val in zip(self.argument_types, args):
-            _unpack_argument(ty, val, expanded_values)
+            _unpack_argument(ty, val, expanded_values, retr, ctx)
 
         # Insert kernel arguments
         base = 0
@@ -280,15 +295,15 @@ class HSAKernel(HSAKernelBase):
             pad = _calc_padding_for_alignment(align, base)
             base += pad
             # Move to offset
-            offseted = ctypes.addressof(kernargs) + base
+            offseted = kernargs.value + base
             asptr = ctypes.cast(offseted, ctypes.POINTER(type(av)))
             # Assign value
             asptr[0] = av
             # Increment offset
             base += align
 
-        assert (kernargs is None or
-                base <= ctypes.sizeof(kernargs)), "Kernel argument size is invalid"
+#        assert (kernargs is None or
+#                base <= ctypes.sizeof(kernargs)), "Kernel argument size is invalid"
 
         # Actual Kernel launch
         qq = ctx.default_queue
@@ -297,22 +312,61 @@ class HSAKernel(HSAKernelBase):
         qq.dispatch(symbol, kernargs, workgroup_size=self.local_size,
                     grid_size=self.global_size)
 
+
+        # retrieve auto converted arrays
+        for wb in retr:
+            wb()
+
         # Free kernel region
         if kernargs is not None:
             kernarg_region.free(kernargs)
 
 
-def _unpack_argument(ty, val, kernelargs):
+# hardware
+known_dgpus = frozenset([b'Fiji'])
+known_apus = frozenset([b'Spectre'])
+known_cpus = frozenset([b'Kaveri'])
+
+#TODO: remove the n copies of this that exist
+def dgpu_count():
+    """
+    Returns the number of discrete GPUs present on the current machine.
+
+    This can be overridden by setting the environment variable
+    `NUMBA_HSA_DGPU_PRESENT` to a positive integer.
+    """
+    if config.NUMBA_HSA_DGPU_PRESENT:
+        return config.NUMBA_HSA_DGPU_PRESENT
+    else:
+        ngpus = 0
+        for a in hsa.agents:
+            if a.is_component:
+                name = getattr(a, "name").lower()
+                for g in known_dgpus:
+                    if g.lower() in name:
+                        ngpus += 1
+        return ngpus
+
+
+def _unpack_argument(ty, val, kernelargs, retr, context):
     """
     Convert arguments to ctypes and append to kernelargs
     """
     if isinstance(ty, types.Array):
         c_intp = ctypes.c_ssize_t
+        # if a dgpu is present, move the data to the device.
+        if dgpu_count() > 0:
+            devary, conv = devicearray.auto_device(val, context)
+            if conv:
+                retr.append(lambda: devary.copy_to_host(context, val))
+            data = devary.device_ctypes_pointer
+        else:
+            data = ctypes.c_void_p(val.ctypes.data)
+
 
         meminfo = parent = ctypes.c_void_p(0)
         nitems = c_intp(val.size)
         itemsize = c_intp(val.dtype.itemsize)
-        data = ctypes.c_void_p(val.ctypes.data)
         kernelargs.append(meminfo)
         kernelargs.append(parent)
         kernelargs.append(nitems)

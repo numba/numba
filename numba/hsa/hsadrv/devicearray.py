@@ -9,8 +9,8 @@ import math
 import copy
 from ctypes import c_void_p
 import numpy as np
-from hsadrv import driver as _driver
-from numba.cuda.driver import memory_size_from_info as \
+from numba.hsa.hsadrv import driver as _driver
+from numba.cuda.cudadrv.driver import memory_size_from_info as \
 agnostic_memory_size_from_info
 from . import devices
 from numba import dummyarray, types, numpy_support
@@ -86,7 +86,7 @@ class DeviceNDArrayBase(object):
                 self.alloc_size = agnostic_memory_size_from_info(self.shape,
                                           self.strides, self.dtype.itemsize)
                 # find a coarse region on the dGPU
-                data = devices.get_context().memalloc(self.alloc_size)
+                dgpu_data = devices.get_context().memalloc(self.alloc_size)
             else:
                 raise NotImplemented("Use of existing memory not supported.")
                 # self.alloc_size = _driver.device_memory_size(dgpu_data)
@@ -96,7 +96,7 @@ class DeviceNDArrayBase(object):
 
         self.dgpu_data = dgpu_data
 
-    @property
+    property
     def _numba_type_(self):
         """
         Magic attribute expected by Numba to get the numba type that
@@ -114,7 +114,7 @@ class DeviceNDArrayBase(object):
         else:
             return self.dgpu_data.device_ctypes_pointer
 
-    def copy_to_device(self, ary):
+    def copy_to_device(self, ary, context):
         """Copy `ary` to `self`.
 
         If `ary` is a HSA memory, perform a device-to-device transfer.
@@ -130,9 +130,12 @@ class DeviceNDArrayBase(object):
         #else:
         #    sz = min(_driver.host_memory_size(ary), self.alloc_size)
         sz = self.alloc_size
-        _driver.host_to_device(self, ary, sz)
 
-    def copy_to_host(self, ary=None):
+        # host_to_dGPU(context, dst, src, size):
+
+        _driver.host_to_dGPU(context, self, ary, sz)
+
+    def copy_to_host(self, context, ary=None):
         """Copy ``self`` to ``ary`` or create a new Numpy ndarray
         if ``ary`` is ``None``.
 
@@ -153,9 +156,9 @@ class DeviceNDArrayBase(object):
 
             result_array = d_arr.copy_to_host()
         """
-        if ary is None:
+        if ary is None: # destination does not exist
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
-        else:
+        else: # destination does exist, it's `ary`, check it
             if ary.dtype != self.dtype:
                 raise TypeError('incompatible dtype')
 
@@ -170,12 +173,17 @@ class DeviceNDArrayBase(object):
                                 self.strides in scalstrides):
                     raise TypeError('incompatible strides; device %s; host %s' %
                                     (self.strides, ary.strides))
-            hostary = ary
+            hostary = ary # this is supposed to be a ptr for writing
 
+        # a location for the data exists as `hostary`
         assert self.alloc_size >= 0, "Negative memory size"
-        if self.alloc_size != 0:
-            _driver.device_to_host(hostary, self, self.alloc_size)
 
+        # copy the data from the device to the hostary
+        if self.alloc_size != 0:
+            _driver.dGPU_to_host(context, hostary, self, self.alloc_size)
+
+        # if the location for the data was originally None
+        # then create a new ndarray and plumb in the new memory
         if ary is None:
             if self.size == 0:
                 hostary = np.ndarray(shape=self.shape, dtype=self.dtype,
@@ -183,6 +191,9 @@ class DeviceNDArrayBase(object):
             else:
                 hostary = np.ndarray(shape=self.shape, dtype=self.dtype,
                                      strides=self.strides, buffer=hostary)
+        else: # else hostary points to ary and how has the right memory
+            hostary = ary
+
         return hostary
 
     def as_hsa_arg(self):
@@ -250,7 +261,7 @@ def from_array_like(ary, dgpu_data=None):
     if ary.ndim == 0:
         ary = ary.reshape(1)
     return DeviceNDArray(ary.shape, ary.strides, ary.dtype,
-                         writeback=ary, dgpu_data=dgpu_data)
+                         dgpu_data=dgpu_data)
 
 
 
@@ -270,9 +281,9 @@ def sentry_contiguous(ary):
             raise ValueError(errmsg_contiguous_buffer)
 
 
-def auto_device(obj, copy=True):
+def auto_device(obj, context, copy=True):
     """
-    Create a DeviceRecord or DeviceArray like obj and optionally copy data from
+    Create a DeviceArray like obj and optionally copy data from
     host to device. If obj already represents device memory, it is returned and
     no copy is made.
     """
@@ -282,7 +293,7 @@ def auto_device(obj, copy=True):
         sentry_contiguous(obj)
         devobj = from_array_like(obj)
         if copy:
-            devobj.copy_to_device(obj)
+            devobj.copy_to_device(obj, context)
         return devobj, True
 
 

@@ -9,13 +9,17 @@ import atexit
 import os
 import ctypes
 import struct
+import traceback
 import weakref
 from collections import Sequence
 from numba.utils import total_ordering
+from numba import mviewbuf
 from numba import utils
 from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
 from . import enums, enums_ext, drvapi
+from numba.utils import longint as long
+import numpy as np
 
 
 class HsaKernelTimedOut(HsaDriverError):
@@ -688,7 +692,7 @@ class Queue(object):
         packet.kernel_object = symbol.kernel_object
 
         packet.kernarg_address = (0 if kernargs is None
-                                  else ctypes.addressof(kernargs))
+                                  else kernargs.value)
 
         packet.private_segment_size = symbol.private_segment_size
         packet.group_segment_size = symbol.group_segment_size
@@ -1006,9 +1010,12 @@ class Context(object):
     """
     def __init__(self, agent):
         self._agent = weakref.proxy(agent)
-        qs = agent.queue_max_size
-        #defq = self._agent.create_queue_multi(qs, callback=self._callback)
-        #self._defaultqueue = defq.owned()
+
+        if self._agent.is_component: # only components have queues
+            qs = agent.queue_max_size
+            defq = self._agent.create_queue_multi(qs, callback=self._callback)
+            self._defaultqueue = defq.owned()
+
         self.allocations = utils.UniqueDict()
 
     def _callback(self, status, queue):
@@ -1043,7 +1050,7 @@ class Context(object):
         if hw == "GPU" or hw == "CPU":
             # check user requested flags
             if(memTypeFlags is not None):
-                for r in regions:
+                for r in all_reg:
                     count = 0
                     for flags in memTypeFlags:
                         if r.supports(flags):
@@ -1091,21 +1098,86 @@ class Context(object):
               combination could meet allocation restraints \
               (hardware = %s, size = %s, flags = %s)." % \
               ( hw, nbytes, memTypeFlags))
-        ret = MemoryPointer(weakref.proxy(self), mem,  nbytes)
+
+        fin = _make_mem_finalizer(hsa.hsa_memory_free)
+        ret = MemoryPointer(weakref.proxy(self), mem,  nbytes,\
+                finalizer = fin(self, mem))
         if mem.value == None:
-            import pdb; pdb.set_trace()
             raise RuntimeError("MemoryPointer has no value")
         self.allocations[mem.value] = ret
         return ret.own()
 
+def _make_mem_finalizer(dtor):
+    """
+    finalises memory
+    Parameters:
+    dtor a function that will delete/free held memory from a reference
+
+    Returns:
+    Finalising function
+    """
+    def mem_finalize(context, handle):
+        allocations = context.allocations
+
+        def core():
+            def cleanup():
+                if allocations:
+                    del allocations[handle.value]
+                dtor(handle)
+        return core
+
+    return mem_finalize
+
+def device_pointer(obj):
+    "Get the device pointer as an integer"
+    return device_ctypes_pointer(obj).value
+
+
+def device_ctypes_pointer(obj):
+    "Get the ctypes object for the device pointer"
+    if obj is None:
+        return c_void_p(0)
+    require_device_memory(obj)
+    return obj.device_ctypes_pointer
+
+
+def is_device_memory(obj):
+    """All HSA dGPU memory object is recognized as an instance with the
+    attribute "__hsa_memory__" defined and its value evaluated to True.
+
+    All HSA memory object should also define an attribute named
+    "device_pointer" which value is an int(or long) object carrying the pointer
+    value of the device memory address.  This is not tested in this method.
+    """
+    return getattr(obj, '__hsa_memory__', False)
+
+
+def require_device_memory(obj):
+    """A sentry for methods that accept HSA memory object.
+    """
+    if not is_device_memory(obj):
+        raise Exception("Not a HSA memory object.")
+
+
+def host_pointer(obj):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous
+    completes.
+    """
+    if isinstance(obj, (int, long)):
+        return obj
+
+    forcewritable = isinstance(obj, np.void)
+    return mviewbuf.memoryview_get_buffer(obj, forcewritable)
 
 def host_to_dGPU(context, dst, src, size):
     """
     Copy data from a host memory region to a dGPU.
     Parameters:
     context the dGPU context
-    dst an OwnedPointer to the destination location in dGPU memory
-    src an OwnedPointer to the source location in host memory
+    dst a pointer to the destination location in dGPU memory
+    src a pointer to the source location in host memory
     size the size (in bytes) of data to transfer
     """
     if size < 0:
@@ -1113,12 +1185,31 @@ def host_to_dGPU(context, dst, src, size):
 
     # dst and src are 2 pointers to memory
     # Allocate a host accessible buffer for the transfer
-    blob = ctypes.c_byte*size
-    buf = context.memalloc(blob, memTypeFlags=\
-            enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED, hostAccessible=True)
+    buf = context.memalloc(size, memTypeFlags=\
+            [enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED], hostAccessible=True)
     # Copy src->buf
-    hsa.hsa_memory_copy(buf.get(), src.get(), size)
+    hsa.hsa_memory_copy(device_pointer(buf), src.ctypes.data, size)
     # Copy buf->dst
-    hsa.hsa_memory_copy(dst.get(), buf.get(), size)
+    hsa.hsa_memory_copy(dst.device_ctypes_pointer.value, device_pointer(buf), size)
 
+def dGPU_to_host(context, dst, src, size):
+    """
+    Copy data from a host memory region to a dGPU.
+    Parameters:
+    context the dGPU context
+    dst a pointer to the destination location in dGPU memory
+    src a pointer to the source location in host memory
+    size the size (in bytes) of data to transfer
+    """
+    if size < 0:
+        raise ValueError("Invalid size given: %s" % size)
+
+    # dst and src are 2 pointers to memory
+    # Allocate a host accessible buffer for the transfer
+    buf = context.memalloc(size, memTypeFlags=\
+            [enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED], hostAccessible=True)
+    # Copy src->buf
+    hsa.hsa_memory_copy(device_pointer(buf), src.device_ctypes_pointer.value, size)
+    # Copy buf->dst
+    hsa.hsa_memory_copy(host_pointer(dst), device_pointer(buf), size)
 
