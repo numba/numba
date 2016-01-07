@@ -742,7 +742,7 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
     def test_numbers(self):
         check = self.check_unary(unbox_usecase)
         check([1, 2])
-        check([1j, 2.5])
+        check([1j, 2.5j])
 
     def test_tuples(self):
         check = self.check_unary(unbox_usecase2)
@@ -759,10 +759,16 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         check((1, [(2,), (3,)]))
 
     def test_errors(self):
-        # See #1545: error checking should ensure the list is homogenous
-        msg = "can't convert complex to (int|long)"
+        # See #1545 and #1594: error checking should ensure the list is
+        # homogenous
+        msg = "can't unbox heterogenous list"
         pyfunc = noop
         cfunc = jit(nopython=True)(pyfunc)
+        lst = [1, 2.5]
+        with self.assert_type_error(msg):
+            cfunc(lst)
+        # The list hasn't been changed (bogus reflecting)
+        self.assertEqual(lst, [1, 2.5])
         with self.assert_type_error(msg):
             cfunc([1, 2j])
         # Same when the list is nested in a tuple or namedtuple
@@ -826,6 +832,17 @@ class TestListReflection(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(expected, got)
         self.assertPreciseEqual(pylist, clist)
         self.assertPreciseEqual(sys.getrefcount(pylist), sys.getrefcount(clist))
+
+    def test_reflect_clean(self):
+        """
+        When the list wasn't mutated, no reflection should take place.
+        """
+        cfunc = jit(nopython=True)(noop)
+        # Use a complex, as Python integers can be cached
+        l = [12.5j]
+        ids = [id(x) for x in l]
+        cfunc(l)
+        self.assertEqual([id(x) for x in l], ids)
 
 
 if __name__ == '__main__':

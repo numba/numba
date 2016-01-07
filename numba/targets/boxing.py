@@ -454,6 +454,57 @@ def box_list(typ, val, c):
     return c.builder.load(res)
 
 
+def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
+    """
+    Construct a new native list from a Python list.
+    """
+    # Allocate a new native list
+    ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
+    with c.builder.if_else(ok, likely=True) as (if_ok, if_not_ok):
+        with if_ok:
+            list.size = size
+            zero = ir.Constant(size.type, 0)
+            with c.builder.if_then(c.builder.icmp_signed('>', size, zero),
+                                   likely=True):
+                # Traverse Python list and unbox objects into native list
+                expected_typobj = c.pyapi.get_type(c.pyapi.list_getitem(obj, zero))
+                with cgutils.for_range(c.builder, size) as loop:
+                    itemobj = c.pyapi.list_getitem(obj, loop.index)
+                    typobj = c.pyapi.get_type(itemobj)
+
+                    # Mandate that objects all have the same exact type
+                    type_mismatch = c.builder.icmp_signed('!=', typobj,
+                                                          expected_typobj)
+                    with c.builder.if_then(type_mismatch, likely=False):
+                        c.builder.store(cgutils.true_bit, errorptr)
+                        c.pyapi.err_set_string("PyExc_TypeError",
+                                               "can't unbox heterogenous list")
+                        loop.do_break()
+
+                    # XXX we don't call native cleanup for each
+                    # list element, since that would require keeping
+                    # of which unboxings have been successful.
+                    native = c.unbox(typ.dtype, itemobj)
+                    with c.builder.if_then(native.is_error, likely=False):
+                        c.builder.store(cgutils.true_bit, errorptr)
+                    list.setitem(loop.index, native.value)
+
+            if typ.reflected:
+                list.parent = obj
+            # Stuff meminfo pointer into the Python object for
+            # later reuse.
+            c.pyapi.list_set_private_data(obj, list.meminfo)
+            list.set_dirty(False)
+            c.builder.store(list.value, listptr)
+
+        with if_not_ok:
+            c.builder.store(cgutils.true_bit, errorptr)
+
+    # If an error occurred, drop the whole native list
+    with c.builder.if_then(c.builder.load(errorptr)):
+        c.context.nrt_decref(c.builder, typ, list.value)
+
+
 @unbox(types.List)
 def unbox_list(typ, obj, c):
     """
@@ -483,32 +534,7 @@ def unbox_list(typ, obj, c):
             c.builder.store(list.value, listptr)
 
         with otherwise:
-            # Allocate a new native list
-            ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
-            with c.builder.if_else(ok, likely=True) as (if_ok, if_not_ok):
-                with if_ok:
-                    list.size = size
-                    with cgutils.for_range(c.builder, size) as loop:
-                        itemobj = c.pyapi.list_getitem(obj, loop.index)
-                        # XXX we don't call native cleanup for each
-                        # list element, since that would require keeping
-                        # of which unboxings have been successful.
-                        native = c.unbox(typ.dtype, itemobj)
-                        with c.builder.if_then(native.is_error, likely=False):
-                            c.builder.store(cgutils.true_bit, errorptr)
-                        list.setitem(loop.index, native.value)
-                    if typ.reflected:
-                        list.parent = obj
-                    # Stuff meminfo pointer into the Python object for
-                    # later reuse.
-                    c.pyapi.list_set_private_data(obj, list.meminfo)
-                    c.builder.store(list.value, listptr)
-                with if_not_ok:
-                    c.builder.store(cgutils.true_bit, errorptr)
-
-            # If an error occurred, drop the whole native list
-            with c.builder.if_then(c.builder.load(errorptr)):
-                c.context.nrt_decref(c.builder, typ, list.value)
+            _python_list_to_native(typ, obj, c, size, listptr, errorptr)
 
     def cleanup():
         # Clean up the stuffed pointer, as the meminfo is now invalid.

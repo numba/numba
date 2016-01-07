@@ -1592,6 +1592,11 @@ numba_gil_release(PyGILState_STATE *state) {
     PyGILState_Release(*state);
 }
 
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_py_type(PyObject *obj) {
+    return (PyObject *) Py_TYPE(obj);
+}
+
 /* Pointer-stuffing functions for tagging a Python list object with an
  * arbitrary pointer.
  * Note a similar hack is used by Python itself, since

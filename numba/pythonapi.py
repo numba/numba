@@ -202,6 +202,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="Py_DecRef")
         self.builder.call(fn, [obj])
 
+    def get_type(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="numba_py_type")
+        return self.builder.call(fn, [obj])
+
     #
     # Argument unpacking
     #
