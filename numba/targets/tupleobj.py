@@ -5,36 +5,37 @@ Implementation of tuple objects
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 
-from .imputils import (builtin, builtin_attr, implement, impl_attribute,
-                       impl_attribute_generic, iternext_impl,
-                       impl_ret_borrowed, impl_ret_untracked)
+from .imputils import (lower_builtin, lower_getattr_generic, lower_cast,
+                       iternext_impl, impl_ret_borrowed, impl_ret_untracked)
 from .. import typing, types, cgutils
 
 
-@builtin
-@implement(types.NamedTupleClass, types.VarArg(types.Any))
+@lower_builtin(types.NamedTupleClass, types.VarArg(types.Any))
 def namedtuple_constructor(context, builder, sig, args):
     # A namedtuple has the same representation as a regular tuple
     res = context.make_tuple(builder, sig.return_type, args)
     # The tuple's contents are borrowed
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
-@builtin
-@implement(types.len_type, types.BaseTuple)
+@lower_builtin(len, types.BaseTuple)
 def tuple_len(context, builder, sig, args):
     tupty, = sig.args
     retty = sig.return_type
     res = context.get_constant(retty, len(tupty.types))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(bool, types.BaseTuple)
+@lower_builtin(bool, types.BaseTuple)
 def tuple_bool(context, builder, sig, args):
     tupty, = sig.args
     if len(tupty):
         return cgutils.true_bit
     else:
         return cgutils.false_bit
+
+@lower_builtin('+', types.BaseTuple, types.BaseTuple)
+def tuple_add(context, builder, sig, args):
+    left, right = [cgutils.unpack_tuple(builder, x) for x in args]
+    return context.make_tuple(builder, sig.return_type, left + right)
 
 def tuple_cmp_ordered(context, builder, op, sig, args):
     tu, tv = sig.args
@@ -57,8 +58,7 @@ def tuple_cmp_ordered(context, builder, op, sig, args):
     builder.position_at_end(bbend)
     return builder.load(res)
 
-@builtin
-@implement('==', types.BaseTuple, types.BaseTuple)
+@lower_builtin('==', types.BaseTuple, types.BaseTuple)
 def tuple_eq(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
@@ -73,39 +73,33 @@ def tuple_eq(context, builder, sig, args):
         res = builder.and_(res, pred)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement('!=', types.BaseTuple, types.BaseTuple)
+@lower_builtin('!=', types.BaseTuple, types.BaseTuple)
 def tuple_ne(context, builder, sig, args):
     res = builder.not_(tuple_eq(context, builder, sig, args))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement('<', types.BaseTuple, types.BaseTuple)
+@lower_builtin('<', types.BaseTuple, types.BaseTuple)
 def tuple_lt(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '<', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement('<=', types.BaseTuple, types.BaseTuple)
+@lower_builtin('<=', types.BaseTuple, types.BaseTuple)
 def tuple_le(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '<=', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement('>', types.BaseTuple, types.BaseTuple)
+@lower_builtin('>', types.BaseTuple, types.BaseTuple)
 def tuple_gt(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '>', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement('>=', types.BaseTuple, types.BaseTuple)
+@lower_builtin('>=', types.BaseTuple, types.BaseTuple)
 def tuple_ge(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '>=', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin_attr
-@impl_attribute_generic(types.BaseNamedTuple)
+@lower_getattr_generic(types.BaseNamedTuple)
 def namedtuple_getattr(context, builder, typ, value, attr):
     """
     Fetch a namedtuple's field.
@@ -126,9 +120,8 @@ def make_unituple_iter(tupiter):
     return cgutils.create_struct_proxy(tupiter)
 
 
-@builtin
-@implement('getiter', types.UniTuple)
-@implement('getiter', types.NamedUniTuple)
+@lower_builtin('getiter', types.UniTuple)
+@lower_builtin('getiter', types.NamedUniTuple)
 def getiter_unituple(context, builder, sig, args):
     [tupty] = sig.args
     [tup] = args
@@ -147,8 +140,7 @@ def getiter_unituple(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement('iternext', types.UniTupleIter)
+@lower_builtin('iternext', types.UniTupleIter)
 @iternext_impl
 def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
@@ -175,9 +167,8 @@ def iternext_unituple(context, builder, sig, args, result):
         builder.store(nidx, iterval.index)
 
 
-@builtin
-@implement('getitem', types.UniTuple, types.intp)
-@implement('getitem', types.NamedUniTuple, types.intp)
+@lower_builtin('getitem', types.UniTuple, types.intp)
+@lower_builtin('getitem', types.NamedUniTuple, types.intp)
 def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
@@ -209,10 +200,29 @@ def getitem_unituple(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement('static_getitem', types.BaseTuple, types.Const)
+@lower_builtin('static_getitem', types.BaseTuple, types.Const)
 def static_getitem_tuple(context, builder, sig, args):
     tup, idx = args
     assert isinstance(idx, int)
     res = builder.extract_value(tup, idx)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+
+#------------------------------------------------------------------------------
+# Implicit conversion
+
+@lower_cast(types.BaseTuple, types.BaseTuple)
+def tuple_to_tuple(context, builder, fromty, toty, val):
+    if (isinstance(fromty, types.BaseNamedTuple)
+        or isinstance(toty, types.BaseNamedTuple)):
+        # Disallowed by typing layer
+        raise NotImplementedError
+
+    if len(fromty) != len(toty):
+        # Disallowed by typing layer
+        raise NotImplementedError
+
+    olditems = cgutils.unpack_tuple(builder, val, len(fromty))
+    items = [context.cast(builder, v, f, t)
+             for v, f, t in zip(olditems, fromty, toty)]
+    return context.make_tuple(builder, toty, items)

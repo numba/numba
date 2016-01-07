@@ -410,7 +410,14 @@ def static_temp_directory(dirname):
     DLL under Windows (this is a bit fragile if stale files can influence the
     result of future test runs).
     """
-    tmpdir = os.path.join(tempfile.gettempdir(), dirname)
+    if os.name == 'nt':
+        # Under Windows, gettempdir() points to the user-local temp dir
+        tmpdir = os.path.join(tempfile.gettempdir(), dirname)
+    else:
+        # Mix the UID into the directory name to allow different users to
+        # run the test suite without permission errors (issue #1586)
+        tmpdir = os.path.join(tempfile.gettempdir(),
+                              "%s.%s" % (dirname, os.getuid()))
     try:
         os.mkdir(tmpdir)
     except OSError as e:

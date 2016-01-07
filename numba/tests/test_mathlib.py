@@ -167,10 +167,17 @@ def ldexp(x, e):
     return math.ldexp(x, e)
 
 
+def get_constants():
+    return math.pi, math.e
+
+
 class TestMathLib(TestCase):
 
     def setUp(self):
         self.ccache = CompilationCache()
+
+    def test_constants(self):
+        self.run_nullary_func(get_constants, no_pyobj_flags)
 
     def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
                   prec='exact', **kwargs):

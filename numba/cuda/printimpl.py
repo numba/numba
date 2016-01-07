@@ -1,16 +1,17 @@
 from __future__ import print_function, absolute_import, division
+
 from llvmlite.llvmpy.core import Type, Constant
+
 from numba import types, typing, cgutils
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import Registry
 from . import nvvmutils
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 voidptr = Type.pointer(Type.int(8))
 
-@register
-@implement(types.print_item_type, types.Integer)
+@lower("print_item", types.Integer)
 def int_print_impl(context, builder, sig, args):
     [x] = args
     [srctype] = sig.args
@@ -30,8 +31,7 @@ def int_print_impl(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@register
-@implement(types.print_item_type, types.Float)
+@lower("print_item", types.Float)
 def real_print_impl(context, builder, sig, args):
     [x] = args
     [srctype] = sig.args
@@ -47,8 +47,7 @@ def real_print_impl(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@register
-@implement(types.print_type, types.VarArg(types.Any))
+@lower(print, types.VarArg(types.Any))
 def print_varargs(context, builder, sig, args):
     """This function is a generic 'print' wrapper for arbitrary types.
     It dispatches to the appropriate 'print' implementations above
@@ -61,7 +60,7 @@ def print_varargs(context, builder, sig, args):
 
     for i, (argtype, argval) in enumerate(zip(sig.args, args)):
         signature = typing.signature(types.none, argtype)
-        imp = context.get_function(types.print_item_type, signature)
+        imp = context.get_function("print_item", signature)
         imp(builder, [argval])
         if i < len(args) - 1:
             builder.call(vprint, (sep, Constant.null(voidptr)))

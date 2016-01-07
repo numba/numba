@@ -696,17 +696,24 @@ class Lower(BaseLower):
             if isinstance(resty, types.BoundFunction):
                 # if we are getting out a method, assume we have typed this
                 # properly and just build a bound function object
-                res = self.context.get_bound_function(self.builder, val, ty)
+                casted = self.context.cast(self.builder, val, ty, resty.this)
+                res = self.context.get_bound_function(self.builder, casted,
+                                                      resty.this)
                 self.incref(resty, res)
                 return res
             else:
-                impl = self.context.get_attribute(val, ty, expr.attr)
+                impl = self.context.get_getattr(ty, expr.attr)
+                attrty = self.context.typing_context.resolve_getattr(ty,
+                                                                     expr.attr)
 
                 if impl is None:
                     # ignore the attribute
                     return self.context.get_dummy_value()
                 else:
                     res = impl(self.context, self.builder, ty, val, expr.attr)
+
+                # Cast the attribute type to the expected output type
+                res = self.context.cast(self.builder, res, attrty, resty)
             return res
 
         elif expr.op == "static_getitem":

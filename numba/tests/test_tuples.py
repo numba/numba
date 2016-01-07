@@ -7,7 +7,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import jit, types
+from numba import jit, types, errors
 from .support import TestCase, MemoryLeakMixin
 
 
@@ -33,6 +33,9 @@ def tuple_index(tup, idx):
 
 def len_usecase(tup):
     return len(tup)
+
+def add_usecase(a, b):
+    return a + b
 
 def eq_usecase(a, b):
     return a == b
@@ -72,6 +75,9 @@ def make_point_nrt(n):
 
 def type_usecase(tup, *args):
     return type(tup)(*args)
+
+def identity(tup):
+    return tup
 
 
 class TestTupleReturn(TestCase):
@@ -162,6 +168,19 @@ class TestOperations(TestCase):
         cr = compile_isolated(pyfunc,
                               [types.Tuple(())])
         self.assertPreciseEqual(cr.entry_point(()), pyfunc(()))
+
+    def test_add(self):
+        pyfunc = add_usecase
+        samples = [(types.Tuple(()), ()),
+                   (types.UniTuple(types.int32, 0), ()),
+                   (types.UniTuple(types.int32, 1), (42,)),
+                   (types.Tuple((types.int64, types.float32)), (3, 4.5)),
+                   ]
+        for (ta, a), (tb, b) in itertools.product(samples, samples):
+            cr = compile_isolated(pyfunc, (ta, tb))
+            expected = pyfunc(a, b)
+            got = cr.entry_point(a, b)
+            self.assertPreciseEqual(got, expected, msg=(ta, tb))
 
     def _test_compare(self, pyfunc):
         def eq(pyfunc, cfunc, args):
@@ -338,6 +357,34 @@ class TestNamedTupleNRT(TestCase, MemoryLeakMixin):
             got = cfunc(arg)
             self.assertIs(type(got), type(expected))
             self.assertPreciseEqual(got, expected)
+
+
+class TestConversions(TestCase):
+    """
+    Test implicit conversions between tuple types.
+    """
+
+    def check_conversion(self, fromty, toty, val):
+        pyfunc = identity
+        cr = compile_isolated(pyfunc, (fromty,), toty)
+        cfunc = cr.entry_point
+        res = cfunc(val)
+        self.assertEqual(res, val)
+
+    def test_conversions(self):
+        check = self.check_conversion
+        fromty = types.UniTuple(types.int32, 2)
+        check(fromty, types.UniTuple(types.float32, 2), (4, 5))
+        check(fromty, types.Tuple((types.float32, types.int16)), (4, 5))
+        aty = types.UniTuple(types.int32, 0)
+        bty = types.Tuple(())
+        check(aty, bty, ())
+        check(bty, aty, ())
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.Tuple((types.float32,)), (4, 5))
+        self.assertIn("No conversion from (int32 x 2) to (float32 x 1)",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':

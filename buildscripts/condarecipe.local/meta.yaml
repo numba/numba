@@ -1,6 +1,7 @@
 package:
    name: numba
-   version: {{ environ.get('GIT_DESCRIBE_TAG','') }}
+   # We need to provide a default version
+   version: {{ environ.get('GIT_DESCRIBE_TAG','devel') }}
 
 source:
    path: ../..

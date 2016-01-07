@@ -7,6 +7,7 @@ import weakref
 import numpy
 
 from .six import add_metaclass
+from .utils import cached_property
 
 
 # Types are added to a global registry (_typecache) in order to assign
@@ -81,9 +82,8 @@ class Type(object):
 
     mutable = False
 
-    def __init__(self, name, param=False):
+    def __init__(self, name):
         self.name = name
-        self.is_parametric = param
 
     @property
     def key(self):
@@ -139,6 +139,13 @@ class Type(object):
         type inference.  Default implementation returns True.
         """
         return True
+
+    def augment(self, other):
+        """
+        Augment this type with the *other*.  Return the augmented type,
+        or None if not supported.
+        """
+        return None
 
     # User-facing helpers.  These are not part of the core Type API but
     # are provided so that users can write e.g. `numba.boolean(1.5)`
@@ -224,14 +231,13 @@ class Callable(Type):
         Using the typing *context*, resolve the callable's signature for
         the given arguments.  A signature object is returned, or None.
         """
-        pass
 
     @abstractmethod
     def get_call_signatures(self):
         """
-        Returns a tuple of (signatures, parameterized)
+        Returns a tuple of (list of signatures, parameterized)
         """
-        pass
+
 
 class DTypeSpec(Type):
     """
@@ -292,3 +298,35 @@ class MutableSequence(Sequence):
     Base class for 1d mutable sequence types.  Instances should have the
     *dtype* attribute.
     """
+
+
+class ArrayCompatible(Type):
+    """
+    Type class for Numpy array-compatible objects (typically, objects
+    exposing an __array__ method).
+    Derived classes should implement the *as_array* attribute.
+    """
+    # If overriden by a subclass, it should also implement typing
+    # for '__array_wrap__' with arguments (input, formal result).
+    array_priority = 0.0
+
+    @abstractproperty
+    def as_array(self):
+        """
+        The equivalent array type, for operations supporting array-compatible
+        objects (such as ufuncs).
+        """
+
+    # For compatibility with types.Array
+
+    @cached_property
+    def ndim(self):
+        return self.as_array.ndim
+
+    @cached_property
+    def layout(self):
+        return self.as_array.layout
+
+    @cached_property
+    def dtype(self):
+        return self.as_array.dtype

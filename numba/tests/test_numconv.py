@@ -22,14 +22,7 @@ class TestNumberConversion(unittest.TestCase):
     Test all int/float numeric conversion to ensure we have all the external
     dependencies to perform these conversions.
     """
-
-    def _test_template(self, realty, intty):
-        def cast(x):
-            y = x
-            return y
-
-        cres = compile_isolated(cast, args=[realty], return_type=intty)
-        self.assertAlmostEqual(cres.entry_point(1.), 1)
+    # NOTE: more implicit tests are in test_numberctor
 
     @classmethod
     def automatic_populate(cls):

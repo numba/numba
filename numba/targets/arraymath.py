@@ -14,7 +14,7 @@ import numpy
 from numba import types, cgutils, typing
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
-from numba.targets.imputils import (builtin, implement, impl_ret_borrowed,
+from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
 from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
@@ -23,9 +23,8 @@ from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
 #----------------------------------------------------------------------------
 # Stats and aggregates
 
-@builtin
-@implement(numpy.sum, types.Array)
-@implement("array.sum", types.Array)
+@lower_builtin(numpy.sum, types.Array)
+@lower_builtin("array.sum", types.Array)
 def array_sum(context, builder, sig, args):
     zero = sig.return_type(0)
 
@@ -39,9 +38,8 @@ def array_sum(context, builder, sig, args):
                                     locals=dict(c=sig.return_type))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.prod, types.Array)
-@implement("array.prod", types.Array)
+@lower_builtin(numpy.prod, types.Array)
+@lower_builtin("array.prod", types.Array)
 def array_prod(context, builder, sig, args):
 
     def array_prod_impl(arr):
@@ -54,9 +52,8 @@ def array_prod(context, builder, sig, args):
                                     locals=dict(c=sig.return_type))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.cumsum, types.Array)
-@implement("array.cumsum", types.Array)
+@lower_builtin(numpy.cumsum, types.Array)
+@lower_builtin("array.cumsum", types.Array)
 def array_cumsum(context, builder, sig, args):
     scalar_dtype = sig.return_type.dtype
     dtype = as_dtype(scalar_dtype)
@@ -79,9 +76,8 @@ def array_cumsum(context, builder, sig, args):
 
 
 
-@builtin
-@implement(numpy.cumprod, types.Array)
-@implement("array.cumprod", types.Array)
+@lower_builtin(numpy.cumprod, types.Array)
+@lower_builtin("array.cumprod", types.Array)
 def array_cumprod(context, builder, sig, args):
     scalar_dtype = sig.return_type.dtype
     dtype = as_dtype(scalar_dtype)
@@ -101,9 +97,8 @@ def array_cumprod(context, builder, sig, args):
                                    locals=dict(c=scalar_dtype))
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.mean, types.Array)
-@implement("array.mean", types.Array)
+@lower_builtin(numpy.mean, types.Array)
+@lower_builtin("array.mean", types.Array)
 def array_mean(context, builder, sig, args):
     zero = sig.return_type(0)
 
@@ -119,9 +114,8 @@ def array_mean(context, builder, sig, args):
                                    locals=dict(c=sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.var, types.Array)
-@implement("array.var", types.Array)
+@lower_builtin(numpy.var, types.Array)
+@lower_builtin("array.var", types.Array)
 def array_var(context, builder, sig, args):
     def array_var_impl(arry):
         # Compute the mean
@@ -137,9 +131,8 @@ def array_var(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(numpy.std, types.Array)
-@implement("array.std", types.Array)
+@lower_builtin(numpy.std, types.Array)
+@lower_builtin("array.std", types.Array)
 def array_std(context, builder, sig, args):
     def array_std_impl(arry):
         return arry.var() ** 0.5
@@ -147,9 +140,8 @@ def array_std(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(numpy.min, types.Array)
-@implement("array.min", types.Array)
+@lower_builtin(numpy.min, types.Array)
+@lower_builtin("array.min", types.Array)
 def array_min(context, builder, sig, args):
     ty = sig.args[0].dtype
     if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
@@ -184,9 +176,8 @@ def array_min(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(numpy.max, types.Array)
-@implement("array.max", types.Array)
+@lower_builtin(numpy.max, types.Array)
+@lower_builtin("array.max", types.Array)
 def array_max(context, builder, sig, args):
     def array_max_impl(arry):
         for v in arry.flat:
@@ -201,9 +192,8 @@ def array_max(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(numpy.argmin, types.Array)
-@implement("array.argmin", types.Array)
+@lower_builtin(numpy.argmin, types.Array)
+@lower_builtin("array.argmin", types.Array)
 def array_argmin(context, builder, sig, args):
     ty = sig.args[0].dtype
     # NOTE: Under Numpy < 1.10, argmin() is inconsistent with min() on NaT values:
@@ -253,9 +243,8 @@ def array_argmin(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(numpy.argmax, types.Array)
-@implement("array.argmax", types.Array)
+@lower_builtin(numpy.argmax, types.Array)
+@lower_builtin("array.argmax", types.Array)
 def array_argmax(context, builder, sig, args):
     def array_argmax_impl(arry):
         for v in arry.flat:
@@ -274,8 +263,7 @@ def array_argmax(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(numpy.median, types.Array)
+@lower_builtin(numpy.median, types.Array)
 def array_median(context, builder, sig, args):
 
     def partition(A, low, high):
@@ -353,20 +341,17 @@ def _np_round_float(context, builder, tp, val):
     fn = module.get_or_insert_function(fnty, name=_np_round_intrinsic(tp))
     return builder.call(fn, (val,))
 
-@builtin
-@implement(numpy.round, types.Float)
+@lower_builtin(numpy.round, types.Float)
 def scalar_round_unary(context, builder, sig, args):
     res =  _np_round_float(context, builder, sig.args[0], args[0])
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.round, types.Integer)
+@lower_builtin(numpy.round, types.Integer)
 def scalar_round_unary(context, builder, sig, args):
     res = args[0]
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.round, types.Complex)
+@lower_builtin(numpy.round, types.Complex)
 def scalar_round_unary_complex(context, builder, sig, args):
     fltty = sig.args[0].underlying_float
     cplx_cls = context.make_complex(sig.args[0])
@@ -376,9 +361,8 @@ def scalar_round_unary_complex(context, builder, sig, args):
     res = z._getvalue()
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.round, types.Float, types.Integer)
-@implement(numpy.round, types.Integer, types.Integer)
+@lower_builtin(numpy.round, types.Float, types.Integer)
+@lower_builtin(numpy.round, types.Integer, types.Integer)
 def scalar_round_binary_float(context, builder, sig, args):
     def round_ndigits(x, ndigits):
         if math.isinf(x) or math.isnan(x):
@@ -408,8 +392,7 @@ def scalar_round_binary_float(context, builder, sig, args):
     res = context.compile_internal(builder, round_ndigits, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.round, types.Complex, types.Integer)
+@lower_builtin(numpy.round, types.Complex, types.Integer)
 def scalar_round_binary_complex(context, builder, sig, args):
     def round_ndigits(z, ndigits):
         return complex(numpy.round(z.real, ndigits),
@@ -419,8 +402,7 @@ def scalar_round_binary_complex(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(numpy.round, types.Array, types.Integer,
+@lower_builtin(numpy.round, types.Array, types.Integer,
            types.Array)
 def array_round(context, builder, sig, args):
     def array_round_impl(arr, decimals, out):
@@ -434,8 +416,7 @@ def array_round(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(numpy.sinc, types.Array)
+@lower_builtin(numpy.sinc, types.Array)
 def array_sinc(context, builder, sig, args):
     def array_sinc_impl(arr):
         out = numpy.zeros_like(arr)
@@ -445,8 +426,7 @@ def array_sinc(context, builder, sig, args):
     res = context.compile_internal(builder, array_sinc_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.sinc, types.Number)
+@lower_builtin(numpy.sinc, types.Number)
 def scalar_sinc(context, builder, sig, args):
     scalar_dtype = sig.return_type
     def scalar_sinc_impl(val):
@@ -458,8 +438,7 @@ def scalar_sinc(context, builder, sig, args):
                                    locals=dict(c=scalar_dtype))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.angle, types.Number)
+@lower_builtin(numpy.angle, types.Number)
 def scalar_angle(context, builder, sig, args):
     def scalar_angle_impl(val):
           return numpy.arctan2(val.imag, val.real)
@@ -467,8 +446,7 @@ def scalar_angle(context, builder, sig, args):
                                       sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.angle, types.Number, types.Boolean)
+@lower_builtin(numpy.angle, types.Number, types.Boolean)
 def scalar_angle_kwarg(context, builder, sig, args):
     def scalar_angle_impl(val, deg=False):
         if deg:
@@ -480,9 +458,8 @@ def scalar_angle_kwarg(context, builder, sig, args):
                                       sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.angle, types.Array)
-@implement(numpy.angle, types.Array, types.Boolean)
+@lower_builtin(numpy.angle, types.Array)
+@lower_builtin(numpy.angle, types.Array, types.Boolean)
 def array_angle_kwarg(context, builder, sig, args):
     arg = sig.args[0]
     if isinstance(arg.dtype, types.Complex):
@@ -497,10 +474,9 @@ def array_angle_kwarg(context, builder, sig, args):
     res = context.compile_internal(builder, array_angle_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@builtin
-@implement(numpy.nonzero, types.Array)
-@implement("array.nonzero", types.Array)
-@implement(numpy.where, types.Array)
+@lower_builtin(numpy.nonzero, types.Array)
+@lower_builtin("array.nonzero", types.Array)
+@lower_builtin(numpy.where, types.Array)
 def array_nonzero(context, builder, sig, args):
     aryty = sig.args[0]
     # Return type is a N-tuple of 1D C-contiguous arrays
@@ -592,8 +568,7 @@ def array_where(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin
-@implement(numpy.where, types.Any, types.Any, types.Any)
+@lower_builtin(numpy.where, types.Any, types.Any, types.Any)
 def any_where(context, builder, sig, args):
     cond = sig.args[0]
     if isinstance(cond, types.Array):
@@ -841,9 +816,8 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
     return builder.load(out)
 
 
-@builtin
-@implement(numpy.dot, types.Array, types.Array)
-@implement('@', types.Array, types.Array)
+@lower_builtin(numpy.dot, types.Array, types.Array)
+@lower_builtin('@', types.Array, types.Array)
 def dot_2(context, builder, sig, args):
     """
     np.dot(a, b)
@@ -863,8 +837,7 @@ def dot_2(context, builder, sig, args):
     else:
         assert 0
 
-@builtin
-@implement(numpy.vdot, types.Array, types.Array)
+@lower_builtin(numpy.vdot, types.Array, types.Array)
 def vdot(context, builder, sig, args):
     """
     np.vdot(a, b)
@@ -1011,8 +984,7 @@ def dot_3_mm(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, out._getvalue())
 
 
-@builtin
-@implement(numpy.dot, types.Array, types.Array,
+@lower_builtin(numpy.dot, types.Array, types.Array,
            types.Array)
 def dot_3(context, builder, sig, args):
     """

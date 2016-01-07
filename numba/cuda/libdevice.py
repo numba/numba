@@ -3,10 +3,10 @@ import sys
 import math
 from llvmlite.llvmpy.core import Type
 from numba import cgutils, types
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import Registry
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 float_set = types.float32, types.float64
 
@@ -62,10 +62,8 @@ def powi_implement(nvname):
     return core
 
 
-register(implement(math.pow, types.float32, types.int32)(powi_implement(
-    '__nv_powif')))
-register(implement(math.pow, types.float64, types.int32)(
-    powi_implement('__nv_powi')))
+lower(math.pow, types.float32, types.int32)(powi_implement('__nv_powif'))
+lower(math.pow, types.float64, types.int32)(powi_implement('__nv_powi'))
 
 
 booleans = []
@@ -106,19 +104,19 @@ binarys += [('__nv_hypot', '__nv_hypotf', math.hypot)]
 
 for name64, name32, key in booleans:
     impl64 = bool_implement(name64, types.float64)
-    register(implement(key, types.float64)(impl64))
+    lower(key, types.float64)(impl64)
     impl32 = bool_implement(name32, types.float32)
-    register(implement(key, types.float32)(impl32))
+    lower(key, types.float32)(impl32)
 
 
 for name64, name32, key in unarys:
     impl64 = unary_implement(name64, types.float64)
-    register(implement(key, types.float64)(impl64))
+    lower(key, types.float64)(impl64)
     impl32 = unary_implement(name32, types.float32)
-    register(implement(key, types.float32)(impl32))
+    lower(key, types.float32)(impl32)
 
 for name64, name32, key in binarys:
     impl64 = binary_implement(name64, types.float64)
-    register(implement(key, types.float64, types.float64)(impl64))
+    lower(key, types.float64, types.float64)(impl64)
     impl32 = binary_implement(name32, types.float32)
-    register(implement(key, types.float32, types.float32)(impl32))
+    lower(key, types.float32, types.float32)(impl32)

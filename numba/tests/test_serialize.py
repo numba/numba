@@ -18,7 +18,7 @@ class TestDispatcherPickling(TestCase):
             meth(proto, *args, **kwargs)
 
     def simulate_fresh_target(self):
-        dispatcher_cls = registry.target_registry['cpu']
+        dispatcher_cls = registry.dispatcher_registry['cpu']
         # Simulate fresh targetdescr
         dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)()
 

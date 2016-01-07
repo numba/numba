@@ -3,7 +3,6 @@ from __future__ import print_function
 from collections import namedtuple, defaultdict
 import copy
 import sys
-from types import MethodType
 
 import numpy
 
@@ -16,11 +15,11 @@ from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
-                                    builtin_registry, impl_attribute,
-                                    impl_ret_borrowed)
+                                    builtin_registry, impl_ret_borrowed,
+                                    RegistryLoader)
 from . import (
     arrayobj, arraymath, builtins, iterators, rangeobj, optional, slicing,
-    tupleobj)
+    tupleobj, imputils)
 from numba import datamodel
 
 try:
@@ -33,35 +32,19 @@ GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
 
-LTYPEMAP = {
-    types.pyobject: PYOBJECT,
 
-    types.boolean: Type.int(8),
+class OverloadSelector(object):
+    """
+    An object matching an actual signature against a registry of formal
+    signatures and choosing the best candidate, if any.
 
-    types.uint8: Type.int(8),
-    types.uint16: Type.int(16),
-    types.uint32: Type.int(32),
-    types.uint64: Type.int(64),
+    In the current implementation:
+    - a "signature" is a tuple of type classes or type instances
+    - the "best candidate" is simply the first match
+    """
 
-    types.int8: Type.int(8),
-    types.int16: Type.int(16),
-    types.int32: Type.int(32),
-    types.int64: Type.int(64),
-
-    types.float32: Type.float(),
-    types.float64: Type.double(),
-}
-
-STRUCT_TYPES = {
-    types.complex64: builtins.Complex64,
-    types.complex128: builtins.Complex128,
-    types.slice3_type: slicing.Slice,
-}
-
-
-class Overloads(object):
     def __init__(self):
-        # A list of (signature, implementation)
+        # A list of (formal args tuple, value)
         self.versions = []
 
     def find(self, sig):
@@ -70,7 +53,7 @@ class Overloads(object):
                 return impl
 
             # As generic type
-            if self._match_arglist(ver_sig.args, sig.args):
+            if self._match_arglist(ver_sig, sig):
                 return impl
 
         raise NotImplementedError(self, sig)
@@ -103,8 +86,12 @@ class Overloads(object):
             assert issubclass(formal, types.Type)
             return True
 
-    def append(self, impl, sig):
-        self.versions.append((sig, impl))
+    def append(self, value, sig):
+        """
+        Add a formal signature and its associated value.
+        """
+        assert isinstance(sig, tuple), (value, sig)
+        self.versions.append((sig, value))
 
 
 @utils.runonce
@@ -164,16 +151,20 @@ class BaseContext(object):
 
     def __init__(self, typing_context):
         _load_global_helpers()
+
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
 
-        self.defns = defaultdict(Overloads)
-        self.attrs = defaultdict(Overloads)
-        self.generators = {}
+        # A mapping of installed registries to their loaders
+        self._registries = {}
+        # Declarations loaded from registries and other sources
+        self._defns = defaultdict(OverloadSelector)
+        self._getattrs = defaultdict(OverloadSelector)
+        self._setattrs = defaultdict(OverloadSelector)
+        self._casts = OverloadSelector()
+        # Other declarations
+        self._generators = {}
         self.special_ops = {}
-
-        self.install_registry(builtin_registry)
-
         self.cached_internal_func = {}
 
         self.data_model_manager = datamodel.default_manager
@@ -185,7 +176,19 @@ class BaseContext(object):
         """
         For subclasses to add initializer
         """
-        pass
+
+    def refresh(self):
+        """
+        Refresh context with new declarations from known registries.
+        Useful for third-party extensions.
+        """
+        self.install_registry(builtin_registry)
+        self.load_additional_registries()
+
+    def load_additional_registries(self):
+        """
+        Load target-specific registries.  Can be overriden by subclasses.
+        """
 
     def get_arg_packer(self, fe_args):
         return datamodel.ArgPacker(self.data_model_manager, fe_args)
@@ -210,40 +213,54 @@ class BaseContext(object):
         Install a *registry* (a imputils.Registry instance) of function
         and attribute implementations.
         """
-        self.insert_func_defn(registry.functions)
-        self.insert_attr_defn(registry.attributes)
+        try:
+            loader = self._registries[registry]
+        except KeyError:
+            loader = RegistryLoader(registry)
+            self._registries[registry] = loader
+        self.insert_func_defn(loader.new_registrations('functions'))
+        self._insert_getattr_defn(loader.new_registrations('getattrs'))
+        self._insert_setattr_defn(loader.new_registrations('setattrs'))
+        self._insert_cast_defn(loader.new_registrations('casts'))
 
     def insert_func_defn(self, defns):
-        for impl, func_sigs in defns:
-            for func, sig in func_sigs:
-                self.defns[func].append(impl, sig)
+        for impl, func, sig in defns:
+            self._defns[func].append(impl, sig)
 
-    def insert_attr_defn(self, defns):
-        for impl in defns:
-            self.attrs[impl.attr].append(impl, impl.signature)
+    def _insert_getattr_defn(self, defns):
+        for impl, attr, sig in defns:
+            self._getattrs[attr].append(impl, sig)
+
+    def _insert_setattr_defn(self, defns):
+        for impl, attr, sig in defns:
+            self._setattrs[attr].append(impl, sig)
+
+    def _insert_cast_defn(self, defns):
+        for impl, sig in defns:
+            self._casts.append(impl, sig)
 
     def insert_user_function(self, func, fndesc, libs=()):
         impl = user_function(fndesc, libs)
-        self.defns[func].append(impl, impl.signature)
+        self._defns[func].append(impl, impl.signature)
 
     def add_user_function(self, func, fndesc, libs=()):
-        if func not in self.defns:
+        if func not in self._defns:
             msg = "{func} is not a registered user function"
             raise KeyError(msg.format(func=func))
         impl = user_function(fndesc, libs)
-        self.defns[func].append(impl, impl.signature)
+        self._defns[func].append(impl, impl.signature)
 
     def insert_generator(self, genty, gendesc, libs=()):
         assert isinstance(genty, types.Generator)
         impl = user_generator(gendesc, libs)
-        self.generators[genty] = gendesc, impl
+        self._generators[genty] = gendesc, impl
 
     def remove_user_function(self, func):
         """
         Remove user function *func*.
         KeyError is raised if the function isn't known to us.
         """
-        del self.defns[func]
+        del self._defns[func]
 
     def get_external_function_type(self, fndesc):
         argtypes = [self.get_argument_type(aty)
@@ -426,100 +443,114 @@ class BaseContext(object):
         lty = self.get_value_type(ty)
         return Constant.null(lty)
 
-    def get_setattr(self, attr, sig):
-        typ = sig.args[0]
-        if isinstance(typ, types.Record):
-            self.sentry_record_alignment(typ, attr)
-
-            offset = typ.offset(attr)
-            elemty = typ.typeof(attr)
-
-            def imp(context, builder, sig, args):
-                valty = sig.args[1]
-                [target, val] = args
-                dptr = cgutils.get_record_member(builder, target, offset,
-                                                 self.get_data_type(elemty))
-                val = context.cast(builder, val, valty, elemty)
-                align = None if typ.aligned else 1
-                self.pack_value(builder, elemty, val, dptr, align=align)
-
-            return _wrap_impl(imp, self, sig)
-
     def get_function(self, fn, sig):
         """
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
-        if isinstance(fn, (types.Function)):
-            key = fn.template.key
-
-            if isinstance(key, MethodType):
-                overloads = self.defns[key.im_func]
-
-            elif sig.recvr:
-                sig = typing.signature(sig.return_type,
-                                       *((sig.recvr,) + sig.args))
-                overloads = self.defns[key]
-            else:
-                overloads = self.defns[key]
-
-        elif isinstance(fn, types.Dispatcher):
-            key = fn.overloaded.get_overload(sig.args)
-            overloads = self.defns[key]
+        sig = sig.as_function()
+        if isinstance(fn, (types.Function, types.BoundFunction,
+                           types.Dispatcher)):
+            key = fn.get_impl_key(sig)
+            overloads = self._defns[key]
         else:
             key = fn
-            overloads = self.defns[key]
+            overloads = self._defns[key]
+
         try:
-            return _wrap_impl(overloads.find(sig), self, sig)
+            return _wrap_impl(overloads.find(sig.args), self, sig)
         except NotImplementedError:
             pass
         if isinstance(fn, types.Type):
             # It's a type instance => try to find a definition for the type class
-            return self.get_function(type(fn), sig)
+            try:
+                return self.get_function(type(fn), sig)
+            except NotImplementedError:
+                # Raise exception for the type instance, for a better error message
+                pass
         raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
 
     def get_generator_desc(self, genty):
         """
         """
-        return self.generators[genty][0]
+        return self._generators[genty][0]
 
     def get_generator_impl(self, genty):
         """
         """
-        return self.generators[genty][1]
+        return self._generators[genty][1]
 
     def get_bound_function(self, builder, obj, ty):
+        assert self.get_value_type(ty) == obj.type
         return obj
 
-    def get_attribute(self, val, typ, attr):
+    def get_getattr(self, typ, attr):
+        """
+        Get the getattr() implementation for the given type and attribute name.
+        The return value is a callable with the signature
+        (context, builder, typ, val, attr).
+        """
         if isinstance(typ, types.Module):
             # Implement getattr for module-level globals.
             # We are treating them as constants.
             # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
-            if attrty is not None and not isinstance(attrty, types.Dummy):
+            if attrty is None or isinstance(attrty, types.Dummy):
+                # No implementation required for dummies (functions, modules...),
+                # which are dealt with later
+                return None
+            else:
                 pyval = getattr(typ.pymod, attr)
                 llval = self.get_constant(attrty, pyval)
-                @impl_attribute(typ, attr, attrty)
-                def imp(context, builder, typ, val):
+                def imp(context, builder, typ, val, attr):
                     return impl_ret_borrowed(context, builder, attrty, llval)
                 return imp
-            # No implementation required for dummies (functions, modules...),
-            # which are dealt with later
-            return None
 
-        # Lookup specific attribute implementation for this type
-        overloads = self.attrs[attr]
+        # Lookup specific getattr implementation for this type and attribute
+        overloads = self._getattrs[attr]
         try:
-            return overloads.find(typing.signature(types.Any, typ))
+            return overloads.find((typ,))
         except NotImplementedError:
             pass
         # Lookup generic getattr implementation for this type
-        overloads = self.attrs[None]
+        overloads = self._getattrs[None]
         try:
-            return overloads.find(typing.signature(types.Any, typ))
+            return overloads.find((typ,))
         except NotImplementedError:
-            raise Exception("No definition for lowering %s.%s" % (typ, attr))
+            pass
+
+        raise NotImplementedError("No definition for lowering %s.%s" % (typ, attr))
+
+    def get_setattr(self, attr, sig):
+        """
+        Get the setattr() implementation for the given attribute name
+        and signature.
+        The return value is a callable with the signature (builder, args).
+        """
+        assert len(sig.args) == 2
+        typ = sig.args[0]
+        valty = sig.args[1]
+
+        def wrap_setattr(impl):
+            def wrapped(builder, args):
+                return impl(self, builder, sig, args, attr)
+            return wrapped
+
+        # Lookup specific setattr implementation for this type and attribute
+        overloads = self._setattrs[attr]
+        try:
+            return wrap_setattr(overloads.find((typ, valty)))
+        except NotImplementedError:
+            pass
+        # Lookup generic setattr implementation for this type
+        overloads = self._setattrs[None]
+        try:
+            return wrap_setattr(overloads.find((typ, valty)))
+        except NotImplementedError:
+            pass
+
+        raise NotImplementedError("No definition for lowering %s.%s = %s"
+                                  % (typ, attr, valty))
 
     def get_argument_value(self, builder, ty, val):
         """
@@ -567,143 +598,19 @@ class BaseContext(object):
         return pair.second
 
     def cast(self, builder, val, fromty, toty):
+        """
+        Cast a value of type *fromty* to type *toty*.
+        This implements implicit conversions as can happen due to the
+        granularity of the Numba type system, or lax Python semantics.
+        """
         if fromty == toty or toty == types.Any:
             return val
-
-        elif isinstance(fromty, types.Integer) and isinstance(toty, types.Integer):
-            if toty.bitwidth == fromty.bitwidth:
-                # Just a change of signedness
-                return val
-            elif toty.bitwidth < fromty.bitwidth:
-                # Downcast
-                return builder.trunc(val, self.get_value_type(toty))
-            elif fromty.signed:
-                # Signed upcast
-                return builder.sext(val, self.get_value_type(toty))
-            else:
-                # Unsigned upcast
-                return builder.zext(val, self.get_value_type(toty))
-
-        elif fromty in types.real_domain and toty in types.real_domain:
-            lty = self.get_value_type(toty)
-            if fromty == types.float32 and toty == types.float64:
-                return builder.fpext(val, lty)
-            elif fromty == types.float64 and toty == types.float32:
-                return builder.fptrunc(val, lty)
-
-        elif fromty in types.real_domain and toty in types.complex_domain:
-            if fromty == types.float32:
-                if toty == types.complex128:
-                    real = self.cast(builder, val, fromty, types.float64)
-                else:
-                    real = val
-
-            elif fromty == types.float64:
-                if toty == types.complex64:
-                    real = self.cast(builder, val, fromty, types.float32)
-                else:
-                    real = val
-
-            if toty == types.complex128:
-                imag = self.get_constant(types.float64, 0)
-            elif toty == types.complex64:
-                imag = self.get_constant(types.float32, 0)
-            else:
-                raise Exception("unreachable")
-
-            cmplx = self.make_complex(toty)(self, builder)
-            cmplx.real = real
-            cmplx.imag = imag
-            return cmplx._getvalue()
-
-        elif fromty in types.integer_domain and toty in types.real_domain:
-            lty = self.get_value_type(toty)
-            if fromty in types.signed_domain:
-                return builder.sitofp(val, lty)
-            else:
-                return builder.uitofp(val, lty)
-
-        elif toty in types.integer_domain and fromty in types.real_domain:
-            lty = self.get_value_type(toty)
-            if toty in types.signed_domain:
-                return builder.fptosi(val, lty)
-            else:
-                return builder.fptoui(val, lty)
-
-        elif fromty in types.integer_domain and toty in types.complex_domain:
-            cmplxcls, flty = builtins.get_complex_info(toty)
-            cmpl = cmplxcls(self, builder)
-            cmpl.real = self.cast(builder, val, fromty, flty)
-            cmpl.imag = self.get_constant(flty, 0)
-            return cmpl._getvalue()
-
-        elif fromty in types.complex_domain and toty in types.complex_domain:
-            srccls, srcty = builtins.get_complex_info(fromty)
-            dstcls, dstty = builtins.get_complex_info(toty)
-
-            src = srccls(self, builder, value=val)
-            dst = dstcls(self, builder)
-            dst.real = self.cast(builder, src.real, srcty, dstty)
-            dst.imag = self.cast(builder, src.imag, srcty, dstty)
-            return dst._getvalue()
-
-        elif (isinstance(fromty, (types.UniTuple, types.Tuple)) and
-              isinstance(toty, (types.UniTuple, types.Tuple)) and
-              len(toty) == len(fromty)):
-            olditems = cgutils.unpack_tuple(builder, val, len(fromty))
-            items = [self.cast(builder, i, f, t)
-                     for i, f, t in zip(olditems, fromty, toty)]
-            return cgutils.make_anonymous_struct(builder, items)
-
-        elif toty == types.boolean:
-            return self.is_true(builder, fromty, val)
-
-        elif fromty == types.boolean:
-            # first promote to int32
-            asint = builder.zext(val, Type.int())
-            # then promote to number
-            return self.cast(builder, asint, types.int32, toty)
-
-        elif fromty == types.none and isinstance(toty, types.Optional):
-            return self.make_optional_none(builder, toty.type)
-
-        elif isinstance(toty, types.Optional):
-            casted = self.cast(builder, val, fromty, toty.type)
-            return self.make_optional_value(builder, toty.type, casted)
-
-        elif isinstance(fromty, types.Optional):
-            optty = self.make_optional(fromty)
-            optval = optty(self, builder, value=val)
-            validbit = cgutils.as_bool_bit(builder, optval.valid)
-            with cgutils.if_unlikely(builder, builder.not_(validbit)):
-                msg = "expected %s, got None" % (fromty.type,)
-                self.call_conv.return_user_exc(builder, TypeError, (msg,))
-
-            return optval.data
-
-        elif (isinstance(fromty, types.Array) and
-              isinstance(toty, types.Array)):
-            # Type inference should have prevented illegal array casting.
-            assert toty.layout == 'A'
-            return val
-
-        elif (isinstance(fromty, types.List) and
-              isinstance(toty, types.List)):
-            # Casting from non-reflected to reflected
-            assert fromty.dtype == toty.dtype
-            return val
-
-        elif (isinstance(fromty, types.RangeType) and
-              isinstance(toty, types.RangeType)):
-            olditems = cgutils.unpack_tuple(builder, val, 3)
-            items = [self.cast(builder, v, fromty.dtype, toty.dtype)
-                     for v in olditems]
-            return cgutils.make_anonymous_struct(builder, items)
-
-        elif fromty in types.integer_domain and toty == types.voidptr:
-            return builder.inttoptr(val, self.get_value_type(toty))
-
-        raise NotImplementedError("cast", val, fromty, toty)
+        try:
+            impl = self._casts.find((fromty, toty))
+            return impl(self, builder, fromty, toty, val)
+        except NotImplementedError:
+            # Re-raise below
+            raise NotImplementedError("cast", val, fromty, toty)
 
     def generic_compare(self, builder, key, argtypes, args):
         """
@@ -902,6 +809,7 @@ class BaseContext(object):
         """
         Create a tuple of the given *typ* containing the *values*.
         """
+        # XXX Use cgutils.pack_array / cgutils.make_anonymous_struct ?
         tup = self.get_constant_undef(typ)
         for i, val in enumerate(values):
             tup = builder.insert_value(tup, val, i)
@@ -990,6 +898,19 @@ class BaseContext(object):
         fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
+
+    def nrt_meminfo_alloc_dtor(self, builder, size, dtor):
+        if not self.enable_nrt:
+            raise Exception("Require NRT")
+        mod = builder.module
+        ll_void_ptr = self.get_value_type(types.voidptr)
+        fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
+                                   [self.get_value_type(types.intp),
+                                    ll_void_ptr])
+        fn = mod.get_or_insert_function(fnty,
+                                        name="NRT_MemInfo_alloc_dtor_safe")
+        fn.return_value.add_attribute("noalias")
+        return builder.call(fn, [size, builder.bitcast(dtor, ll_void_ptr)])
 
     def nrt_meminfo_alloc_aligned(self, builder, size, align):
         """
@@ -1098,6 +1019,12 @@ class BaseContext(object):
 
 
 class _wrap_impl(object):
+    """
+    A wrapper object to call an implementation function with some predefined
+    (context, signature) arguments.
+    The wrapper also forwards attribute queries, which is important.
+    """
+
     def __init__(self, imp, context, sig):
         self._imp = imp
         self._context = context

@@ -90,6 +90,7 @@ operations:
 
 * comparison between tuples
 * iteration and indexing over homogenous tuples
+* addition (concatenation) between tuples
 
 list
 ----

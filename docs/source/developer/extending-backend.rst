@@ -4,6 +4,11 @@ Extending the Numba backend
 
 .. todo:: write this
 
+.. warning::
+   This part of the documentation is obsolete and will be rewritten
+   once the user-facing extension API stabilizes.
+
+
 Helper Lib
 ----------
 

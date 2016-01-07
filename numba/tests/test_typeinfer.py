@@ -203,7 +203,7 @@ class TestUnify(unittest.TestCase):
         self.assert_unify(aty, bty, types.Optional(i64))
         # Failure
         aty = types.Optional(i32)
-        bty = types.Optional(types.len_type)
+        bty = types.Optional(types.slice3_type)
         self.assert_unify_failure(aty, bty)
 
     def test_tuple(self):
@@ -238,12 +238,12 @@ class TestUnify(unittest.TestCase):
                           types.UniTuple(types.Tuple((i64, f32)), 2))
         # Failures
         aty = types.UniTuple(i32, 1)
-        bty = types.UniTuple(types.len_type, 1)
+        bty = types.UniTuple(types.slice3_type, 1)
         self.assert_unify_failure(aty, bty)
         aty = types.UniTuple(i32, 1)
         bty = types.UniTuple(i32, 2)
         self.assert_unify_failure(aty, bty)
-        aty = types.Tuple((i8, types.len_type))
+        aty = types.Tuple((i8, types.slice3_type))
         bty = types.Tuple((i32, i8))
         self.assert_unify_failure(aty, bty)
 
