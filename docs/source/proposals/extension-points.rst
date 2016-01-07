@@ -280,6 +280,23 @@ full signature)
 Proposed changes
 ''''''''''''''''
 
+Naming of the various decorators is quite vague and confusing.  We propose
+renaming ``@builtin`` to ``@infer``, ``@builtin_attr`` to ``@infer_getattr``
+and ``builtin_global`` to ``infer_global``.
+
+The two-step declaration for global values is a bit verbose, we propose
+simplifying it by allowing the use of ``infer_global`` as a decorator::
+
+   @infer_global(len)
+   class Len(AbstractTemplate):
+       key = len
+
+       def generic(self, args, kws):
+           assert not kws
+           (val,) = args
+           if isinstance(val, (types.Buffer, types.BaseTuple)):
+               return signature(types.intp, val)
+
 The class-based API can feel clumsy, we can add a functional API for
 some of the template kinds:
 
@@ -332,7 +349,7 @@ Add a generic function for implicit conversion, with multiple dispatch
 based on the source and destination types.  Here is an example showing
 how to write a float-to-integer conversion::
 
-   @builtin_cast(types.Float, types.Integer)
+   @lower_cast(types.Float, types.Integer)
    def float_to_integer(context, builder, fromty, toty, val):
        lty = context.get_value_type(toty)
        if toty.signed:
@@ -366,7 +383,12 @@ Proposed changes
 ''''''''''''''''
 
 Review and streamine the API.  Drop the requirement to write
-``types.Kind(...)`` explicitly.
+``types.Kind(...)`` explicitly.  Remove the separate ``@implement``
+decorator and rename ``@builtin`` to ``@lower_builtin``, ``@builtin_attr``
+to ``@lower_getattr``, etc.
+
+Add decorators to implement ``setattr()`` operations, named
+``@lower_setattr`` and ``@lower_setattr_generic``.
 
 
 Conversion from / to Python objects
@@ -387,6 +409,6 @@ implementation for a boolean value::
 Proposed changes
 ''''''''''''''''
 
-Perhaps change the implementation signature slightly, from ``(c, typ, val)``
-to ``(typ, val, c)``, to match the one chosen for the ``typeof_impl``
+Change the implementation signature from ``(c, typ, val)`` to
+``(typ, val, c)``, to match the one chosen for the ``typeof_impl``
 generic function.
