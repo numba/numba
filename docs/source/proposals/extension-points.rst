@@ -30,6 +30,12 @@ complicated than they should be.
 Proposed changes
 ----------------
 
+Dedicated module
+''''''''''''''''
+
+We propose the addition of a ``numba.extending`` module exposing the main
+APIs useful for extending Numba.
+
 Implementing a function
 '''''''''''''''''''''''
 
@@ -59,7 +65,65 @@ built-in function :func:`len` for tuples with this approach::
          return len_impl
 
 
-.. TODO: mention @overload_attribute
+Implementing an attribute
+'''''''''''''''''''''''''
+
+We propose the addition of a ``@overload_attribute`` decorator allowing
+the implementation of an attribute getter for use in :term:`nopython mode`.
+
+The following example implements the ``.nbytes`` attribute on Numpy arrays::
+
+   @overload_attribute(types.Array, 'nbytes')
+   def array_nbytes(arr):
+      def get(arr):
+          return arr.size * arr.itemsize
+      return get
+
+.. note::
+   The overload_attribute() signature allows for expansion to also define
+   setters and deleters, by letting the decorated function return a
+   ``getter, setter, deleter`` tuple instead of a single ``getter``.
+
+
+Implementing a method
+'''''''''''''''''''''
+
+We propose the addition of a ``@overload_method`` decorator allowing the
+implementation of an instance method for use in :term:`nopython mode`.
+
+The following example implements the ``.take()`` method on Numpy arrays::
+
+   @overload_method(types.Array, 'take')
+   def array_take(arr, indices):
+      if isinstance(indices, types.Array):
+          def take_impl(arr, indices):
+              n = indices.shape[0]
+              res = np.empty(n, arr.dtype)
+              for i in range(n):
+                  res[i] = arr[indices[i]]
+              return res
+          return take_impl
+
+
+Exposing a structure member
+'''''''''''''''''''''''''''
+
+We propose the addition of a ``make_attribute_wrapper()`` function exposing
+an internal field as a visible read-only attribute, for those types backed
+by a ``StructModel`` data model.
+
+For example, assuming ``PdIndexType`` is the Numba type of pandas indices,
+here is how to expose the underlying Numpy array as a ``._data`` attribute::
+
+   @register_model(PdIndexType)
+   class PdIndexModel(models.StructModel):
+       def __init__(self, dmm, fe_type):
+           members = [
+               ('values', fe_type.as_array),
+               ]
+           models.StructModel.__init__(self, dmm, fe_type, members)
+
+   make_attribute_wrapper(PdIndexType, 'values', '_data')
 
 
 Typing
