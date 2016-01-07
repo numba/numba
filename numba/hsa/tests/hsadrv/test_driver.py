@@ -383,7 +383,6 @@ class TestMemory(_TestBase):
         argref = (2 * ctypes.c_size_t).from_address(kernarg_ptr.value)
         argref[0] = gpu_in_ptr.value
         argref[1] = gpu_out_ptr.value
-        kernarg_ptr = argref
 
         # signal
         sig = hsa.create_signal(1)

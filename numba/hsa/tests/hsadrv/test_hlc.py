@@ -169,7 +169,7 @@ class TestHLC(unittest.TestCase):
             argref[0] = gpu_in_ptr.value
             argref[1] = gpu_out_ptr.value
 
-            kernargs = argref
+            kernargs = kernarg_ptr
 
         else:
             kernarg_region = [r for r in agent.regions
