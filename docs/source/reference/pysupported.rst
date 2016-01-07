@@ -96,7 +96,10 @@ list
 ----
 
 Creating and returning lists from JIT-compiled functions is supported,
-as well as all methods and operations.
+as well as all methods and operations.  Lists must be strictly homogenous:
+Numba will reject any list containing objects of different types, even if
+the types are compatible (for example, ``[1, 2.5]`` is rejected as it
+contains a :class:`int` and a :class:`float`).
 
 .. note::
    When passing a list into a JIT-compiled function, any modifications
