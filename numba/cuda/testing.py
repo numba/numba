@@ -61,6 +61,9 @@ def captured_cuda_stdout():
     Return a minimal stream-like object capturing the text output of
     either CUDA or the simulator.
     """
+    # Prevent accidentally capturing previously output text
+    sys.stdout.flush()
+
     if config.ENABLE_CUDASIM:
         # The simulator calls print() on Python stdout
         with captured_stdout() as stream:
