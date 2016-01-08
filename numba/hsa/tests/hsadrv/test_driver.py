@@ -6,50 +6,12 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.hsa.hsadrv.driver import hsa, Queue, Program, Executable,\
-                                    BrigModule, Context
+                                    BrigModule, Context, dgpu_present
 from numba.hsa.hsadrv import drvapi
 from numba.hsa.hsadrv import enums
 from numba.hsa.hsadrv import enums_ext
 
 from numba import config
-
-# hardware
-known_dgpus = frozenset([b'Fiji'])
-known_apus = frozenset([b'Spectre'])
-known_cpus = frozenset([b'Kaveri'])
-
-
-def apu_present():
-    """
-    Returns true if an APU is present on the current machine.
-    """
-    # Find the nodes to which the agents claim to belong.
-    # If the number of nodes is different to the number of
-    # agents then some agents must share a node -> APU!
-    nodes = set()
-    for a in hsa.agents:
-        nodes.add(getattr(a, "node"))
-    return len(hsa.agents) != len(nodes)
-
-
-def dgpu_count():
-    """
-    Returns the number of discrete GPUs present on the current machine.
-
-    This can be overridden by setting the environment variable
-    `NUMBA_HSA_DGPU_PRESENT` to a positive integer.
-    """
-    if config.NUMBA_HSA_DGPU_PRESENT:
-        return config.NUMBA_HSA_DGPU_PRESENT
-    else:
-        ngpus = 0
-        for a in hsa.agents:
-            if a.is_component:
-                name = getattr(a, "name").lower()
-                for g in known_dgpus:
-                    if g.lower() in name:
-                        ngpus += 1
-        return ngpus
 
 class TestLowLevelApi(unittest.TestCase):
     """This test checks that all the functions defined in drvapi
@@ -167,7 +129,7 @@ class TestMemory(_TestBase):
             self.assertEqual(ref[i], src[i])
         hsa.hsa_memory_free(ptr)
 
-    @unittest.skipIf(dgpu_count() == 0, "no discrete GPU present")
+    @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
     def test_coarse_grained_allocate(self):
         """
         Tests the coarse grained allocation works on a dGPU.
@@ -263,7 +225,7 @@ class TestMemory(_TestBase):
         hsa.hsa_memory_free(gpu_only_ptr)
         hsa.hsa_memory_free(gpu_host_accessible_ptr)
 
-    @unittest.skipIf(dgpu_count() == 0, "no discrete GPU present")
+    @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
     def test_coarse_grained_kernel_execution(self):
         """
         This tests the execution of a kernel on a dGPU using coarse memory
@@ -419,7 +381,7 @@ class TestContext(_TestBase):
         nbytes = ctypes.sizeof(ctypes.c_double) * n
 
         # run if a dGPU is present
-        if(dgpu_count() > 0):
+        if(dgpu_present()):
             # find a host accessible region
             dGPU_agent = self.gpu
             CPU_agent = self.cpu

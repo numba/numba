@@ -6,7 +6,7 @@ from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
 from .hlc import hlc
 from .hsadrv import devices, driver, enums
-from numba.hsa.hsadrv.driver import hsa
+from numba.hsa.hsadrv.driver import hsa, dgpu_present
 from .hsadrv import devicearray
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
@@ -224,8 +224,6 @@ class _CachedProgram(object):
             ex.load(agent, code)
             ex.freeze()
             symobj = ex.get_symbol(agent, symbol)
-#            kernarg_region = [r for r in agent.regions.globals
-#                        if r.supports(enums.HSA_REGION_GLOBAL_FLAG_KERNARG)][0]
             regions = agent.regions.globals
             for reg in regions:
                 if reg.host_accessible:
@@ -302,16 +300,12 @@ class HSAKernel(HSAKernelBase):
             # Increment offset
             base += align
 
-#        assert (kernargs is None or
-#                base <= ctypes.sizeof(kernargs)), "Kernel argument size is invalid"
-
         # Actual Kernel launch
         qq = ctx.default_queue
 
         # Dispatch
         qq.dispatch(symbol, kernargs, workgroup_size=self.local_size,
                     grid_size=self.global_size)
-
 
         # retrieve auto converted arrays
         for wb in retr:
@@ -322,32 +316,6 @@ class HSAKernel(HSAKernelBase):
             kernarg_region.free(kernargs)
 
 
-# hardware
-known_dgpus = frozenset([b'Fiji'])
-known_apus = frozenset([b'Spectre'])
-known_cpus = frozenset([b'Kaveri'])
-
-#TODO: remove the n copies of this that exist
-def dgpu_count():
-    """
-    Returns the number of discrete GPUs present on the current machine.
-
-    This can be overridden by setting the environment variable
-    `NUMBA_HSA_DGPU_PRESENT` to a positive integer.
-    """
-    if config.NUMBA_HSA_DGPU_PRESENT:
-        return config.NUMBA_HSA_DGPU_PRESENT
-    else:
-        ngpus = 0
-        for a in hsa.agents:
-            if a.is_component:
-                name = getattr(a, "name").lower()
-                for g in known_dgpus:
-                    if g.lower() in name:
-                        ngpus += 1
-        return ngpus
-
-
 def _unpack_argument(ty, val, kernelargs, retr, context):
     """
     Convert arguments to ctypes and append to kernelargs
@@ -355,7 +323,7 @@ def _unpack_argument(ty, val, kernelargs, retr, context):
     if isinstance(ty, types.Array):
         c_intp = ctypes.c_ssize_t
         # if a dgpu is present, move the data to the device.
-        if dgpu_count() > 0:
+        if dgpu_present():
             devary, conv = devicearray.auto_device(val, context)
             if conv:
                 retr.append(lambda: devary.copy_to_host(context, val))

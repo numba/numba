@@ -15,7 +15,7 @@ class TestSimple(unittest.TestCase):
         def udt(output):
             output[0] = magic_token
 
-        out = np.ones(1, dtype=np.intp)
+        out = np.zeros(1, dtype=np.intp)
         udt[1, 1](out)
 
         self.assertEqual(out[0], magic_token)

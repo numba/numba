@@ -151,6 +151,50 @@ class Recycler(object):
         self.enabled = False
 
 
+# Known Hardware
+known_dgpus = frozenset([b'Fiji'])
+known_apus = frozenset([b'Spectre'])
+known_cpus = frozenset([b'Kaveri'])
+
+def apu_present():
+    """
+    Returns true if an APU is present on the current machine.
+    """
+    # Find the nodes to which the agents claim to belong.
+    # If the number of nodes is different to the number of
+    # agents then some agents must share a node -> APU!
+    nodes = set()
+    for a in hsa.agents:
+        nodes.add(getattr(a, "node"))
+    return len(hsa.agents) != len(nodes)
+
+
+def dgpu_count():
+    """
+    Returns the number of discrete GPUs present on the current machine.
+
+    This can be overridden by setting the environment variable
+    `NUMBA_HSA_DGPU_PRESENT` to a positive integer.
+    """
+    if config.NUMBA_HSA_DGPU_PRESENT > 0:
+        return config.NUMBA_HSA_DGPU_PRESENT
+    else:
+        ngpus = 0
+        for a in hsa.agents:
+            if a.is_component:
+                name = getattr(a, "name").lower()
+                for g in known_dgpus:
+                    if g.lower() in name:
+                        ngpus += 1
+        return ngpus
+
+def dgpu_present():
+    """
+    Returns true if a dGPU is present in the current machine.
+    """
+    return dgpu_count() > 0
+
+
 # The Driver ###########################################################
 
 
@@ -954,14 +998,6 @@ class MemoryPointer(object):
                 raise RuntimeError("Freeing dead memory")
             self.finalizer()
             self.is_alive = False
-
-#    def memset(self, byte, count=None, stream=0):
-#        count = self.size if count is None else count
-#        if stream:
-#            driver.cuMemsetD8Async(self.device_pointer, byte, count,
-#                                   stream.handle)
-#        else:
-#            driver.cuMemsetD8(self.device_pointer, byte, count)
 
     def view(self):
         pointer = self.device_pointer.value

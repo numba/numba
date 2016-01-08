@@ -51,7 +51,7 @@ class DeviceNDArrayBase(object):
     """Base class for an on dGPU NDArray representation cf. numpy.ndarray
     """
     __hsa_dGPU_memory__ = True
-    __hsa_ndarray__ = True     # There must be dgpu_data attribute
+    __hsa_ndarray__ = True     # There must be dgpu_data attribute as a result
 
     def __init__(self, shape, strides, dtype, dgpu_data=None):
         """
@@ -89,6 +89,8 @@ class DeviceNDArrayBase(object):
                 dgpu_data = devices.get_context().memalloc(self.alloc_size)
             else:
                 raise NotImplemented("Use of existing memory not supported.")
+                # TODO: write the equiv so preallocated memory
+                # blocks can be used.
                 # self.alloc_size = _driver.device_memory_size(dgpu_data)
         else:
             dgpu_data = None
@@ -96,7 +98,7 @@ class DeviceNDArrayBase(object):
 
         self.dgpu_data = dgpu_data
 
-    property
+    @property
     def _numba_type_(self):
         """
         Magic attribute expected by Numba to get the numba type that
@@ -129,6 +131,7 @@ class DeviceNDArrayBase(object):
         #    _driver.device_to_device(self, ary, sz)
         #else:
         #    sz = min(_driver.host_memory_size(ary), self.alloc_size)
+
         sz = self.alloc_size
 
         # host_to_dGPU(context, dst, src, size):
@@ -287,9 +290,9 @@ def auto_device(obj, context, copy=True):
     host to device. If obj already represents device memory, it is returned and
     no copy is made.
     """
-    if _driver.is_device_memory(obj):
+    if _driver.is_device_memory(obj): # it's already on the dGPU
         return obj, False
-    else:
+    else: # needs to be copied to the dGPU
         sentry_contiguous(obj)
         devobj = from_array_like(obj)
         if copy:

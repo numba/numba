@@ -127,10 +127,6 @@ class TestHLC(unittest.TestCase):
 
             # init mem with data
             hsa.hsa_memory_copy(host_in_ptr, src.ctypes.data, src.nbytes)
-
-            f=(ctypes.c_float*nelem).from_address(host_in_ptr.value)
-            print("orig = %f, PTR=%f"%(src[0],f[0]))
-
             hsa.hsa_memory_copy(host_out_ptr, dst.ctypes.data, dst.nbytes)
 
             # alloc gpu only memory
