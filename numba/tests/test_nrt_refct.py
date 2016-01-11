@@ -59,7 +59,7 @@ class TestNrtRefCt(unittest.TestCase):
         """
         @njit
         def if_with_allocation_and_initialization(arr1, test1):
-            tmp_arr = np.ones_like(arr1)
+            tmp_arr = np.zeros_like(arr1)
 
             for i in range(tmp_arr.shape[0]):
                 pass
@@ -69,7 +69,7 @@ class TestNrtRefCt(unittest.TestCase):
 
             return tmp_arr
 
-        arr = np.random.choice([0, 1, 2], (1000, 1000))
+        arr = np.random.random((5, 5))  # the values are not consumed
 
         init_stats = rtsys.get_allocation_stats()
         if_with_allocation_and_initialization(arr, False)
