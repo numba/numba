@@ -205,8 +205,11 @@ class TestMathLib(TestCase):
     def check_predicate_func(self, pyfunc, flags=enable_pyobj_flags):
         x_types = [types.int16, types.int32, types.int64,
                    types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float32, types.float64, types.float64]
-        x_values = [0, 0, 0, 0, 0, 0, float('inf'), 0.0, float('inf'), 0.0]
+                   types.float32, types.float32, types.float32,
+                   types.float64, types.float64, types.float64]
+        x_values = [0, 0, 0, 0, 0, 0,
+                    float('inf'), 0.0, float('nan'),
+                    float('inf'), 0.0, float('nan')]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     def test_sin(self, flags=enable_pyobj_flags):

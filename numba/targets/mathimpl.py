@@ -49,11 +49,9 @@ def is_finite(builder, val):
     """
     Return a condition testing whether *val* is a finite.
     """
-    pos_inf = lc.Constant.real(val.type, float("+inf"))
-    neg_inf = lc.Constant.real(val.type, float("-inf"))
-    isnotposinf = builder.fcmp(lc.FCMP_ONE, val, pos_inf)
-    isnotneginf = builder.fcmp(lc.FCMP_ONE, val, neg_inf)
-    return builder.and_(isnotposinf, isnotneginf)
+    # is_finite(x)  <=>  x - x != NaN
+    val_minus_val = builder.fsub(val, val)
+    return builder.fcmp_ordered('==', val_minus_val, val_minus_val)
 
 def f64_as_int64(builder, val):
     """
@@ -388,51 +386,25 @@ def hypot_float_impl(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-@lower(math.radians, types.float64)
-def radians_f64_impl(context, builder, sig, args):
+@lower(math.radians, types.Float)
+def radians_float_impl(context, builder, sig, args):
     [x] = args
-    rate = builder.fdiv(x, context.get_constant(types.float64, 360))
-    pi = context.get_constant(types.float64, math.pi)
-    two = context.get_constant(types.float64, 2)
-    twopi = builder.fmul(pi, two)
-    res = builder.fmul(rate, twopi)
+    coef = context.get_constant(sig.return_type, math.pi / 180)
+    res = builder.fmul(x, coef)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower(math.radians, types.float32)
-def radians_f32_impl(context, builder, sig, args):
-    [x] = args
-    rate = builder.fdiv(x, context.get_constant(types.float32, 360))
-    pi = context.get_constant(types.float32, math.pi)
-    two = context.get_constant(types.float32, 2)
-    twopi = builder.fmul(pi, two)
-    res = builder.fmul(rate, twopi)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-unary_math_int_impl(math.radians, radians_f64_impl)
+unary_math_int_impl(math.radians, radians_float_impl)
 
 # -----------------------------------------------------------------------------
 
-@lower(math.degrees, types.float64)
-def degrees_f64_impl(context, builder, sig, args):
+@lower(math.degrees, types.Float)
+def degrees_float_impl(context, builder, sig, args):
     [x] = args
-    full = context.get_constant(types.float64, 360)
-    pi = context.get_constant(types.float64, math.pi)
-    two = context.get_constant(types.float64, 2)
-    twopi = builder.fmul(pi, two)
-    res = builder.fmul(builder.fdiv(x, twopi), full)
+    coef = context.get_constant(sig.return_type, 180 / math.pi)
+    res = builder.fmul(x, coef)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower(math.degrees, types.float32)
-def degrees_f32_impl(context, builder, sig, args):
-    [x] = args
-    full = context.get_constant(types.float32, 360)
-    pi = context.get_constant(types.float32, math.pi)
-    two = context.get_constant(types.float32, 2)
-    twopi = builder.fmul(pi, two)
-    res = builder.fdiv(builder.fmul(x, full), twopi)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-unary_math_int_impl(math.degrees, degrees_f64_impl)
+unary_math_int_impl(math.degrees, degrees_float_impl)
 
 # -----------------------------------------------------------------------------
 
