@@ -242,7 +242,19 @@ class Interpreter(object):
         gi.state_vars = sorted(st)
 
     def _insert_var_dels(self):
-        # Find variable use/def per block.
+        """
+        Insert del statements for each variable.
+        """
+        var_use_map, var_def_map = self._compute_use_defs()
+        live_map = self._compute_live_map(var_use_map, var_def_map)
+        dead_maps = self._compute_dead_maps(live_map, var_def_map)
+        intern_dead_map, escaping_dead_map = dead_maps
+        self._patch_var_dels(intern_dead_map, escaping_dead_map)
+
+    def _compute_use_defs(self):
+        """
+        Find variable use/def per block.
+        """
         var_use_map = {}   # { block offset -> set of vars }
         var_def_map = {}   # { block offset -> set of vars }
         for offset, ir_block in self.blocks.items():
@@ -251,10 +263,12 @@ class Interpreter(object):
             for stmt in ir_block.body:
                 if isinstance(stmt, ir.Assign):
                     if isinstance(stmt.value, ir.Inst):
-                        rhs_set = set(var.name for var in stmt.value.list_vars())
+                        rhs_set = set(var.name
+                                      for var in stmt.value.list_vars())
                     elif isinstance(stmt.value, ir.Var):
                         rhs_set = set([stmt.value.name])
-                    elif isinstance(stmt.value, (ir.Arg, ir.Const, ir.Global, ir.FreeVar)):
+                    elif isinstance(stmt.value, (ir.Arg, ir.Const, ir.Global,
+                                                 ir.FreeVar)):
                         rhs_set = ()
                     else:
                         raise AssertionError('unreachable', type(stmt.value))
@@ -267,9 +281,14 @@ class Interpreter(object):
                     if var.name not in def_set:
                         use_set.add(var.name)
 
-        # Find variables that must be alive at the ENTRY of each block.
-        # We use a simple fix-point algorithm that iterates until the set of
-        # live variables is unchanged for each block.
+        return var_use_map, var_def_map
+
+    def _compute_live_map(self, var_use_map, var_def_map):
+        """
+        Find variables that must be alive at the ENTRY of each block.
+        We use a simple fix-point algorithm that iterates until the set of
+        live variables is unchanged for each block.
+        """
         live_map = {}
         for offset in self.blocks.keys():
             live_map[offset] = var_use_map[offset]
@@ -288,9 +307,14 @@ class Interpreter(object):
             old_point = new_point
             new_point = fix_point_progress()
 
-        # At this point, `live_map` contains a mapping of block offset to all
-        # the living variables at the ENTRY of the block.
+        return live_map
 
+    def _compute_dead_maps(self, live_map, var_def_map):
+        """
+        Compute the end-of-live information for variables.
+        `live_map` contains a mapping of block offset to all the living
+        variables at the ENTRY of the block.
+        """
         # The following three dictionaries will be
         # { block offset -> set of variables to delete }
         # all vars that should be deleted at the start of the successors
@@ -309,9 +333,11 @@ class Interpreter(object):
                                      for out_blk, _data
                                      in self.cfa.graph.successors(offset))
             # vars to keep alive for the terminator
-            terminator_liveset = set(v.name for v in ir_block.terminator.list_vars())
+            terminator_liveset = set(v.name
+                                     for v in ir_block.terminator.list_vars())
             # vars to keep alive in the successors
-            combined_liveset = reduce(operator.or_, outgoing_live_map.values(), set())
+            combined_liveset = reduce(operator.or_, outgoing_live_map.values(),
+                                      set())
             # include variables used in terminator
             combined_liveset |= terminator_liveset
             # vars that are dead within the block beacuse they are not
@@ -322,7 +348,8 @@ class Interpreter(object):
             escaping_live_set = cur_live_set - intern_set
             for out_blk, new_live_set in outgoing_live_map.items():
                 # successor should delete the unused escaped vars
-                escaping_dead_map[out_blk] |= escaping_live_set - (new_live_set | var_def_map[out_blk])
+                new_live_set = new_live_set | var_def_map[out_blk]
+                escaping_dead_map[out_blk] |= escaping_live_set - new_live_set
 
             # if no outgoing blocks
             if not outgoing_live_map:
@@ -331,19 +358,28 @@ class Interpreter(object):
 
         # Verify that the dead maps cover all live variables
         all_vars = reduce(operator.or_, live_map.values(), set())
-        inter_dead_vars = reduce(operator.or_, intern_dead_map.values(), set())
-        escaping_dead_vars = reduce(operator.or_, escaping_dead_map.values(), set())
+        inter_dead_vars = reduce(operator.or_, intern_dead_map.values(),
+                                 set())
+        escaping_dead_vars = reduce(operator.or_, escaping_dead_map.values(),
+                                    set())
         exit_dead_vars = reduce(operator.or_, exit_dead_map.values(), set())
-        missing_vars = all_vars - (inter_dead_vars | escaping_dead_vars | exit_dead_vars)
+        dead_vars = (inter_dead_vars | escaping_dead_vars | exit_dead_vars)
+        missing_vars = all_vars - dead_vars
         if missing_vars:
             # There are no exit points
             if not self.cfa.graph.exit_points():
                 # We won't be able to verify this
                 pass
             else:
-                raise RuntimeError('lifetime info missing {0}'.format(missing_vars))
+                msg = 'liveness info missing for vars: {0}'.format(missing_vars)
+                raise RuntimeError(msg)
 
-        # Insert delete in each block
+        return intern_dead_map, escaping_dead_map
+
+    def _patch_var_dels(self, intern_dead_map, escaping_dead_map):
+        """
+        Insert delete in each block
+        """
         for offset, ir_block in self.blocks.items():
             # for each intern var, insert delete after the last use
             intern_set = intern_dead_map[offset]
