@@ -11,7 +11,7 @@ import math
 from llvmlite.llvmpy import core as lc
 
 from .. import cgutils, typing, types, lowering, errors
-from . import builtins
+from . import builtins, mathimpl
 
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to
@@ -493,24 +493,6 @@ def np_complex_power_impl(context, builder, sig, args):
                                        dispatch_table, 'power')
 
 
-def np_real_floor_impl(context, builder, sig, args):
-    assert len(args) == 1
-    assert len(sig.args) == 1
-    ty = sig.args[0]
-    assert ty == sig.return_type, "must have homogeneous types"
-    mod = builder.module
-    if ty == types.float64:
-        fnty = lc.Type.function(lc.Type.double(), [lc.Type.double()])
-        fn = cgutils.insert_pure_function(mod, fnty, name="numba.npymath.floor")
-    elif ty == types.float32:
-        fnty = lc.Type.function(lc.Type.float(), [lc.Type.float()])
-        fn = cgutils.insert_pure_function(mod, fnty, name="numba.npymath.floorf")
-    else:
-        raise errors.LoweringError("No floor function for real type {0}".format(str(ty)))
-
-    return builder.call(fn, args)
-
-
 ########################################################################
 # Numpy style complex sign
 
@@ -550,13 +532,7 @@ def np_complex_sign_impl(context, builder, sig, args):
 def np_real_rint_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
-    dispatch_table = {
-        types.float32: 'numba.npymath.rintf',
-        types.float64: 'numba.npymath.rint',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'rint')
+    return mathimpl.call_fp_intrinsic(builder, 'llvm.rint', args)
 
 
 def np_complex_rint_impl(context, builder, sig, args):
@@ -1530,19 +1506,14 @@ def np_complex_atanh_impl(context, builder, sig, args):
     return out._getvalue()
 
 
+
 ########################################################################
 # NumPy floor
 
 def np_real_floor_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
-    dispatch_table = {
-        types.float32: 'numba.npymath.floorf',
-        types.float64: 'numba.npymath.floor',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'floor')
+    return mathimpl.call_fp_intrinsic(builder, 'llvm.floor', args)
 
 
 ########################################################################
@@ -1551,13 +1522,7 @@ def np_real_floor_impl(context, builder, sig, args):
 def np_real_ceil_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
-    dispatch_table = {
-        types.float32: 'numba.npymath.ceilf',
-        types.float64: 'numba.npymath.ceil',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'ceil')
+    return mathimpl.call_fp_intrinsic(builder, 'llvm.ceil', args)
 
 
 ########################################################################
@@ -1566,13 +1531,7 @@ def np_real_ceil_impl(context, builder, sig, args):
 def np_real_trunc_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
-    dispatch_table = {
-        types.float32: 'numba.npymath.truncf',
-        types.float64: 'numba.npymath.trunc',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'trunc')
+    return mathimpl.call_fp_intrinsic(builder, 'llvm.trunc', args)
 
 
 ########################################################################
@@ -1581,13 +1540,7 @@ def np_real_trunc_impl(context, builder, sig, args):
 def np_real_fabs_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
-    dispatch_table = {
-        types.float32: 'numba.npymath.fabsf',
-        types.float64: 'numba.npymath.fabs',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'fabs')
+    return mathimpl.call_fp_intrinsic(builder, 'llvm.fabs', args)
 
 
 ########################################################################
@@ -2055,13 +2008,7 @@ def np_real_signbit_impl(context, builder, sig, args):
 def np_real_copysign_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
-    dispatch_table = {
-        types.float32: 'numba.npymath.copysignf',
-        types.float64: 'numba.npymath.copysign',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'copysign')
+    return mathimpl.copysign_float_impl(context, builder, sig, args)
 
 def np_real_nextafter_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)

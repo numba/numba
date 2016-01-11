@@ -206,23 +206,13 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(log10),
     NPYMATH_SYMBOL(log1p),
 
-    NPYMATH_SYMBOL(floor),
-    NPYMATH_SYMBOL(ceil),
-    NPYMATH_SYMBOL(trunc),
-
     NPYMATH_SYMBOL(pow),
     NPYMATH_SYMBOL(sqrt),
-
-    NPYMATH_SYMBOL(deg2rad),
-    NPYMATH_SYMBOL(rad2deg),
 
     NPYMATH_SYMBOL(atan2),
 
     NPYMATH_SYMBOL(logaddexp),
     NPYMATH_SYMBOL(logaddexp2),
-    NPYMATH_SYMBOL(rint),
-    NPYMATH_SYMBOL(fabs),
-    NPYMATH_SYMBOL(copysign),
     NPYMATH_SYMBOL(nextafter),
     NPYMATH_SYMBOL(spacing),
     /* npy_ldexp and npy_frexp appear in npy_math.h past NumPy 1.9, so link
@@ -233,9 +223,7 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(modf),
 
     /* float functions */
-    NPYMATH_SYMBOL(floorf),
     NPYMATH_SYMBOL(powf),
-    NPYMATH_SYMBOL(rintf),
     NPYMATH_SYMBOL(expf),
     NPYMATH_SYMBOL(exp2f),
     NPYMATH_SYMBOL(logf),
@@ -264,11 +252,6 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(atanhf),
     NPYMATH_SYMBOL(logaddexpf),
     NPYMATH_SYMBOL(logaddexp2f),
-    NPYMATH_SYMBOL(floorf),
-    NPYMATH_SYMBOL(ceilf),
-    NPYMATH_SYMBOL(truncf),
-    NPYMATH_SYMBOL(fabsf),
-    NPYMATH_SYMBOL(copysignf),
     NPYMATH_SYMBOL(nextafterf),
     NPYMATH_SYMBOL(spacingf),
     /* npy_ldexpf and npy_frexpf appear in npy_math.h past NumPy 1.9, so link
