@@ -18,7 +18,7 @@ Improvements:
 * PR #1440: Support the HSA wavebarrier() and activelanepermute_wavewidth()
   intrinsics
 * PR #1540: Support np.angle()
-* PR #1543: Implement parallel gufuncs
+* PR #1543: Implement CPU multithreaded gufuncs (target="parallel")
 * PR #1551: Allow scalar arguments in np.where(), np.empty_like().
 * PR #1516: Add some more examples from NumbaPro
 * PR #1517: Support np.sinc()
