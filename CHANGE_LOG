@@ -1,3 +1,42 @@
+Version 0.23.0
+--------------
+
+This release introduces JIT classes using the new ``@jitclass`` decorator,
+allowing user-defined structures for nopython mode.  Other improvements
+and bug fixes are listed below.
+
+Improvements:
+
+* PR #1571: Implement JIT classes
+* PR #1584: Improve typing of array indexing
+* PR #1583: Allow printing booleans
+* PR #1542: Allow negative values in np.reshape()
+* PR #1560: Support vector and matrix dot product, including ``np.dot()``
+  and the ``@`` operator in Python 3.5
+* PR #1546: Support field lookup on record arrays and scalars (i.e.
+  ``array['field']`` in addition to ``array.field``)
+* PR #1440: Support the HSA wavebarrier() and activelanepermute_wavewidth()
+  intrinsics
+* PR #1540: Support np.angle()
+* PR #1543: Implement parallel gufuncs
+* PR #1551: Allow scalar arguments in np.where(), np.empty_like().
+* PR #1516: Add some more examples from NumbaPro
+* PR #1517: Support np.sinc()
+
+Fixes:
+
+* Issue #1594: Ensure a list is homogenous when unboxing
+* Issue #1595: Replace deprecated use of get_pointer_to_function()
+* Issue #1586: Allow tests to be run by different users on the same machine
+* Issue #1587: Make CudaAPIError picklable
+* Issue #1568: Fix using Numba from inside Visual Studio 2015
+* Issue #1559: Fix serializing a jit function referring a renamed module
+* PR #1508: Let reshape() accept integer argument(s), not just a tuple
+* Issue #1545: Improve error checking when unboxing list objects
+* Issue #1538: Fix array broadcasting in CUDA gufuncs
+* Issue #1526: Fix a reference count handling bug
+
+
 Version 0.22.1
 --------------
 
