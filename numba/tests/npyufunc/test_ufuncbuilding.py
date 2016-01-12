@@ -5,9 +5,10 @@ import sys
 import numpy
 
 from numba import config, unittest_support as unittest
-from numba.npyufunc.ufuncbuilder import UFuncBuilder, GUFuncBuilder
+from numba.npyufunc.ufuncbuilder import GUFuncBuilder
 from numba import vectorize, guvectorize
 from numba.npyufunc import PyUFunc_One
+from numba.npyufunc.dufunc import DUFunc as UFuncBuilder
 from numba.tests import support
 
 
@@ -123,7 +124,8 @@ class TestUfuncBuilding(unittest.TestCase):
         """
         Check nested call to an implicitly-typed ufunc.
         """
-        builder = UFuncBuilder(outer)
+        builder = UFuncBuilder(outer,
+                               targetoptions={'nopython': True})
         builder.add("(int64, int64)")
         ufunc = builder.build_ufunc()
         self.assertEqual(ufunc(-1, 3), 2)
@@ -132,7 +134,8 @@ class TestUfuncBuilding(unittest.TestCase):
         """
         Check nested call to an explicitly-typed ufunc.
         """
-        builder = UFuncBuilder(outer_explicit, targetoptions={'nopython': True})
+        builder = UFuncBuilder(outer_explicit,
+                               targetoptions={'nopython': True})
         builder.add("(int64, int64)")
         ufunc = builder.build_ufunc()
         self.assertEqual(ufunc(-1, 3), 2)

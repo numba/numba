@@ -80,6 +80,8 @@ class DUFunc(_internal._DUFunc):
         self._install_type()
         self._lower_me = DUFuncLowerer(self)
         self._install_cg()
+        self.__name__ = py_func.__name__
+        self.__doc__ = py_func.__doc__
 
     def build_ufunc(self):
         """
@@ -124,7 +126,7 @@ class DUFunc(_internal._DUFunc):
         Compile the DUFunc for the given signature.
         """
         args, return_type = sigutils.normalize_signature(sig)
-        self._compile_for_argtys(args, return_type)
+        return self._compile_for_argtys(args, return_type)
 
     def _compile_for_args(self, *args, **kws):
         nin = self.ufunc.nin
@@ -170,6 +172,7 @@ class DUFunc(_internal._DUFunc):
         self._add_loop(utils.longint(ptr), dtypenums)
         self._keepalive.append((ptr, cres.library, env))
         self._lower_me.libs.append(cres.library)
+        return cres
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the
