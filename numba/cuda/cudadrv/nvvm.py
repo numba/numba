@@ -348,7 +348,7 @@ ir_numba_atomic_double_add = """
 define internal double @___numba_atomic_double_add(double* %ptr, double %val) alwaysinline {
 entry:
     %iptr = bitcast double* %ptr to i64*
-    %old2 = load volatile i64* %iptr
+    %old2 = load volatile i64, i64* %iptr
     br label %attempt
 
 attempt:
@@ -369,7 +369,7 @@ done:
 ir_numba_atomic_double_max = """
 define internal double @___numba_atomic_double_max(double* %ptr, double %val) alwaysinline {
 entry:
-    %ptrval = load volatile double* %ptr
+    %ptrval = load volatile double, double* %ptr
     ; Check if val is a NaN and return *ptr early if so
     %valnan = fcmp uno double %val, %val
     br i1 %valnan, label %done, label %lt_check
@@ -428,7 +428,8 @@ def llvm_to_ptx(llvmir, **opts):
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
 
-    llvmir = llvm36_to_34_ir(llvmir)
+    llvmir = llvm37_to_34_ir(llvmir)
+
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
     ptx = cu.compile(**opts)
@@ -438,21 +439,75 @@ def llvm_to_ptx(llvmir, **opts):
 re_metadata_def = re.compile(r"\!\d+\s*=")
 re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"]")
 
+re_getelementptr = re.compile(r"\Wgetelementptr\s(?:inbounds )?\(?")
 
-def llvm36_to_34_ir(ir):
-    """
-    Convert LLVM 3.6 IR for LLVM 3.4.
+re_load = re.compile(r"\Wload\s(?:volatile )?")
 
-    Rewrite metadata since llvm3.6 dropped the "metadata" type prefix.
+re_call = re.compile(r"(call\s[^@]+\))(\s@)")
+
+re_type_tok = re.compile(r"[,{}()[\]]")
+
+re_annotations = re.compile(r"\Wnonnull\W")
+
+
+def llvm37_to_34_ir(ir):
     """
+    Convert LLVM 3.7 IR for LLVM 3.4.
+    """
+    def parse_out_leading_type(s):
+        par_level = 0
+        pos = 0
+        # Parse out the first <ty> (which may be an aggregate type)
+        while True:
+            m = re_type_tok.search(s, pos)
+            if m is None:
+                # End of line
+                raise RuntimeError("failed parsing leading type: %s" % (s,))
+                break
+            pos = m.end()
+            tok = m.group(0)
+            if tok == ',':
+                if par_level == 0:
+                    # End of operand
+                    break
+            elif tok in '{[(':
+                par_level += 1
+            elif tok in ')]}':
+                par_level -= 1
+        return s[pos:].lstrip()
+
     buf = []
     for line in ir.splitlines():
-        # If the line is a metadata
+        orig = line
         if re_metadata_def.match(line):
-            # Does not contain any correct usage (Maybe already fixed)
+            # Rewrite metadata since LLVM 3.7 dropped the "metadata" type prefix.
             if None is re_metadata_correct_usage.search(line):
                 line = line.replace('!{', 'metadata !{')
                 line = line.replace('!"', 'metadata !"')
+        if 'getelementptr ' in line:
+            # Rewrite "getelementptr ty, ty* ptr, ..."
+            # to "getelementptr ty *ptr, ..."
+            m = re_getelementptr.search(line)
+            if m is None:
+                raise RuntimeError("failed parsing getelementptr: %s" % (line,))
+            pos = m.end()
+            line = line[:pos] + parse_out_leading_type(line[pos:])
+        if 'load ' in line:
+            # Rewrite "load ty, ty* ptr"
+            # to "load ty *ptr"
+            m = re_load.search(line)
+            if m is None:
+                raise RuntimeError("failed parsing load: %s" % (line,))
+            pos = m.end()
+            line = line[:pos] + parse_out_leading_type(line[pos:])
+        if 'call ' in line:
+            # Rewrite "call ty (...) @foo"
+            # to "call ty (...)* @foo"
+            line = re_call.sub(r"\1*\2", line)
+
+        # Remove unknown annotations
+        line = re_annotations.sub('', line)
+
         buf.append(line)
 
     return '\n'.join(buf)
