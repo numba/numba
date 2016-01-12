@@ -7,6 +7,8 @@ and bug fixes are listed below.
 
 Improvements:
 
+* PR #1609: Speed up some simple math functions by inlining them
+  in their caller
 * PR #1571: Implement JIT classes
 * PR #1584: Improve typing of array indexing
 * PR #1583: Allow printing booleans
@@ -25,6 +27,7 @@ Improvements:
 
 Fixes:
 
+* Issue #1603: Fix calling a non-cached function from a cached function
 * Issue #1594: Ensure a list is homogenous when unboxing
 * Issue #1595: Replace deprecated use of get_pointer_to_function()
 * Issue #1586: Allow tests to be run by different users on the same machine
