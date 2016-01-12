@@ -29,6 +29,20 @@ def guadd(a, b, c):
         for j in range(y):
             c[i, j] = a[i, j] + b[i, j]
 
+@vectorize(nopython=True)
+def inner(a, b):
+    return a + b
+
+@vectorize(["int64(int64, int64)"], nopython=True)
+def inner_explicit(a, b):
+    return a + b
+
+def outer(a, b):
+    return inner(a, b)
+
+def outer_explicit(a, b):
+    return inner_explicit(a, b)
+
 
 class Dummy: pass
 
@@ -104,6 +118,24 @@ class TestUfuncBuilding(unittest.TestCase):
         a = numpy.arange(10, dtype='int32')
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
+
+    def test_nested_call(self):
+        """
+        Check nested call to an implicitly-typed ufunc.
+        """
+        builder = UFuncBuilder(outer)
+        builder.add("(int64, int64)")
+        ufunc = builder.build_ufunc()
+        self.assertEqual(ufunc(-1, 3), 2)
+
+    def test_nested_call_explicit(self):
+        """
+        Check nested call to an explicitly-typed ufunc.
+        """
+        builder = UFuncBuilder(outer_explicit, targetoptions={'nopython': True})
+        builder.add("(int64, int64)")
+        ufunc = builder.build_ufunc()
+        self.assertEqual(ufunc(-1, 3), 2)
 
 
 class TestUfuncBuildingJitDisabled(TestUfuncBuilding):

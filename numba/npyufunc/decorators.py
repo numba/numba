@@ -25,7 +25,8 @@ class _BaseVectorize(object):
 
 
 class Vectorize(_BaseVectorize):
-    target_registry = TargetRegistry({'cpu': UFuncBuilder,
+    target_registry = TargetRegistry({'cpu': dufunc.DUFunc,
+                                      #'cpu': UFuncBuilder,
                                       'parallel': ParallelUFuncBuilder,})
 
     def __new__(cls, func, **kws):
@@ -105,12 +106,12 @@ def vectorize(ftylist_or_function=(), **kws):
         ftylist = ftylist_or_function
 
     def wrap(func):
+        vec = Vectorize(func, **kws)
+        for sig in ftylist:
+            vec.add(sig)
         if len(ftylist) > 0:
-            vec = Vectorize(func, **kws)
-            for fty in ftylist:
-                vec.add(fty)
-            return vec.build_ufunc()
-        return dufunc.DUFunc(func, **kws)
+            vec.disable_compile()
+        return vec.build_ufunc()
 
     return wrap
 
@@ -167,5 +168,3 @@ def guvectorize(ftylist, signature, **kws):
         return guvec.build_ufunc()
 
     return wrap
-
-

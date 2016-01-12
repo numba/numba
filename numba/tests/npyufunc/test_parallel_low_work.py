@@ -17,10 +17,8 @@ class TestParallelLowWorkCount(unittest.TestCase):
     def test_low_workcount(self):
         # build parallel native code ufunc
         pv = Vectorize(vector_add, target='parallel')
-        pv.add(restype=int32, argtypes=[int32, int32])
-        pv.add(restype=uint32, argtypes=[uint32, uint32])
-        pv.add(restype=float32, argtypes=[float32, float32])
-        pv.add(restype=float64, argtypes=[float64, float64])
+        for ty in (int32, uint32, float32, float64):
+            pv.add(ty(ty, ty))
         para_ufunc = pv.build_ufunc()
 
         # build python ufunc
