@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 import inspect
 
 from . import _internal, dufunc
-from .ufuncbuilder import UFuncBuilder, GUFuncBuilder
+from .ufuncbuilder import GUFuncBuilder
 from .parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
 
 from numba.cuda.vectorizers import CUDAVectorize, CUDAGUFuncVectorize
@@ -26,7 +26,6 @@ class _BaseVectorize(object):
 
 class Vectorize(_BaseVectorize):
     target_registry = TargetRegistry({'cpu': dufunc.DUFunc,
-                                      #'cpu': UFuncBuilder,
                                       'parallel': ParallelUFuncBuilder,})
 
     def __new__(cls, func, **kws):
