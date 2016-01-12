@@ -399,9 +399,7 @@ class BaseCPUCodegen(object):
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
         engine = ll.create_mcjit_compiler(llvm_module, tm)
-        tli = ll.create_target_library_info(llvm_module.triple)
 
-        self._tli = tli
         self._tm = tm
         self._engine = engine
         self._target_data = engine.target_data
@@ -447,7 +445,6 @@ class BaseCPUCodegen(object):
         pm = ll.create_module_pass_manager()
         dl = ll.create_target_data(self._data_layout)
         dl.add_pass(pm)
-        self._tli.add_pass(pm)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
@@ -456,7 +453,6 @@ class BaseCPUCodegen(object):
     def _function_pass_manager(self, llvm_module):
         pm = ll.create_function_pass_manager(llvm_module)
         self._target_data.add_pass(pm)
-        self._tli.add_pass(pm)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
