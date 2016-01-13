@@ -154,54 +154,52 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
         # Post-processing and analysis on generated IR
-        self._insert_var_dels()
-        self._compute_live_variables()
+        var_def_map, var_dead_map = self._insert_var_dels()
+        self._compute_live_variables(var_def_map, var_dead_map)
         if self.generator_info:
             self._compute_generator_info()
 
-    def _compute_live_variables(self):
+    def _compute_live_variables(self, var_def_map, var_dead_map):
         """
         Compute the live variables at the beginning of each block
         and at each yield point.
-        This must be done after insertion of ir.Dels.
+        The ``var_def_map`` and ``var_dead_map`` indicates the variable defined
+        and deleted at each block, respectively.
         """
-        # Scan for variable additions and deletions in each block
-        block_var_adds = {}
-        block_var_dels = {}
+        # live var at the entry per block
+        block_entry_vars = collections.defaultdict(set)
+
+        def fix_point_progress():
+            return tuple(map(len, block_entry_vars.values()))
+
         cfg = self.cfa.graph
+        old_point = None
+        new_point = fix_point_progress()
 
-        for ir_block in self.blocks.values():
-            self.block_entry_vars[ir_block] = set()
-            adds = block_var_adds[ir_block] = set()
-            dels = block_var_dels[ir_block] = set()
-            for stmt in ir_block.body:
-                if isinstance(stmt, ir.Assign):
-                    name = stmt.target.name
-                    adds.add(name)
-                    dels.discard(name)
-                elif isinstance(stmt, ir.Del):
-                    name = stmt.value
-                    adds.discard(name)
-                    dels.add(name)
-
-        # Propagate defined variables from every block to its successors.
+        # Propagate defined variables and still live the successors.
         # (note the entry block automatically gets an empty set)
-        changed = True
-        while changed:
+
+        # Note: This is finding the actual available variables at the entry
+        #       of each block. The algorithm in _compute_live_map() is finding
+        #       the variable that must be available at the entry of each block.
+        #       This is top-down in the dataflow.  The other one is bottom-up.
+        while old_point != new_point:
             # We iterate until the result stabilizes.  This is necessary
-            # because of loops in the graph.
-            changed = False
-            for i in cfg.topo_order():
-                ir_block = self.blocks[i]
-                v = self.block_entry_vars[ir_block].copy()
-                v |= block_var_adds[ir_block]
-                v -= block_var_dels[ir_block]
-                for j, _ in cfg.successors(i):
-                    succ = self.blocks[j]
-                    succ_entry_vars = self.block_entry_vars[succ]
-                    if not succ_entry_vars >= v:
-                        succ_entry_vars.update(v)
-                        changed = True
+            # because of loops in the graphself.
+            for offset in self.blocks:
+                # vars available + variable defined
+                avail = block_entry_vars[offset] | var_def_map[offset]
+                # substract variables deleted
+                avail -= var_dead_map[offset]
+                # add ``avail`` to each successors
+                for succ, _data in cfg.successors(offset):
+                    block_entry_vars[succ] |= avail
+
+            old_point = new_point
+            new_point = fix_point_progress()
+
+        for offset, ir_block in self.blocks.items():
+            self.block_entry_vars[ir_block] = block_entry_vars[offset]
 
     def _compute_generator_info(self):
         """
@@ -244,12 +242,17 @@ class Interpreter(object):
     def _insert_var_dels(self):
         """
         Insert del statements for each variable.
+        Returns a 2-tuple of (variable definition map, variable deletion map)
+        which indicates variables defined and deleted in each block.
         """
         var_use_map, var_def_map = self._compute_use_defs()
         live_map = self._compute_live_map(var_use_map, var_def_map)
         dead_maps = self._compute_dead_maps(live_map, var_def_map)
         internal_dead_map, escaping_dead_map = dead_maps
         self._patch_var_dels(internal_dead_map, escaping_dead_map)
+        var_dead_map = dict((k, internal_dead_map[k] | escaping_dead_map[k])
+                            for k in self.blocks)
+        return var_def_map, var_dead_map
 
     def _compute_use_defs(self):
         """
@@ -382,7 +385,7 @@ class Interpreter(object):
         """
         for offset, ir_block in self.blocks.items():
             # for each internal var, insert delete after the last use
-            internal_dead_set = internal_dead_map[offset]
+            internal_dead_set = internal_dead_map[offset].copy()
             delete_pts = []
             # for each statement in reverse order
             for stmt in reversed(ir_block.body[:-1]):
