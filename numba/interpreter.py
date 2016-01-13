@@ -248,8 +248,8 @@ class Interpreter(object):
         var_use_map, var_def_map = self._compute_use_defs()
         live_map = self._compute_live_map(var_use_map, var_def_map)
         dead_maps = self._compute_dead_maps(live_map, var_def_map)
-        intern_dead_map, escaping_dead_map = dead_maps
-        self._patch_var_dels(intern_dead_map, escaping_dead_map)
+        internal_dead_map, escaping_dead_map = dead_maps
+        self._patch_var_dels(internal_dead_map, escaping_dead_map)
 
     def _compute_use_defs(self):
         """
@@ -320,7 +320,7 @@ class Interpreter(object):
         # all vars that should be deleted at the start of the successors
         escaping_dead_map = collections.defaultdict(set)
         # all vars that should be deleted within this block
-        intern_dead_map = collections.defaultdict(set)
+        internal_dead_map = collections.defaultdict(set)
         # all vars that should be delted after the function exit
         exit_dead_map = collections.defaultdict(set)
 
@@ -342,10 +342,10 @@ class Interpreter(object):
             combined_liveset |= terminator_liveset
             # vars that are dead within the block beacuse they are not
             # propagated to any outgoing blocks
-            intern_set = cur_live_set - combined_liveset
-            intern_dead_map[offset] = intern_set
+            internal_set = cur_live_set - combined_liveset
+            internal_dead_map[offset] = internal_set
             # vars that escape this block
-            escaping_live_set = cur_live_set - intern_set
+            escaping_live_set = cur_live_set - internal_set
             for out_blk, new_live_set in outgoing_live_map.items():
                 # successor should delete the unused escaped vars
                 new_live_set = new_live_set | var_def_map[out_blk]
@@ -358,12 +358,12 @@ class Interpreter(object):
 
         # Verify that the dead maps cover all live variables
         all_vars = reduce(operator.or_, live_map.values(), set())
-        inter_dead_vars = reduce(operator.or_, intern_dead_map.values(),
+        internal_dead_vars = reduce(operator.or_, internal_dead_map.values(),
                                  set())
         escaping_dead_vars = reduce(operator.or_, escaping_dead_map.values(),
                                     set())
         exit_dead_vars = reduce(operator.or_, exit_dead_map.values(), set())
-        dead_vars = (inter_dead_vars | escaping_dead_vars | exit_dead_vars)
+        dead_vars = (internal_dead_vars | escaping_dead_vars | exit_dead_vars)
         missing_vars = all_vars - dead_vars
         if missing_vars:
             # There are no exit points
@@ -374,23 +374,23 @@ class Interpreter(object):
                 msg = 'liveness info missing for vars: {0}'.format(missing_vars)
                 raise RuntimeError(msg)
 
-        return intern_dead_map, escaping_dead_map
+        return internal_dead_map, escaping_dead_map
 
-    def _patch_var_dels(self, intern_dead_map, escaping_dead_map):
+    def _patch_var_dels(self, internal_dead_map, escaping_dead_map):
         """
         Insert delete in each block
         """
         for offset, ir_block in self.blocks.items():
-            # for each intern var, insert delete after the last use
-            intern_set = intern_dead_map[offset]
+            # for each internal var, insert delete after the last use
+            internal_set = internal_dead_map[offset]
             # all non escaping live varibles at the terminator
             live_set = set(v.name for v in ir_block.terminator.list_vars())
-            live_set &= intern_set
+            live_set &= internal_set
             delete_pts = []
             # for each statement in reverse order
             for stmt in reversed(ir_block.body[:-1]):
-                # intern vars that are used here
-                use_set = set(v.name for v in stmt.list_vars()) & intern_set
+                # internal vars that are used here
+                use_set = set(v.name for v in stmt.list_vars()) & internal_set
                 # used here but not afterwards
                 dead_set = use_set - live_set
                 delete_pts.append((stmt, dead_set))
