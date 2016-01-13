@@ -359,7 +359,7 @@ class Interpreter(object):
         # Verify that the dead maps cover all live variables
         all_vars = reduce(operator.or_, live_map.values(), set())
         internal_dead_vars = reduce(operator.or_, internal_dead_map.values(),
-                                 set())
+                                    set())
         escaping_dead_vars = reduce(operator.or_, escaping_dead_map.values(),
                                     set())
         exit_dead_vars = reduce(operator.or_, exit_dead_map.values(), set())
@@ -396,11 +396,14 @@ class Interpreter(object):
                 delete_pts.append((stmt, dead_set))
                 live_set |= use_set
 
-            # insert del after the last uses
-            for stmt, delete_set in delete_pts:
+            # rewrite body and insert dels
+            body = []
+            for stmt, delete_set in reversed(delete_pts):
+                body.append(stmt)
                 for var_name in sorted(delete_set):
-                    ir_block.insert_after(ir.Del(var_name, loc=ir_block.loc),
-                                          stmt)
+                    body.append(ir.Del(var_name, loc=ir_block.loc))
+            body.append(ir_block.body[-1])  # terminator
+            ir_block.body = body
 
             # vars to delete at the start
             escape_dead_set = escaping_dead_map[offset]
