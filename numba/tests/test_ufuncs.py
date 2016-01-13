@@ -1562,7 +1562,8 @@ class _TestLoopTypes(TestCase):
             return np.array([1.5, -3.5, 0.0, float('nan')], dtype=a_letter_type)
         elif a_letter_type in 'FD':
             # complex
-            return np.array([-1.0j, 1.5 + 1.5j, 1j * float('nan'), 0j],
+            # Note `-1j` is different on 2.x and 3.x, hence the explicit spelling
+            return np.array([0.0-1.0j, 1.5 + 1.5j, 1j * float('nan'), 0j],
                             dtype=a_letter_type)
         else:
             raise RuntimeError("type %r not understood" % (a_letter_type,))
