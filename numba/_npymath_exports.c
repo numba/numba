@@ -195,7 +195,6 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(asinh),
     NPYMATH_SYMBOL(acosh),
     NPYMATH_SYMBOL(atanh),
-    NPYMATH_SYMBOL(hypot),
 
     NPYMATH_SYMBOL(exp),
     NPYMATH_SYMBOL(exp2),
@@ -235,7 +234,6 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(cosf),
     NPYMATH_SYMBOL(tanf),
     NPYMATH_SYMBOL(atan2f),
-    NPYMATH_SYMBOL(hypotf),
     NPYMATH_SYMBOL(sqrtf),
     NPYMATH_SYMBOL(sinhf),
     NPYMATH_SYMBOL(coshf),
