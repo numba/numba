@@ -1563,8 +1563,12 @@ class _TestLoopTypes(TestCase):
         elif a_letter_type in 'FD':
             # complex
             # Note `-1j` is different on 2.x and 3.x, hence the explicit spelling
-            return np.array([0.0-1.0j, 1.5 + 1.5j, 1j * float('nan'), 0j],
-                            dtype=a_letter_type)
+            vals = [0.0-1.0j, 1.5 + 1.5j, 1j * float('nan'), 0j]
+            if sys.platform != 'win32':
+                # Other platforms have better handling of negative zeros,
+                # test them
+                vals.append(-(0.0+1.0j))
+            return np.array(vals, dtype=a_letter_type)
         else:
             raise RuntimeError("type %r not understood" % (a_letter_type,))
 
