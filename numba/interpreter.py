@@ -382,19 +382,16 @@ class Interpreter(object):
         """
         for offset, ir_block in self.blocks.items():
             # for each internal var, insert delete after the last use
-            internal_set = internal_dead_map[offset]
-            # all non escaping live varibles at the terminator
-            live_set = set(v.name for v in ir_block.terminator.list_vars())
-            live_set &= internal_set
+            internal_dead_set = internal_dead_map[offset]
             delete_pts = []
             # for each statement in reverse order
             for stmt in reversed(ir_block.body[:-1]):
                 # internal vars that are used here
-                use_set = set(v.name for v in stmt.list_vars()) & internal_set
+                live_set = set(v.name for v in stmt.list_vars())
+                dead_set = live_set & internal_dead_set
                 # used here but not afterwards
-                dead_set = use_set - live_set
                 delete_pts.append((stmt, dead_set))
-                live_set |= use_set
+                internal_dead_set -= dead_set
 
             # rewrite body and insert dels
             body = []
