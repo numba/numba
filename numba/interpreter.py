@@ -397,7 +397,9 @@ class Interpreter(object):
             body = []
             for stmt, delete_set in reversed(delete_pts):
                 body.append(stmt)
-                for var_name in sorted(delete_set):
+                # note: the reverse sort is not necessary for correctness
+                #       it is just to minimize changes to test for now
+                for var_name in sorted(delete_set, reverse=True):
                     body.append(ir.Del(var_name, loc=ir_block.loc))
             body.append(ir_block.body[-1])  # terminator
             ir_block.body = body
