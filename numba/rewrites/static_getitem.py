@@ -1,4 +1,4 @@
-from numba import ir
+from numba import ir, errors
 from . import register_rewrite, Rewrite
 
 
@@ -18,15 +18,9 @@ class RewriteConstGetitems(Rewrite):
         for expr in block.find_exprs(op='getitem'):
             if expr.op == 'getitem':
                 try:
-                    defn = interp.get_definition(expr.index)
-                except KeyError:
+                    const = interp.infer_constant(expr.index)
+                except errors.ConstantInferenceError:
                     continue
-                print("defn =", defn)
-                try:
-                    const = defn.infer_constant(interp)
-                except TypeError:
-                    continue
-                print("-> const =", const)
                 getitems.append((expr, const))
 
         return len(getitems) > 0
@@ -57,12 +51,8 @@ class RewriteConstSetitems(Rewrite):
         # rewritten
         for inst in block.find_insts(ir.SetItem):
             try:
-                defn = interp.get_definition(inst.index)
-            except KeyError:
-                continue
-            try:
-                const = defn.infer_constant(interp)
-            except TypeError:
+                const = interp.infer_constant(inst.index)
+            except errors.ConstantInferenceError:
                 continue
             setitems[inst] = const
 

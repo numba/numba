@@ -4,8 +4,8 @@ import collections
 import dis
 import sys
 
-from numba import ir, controlflow, dataflow, utils, errors
-from numba.utils import builtins
+from . import ir, controlflow, dataflow, utils, errors, consts
+from .utils import builtins
 
 
 class Assigner(object):
@@ -101,9 +101,10 @@ class Interpreter(object):
         # Data flow analysis
         self.dfa = dataflow.DataFlowAnalysis(self.cfa)
         self.dfa.run()
+        # Constant inference
+        self.consts = consts.ConstantInference(self)
 
         global_scope = ir.Scope(parent=None, loc=self.loc)
-        self._fill_global_scope(global_scope)
         self.scopes.append(global_scope)
 
         # { inst offset : ir.Block }
@@ -126,11 +127,6 @@ class Interpreter(object):
         self.syntax_blocks = []
         self.dfainfo = None
 
-    def _fill_global_scope(self, scope):
-        """TODO
-        """
-        pass
-
     def get_used_globals(self):
         """
         Return a dictionary of global variables used by the bytecode.
@@ -143,6 +139,14 @@ class Interpreter(object):
         the block.
         """
         return self.block_entry_vars[block]
+
+    def infer_constant(self, name):
+        """
+        Try to infer the constant value of a given variable.
+        """
+        if isinstance(name, ir.Var):
+            name = name.name
+        return self.consts.infer_constant(name)
 
     def interpret(self):
         firstblk = min(self.cfa.blocks.keys())
@@ -518,19 +522,23 @@ class Interpreter(object):
 
     def get_definition(self, value):
         """
-        Get the definition site for the given Var instance.
+        Get the definition site for the given variable name or instance.
         A Expr instance is returned.
         """
         while True:
-            if not isinstance(value, ir.Var):
+            if isinstance(value, ir.Var):
+                name = value.name
+            elif isinstance(value, str):
+                name = value
+            else:
                 return value
-            defs = self.definitions[value.name]
+            defs = self.definitions[name]
             if len(defs) == 0:
                 raise KeyError("no definition for %r"
-                               % (value.name,))
+                               % (name,))
             if len(defs) > 1:
                 raise KeyError("more than one definition for %r"
-                               % (value.name,))
+                               % (name,))
             value = defs[0]
 
     # --- Block operations ---

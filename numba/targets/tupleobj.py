@@ -208,7 +208,6 @@ def static_getitem_tuple(context, builder, sig, args):
         res = builder.extract_value(tup, idx)
     elif isinstance(idx, slice):
         items = cgutils.unpack_tuple(builder, tup)[idx]
-        print("items =", items, tupty, sig.return_type)
         res = context.make_tuple(builder, sig.return_type, items)
     else:
         raise NotImplementedError("unexpected index %r for %s"

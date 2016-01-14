@@ -87,5 +87,11 @@ class CompilerError(NumbaError):
     """
 
 
+class ConstantInferenceError(NumbaError):
+    """
+    Failure during constant inference.
+    """
+
+
 __all__ += [name for (name, value) in globals().items()
             if not name.startswith('_') and issubclass(value, Exception)]
