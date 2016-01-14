@@ -240,7 +240,7 @@ class _PipelineManager(object):
             is_final_pipeline = pipeline_name == self.pipeline_order[-1]
             for stage, stage_name in self.pipeline_stages[pipeline_name]:
                 try:
-                    res = stage()
+                    stage()
                 except _EarlyPipelineCompletion as e:
                     return e.result
                 except BaseException as e:
@@ -254,7 +254,7 @@ class _PipelineManager(object):
                         status.fail_reason = patched_exception
                         break
             else:
-                return res
+                return None
 
         # TODO save all error information
         raise CompilerError("All pipelines have failed")
@@ -287,12 +287,17 @@ class Pipeline(object):
         self.return_type = return_type
         self.flags = flags
         self.locals = locals
+
         # Results of various steps of the compilation pipeline
+        self.interp = None
         self.bc = None
+        self.func = None
         self.func_attr = None
         self.lifted = None
+        self.lifted_from = None
         self.typemap = None
         self.calltypes = None
+        self.type_annotation = None
 
         self.status = _CompileStatus(
             can_fallback=self.flags.enable_pyobject,
@@ -359,7 +364,8 @@ class Pipeline(object):
             bc = self.extract_bytecode(func)
         except BaseException as e:
             if self.status.can_giveup:
-                return self.stage_compile_interp_mode()
+                self.stage_compile_interp_mode()
+                return self.cr
             else:
                 raise e
 
@@ -558,29 +564,28 @@ class Pipeline(object):
 
         lowered = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
-        cr = compile_result(typing_context=self.typingctx,
-                            target_context=self.targetctx,
-                            entry_point=lowered.cfunc,
-                            typing_error=self.status.fail_reason,
-                            type_annotation=self.type_annotation,
-                            library=self.library,
-                            call_helper=lowered.call_helper,
-                            signature=signature,
-                            objectmode=objectmode,
-                            interpmode=False,
-                            lifted=self.lifted,
-                            fndesc=lowered.fndesc,
-                            environment=lowered.env,
-                            has_dynamic_globals=lowered.has_dynamic_globals,
-                            )
-        return cr
+        self.cr = compile_result(typing_context=self.typingctx,
+                                target_context=self.targetctx,
+                                entry_point=lowered.cfunc,
+                                typing_error=self.status.fail_reason,
+                                type_annotation=self.type_annotation,
+                                library=self.library,
+                                call_helper=lowered.call_helper,
+                                signature=signature,
+                                objectmode=objectmode,
+                                interpmode=False,
+                                lifted=self.lifted,
+                                fndesc=lowered.fndesc,
+                                environment=lowered.env,
+                                has_dynamic_globals=lowered.has_dynamic_globals,
+                                )
 
     def stage_objectmode_backend(self):
         """
         Lowering for object mode
         """
         lowerfn = self.backend_object_mode
-        res = self._backend(lowerfn, objectmode=True)
+        self._backend(lowerfn, objectmode=True)
 
         # Warn if compiled function in object mode and force_pyobject not set
         if not self.flags.force_pyobject:
@@ -596,14 +601,13 @@ class Pipeline(object):
                 warnings.warn_explicit(warn_msg, config.NumbaWarning,
                                        self.func_attr.filename,
                                        self.func_attr.lineno)
-        return res
 
     def stage_nopython_backend(self):
         """
         Do lowering for nopython
         """
         lowerfn = self.backend_nopython_mode
-        return self._backend(lowerfn, objectmode=False)
+        self._backend(lowerfn, objectmode=False)
 
     def stage_compile_interp_mode(self):
         """
@@ -611,17 +615,23 @@ class Pipeline(object):
         """
         args = [types.pyobject] * len(self.args)
         signature = typing.signature(types.pyobject, *args)
-        cr = compile_result(typing_context=self.typingctx,
-                            target_context=self.targetctx,
-                            entry_point=self.func,
-                            typing_error=self.status.fail_reason,
-                            type_annotation="<Interpreter mode function>",
-                            signature=signature,
-                            objectmode=False,
-                            interpmode=True,
-                            lifted=(),
-                            fndesc=None,)
-        return cr
+        self.cr = compile_result(typing_context=self.typingctx,
+                                target_context=self.targetctx,
+                                entry_point=self.func,
+                                typing_error=self.status.fail_reason,
+                                type_annotation="<Interpreter mode function>",
+                                signature=signature,
+                                objectmode=False,
+                                interpmode=True,
+                                lifted=(),
+                                fndesc=None,)
+
+    def stage_cleanup(self):
+        """
+        Cleanup intermediate results to release resources.
+        """
+        if self.interp is not None:
+            self.interp.reset()
 
     def _compile_bytecode(self):
         pm = _PipelineManager()
@@ -636,6 +646,7 @@ class Pipeline(object):
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
+            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
         if self.status.can_fallback or self.flags.force_pyobject:
             pm.create_pipeline("object")
@@ -643,13 +654,21 @@ class Pipeline(object):
             pm.add_stage(self.stage_objectmode_frontend, "object mode frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
             pm.add_stage(self.stage_objectmode_backend, "object mode backend")
+            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
         if self.status.can_giveup:
             pm.create_pipeline("interp")
             pm.add_stage(self.stage_compile_interp_mode, "compiling with interpreter mode")
+            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
         pm.finalize()
-        return pm.run(self.status)
+        res = pm.run(self.status)
+        if res is not None:
+            # Early pipeline completion
+            return res
+        else:
+            assert self.cr is not None
+            return self.cr
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,

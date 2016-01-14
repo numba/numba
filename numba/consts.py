@@ -1,4 +1,6 @@
 
+import weakref
+
 from . import ir
 from .errors import ConstantInferenceError
 
@@ -11,7 +13,9 @@ class ConstantInference(object):
     """
 
     def __init__(self, interp):
-        self._interp = interp
+        # Avoid cyclic references as some user-visible objects may be
+        # held alive in the cache
+        self._interp = weakref.proxy(interp)
         self._cache = {}
 
     def infer_constant(self, name):

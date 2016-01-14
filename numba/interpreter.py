@@ -91,21 +91,9 @@ class Interpreter(object):
 
     def __init__(self, bytecode):
         self.bytecode = bytecode
-        self.scopes = []
         self.loc = ir.Loc(filename=bytecode.filename, line=1)
         self.arg_count = bytecode.arg_count
         self.arg_names = bytecode.arg_names
-        # Control flow analysis
-        self.cfa = controlflow.ControlFlowAnalysis(bytecode)
-        self.cfa.run()
-        # Data flow analysis
-        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
-        self.dfa.run()
-        # Constant inference
-        self.consts = consts.ConstantInference(self)
-
-        global_scope = ir.Scope(parent=None, loc=self.loc)
-        self.scopes.append(global_scope)
 
         # { inst offset : ir.Block }
         self.blocks = {}
@@ -115,6 +103,25 @@ class Interpreter(object):
         self.definitions = collections.defaultdict(list)
         # { ir.Block: { variable names (potentially) alive at start of block } }
         self.block_entry_vars = {}
+
+        self.reset()
+
+    def reset(self):
+        """
+        Reset all internal state and release resources.
+        """
+        self.scopes = []
+        global_scope = ir.Scope(parent=None, loc=self.loc)
+        self.scopes.append(global_scope)
+
+        # Control flow analysis
+        self.cfa = controlflow.ControlFlowAnalysis(self.bytecode)
+        self.cfa.run()
+        # Data flow analysis
+        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
+        self.dfa.run()
+        # Constant inference
+        self.consts = consts.ConstantInference(self)
 
         if self.bytecode.is_generator:
             self.generator_info = GeneratorInfo()
@@ -149,6 +156,9 @@ class Interpreter(object):
         return self.consts.infer_constant(name)
 
     def interpret(self):
+        """
+        Generate IR for this bytecode.
+        """
         firstblk = min(self.cfa.blocks.keys())
         self.loc = ir.Loc(filename=self.bytecode.filename,
                           line=self.bytecode[firstblk].lineno)
