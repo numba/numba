@@ -167,6 +167,8 @@ class Const(Dummy):
 
     def __init__(self, value):
         self.value = value
+        # We want to support constants of non-hashable values, therefore
+        # fall back on the value's id() if necessary.
         try:
             hash(value)
         except TypeError:
