@@ -743,6 +743,31 @@ class TestSetItem(TestCase):
         with self.assertRaises(ValueError):
             cfunc(np.zeros_like(arg), arg, 0, 0, 1)
 
+    def test_1d_slicing_set_tuple(self, flags=enable_pyobj_flags):
+        """
+        Tuple to 1d slice assignment
+        """
+        pyfunc = slicing_1d_usecase_set
+        # Note heterogenous types for the source and destination arrays
+        dest_type = types.Array(types.int32, 1, 'C')
+        src_type = types.UniTuple(types.int16, 2)
+        argtys = (dest_type, src_type, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        N = 10
+        arg = np.arange(N, dtype=np.int32)
+        args = ((8, -42), 1, -N+3, 1)
+        expected = pyfunc(arg.copy(), *args)
+        got = cfunc(arg.copy(), *args)
+        self.assertPreciseEqual(expected, got)
+
+        args = ((8, -42), 1, -N+2, 1)
+        with self.assertRaises(ValueError) as raises:
+            cfunc(arg.copy(), *args)
+        self.assertEqual(str(raises.exception),
+                         "cannot assign slice from input of different size")
+
     def test_1d_slicing_broadcast(self, flags=enable_pyobj_flags):
         """
         scalar to 1d slice assignment
@@ -782,6 +807,9 @@ class TestSetItem(TestCase):
 
     def test_1d_slicing_set_npm(self):
         self.test_1d_slicing_set(flags=Noflags)
+
+    def test_1d_slicing_set_tuple_npm(self):
+        self.test_1d_slicing_set_tuple(flags=Noflags)
 
     def test_1d_slicing_broadcast_npm(self):
         self.test_1d_slicing_broadcast(flags=Noflags)
