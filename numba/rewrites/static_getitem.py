@@ -21,10 +21,12 @@ class RewriteConstGetitems(Rewrite):
                     defn = interp.get_definition(expr.index)
                 except KeyError:
                     continue
+                print("defn =", defn)
                 try:
-                    const = defn.infer_constant()
+                    const = defn.infer_constant(interp)
                 except TypeError:
                     continue
+                print("-> const =", const)
                 getitems.append((expr, const))
 
         return len(getitems) > 0
@@ -59,7 +61,7 @@ class RewriteConstSetitems(Rewrite):
             except KeyError:
                 continue
             try:
-                const = defn.infer_constant()
+                const = defn.infer_constant(interp)
             except TypeError:
                 continue
             setitems[inst] = const

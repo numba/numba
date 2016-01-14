@@ -131,7 +131,11 @@ class Expr(Inst):
         self._kws = kws
 
     def __getattr__(self, name):
-        return self._kws[name]
+        try:
+            return self._kws[name]
+        except KeyError:
+            raise AttributeError("%s has no attribute %r"
+                                 % (self, name))
 
     def __setattr__(self, name, value):
         if name in ('op', 'loc', '_kws'):
@@ -246,8 +250,26 @@ class Expr(Inst):
     def list_vars(self):
         return self._rec_list_vars(self._kws)
 
-    def infer_constant(self):
+    def _fail_infer_constant(self):
         raise TypeError("cannot make a constant of %s" % (self,))
+
+    def infer_constant(self, interp):
+        if self.op == 'call':
+            return self._infer_call_result(interp)
+        self._fail_infer_constant()
+
+    def _infer_call_result(self, interp):
+        fail = self._fail_infer_constant
+        if self.kws or self.vararg:
+            fail()
+        func = interp.get_definition(self.func).infer_constant(interp)
+        if func == slice:
+            args = [interp.get_definition(a).infer_constant(interp)
+                    for a in self.args]
+            const = func(*args)
+            return const
+        else:
+            fail()
 
 
 class SetItem(Stmt):
@@ -440,7 +462,7 @@ class Arg(object):
     def __repr__(self):
         return 'arg(%d, name=%s)' % (self.index, self.name)
 
-    def infer_constant(self):
+    def infer_constant(self, interp):
         raise TypeError("cannot make a constant of %s" % (self,))
 
 
@@ -452,7 +474,7 @@ class Const(object):
     def __repr__(self):
         return 'const(%s, %s)' % (type(self.value).__name__, self.value)
 
-    def infer_constant(self):
+    def infer_constant(self, interp):
         return self.value
 
 
@@ -465,7 +487,7 @@ class Global(object):
     def __str__(self):
         return 'global(%s: %s)' % (self.name, self.value)
 
-    def infer_constant(self):
+    def infer_constant(self, interp):
         return self.value
 
 
@@ -487,7 +509,7 @@ class FreeVar(object):
     def __str__(self):
         return 'freevar(%s: %s)' % (self.name, self.value)
 
-    def infer_constant(self):
+    def infer_constant(self, interp):
         return self.value
 
 

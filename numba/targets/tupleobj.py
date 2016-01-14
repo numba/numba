@@ -202,9 +202,17 @@ def getitem_unituple(context, builder, sig, args):
 
 @lower_builtin('static_getitem', types.BaseTuple, types.Const)
 def static_getitem_tuple(context, builder, sig, args):
+    tupty, _ = sig.args
     tup, idx = args
-    assert isinstance(idx, int)
-    res = builder.extract_value(tup, idx)
+    if isinstance(idx, int):
+        res = builder.extract_value(tup, idx)
+    elif isinstance(idx, slice):
+        items = cgutils.unpack_tuple(builder, tup)[idx]
+        print("items =", items, tupty, sig.return_type)
+        res = context.make_tuple(builder, sig.return_type, items)
+    else:
+        raise NotImplementedError("unexpected index %r for %s"
+                                  % (idx, sig.args[0]))
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 

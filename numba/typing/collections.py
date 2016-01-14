@@ -48,7 +48,9 @@ class GetItemSequence(AbstractTemplate):
         if isinstance(seq, types.Sequence):
             idx = normalize_1d_index(idx)
             if isinstance(idx, types.SliceType):
-                return signature(seq, seq, idx)
+                # Slicing a tuple only supported with static_getitem
+                if not isinstance(seq, types.BaseTuple):
+                    return signature(seq, seq, idx)
             elif isinstance(idx, types.Integer):
                 return signature(seq.dtype, seq, idx)
 

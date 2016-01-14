@@ -167,11 +167,17 @@ class Const(Dummy):
 
     def __init__(self, value):
         self.value = value
+        try:
+            hash(value)
+        except TypeError:
+            self._key = id(value)
+        else:
+            self._key = value
         super(Const, self).__init__("const(%r)" % (value,))
 
     @property
     def key(self):
-        return type(self.value), self.value
+        return type(self.value), self._key
 
 
 class VarArg(Type):

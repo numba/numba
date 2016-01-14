@@ -35,8 +35,8 @@ class RewriteConstRaises(Rewrite):
         if call.kws or call.vararg:
             raise NotImplementedError
         try:
-            exc_type = interp.get_definition(call.func).infer_constant()
-            exc_args = tuple(interp.get_definition(arg).infer_constant()
+            exc_type = interp.get_definition(call.func).infer_constant(interp)
+            exc_args = tuple(interp.get_definition(arg).infer_constant(interp)
                              for arg in call.args)
         except (KeyError, TypeError):
             # Not all exception arguments are constants
@@ -67,7 +67,7 @@ class RewriteConstRaises(Rewrite):
                 else:
                     # Is it a compile-time constant?
                     try:
-                        const = excdef.infer_constant()
+                        const = excdef.infer_constant(interp)
                     except TypeError:
                         continue
                     try:
