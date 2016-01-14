@@ -54,7 +54,7 @@ script:
     # Ensure that the documentation builds without warnings
     - cd $TRAVIS_BUILD_DIR/docs ; make SPHINXOPTS=-W clean html
     # Run the Numba test suite
-    - cd ~ ; NUMBA_ENABLE_CUDASIM=1 python -m numba.testing -b -m
+    - cd ~ ; NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests
 
 notifications:
   email: false
