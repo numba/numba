@@ -565,20 +565,20 @@ class Pipeline(object):
         lowered = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
         self.cr = compile_result(typing_context=self.typingctx,
-                                target_context=self.targetctx,
-                                entry_point=lowered.cfunc,
-                                typing_error=self.status.fail_reason,
-                                type_annotation=self.type_annotation,
-                                library=self.library,
-                                call_helper=lowered.call_helper,
-                                signature=signature,
-                                objectmode=objectmode,
-                                interpmode=False,
-                                lifted=self.lifted,
-                                fndesc=lowered.fndesc,
-                                environment=lowered.env,
-                                has_dynamic_globals=lowered.has_dynamic_globals,
-                                )
+                                 target_context=self.targetctx,
+                                 entry_point=lowered.cfunc,
+                                 typing_error=self.status.fail_reason,
+                                 type_annotation=self.type_annotation,
+                                 library=self.library,
+                                 call_helper=lowered.call_helper,
+                                 signature=signature,
+                                 objectmode=objectmode,
+                                 interpmode=False,
+                                 lifted=self.lifted,
+                                 fndesc=lowered.fndesc,
+                                 environment=lowered.env,
+                                 has_dynamic_globals=lowered.has_dynamic_globals,
+                                 )
 
     def stage_objectmode_backend(self):
         """
@@ -616,15 +616,15 @@ class Pipeline(object):
         args = [types.pyobject] * len(self.args)
         signature = typing.signature(types.pyobject, *args)
         self.cr = compile_result(typing_context=self.typingctx,
-                                target_context=self.targetctx,
-                                entry_point=self.func,
-                                typing_error=self.status.fail_reason,
-                                type_annotation="<Interpreter mode function>",
-                                signature=signature,
-                                objectmode=False,
-                                interpmode=True,
-                                lifted=(),
-                                fndesc=None,)
+                                 target_context=self.targetctx,
+                                 entry_point=self.func,
+                                 typing_error=self.status.fail_reason,
+                                 type_annotation="<Interpreter mode function>",
+                                 signature=signature,
+                                 objectmode=False,
+                                 interpmode=True,
+                                 lifted=(),
+                                 fndesc=None,)
 
     def stage_cleanup(self):
         """
