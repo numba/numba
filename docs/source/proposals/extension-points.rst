@@ -24,27 +24,106 @@ public.
 High-level API
 ==============
 
-There is currently no high-level API for quick implementation of
-an existing function or type.
+There is currently no high-level API, making some use cases more
+complicated than they should be.
 
 Proposed changes
 ----------------
 
-It would be nice for people to be able to implement a function
-in a single go, as if they were writing a ``@jit`` function.
-As an example, let's assume we want to make :func:`numpy.where`
-usable from :term:`nopython mode`.  We would like to be able
-to define several implementations and select between them at
-compile-time depending on the input types.
+Dedicated module
+''''''''''''''''
 
-The following example showcases a hypothetical API where we can
-register a function taking the argument types and returning a
-callable implementing the actual function for those types.
-The API should also be able to handle optional arguments, and
-the resulting implementation should support calling with named
-parameters.
+We propose the addition of a ``numba.extending`` module exposing the main
+APIs useful for extending Numba.
+
+Implementing a function
+'''''''''''''''''''''''
+
+We propose the addition of a ``@overload`` decorator allowing the
+implementation of a given function for use in :term:`nopython mode`.
+The overloading function has the same formal signature as the implemented
+function, and receives the actual argument types.  It should return a
+Python function implementing the overloaded function for the given types.
+
+The following example implements :func:`numpy.where` with
+this approach.
 
 .. literalinclude:: np-where-override.py
+
+It is also possible to implement functions already known to Numba, to
+support additional types.  The following example implements the
+built-in function :func:`len` for tuples with this approach::
+
+   @overload(len)
+   def tuple_len(x):
+      if isinstance(x, types.BaseTuple):
+         # The tuple length is known at compile-time, so simply reify it
+         # as a constant.
+         n = len(x)
+         def len_impl(x):
+            return n
+         return len_impl
+
+
+Implementing an attribute
+'''''''''''''''''''''''''
+
+We propose the addition of a ``@overload_attribute`` decorator allowing
+the implementation of an attribute getter for use in :term:`nopython mode`.
+
+The following example implements the ``.nbytes`` attribute on Numpy arrays::
+
+   @overload_attribute(types.Array, 'nbytes')
+   def array_nbytes(arr):
+      def get(arr):
+          return arr.size * arr.itemsize
+      return get
+
+.. note::
+   The overload_attribute() signature allows for expansion to also define
+   setters and deleters, by letting the decorated function return a
+   ``getter, setter, deleter`` tuple instead of a single ``getter``.
+
+
+Implementing a method
+'''''''''''''''''''''
+
+We propose the addition of a ``@overload_method`` decorator allowing the
+implementation of an instance method for use in :term:`nopython mode`.
+
+The following example implements the ``.take()`` method on Numpy arrays::
+
+   @overload_method(types.Array, 'take')
+   def array_take(arr, indices):
+      if isinstance(indices, types.Array):
+          def take_impl(arr, indices):
+              n = indices.shape[0]
+              res = np.empty(n, arr.dtype)
+              for i in range(n):
+                  res[i] = arr[indices[i]]
+              return res
+          return take_impl
+
+
+Exposing a structure member
+'''''''''''''''''''''''''''
+
+We propose the addition of a ``make_attribute_wrapper()`` function exposing
+an internal field as a visible read-only attribute, for those types backed
+by a ``StructModel`` data model.
+
+For example, assuming ``PdIndexType`` is the Numba type of pandas indices,
+here is how to expose the underlying Numpy array as a ``._data`` attribute::
+
+   @register_model(PdIndexType)
+   class PdIndexModel(models.StructModel):
+       def __init__(self, dmm, fe_type):
+           members = [
+               ('values', fe_type.as_array),
+               ]
+           models.StructModel.__init__(self, dmm, fe_type, members)
+
+   make_attribute_wrapper(PdIndexType, 'values', '_data')
 
 
 Typing
@@ -83,6 +162,9 @@ classes, e.g.::
 
 The ``typeof_impl`` specialization must return a Numba type instance,
 or None if the value failed typing.
+
+(when one controls the class being type-inferred, an alternative
+to ``typeof_impl`` is to define a ``_numba_type_`` property on the class)
 
 In the rarer case where the new type can denote various Python classes
 that are impossible to enumerate, one must insert a manual check in the
@@ -198,9 +280,25 @@ full signature)
 Proposed changes
 ''''''''''''''''
 
-If we expose some of this, should we streamline the API first?
-The class-based API can feel clumsy, one could instead imagine
-a functional API for some of the template kinds:
+Naming of the various decorators is quite vague and confusing.  We propose
+renaming ``@builtin`` to ``@infer``, ``@builtin_attr`` to ``@infer_getattr``
+and ``builtin_global`` to ``infer_global``.
+
+The two-step declaration for global values is a bit verbose, we propose
+simplifying it by allowing the use of ``infer_global`` as a decorator::
+
+   @infer_global(len)
+   class Len(AbstractTemplate):
+       key = len
+
+       def generic(self, args, kws):
+           assert not kws
+           (val,) = args
+           if isinstance(val, (types.Buffer, types.BaseTuple)):
+               return signature(types.intp, val)
+
+The class-based API can feel clumsy, we can add a functional API for
+some of the template kinds:
 
 .. code-block:: python
 
@@ -247,8 +345,18 @@ destination type being :class:`types.Boolean`).
 Proposed changes
 ''''''''''''''''
 
-Implicit conversion could use some kind of generic function, with multiple
-dispatch based on the source and destination types.
+Add a generic function for implicit conversion, with multiple dispatch
+based on the source and destination types.  Here is an example showing
+how to write a float-to-integer conversion::
+
+   @lower_cast(types.Float, types.Integer)
+   def float_to_integer(context, builder, fromty, toty, val):
+       lty = context.get_value_type(toty)
+       if toty.signed:
+           return builder.fptosi(val, lty)
+       else:
+           return builder.fptoui(val, lty)
+
 
 Implementation of an operation
 ------------------------------
@@ -274,8 +382,13 @@ And here is how calling ``len()`` on a tuple value is implemented::
 Proposed changes
 ''''''''''''''''
 
-No changes required.  Perhaps review and streamine the API (drop the
-requirement to write ``types.Kind(...)`` explicitly?).
+Review and streamine the API.  Drop the requirement to write
+``types.Kind(...)`` explicitly.  Remove the separate ``@implement``
+decorator and rename ``@builtin`` to ``@lower_builtin``, ``@builtin_attr``
+to ``@lower_getattr``, etc.
+
+Add decorators to implement ``setattr()`` operations, named
+``@lower_setattr`` and ``@lower_setattr_generic``.
 
 
 Conversion from / to Python objects
@@ -296,6 +409,6 @@ implementation for a boolean value::
 Proposed changes
 ''''''''''''''''
 
-Perhaps change the implementation signature slightly, from ``(c, typ, val)``
-to ``(typ, val, c)``, to match the one chosen for the ``typeof_impl``
+Change the implementation signature from ``(c, typ, val)`` to
+``(typ, val, c)``, to match the one chosen for the ``typeof_impl``
 generic function.
