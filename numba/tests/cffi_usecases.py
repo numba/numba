@@ -1,16 +1,22 @@
 from __future__ import print_function, division, absolute_import
 
-from numba import cffi_support
-from numba.tests.support import static_temp_directory
 import sys
+
 import numpy as np
 
+from numba import cffi_support
+from numba.tests.support import static_temp_directory
 
-if cffi_support.SUPPORTED:
+
+def load_inline_module():
+    """
+    Create an inline module, return the corresponding ffi and dll objects.
+    """
     from cffi import FFI
+
     defs = """
-    double sin(double x);
-    double cos(double x);
+    double _numba_test_sin(double x);
+    double _numba_test_cos(double x);
     int foo(int a, int b, int c);
     """
 
@@ -21,22 +27,34 @@ if cffi_support.SUPPORTED:
     }
     """
 
-    # Create inline module
-
     ffi = FFI()
     ffi.cdef(defs)
-    C = ffi.dlopen(None) # loads the entire C namespace
-    cffi_sin = C.sin
-    cffi_cos = C.cos
+    # Load the _helperlib namespace
+    from numba import _helperlib
+    return ffi, ffi.dlopen(_helperlib.__file__)
 
-    # Compile out-of-line module and load it
 
-    defs += """
+def load_ool_module():
+    """
+    Compile an out-of-line module, return the corresponding ffi and
+    module objects.
+    """
+    from cffi import FFI
+
+    defs = """
+    double sin(double x);
+    double cos(double x);
     void vsSin(int n, float* x, float* y);
     void vdSin(int n, double* x, double* y);
+    int foo(int a, int b, int c);
     """
 
-    source += """
+    source = """
+    static int foo(int a, int b, int c)
+    {
+        return a + b * c;
+    }
+
     void vsSin(int n, float* x, float* y) {
         int i;
         for (i=0; i<n; i++)
@@ -50,22 +68,33 @@ if cffi_support.SUPPORTED:
     }
     """
 
-    ffi_ool = FFI()
+    ffi = FFI()
     ffi.set_source('cffi_usecases_ool', source)
     ffi.cdef(defs, override=True)
     tmpdir = static_temp_directory('test_cffi')
     ffi.compile(tmpdir=tmpdir)
     sys.path.append(tmpdir)
     try:
-        import cffi_usecases_ool
-        cffi_support.register_module(cffi_usecases_ool)
-        cffi_sin_ool = cffi_usecases_ool.lib.sin
-        cffi_cos_ool = cffi_usecases_ool.lib.cos
-        cffi_foo = cffi_usecases_ool.lib.foo
-        vsSin = cffi_usecases_ool.lib.vsSin
-        vdSin = cffi_usecases_ool.lib.vdSin
+        import cffi_usecases_ool as mod
+        cffi_support.register_module(mod)
+        return mod.ffi, mod
     finally:
         sys.path.remove(tmpdir)
+
+
+if cffi_support.SUPPORTED:
+    ffi, dll = load_inline_module()
+    cffi_sin = dll._numba_test_sin
+    cffi_cos = dll._numba_test_cos
+    del dll
+
+    ffi_ool, mod = load_ool_module()
+    cffi_sin_ool = mod.lib.sin
+    cffi_cos_ool = mod.lib.cos
+    cffi_foo = mod.lib.foo
+    vsSin = mod.lib.vsSin
+    vdSin = mod.lib.vdSin
+    del mod
 
 
 def use_cffi_sin(x):
@@ -95,12 +124,10 @@ def use_user_defined_symbols():
 
 def vector_sin_float32(x):
     y = np.empty_like(x)
-    vsSin(len(x), ffi.from_buffer(x),
-        cffi_usecases_ool.ffi.from_buffer(y))
+    vsSin(len(x), ffi.from_buffer(x), ffi_ool.from_buffer(y))
     return y
 
 def vector_sin_float64(x):
     y = np.empty_like(x)
-    vdSin(len(x), ffi.from_buffer(x),
-        cffi_usecases_ool.ffi.from_buffer(y))
+    vdSin(len(x), ffi.from_buffer(x), ffi_ool.from_buffer(y))
     return y

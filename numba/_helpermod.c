@@ -5,8 +5,8 @@ Expose all functions as pointers in a dedicated C extension.
 #define NUMBA_EXPORT_FUNC(_rettype) static _rettype
 #define NUMBA_EXPORT_DATA(_vartype) static _vartype
 
+#include <math.h>
 #include "_helperlib.c"
-
 
 static PyObject *
 build_c_helpers_dict(void)
@@ -100,6 +100,30 @@ static PyMethodDef ext_methods[] = {
     { "rnd_shuffle", (PyCFunction) _numba_rnd_shuffle, METH_O, NULL },
     { NULL },
 };
+
+/*
+ * These functions are exported by the module's DLL, to exercise ctypes / cffi
+ * without relying on libc availability (see https://bugs.python.org/issue23606)
+ */
+
+PyAPI_FUNC(double) _numba_test_sin(double x);
+PyAPI_FUNC(double) _numba_test_cos(double x);
+PyAPI_FUNC(double) _numba_test_exp(double x);
+
+double _numba_test_sin(double x)
+{
+    return sin(x);
+}
+
+double _numba_test_cos(double x)
+{
+    return cos(x);
+}
+
+double _numba_test_exp(double x)
+{
+    return cos(x);
+}
 
 
 MOD_INIT(_helperlib) {

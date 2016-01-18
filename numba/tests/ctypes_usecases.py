@@ -6,35 +6,34 @@ import sys
 
 is_windows = sys.platform.startswith('win32')
 
-if is_windows:
-    libc = cdll.msvcrt
-else:
-    libc = CDLL(None)
+from numba import _helperlib
+libnumba = CDLL(_helperlib.__file__)
+del _helperlib
 
-# A typed libc function (cdecl under Windows)
+# A typed C function (cdecl under Windows)
 
-c_sin = libc.sin
+c_sin = libnumba._numba_test_sin
 c_sin.argtypes = [c_double]
 c_sin.restype = c_double
 
 def use_c_sin(x):
     return c_sin(x)
 
-c_cos = libc.cos
+c_cos = libnumba._numba_test_cos
 c_cos.argtypes = [c_double]
 c_cos.restype = c_double
 
 def use_two_funcs(x):
     return c_sin(x) - c_cos(x)
 
-# An untyped libc function
+# An untyped C function
 
-c_untyped = libc.exp
+c_untyped = libnumba._numba_test_exp
 
 def use_c_untyped(x):
     return c_untyped(x)
 
-# A libc function wrapped in a CFUNCTYPE
+# A C function wrapped in a CFUNCTYPE
 
 ctype_wrapping = CFUNCTYPE(c_double, c_double)(use_c_sin)
 
