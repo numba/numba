@@ -48,12 +48,6 @@ class TestDispatcher(TestCase):
         f = jit(nopython=True)(pyfunc)
         return f, check
 
-    def test_numba_interface(self):
-        """
-        Check that vectorize can accept a decorated object.
-        """
-        vectorize('f8(f8)')(jit(dummy))
-
     def test_no_argument(self):
         @jit
         def foo():

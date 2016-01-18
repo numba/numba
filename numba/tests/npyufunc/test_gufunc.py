@@ -36,7 +36,7 @@ class TestGUFunc(unittest.TestCase):
     def test_gufunc(self, target='cpu'):
         gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
                              target=self.target)
-        gufunc.add(argtypes=[float32[:, :], float32[:, :], float32[:, :]])
+        gufunc.add((float32[:, :], float32[:, :], float32[:, :]))
         gufunc = gufunc.build_ufunc()
 
         matrix_ct = 1001

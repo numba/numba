@@ -249,8 +249,6 @@ class UFuncLoopSpec(collections.namedtuple('_UFuncLoopSpec',
     An object describing a ufunc loop's inner types.  Properties:
     - inputs: the inputs' Numba types
     - outputs: the outputs' Numba types
-    - numpy_inputs: the inputs' Numpy dtypes
-    - numpy_outputs: the outputs' Numpy dtypes
     - ufunc_sig: the string representing the ufunc's type signature, in
       Numpy format (e.g. "ii->i")
     """

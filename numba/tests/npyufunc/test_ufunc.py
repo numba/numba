@@ -1,6 +1,8 @@
 from __future__ import absolute_import, print_function, division
-from numba import unittest_support as unittest
+
 import numpy as np
+
+from numba import unittest_support as unittest
 from numba import float32
 from numba.npyufunc import Vectorize
 
@@ -46,7 +48,7 @@ class TestUFuncs(unittest.TestCase):
     def _test_ufunc_attributes(self, cls, a, b, *args):
         "Test ufunc attributes"
         vectorizer = cls(add, *args)
-        vectorizer.add(restype=float32, argtypes=[float32, float32])
+        vectorizer.add(float32(float32, float32))
         ufunc = vectorizer.build_ufunc()
 
         info = (cls, a.ndim)
@@ -58,8 +60,7 @@ class TestUFuncs(unittest.TestCase):
     def _test_broadcasting(self, cls, a, b, c, d):
         "Test multiple args"
         vectorizer = cls(add_multiple_args)
-        vectorizer.add(restype=float32,
-                       argtypes=[float32, float32, float32, float32])
+        vectorizer.add(float32(float32, float32, float32, float32))
         ufunc = vectorizer.build_ufunc()
 
         info = (cls, a.shape)
@@ -86,7 +87,7 @@ class TestUFuncs(unittest.TestCase):
     def test_implicit_broadcasting(self):
         for v in vectorizers:
             vectorizer = v(add)
-            vectorizer.add(restype=float32, argtypes=[float32, float32])
+            vectorizer.add(float32(float32, float32))
             ufunc = vectorizer.build_ufunc()
 
             broadcasting_b = b[np.newaxis, :, np.newaxis, np.newaxis, :]
