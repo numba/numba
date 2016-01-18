@@ -35,6 +35,9 @@ test:
     - argparse       [py26]
     - unittest2      [py26]
     - jinja2
+    # Required to test optional Numba features
+    - cffi
+    - scipy
   files:
     - mandel.py
   commands:
