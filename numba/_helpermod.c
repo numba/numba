@@ -5,6 +5,8 @@ Expose all functions as pointers in a dedicated C extension.
 #define NUMBA_EXPORT_FUNC(_rettype) static _rettype
 #define NUMBA_EXPORT_DATA(_vartype) static _vartype
 
+/* Import _pymodule.h first, for a recent _POSIX_C_SOURCE */
+#include "_pymodule.h"
 #include <math.h>
 #include "_helperlib.c"
 
