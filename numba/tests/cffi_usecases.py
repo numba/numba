@@ -14,6 +14,9 @@ def load_inline_module():
     """
     from cffi import FFI
 
+    # We can't rely on libc availability on Windows anymore, so we use our
+    # own compiled wrappers (see https://bugs.python.org/issue23606).
+
     defs = """
     double _numba_test_sin(double x);
     double _numba_test_cos(double x);

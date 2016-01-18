@@ -6,6 +6,9 @@ import sys
 
 is_windows = sys.platform.startswith('win32')
 
+# We can't rely on libc availability on Windows anymore, so we use our
+# own compiled wrappers (see https://bugs.python.org/issue23606).
+
 from numba import _helperlib
 libnumba = CDLL(_helperlib.__file__)
 del _helperlib
