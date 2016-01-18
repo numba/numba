@@ -1,9 +1,9 @@
 import numpy as np
 
 from numba import types
-from numba.extending import overlay
+from numba.extending import overload
 
-@overlay(np.where)
+@overload(np.where)
 def where(cond, x, y):
     """
     Implement np.where().

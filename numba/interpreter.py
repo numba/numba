@@ -2,6 +2,8 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 import dis
+from functools import reduce
+import operator
 import sys
 
 from . import ir, controlflow, dataflow, utils, errors, consts
@@ -167,54 +169,52 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
         # Post-processing and analysis on generated IR
-        self._insert_var_dels()
-        self._compute_live_variables()
+        var_def_map, var_dead_map = self._insert_var_dels()
+        self._compute_live_variables(var_def_map, var_dead_map)
         if self.generator_info:
             self._compute_generator_info()
 
-    def _compute_live_variables(self):
+    def _compute_live_variables(self, var_def_map, var_dead_map):
         """
         Compute the live variables at the beginning of each block
         and at each yield point.
-        This must be done after insertion of ir.Dels.
+        The ``var_def_map`` and ``var_dead_map`` indicates the variable defined
+        and deleted at each block, respectively.
         """
-        # Scan for variable additions and deletions in each block
-        block_var_adds = {}
-        block_var_dels = {}
+        # live var at the entry per block
+        block_entry_vars = collections.defaultdict(set)
+
+        def fix_point_progress():
+            return tuple(map(len, block_entry_vars.values()))
+
         cfg = self.cfa.graph
+        old_point = None
+        new_point = fix_point_progress()
 
-        for ir_block in self.blocks.values():
-            self.block_entry_vars[ir_block] = set()
-            adds = block_var_adds[ir_block] = set()
-            dels = block_var_dels[ir_block] = set()
-            for stmt in ir_block.body:
-                if isinstance(stmt, ir.Assign):
-                    name = stmt.target.name
-                    adds.add(name)
-                    dels.discard(name)
-                elif isinstance(stmt, ir.Del):
-                    name = stmt.value
-                    adds.discard(name)
-                    dels.add(name)
-
-        # Propagate defined variables from every block to its successors.
+        # Propagate defined variables and still live the successors.
         # (note the entry block automatically gets an empty set)
-        changed = True
-        while changed:
+
+        # Note: This is finding the actual available variables at the entry
+        #       of each block. The algorithm in _compute_live_map() is finding
+        #       the variable that must be available at the entry of each block.
+        #       This is top-down in the dataflow.  The other one is bottom-up.
+        while old_point != new_point:
             # We iterate until the result stabilizes.  This is necessary
-            # because of loops in the graph.
-            changed = False
-            for i in cfg.topo_order():
-                ir_block = self.blocks[i]
-                v = self.block_entry_vars[ir_block].copy()
-                v |= block_var_adds[ir_block]
-                v -= block_var_dels[ir_block]
-                for j, _ in cfg.successors(i):
-                    succ = self.blocks[j]
-                    succ_entry_vars = self.block_entry_vars[succ]
-                    if not succ_entry_vars >= v:
-                        succ_entry_vars.update(v)
-                        changed = True
+            # because of loops in the graphself.
+            for offset in self.blocks:
+                # vars available + variable defined
+                avail = block_entry_vars[offset] | var_def_map[offset]
+                # substract variables deleted
+                avail -= var_dead_map[offset]
+                # add ``avail`` to each successors
+                for succ, _data in cfg.successors(offset):
+                    block_entry_vars[succ] |= avail
+
+            old_point = new_point
+            new_point = fix_point_progress()
+
+        for offset, ir_block in self.blocks.items():
+            self.block_entry_vars[ir_block] = block_entry_vars[offset]
 
     def _compute_generator_info(self):
         """
@@ -256,119 +256,187 @@ class Interpreter(object):
 
     def _insert_var_dels(self):
         """
-        Insert ir.Del statements where necessary for the various
-        variables defined within the IR.
+        Insert del statements for each variable.
+        Returns a 2-tuple of (variable definition map, variable deletion map)
+        which indicates variables defined and deleted in each block.
+
+        The algorithm avoids relying on explicit knowledge on loops and
+        distinguish between variables that are defined locally vs variables that
+        come from incoming blocks.
+        We start with simple usage (variable reference) and definition (variable
+        creation) maps on each block. Propagate the liveness info to predecessor
+        blocks until it stabilize, at which point we know which variables must
+        exist before entering each block. Then, we compute the end of variable
+        lives and insert del statements accordingly. Variables are deleted after
+        the last use. Variable referenced by terminators (e.g. conditional
+        branch and return) are deleted by the successors or the caller.
         """
-        # { var name -> { block offset -> stmt of last use } }
-        var_use = collections.defaultdict(dict)
-        cfg = self.cfa.graph
+        var_use_map, var_def_map = self._compute_use_defs()
+        live_map = self._compute_live_map(var_use_map, var_def_map)
+        dead_maps = self._compute_dead_maps(live_map, var_def_map)
+        internal_dead_map, escaping_dead_map = dead_maps
+        self._patch_var_dels(internal_dead_map, escaping_dead_map)
+        var_dead_map = dict((k, internal_dead_map[k] | escaping_dead_map[k])
+                            for k in self.blocks)
+        return var_def_map, var_dead_map
+
+    def _compute_use_defs(self):
+        """
+        Find variable use/def per block.
+        """
+        var_use_map = {}   # { block offset -> set of vars }
+        var_def_map = {}   # { block offset -> set of vars }
+        for offset, ir_block in self.blocks.items():
+            var_use_map[offset] = use_set = set()
+            var_def_map[offset] = def_set = set()
+            for stmt in ir_block.body:
+                if isinstance(stmt, ir.Assign):
+                    if isinstance(stmt.value, ir.Inst):
+                        rhs_set = set(var.name
+                                      for var in stmt.value.list_vars())
+                    elif isinstance(stmt.value, ir.Var):
+                        rhs_set = set([stmt.value.name])
+                    elif isinstance(stmt.value, (ir.Arg, ir.Const, ir.Global,
+                                                 ir.FreeVar)):
+                        rhs_set = ()
+                    else:
+                        raise AssertionError('unreachable', type(stmt.value))
+                    # If lhs not in rhs of the assignment
+                    if stmt.target.name not in rhs_set:
+                        def_set.add(stmt.target.name)
+
+                for var in stmt.list_vars():
+                    # do not include locally defined vars to use-map
+                    if var.name not in def_set:
+                        use_set.add(var.name)
+
+        return var_use_map, var_def_map
+
+    def _compute_live_map(self, var_use_map, var_def_map):
+        """
+        Find variables that must be alive at the ENTRY of each block.
+        We use a simple fix-point algorithm that iterates until the set of
+        live variables is unchanged for each block.
+        """
+        live_map = {}
+        for offset in self.blocks.keys():
+            live_map[offset] = var_use_map[offset]
+
+        def fix_point_progress():
+            return tuple(len(v) for v in live_map.values())
+
+        old_point = None
+        new_point = fix_point_progress()
+        while old_point != new_point:
+            for offset in live_map.keys():
+                for inc_blk, _data in self.cfa.graph.predecessors(offset):
+                    # substract all variables that are defined in
+                    # the incoming block
+                    live_map[inc_blk] |= live_map[offset] - var_def_map[inc_blk]
+            old_point = new_point
+            new_point = fix_point_progress()
+
+        return live_map
+
+    def _compute_dead_maps(self, live_map, var_def_map):
+        """
+        Compute the end-of-live information for variables.
+        `live_map` contains a mapping of block offset to all the living
+        variables at the ENTRY of the block.
+        """
+        # The following three dictionaries will be
+        # { block offset -> set of variables to delete }
+        # all vars that should be deleted at the start of the successors
+        escaping_dead_map = collections.defaultdict(set)
+        # all vars that should be deleted within this block
+        internal_dead_map = collections.defaultdict(set)
+        # all vars that should be delted after the function exit
+        exit_dead_map = collections.defaultdict(set)
 
         for offset, ir_block in self.blocks.items():
-            for stmt in ir_block.body:
-                for var_name in stmt.list_vars():
-                    if stmt.is_terminator and not stmt.is_exit:
-                        # Move the "last use" at the beginning of successor
-                        # blocks.
-                        for succ, _ in cfg.successors(offset):
-                            var_use[var_name.name].setdefault(succ, None)
-                    else:
-                        var_use[var_name.name][offset] = stmt
+            # live vars WITHIN the block will include all the locally
+            # defined variables
+            cur_live_set = live_map[offset] | var_def_map[offset]
+            # vars alive alive in the outgoing blocks
+            outgoing_live_map = dict((out_blk, live_map[out_blk])
+                                     for out_blk, _data
+                                     in self.cfa.graph.successors(offset))
+            # vars to keep alive for the terminator
+            terminator_liveset = set(v.name
+                                     for v in ir_block.terminator.list_vars())
+            # vars to keep alive in the successors
+            combined_liveset = reduce(operator.or_, outgoing_live_map.values(),
+                                      set())
+            # include variables used in terminator
+            combined_liveset |= terminator_liveset
+            # vars that are dead within the block beacuse they are not
+            # propagated to any outgoing blocks
+            internal_set = cur_live_set - combined_liveset
+            internal_dead_map[offset] = internal_set
+            # vars that escape this block
+            escaping_live_set = cur_live_set - internal_set
+            for out_blk, new_live_set in outgoing_live_map.items():
+                # successor should delete the unused escaped vars
+                new_live_set = new_live_set | var_def_map[out_blk]
+                escaping_dead_map[out_blk] |= escaping_live_set - new_live_set
 
-        for name in sorted(var_use):
-            var_use_map = var_use[name]
-            blocks = self._compute_var_disposal(name, var_use_map)
-            self._patch_var_disposal(name, var_use_map, blocks)
+            # if no outgoing blocks
+            if not outgoing_live_map:
+                # insert var used by terminator
+                exit_dead_map[offset] = terminator_liveset
 
-    def _patch_var_disposal(self, var_name, use_map, disposal_blocks):
+        # Verify that the dead maps cover all live variables
+        all_vars = reduce(operator.or_, live_map.values(), set())
+        internal_dead_vars = reduce(operator.or_, internal_dead_map.values(),
+                                    set())
+        escaping_dead_vars = reduce(operator.or_, escaping_dead_map.values(),
+                                    set())
+        exit_dead_vars = reduce(operator.or_, exit_dead_map.values(), set())
+        dead_vars = (internal_dead_vars | escaping_dead_vars | exit_dead_vars)
+        missing_vars = all_vars - dead_vars
+        if missing_vars:
+            # There are no exit points
+            if not self.cfa.graph.exit_points():
+                # We won't be able to verify this
+                pass
+            else:
+                msg = 'liveness info missing for vars: {0}'.format(missing_vars)
+                raise RuntimeError(msg)
+
+        return internal_dead_map, escaping_dead_map
+
+    def _patch_var_dels(self, internal_dead_map, escaping_dead_map):
         """
-        Insert ir.Del statements into each of the *disposal_blocks*
-        for variable *var_name*, at the appropriate points in the blocks.
+        Insert delete in each block
         """
-        for b in disposal_blocks:
-            # Either this is an original use point and we will insert after
-            # that statement, or it's a computed one and we will insert
-            # at the beginning of the block.
-            stmt = use_map.get(b)
-            ir_block = self.blocks[b]
-            if stmt is None:
+        for offset, ir_block in self.blocks.items():
+            # for each internal var, insert delete after the last use
+            internal_dead_set = internal_dead_map[offset].copy()
+            delete_pts = []
+            # for each statement in reverse order
+            for stmt in reversed(ir_block.body[:-1]):
+                # internal vars that are used here
+                live_set = set(v.name for v in stmt.list_vars())
+                dead_set = live_set & internal_dead_set
+                # used here but not afterwards
+                delete_pts.append((stmt, dead_set))
+                internal_dead_set -= dead_set
+
+            # rewrite body and insert dels
+            body = []
+            for stmt, delete_set in reversed(delete_pts):
+                body.append(stmt)
+                # note: the reverse sort is not necessary for correctness
+                #       it is just to minimize changes to test for now
+                for var_name in sorted(delete_set, reverse=True):
+                    body.append(ir.Del(var_name, loc=ir_block.loc))
+            body.append(ir_block.body[-1])  # terminator
+            ir_block.body = body
+
+            # vars to delete at the start
+            escape_dead_set = escaping_dead_map[offset]
+            for var_name in sorted(escape_dead_set):
                 ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
-            else:
-                # If the variable is used in an exiting statement
-                # (e.g. raise or return), we don't insert anything.
-                if not stmt.is_exit:
-                    ir_block.insert_after(ir.Del(var_name, loc=stmt.loc), stmt)
-
-    def _compute_var_disposal(self, var_name, use_map):
-        """
-        Compute a set of blocks in which *var_name* should be disposed of.
-        """
-        cfg = self.cfa.graph
-
-        # Compute a set of blocks where we want the variable to be
-        # kept alive.
-        live_points = set()
-
-        # Find the loops the variable is used in
-        loops = set()
-        # Each enclosing loop encloses *all* use points
-        enclosing_loops = None
-        for block in use_map:
-            block_loops = cfg.in_loops(block)
-            loops.update(block_loops)
-            if enclosing_loops is None:
-                enclosing_loops = set(block_loops)
-            else:
-                enclosing_loops.intersection_update(block_loops)
-
-        spanned_loops = loops - enclosing_loops
-
-        for loop in spanned_loops:
-            # As there are blocks outside the loop, the variable must be
-            # kept alive accross loop iterations => we only consider
-            # loop exit points.
-            # (otherwise it means the variable is *defined* inside the loop
-            #  and need not be kept alive accross iterations)
-            live_points.update(loop.exits)
-
-        for block in use_map:
-            live_points.add(block)
-
-        # Now compute a set of *exclusive* blocks covering all paths
-        # stemming from the live points. This ensures that each variable
-        # is del'ed at most once per possible code path.
-        tails = set()
-        # We use the todo list as a stack, so we really iterate in
-        # reverse topo order.
-        todo = list(cfg.topo_sort(live_points))
-        seen = set()
-        infinite_loops = set()
-        while todo:
-            b = todo.pop()
-            if b in seen:
-                continue
-            seen.add(b)
-            block_loops = cfg.in_loops(b)
-            if block_loops:
-                loop = block_loops[0]
-                if loop not in enclosing_loops:
-                    if not loop.exits:
-                        # Fix-up for infinite loops: we temporarily add
-                        # the loop header to the tails, so that the variable
-                        # isn't del'ed before the loop.
-                        tails.add(loop.header)
-                        infinite_loops.add(loop.header)
-                    continue
-            if cfg.descendents(b) & tails:
-                for succ, _ in cfg.successors(b):
-                    if succ not in tails:
-                        todo.append(succ)
-            else:
-                tails.add(b)
-
-        # Remove temporary entries for infinite loops
-        tails -= infinite_loops
-
-        return tails
 
     def init_first_block(self):
         # Define variables receiving the function arguments
