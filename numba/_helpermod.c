@@ -122,7 +122,7 @@ double _numba_test_cos(double x)
 
 double _numba_test_exp(double x)
 {
-    return cos(x);
+    return exp(x);
 }
 
 
