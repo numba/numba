@@ -459,7 +459,7 @@ class BaseContext(object):
         unified = typelist[0]
         for tp in typelist[1:]:
             unified = self.unify_pairs(unified, tp)
-            if unified is None:
+            if unified is types.pyobject:
                 break
         return unified
 

@@ -2587,6 +2587,150 @@ def np_frombuffer(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
+
+def _get_seq_size(context, builder, seqty, seq):
+    if isinstance(seqty, types.BaseTuple):
+        return context.get_constant(types.intp, len(seqty))
+    elif isinstance(seqty, types.Sequence):
+        len_impl = context.get_function(len, signature(types.intp, seqty,))
+        return len_impl(builder, (seq,))
+    else:
+        assert 0
+
+
+def compute_sequence_shape(context, builder, ndim, seqty, seq):
+    """
+    Compute the likely shape of a nested sequence (possibly 0d).
+    """
+    intp_t = context.get_value_type(types.intp)
+    zero = Constant.int(intp_t, 0)
+
+    def get_first_item(seqty, seq):
+        if isinstance(seqty, types.BaseTuple):
+            if len(seqty) == 0:
+                return None, None
+            else:
+                return seqty[0], builder.extract_value(seq, 0)
+        else:
+            getitem_impl = context.get_function('getitem',
+                                                signature(seqty.dtype, seqty, types.intp))
+            return seqty.dtype, getitem_impl(builder, (seq, zero))
+
+    # Compute shape by traversing the first element of each nested
+    # sequence
+    shapes = []
+    innerty, inner = seqty, seq
+
+    for i in range(ndim):
+        shapes.append(_get_seq_size(context, builder, innerty, inner))
+        innerty, inner = get_first_item(innerty, inner)
+
+    return tuple(shapes)
+
+
+def check_sequence_shape(context, builder, seqty, seq, shapes):
+    """
+    Check the nested sequence matches the given *shapes*.
+    """
+    intp_t = context.get_value_type(types.intp)
+
+    def _fail():
+        context.call_conv.return_user_exc(builder, ValueError,
+                                          ("incompatible sequence shape",))
+
+    def check_seq_size(seqty, seq, shapes):
+        if len(shapes) == 0:
+            return
+
+        size = _get_seq_size(context, builder, seqty, seq)
+        expected = shapes[0]
+        mismatch = builder.icmp_signed('!=', size, expected)
+        with builder.if_then(mismatch, likely=False):
+            _fail()
+
+        if len(shapes) == 1:
+            return
+
+        if isinstance(seqty, types.Sequence):
+            getitem_impl = context.get_function('getitem',
+                                                signature(seqty.dtype, seqty, types.intp))
+            with cgutils.for_range(builder, size) as loop:
+                innerty = seqty.dtype
+                inner = getitem_impl(builder, (seq, loop.index))
+                check_seq_size(innerty, inner, shapes[1:])
+
+        elif isinstance(seqty, types.BaseTuple):
+            for i in range(len(seqty)):
+                innerty = seqty[i]
+                inner = builder.extract_value(seq, i)
+                check_seq_size(innerty, inner, shapes[1:])
+
+        else:
+            assert 0, seqty
+
+    check_seq_size(seqty, seq, shapes)
+
+
+def assign_sequence_to_array(context, builder, data, shapes, strides,
+                             dtype, layout, seqty, seq):
+    """
+    Assign a nested sequence contents to an array.  The shape must match
+    the sequence's structure.
+    """
+
+    def assign_item(indices, valty, val):
+        ptr = cgutils.get_item_pointer2(builder, data, shapes, strides,
+                                        layout, indices, wraparound=False)
+        val = context.cast(builder, val, valty, dtype)
+        builder.store(val, ptr)
+
+    def assign(seqty, seq, shapes, indices):
+        if len(shapes) == 0:
+            assert not isinstance(seqty, (types.Sequence, types.BaseTuple))
+            assign_item(indices, seqty, seq)
+            return
+
+        size = shapes[0]
+
+        if isinstance(seqty, types.Sequence):
+            getitem_impl = context.get_function('getitem',
+                                                signature(seqty.dtype, seqty, types.intp))
+            with cgutils.for_range(builder, size) as loop:
+                innerty = seqty.dtype
+                inner = getitem_impl(builder, (seq, loop.index))
+                assign(innerty, inner, shapes[1:], indices + (loop.index,))
+
+        elif isinstance(seqty, types.BaseTuple):
+            for i in range(len(seqty)):
+                innerty = seqty[i]
+                inner = builder.extract_value(seq, i)
+                index = context.get_constant(types.intp, i)
+                assign(innerty, inner, shapes[1:], indices + (index,))
+
+        else:
+            assert 0, seqty
+
+    assign(seqty, seq, shapes, ())
+
+
+@lower_builtin(numpy.array, types.Any)
+def np_array(context, builder, sig, args):
+    arrty = sig.return_type
+    ndim = arrty.ndim
+    seqty = sig.args[0]
+    seq = args[0]
+
+    shapes = compute_sequence_shape(context, builder, ndim, seqty, seq)
+    assert len(shapes) == ndim
+
+    check_sequence_shape(context, builder, seqty, seq, shapes)
+    arr = _empty_nd_impl(context, builder, arrty, shapes)
+    assign_sequence_to_array(context, builder, arr.data, shapes, arr.strides,
+                             arrty.dtype, arrty.layout, seqty, seq)
+
+    return impl_ret_new_ref(context, builder, sig.return_type, arr._getvalue())
+
+
 # -----------------------------------------------------------------------------
 # Sorting
 
