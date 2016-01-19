@@ -809,7 +809,6 @@ class BaseContext(object):
         """
         Create a tuple of the given *typ* containing the *values*.
         """
-        # XXX Use cgutils.pack_array / cgutils.make_anonymous_struct ?
         tup = self.get_constant_undef(typ)
         for i, val in enumerate(values):
             tup = builder.insert_value(tup, val, i)

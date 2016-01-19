@@ -396,29 +396,46 @@ def unbox_tuple(typ, obj, c):
     n = len(typ)
     values = []
     cleanups = []
-    is_error = cgutils.false_bit
+    lty = c.context.get_value_type(typ)
+
+    is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+    value_ptr = cgutils.alloca_once(c.builder, lty)
+
+    # Issue #1638: need to check the tuple size
+    actual_size = c.pyapi.tuple_size(obj)
+    size_matches = c.builder.icmp_unsigned('==', actual_size,
+                                            ir.Constant(actual_size.type, n))
+    with c.builder.if_then(c.builder.not_(size_matches), likely=False):
+        c.pyapi.err_format(
+            "PyExc_ValueError",
+            "size mismatch for tuple, expected %d element(s) but got %%zd" % (n,),
+            actual_size)
+        c.builder.store(cgutils.true_bit, is_error_ptr)
+
+    # We unbox the items even if not `size_matches`, to avoid issues with
+    # the generated IR (instruction doesn't dominate all uses)
     for i, eltype in enumerate(typ):
         elem = c.pyapi.tuple_getitem(obj, i)
         native = c.unbox(eltype, elem)
         values.append(native.value)
-        is_error = c.builder.or_(is_error, native.is_error)
+        with c.builder.if_then(native.is_error, likely=False):
+            c.builder.store(cgutils.true_bit, is_error_ptr)
         if native.cleanup is not None:
             cleanups.append(native.cleanup)
 
+    value = c.context.make_tuple(c.builder, typ, values)
+    c.builder.store(value, value_ptr)
+
     if cleanups:
-        def cleanup():
-            for func in reversed(cleanups):
-                func()
+        with c.builder.if_then(size_matches, likely=True):
+            def cleanup():
+                for func in reversed(cleanups):
+                    func()
     else:
         cleanup = None
 
-    # XXX should we use context.make_tuple()
-    if isinstance(typ, types.UniTuple):
-        value = cgutils.pack_array(c.builder, values,
-                                   c.context.get_value_type(typ.dtype))
-    else:
-        value = cgutils.make_anonymous_struct(c.builder, values)
-    return NativeValue(value, is_error=is_error, cleanup=cleanup)
+    return NativeValue(c.builder.load(value_ptr), cleanup=cleanup,
+                       is_error=c.builder.load(is_error_ptr))
 
 
 @box(types.List)

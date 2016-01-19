@@ -135,6 +135,15 @@ class TestTuplePassing(TestCase):
         self.assertPreciseEqual(cr_first.entry_point((2**61, 1.5)), 2**61)
         self.assertPreciseEqual(cr_second.entry_point((2**61, 1.5)), 1.5)
 
+    def test_size_mismatch(self):
+        # Issue #1638: tuple size should be checked when unboxing
+        tuple_type = types.UniTuple(types.int32, 2)
+        cr = compile_isolated(tuple_first, (tuple_type,))
+        with self.assertRaises(ValueError) as raises:
+            cr.entry_point((4, 5, 6))
+        self.assertEqual(str(raises.exception),
+                         "size mismatch for tuple, expected 2 element(s) but got 3")
+
 
 class TestOperations(TestCase):
 
