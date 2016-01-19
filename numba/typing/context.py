@@ -105,11 +105,18 @@ class BaseContext(object):
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
         """
-        defns = self._functions[func]
-        for defn in defns:
-            res = defn.apply(args, kws)
-            if res is not None:
-                return res
+        if func not in self._functions:
+            # It's not a known function type, perhaps it's a global?
+            try:
+                func = self._lookup_global(func)
+            except KeyError:
+                pass
+        if func in self._functions:
+            defns = self._functions[func]
+            for defn in defns:
+                res = defn.apply(args, kws)
+                if res is not None:
+                    return res
 
         if isinstance(func, types.Type):
             # If it's a type, it may support a __call__ method

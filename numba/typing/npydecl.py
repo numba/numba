@@ -443,12 +443,19 @@ def _parse_nested_sequence(context, typ):
 
 @infer_global(numpy.array)
 class NpArray(CallableTemplate):
+    """
+    Typing template for np.array().
+    """
 
     def generic(self):
         def typer(object, dtype=None):
-            if dtype is not None:
-                raise NotImplementedError
-            ndim, dtype = _parse_nested_sequence(self.context, object)
+            ndim, seq_dtype = _parse_nested_sequence(self.context, object)
+            if dtype is None:
+                dtype = seq_dtype
+            else:
+                dtype = _parse_dtype(dtype)
+                if dtype is None:
+                    return
             return types.Array(dtype, ndim, 'C')
 
         return typer

@@ -2714,6 +2714,7 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
 
 
 @lower_builtin(numpy.array, types.Any)
+@lower_builtin(numpy.array, types.Any, types.DTypeSpec)
 def np_array(context, builder, sig, args):
     arrty = sig.return_type
     ndim = arrty.ndim
