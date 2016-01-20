@@ -25,6 +25,18 @@ from numba.six import create_bound_method, next
 from .config import NumbaWarning
 
 
+class _OmittedArg(object):
+    """
+    A placeholder for omitted arguments with a default value.
+    """
+
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return "omitted arg(%r)" % (self.value,)
+
+
 class _DispatcherBase(_dispatcher.Dispatcher):
     """
     Common base class for dispatcher Implementations.
@@ -46,7 +58,9 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         self._pysig = pysig
         argnames = tuple(self._pysig.parameters)
-        defargs = self.py_func.__defaults__ or ()
+        #defargs = (_omitted,) * len(self.py_func.__defaults__ or ())
+        defargs = tuple(_OmittedArg(val)
+                        for val in (self.py_func.__defaults__ or ()))
         try:
             lastarg = list(self._pysig.parameters.values())[-1]
         except IndexError:
@@ -126,7 +140,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         def normal_handler(index, param, value):
             return value
         def default_handler(index, param, default):
-            return self.typeof_pyval(default)
+            return types.Omitted(default)
         def stararg_handler(index, param, values):
             return types.Tuple(values)
         args = fold_arguments(self._pysig, args, kws,
@@ -167,8 +181,13 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         for the given *args* and *kws*, and return the resulting callable.
         """
         assert not kws
-        sig = tuple([self.typeof_pyval(a) for a in args])
-        return self.compile(sig)
+        real_args = []
+        for a in args:
+            if isinstance(a, _OmittedArg):
+                real_args.append(types.Omitted(a.value))
+            else:
+                real_args.append(self.typeof_pyval(a))
+        return self.compile(tuple(real_args))
 
     def inspect_llvm(self, signature=None):
         if signature is not None:

@@ -174,6 +174,21 @@ class Const(Dummy):
         return type(self.value), self.value
 
 
+class Omitted(Opaque):
+    """
+    An omitted argument with a default value.
+    """
+
+    def __init__(self, value):
+        self.value = value
+        super(Omitted, self).__init__("omitted(default=%r)" % (value,))
+
+    @property
+    def key(self):
+        # XXX value may not be hashable
+        return type(self.value), self.value
+
+
 class VarArg(Type):
     """
     Special type representing a variable number of arguments at the

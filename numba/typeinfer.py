@@ -142,6 +142,24 @@ class Propagate(object):
         typeinfer.add_type(self.src, target_type, unless_locked=True)
 
 
+class ArgConstraint(object):
+
+    def __init__(self, dst, src, loc):
+        self.dst = dst
+        self.src = src
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
+        src = typevars[self.src]
+        if not src.defined:
+            return
+        ty = src.getone()
+        if isinstance(ty, types.Omitted):
+            ty = typeinfer.context.resolve_value_type(ty.value)
+        typeinfer.add_type(self.dst, ty)
+
+
 class BuildTupleConstraint(object):
     def __init__(self, target, items, loc):
         self.target = target
@@ -569,8 +587,10 @@ class TypeInferer(object):
         tv = self.typevars[var]
         if unless_locked and tv.locked:
             return
+        oldty = tv.type
         unified = tv.add_type(tp)
-        self.propagate_refined_type(var, unified)
+        if unified != oldty:
+            self.propagate_refined_type(var, unified)
 
     def add_calltype(self, inst, signature):
         self.calltypes[inst] = signature
@@ -743,9 +763,9 @@ class TypeInferer(object):
 
     def typeof_arg(self, inst, target, arg):
         src_name = self._mangle_arg_name(arg.name)
-        self.constraints.append(Propagate(dst=target.name,
-                                          src=src_name,
-                                          loc=inst.loc))
+        self.constraints.append(ArgConstraint(dst=target.name,
+                                              src=src_name,
+                                              loc=inst.loc))
 
     def typeof_const(self, inst, target, const):
         self.lock_type(target.name, self.resolve_value_type(inst, const))

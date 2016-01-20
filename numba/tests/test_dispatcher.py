@@ -156,8 +156,6 @@ class TestDispatcher(TestCase):
         check(x=3, y=4)
         check(3)
         check(x=3)
-        # All calls above fall under the same specialization
-        self.assertEqual(len(f.overloads), 1)
         # Errors
         with self.assertRaises(TypeError) as cm:
             f(3, 4, y=6, z=7)

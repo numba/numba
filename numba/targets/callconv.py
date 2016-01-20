@@ -134,6 +134,29 @@ class BaseCallConv(object):
 
         builder.position_at_end(bbend)
 
+    def decode_arguments(self, builder, argtypes, func):
+        """
+        Get the decoded (unpacked) Python arguments with *argtypes*
+        from LLVM function *func*.  A tuple of LLVM values is returned.
+        """
+        raw_args = self.get_arguments(func)
+        arginfo = self._get_arg_packer(argtypes)
+        return arginfo.from_arguments(builder, raw_args)
+
+    def _fix_argtypes(self, argtypes):
+        """
+        Fix argument types, removing any omitted arguments.
+        """
+        return tuple(ty for ty in argtypes
+                     if not isinstance(ty, types.Omitted))
+
+    def _get_arg_packer(self, argtypes):
+        """
+        Get an argument packer for the given argument types.
+        """
+        #argtypes = self._fix_argtypes(argtypes)
+        return self.context.get_arg_packer(argtypes)
+
 
 class MinimalCallConv(BaseCallConv):
     """
@@ -200,7 +223,7 @@ class MinimalCallConv(BaseCallConv):
         """
         Get the implemented Function type for *restype* and *argtypes*.
         """
-        arginfo = self.context.get_arg_packer(argtypes)
+        arginfo = self._get_arg_packer(argtypes)
         argtypes = list(arginfo.argument_types)
         resptr = self.get_return_type(restype)
         fnty = ir.FunctionType(errcode_t, [resptr] + argtypes)
@@ -210,7 +233,7 @@ class MinimalCallConv(BaseCallConv):
         """
         Set names and attributes of function arguments.
         """
-        arginfo = self.context.get_arg_packer(fe_argtypes)
+        arginfo = self._get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
         fn.args[0].name = ".ret"
@@ -219,7 +242,6 @@ class MinimalCallConv(BaseCallConv):
     def get_arguments(self, func):
         """
         Get the Python-level arguments of LLVM *func*.
-        See get_function_type() for the calling convention.
         """
         return func.args[1:]
 
@@ -233,7 +255,7 @@ class MinimalCallConv(BaseCallConv):
         # initialize return value
         builder.store(cgutils.get_null_value(retty), retvaltmp)
 
-        arginfo = self.context.get_arg_packer(argtys)
+        arginfo = self._get_arg_packer(argtys)
         args = arginfo.as_arguments(builder, args)
         realargs = [retvaltmp] + list(args)
         code = builder.call(callee, realargs)
@@ -348,8 +370,7 @@ class CPUCallConv(BaseCallConv):
         """
         Get the implemented Function type for *restype* and *argtypes*.
         """
-
-        arginfo = self.context.get_arg_packer(argtypes)
+        arginfo = self._get_arg_packer(argtypes)
         argtypes = list(arginfo.argument_types)
         resptr = self.get_return_type(restype)
         fnty = ir.FunctionType(errcode_t,
@@ -361,7 +382,7 @@ class CPUCallConv(BaseCallConv):
         """
         Set names of function arguments, and add useful attributes to them.
         """
-        arginfo = self.context.get_arg_packer(fe_argtypes)
+        arginfo = self._get_arg_packer(fe_argtypes)
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
         retarg = self._get_return_argument(fn)
@@ -413,7 +434,7 @@ class CPUCallConv(BaseCallConv):
         excinfoptr = cgutils.alloca_once(builder, ir.PointerType(excinfo_t),
                                          name="excinfo")
 
-        arginfo = self.context.get_arg_packer(argtys)
+        arginfo = self._get_arg_packer(argtys)
         args = list(arginfo.as_arguments(builder, args))
         realargs = [retvaltmp, excinfoptr, env] + args
         code = builder.call(callee, realargs)

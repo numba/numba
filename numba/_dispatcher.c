@@ -8,6 +8,37 @@
 #include "_typeof.h"
 
 
+// static PyTypeObject OmittedType = {
+// #if (PY_MAJOR_VERSION < 3)
+//     PyObject_HEAD_INIT(NULL)
+//     0,                                           /* ob_size */
+// #else
+//     PyVarObject_HEAD_INIT(NULL, 0)
+// #endif
+//     "<omitted argument>",                        /* tp_name */
+//     0,                                           /* tp_basicsize */
+//     0,                                           /* tp_itemsize */
+//     0,                                           /* tp_dealloc*/
+//     0,                                           /* tp_print*/
+//     0,                                           /* tp_getattr*/
+//     0,                                           /* tp_setattr*/
+//     0,                                           /* tp_compare*/
+//     0,                                           /* tp_repr*/
+//     0,                                           /* tp_as_number*/
+//     0,                                           /* tp_as_sequence*/
+//     0,                                           /* tp_as_mapping*/
+//     0,                                           /* tp_hash */
+//     0,                                           /* tp_call*/
+//     0,                                           /* tp_str*/
+//     0,                                           /* tp_getattro*/
+//     0,                                           /* tp_setattro*/
+//     0,                                           /* tp_as_buffer*/
+//     Py_TPFLAGS_DEFAULT                           /* tp_flags*/
+// };
+//
+// static PyObject *omitted;
+
+
 typedef struct DispatcherObject{
     PyObject_HEAD
     /* Holds borrowed references to PyCFunction objects */
@@ -197,6 +228,7 @@ call_cfunc(PyObject *cfunc, PyObject *args, PyObject *kws)
     assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == METH_VARARGS | METH_KEYWORDS);
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
+//     PySys_FormatStderr("calling C func with %R\n", args);
     return fn(PyCFunction_GET_SELF(cfunc), args, kws);
 }
 
@@ -365,7 +397,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
     argct = PySequence_Fast_GET_SIZE(args);
 
-    if (argct < sizeof(prealloc) / sizeof(int))
+    if (argct < (Py_ssize_t) (sizeof(prealloc) / sizeof(int)))
         tys = prealloc;
     else
         tys = malloc(argct * sizeof(int));
@@ -521,6 +553,16 @@ MOD_INIT(_dispatcher) {
     }
     Py_INCREF(&DispatcherType);
     PyModule_AddObject(m, "Dispatcher", (PyObject*)(&DispatcherType));
+
+//     if (PyType_Ready(&OmittedType) < 0) {
+//         return MOD_ERROR_VAL;
+//     }
+//     omitted = PyObject_New(PyObject, &OmittedType);
+//     if (omitted == NULL) {
+//         return MOD_ERROR_VAL;
+//     }
+//     Py_INCREF(omitted);
+//     PyModule_AddObject(m, "_omitted", omitted);
 
     return MOD_SUCCESS_VAL(m);
 }

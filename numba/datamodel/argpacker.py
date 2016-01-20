@@ -2,6 +2,21 @@ from __future__ import print_function, absolute_import
 
 from collections import deque
 
+from numba import types
+
+
+class _OmittedArgDataModel(object):
+
+    def get_argument_type(self):
+        return ()
+
+    def as_argument(self, builder, val):
+        return ()
+
+    def from_argument(self, builder, val):
+        assert val == (), val
+        return None
+
 
 class ArgPacker(object):
     """
@@ -20,8 +35,16 @@ class ArgPacker(object):
         self._dmm = dmm
         self._fe_args = fe_args
         self._nargs = len(fe_args)
-        self._dm_args = [self._dmm.lookup(ty) for ty in fe_args]
-        argtys = [bt.get_argument_type() for bt in self._dm_args]
+
+        self._dm_args = []
+        argtys = []
+        for ty in fe_args:
+            if not isinstance(ty, types.Omitted):
+                dm = self._dmm.lookup(ty)
+            else:
+                dm = _OmittedArgDataModel()
+            self._dm_args.append(dm)
+            argtys.append(dm.get_argument_type())
         self._unflattener = _Unflattener(argtys)
         self._be_args = list(_flatten(argtys))
 
@@ -29,13 +52,15 @@ class ArgPacker(object):
         """Flatten all argument values
         """
         if len(values) != self._nargs:
-            raise TypeError("invalid number of args")
+            raise TypeError("invalid number of args: expected %d, got %d"
+                            % (self._nargs, len(values)))
 
         if not values:
             return ()
 
         args = [dm.as_argument(builder, val)
-                for dm, val in zip(self._dm_args, values)]
+                for dm, val in zip(self._dm_args, values)
+                ]
 
         args = tuple(_flatten(args))
         return args
@@ -46,7 +71,8 @@ class ArgPacker(object):
 
         valtree = self._unflattener.unflatten(args)
         values = [dm.from_argument(builder, val)
-                  for dm, val in zip(self._dm_args, valtree)]
+                  for dm, val in zip(self._dm_args, valtree)
+                  ]
 
         return values
 
