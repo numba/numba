@@ -89,6 +89,7 @@ class _FunctionCompiler(object):
 class _IndirectFunctionCompiler(_FunctionCompiler):
 
     def _get_implementation(self, args, kws):
+        # XXX check the number of arguments of the returned function?
         return self.py_func(*args, **kws)
 
 
