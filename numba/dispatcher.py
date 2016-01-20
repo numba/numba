@@ -112,7 +112,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self.__code__ = self.func_code
 
         argnames = tuple(pysig.parameters)
-        #defargs = (_omitted,) * len(self.py_func.__defaults__ or ())
         defargs = tuple(_OmittedArg(val)
                         for val in (self.py_func.__defaults__ or ()))
         try:
@@ -197,16 +196,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         # Fold keyword arguments and resolve default values
         pysig, args = self._compiler.fold_argument_types(args, kws)
-        #def normal_handler(index, param, value):
-            #return value
-        #def default_handler(index, param, default):
-            #return types.Omitted(default)
-        #def stararg_handler(index, param, values):
-            #return types.Tuple(values)
-        #args = fold_arguments(self._pysig, args, kws,
-                              #normal_handler,
-                              #default_handler,
-                              #stararg_handler)
         kws = {}
         # Ensure an overload is available, but avoid compiler re-entrance
         if self._can_compile and not self.is_compiling:

@@ -154,7 +154,6 @@ class BaseCallConv(object):
         """
         Get an argument packer for the given argument types.
         """
-        #argtypes = self._fix_argtypes(argtypes)
         return self.context.get_arg_packer(argtypes)
 
 

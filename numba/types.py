@@ -176,7 +176,7 @@ class Const(Dummy):
 
 class Omitted(Opaque):
     """
-    An omitted argument with a default value.
+    An omitted function argument with a default value.
     """
 
     def __init__(self, value):
@@ -185,8 +185,7 @@ class Omitted(Opaque):
 
     @property
     def key(self):
-        # XXX value may not be hashable
-        return type(self.value), self.value
+        return type(self.value), id(self.value)
 
 
 class VarArg(Type):
@@ -437,7 +436,8 @@ class Dispatcher(WeakType, Callable, Dummy):
     def get_call_type(self, context, args, kws):
         """
         Resolve a call to this dispatcher using the given argument types.
-        A signature is compiled.
+        A signature returned and it is ensured that a compiled specialization
+        is available for it.
         """
         template, pysig, args, kws = self.dispatcher.get_call_template(args, kws)
         sig = template(context).apply(args, kws)

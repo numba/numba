@@ -6,6 +6,11 @@ from numba import types
 
 
 class _OmittedArgDataModel(object):
+    """
+    A fake data model for omitted arguments.
+    Only used in this module.
+    """
+    # Omitted arguments don't produce any LLVM function argument
 
     def get_argument_type(self):
         return ()
