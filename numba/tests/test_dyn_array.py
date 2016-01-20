@@ -953,7 +953,6 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
         got = cfunc(())
         self.assertPreciseEqual(got, np.float64(()))
 
-
     def test_1d_with_dtype(self):
         def pyfunc(arg):
             return np.array(arg, dtype=np.float32)

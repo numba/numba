@@ -2684,7 +2684,7 @@ def check_sequence_shape(context, builder, seqty, seq, shapes):
 
 
 def assign_sequence_to_array(context, builder, data, shapes, strides,
-                             dtype, layout, seqty, seq):
+                             arrty, seqty, seq):
     """
     Assign a nested sequence contents to an array.  The shape must match
     the sequence's structure.
@@ -2692,9 +2692,9 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
 
     def assign_item(indices, valty, val):
         ptr = cgutils.get_item_pointer2(builder, data, shapes, strides,
-                                        layout, indices, wraparound=False)
-        val = context.cast(builder, val, valty, dtype)
-        builder.store(val, ptr)
+                                        arrty.layout, indices, wraparound=False)
+        val = context.cast(builder, val, valty, arrty.dtype)
+        store_item(context, builder, arrty, val, ptr)
 
     def assign(seqty, seq, shapes, indices):
         if len(shapes) == 0:
@@ -2738,7 +2738,7 @@ def np_array(context, builder, sig, args):
     check_sequence_shape(context, builder, seqty, seq, shapes)
     arr = _empty_nd_impl(context, builder, arrty, shapes)
     assign_sequence_to_array(context, builder, arr.data, shapes, arr.strides,
-                             arrty.dtype, arrty.layout, seqty, seq)
+                             arrty, seqty, seq)
 
     return impl_ret_new_ref(context, builder, sig.return_type, arr._getvalue())
 
