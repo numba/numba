@@ -173,7 +173,10 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     return wrapper
 
 
-def indirect_jit(function=None, target='cpu', cache=False, **options):
+def generated_jit(function=None, target='cpu', cache=False, **options):
+    """
+    XXX docstring
+    """
     wrapper = _jit(sigs=None, locals={}, target=target, cache=cache,
                    targetoptions=options, impl_kind='indirect')
     if function is not None:

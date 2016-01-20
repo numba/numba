@@ -13,7 +13,7 @@ import warnings
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import utils, vectorize, jit, indirect_jit, types
+from numba import utils, vectorize, jit, generated_jit, types
 from numba.config import NumbaWarning
 from .support import TestCase
 
@@ -38,7 +38,7 @@ def star_defaults(x, y=2, *z):
     return x, y, z
 
 
-def indirect_usecase(x, y=5):
+def generated_usecase(x, y=5):
     if isinstance(x, types.Complex):
         def impl(x, y):
             return x + y
@@ -285,9 +285,12 @@ class TestSignatureHandlingObjectMode(TestSignatureHandling):
 
 
 class TestIndirectDispatcher(TestCase):
+    """
+    Tests for @generated_jit.
+    """
 
     def test_indirect(self):
-        f = indirect_jit(nopython=True)(indirect_usecase)
+        f = generated_jit(nopython=True)(generated_usecase)
         self.assertEqual(f(8), 8 - 5)
         self.assertEqual(f(x=8), 8 - 5)
         self.assertEqual(f(x=8, y=4), 8 - 4)
@@ -491,6 +494,7 @@ class TestCache(TestCase):
             assert mod.add_objmode_usecase(2, 3) == 6
             assert mod.outer_uncached(3, 2) == 2
             assert mod.outer(3, 2) == 2
+            assert mod.generated_usecase(3, 2) == 1
             packed_rec = mod.record_return(mod.packed_arr, 1)
             assert tuple(packed_rec) == (2, 43.5), packed_rec
             aligned_rec = mod.record_return(mod.aligned_arr, 1)
@@ -542,6 +546,10 @@ class TestCache(TestCase):
         rec = f(mod.packed_arr, 1)
         self.assertPreciseEqual(tuple(rec), (2, 43.5))
         self.check_cache(9)  # 3 index, 6 data
+
+        f = mod.generated_usecase
+        self.assertPreciseEqual(f(3, 2), 1)
+        self.assertPreciseEqual(f(3j, 2), 2 + 3j)
 
         # Check the code runs ok from another process
         self.run_in_separate_process()
@@ -644,6 +652,7 @@ class TestCache(TestCase):
         mod.outer(2, 3)
         mod.record_return(mod.packed_arr, 0)
         mod.record_return(mod.aligned_arr, 1)
+        mod.generated_usecase(2, 3)
         mtimes = self.get_cache_mtimes()
 
         mod2 = self.import_module()
