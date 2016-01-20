@@ -170,6 +170,7 @@ Other functions
 The following top-level functions are supported:
 
 * :func:`numpy.arange`
+* :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.eye`
@@ -190,7 +191,8 @@ The following top-level functions are supported:
 * :func:`numpy.zeros`
 * :func:`numpy.zeros_like`
 
-The following constructors are supported, only with a numeric input:
+The following constructors are supported, both with a numeric input (to
+construct a scalar) or a sequence (to construct an array):
 
 * :class:`numpy.bool_`
 * :class:`numpy.complex64`
