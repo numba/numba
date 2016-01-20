@@ -260,6 +260,15 @@ class PythonAPI(object):
             msg = self.context.insert_const_string(self.module, msg)
         return self.builder.call(fn, (exctype, msg))
 
+    def err_format(self, exctype, msg, *format_args):
+        fnty = Type.function(Type.void(), [self.pyobj, self.cstring], var_arg=True)
+        fn = self._get_function(fnty, name="PyErr_Format")
+        if isinstance(exctype, str):
+            exctype = self.get_c_object(exctype)
+        if isinstance(msg, str):
+            msg = self.context.insert_const_string(self.module, msg)
+        return self.builder.call(fn, (exctype, msg) + tuple(format_args))
+
     def raise_object(self, exc=None):
         """
         Raise an arbitrary exception (type or value or (type, args)

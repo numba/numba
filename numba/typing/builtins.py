@@ -61,7 +61,6 @@ class Slice(ConcreteTemplate):
     ]
 
 
-@infer_global(range)
 class Range(ConcreteTemplate):
     cases = [
         signature(types.range_state32_type, types.int32),
@@ -77,6 +76,9 @@ class Range(ConcreteTemplate):
         signature(types.unsigned_range_state64_type, types.uint64, types.uint64,
                   types.uint64),
     ]
+
+for func in RANGE_ITER_OBJECTS:
+    infer_global(func, typing_key=range)(Range)
 
 
 @infer
