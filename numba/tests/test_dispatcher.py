@@ -48,15 +48,20 @@ def indirect_usecase(x, y=5):
     return impl
 
 
-class TestDispatcher(TestCase):
+class BaseTest(TestCase):
+
+    jit_args = dict(nopython=True)
 
     def compile_func(self, pyfunc):
         def check(*args, **kwargs):
             expected = pyfunc(*args, **kwargs)
             result = f(*args, **kwargs)
             self.assertPreciseEqual(result, expected)
-        f = jit(nopython=True)(pyfunc)
+        f = jit(**self.jit_args)(pyfunc)
         return f, check
+
+
+class TestDispatcher(BaseTest):
 
     def test_no_argument(self):
         @jit
@@ -128,6 +133,74 @@ class TestDispatcher(TestCase):
         for t in threads:
             t.join()
         self.assertFalse(errors)
+
+    def test_explicit_signatures(self):
+        f = jit("(int64,int64)")(add)
+        # Approximate match (unsafe conversion)
+        self.assertPreciseEqual(f(1.5, 2.5), 3)
+        self.assertEqual(len(f.overloads), 1, f.overloads)
+        f = jit(["(int64,int64)", "(float64,float64)"])(add)
+        # Exact signature matches
+        self.assertPreciseEqual(f(1, 2), 3)
+        self.assertPreciseEqual(f(1.5, 2.5), 4.0)
+        # Approximate match (int32 -> float64 is a safe conversion)
+        self.assertPreciseEqual(f(np.int32(1), 2.5), 3.5)
+        # No conversion
+        with self.assertRaises(TypeError) as cm:
+            f(1j, 1j)
+        self.assertIn("No matching definition", str(cm.exception))
+        self.assertEqual(len(f.overloads), 2, f.overloads)
+        # A more interesting one...
+        f = jit(["(float32,float32)", "(float64,float64)"])(add)
+        self.assertPreciseEqual(f(np.float32(1), np.float32(2**-25)), 1.0)
+        self.assertPreciseEqual(f(1, 2**-25), 1.0000000298023224)
+        # Fail to resolve ambiguity between the two best overloads
+        f = jit(["(float32,float64)",
+                 "(float64,float32)",
+                 "(int64,int64)"])(add)
+        with self.assertRaises(TypeError) as cm:
+            f(1.0, 2.0)
+        # The two best matches are output in the error message, as well
+        # as the actual argument types.
+        self.assertRegexpMatches(
+            str(cm.exception),
+            r"Ambiguous overloading for <function add [^>]*> \(float64, float64\):\n"
+            r"\(float32, float64\) -> float64\n"
+            r"\(float64, float32\) -> float64"
+            )
+        # The integer signature is not part of the best matches
+        self.assertNotIn("int64", str(cm.exception))
+
+    def test_signature_mismatch(self):
+        tmpl = "Signature mismatch: %d argument types given, but function takes 2 arguments"
+        with self.assertRaises(TypeError) as cm:
+            jit("()")(add)
+        self.assertIn(tmpl % 0, str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            jit("(intc,)")(add)
+        self.assertIn(tmpl % 1, str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            jit("(intc,intc,intc)")(add)
+        self.assertIn(tmpl % 3, str(cm.exception))
+        # With forceobj=True, an empty tuple is accepted
+        jit("()", forceobj=True)(add)
+        with self.assertRaises(TypeError) as cm:
+            jit("(intc,)", forceobj=True)(add)
+        self.assertIn(tmpl % 1, str(cm.exception))
+
+    def test_matching_error_message(self):
+        f = jit("(intc,intc)")(add)
+        with self.assertRaises(TypeError) as cm:
+            f(1j, 1j)
+        self.assertEqual(str(cm.exception),
+                         "No matching definition for argument type(s) "
+                         "complex128, complex128")
+
+
+class TestSignatureHandling(BaseTest):
+    """
+    Test support for various parameter passing styles.
+    """
 
     def test_named_args(self):
         """
@@ -202,67 +275,13 @@ class TestDispatcher(TestCase):
             f(4, x=6)
         self.assertIn("some keyword arguments unexpected", str(cm.exception))
 
-    def test_explicit_signatures(self):
-        f = jit("(int64,int64)")(add)
-        # Approximate match (unsafe conversion)
-        self.assertPreciseEqual(f(1.5, 2.5), 3)
-        self.assertEqual(len(f.overloads), 1, f.overloads)
-        f = jit(["(int64,int64)", "(float64,float64)"])(add)
-        # Exact signature matches
-        self.assertPreciseEqual(f(1, 2), 3)
-        self.assertPreciseEqual(f(1.5, 2.5), 4.0)
-        # Approximate match (int32 -> float64 is a safe conversion)
-        self.assertPreciseEqual(f(np.int32(1), 2.5), 3.5)
-        # No conversion
-        with self.assertRaises(TypeError) as cm:
-            f(1j, 1j)
-        self.assertIn("No matching definition", str(cm.exception))
-        self.assertEqual(len(f.overloads), 2, f.overloads)
-        # A more interesting one...
-        f = jit(["(float32,float32)", "(float64,float64)"])(add)
-        self.assertPreciseEqual(f(np.float32(1), np.float32(2**-25)), 1.0)
-        self.assertPreciseEqual(f(1, 2**-25), 1.0000000298023224)
-        # Fail to resolve ambiguity between the two best overloads
-        f = jit(["(float32,float64)",
-                 "(float64,float32)",
-                 "(int64,int64)"])(add)
-        with self.assertRaises(TypeError) as cm:
-            f(1.0, 2.0)
-        # The two best matches are output in the error message, as well
-        # as the actual argument types.
-        self.assertRegexpMatches(
-            str(cm.exception),
-            r"Ambiguous overloading for <function add [^>]*> \(float64, float64\):\n"
-            r"\(float32, float64\) -> float64\n"
-            r"\(float64, float32\) -> float64"
-            )
-        # The integer signature is not part of the best matches
-        self.assertNotIn("int64", str(cm.exception))
 
-    def test_signature_mismatch(self):
-        tmpl = "Signature mismatch: %d argument types given, but function takes 2 arguments"
-        with self.assertRaises(TypeError) as cm:
-            jit("()")(add)
-        self.assertIn(tmpl % 0, str(cm.exception))
-        with self.assertRaises(TypeError) as cm:
-            jit("(intc,)")(add)
-        self.assertIn(tmpl % 1, str(cm.exception))
-        with self.assertRaises(TypeError) as cm:
-            jit("(intc,intc,intc)")(add)
-        self.assertIn(tmpl % 3, str(cm.exception))
-        # With forceobj=True, an empty tuple is accepted
-        jit("()", forceobj=True)(add)
-        with self.assertRaises(TypeError) as cm:
-            jit("(intc,)", forceobj=True)(add)
-        self.assertIn(tmpl % 1, str(cm.exception))
+class TestSignatureHandlingObjectMode(TestSignatureHandling):
+    """
+    Sams as TestSignatureHandling, but in object mode.
+    """
 
-    def test_matching_error_message(self):
-        f = jit("(intc,intc)")(add)
-        with self.assertRaises(TypeError) as cm:
-            f(1j, 1j)
-        self.assertEqual(str(cm.exception),
-                         "No matching definition for argument type(s) "
-                         "complex128, complex128")
+    jit_args = dict(forceobj=True)
 
 
 class TestIndirectDispatcher(TestCase):

@@ -25,7 +25,7 @@ from numba.six import create_bound_method, next
 from .config import NumbaWarning
 
 
-class _OmittedArg(object):
+class OmittedArg(object):
     """
     A placeholder for omitted arguments with a default value.
     """
@@ -112,7 +112,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self.__code__ = self.func_code
 
         argnames = tuple(pysig.parameters)
-        defargs = tuple(_OmittedArg(val)
+        defargs = tuple(OmittedArg(val)
                         for val in (self.py_func.__defaults__ or ()))
         try:
             lastarg = list(pysig.parameters.values())[-1]
@@ -232,7 +232,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         assert not kws
         real_args = []
         for a in args:
-            if isinstance(a, _OmittedArg):
+            if isinstance(a, OmittedArg):
                 real_args.append(types.Omitted(a.value))
             else:
                 real_args.append(self.typeof_pyval(a))
