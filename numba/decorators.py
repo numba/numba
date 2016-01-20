@@ -151,7 +151,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
         return wrapper
 
 
-def _jit(sigs, locals, target, cache, targetoptions):
+def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     dispatcher = registry.dispatcher_registry[target]
 
     def wrapper(func):
@@ -160,7 +160,8 @@ def _jit(sigs, locals, target, cache, targetoptions):
         if config.DISABLE_JIT and not target == 'npyufunc':
             return _DisableJitWrapper(func)
         disp = dispatcher(py_func=func, locals=locals,
-                          targetoptions=targetoptions)
+                          targetoptions=targetoptions,
+                          **dispatcher_args)
         if cache:
             disp.enable_caching()
         if sigs is not None:
@@ -170,6 +171,15 @@ def _jit(sigs, locals, target, cache, targetoptions):
         return disp
 
     return wrapper
+
+
+def indirect_jit(function=None, target='cpu', cache=False, **options):
+    wrapper = _jit(sigs=None, locals={}, target=target, cache=cache,
+                   targetoptions=options, impl_kind='indirect')
+    if function is not None:
+        return wrapper(function)
+    else:
+        return wrapper
 
 
 def njit(*args, **kws):

@@ -17,7 +17,7 @@ import warnings
 import numba
 from numba import _dispatcher, compiler, utils, types
 from numba.typeconv.rules import default_type_manager
-from numba import sigutils, serialize, types, typing
+from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
 from numba.typing.typeof import typeof
 from numba.bytecode import get_code_object
@@ -35,6 +35,61 @@ class _OmittedArg(object):
 
     def __repr__(self):
         return "omitted arg(%r)" % (self.value,)
+
+
+class _FunctionCompiler(object):
+
+    def __init__(self, py_func, targetdescr, targetoptions, locals):
+        self.py_func = py_func
+        self.targetdescr = targetdescr
+        self.targetoptions = targetoptions
+        self.locals = locals
+        self.pysig = utils.pysignature(self.py_func)
+
+    def fold_argument_types(self, args, kws):
+        """
+        Given positional and named argument types, fold keyword arguments
+        and resolve defaults by inserting types.Omitted() instances.
+
+        A (pysig, argument types) tuple is returned.
+        """
+        def normal_handler(index, param, value):
+            return value
+        def default_handler(index, param, default):
+            return types.Omitted(default)
+        def stararg_handler(index, param, values):
+            return types.Tuple(values)
+        # For now, we take argument values from the @jit function, even
+        # in the case of indirect jit.
+        args = fold_arguments(self.pysig, args, kws,
+                              normal_handler,
+                              default_handler,
+                              stararg_handler)
+        return self.pysig, args
+
+    def compile(self, args, return_type):
+        flags = compiler.Flags()
+        self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
+
+        impl = self._get_implementation(args, {})
+        cres = compiler.compile_extra(self.targetdescr.typing_context,
+                                      self.targetdescr.target_context,
+                                      impl,
+                                      args=args, return_type=return_type,
+                                      flags=flags, locals=self.locals)
+        # Check typing error if object mode is used
+        if cres.typing_error is not None and not flags.enable_pyobject:
+            raise cres.typing_error
+        return cres
+
+    def _get_implementation(self, args, kws):
+        return self.py_func
+
+
+class _IndirectFunctionCompiler(_FunctionCompiler):
+
+    def _get_implementation(self, args, kws):
+        return self.py_func(*args, **kws)
 
 
 class _DispatcherBase(_dispatcher.Dispatcher):
@@ -56,13 +111,12 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
 
-        self._pysig = pysig
-        argnames = tuple(self._pysig.parameters)
+        argnames = tuple(pysig.parameters)
         #defargs = (_omitted,) * len(self.py_func.__defaults__ or ())
         defargs = tuple(_OmittedArg(val)
                         for val in (self.py_func.__defaults__ or ()))
         try:
-            lastarg = list(self._pysig.parameters.values())[-1]
+            lastarg = list(pysig.parameters.values())[-1]
         except IndexError:
             has_stararg = False
         else:
@@ -135,18 +189,24 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         Get a typing.ConcreteTemplate for this dispatcher and the given
         *args* and *kws* types.  This allows to resolve the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
         """
+        # XXX how about a dispatcher template class automating the
+        # following?
+
         # Fold keyword arguments and resolve default values
-        def normal_handler(index, param, value):
-            return value
-        def default_handler(index, param, default):
-            return types.Omitted(default)
-        def stararg_handler(index, param, values):
-            return types.Tuple(values)
-        args = fold_arguments(self._pysig, args, kws,
-                              normal_handler,
-                              default_handler,
-                              stararg_handler)
+        pysig, args = self._compiler.fold_argument_types(args, kws)
+        #def normal_handler(index, param, value):
+            #return value
+        #def default_handler(index, param, default):
+            #return types.Omitted(default)
+        #def stararg_handler(index, param, values):
+            #return types.Tuple(values)
+        #args = fold_arguments(self._pysig, args, kws,
+                              #normal_handler,
+                              #default_handler,
+                              #stararg_handler)
         kws = {}
         # Ensure an overload is available, but avoid compiler re-entrance
         if self._can_compile and not self.is_compiling:
@@ -159,7 +219,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # so avoid keeping a reference to `cfunc`.
         call_template = typing.make_concrete_template(
             name, key=func_name, signatures=self.nopython_signatures)
-        return call_template, args, kws
+        return call_template, pysig, args, kws
 
     def get_overload(self, sig):
         """
@@ -277,8 +337,12 @@ class Dispatcher(_DispatcherBase):
     class attribute.
     """
     _fold_args = True
+    _impl_kinds = {
+        'direct': _FunctionCompiler,
+        'indirect': _IndirectFunctionCompiler,
+        }
 
-    def __init__(self, py_func, locals={}, targetoptions={}):
+    def __init__(self, py_func, locals={}, targetoptions={}, impl_kind='direct'):
         """
         Parameters
         ----------
@@ -302,6 +366,9 @@ class Dispatcher(_DispatcherBase):
         self.targetoptions = targetoptions
         self.locals = locals
         self._cache = NullCache()
+        compiler_class = self._impl_kinds[impl_kind]
+        self._compiler = compiler_class(py_func, self.targetdescr,
+                                        targetoptions, locals)
 
         self.typingctx.insert_global(self, types.Dispatcher(self))
 
@@ -359,18 +426,7 @@ class Dispatcher(_DispatcherBase):
                 self.add_overload(cres)
                 return cres.entry_point
 
-            flags = compiler.Flags()
-            self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
-
-            cres = compiler.compile_extra(self.typingctx, self.targetctx,
-                                          self.py_func,
-                                          args=args, return_type=return_type,
-                                          flags=flags, locals=self.locals)
-
-            # Check typing error if object mode is used
-            if cres.typing_error is not None and not flags.enable_pyobject:
-                raise cres.typing_error
-
+            cres = self._compiler.compile(args, return_type)
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
             return cres.entry_point

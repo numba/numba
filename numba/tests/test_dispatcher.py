@@ -13,7 +13,7 @@ import warnings
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import utils, vectorize, jit
+from numba import utils, vectorize, jit, indirect_jit, types
 from numba.config import NumbaWarning
 from .support import TestCase
 
@@ -36,6 +36,16 @@ def addsub_defaults(x, y=2, z=3):
 
 def star_defaults(x, y=2, *z):
     return x, y, z
+
+
+def indirect_usecase(x, y=5):
+    if isinstance(x, types.Complex):
+        def impl(x, y):
+            return x + y
+    else:
+        def impl(x, y):
+            return x - y
+    return impl
 
 
 class TestDispatcher(TestCase):
@@ -253,6 +263,18 @@ class TestDispatcher(TestCase):
         self.assertEqual(str(cm.exception),
                          "No matching definition for argument type(s) "
                          "complex128, complex128")
+
+
+class TestIndirectDispatcher(TestCase):
+
+    def test_indirect(self):
+        f = indirect_jit(nopython=True)(indirect_usecase)
+        self.assertEqual(f(8), 8 - 5)
+        self.assertEqual(f(x=8), 8 - 5)
+        self.assertEqual(f(x=8, y=4), 8 - 4)
+        self.assertEqual(f(1j), 5 + 1j)
+        self.assertEqual(f(1j, 42), 42 + 1j)
+        self.assertEqual(f(x=1j, y=7), 7 + 1j)
 
 
 class TestDispatcherMethods(TestCase):

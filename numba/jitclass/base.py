@@ -173,13 +173,18 @@ def register_class_type(cls, spec, class_ctor, builder):
 
 
 class ConstructorTemplate(templates.AbstractTemplate):
+    """
+    Base class for jitclass constructor templates.
+    """
+
     def generic(self, args, kws):
         # Redirect resolution to __init__
         instance_type = self.key.instance_type
         ctor = instance_type.jitmethods['__init__']
         boundargs = (instance_type.get_reference_type(),) + args
-        template, args, kws = ctor.get_call_template(boundargs, kws)
-        sig = template(self.context).apply(args, kws)
+        disp_type = types.Dispatcher(ctor)
+        sig = disp_type.get_call_type(self.context, boundargs, kws)
+        # Actual constructor returns an instance value (not None)
         out = templates.signature(instance_type, *sig.args[1:])
         return out
 
@@ -262,15 +267,14 @@ class ClassAttribute(templates.AttributeTemplate):
         elif attr in instance.jitmethods:
             # It's a jitted method => typeinfer it
             meth = instance.jitmethods[attr]
+            disp_type = types.Dispatcher(meth)
 
             class MethodTemplate(templates.AbstractTemplate):
                 key = (self.key, attr)
 
                 def generic(self, args, kws):
                     args = (instance,) + tuple(args)
-                    template, args, kws = meth.get_call_template(args,
-                                                                 kws)
-                    sig = template(self.context).apply(args, kws)
+                    sig = disp_type.get_call_type(self.context, args, kws)
                     return sig.as_method()
 
             return types.BoundFunction(MethodTemplate, instance)
@@ -279,8 +283,8 @@ class ClassAttribute(templates.AttributeTemplate):
             # It's a jitted property => typeinfer its getter
             impdct = instance.jitprops[attr]
             getter = impdct['get']
-            template, args, kws = getter.get_call_template([instance], {})
-            sig = template(self.context).apply(args, kws)
+            disp_type = types.Dispatcher(getter)
+            sig = disp_type.get_call_type(self.context, (instance,), {})
             return sig.return_type
 
 

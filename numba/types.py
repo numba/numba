@@ -435,9 +435,13 @@ class Dispatcher(WeakType, Callable, Dummy):
         super(Dispatcher, self).__init__("Dispatcher(%s)" % dispatcher)
 
     def get_call_type(self, context, args, kws):
-        template, args, kws = self.dispatcher.get_call_template(args, kws)
+        """
+        Resolve a call to this dispatcher using the given argument types.
+        A signature is compiled.
+        """
+        template, pysig, args, kws = self.dispatcher.get_call_template(args, kws)
         sig = template(context).apply(args, kws)
-        sig.pysig = self.pysig
+        sig.pysig = pysig
         return sig
 
     def get_call_signatures(self):
@@ -450,13 +454,6 @@ class Dispatcher(WeakType, Callable, Dummy):
         A strong reference to the underlying numba.dispatcher.Dispatcher instance.
         """
         return self._get_object()
-
-    @property
-    def pysig(self):
-        """
-        A inspect.Signature object corresponding to this type.
-        """
-        return self.dispatcher._pysig
 
     def get_overload(self, sig):
         """
