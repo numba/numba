@@ -2587,7 +2587,6 @@ def np_frombuffer(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-
 def _get_seq_size(context, builder, seqty, seq):
     if isinstance(seqty, types.BaseTuple):
         return context.get_constant(types.intp, len(seqty))
@@ -2596,6 +2595,21 @@ def _get_seq_size(context, builder, seqty, seq):
         return len_impl(builder, (seq,))
     else:
         assert 0
+
+def _get_borrowing_getitem(context, seqty):
+    """
+    Return a getitem() implementation that doesn't incref its result.
+    """
+    retty = seqty.dtype
+    getitem_impl = context.get_function('getitem',
+                                        signature(retty, seqty, types.intp))
+    def wrap(builder, args):
+        ret = getitem_impl(builder, args)
+        if context.enable_nrt:
+            context.nrt_decref(builder, retty, ret)
+        return ret
+
+    return wrap
 
 
 def compute_sequence_shape(context, builder, ndim, seqty, seq):
@@ -2612,8 +2626,7 @@ def compute_sequence_shape(context, builder, ndim, seqty, seq):
             else:
                 return seqty[0], builder.extract_value(seq, 0)
         else:
-            getitem_impl = context.get_function('getitem',
-                                                signature(seqty.dtype, seqty, types.intp))
+            getitem_impl = _get_borrowing_getitem(context, seqty)
             return seqty.dtype, getitem_impl(builder, (seq, zero))
 
     # Compute shape by traversing the first element of each nested
@@ -2652,8 +2665,7 @@ def check_sequence_shape(context, builder, seqty, seq, shapes):
             return
 
         if isinstance(seqty, types.Sequence):
-            getitem_impl = context.get_function('getitem',
-                                                signature(seqty.dtype, seqty, types.intp))
+            getitem_impl = _get_borrowing_getitem(context, seqty)
             with cgutils.for_range(builder, size) as loop:
                 innerty = seqty.dtype
                 inner = getitem_impl(builder, (seq, loop.index))
@@ -2693,8 +2705,7 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
         size = shapes[0]
 
         if isinstance(seqty, types.Sequence):
-            getitem_impl = context.get_function('getitem',
-                                                signature(seqty.dtype, seqty, types.intp))
+            getitem_impl = _get_borrowing_getitem(context, seqty)
             with cgutils.for_range(builder, size) as loop:
                 innerty = seqty.dtype
                 inner = getitem_impl(builder, (seq, loop.index))

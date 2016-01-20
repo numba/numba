@@ -31,11 +31,9 @@ class BaseTest(TestCase):
                 np.testing.assert_allclose(expected, ret)
 
 
-
 class NrtRefCtTest(MemoryLeakMixin):
     def assert_array_nrt_refct(self, arr, expect):
         self.assertEqual(arr.base.refcount, expect)
-
 
 
 class TestDynArray(NrtRefCtTest, TestCase):
@@ -920,6 +918,81 @@ class TestNpyEmptyKeyword(TestCase):
         # That will cause a TypingError due to missing shape argument
         with self.assertRaises(TypingError):
             cfunc()
+
+
+class TestNpArray(MemoryLeakMixin, BaseTest):
+
+    def test_0d(self):
+        def pyfunc(arg):
+            return np.array(arg)
+
+        cfunc = nrtjit(pyfunc)
+        got = cfunc(42)
+        self.assertPreciseEqual(got, np.array(42, dtype=np.intp))
+        got = cfunc(2.5)
+        self.assertPreciseEqual(got, np.array(2.5))
+
+    def test_0d_with_dtype(self):
+        def pyfunc(arg):
+            return np.array(arg, dtype=np.int16)
+
+        self.check_outputs(pyfunc, [(42,), (3.5,)])
+
+    def test_1d(self):
+        def pyfunc(arg):
+            return np.array(arg)
+
+        cfunc = nrtjit(pyfunc)
+        # A list
+        got = cfunc([2, 3, 42])
+        self.assertPreciseEqual(got, np.intp([2, 3, 42]))
+        # A heterogenous tuple
+        got = cfunc((1.0, 2.5j, 42))
+        self.assertPreciseEqual(got, np.array([1.0, 2.5j, 42]))
+        # An empty tuple
+        got = cfunc(())
+        self.assertPreciseEqual(got, np.float64(()))
+
+
+    def test_1d_with_dtype(self):
+        def pyfunc(arg):
+            return np.array(arg, dtype=np.float32)
+
+        self.check_outputs(pyfunc,
+                           [([2, 42],),
+                            ([3.5, 1.0],),
+                            ((1, 3.5, 42),),
+                            ((),),
+                            ])
+
+    def test_2d(self):
+        def pyfunc(arg):
+            return np.array(arg)
+
+        cfunc = nrtjit(pyfunc)
+        # A list of tuples
+        got = cfunc([(1, 2), (3, 4)])
+        self.assertPreciseEqual(got, np.intp([[1, 2], [3, 4]]))
+        got = cfunc([(1, 2.5), (3, 4.5)])
+        self.assertPreciseEqual(got, np.float64([[1, 2.5], [3, 4.5]]))
+        # A tuple of lists
+        got = cfunc(([1, 2], [3, 4]))
+        self.assertPreciseEqual(got, np.intp([[1, 2], [3, 4]]))
+        got = cfunc(([1, 2], [3.5, 4.5]))
+        self.assertPreciseEqual(got, np.float64([[1, 2], [3.5, 4.5]]))
+        # A tuple of tuples
+        got = cfunc(((1.5, 2), (3.5, 4.5)))
+        self.assertPreciseEqual(got, np.float64([[1.5, 2], [3.5, 4.5]]))
+        got = cfunc(((), ()))
+        self.assertPreciseEqual(got, np.float64(((), ())))
+
+    def test_2d_with_dtype(self):
+        def pyfunc(arg):
+            return np.array(arg, dtype=np.int32)
+
+        cfunc = nrtjit(pyfunc)
+        got = cfunc([(1, 2.5), (3, 4.5)])
+        self.assertPreciseEqual(got, np.int32([[1, 2], [3, 4]]))
 
 
 def benchmark_refct_speed():

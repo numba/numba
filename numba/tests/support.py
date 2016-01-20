@@ -158,9 +158,12 @@ class TestCase(unittest.TestCase):
         Return the strides of the given array, fixed for comparison.
         Strides for 0- or 1-sized dimensions are ignored.
         """
-        return [stride / arr.itemsize
-                for (stride, shape) in zip(arr.strides, arr.shape)
-                if shape > 1]
+        if arr.size == 0:
+            return [0] * arr.ndim
+        else:
+            return [stride / arr.itemsize
+                    for (stride, shape) in zip(arr.strides, arr.shape)
+                    if shape > 1]
 
     def assertStridesEqual(self, first, second):
         """
