@@ -776,6 +776,13 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
             cfunc((1, [1, 2j]))
         with self.assert_type_error(msg):
             cfunc(Point(1, [1, 2j]))
+        # Issue #1638: tuples of different size.
+        # Note the check is really on the tuple side.
+        lst = [(1,), (2, 3)]
+        with self.assertRaises(ValueError) as raises:
+            cfunc(lst)
+        self.assertEqual(str(raises.exception),
+                         "size mismatch for tuple, expected 1 element(s) but got 2")
 
 
 class TestListReflection(MemoryLeakMixin, TestCase):

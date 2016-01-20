@@ -68,7 +68,7 @@ class TestCTypes(MemoryLeakMixin, unittest.TestCase):
     def test_untyped_function(self):
         with self.assertRaises(TypeError) as raises:
             compile_isolated(use_c_untyped, [types.double])
-        self.assertIn("ctypes function 'exp' doesn't define its argument types",
+        self.assertIn("ctypes function '_numba_test_exp' doesn't define its argument types",
                       str(raises.exception))
 
     def test_python_call_back(self):
