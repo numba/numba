@@ -1,6 +1,7 @@
 Just-in-Time compilation
 ========================
 
+
 JIT functions
 -------------
 
@@ -99,11 +100,32 @@ JIT functions
       Compilation can be influenced by some dedicated :ref:`numba-envvars`.
 
 
+Generated JIT functions
+-----------------------
+
+.. decorator:: numba.generated_jit(nopython=False, nogil=False, cache=False, forceobj=False, locals={})
+
+   Like the :func:`~numba.jit` decorator, but calls the decorated function at
+   compile-time, passing the *types* of the function's arguments.
+   The decorated function must return a callable which will be compiled as
+   the function's implementation for those types, allowing flexible kinds of
+   specialization.
+
+   The :func:`~numba.generated_jit` decorator returns a :class:`Dispatcher` object.
+
+
+Dispatcher objects
+------------------
+
 .. class:: Dispatcher
 
-   The class of objects created by calling :func:`numba.jit`.  You shouldn't
-   try to create such an object in any other way.  Dispatcher objects have
-   the following methods and attributes:
+   The class of objects created by calling :func:`~numba.jit` or
+   :func:`~numba.generated_jit`.  You shouldn't try to create such an object
+   in any other way.  Calling a Dispatcher object calls the compiled
+   specialization for the arguments with which it is called, letting it
+   act as an accelerated replacement for the Python function which was compiled.
+
+   In addition, Dispatcher objects have the following methods and attributes:
 
    .. attribute:: py_func
 
@@ -120,17 +142,17 @@ JIT functions
 
    .. method:: inspect_llvm(signature=None)
 
-      Return a dictionary keying compiled function signatures to the human 
-      readable LLVM IR generated for the function.  If the signature 
-      keyword is specified a string corresponding to that individual 
-      signature is returned.  
+      Return a dictionary keying compiled function signatures to the human
+      readable LLVM IR generated for the function.  If the signature
+      keyword is specified a string corresponding to that individual
+      signature is returned.
 
    .. method:: inspect_asm(signature=None)
 
       Return a dictionary keying compiled function signatures to the
-      human-readable native assembler code for the function.  If the 
-      signature keyword is specified a string corresponding to that 
-      individual signature is returned.  
+      human-readable native assembler code for the function.  If the
+      signature keyword is specified a string corresponding to that
+      individual signature is returned.
 
    .. method:: recompile()
 
