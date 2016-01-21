@@ -5,16 +5,15 @@ import os
 import warnings
 import time
 import gc
-import functools
 import collections
 import contextlib
 import cProfile
 import multiprocessing
-from fnmatch import fnmatch
 from os.path import dirname, join, abspath, relpath
 
 import numba.unittest_support as unittest
 from unittest import result, runner, signals, suite, loader, case
+from .loader import TestLoader
 from numba.utils import PYVERSION, StringIO
 from numba import config
 
@@ -54,59 +53,6 @@ class SerialSuite(unittest.TestSuite):
         else:
             test._numba_parallel_test_ = True
             super(SerialSuite, self).addTest(test)
-
-
-def load_testsuite(loader, dir):
-    """Find tests in 'dir'."""
-
-    suite = unittest.TestSuite()
-    files = []
-    for f in os.listdir(dir):
-        path = join(dir, f)
-        if os.path.isfile(path) and fnmatch(f, 'test_*.py'):
-            files.append(f)
-        elif os.path.isfile(join(path, '__init__.py')):
-            suite.addTests(loader.discover(path))
-    for f in files:
-        # turn 'f' into a filename relative to the toplevel dir...
-        f = relpath(join(dir, f), loader._top_level_dir)
-        # ...and translate it to a module name.
-        f = os.path.splitext(os.path.normpath(f.replace(os.path.sep, '.')))[0]
-        suite.addTests(loader.loadTestsFromName(f))
-    return suite
-
-
-class TestLoader(loader.TestLoader):
-
-    _top_level_dir = dirname(dirname(__file__))
-
-    def discover(self, start_dir, pattern='test*.py', top_level_dir=None):
-        """Upstream discover doesn't consider top-level 'load_tests' functions.
-        If we find load_tests in start_dir, deal with it here. Otherwise
-        forward the call to the base class."""
-        top = top_level_dir or self._top_level_dir
-        location = top and join(abspath(top), start_dir) or start_dir
-        if os.path.isfile(join(location, '__init__.py')):
-            name = self._get_name_from_path(location)
-            try:
-                package = self._get_module_from_name(name)
-                load_tests = getattr(package, 'load_tests', None)
-                if load_tests:
-                    return load_tests(self, [], pattern)
-            except case.SkipTest as e:
-                return loader._make_skipped_test(name, e, self.suiteClass)
-            else:
-                return super(TestLoader, self).discover(start_dir, pattern, top)
-        else:
-            try:
-                __import__(start_dir)
-                module = sys.modules[start_dir]
-                load_tests = getattr(module, 'load_tests', None)
-                if load_tests:
-                    return load_tests(self, [], pattern)
-            except:
-                pass
-            return super(TestLoader, self).discover(start_dir, pattern, top)
 
 
 # "unittest.main" is really the TestProgram class!
@@ -184,14 +130,6 @@ class NumbaTestProgram(unittest.main):
             # We aren't interested in informational messages / warnings when
             # running with '-q'.
             self.buffer = True
-
-    def _do_discovery(self, argv, Loader=None):
-        """Upstream _do_discovery doesn't find our load_tests() functions."""
-
-        loader = TestLoader() if Loader is None else Loader()
-        topdir = abspath(dirname(dirname(__file__)))
-        tests = loader.discover(join(topdir, 'numba/tests'), '*.py', topdir)
-        self.test = unittest.TestSuite(tests)
 
     def runTests(self):
         if self.refleak:
@@ -540,49 +478,3 @@ class ParallelTestRunner(runner.TextTestRunner):
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
-
-
-def allow_interpreter_mode(fn):
-    """Temporarily re-enable intepreter mode
-    """
-    @functools.wraps(fn)
-    def _core(*args, **kws):
-        config.COMPATIBILITY_MODE = True
-        try:
-            fn(*args, **kws)
-        finally:
-            config.COMPATIBILITY_MODE = False
-    return _core
-
-
-def run_tests(argv=None, xmloutput=None, verbosity=1, nomultiproc=False):
-    """
-    args
-    ----
-    - xmloutput [str or None]
-        Path of XML output directory (optional)
-    - verbosity [int]
-        Verbosity level of tests output
-
-    Returns the TestResult object after running the test *suite*.
-    """
-
-    if xmloutput is not None:
-        import xmlrunner
-        runner = xmlrunner.XMLTestRunner(output=xmloutput)
-    else:
-        runner = None
-    prog = NumbaTestProgram(argv=argv,
-                            module=None,
-                            testRunner=runner, exit=False,
-                            verbosity=verbosity,
-                            nomultiproc=nomultiproc)
-    return prog.result
-
-
-def test(*args, **kwargs):
-    return run_tests(argv=['<main>'] + list(args), **kwargs).wasSuccessful()
-
-
-if __name__ == "__main__":
-    sys.exit(0 if run_tests(sys.argv).wasSuccessful() else 1)
