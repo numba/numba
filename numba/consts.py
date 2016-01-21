@@ -1,3 +1,6 @@
+from __future__ import print_function, absolute_import
+
+from types import ModuleType
 
 import weakref
 
@@ -7,7 +10,9 @@ from .errors import ConstantInferenceError
 
 class ConstantInference(object):
     """
-    A constant inference object for a given interpreter.
+    A constant inference engine for a given interpreter.
+    Inference inspects the IR to try and compute a compile-time constant for
+    a variable.
 
     This shouldn't be used directly, instead call Interpreter.infer_constant().
     """
@@ -60,17 +65,27 @@ class ConstantInference(object):
         return const
 
     def _infer_expr(self, expr):
+        # Infer an expression: handle supported cases
         if expr.op == 'call':
-            if not expr.kws and not expr.vararg:
-                func = self.infer_constant(expr.func.name)
-                return self._infer_call(func, expr)
+            func = self.infer_constant(expr.func.name)
+            return self._infer_call(func, expr)
+        elif expr.op == 'getattr':
+            value = self.infer_constant(expr.value.name)
+            return self._infer_getattr(value, expr)
         self._fail(expr)
 
     def _infer_call(self, func, expr):
         if expr.kws or expr.vararg:
             self._fail(expr)
+        # Check supported callables
         if (func in (slice,) or
             (isinstance(func, type) and issubclass(func, BaseException))):
             args = [self.infer_constant(a.name) for a in expr.args]
             return func(*args)
+        self._fail(expr)
+
+    def _infer_getattr(self, value, expr):
+        if isinstance(value, ModuleType):
+            # Allow looking up a constant on a module
+            return getattr(value, expr.attr)
         self._fail(expr)
