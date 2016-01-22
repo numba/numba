@@ -64,11 +64,3 @@ def run_tests(argv=None, xmloutput=None, verbosity=1, nomultiproc=False):
                             verbosity=verbosity,
                             nomultiproc=nomultiproc)
     return prog.result
-
-
-def test(*args, **kwargs):
-    return run_tests(argv=['<main>'] + list(args), **kwargs).wasSuccessful()
-
-
-if __name__ == "__main__":
-    sys.exit(0 if run_tests(sys.argv).wasSuccessful() else 1)

@@ -24,5 +24,5 @@ class TestLoader(loader.TestLoader):
                 except Exception as e:
                     yield loader._make_failed_load_tests(package.__name__, e, self.suiteClass)
         else:
-            for t in super(TestLoader, self)._find_tests(start_dir, pattern, namespace):
+            for t in super(TestLoader, self)._find_tests(start_dir, pattern):
                 yield t
