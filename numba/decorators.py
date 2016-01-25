@@ -52,11 +52,11 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
         Mapping of local variable names to Numba types. Used to override the
         types deduced by Numba's type inference engine.
 
-    targets: str
+    target: str
         Specifies the target platform to compile for. Valid targets are cpu,
         gpu, npyufunc, and cuda. Defaults to cpu.
 
-    targetoptions: 
+    targetoptions:
         For a cpu target, valid options are:
             nopython: bool
                 Set to True to disable the use of PyObjects and Python API
@@ -175,7 +175,10 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
 def generated_jit(function=None, target='cpu', cache=False, **options):
     """
-    XXX docstring
+    This decorator allows flexible type-based compilation
+    of a jitted function.  It works as `@jit`, except that the decorated
+    function is called at compile-time with the *types* of the arguments
+    and should return an implementation function for those types.
     """
     wrapper = _jit(sigs=None, locals={}, target=target, cache=cache,
                    targetoptions=options, impl_kind='generated')
