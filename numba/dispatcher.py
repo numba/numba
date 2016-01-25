@@ -60,7 +60,7 @@ class _FunctionCompiler(object):
         def stararg_handler(index, param, values):
             return types.Tuple(values)
         # For now, we take argument values from the @jit function, even
-        # in the case of indirect jit.
+        # in the case of generated jit.
         args = fold_arguments(self.pysig, args, kws,
                               normal_handler,
                               default_handler,
@@ -89,10 +89,10 @@ class _FunctionCompiler(object):
         return self.py_func
 
 
-class _IndirectFunctionCompiler(_FunctionCompiler):
+class _GeneratedFunctionCompiler(_FunctionCompiler):
 
     def __init__(self, py_func, targetdescr, targetoptions, locals):
-        super(_IndirectFunctionCompiler, self).__init__(
+        super(_GeneratedFunctionCompiler, self).__init__(
             py_func, targetdescr, targetoptions, locals)
         self.impls = set()
 
@@ -344,7 +344,7 @@ class Dispatcher(_DispatcherBase):
     _fold_args = True
     _impl_kinds = {
         'direct': _FunctionCompiler,
-        'indirect': _IndirectFunctionCompiler,
+        'generated': _GeneratedFunctionCompiler,
         }
 
     def __init__(self, py_func, locals={}, targetoptions={}, impl_kind='direct'):

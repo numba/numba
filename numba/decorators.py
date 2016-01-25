@@ -178,7 +178,7 @@ def generated_jit(function=None, target='cpu', cache=False, **options):
     XXX docstring
     """
     wrapper = _jit(sigs=None, locals={}, target=target, cache=cache,
-                   targetoptions=options, impl_kind='indirect')
+                   targetoptions=options, impl_kind='generated')
     if function is not None:
         return wrapper(function)
     else:

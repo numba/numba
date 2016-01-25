@@ -284,12 +284,12 @@ class TestSignatureHandlingObjectMode(TestSignatureHandling):
     jit_args = dict(forceobj=True)
 
 
-class TestIndirectDispatcher(TestCase):
+class TestGeneratedDispatcher(TestCase):
     """
     Tests for @generated_jit.
     """
 
-    def test_indirect(self):
+    def test_generated(self):
         f = generated_jit(nopython=True)(generated_usecase)
         self.assertEqual(f(8), 8 - 5)
         self.assertEqual(f(x=8), 8 - 5)
