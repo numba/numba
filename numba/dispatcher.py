@@ -82,15 +82,30 @@ class _FunctionCompiler(object):
             raise cres.typing_error
         return cres
 
+    def get_globals_for_reduction(self):
+        return serialize._get_function_globals_for_reduction(self.py_func)
+
     def _get_implementation(self, args, kws):
         return self.py_func
 
 
 class _IndirectFunctionCompiler(_FunctionCompiler):
 
+    def __init__(self, py_func, targetdescr, targetoptions, locals):
+        super(_IndirectFunctionCompiler, self).__init__(
+            py_func, targetdescr, targetoptions, locals)
+        self.impls = set()
+
+    def get_globals_for_reduction(self):
+        # This will recursively get the globals used by any nested
+        # implementation function.
+        return serialize._get_function_globals_for_reduction(self.py_func)
+
     def _get_implementation(self, args, kws):
         # XXX check the number of arguments of the returned function?
-        return self.py_func(*args, **kws)
+        impl = self.py_func(*args, **kws)
+        self.impls.add(impl)
+        return impl
 
 
 class _DispatcherBase(_dispatcher.Dispatcher):
@@ -357,6 +372,7 @@ class Dispatcher(_DispatcherBase):
         self.locals = locals
         self._cache = NullCache()
         compiler_class = self._impl_kinds[impl_kind]
+        self._impl_kind = impl_kind
         self._compiler = compiler_class(py_func, self.targetdescr,
                                         targetoptions, locals)
 
@@ -382,17 +398,20 @@ class Dispatcher(_DispatcherBase):
             sigs = []
         else:
             sigs = [cr.signature for cr in self.overloads.values()]
+        globs = self._compiler.get_globals_for_reduction()
         return (serialize._rebuild_reduction,
-                (self.__class__, serialize._reduce_function(self.py_func),
-                 self.locals, self.targetoptions, self._can_compile, sigs))
+                (self.__class__, serialize._reduce_function(self.py_func, globs),
+                 self.locals, self.targetoptions, self._impl_kind,
+                 self._can_compile, sigs))
 
     @classmethod
-    def _rebuild(cls, func_reduced, locals, targetoptions, can_compile, sigs):
+    def _rebuild(cls, func_reduced, locals, targetoptions, impl_kind,
+                 can_compile, sigs):
         """
         Rebuild an Dispatcher instance after it was __reduce__'d.
         """
         py_func = serialize._rebuild_function(*func_reduced)
-        self = cls(py_func, locals, targetoptions)
+        self = cls(py_func, locals, targetoptions, impl_kind)
         for sig in sigs:
             self.compile(sig)
         self._can_compile = can_compile
