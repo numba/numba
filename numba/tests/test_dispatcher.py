@@ -47,6 +47,15 @@ def generated_usecase(x, y=5):
             return x - y
     return impl
 
+def bad_generated_usecase(x, y=5):
+    if isinstance(x, types.Complex):
+        def impl(x):
+            return x
+    else:
+        def impl(x, y=6):
+            return x - y
+    return impl
+
 
 class BaseTest(TestCase):
 
@@ -297,6 +306,23 @@ class TestGeneratedDispatcher(TestCase):
         self.assertEqual(f(1j), 5 + 1j)
         self.assertEqual(f(1j, 42), 42 + 1j)
         self.assertEqual(f(x=1j, y=7), 7 + 1j)
+
+    def test_signature_errors(self):
+        """
+        Check error reporting when implementation signature doesn't match
+        generating function signature.
+        """
+        f = generated_jit(nopython=True)(bad_generated_usecase)
+        # Mismatching # of arguments
+        with self.assertRaises(TypeError) as raises:
+            f(1j)
+        self.assertIn("should be compatible with signature '(x, y=5)', but has signature '(x)'",
+                      str(raises.exception))
+        # Mismatching defaults
+        with self.assertRaises(TypeError) as raises:
+            f(1)
+        self.assertIn("should be compatible with signature '(x, y=5)', but has signature '(x, y=6)'",
+                      str(raises.exception))
 
 
 class TestDispatcherMethods(TestCase):
