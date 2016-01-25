@@ -119,13 +119,12 @@ class NumbaTestProgram(unittest.main):
             argv.remove('-m')
             self.multiprocess = True
         super(NumbaTestProgram, self).parseArgs(argv)
-        # in Python 2.7, the 'discover' option isn't implicit.
-        # So if no test names were provided and 'self.test' is empty,
-        # we assume discovery hasn't been done yet.
-        if (not getattr(self, 'testNames', None) and
-            not self.test or (isinstance(self.test, suite.BaseTestSuite) and
-                              not self.test.countTestCases())):
-            self._do_discovery([])
+        # If at this point self.tests doesn't exist, it is because
+        # no test ID was given in argv. Use the default instead.
+        if not hasattr(self, 'tests') or not self.tests:
+            self.testNames = (self.defaultTest,)
+            self.createTests()
+
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
             # running with '-q'.

@@ -6,7 +6,7 @@ def _main(argv, **kwds):
     # is the name of the calling program.
     # The 'main' API function is invoked in-process, and thus
     # will synthesize that name.
-    return run_tests(argv, **kwds).wasSuccessful()
+    return run_tests(argv, defaultTest='numba.tests', **kwds).wasSuccessful()
 
 def main(*argv, **kwds):
     """keyword arguments are accepted for backward compatiblity only.
