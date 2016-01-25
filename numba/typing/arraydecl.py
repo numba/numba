@@ -176,17 +176,29 @@ class SetItemBuffer(AbstractTemplate):
         res = out.result
         if isinstance(res, types.Array):
             # Indexing produces an array
-            if not isinstance(val, types.Array):
-                # Allow scalar broadcasting
-                res = res.dtype
-            elif (val.ndim == res.ndim and
-                  self.context.can_convert(val.dtype, res.dtype)):
-                # Allow assignement of same-dimensionality compatible-dtype array
-                res = val
+            if isinstance(val, types.Array):
+                if (val.ndim == res.ndim and
+                    self.context.can_convert(val.dtype, res.dtype)):
+                    # Allow assignement of same-dimensionality compatible-dtype array
+                    res = val
+                else:
+                    # NOTE: array broadcasting is unsupported
+                    return
+            elif isinstance(val, types.Sequence):
+                if (res.ndim == 1 and
+                    self.context.can_convert(val.dtype, res.dtype)):
+                    # Allow assignement of sequence to 1d array
+                    res = val
+                else:
+                    # NOTE: sequence-to-array broadcasting is unsupported
+                    return
             else:
-                # Unexpected dimensionality of assignment source
-                # (array broadcasting is unsupported)
-                return
+                # Allow scalar broadcasting
+                if self.context.can_convert(val, res.dtype):
+                    res = res.dtype
+                else:
+                    # Incompatible scalar type
+                    return
         elif not isinstance(val, types.Array):
             # Single item assignment
             res = val

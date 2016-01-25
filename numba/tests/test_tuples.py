@@ -31,6 +31,12 @@ def tuple_second(tup):
 def tuple_index(tup, idx):
     return tup[idx]
 
+def tuple_slice2(tup):
+    return tup[1:-1]
+
+def tuple_slice3(tup):
+    return tup[1::2]
+
 def len_usecase(tup):
     return len(tup)
 
@@ -163,6 +169,22 @@ class TestOperations(TestCase):
         tup = (4, 5, 6)
         for i in range(len(tup)):
             self.assertPreciseEqual(cr.entry_point(tup, i), tup[i])
+
+    def check_slice(self, pyfunc):
+        tup = (4, 5, 6, 7)
+        cr = compile_isolated(pyfunc,
+                              [types.UniTuple(types.int64, 4)])
+        self.assertPreciseEqual(cr.entry_point(tup), pyfunc(tup))
+        cr = compile_isolated(
+            pyfunc,
+            [types.Tuple((types.int64, types.int32, types.int64, types.int32))])
+        self.assertPreciseEqual(cr.entry_point(tup), pyfunc(tup))
+
+    def test_slice2(self):
+        self.check_slice(tuple_slice2)
+
+    def test_slice3(self):
+        self.check_slice(tuple_slice3)
 
     def test_bool(self):
         pyfunc = bool_usecase

@@ -85,12 +85,14 @@ The following attributes and methods are supported:
 tuple
 -----
 
-Tuple construction and unpacking is supported, as well as the following
-operations:
+The following operations are supported:
 
+* tuple construction
+* tuple unpacking
 * comparison between tuples
 * iteration and indexing over homogenous tuples
 * addition (concatenation) between tuples
+* slicing tuples with a constant slice
 
 list
 ----

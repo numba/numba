@@ -69,7 +69,7 @@ class RewriteRegistry(object):
                 matches = rewrite.match(interp, block, pipeline.typemap,
                                         pipeline.calltypes)
                 if matches:
-                    if config.DUMP_IR:
+                    if config.DEBUG or config.DUMP_IR:
                         print("_" * 70)
                         print("REWRITING:")
                         block.dump()
@@ -77,7 +77,7 @@ class RewriteRegistry(object):
                     new_block = rewrite.apply()
                     blocks[key] = new_block
                     work_list.append((key, new_block))
-                    if config.DUMP_IR:
+                    if config.DEBUG or config.DUMP_IR:
                         new_block.dump()
                         print("_" * 70)
         # If any blocks were changed, perform a sanity check.

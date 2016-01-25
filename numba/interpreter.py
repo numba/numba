@@ -2,11 +2,12 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 import dis
-import sys
-import operator
 from functools import reduce
-from numba import ir, controlflow, dataflow, utils, errors
-from numba.utils import builtins
+import operator
+import sys
+
+from . import ir, controlflow, dataflow, utils, errors, consts
+from .utils import builtins
 
 
 class Assigner(object):
@@ -92,20 +93,9 @@ class Interpreter(object):
 
     def __init__(self, bytecode):
         self.bytecode = bytecode
-        self.scopes = []
         self.loc = ir.Loc(filename=bytecode.filename, line=1)
         self.arg_count = bytecode.arg_count
         self.arg_names = bytecode.arg_names
-        # Control flow analysis
-        self.cfa = controlflow.ControlFlowAnalysis(bytecode)
-        self.cfa.run()
-        # Data flow analysis
-        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
-        self.dfa.run()
-
-        global_scope = ir.Scope(parent=None, loc=self.loc)
-        self._fill_global_scope(global_scope)
-        self.scopes.append(global_scope)
 
         # { inst offset : ir.Block }
         self.blocks = {}
@@ -115,6 +105,25 @@ class Interpreter(object):
         self.definitions = collections.defaultdict(list)
         # { ir.Block: { variable names (potentially) alive at start of block } }
         self.block_entry_vars = {}
+
+        self.reset()
+
+    def reset(self):
+        """
+        Reset all internal state and release resources.
+        """
+        self.scopes = []
+        global_scope = ir.Scope(parent=None, loc=self.loc)
+        self.scopes.append(global_scope)
+
+        # Control flow analysis
+        self.cfa = controlflow.ControlFlowAnalysis(self.bytecode)
+        self.cfa.run()
+        # Data flow analysis
+        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
+        self.dfa.run()
+        # Constant inference
+        self.consts = consts.ConstantInference(self)
 
         if self.bytecode.is_generator:
             self.generator_info = GeneratorInfo()
@@ -126,11 +135,6 @@ class Interpreter(object):
         self.current_block_offset = None
         self.syntax_blocks = []
         self.dfainfo = None
-
-    def _fill_global_scope(self, scope):
-        """TODO
-        """
-        pass
 
     def get_used_globals(self):
         """
@@ -145,7 +149,18 @@ class Interpreter(object):
         """
         return self.block_entry_vars[block]
 
+    def infer_constant(self, name):
+        """
+        Try to infer the constant value of a given variable.
+        """
+        if isinstance(name, ir.Var):
+            name = name.name
+        return self.consts.infer_constant(name)
+
     def interpret(self):
+        """
+        Generate IR for this bytecode.
+        """
         firstblk = min(self.cfa.blocks.keys())
         self.loc = ir.Loc(filename=self.bytecode.filename,
                           line=self.bytecode[firstblk].lineno)
@@ -585,19 +600,23 @@ class Interpreter(object):
 
     def get_definition(self, value):
         """
-        Get the definition site for the given Var instance.
+        Get the definition site for the given variable name or instance.
         A Expr instance is returned.
         """
         while True:
-            if not isinstance(value, ir.Var):
+            if isinstance(value, ir.Var):
+                name = value.name
+            elif isinstance(value, str):
+                name = value
+            else:
                 return value
-            defs = self.definitions[value.name]
+            defs = self.definitions[name]
             if len(defs) == 0:
                 raise KeyError("no definition for %r"
-                               % (value.name,))
+                               % (name,))
             if len(defs) > 1:
                 raise KeyError("more than one definition for %r"
-                               % (value.name,))
+                               % (name,))
             value = defs[0]
 
     # --- Block operations ---

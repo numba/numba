@@ -997,6 +997,27 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                                 wraparound=False)
             return load_item(context, builder, srcty, src_ptr)
 
+    elif isinstance(srcty, types.Sequence):
+        src_dtype = srcty.dtype
+
+        # Check shape is equal to sequence length
+        index_shape = indexer.get_shape()
+        assert len(index_shape) == 1
+        len_impl = context.get_function(len, signature(types.intp, srcty))
+        seq_len = len_impl(builder, (src,))
+
+        shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
+
+        with builder.if_then(shape_error, likely=False):
+            msg = "cannot assign slice from input of different size"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+        def src_getitem(source_indices):
+            idx, = source_indices
+            getitem_impl = context.get_function('getitem',
+                                                signature(src_dtype, srcty, types.intp))
+            return getitem_impl(builder, (src, idx))
+
     else:
         # Source is a scalar (broadcast or not, depending on destination
         # shape).
