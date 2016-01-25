@@ -2,13 +2,16 @@
 Implements custom ufunc dispatch mechanism for non-CPU devices.
 """
 from __future__ import print_function, absolute_import
+
 import operator
 import warnings
 from functools import reduce
+
 import numpy as np
+
 from numba.utils import longint, OrderedDict
 from numba.utils import IS_PY3
-from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder
+from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
 from numba import sigutils, types
 from numba.typing import signature
 from numba.npyufunc.sigparse import parse_signature
@@ -356,7 +359,7 @@ class DeviceVectorize(_BaseUFuncBuilder):
     def __init__(self, func, identity=None, targetoptions={}):
         assert not targetoptions
         self.py_func = func
-        self.identity = self.parse_identity(identity)
+        self.identity = parse_identity(identity)
         # { arg_dtype: (return_dtype), cudakernel }
         self.kernelmap = OrderedDict()
 
@@ -428,7 +431,7 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
             raise TypeError(fmt.format(opts))
 
         self.py_func = func
-        self.identity = self.parse_identity(identity)
+        self.identity = parse_identity(identity)
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
         assert len(self.outputsig) == 1, "only support 1 output"

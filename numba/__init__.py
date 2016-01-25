@@ -4,7 +4,7 @@ Expose top-level symbols that are safe for import *
 from __future__ import print_function, division, absolute_import
 import re
 
-from . import testing, decorators
+from . import runtests, decorators
 from . import errors, special, types, config
 
 # Re-export typeof
@@ -29,8 +29,8 @@ from .numpy_support import from_dtype
 # Re export jitclass
 from .jitclass import jitclass
 
-# Re-export test entrypoint
-test = testing.test
+# Keep this for backward compatibility.
+test = runtests.main
 
 # Try to initialize cuda
 from . import cuda

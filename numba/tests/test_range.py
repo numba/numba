@@ -1,6 +1,11 @@
 from __future__ import print_function
+
 import numba.unittest_support as unittest
+
+import sys
+
 import numpy
+
 from numba.compiler import compile_isolated
 from numba import types
 
@@ -50,7 +55,15 @@ def range3_writeout(a, b, c, out):
     return i
 
 
+def xrange_usecase(n):
+    s = 0
+    for i in xrange(n):
+        s += i
+    return s
+
+
 class TestRange(unittest.TestCase):
+
     def test_loop1_int16(self):
         pyfunc = loop1
         cres = compile_isolated(pyfunc, [types.int16])
@@ -147,6 +160,13 @@ class TestRange(unittest.TestCase):
         got = numpy.zeros(b - a, dtype=numpy.int64)
         self.assertTrue(cfunc(a, b, c, got), pyfunc(a, b, c, expected))
         numpy.testing.assert_equal(expected, got)
+
+    @unittest.skipIf(sys.version_info >= (3,), "test is Python 2-specific")
+    def test_xrange(self):
+        pyfunc = xrange_usecase
+        cres = compile_isolated(pyfunc, (types.int32,))
+        cfunc = cres.entry_point
+        self.assertEqual(cfunc(5), pyfunc(5))
 
 
 if __name__ == '__main__':

@@ -217,17 +217,23 @@ class PyLower(BaseLower):
         elif expr.op == 'call':
             argvals = [self.loadvar(a.name) for a in expr.args]
             fn = self.loadvar(expr.func.name)
+            args = self.pyapi.tuple_pack(argvals)
+            if expr.vararg:
+                # Expand *args
+                new_args = self.pyapi.number_add(args,
+                                                 self.loadvar(expr.vararg.name))
+                self.decref(args)
+                args = new_args
             if not expr.kws:
-                # No keyword
-                ret = self.pyapi.call_function_objargs(fn, argvals)
+                # No named arguments
+                ret = self.pyapi.call(fn, args, None)
             else:
-                # Have Keywords
+                # Named arguments
                 keyvalues = [(k, self.loadvar(v.name)) for k, v in expr.kws]
-                args = self.pyapi.tuple_pack(argvals)
                 kws = self.pyapi.dict_pack(keyvalues)
                 ret = self.pyapi.call(fn, args, kws)
                 self.decref(kws)
-                self.decref(args)
+            self.decref(args)
             self.check_error(ret)
             return ret
         elif expr.op == 'getattr':

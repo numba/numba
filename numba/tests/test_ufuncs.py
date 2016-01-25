@@ -1539,6 +1539,8 @@ class _TestLoopTypes(TestCase):
 
     def _arg_for_type(self, a_letter_type, index=0):
         """return a suitable array argument for testing the letter type"""
+        # Note all possible arrays must have the same size, since they
+        # may be used as inputs to the same func.
         if a_letter_type in 'bhilq':
             # an integral
             return np.array([1, 4, 0, -2], dtype=a_letter_type)
@@ -1559,10 +1561,18 @@ class _TestLoopTypes(TestCase):
             return np.array(['Nat', 1, 25, 0], dtype=a_letter_type)
         elif a_letter_type in 'fd':
             # floating point
-            return np.array([1.5, -3.5, 0.0, float('nan')], dtype=a_letter_type)
+            return np.array([1.5, -3.5, 0.0, float('nan')],
+                            dtype=a_letter_type)
         elif a_letter_type in 'FD':
             # complex
-            return np.array([-1.0j, 1.5 + 1.5j, 1j * float('nan'), 0j],
+            # Note `-1j` is different on 2.x and 3.x, hence the explicit spelling
+            if sys.platform != 'win32':
+                # Other platforms have better handling of negative zeros,
+                # test them
+                negzero = -(0.0 + 1.0j)
+            else:
+                negzero = 0.0 - 1.0j
+            return np.array([negzero, 1.5 + 1.5j, 1j * float('nan'), 0j],
                             dtype=a_letter_type)
         else:
             raise RuntimeError("type %r not understood" % (a_letter_type,))

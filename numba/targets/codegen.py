@@ -95,6 +95,7 @@ class CodeLibrary(object):
 
         See discussion in https://github.com/numba/numba/pull/890
         """
+        self._ensure_finalized()
         if self._shared_module is not None:
             return self._shared_module
         mod = self._final_module
@@ -315,11 +316,13 @@ class CodeLibrary(object):
     def serialize_using_object_code(self):
         """
         Serialize this library using its object code as the cached
-        representation.
+        representation.  We also include its bitcode for further inlining
+        with other libraries.
         """
         self._ensure_finalized()
-        ll_module = self._final_module
-        return (self._name, 'object', self._get_compiled_object())
+        data = (self._get_compiled_object(),
+                self._get_module_for_linking().as_bitcode())
+        return (self._name, 'object', data)
 
     @classmethod
     def _unserialize(cls, codegen, state):
@@ -332,8 +335,10 @@ class CodeLibrary(object):
             self._finalize_final_module()
             return self
         elif kind == 'object':
+            object_code, shared_bitcode = data
             self.enable_object_caching()
-            self._set_compiled_object(data)
+            self._set_compiled_object(object_code)
+            self._shared_module = ll.parse_bitcode(shared_bitcode)
             self._finalize_final_module()
             return self
         else:

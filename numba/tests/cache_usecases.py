@@ -37,6 +37,10 @@ def inner(x, y):
 def outer(x, y):
     return inner(-y, x)
 
+@jit(cache=False, nopython=True)
+def outer_uncached(x, y):
+    return inner(-y, x)
+
 
 @jit(cache=True, forceobj=True)
 def looplifted(n):
