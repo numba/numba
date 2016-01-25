@@ -29,7 +29,7 @@ before_install:
   - CONDA_INSTALL="conda install --yes -q"
   - PIP_INSTALL="pip install -q"
   # Install llvmdev (separate channel, for now)
-  - $CONDA_INSTALL -c numba llvmdev="3.6*"
+  - $CONDA_INSTALL -c numba llvmdev="3.7*"
   # Install unittest2 for Python 2
   - if [ $PYTHON == "2.6" ]; then $CONDA_INSTALL unittest2 argparse; fi
   # Install enum34 and singledispatch for Python < 3.4
