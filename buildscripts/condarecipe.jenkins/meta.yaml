@@ -18,16 +18,16 @@ requirements:
     - python
     - argparse        [py26]
     - numpy x.x
-    # On channel https://binstar.org/numba/
-    - llvmlite 0.8*
+    # On channel https://anaconda.org/numba/
+    - llvmlite 0.9.*
     - funcsigs       [py26 or py27]
     - singledispatch [py26 or py27 or py33]
   run:
     - python
     - argparse        [py26]
     - numpy x.x
-    # On channel https://binstar.org/numba/
-    - llvmlite 0.8*
+    # On channel https://anaconda.org/numba/
+    - llvmlite 0.9.*
     - funcsigs       [py26 or py27]
     - singledispatch [py26 or py27 or py33]
 test:
