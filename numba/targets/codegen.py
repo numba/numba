@@ -503,8 +503,9 @@ class BaseCPUCodegen(object):
         if "1.0" in ir_out:
             loc = locale.getlocale()
             raise RuntimeError(
-                "LLVM will produce incorrect floating-point code in the current "
-                "locale %s.\nPlease see https://github.com/numba/numba/issues/1569 "
+                "LLVM will produce incorrect floating-point code "
+                "in the current locale %s.\nPlease read "
+                "http://numba.pydata.org/numba-doc/dev/user/faq.html#llvm-locale-bug "
                 "for more information."
                 % (loc,))
         raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))
