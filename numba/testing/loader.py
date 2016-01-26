@@ -5,10 +5,10 @@ from os.path import isdir, isfile, join, dirname, basename
 
 class TestLoader(loader.TestLoader):
 
-    # Unfortunately there is right now no other way to set
-    # the top-level directory.
-    # ('-t' only works after the 'discover' command).
-    _top_level_dir = dirname(dirname(dirname(__file__)))
+
+    def __init__(self, topleveldir=None):
+        super(TestLoader, self).__init__()
+        self._top_level_dir = topleveldir or dirname(dirname(dirname(__file__)))
 
     def _find_tests(self, start_dir, pattern, namespace=False):
         # Upstream doesn't look for 'load_tests' in start_dir.
