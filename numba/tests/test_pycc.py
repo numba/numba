@@ -176,7 +176,7 @@ class TestCC(BasePYCCTest):
         f = self._test_module.cc.output_file
         self.assertFalse(os.path.exists(f), f)
         self.assertTrue(os.path.basename(f).startswith('pycc_test_simple.'), f)
-        if sys.platform == 'linux':
+        if sys.platform.startswith('linux'):
             self.assertTrue(f.endswith('.so'), f)
             if sys.version_info >= (3,):
                 self.assertIn('.cpython', f)
