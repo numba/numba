@@ -44,7 +44,7 @@ def _os_supports_avx():
     This is necessary because the user may be running a very old Linux
     kernel (e.g. CentOS 5) on a recent CPU.
     """
-    if (sys.platform != 'linux'
+    if (not sys.platform.startswith('linux')
         or platform.machine() not in ('i386', 'i586', 'i686', 'x86_64')):
         return True
     # Executing the CPUID instruction may report AVX available even though
