@@ -9,7 +9,6 @@ import collections
 import contextlib
 import cProfile
 import multiprocessing
-from os.path import dirname, join, abspath, relpath
 
 import numba.unittest_support as unittest
 from unittest import result, runner, signals, suite, loader, case
@@ -80,9 +79,8 @@ class NumbaTestProgram(unittest.main):
             warnings.warn("Unset INTERPRETER_FALLBACK")
             config.COMPATIBILITY_MODE = False
 
-        # The default test loader is buggy in its handling of load_tests().
-        # See http://bugs.python.org/issue25520
-        kwargs['testLoader'] = TestLoader()
+        topleveldir = kwargs.pop('topleveldir', None)
+        kwargs['testLoader'] = TestLoader(topleveldir)
 
         # HACK to force unittest not to change warning display options
         # (so that NumbaWarnings don't appear all over the place)
@@ -119,9 +117,9 @@ class NumbaTestProgram(unittest.main):
             argv.remove('-m')
             self.multiprocess = True
         super(NumbaTestProgram, self).parseArgs(argv)
-        # If at this point self.tests doesn't exist, it is because
+        # If at this point self.test doesn't exist, it is because
         # no test ID was given in argv. Use the default instead.
-        if not hasattr(self, 'tests') or not self.tests:
+        if not hasattr(self, 'test') or not self.test.countTestCases():
             self.testNames = (self.defaultTest,)
             self.createTests()
 
@@ -129,6 +127,14 @@ class NumbaTestProgram(unittest.main):
             # We aren't interested in informational messages / warnings when
             # running with '-q'.
             self.buffer = True
+
+    def _do_discovery(self, argv, Loader=None):
+        # Upstream uses a default start_dir of '.', which assumes we only ever
+        # run the tests from the top-level directory.
+        # So, if no 'start' argument is given in argv, inject one, to satisfy our CI builders.
+        if argv == []:
+            argv = [self.testLoader._top_level_dir]
+            super(NumbaTestProgram, self)._do_discovery(argv, Loader)
 
     def runTests(self):
         if self.refleak:

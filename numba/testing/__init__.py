@@ -41,7 +41,8 @@ def allow_interpreter_mode(fn):
     return _core
 
 
-def run_tests(argv=None, defaultTest=None, xmloutput=None, verbosity=1, nomultiproc=False):
+def run_tests(argv=None, defaultTest=None, topleveldir=None,
+              xmloutput=None, verbosity=1, nomultiproc=False):
     """
     args
     ----
@@ -61,6 +62,7 @@ def run_tests(argv=None, defaultTest=None, xmloutput=None, verbosity=1, nomultip
     prog = NumbaTestProgram(argv=argv,
                             module=None,
                             defaultTest=defaultTest,
+                            topleveldir=topleveldir,
                             testRunner=runner, exit=False,
                             verbosity=verbosity,
                             nomultiproc=nomultiproc)
