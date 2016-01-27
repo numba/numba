@@ -1545,7 +1545,11 @@ def array_record_getattr(context, builder, typ, value, attr):
 
 @lower_builtin('static_getitem', types.Array, types.Const)
 def array_record_getitem(context, builder, sig, args):
-    return array_record_getattr(context, builder, sig.args[0], args[0], args[1])
+    index = args[1]
+    if not isinstance(index, str):
+        # This will fallback to normal getitem
+        raise NotImplementedError
+    return array_record_getattr(context, builder, sig.args[0], args[0], index)
 
 
 @lower_getattr_generic(types.Record)
