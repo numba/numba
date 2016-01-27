@@ -17,7 +17,7 @@ Constructs
 ----------
 
 Numba strives to support as much of the Python language as possible, but
-some language features are not available inside Numba-compiled functions:
+some language features are not available inside Numba-compiled functions. The following Python language features are not currently supported:
 
 * Function definition
 * Class definition
