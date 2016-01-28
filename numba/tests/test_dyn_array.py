@@ -864,16 +864,17 @@ class TestNdDiag(TestCase):
         self.matricies = [a3x4, a4x3]
         def func(q):
             return np.diag(q)
-        self.f_diag = func
+        self.py = func
+        self.jit = nrtjit(func)
 
         def func_kwarg(q, k=0):
             return np.diag(q, k=k)
-        self.f_diag_kwarg = func_kwarg
+        self.py_kw = func_kwarg
+        self.jit_kw = nrtjit(func_kwarg)
 
-    def check_diag(self, pyfunc, *args, **kwargs):
-        cfunc = nrtjit(pyfunc)
+    def check_diag(self, pyfunc, nrtfunc, *args, **kwargs):
         expected = pyfunc(*args, **kwargs)
-        computed = cfunc(*args, **kwargs)
+        computed = nrtfunc(*args, **kwargs)
         self.assertEqual(computed.size, expected.size)
         self.assertEqual(computed.dtype, expected.dtype)
         # NOTE: stride not tested as np returns a RO view, nb returns new data
@@ -882,36 +883,41 @@ class TestNdDiag(TestCase):
     # create a diag matrix from a vector
     def test_diag_vect_create(self):
         for d in self.vectors:
-            self.check_diag(self.f_diag, d)
+            self.check_diag(self.py, self.jit, d)
 
     # create a diag matrix from a vector at a given offset
     def test_diag_vect_create_kwarg(self):
         for k in range(-10, 10):
             for d in self.vectors:
-                self.check_diag(self.f_diag_kwarg, d, k=k)
+                self.check_diag(self.py_kw, self.jit_kw, d, k=k)
 
     # extract the diagonal
     def test_diag_extract(self):
         for d in self.matricies:
-            self.check_diag(self.f_diag, d)
+            self.check_diag(self.py, self.jit, d)
 
     # extract a diagonal at a given offset
     def test_diag_extract_kwarg(self):
         for k in range(-4, 4):
             for d in self.matricies:
-                self.check_diag(self.f_diag_kwarg, d, k=k)
+                self.check_diag(self.py_kw, self.jit_kw, d, k=k)
 
     # check error handling
     def test_error_handling(self):
-      # missing arg
-      with self.assertRaises(TypeError):
-          cfunc = nrtjit(self.f_diag())
+        from numba.errors import TypingError
+        d = np.array([[[1.]]])
+        cfunc = nrtjit(self.py)
 
-      # > 2d
-      with self.assertRaises(ValueError):
-          d = np.array([[[1]]])
-          cfunc = nrtjit(self.f_diag(d))
+        # missing arg
+        with self.assertRaises(TypeError):
+            cfunc()
 
+        # > 2d
+        with self.assertRaises(TypingError):
+            cfunc(d)
+        with self.assertRaises(TypingError):
+            dfunc = nrtjit(self.py_kw)
+            dfunc(d, k=3)
 
 class TestNdArange(BaseTest):
 

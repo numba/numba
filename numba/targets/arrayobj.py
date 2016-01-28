@@ -2459,9 +2459,7 @@ def numpy_diag_kwarg(context, builder, sig, args):
         # matrix context
         def diag_impl(arr, k=0):
             #Will return arr.diagonal(v, k) when axis args are supported
-            s = arr.shape
-            rows = s[0]
-            cols = s[1]
+            rows, cols = arr.shape
             r = rows
             c = cols
             if k < 0:
@@ -2470,13 +2468,12 @@ def numpy_diag_kwarg(context, builder, sig, args):
                 cols = cols - k
             n = max(min(rows, cols), 0)
             ret = numpy.empty(n, arr.dtype)
-            flt = arr.flat
             if k >= 0:
                 for i in range(n):
-                    ret[i] = flt[i * c + k + i]
+                    ret[i] = arr[i, k + i]
             else:
                 for i in range(n):
-                    ret[i] = flt[(i - k) * c + i]
+                    ret[i] = arr[i - k, i]
             return ret
     else:
         #invalid input
