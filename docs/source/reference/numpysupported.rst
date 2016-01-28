@@ -160,6 +160,7 @@ floating-point and complex numbers.
 * :func:`numpy.vdot`
 * On Python 3.5 and above, the matrix multiplication operator from
   :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
+* :func:`numpy.linalg.inv`
 
 .. note::
    The implementation of these functions needs Scipy 0.16+ to be installed.

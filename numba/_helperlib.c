@@ -1279,21 +1279,19 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
 
     return 1;
 }
-
 /*
- * BLAS calling helpers.  The helpers can be called without the GIL held.
- * The caller is responsible for checking arguments (especially dimensions).
+ * Cython utilities.
  */
 
-/* Fetch the address of the given CBLAS function, as exposed by
-   scipy.linalg.cython_blas. */
-static void *
-import_cblas_function(const char *function_name)
+/* Fetch the address of the given function, as exposed by
+   a cython module */
+ static void *
+ import_cython_function(const char *module_name, const char *function_name)
 {
     PyObject *module, *capi, *cobj;
     void *res = NULL;
 
-    module = PyImport_ImportModule("scipy.linalg.cython_blas");
+    module = PyImport_ImportModule(module_name);
     if (module == NULL)
         return NULL;
     capi = PyObject_GetAttrString(module, "__pyx_capi__");
@@ -1323,18 +1321,25 @@ import_cblas_function(const char *function_name)
     return res;
 }
 
+/*
+ * BLAS calling helpers.  The helpers can be called without the GIL held.
+ * The caller is responsible for checking arguments (especially dimensions).
+ */
+
+
 /* Fast getters caching the value of a function's address after
    the first call to import_cblas_function(). */
 
-#define EMIT_GET_CBLAS_FUNC(name)                            \
-    static void *cblas_ ## name = NULL;                      \
-    static void *get_cblas_ ## name(void) {                  \
-        if (cblas_ ## name == NULL) {                        \
-            PyGILState_STATE st = PyGILState_Ensure();       \
-            cblas_ ## name = import_cblas_function(# name);  \
-            PyGILState_Release(st);                          \
-        }                                                    \
-        return cblas_ ## name;                               \
+#define EMIT_GET_CBLAS_FUNC(name)                                 \
+    static void *cblas_ ## name = NULL;                           \
+    static void *get_cblas_ ## name(void) {                       \
+        if (cblas_ ## name == NULL) {                             \
+            PyGILState_STATE st = PyGILState_Ensure();            \
+            const char *mod = "scipy.linalg.cython_blas";         \
+            cblas_ ## name = import_cython_function(mod, # name); \
+            PyGILState_Release(st);                               \
+        }                                                         \
+        return cblas_ ## name;                                    \
     }
 
 EMIT_GET_CBLAS_FUNC(dgemm)
@@ -1515,6 +1520,122 @@ numba_xxgemm(char kind, char *transa, char *transb,
 
     (*(xxgemm_t) raw_func)(transa, transb, &_m, &_n, &_k, alpha, a, &_lda,
                            b, &_ldb, beta, c, &_ldc);
+    return 0;
+}
+
+/*
+ * LAPACK calling helpers.  The helpers can be called without the GIL held.
+ * The caller is responsible for checking arguments (especially dimensions).
+ */
+
+/* Fast getters caching the value of a function's address after
+   the first call to import_clapack_function(). */
+
+#define EMIT_GET_CLAPACK_FUNC(name)                                 \
+    static void *clapack_ ## name = NULL;                           \
+    static void *get_clapack_ ## name(void) {                       \
+        if (clapack_ ## name == NULL) {                             \
+            PyGILState_STATE st = PyGILState_Ensure();              \
+            const char *mod = "scipy.linalg.cython_lapack";         \
+            clapack_ ## name = import_cython_function(mod, # name); \
+            PyGILState_Release(st);                                 \
+        }                                                           \
+        return clapack_ ## name;                                    \
+    }
+
+EMIT_GET_CLAPACK_FUNC(sgetrf)
+EMIT_GET_CLAPACK_FUNC(dgetrf)
+EMIT_GET_CLAPACK_FUNC(cgetrf)
+EMIT_GET_CLAPACK_FUNC(zgetrf)
+EMIT_GET_CLAPACK_FUNC(sgetri)
+EMIT_GET_CLAPACK_FUNC(dgetri)
+EMIT_GET_CLAPACK_FUNC(cgetri)
+EMIT_GET_CLAPACK_FUNC(zgetri)
+
+
+#undef EMIT_GET_CLAPACK_FUNC
+
+typedef void (*xxgetrf_t)(int *m, int *n, void *a, int *lda, int *ipiv, int *info);
+
+typedef void (*xxgetri_t)(int *n, void *a, int *lda, int *ipiv, void *work, int *lwork, int*info);
+
+/* Compute LU decomposition of a*/
+NUMBA_EXPORT_FUNC(int)
+numba_xxgetrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t lda, int *ipiv, int *info)  /* XXX should these be int * or Pyssize_t */
+{
+    void *raw_func = NULL;
+    int _m, _n, _lda;
+
+    switch (kind) {
+        case 's':
+            raw_func = get_clapack_sgetrf();
+            break;
+        case 'd':
+            raw_func = get_clapack_dgetrf();
+            break;
+        case 'c':
+            raw_func = get_clapack_cgetrf();
+            break;
+        case 'z':
+            raw_func = get_clapack_zgetrf();
+            break;
+        default:
+            {
+                PyGILState_STATE st = PyGILState_Ensure();
+                PyErr_SetString(PyExc_ValueError,
+                                "invalid kind of *LU factorization function");
+                PyGILState_Release(st);
+            }
+            return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    _m = (int) m;
+    _n = (int) n;
+    _lda = (int) lda;
+
+    (*(xxgetrf_t) raw_func)(&_m, &_n, a, &_lda, ipiv, info);
+    return 0;
+}
+
+
+/* Compute the inverse of a  matrix given its LU decomposition*/
+NUMBA_EXPORT_FUNC(int)
+numba_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda, int *ipiv, void *work, int *lwork, int *info) /* XXX int * */
+{
+    void *raw_func = NULL;
+    int _n, _lda;
+
+    switch (kind) {
+        case 's':
+            raw_func = get_clapack_sgetri();
+            break;
+        case 'd':
+            raw_func = get_clapack_dgetri();
+            break;
+        case 'c':
+            raw_func = get_clapack_cgetri();
+            break;
+        case 'z':
+            raw_func = get_clapack_zgetri();
+            break;
+        default:
+            {
+                PyGILState_STATE st = PyGILState_Ensure();
+                PyErr_SetString(PyExc_ValueError,
+                                "invalid kind of *inversion from LU factorization function");
+                PyGILState_Release(st);
+            }
+            return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    _n = (int) n;
+    _lda = (int) lda;
+
+    (*(xxgetri_t) raw_func)(&_n, a, &_lda, ipiv, work, lwork, info);
     return 0;
 }
 
