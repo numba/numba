@@ -50,7 +50,8 @@ jitclass
 """.split() + types.__all__ + special.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 6, 0)
+_min_llvmlite_version = (0, 9, 0)
+_min_llvm_version = (3, 7, 0)
 
 def _ensure_llvm():
     """
@@ -75,9 +76,16 @@ def _ensure_llvm():
         # Not matching?
         warnings.warn("llvmlite version format not recognized!")
 
-    from llvmlite.binding import check_jit_execution
-    check_jit_execution()
+    from llvmlite.binding import llvm_version_info, check_jit_execution
 
+    if llvm_version_info < _min_llvm_version:
+        msg = ("Numba requires at least version %d.%d.%d of LLVM.\n"
+               "Installed llvmlite is built against version %d.%d.%d.\n"
+               "Please update llvmlite." %
+               (_min_llvm_version + llvm_version_info))
+        raise ImportError(msg)
+
+    check_jit_execution()
 
 _ensure_llvm()
 
