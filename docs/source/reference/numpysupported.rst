@@ -212,6 +212,18 @@ construct a scalar) or a sequence (to construct an array):
 * :class:`numpy.uintc`
 * :class:`numpy.uintp`
 
+Literal arrays
+--------------
+
+.. XXX should this part of the user's guide?
+
+Neither Python nor Numba has actual array literals, but you can construct
+arbitrary arrays by calling :func:`numpy.array` on a nested tuple::
+
+   a = numpy.array(((a, b, c), (d, e, f)))
+
+(nested lists are not yet supported by Numba)
+
 
 Modules
 =======
