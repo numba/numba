@@ -10,6 +10,14 @@ from numba import jit, errors
 from .support import TestCase
 from .matmul_usecase import matmul_usecase, needs_matmul, needs_blas
 
+try:
+    import scipy.linalg.cython_lapack
+    has_lapack = True
+except ImportError:
+    has_lapack = False
+
+needs_lapack = unittest.skipUnless(has_lapack,
+                                   "LAPACK needs Scipy 0.16+")
 
 def dot2(a, b):
     return np.dot(a, b)
@@ -234,6 +242,89 @@ class TestProduct(TestCase):
         Test matrix @ matrix
         """
         self.check_dot_mm(matmul_usecase, None, "'@'")
+
+
+def invert_matrix(a):
+    return np.linalg.inv(a)
+
+
+class TestLinalgInv(TestCase):
+    """
+    Tests for np.linalg.inv.
+    """
+
+    dtypes = (np.float64, np.float32, np.complex128, np.complex64)
+
+    def sample_vector(self, n, dtype):
+        # Be careful to generate only exactly representable float values,
+        # to avoid rounding discrepancies between Numpy and Numba
+        base = np.arange(n)
+        if issubclass(dtype, np.complexfloating):
+            return (base * (1 - 0.5j) + 2j).astype(dtype)
+        else:
+            return (base * 0.5 + 1).astype(dtype)
+
+    def sample_matrix(self, m, dtype, order):
+        a = np.zeros((m, m), dtype, order)
+        a += np.diag(self.sample_vector(m, dtype))
+        return a
+
+    def assert_error(self, cfunc, args, msg, err=ValueError):
+        with self.assertRaises(err) as raises:
+            cfunc(*args)
+        self.assertIn(msg, str(raises.exception))
+
+    def assert_non_square(self, cfunc, args):
+        msg = "np.linalg.inv can only work on square arrays."
+        self.assert_error(cfunc, args, msg)
+
+    def assert_wrong_dtype(self, cfunc, args):
+        msg = "np.linalg.inv() only supported on float and complex arrays"
+        self.assert_error(cfunc, args, msg, errors.TypingError)
+
+    def assert_wrong_dimensions(self, cfunc, args):
+        msg = "np.linalg.inv() only supported on 2-D arrays"
+        self.assert_error(cfunc, args, msg, errors.TypingError)
+
+    def assert_singular_matrix(self, cfunc, args):
+        msg = "Matrix is singular and cannot be inverted"
+        self.assert_error(cfunc, args, msg)
+
+    @needs_lapack
+    def test_linalg_inv(self):
+        """
+        Test np.linalg.inv
+        """
+        n = 10
+        cfunc = jit(nopython=True)(invert_matrix)
+        for dtype, order in product(self.dtypes, 'CF'):
+            a = self.sample_matrix(n, dtype, order)
+            expected = invert_matrix(a).copy(order='C')
+            got = cfunc(a)
+            # XXX add to use that function otherwise comparison fails
+            # because of +0, -0 discrepancies
+            np.testing.assert_array_almost_equal_nulp(got, expected)
+
+        for order in 'CF':
+            a = np.array(((2, 1), (2, 3)), dtype=np.float64, order=order)
+            expected = invert_matrix(a).copy(order='C')
+            got = cfunc(a)
+            # XXX add to use that function otherwise comparison fails
+            # because of +0, -0 discrepancies
+            np.testing.assert_array_almost_equal_nulp(got, expected)
+
+        # Non square matrices
+        self.assert_non_square(cfunc, (np.ones((2,3)),))
+
+        # Wrong dtype
+        self.assert_wrong_dtype(cfunc,
+                                (np.ones((2, 2), dtype=np.int32),))
+
+        # Dimension issue
+        self.assert_wrong_dimensions(cfunc, (np.ones(10),))
+
+        # Singular matrix
+        self.assert_singular_matrix(cfunc, (np.zeros((2, 2)),))
 
 
 if __name__ == '__main__':

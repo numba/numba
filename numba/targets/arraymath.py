@@ -595,6 +595,8 @@ def any_where(context, builder, sig, args):
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()
 ll_void_p = ll_char_p
+ll_intc = ir.IntType(32)
+ll_intc_p = ll_intc.as_pointer()
 intp_t = cgutils.intp_t
 
 def get_blas_kind(dtype):
@@ -608,6 +610,12 @@ def get_blas_kind(dtype):
 def ensure_blas():
     try:
         import scipy.linalg.cython_blas
+    except ImportError:
+        raise ImportError("scipy 0.16+ is required for linear algebra")
+
+def ensure_lapack():
+    try:
+        import scipy.linalg.cython_lapack
     except ImportError:
         raise ImportError("scipy 0.16+ is required for linear algebra")
 
@@ -638,6 +646,18 @@ def check_blas_return(context, builder, res):
         pyapi = context.get_python_api(builder)
         pyapi.gil_ensure()
         pyapi.fatal_error("BLAS wrapper returned with an error")
+
+
+def check_lapack_return(context, builder, res):
+    """
+    Check the integer error return from one of the LAPACK wrappers in
+    _helperlib.c.
+    """
+    with builder.if_then(cgutils.is_not_null(builder, res), likely=False):
+        # Those errors shouldn't happen, it's easier to just abort the process
+        pyapi = context.get_python_api(builder)
+        pyapi.gil_ensure()
+        pyapi.fatal_error("LAPACK wrapper returned with an error")
 
 
 def call_xxdot(context, builder, conjugate, dtype,
@@ -997,5 +1017,194 @@ def dot_3(context, builder, sig, args):
         return dot_3_mm(context, builder, sig, args)
     elif ndims == set([1, 2]):
         return dot_3_vm(context, builder, sig, args)
+    else:
+        assert 0
+
+
+def call_xxgetrf(context, builder, a_type, a_shapes, a_data, ipiv, info):
+    """
+    Call the LAPACK gettrf function for the given argument.
+
+    This function computes the LU decomposition of a matrix.
+
+    """
+    fnty = ir.FunctionType(ll_intc,
+                           [ll_char,                       # kind
+                            intp_t, intp_t,                # m, n
+                            ll_void_p, intp_t,             # a, lda
+                            ll_intc_p, ll_intc_p           # ipiv, info
+                           ])
+
+    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgetrf")
+
+    kind = get_blas_kind(a_type.dtype)
+    kind_val = ir.Constant(ll_char, ord(kind))
+
+    if a_type.layout == 'F':
+        m, n = a_shapes
+        lda = a_shapes[0]
+    else:
+        n, m = a_shapes
+        lda = a_shapes[1]
+
+    res = builder.call(fn, (kind_val, m, n,
+                            builder.bitcast(a_data, ll_void_p), lda,
+                            ipiv, info
+                            ))
+    check_lapack_return(context, builder, res)
+
+
+def call_xxgetri(context, builder, a_type, a_shapes, a_data, ipiv, work,
+                 lwork, info):
+    """
+    Call the LAPACK gettri function for the given argument.
+
+    This function computes the inverse of a matrix given its LU decomposition.
+
+    """
+    fnty = ir.FunctionType(ll_intc,
+                           [ll_char,                       # kind
+                            intp_t, ll_void_p, intp_t,     # n, a, lda
+                            ll_intc_p, ll_void_p,          # ipiv, work
+                            ll_intc_p, ll_intc_p           # lwork, info
+                           ])
+    fn = builder.module.get_or_insert_function(fnty, name="numba_xxgetri")
+
+    kind = get_blas_kind(a_type.dtype)
+    kind_val = ir.Constant(ll_char, ord(kind))
+
+    n = lda = a_shapes[0]
+
+    res = builder.call(fn, (kind_val, n,
+                            builder.bitcast(a_data, ll_void_p), lda,
+                            ipiv, builder.bitcast(work, ll_void_p),
+                            lwork, info
+                            ))
+    check_lapack_return(context, builder, res)
+
+
+def mat_inv(context, builder, sig, args):
+    """
+    Invert a matrix through the use of its LU decomposition.
+    """
+    xty = sig.args[0]
+    dtype = xty.dtype
+
+    x = make_array(xty)(context, builder, args[0])
+    x_shapes = cgutils.unpack_tuple(builder, x.shape)
+    m, n = x_shapes
+    check_c_int(context, builder, m)
+    check_c_int(context, builder, n)
+
+    # Allocate the return array (Numpy never works in place contrary to
+    # Scipy for which one can specify to whether or not to overwrite the
+    # input).
+    def create_out(a):
+        m, n= a.shape
+        if m != n:
+            raise ValueError("np.linalg.inv can only work on square "
+                             "arrays.")
+        return a.copy()
+
+    out = context.compile_internal(builder, create_out,
+                                   signature(sig.return_type, *sig.args), args)
+    o = make_array(xty)(context, builder, out)
+
+    # Allocate the array in which the pivot indices are stored.
+    ipiv_t = types.Array(types.intc, 1, 'C')
+    i = _empty_nd_impl(context, builder, ipiv_t, (m,))
+
+    info = cgutils.alloca_once(builder, ll_intc)
+
+    # Compute the LU decomposition of the matrix.
+    call_xxgetrf(context, builder, xty, x_shapes, o.data, i.data,
+                 info)
+
+    zero = ir.Constant(ll_intc, 0)
+    info_val = builder.load(info)
+    lapack_error = builder.icmp_signed('!=', info_val, zero)
+    invalid_arg = builder.icmp_signed('<', info_val, zero)
+
+    with builder.if_then(lapack_error, False):
+        with builder.if_else(invalid_arg) as (then, otherwise):
+            raise_err = context.call_conv.return_user_exc
+            with then:
+                raise_err(builder, ValueError,
+                          ('One argument passed to getrf is invalid',)
+                          )
+            with otherwise:
+                raise_err(builder, ValueError,
+                          ('Matrix is singular and cannot be inverted',)
+                          )
+
+    # Compute the optimal lwork.
+    lwork = make_constant_slot(context, builder, types.intc, -1)
+    work = cgutils.alloca_once(builder, context.get_value_type(xty.dtype))
+    call_xxgetri(context, builder, xty, x_shapes, o.data, i.data, work,
+                 lwork, info)
+
+    info_val = builder.load(info)
+    lapack_error = builder.icmp_signed('!=', info_val, zero)
+
+    with builder.if_then(lapack_error, False):
+        raise_err = context.call_conv.return_user_exc
+        raise_err(builder, ValueError,
+                  ('One argument passed to getri is invalid',)
+                  )
+
+    # Allocate a work array of the optimal size as computed by getri.
+    def allocate_work(x, size):
+        """Allocate the work array.
+
+        """
+        size = int(1.01 * size.real)
+        return numpy.empty((size,), dtype=x.dtype)
+
+
+    wty = types.Array(dtype, 1, 'C')
+    work = context.compile_internal(builder, allocate_work,
+                                    signature(wty, xty, dtype),
+                                    (args[0], builder.load(work)))
+
+    w = make_array(wty)(context, builder, work)
+    w_shapes = cgutils.unpack_tuple(builder, w.shape)
+    lw, = w_shapes
+
+    builder.store(context.cast(builder, lw, types.intp, types.intc),
+                  lwork)
+
+    # Compute the matrix inverse.
+    call_xxgetri(context, builder, xty, x_shapes, o.data, i.data, w.data,
+                 lwork, info)
+
+    info_val = builder.load(info)
+    lapack_error = builder.icmp_signed('!=', info_val, zero)
+    invalid_arg = builder.icmp_signed('<', info_val, zero)
+
+    with builder.if_then(lapack_error, False):
+        with builder.if_else(invalid_arg) as (then, otherwise):
+            raise_err = context.call_conv.return_user_exc
+            with then:
+                raise_err(builder, ValueError,
+                          ('One argument passed to getri is invalid',)
+                          )
+            with otherwise:
+                raise_err(builder, ValueError,
+                          ('Matrix is singular and cannot be inverted',)
+                          )
+
+    return impl_ret_borrowed(context, builder, sig.return_type, out)
+
+
+@lower_builtin(numpy.linalg.inv, types.Array)
+def inv(context, builder, sig, args):
+    """
+    np.linalg.inv(a)
+    """
+    ensure_lapack()
+
+    ndims = sig.args[0].ndim
+    if ndims == 2:
+        return mat_inv(context, builder, sig, args)
     else:
         assert 0
