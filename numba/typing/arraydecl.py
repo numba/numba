@@ -427,6 +427,8 @@ def _expand_integer(ty):
             return max(types.intp, ty)
         else:
             return max(types.uintp, ty)
+    elif isinstance(ty, types.Boolean):
+        return types.intp
     else:
         return ty
 
@@ -447,7 +449,7 @@ def generic_expand_cumulative(self, args, kws):
 def generic_hetero_real(self, args, kws):
     assert not args
     assert not kws
-    if self.this.dtype in types.integer_domain:
+    if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
         return signature(types.float64, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
