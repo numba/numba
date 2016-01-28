@@ -91,7 +91,9 @@ def base_test_arrays(dtype):
 
     a1 = factory(10)
     a2 = factory(10).reshape(2, 5)
-    a3 = (factory(60))[::2].reshape((2, 5, 3), order='A')
+    # The prod() of this array fits in a 32-bit int
+    a3 = (factory(12))[::-1].reshape((2, 3, 2), order='A')
+    assert not (a3.flags.c_contiguous or a3.flags.f_contiguous)
 
     return [a1, a2, a3]
 
