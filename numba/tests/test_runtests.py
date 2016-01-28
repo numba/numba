@@ -29,9 +29,14 @@ class TestCase(unittest.TestCase):
         cmd = ['python', '-m', 'numba.runtests', '-l']
         if id:
             cmd.append(id)
-        last_line = check_output(cmd).decode().split('\n')[-2]
+        lines = check_output(cmd).decode().splitlines()
+        lines = [line for line in lines if line.strip()]
+        last_line = lines[-1]
         self.assertTrue(last_line.endswith('tests found'))
         number = int(last_line.split(' ')[0])
+        # There may be some "skipped" messages at the beginning,
+        # so do an approximate check.
+        self.assertIn(len(lines), range(number + 1, number + 10))
         if maxsize is None:
             self.assertEqual(number, minsize)
         else:
