@@ -7,7 +7,7 @@ from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
 
 from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
-                             from_dtype, resolve_output_type)
+                             from_dtype, as_dtype, resolve_output_type)
 from ..numpy_support import version as numpy_version
 
 from ..errors import TypingError
@@ -406,6 +406,59 @@ def _parse_shape(shape):
 def _parse_dtype(dtype):
     if isinstance(dtype, types.DTypeSpec):
         return dtype.dtype
+
+def _parse_nested_sequence(context, typ):
+    """
+    Parse a (possibly 0d) nested sequence type.
+    A (ndim, dtype) tuple is returned.  Note the sequence may still be
+    heterogenous, as long as it converts to the given dtype.
+    """
+    if isinstance(typ, (types.Buffer,)):
+        raise TypingError("%r not allowed in a homogenous sequence")
+    elif isinstance(typ, (types.Sequence,)):
+        n, dtype = _parse_nested_sequence(context, typ.dtype)
+        return n + 1, dtype
+    elif isinstance(typ, (types.BaseTuple,)):
+        if typ.count == 0:
+            # Mimick Numpy's behaviour
+            return 1, types.float64
+        n, dtype = _parse_nested_sequence(context, typ[0])
+        dtypes = [dtype]
+        for i in range(1, typ.count):
+            _n, dtype = _parse_nested_sequence(context, typ[i])
+            if _n != n:
+                raise TypingError("type %r does not have a regular shape"
+                                  % (typ,))
+            dtypes.append(dtype)
+        dtype = context.unify_types(*dtypes)
+        if dtype is types.pyobject:
+            raise TypingError("cannot convert %r to a homogenous type")
+        return n + 1, dtype
+    else:
+        # Scalar type => check it's valid as a Numpy array dtype
+        as_dtype(typ)
+        return 0, typ
+
+
+
+@infer_global(numpy.array)
+class NpArray(CallableTemplate):
+    """
+    Typing template for np.array().
+    """
+
+    def generic(self):
+        def typer(object, dtype=None):
+            ndim, seq_dtype = _parse_nested_sequence(self.context, object)
+            if dtype is None:
+                dtype = seq_dtype
+            else:
+                dtype = _parse_dtype(dtype)
+                if dtype is None:
+                    return
+            return types.Array(dtype, ndim, 'C')
+
+        return typer
 
 
 @infer_global(numpy.empty)

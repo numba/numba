@@ -3,6 +3,8 @@ from __future__ import print_function, absolute_import, division
 import math
 from functools import reduce
 
+import numpy
+
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
@@ -1327,11 +1329,17 @@ def complex_impl(context, builder, sig, args):
 @lower_builtin(types.NumberClass, types.Any)
 def number_constructor(context, builder, sig, args):
     """
-    Convert any number to any other.
+    Call a number class, e.g. np.int32(...)
     """
-    [val] = args
-    [valty] = sig.args
-    return context.cast(builder, val, valty, sig.return_type)
+    if isinstance(sig.return_type, types.Array):
+        # Array constructor
+        impl = context.get_function(numpy.array, sig)
+        return impl(builder, args)
+    else:
+        # Scalar constructor
+        [val] = args
+        [valty] = sig.args
+        return context.cast(builder, val, valty, sig.return_type)
 
 
 #-------------------------------------------------------------------------------

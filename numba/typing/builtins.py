@@ -2,6 +2,8 @@ from __future__ import print_function, division, absolute_import
 
 import itertools
 
+import numpy
+
 from numba import types, intrinsics
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, operator_map
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
@@ -586,7 +588,14 @@ class NumberClassAttribute(AttributeTemplate):
         ty = classty.instance_type
 
         def typer(val):
-            return ty
+            if isinstance(val, (types.BaseTuple, types.Sequence)):
+                # Array constructor, e.g. np.int32([1, 2])
+                sig = self.context.resolve_function_type(
+                    numpy.array, (val,), {'dtype': types.DType(ty)})
+                return sig.return_type
+            else:
+                # Scalar constructor, e.g. np.int32(42)
+                return ty
 
         return types.Function(make_callable_template(key=ty, typer=typer))
 
