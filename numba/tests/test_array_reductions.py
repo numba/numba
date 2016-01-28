@@ -81,9 +81,17 @@ def array_median_global(arr):
 
 
 def base_test_arrays(dtype):
-    a1 = np.arange(10, dtype=dtype) + 1
-    a2 = np.arange(10, dtype=dtype).reshape(2, 5) + 1
-    a3 = (np.arange(60, dtype=dtype))[::2].reshape((2, 5, 3), order='A')
+    if dtype == np.bool_:
+        def factory(n):
+            assert n % 2 == 0
+            return np.bool_([0, 1] * (n // 2))
+    else:
+        def factory(n):
+            return np.arange(n, dtype=dtype) + 1
+
+    a1 = factory(10)
+    a2 = factory(10).reshape(2, 5)
+    a3 = (factory(60))[::2].reshape((2, 5, 3), order='A')
 
     return [a1, a2, a3]
 
@@ -94,6 +102,8 @@ def full_test_arrays(dtype):
     if dtype == np.float32:
         array_list += [a / 10 for a in array_list]
 
+    for a in array_list:
+        assert a.dtype == np.dtype(dtype)
     return array_list
 
 def run_comparative(compare_func, test_array):
@@ -362,11 +372,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_max, array_max_global,
                            array_argmin, array_argmin_global,
                            array_argmax, array_argmax_global]
-        dtypes_to_test = [np.int32, np.float32]
+        dtypes_to_test = [np.int32, np.float32, np.bool_]
 
         # Install tests on class
         for dt in dtypes_to_test:
-            for red_func, test_array in product(reduction_funcs, full_test_arrays(dt)):
+            test_arrays = full_test_arrays(dt)
+            for red_func, test_array in product(reduction_funcs, test_arrays):
                 # Create the name for the test function
                 test_name = "test_{0}_{1}_{2}d".format(red_func.__name__, test_array.dtype.name, test_array.ndim)
 
