@@ -171,6 +171,7 @@ The following top-level functions are supported:
 
 * :func:`numpy.arange`
 * :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.diag`
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.eye`

@@ -852,6 +852,73 @@ class TestNdEye(BaseTest):
         self.check_eye_n_m_k(func)
 
 
+class TestNdDiag(TestCase):
+
+    def setUp(self):
+        v = np.array([1, 2, 3])
+        hv = np.array([[1, 2, 3]])
+        vv = np.transpose(hv)
+        self.vectors = [v, hv, vv]
+        a3x4 = np.arange(12).reshape(3, 4)
+        a4x3 = np.arange(12).reshape(4, 3)
+        self.matricies = [a3x4, a4x3]
+        def func(q):
+            return np.diag(q)
+        self.py = func
+        self.jit = nrtjit(func)
+
+        def func_kwarg(q, k=0):
+            return np.diag(q, k=k)
+        self.py_kw = func_kwarg
+        self.jit_kw = nrtjit(func_kwarg)
+
+    def check_diag(self, pyfunc, nrtfunc, *args, **kwargs):
+        expected = pyfunc(*args, **kwargs)
+        computed = nrtfunc(*args, **kwargs)
+        self.assertEqual(computed.size, expected.size)
+        self.assertEqual(computed.dtype, expected.dtype)
+        # NOTE: stride not tested as np returns a RO view, nb returns new data
+        np.testing.assert_equal(expected, computed)
+
+    # create a diag matrix from a vector
+    def test_diag_vect_create(self):
+        for d in self.vectors:
+            self.check_diag(self.py, self.jit, d)
+
+    # create a diag matrix from a vector at a given offset
+    def test_diag_vect_create_kwarg(self):
+        for k in range(-10, 10):
+            for d in self.vectors:
+                self.check_diag(self.py_kw, self.jit_kw, d, k=k)
+
+    # extract the diagonal
+    def test_diag_extract(self):
+        for d in self.matricies:
+            self.check_diag(self.py, self.jit, d)
+
+    # extract a diagonal at a given offset
+    def test_diag_extract_kwarg(self):
+        for k in range(-4, 4):
+            for d in self.matricies:
+                self.check_diag(self.py_kw, self.jit_kw, d, k=k)
+
+    # check error handling
+    def test_error_handling(self):
+        from numba.errors import TypingError
+        d = np.array([[[1.]]])
+        cfunc = nrtjit(self.py)
+
+        # missing arg
+        with self.assertRaises(TypeError):
+            cfunc()
+
+        # > 2d
+        with self.assertRaises(TypingError):
+            cfunc(d)
+        with self.assertRaises(TypingError):
+            dfunc = nrtjit(self.py_kw)
+            dfunc(d, k=3)
+
 class TestNdArange(BaseTest):
 
     def test_linspace_2(self):

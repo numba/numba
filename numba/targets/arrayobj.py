@@ -2433,6 +2433,54 @@ def numpy_eye(context, builder, sig, args):
     res = context.compile_internal(builder, eye, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
+@lower_builtin(numpy.diag, types.Array)
+def numpy_diag(context, builder, sig, args):
+    def diag_impl(val):
+        return numpy.diag(val, k=0)
+    return context.compile_internal(builder, diag_impl, sig, args)
+
+@lower_builtin(numpy.diag, types.Array, types.Integer)
+def numpy_diag_kwarg(context, builder, sig, args):
+    arg = sig.args[0]
+    if arg.ndim == 1:
+        # vector context
+        def diag_impl(arr, k=0):
+            s = arr.shape
+            n = s[0] + abs(k)
+            ret = numpy.zeros((n, n), arr.dtype)
+            if k >= 0:
+                for i in range(n - k):
+                    ret[i, k + i] = arr[i]
+            else:
+                for i in range(n + k):
+                    ret[i - k, i] = arr[i]
+            return ret
+    elif arg.ndim == 2:
+        # matrix context
+        def diag_impl(arr, k=0):
+            #Will return arr.diagonal(v, k) when axis args are supported
+            rows, cols = arr.shape
+            r = rows
+            c = cols
+            if k < 0:
+                rows = rows + k
+            if k > 0:
+                cols = cols - k
+            n = max(min(rows, cols), 0)
+            ret = numpy.empty(n, arr.dtype)
+            if k >= 0:
+                for i in range(n):
+                    ret[i] = arr[i, k + i]
+            else:
+                for i in range(n):
+                    ret[i] = arr[i - k, i]
+            return ret
+    else:
+        #invalid input
+        raise ValueError("Input must be 1- or 2-d.")
+
+    res = context.compile_internal(builder, diag_impl, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin(numpy.arange, types.Number)
 def numpy_arange_1(context, builder, sig, args):
