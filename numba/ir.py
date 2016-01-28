@@ -4,7 +4,8 @@ import os
 import pprint
 from collections import defaultdict
 
-from .errors import NotDefinedError, RedefinedError, VerificationError
+from .errors import (NotDefinedError, RedefinedError, VerificationError,
+                     ConstantInferenceError)
 
 
 class Loc(object):
@@ -247,7 +248,7 @@ class Expr(Inst):
         return self._rec_list_vars(self._kws)
 
     def infer_constant(self):
-        raise TypeError("cannot make a constant of %s" % (self,))
+        raise ConstantInferenceError("cannot make a constant of %s" % (self,))
 
 
 class SetItem(Stmt):
@@ -441,7 +442,7 @@ class Arg(object):
         return 'arg(%d, name=%s)' % (self.index, self.name)
 
     def infer_constant(self):
-        raise TypeError("cannot make a constant of %s" % (self,))
+        raise ConstantInferenceError("cannot make a constant of %s" % (self,))
 
 
 class Const(object):

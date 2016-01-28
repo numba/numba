@@ -25,6 +25,10 @@ def make_getitem(item):
         return ary[i][item]
     return get_xx
 
+# Issue #1664: constant index lookup should fall back to regular getitem
+def get_zero_a(ary, _unused):
+    return ary[0].a
+
 getitem_a = make_getitem('a')
 getitem_b = make_getitem('b')
 getitem_c = make_getitem('c')
@@ -37,6 +41,9 @@ def get_b_subarray(ary, i):
 
 def get_c_subarray(ary, i):
     return ary.c[i]
+
+def get_a_zero(ary, _unused):
+    return ary.a[0]
 
 def make_getitem_subarray(item):
     # This also exercises constant lookup from a closure variable
@@ -308,6 +315,8 @@ class TestRecordDtype(unittest.TestCase):
         self._test_get_equal(get_a_subarray)
         self._test_get_equal(getitem_a)
         self._test_get_equal(getitem_a_subarray)
+        self._test_get_equal(get_a_zero)
+        self._test_get_equal(get_zero_a)
 
     def test_get_b(self):
         self._test_get_equal(get_b)

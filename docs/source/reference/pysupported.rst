@@ -17,7 +17,7 @@ Constructs
 ----------
 
 Numba strives to support as much of the Python language as possible, but
-some language features are not available inside Numba-compiled functions:
+some language features are not available inside Numba-compiled functions. The following Python language features are not currently supported:
 
 * Function definition
 * Class definition
@@ -85,12 +85,14 @@ The following attributes and methods are supported:
 tuple
 -----
 
-Tuple construction and unpacking is supported, as well as the following
-operations:
+The following operations are supported:
 
+* tuple construction
+* tuple unpacking
 * comparison between tuples
 * iteration and indexing over homogenous tuples
 * addition (concatenation) between tuples
+* slicing tuples with a constant slice
 
 list
 ----

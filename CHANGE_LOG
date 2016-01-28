@@ -1,3 +1,23 @@
+
+Version 0.23.1
+--------------
+
+This is a bug-fix release to address several regressions introduced
+in the 0.23.0 release, and a couple other issues.
+
+Fixes:
+
+* Issue #1645: CUDA ufuncs were broken in 0.23.0.
+* Issue #1638: Check tuple sizes when passing a list of tuples.
+* Issue #1630: Parallel ufunc would keep eating CPU even after finishing
+  under Windows.
+* Issue #1628: Fix ctypes and cffi tests under Windows with Python 3.5.
+* Issue #1627: Fix xrange() support.
+* PR #1611: Rewrite variable liveness analysis.
+* Issue #1610: Allow nested calls between explicitly-typed ufuncs.
+* Issue #1593: Fix `*args` in object mode.
+
+
 Version 0.23.0
 --------------
 

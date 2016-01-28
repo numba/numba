@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import platform
 import struct
 import sys
 import os
@@ -14,8 +15,6 @@ MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
-
-_cpu_name = ll.get_host_cpu_name()
 
 
 class NumbaWarning(Warning):
@@ -36,6 +35,32 @@ def _parse_cc(text):
                              "and minor are decimals")
         grp = m.groups()
         return int(grp[0]), int(grp[1])
+
+
+def _os_supports_avx():
+    """
+    Whether the current OS supports AVX, regardless of the CPU.
+
+    This is necessary because the user may be running a very old Linux
+    kernel (e.g. CentOS 5) on a recent CPU.
+    """
+    if (not sys.platform.startswith('linux')
+        or platform.machine() not in ('i386', 'i586', 'i686', 'x86_64')):
+        return True
+    # Executing the CPUID instruction may report AVX available even though
+    # the kernel doesn't support it, so parse /proc/cpuinfo instead.
+    try:
+        f = open('/proc/cpuinfo', 'r')
+    except OSError:
+        # If /proc isn't available, assume yes
+        return True
+    with f:
+        for line in f:
+            head, _, body = line.partition(':')
+            if head.strip() == 'flags' and 'avx' in body.split():
+                return True
+        else:
+            return False
 
 
 class _EnvReloader(object):
@@ -73,7 +98,7 @@ class _EnvReloader(object):
         def _readenv(name, ctor, default):
             value = environ.get(name)
             if value is None:
-                return default
+                return default() if callable(default) else default
             try:
                 return ctor(value)
             except Exception:
@@ -152,8 +177,18 @@ class _EnvReloader(object):
 
         # x86-64 specific
         # Enable AVX on supported platforms where it won't degrade performance.
-        ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int,
-                              _cpu_name not in ('corei7-avx', 'core-avx-i'))
+        def avx_default():
+            if not _os_supports_avx():
+                # XXX: need a dedicated PerformanceWarning class?
+                warnings.warn("your operating system doesn't support "
+                              "AVX, this may degrade performance on "
+                              "some numerical code", NumbaWarning)
+                return False
+            else:
+                cpu_name = ll.get_host_cpu_name()
+                return cpu_name not in ('corei7-avx', 'core-avx-i')
+
+        ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
 
         # Disable jit for debugging
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)

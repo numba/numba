@@ -167,11 +167,19 @@ class Const(Dummy):
 
     def __init__(self, value):
         self.value = value
+        # We want to support constants of non-hashable values, therefore
+        # fall back on the value's id() if necessary.
+        try:
+            hash(value)
+        except TypeError:
+            self._key = id(value)
+        else:
+            self._key = value
         super(Const, self).__init__("const(%r)" % (value,))
 
     @property
     def key(self):
-        return type(self.value), self.value
+        return type(self.value), self._key
 
 
 class VarArg(Type):
