@@ -382,7 +382,7 @@ class TestMathLib(TestCase):
                    types.uint16, types.uint32, types.uint64,
                    types.float32, types.float64]
         x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags, prec='double')
 
     def test_asinh_npm(self):
         self.test_asinh(flags=no_pyobj_flags)
@@ -404,7 +404,7 @@ class TestMathLib(TestCase):
                    types.uint16, types.uint32, types.uint64,
                    types.float32, types.float64]
         x_values = [0, 0, 0, 0, 0, 0, 0.1, 0.1]
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags, prec='double')
 
     def test_atanh_npm(self):
         self.test_atanh(flags=no_pyobj_flags)
@@ -536,7 +536,8 @@ class TestMathLib(TestCase):
         pyfunc = erf
         x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
         x_types = [types.float32, types.float64] * (len(x_values) // 2)
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags,
+                       prec='double')
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erf_npm(self):
@@ -547,7 +548,8 @@ class TestMathLib(TestCase):
         pyfunc = erfc
         x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
         x_types = [types.float32, types.float64] * (len(x_values) // 2)
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags,
+                       prec='double', ulps=3)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc_npm(self):
