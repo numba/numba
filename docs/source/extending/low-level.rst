@@ -23,9 +23,13 @@ it distinguished between several compilation phases:
 Typing
 ------
 
-Broadly speaking, typing comes in two flavours: typing plain *values*
-(e.g. Python global variables) and typing *operations* (or *functions*)
-on known value types.
+Type inference -- or simply *typing* -- is the process of assigning
+Numba types to all values involved in a function, so as to enable
+efficient code generation.
+
+Broadly speaking, typing comes in two flavours: typing plain Python *values*
+(e.g. function arguments or global variables) and typing *operations*
+(or *functions*) on known value types.
 
 However, before typing anything, you may need to declare your own type first.
 Numba doesn't recognize Python types automatically.  While the Numba type

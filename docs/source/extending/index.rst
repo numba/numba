@@ -20,4 +20,5 @@ of APIs to this end:
 
    high-level.rst
    low-level.rst
+   interval-example.rst
 
