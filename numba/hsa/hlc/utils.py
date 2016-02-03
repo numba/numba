@@ -58,4 +58,5 @@ def adapt_llvm_version(llvmir):
     """
     llvmir = rename_register(llvmir)
     llvmir = rename_label(llvmir)
-    return add_metadata_type(llvmir)
+    #   return add_metadata_type(llvmir)
+    return llvmir
