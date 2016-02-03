@@ -51,7 +51,7 @@ class TestCase(unittest.TestCase):
         self.check_testsuite_size('numba.cuda.tests', 0, 400)
     def test_module(self):
         self.check_testsuite_size('numba.tests.test_builtins', 82)
-        
+
 if __name__ == '__main__':
     unittest.main()
     

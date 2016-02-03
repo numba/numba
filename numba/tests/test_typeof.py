@@ -220,18 +220,19 @@ class TestTypeof(ValueTypingTestBase, TestCase):
 
     @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
     def test_cffi(self):
-        from .cffi_usecases import cffi_cos, cffi_sin
-        ty_cffi_cos = typeof(cffi_cos)
-        ty_cffi_sin = typeof(cffi_sin)
+        from . import cffi_usecases as mod
+        mod.init()
+        ty_cffi_cos = typeof(mod.cffi_cos)
+        ty_cffi_sin = typeof(mod.cffi_sin)
         self.assertIsInstance(ty_cffi_cos, types.ExternalFunctionPointer)
         self.assertEqual(ty_cffi_cos.sig.args, (types.float64,))
         self.assertEqual(ty_cffi_cos.sig.return_type, types.float64)
         self.assertEqual(ty_cffi_cos, ty_cffi_sin)
         ty_ctypes_cos = typeof(c_cos)
         self.assertNotEqual(ty_cffi_cos, ty_ctypes_cos)
-        self.assertNotEqual(ty_cffi_cos.get_pointer(cffi_cos),
-                            ty_cffi_sin.get_pointer(cffi_sin))
-        self.assertEqual(ty_cffi_cos.get_pointer(cffi_cos),
+        self.assertNotEqual(ty_cffi_cos.get_pointer(mod.cffi_cos),
+                            ty_cffi_sin.get_pointer(mod.cffi_sin))
+        self.assertEqual(ty_cffi_cos.get_pointer(mod.cffi_cos),
                          ty_ctypes_cos.get_pointer(c_cos))
 
     def test_custom(self):
