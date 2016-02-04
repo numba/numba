@@ -20,9 +20,9 @@ no_pyobj_flags = Flags()
                      "CFFI not supported -- please install the cffi module")
 class TestCFFI(TestCase):
 
-    # Need to run the test serially because of race conditions with
+    # Need to run the tests serially because of race conditions in
     # cffi's OOL mode.
-    _numba_parallel_test_ = True
+    _numba_parallel_test_ = False
 
     def setUp(self):
         mod.init()
