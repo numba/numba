@@ -85,19 +85,35 @@ def load_ool_module():
         sys.path.remove(tmpdir)
 
 
-if cffi_support.SUPPORTED:
-    ffi, dll = load_inline_module()
-    cffi_sin = dll._numba_test_sin
-    cffi_cos = dll._numba_test_cos
-    del dll
+def init():
+    """
+    Initialize module globals.  This can invoke external utilities, hence not
+    being executed implicitly at module import.
+    """
+    global ffi, cffi_sin, cffi_cos
 
-    ffi_ool, mod = load_ool_module()
-    cffi_sin_ool = mod.lib.sin
-    cffi_cos_ool = mod.lib.cos
-    cffi_foo = mod.lib.foo
-    vsSin = mod.lib.vsSin
-    vdSin = mod.lib.vdSin
-    del mod
+    if ffi is None:
+        ffi, dll = load_inline_module()
+        cffi_sin = dll._numba_test_sin
+        cffi_cos = dll._numba_test_cos
+        del dll
+
+def init_ool():
+    """
+    Same as init() for OOL mode.
+    """
+    global ffi_ool, cffi_sin_ool, cffi_cos_ool, cffi_foo, vsSin, vdSin
+
+    if ffi_ool is None:
+        ffi_ool, mod = load_ool_module()
+        cffi_sin_ool = mod.lib.sin
+        cffi_cos_ool = mod.lib.cos
+        cffi_foo = mod.lib.foo
+        vsSin = mod.lib.vsSin
+        vdSin = mod.lib.vdSin
+        del mod
+
+ffi = ffi_ool = None
 
 
 def use_cffi_sin(x):

@@ -39,18 +39,20 @@ class TestLister(object):
 class SerialSuite(unittest.TestSuite):
     """A simple marker to make sure tests in this suite are run serially.
 
-    Note: As the suite to going through the internal of unittest,
-          It may get unpacked and stuff into a plain TestSuite.
-          We need to set an attribute on the TestCase object to mark the
-          TestCase has a parallel test.
+    Note: As the suite is going through internals of unittest,
+          it may get unpacked and stuffed into a plain TestSuite.
+          We need to set an attribute on the TestCase objects to
+          remember they should not be run in parallel.
     """
 
     def addTest(self, test):
         if not isinstance(test, unittest.TestCase):
+            # It's a sub-suite, recurse
             for t in test:
                 self.addTest(t)
         else:
-            test._numba_parallel_test_ = True
+            # It's a test case, mark it serial
+            test._numba_parallel_test_ = False
             super(SerialSuite, self).addTest(test)
 
 
@@ -410,18 +412,23 @@ class _MinimalRunner(object):
 
 
 def _split_nonparallel_tests(test):
-    """split test suite into parallel and serial tests."""
+    """
+    Split test suite into parallel and serial tests.
+    """
     ptests = []
     stests = []
     if isinstance(test, unittest.TestSuite):
+        # It's a sub-suite, recurse
         for t in test:
             p, s = _split_nonparallel_tests(t)
             ptests.extend(p)
             stests.extend(s)
-    elif getattr(test, "_numba_parallel_test_", False):
-        stests.extend(_flatten_suite(test))
-    else:
+    elif getattr(test, "_numba_parallel_test_", True):
+        # Test case is suitable for parallel execution (default)
         ptests = [test]
+    else:
+        # Test case explicitly disallows parallel execution
+        stests = _flatten_suite(test)
     return ptests, stests
 
 
