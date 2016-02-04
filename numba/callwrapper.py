@@ -124,10 +124,11 @@ class PyCallWrapper(object):
         return wrapper, api
 
     def build_wrapper(self, api, builder, closure, args, kws):
-        nargs = len(self.fndesc.args)
+        nargs = len(self.fndesc.argtypes)
 
         objs = [api.alloca_obj() for _ in range(nargs)]
-        parseok = api.unpack_tuple(args, self.fndesc.qualname, nargs, nargs, *objs)
+        parseok = api.unpack_tuple(args, self.fndesc.qualname,
+                                   nargs, nargs, *objs)
 
         pred = builder.icmp(lc.ICMP_EQ, parseok, Constant.null(parseok.type))
         with cgutils.if_unlikely(builder, pred):
@@ -144,10 +145,15 @@ class PyCallWrapper(object):
         cleanup_manager = _ArgManager(self.context, builder, api,
                                       env_manager, endblk, nargs)
 
+        # Compute the arguments to the compiled Numba function.
         innerargs = []
         for obj, ty in zip(objs, self.fndesc.argtypes):
-            val = cleanup_manager.add_arg(builder.load(obj), ty)
-            innerargs.append(val)
+            if isinstance(ty, types.Omitted):
+                # It's an omitted value => ignore dummy Python object
+                innerargs.append(None)
+            else:
+                val = cleanup_manager.add_arg(builder.load(obj), ty)
+                innerargs.append(val)
 
         if self.release_gil:
             cleanup_manager = _GilManager(builder, api, cleanup_manager)

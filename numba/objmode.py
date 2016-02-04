@@ -49,6 +49,10 @@ class PyLower(BaseLower):
     def pre_lower(self):
         super(PyLower, self).pre_lower()
         self.init_pyapi()
+        # Pre-computed for later use
+        from .dispatcher import OmittedArg
+        self.omitted_typobj = self.pyapi.unserialize(
+            self.pyapi.serialize_object(OmittedArg))
 
     def post_lower(self):
         pass
@@ -152,9 +156,23 @@ class PyLower(BaseLower):
         elif isinstance(value, ir.Yield):
             return self.lower_yield(value)
         elif isinstance(value, ir.Arg):
-            value = self.fnargs[value.index]
-            self.incref(value)
-            return value
+            obj = self.fnargs[value.index]
+            # When an argument is omitted, the dispatcher hands it as
+            # _OmittedArg(<default value>)
+            typobj = self.pyapi.get_type(obj)
+            slot = cgutils.alloca_once_value(self.builder, obj)
+            is_omitted = self.builder.icmp_unsigned('==', typobj,
+                                                    self.omitted_typobj)
+            with self.builder.if_else(is_omitted, likely=False) as (omitted, present):
+                with present:
+                    self.incref(obj)
+                    self.builder.store(obj, slot)
+                with omitted:
+                    # The argument is omitted => get the default value
+                    obj = self.pyapi.object_getattr_string(obj, 'value')
+                    self.builder.store(obj, slot)
+
+            return self.builder.load(slot)
         else:
             raise NotImplementedError(type(value), value)
 

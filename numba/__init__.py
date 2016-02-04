@@ -19,6 +19,7 @@ from .types import *
 jit = decorators.jit
 autojit = decorators.autojit
 njit = decorators.njit
+generated_jit = decorators.generated_jit
 
 # Re export vectorize decorators
 from .npyufunc import vectorize, guvectorize

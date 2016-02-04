@@ -6,7 +6,7 @@ Usually due to invalid type conversion between function boundaries.
 from __future__ import print_function, division, absolute_import
 
 from numba import int32, int64
-from numba import jit
+from numba import jit, generated_jit, types
 from numba import unittest_support as unittest
 from .support import TestCase
 
@@ -44,6 +44,19 @@ def argcast_inner(a, b):
 
 def argcast(a, b):
     return argcast_inner(int32(a), b)
+
+@generated_jit(nopython=True)
+def generated_inner(x, y=5, z=6):
+    if isinstance(x, types.Complex):
+        def impl(x, y, z):
+            return x + y, z
+    else:
+        def impl(x, y, z):
+            return x - y, z
+    return impl
+
+def call_generated(a, b):
+    return generated_inner(a, z=b)
 
 
 class TestNestedCall(TestCase):
@@ -119,6 +132,14 @@ class TestNestedCall(TestCase):
         cfunc, check = self.compile_func(argcast)
         check(1, 0)
         check(1, 1)
+
+    def test_call_generated(self):
+        """
+        Test a nested function call to a generated jit function.
+        """
+        cfunc = jit(nopython=True)(call_generated)
+        self.assertPreciseEqual(cfunc(1, 2), (-4, 2))
+        self.assertPreciseEqual(cfunc(1j, 2), (1j + 5, 2))
 
 
 if __name__ == '__main__':

@@ -365,7 +365,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
     argct = PySequence_Fast_GET_SIZE(args);
 
-    if (argct < sizeof(prealloc) / sizeof(int))
+    if (argct < (Py_ssize_t) (sizeof(prealloc) / sizeof(int)))
         tys = prealloc;
     else
         tys = malloc(argct * sizeof(int));

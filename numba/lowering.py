@@ -142,9 +142,9 @@ class BaseLower(object):
         self.library.add_ir_module(self.module)
 
     def extract_function_arguments(self):
-        rawfnargs = self.call_conv.get_arguments(self.function)
-        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
-        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
+        self.fnargs = self.call_conv.decode_arguments(self.builder,
+                                                      self.fndesc.argtypes,
+                                                      self.function)
         return self.fnargs
 
     def lower_normal_function(self, fndesc):
@@ -394,11 +394,16 @@ class Lower(BaseLower):
             return res
 
         elif isinstance(value, ir.Arg):
-            val = self.fnargs[value.index]
             # Cast from the argument type to the local variable type
             # (note the "arg.FOO" convention as used in typeinfer)
-            oty = self.typeof("arg." + value.name)
-            res = self.context.cast(self.builder, val, oty, ty)
+            argty = self.typeof("arg." + value.name)
+            if isinstance(argty, types.Omitted):
+                pyval = argty.value
+                res = self.context.get_constant_generic(self.builder, ty,
+                                                        pyval)
+            else:
+                val = self.fnargs[value.index]
+                res = self.context.cast(self.builder, val, argty, ty)
             self.incref(ty, res)
             return res
 

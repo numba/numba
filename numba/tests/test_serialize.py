@@ -97,6 +97,12 @@ class TestDispatcherPickling(TestCase):
         self.run_with_protocols(self.check_call, get_renamed_module,
                                 expected, (0.0,))
 
+    def test_call_generated(self):
+        self.run_with_protocols(self.check_call, generated_add,
+                                46, (1, 2))
+        self.run_with_protocols(self.check_call, generated_add,
+                                1j + 7, (1j, 2))
+
     def test_other_process(self):
         """
         Check that reconstructing doesn't depend on resources already

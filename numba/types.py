@@ -182,6 +182,20 @@ class Const(Dummy):
         return type(self.value), self._key
 
 
+class Omitted(Opaque):
+    """
+    An omitted function argument with a default value.
+    """
+
+    def __init__(self, value):
+        self.value = value
+        super(Omitted, self).__init__("omitted(default=%r)" % (value,))
+
+    @property
+    def key(self):
+        return type(self.value), id(self.value)
+
+
 class VarArg(Type):
     """
     Special type representing a variable number of arguments at the
@@ -428,9 +442,14 @@ class Dispatcher(WeakType, Callable, Dummy):
         super(Dispatcher, self).__init__("Dispatcher(%s)" % dispatcher)
 
     def get_call_type(self, context, args, kws):
-        template, args, kws = self.dispatcher.get_call_template(args, kws)
+        """
+        Resolve a call to this dispatcher using the given argument types.
+        A signature returned and it is ensured that a compiled specialization
+        is available for it.
+        """
+        template, pysig, args, kws = self.dispatcher.get_call_template(args, kws)
         sig = template(context).apply(args, kws)
-        sig.pysig = self.pysig
+        sig.pysig = pysig
         return sig
 
     def get_call_signatures(self):
@@ -443,13 +462,6 @@ class Dispatcher(WeakType, Callable, Dummy):
         A strong reference to the underlying numba.dispatcher.Dispatcher instance.
         """
         return self._get_object()
-
-    @property
-    def pysig(self):
-        """
-        A inspect.Signature object corresponding to this type.
-        """
-        return self.dispatcher._pysig
 
     def get_overload(self, sig):
         """
