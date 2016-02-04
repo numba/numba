@@ -303,7 +303,7 @@ class TestLinalgInv(TestCase):
             got = cfunc(a)
             # XXX add to use that function otherwise comparison fails
             # because of +0, -0 discrepancies
-            np.testing.assert_array_almost_equal_nulp(got, expected, nulp=2)
+            np.testing.assert_array_almost_equal_nulp(got, expected, nulp=3)
 
         for order in 'CF':
             a = np.array(((2, 1), (2, 3)), dtype=np.float64, order=order)
