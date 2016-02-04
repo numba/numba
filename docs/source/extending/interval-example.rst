@@ -105,8 +105,8 @@ more sophisticated cases where computing the callable's return type
 requires resolving other types.
 
 
-Extending the code generation layer
-"""""""""""""""""""""""""""""""""""
+Extending the lowering layer
+""""""""""""""""""""""""""""
 
 We have finished teaching Numba about our type inference additions.
 We must now teach Numba how to actually generated code and data for

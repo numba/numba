@@ -8,12 +8,12 @@ This extension API is available through the :mod:`numba.extending` module.
 It allows you to hook directly into the Numba compilation chain.  As such,
 it distinguished between several compilation phases:
 
-* The *typing* phase deduces the types of variables in a compiled function
-  by looking at the operations performed.
+* The :term:`typing` phase deduces the types of variables in a compiled
+  function by looking at the operations performed.
 
-* The *lowering* phase converts high-level Python operations into low-level
-  LLVM code.  This phase exploits the typing information derived by the
-  typing phase.
+* The :term:`lowering` phase converts high-level Python operations into
+  low-level LLVM code.  This phase exploits the typing information derived
+  by the typing phase.
 
 * *Boxing* and *unboxing* convert Python objects into native values, and
   vice-versa.  They occur at the boundaries of calling a Numba function
