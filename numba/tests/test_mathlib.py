@@ -537,7 +537,7 @@ class TestMathLib(TestCase):
         x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
         x_types = [types.float32, types.float64] * (len(x_values) // 2)
         self.run_unary(pyfunc, x_types, x_values, flags,
-                       prec='double')
+                       prec='double', ulps=2)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erf_npm(self):
@@ -549,7 +549,7 @@ class TestMathLib(TestCase):
         x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
         x_types = [types.float32, types.float64] * (len(x_values) // 2)
         self.run_unary(pyfunc, x_types, x_values, flags,
-                       prec='double', ulps=3)
+                       prec='double', ulps=4)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc_npm(self):
