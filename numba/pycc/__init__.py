@@ -10,6 +10,7 @@ import sys
 
 # Public API
 from .cc import CC
+from .decorators import export, exportmany
 
 
 def get_ending(args):

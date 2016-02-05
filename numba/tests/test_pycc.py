@@ -16,8 +16,9 @@ except ImportError:
     setuptools = None
 
 from numba import unittest_support as unittest
-from numba.pycc import find_shared_ending, find_pyext_ending, main
+from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
+from numba.pycc.platform import find_shared_ending, find_pyext_ending
 from .support import TestCase
 
 from numba.tests.support import static_temp_directory
