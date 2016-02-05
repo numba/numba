@@ -12,6 +12,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import jit, _helperlib, types
 from numba.compiler import compile_isolated
+from numba.targets.randomimpl import random_init
 from .support import TestCase, compile_function
 
 
@@ -186,6 +187,10 @@ class TestRandom(TestCase):
     # C code and SSE-using LLVM code), which is especially brutal for some
     # iterative algorithms with sensitive exit conditions.
     # Therefore we stick to hardcoded integers for seed values below.
+
+    def setUp(self):
+        # Make sure the PRNG is initialized before we set the seed
+        random_init()
 
     def _follow_cpython(self, ptr, seed=2):
         r = random.Random(seed)
@@ -835,4 +840,3 @@ class TestRandom(TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

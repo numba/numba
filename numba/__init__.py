@@ -10,7 +10,6 @@ from . import errors, special, types, config
 # Re-export typeof
 from .special import *
 from .errors import *
-from .pycc.decorators import export, exportmany
 
 # Re-export all type names
 from .types import *
@@ -33,9 +32,6 @@ from .jitclass import jitclass
 # Keep this for backward compatibility.
 test = runtests.main
 
-# Try to initialize cuda
-from . import cuda
-
 
 __all__ = """
 jit
@@ -43,9 +39,6 @@ autojit
 njit
 vectorize
 guvectorize
-export
-exportmany
-cuda
 from_dtype
 jitclass
 """.split() + types.__all__ + special.__all__ + errors.__all__
@@ -90,12 +83,6 @@ def _ensure_llvm():
 
 _ensure_llvm()
 
-
-# Process initialization
-# Should this be hooked into CPUContext instead?
-from .targets.randomimpl import random_init
-random_init()
-del random_init
 
 from ._version import get_versions
 __version__ = get_versions()['version']

@@ -8,7 +8,6 @@ from numpy import ufunc
 
 from .. import ir, types, rewrites, six
 from ..typing import npydecl
-from ..targets import npyimpl
 from .dufunc import DUFunc
 
 
@@ -338,6 +337,9 @@ def _lower_array_expr(lowerer, expr):
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
     cres = context.compile_only_no_cache(builder, impl, inner_sig)
+
+    # Create kernel subclass calling our native function
+    from ..targets import npyimpl
 
     class ExprKernel(npyimpl._Kernel):
         def generate(self, *args):

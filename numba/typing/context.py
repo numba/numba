@@ -9,12 +9,7 @@ from numba.typeconv import Conversion, rules
 from . import templates
 from .typeof import typeof, Purpose
 
-# Initialize declarations
-from . import (
-    builtins, arraydecl, cmathdecl, listdecl, mathdecl, npdatetime, npydecl,
-    operatordecl, randomdecl)
 from numba import utils
-from . import ctypes_utils, cffi_utils, bufproto
 
 
 class Rating(object):
@@ -249,6 +244,9 @@ class BaseContext(object):
                 raise
 
     def _load_builtins(self):
+        # Initialize declarations
+        from . import builtins, arraydecl, npdatetime
+        from . import ctypes_utils, bufproto
         self.install_registry(templates.builtin_registry)
 
     def load_additional_registries(self):
@@ -510,10 +508,12 @@ class BaseContext(object):
 class Context(BaseContext):
 
     def load_additional_registries(self):
+        from . import (cffi_utils, cmathdecl, listdecl, mathdecl,
+                       npydecl, operatordecl, randomdecl)
+        self.install_registry(cffi_utils.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(listdecl.registry)
         self.install_registry(mathdecl.registry)
         self.install_registry(npydecl.registry)
         self.install_registry(operatordecl.registry)
         self.install_registry(randomdecl.registry)
-        self.install_registry(cffi_utils.registry)

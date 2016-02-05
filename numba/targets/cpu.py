@@ -11,9 +11,7 @@ from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
-from numba.targets import (
-    callconv, cffiimpl, codegen, externals, intrinsics, listobj, cmathimpl,
-    mathimpl, npyimpl, operatorimpl, printimpl, randomimpl)
+from numba.targets import callconv, codegen, externals, intrinsics, listobj
 from .options import TargetOptions
 from numba.runtime import rtsys
 
@@ -51,6 +49,8 @@ class CPUContext(BaseContext):
 
     def load_additional_registries(self):
         # Add target specific implementations
+        from . import (cffiimpl, cmathimpl, mathimpl, npyimpl, operatorimpl,
+                       printimpl, randomimpl)
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
@@ -58,6 +58,8 @@ class CPUContext(BaseContext):
         self.install_registry(operatorimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
+        # Initialize PRNG state
+        randomimpl.random_init()
 
     @property
     def target_data(self):

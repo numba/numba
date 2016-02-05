@@ -2,6 +2,7 @@ from __future__ import print_function
 
 from collections import namedtuple, defaultdict
 import copy
+import os
 import sys
 
 import numpy
@@ -17,15 +18,8 @@ from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
                                     builtin_registry, impl_ret_borrowed,
                                     RegistryLoader)
-from . import (
-    arrayobj, arraymath, builtins, iterators, rangeobj, optional, slicing,
-    tupleobj, imputils)
+from . import arrayobj, builtins, optional, imputils
 from numba import datamodel
-
-try:
-    from . import npdatetime
-except NotImplementedError:
-    pass
 
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
@@ -166,6 +160,7 @@ class BaseContext(object):
         self._generators = {}
         self.special_ops = {}
         self.cached_internal_func = {}
+        self._pid = None
 
         self.data_model_manager = datamodel.default_manager
 
@@ -182,6 +177,12 @@ class BaseContext(object):
         Refresh context with new declarations from known registries.
         Useful for third-party extensions.
         """
+        # Populate built-in registry
+        from . import arraymath, iterators, rangeobj, slicing, tupleobj
+        try:
+            from . import npdatetime
+        except NotImplementedError:
+            pass
         self.install_registry(builtin_registry)
         self.load_additional_registries()
 

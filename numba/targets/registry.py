@@ -10,12 +10,22 @@ from .. import dispatcher, utils, typing
 
 class CPUTarget(TargetDescriptor):
     options = cpu.CPUTargetOptions
-    typing_context = typing.Context()
-    target_context = cpu.CPUContext(typing_context)
+
+    @utils.cached_property
+    def target_context(self):
+        return cpu.CPUContext(self.typing_context)
+
+    @utils.cached_property
+    def typing_context(self):
+        return typing.Context()
+
+
+# The global CPU target
+cpu_target = CPUTarget()
 
 
 class CPUDispatcher(dispatcher.Dispatcher):
-    targetdescr = CPUTarget()
+    targetdescr = cpu_target
 
 
 class TargetRegistry(utils.UniqueDict):

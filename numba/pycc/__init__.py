@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-### Copyright (2012) Continuum Analytics, Inc
-### All Rights Reserved
+
 from __future__ import print_function, division, absolute_import
 
 import os
@@ -9,10 +8,8 @@ import subprocess
 import tempfile
 import sys
 
+# Public API
 from .cc import CC
-from .compiler import ModuleCompiler
-from .platform import Toolchain, find_shared_ending, find_pyext_ending
-from . import decorators
 
 
 def get_ending(args):
@@ -28,6 +25,11 @@ def get_ending(args):
 
 def main(args=None):
     import argparse
+
+    from .compiler import ModuleCompiler
+    from .platform import Toolchain, find_shared_ending, find_pyext_ending
+    from . import decorators
+
     parser = argparse.ArgumentParser(
         description="DEPRECATED - Compile Python modules to a single shared library")
     parser.add_argument("inputs", nargs='+', help="Input file(s)")
