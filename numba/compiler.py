@@ -166,7 +166,7 @@ def compile_result(**kws):
 def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                      locals={}):
     """
-    Compile the function is an isolated environment.
+    Compile the function in an isolated environment (typing and target context).
     Good for testing.
     """
     typingctx = typing.Context()
