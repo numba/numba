@@ -1,5 +1,22 @@
+"""
+Numba-specific errors and warnings.
+"""
 
+from __future__ import print_function, division, absolute_import
+
+
+# Filled at the end
 __all__ = []
+
+
+# XXX the same warning can be printed several times if raised during type inference
+# XXX also need a mechanism to give the right compiled line number...
+
+class NumbaWarning(Warning):
+    pass
+
+class PerformanceWarning(NumbaWarning):
+    pass
 
 
 class NumbaError(Exception):
@@ -94,4 +111,5 @@ class ConstantInferenceError(NumbaError):
 
 
 __all__ += [name for (name, value) in globals().items()
-            if not name.startswith('_') and issubclass(value, Exception)]
+            if not name.startswith('_') and isinstance(value, type)
+               and issubclass(value, (Exception, Warning))]

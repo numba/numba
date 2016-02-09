@@ -9,25 +9,14 @@ import warnings
 
 import llvmlite.binding as ll
 
+from .errors import NumbaWarning, PerformanceWarning
+
 
 IS_WIN32 = sys.platform.startswith('win32')
 MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
-
-
-# XXX put in numba.errors?
-
-# XXX the same warning can be printed several times if raised during type inference
-# XXX also need an API to give the right compiled line number...
-
-
-class NumbaWarning(Warning):
-    pass
-
-class PerformanceWarning(NumbaWarning):
-    pass
 
 
 def _parse_cc(text):
