@@ -51,7 +51,7 @@ class TestProduct(TestCase):
         return self.sample_vector(m * n, dtype).reshape((m, n))
 
     @contextlib.contextmanager
-    def check_contiguity_warning(self):
+    def check_contiguity_warning(self, pyfunc):
         """
         Check performance warning(s) for non-contiguity.
         """
@@ -61,6 +61,9 @@ class TestProduct(TestCase):
         self.assertGreaterEqual(len(w), 1)
         self.assertIs(w[0].category, errors.PerformanceWarning)
         self.assertIn("faster on contiguous arrays", str(w[0].message))
+        self.assertEqual(w[0].filename, pyfunc.__code__.co_filename)
+        # This works because our functions are one-liners
+        self.assertEqual(w[0].lineno, pyfunc.__code__.co_firstlineno + 1)
 
     def check_func(self, pyfunc, cfunc, args):
         expected = pyfunc(*args)
@@ -272,17 +275,17 @@ class TestProduct(TestCase):
         out = np.empty((m, n), dtype)
 
         cfunc = jit(nopython=True)(dot2)
-        with self.check_contiguity_warning():
+        with self.check_contiguity_warning(cfunc.py_func):
             cfunc(a, b)
         cfunc = jit(nopython=True)(dot3)
-        with self.check_contiguity_warning():
+        with self.check_contiguity_warning(cfunc.py_func):
             cfunc(a, b, out)
 
         a = self.sample_vector(n, dtype)[::-1]
         b = self.sample_vector(n, dtype)[::-1]
 
         cfunc = jit(nopython=True)(vdot)
-        with self.check_contiguity_warning():
+        with self.check_contiguity_warning(cfunc.py_func):
             cfunc(a, b)
 
 

@@ -107,17 +107,20 @@ class ConstraintNetwork(object):
         """
         errors = []
         for constraint in self.constraints:
-            try:
-                constraint(typeinfer)
-            except TypingError as e:
-                errors.append(e)
-            except Exception:
-                msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
-                e = TypingError(msg.format(con=constraint,
-                                           err=traceback.format_exc(),
-                                           sep='--%<' +'-' * 65),
-                                loc=constraint.loc)
-                errors.append(e)
+            loc = constraint.loc
+            with typeinfer.warnings.catch_warnings(filename=loc.filename,
+                                                   lineno=loc.line):
+                try:
+                    constraint(typeinfer)
+                except TypingError as e:
+                    errors.append(e)
+                except Exception:
+                    msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
+                    e = TypingError(msg.format(con=constraint,
+                                               err=traceback.format_exc(),
+                                               sep='--%<' +'-' * 65),
+                                    loc=constraint.loc)
+                    errors.append(e)
         return errors
 
 
@@ -513,7 +516,7 @@ class TypeInferer(object):
     Operates on block that shares the same ir.Scope.
     """
 
-    def __init__(self, context, interp):
+    def __init__(self, context, interp, warnings):
         self.context = context
         self.blocks = interp.blocks
         self.generator_info = interp.generator_info
@@ -521,6 +524,7 @@ class TypeInferer(object):
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constraints = ConstraintNetwork()
+        self.warnings = warnings
 
         # { index: mangled name }
         self.arg_names = {}
