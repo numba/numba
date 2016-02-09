@@ -9,16 +9,14 @@ import warnings
 
 import llvmlite.binding as ll
 
+from .errors import NumbaWarning, PerformanceWarning
+
 
 IS_WIN32 = sys.platform.startswith('win32')
 MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
-
-
-class NumbaWarning(Warning):
-    pass
 
 
 def _parse_cc(text):
@@ -179,10 +177,9 @@ class _EnvReloader(object):
         # Enable AVX on supported platforms where it won't degrade performance.
         def avx_default():
             if not _os_supports_avx():
-                # XXX: need a dedicated PerformanceWarning class?
                 warnings.warn("your operating system doesn't support "
                               "AVX, this may degrade performance on "
-                              "some numerical code", NumbaWarning)
+                              "some numerical code", PerformanceWarning)
                 return False
             else:
                 cpu_name = ll.get_host_cpu_name()

@@ -9,7 +9,7 @@ import warnings
 import traceback
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
-                   lowering, objmode, irpasses, utils, config,
+                   lowering, objmode, irpasses, utils, config, errors,
                    types, ir, looplifting, macro, types, rewrites)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
@@ -319,7 +319,7 @@ class Pipeline(object):
                     # Clear all references attached to the traceback
                     e = e.with_traceback(None)
                 warnings.warn_explicit('%s: %s' % (msg, e),
-                                       config.NumbaWarning,
+                                       errors.NumbaWarning,
                                        self.func_attr.filename,
                                        self.func_attr.lineno)
 
@@ -340,7 +340,7 @@ class Pipeline(object):
                     # Clear all references attached to the traceback
                     e = e.with_traceback(None)
                 warnings.warn_explicit('%s: %s' % (msg, e),
-                                       config.NumbaWarning,
+                                       errors.NumbaWarning,
                                        self.func_attr.filename,
                                        self.func_attr.lineno)
 
@@ -593,12 +593,12 @@ class Pipeline(object):
                 warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % (self.func_attr.name,)
             else:
                 warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % (self.func_attr.name,)
-            warnings.warn_explicit(warn_msg, config.NumbaWarning,
+            warnings.warn_explicit(warn_msg, errors.NumbaWarning,
                                    self.func_attr.filename,
                                    self.func_attr.lineno)
             if self.flags.release_gil:
                 warn_msg = "Code running in object mode won't allow parallel execution despite nogil=True."
-                warnings.warn_explicit(warn_msg, config.NumbaWarning,
+                warnings.warn_explicit(warn_msg, errors.NumbaWarning,
                                        self.func_attr.filename,
                                        self.func_attr.lineno)
 
