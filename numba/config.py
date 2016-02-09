@@ -17,7 +17,16 @@ IS_32BITS = MACHINE_BITS == 32
 PYVERSION = sys.version_info[:2]
 
 
+# XXX put in numba.errors?
+
+# XXX the same warning can be printed several times if raised during type inference
+# XXX also need an API to give the right compiled line number...
+
+
 class NumbaWarning(Warning):
+    pass
+
+class PerformanceWarning(NumbaWarning):
     pass
 
 
@@ -182,7 +191,7 @@ class _EnvReloader(object):
                 # XXX: need a dedicated PerformanceWarning class?
                 warnings.warn("your operating system doesn't support "
                               "AVX, this may degrade performance on "
-                              "some numerical code", NumbaWarning)
+                              "some numerical code", PerformanceWarning)
                 return False
             else:
                 cpu_name = ll.get_host_cpu_name()

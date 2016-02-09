@@ -82,6 +82,8 @@ class TestProduct(TestCase):
             a = self.sample_vector(n, dtype)
             b = self.sample_vector(n, dtype)
             self.check_func(pyfunc, cfunc, (a, b))
+            # Non-contiguous
+            self.check_func(pyfunc, cfunc, (a[::-1], b[::-1]))
 
         # Mismatching sizes
         a = self.sample_vector(n - 1, np.float64)
@@ -117,6 +119,8 @@ class TestProduct(TestCase):
                 a = self.sample_matrix(m, n, dtype)
                 b = self.sample_vector(n, dtype)
                 yield a, b
+            # Non-contiguous
+            yield a[::-1], b[::-1]
 
         cfunc2 = jit(nopython=True)(pyfunc2)
         if pyfunc3 is not None:
@@ -172,6 +176,8 @@ class TestProduct(TestCase):
                 a = self.sample_matrix(m, k, dtype)
                 b = self.sample_matrix(k, n, dtype)
                 yield a, b
+            # Non-contiguous
+            yield a[::-1], b[::-1]
 
         cfunc2 = jit(nopython=True)(pyfunc2)
         if pyfunc3 is not None:

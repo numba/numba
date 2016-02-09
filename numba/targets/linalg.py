@@ -11,7 +11,7 @@ from numba import types, cgutils
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
-from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
+from .arrayobj import make_array, _empty_nd_impl, array_copy
 
 
 ll_char = ir.IntType(8)
@@ -44,6 +44,26 @@ def ensure_lapack():
 def make_constant_slot(context, builder, ty, val):
     const = context.get_constant_generic(builder, ty, val)
     return cgutils.alloca_once_value(builder, const)
+
+def make_contiguous(context, builder, sig, args):
+    """
+    Ensure that all array arguments are contiguous, if necessary by
+    copying them.
+    A new (sig, args) tuple is returned.
+    """
+    newtys = []
+    newargs = []
+    for ty, val in zip(sig.args, args):
+        if not isinstance(ty, types.Array) or ty.layout in 'CF':
+            newty, newval = ty, val
+        else:
+            newty = ty.copy(layout='C')
+            copysig = signature(newty, ty)
+            newval = array_copy(context, builder, copysig, (val,))
+        newtys.append(newty)
+        newargs.append(newval)
+    return signature(sig.return_type, *newtys), tuple(newargs)
+
 
 def check_c_int(context, builder, n):
     """
@@ -266,6 +286,7 @@ def dot_2(context, builder, sig, args):
     a @ b
     """
     ensure_blas()
+    sig, args = make_contiguous(context, builder, sig, args)
 
     ndims = [x.ndim for x in sig.args[:2]]
     if ndims == [2, 2]:
@@ -285,6 +306,7 @@ def vdot(context, builder, sig, args):
     np.vdot(a, b)
     """
     ensure_blas()
+    sig, args = make_contiguous(context, builder, sig, args)
 
     return dot_2_vv(context, builder, sig, args, conjugate=True)
 
@@ -433,6 +455,7 @@ def dot_3(context, builder, sig, args):
     np.dot(a, b, out)
     """
     ensure_blas()
+    sig, args = make_contiguous(context, builder, sig, args)
 
     ndims = set(x.ndim for x in sig.args[:2])
     if ndims == set([2]):
