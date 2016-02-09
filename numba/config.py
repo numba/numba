@@ -177,7 +177,6 @@ class _EnvReloader(object):
         # Enable AVX on supported platforms where it won't degrade performance.
         def avx_default():
             if not _os_supports_avx():
-                # XXX: need a dedicated PerformanceWarning class?
                 warnings.warn("your operating system doesn't support "
                               "AVX, this may degrade performance on "
                               "some numerical code", PerformanceWarning)
