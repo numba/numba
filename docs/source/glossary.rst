@@ -32,9 +32,9 @@ Glossary
    loop-jitting
       A feature of compilation in :term:`object mode` where a loop can be
       automatically extracted and compiled in :term:`nopython mode`.  This
-      allows functions with operations unsupported in nopython mode (such as
-      array creation) to see significant performance improvements if they
-      contain loops with only nopython-supported operations.
+      allows functions with operations unsupported in nopython mode to see 
+      significant performance improvements if they contain loops with only 
+      nopython-supported operations.
 
    nopython mode
       A Numba compilation mode that generates code that does not access the
