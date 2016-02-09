@@ -13,14 +13,16 @@ import warnings
 __all__ = []
 
 
-# XXX the same warning can be printed several times if raised during type inference
-# XXX also need a mechanism to give the right compiled line number...
-
 class NumbaWarning(Warning):
-    pass
+    """
+    Base category for all Numba compiler warnings.
+    """
 
 class PerformanceWarning(NumbaWarning):
-    pass
+    """
+    Warning category for when an operation might not be
+    as fast as expected.
+    """
 
 
 class WarningsFixer(object):
@@ -38,8 +40,7 @@ class WarningsFixer(object):
     @contextlib.contextmanager
     def catch_warnings(self, filename=None, lineno=None):
         """
-        Store warnings of our category and optionally fix their filename
-        and lineno.
+        Store warnings and optionally fix their filename and lineno.
         """
         with warnings.catch_warnings(record=True) as wlist:
             warnings.simplefilter('always', self._category)
@@ -53,7 +54,7 @@ class WarningsFixer(object):
                 lineno = lineno or w.lineno
                 self._warnings[filename, lineno, w.category].add(msg)
             else:
-                # Simply output other warnings again
+                # Simply emit other warnings again
                 warnings.warn_explicit(msg, w.category,
                                        w.filename, w.lineno)
 
