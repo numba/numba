@@ -58,7 +58,7 @@ class TestProduct(TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', errors.PerformanceWarning)
             yield
-        self.assertGreater(len(w), 1)
+        self.assertGreaterEqual(len(w), 1)
         self.assertIs(w[0].category, errors.PerformanceWarning)
         self.assertIn("faster on contiguous arrays", str(w[0].message))
 
