@@ -5,7 +5,6 @@ from os.path import isdir, isfile, join, dirname, basename
 
 class TestLoader(loader.TestLoader):
 
-
     def __init__(self, topleveldir=None):
         super(TestLoader, self).__init__()
         self._top_level_dir = topleveldir or dirname(dirname(dirname(__file__)))

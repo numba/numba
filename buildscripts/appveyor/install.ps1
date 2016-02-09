@@ -1,7 +1,6 @@
 # Sample script to install Miniconda under Windows
 # Authors: Olivier Grisel, Jonathan Helmus and Kyle Kastner, Robert McGibbon
 # License: CC0 1.0 Universal: http://creativecommons.org/publicdomain/zero/1.0/
-# From: https://github.com/rmcgibbo/python-appveyor-conda-example
 
 $MINICONDA_URL = "http://repo.continuum.io/miniconda/"
 
@@ -9,9 +8,9 @@ $MINICONDA_URL = "http://repo.continuum.io/miniconda/"
 function DownloadMiniconda ($python_version, $platform_suffix) {
     $webclient = New-Object System.Net.WebClient
     if ($python_version -match "3.4") {
-        $filename = "Miniconda3-3.5.5-Windows-" + $platform_suffix + ".exe"
+        $filename = "Miniconda3-latest-Windows-" + $platform_suffix + ".exe"
     } else {
-        $filename = "Miniconda-3.5.5-Windows-" + $platform_suffix + ".exe"
+        $filename = "Miniconda-latest-Windows-" + $platform_suffix + ".exe"
     }
     $url = $MINICONDA_URL + $filename
 
@@ -74,7 +73,7 @@ function InstallMiniconda ($python_version, $architecture, $python_home) {
 
 function InstallCondaPackages ($python_home, $spec) {
     $conda_path = $python_home + "\Scripts\conda.exe"
-    $args = "install --yes " + $spec
+    $args = "install --yes --quiet " + $spec
     Write-Host ("conda " + $args)
     Start-Process -FilePath "$conda_path" -ArgumentList $args -Wait -Passthru
 }
@@ -82,16 +81,15 @@ function InstallCondaPackages ($python_home, $spec) {
 function UpdateConda ($python_home) {
     $conda_path = $python_home + "\Scripts\conda.exe"
     Write-Host "Updating conda..."
-    $args = "update --yes conda"
+    $args = "update --yes --quiet conda"
     Write-Host $conda_path $args
     Start-Process -FilePath "$conda_path" -ArgumentList $args -Wait -Passthru
 }
 
-
 function main () {
     InstallMiniconda $env:PYTHON_VERSION $env:PYTHON_ARCH $env:PYTHON
-    UpdateConda $env:PYTHON
-    InstallCondaPackages $env:PYTHON "llvmpy numpy"
+    # UpdateConda $env:PYTHON
+    # InstallCondaPackages $env:PYTHON "conda-build jinja2"
 }
 
 main

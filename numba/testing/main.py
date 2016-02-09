@@ -1,17 +1,19 @@
 from __future__ import print_function, division, absolute_import
 
-import sys
-import os
-import warnings
-import time
-import gc
+import numba.unittest_support as unittest
+
 import collections
 import contextlib
 import cProfile
+import gc
 import multiprocessing
-
-import numba.unittest_support as unittest
+import os
+import random
+import sys
+import time
 from unittest import result, runner, signals, suite, loader, case
+import warnings
+
 from .loader import TestLoader
 from numba.utils import PYVERSION, StringIO
 from numba import config
@@ -74,6 +76,8 @@ class NumbaTestProgram(unittest.main):
     profile = False
     multiprocess = False
     list = False
+    random_select = None
+    random_seed = 42
 
     def __init__(self, *args, **kwargs):
         # Disable interpreter fallback if we are running the test suite
@@ -108,6 +112,8 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('--profile', dest='profile',
                             action='store_true',
                             help='Profile the test run')
+        parser.add_argument('--random', dest='random_select', type=float,
+                            help='Random proportion of tests to select')
         return parser
 
     def parseArgs(self, argv):
@@ -119,11 +125,16 @@ class NumbaTestProgram(unittest.main):
             argv.remove('-m')
             self.multiprocess = True
         super(NumbaTestProgram, self).parseArgs(argv)
+
         # If at this point self.test doesn't exist, it is because
         # no test ID was given in argv. Use the default instead.
         if not hasattr(self, 'test') or not self.test.countTestCases():
             self.testNames = (self.defaultTest,)
             self.createTests()
+
+        if self.random_select:
+            self.test = _choose_random_tests(self.test, self.random_select,
+                                             self.random_seed)
 
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
@@ -430,6 +441,19 @@ def _split_nonparallel_tests(test):
         # Test case explicitly disallows parallel execution
         stests = _flatten_suite(test)
     return ptests, stests
+
+
+def _choose_random_tests(tests, ratio, seed):
+    """
+    Choose a given proportion of tests at random.
+    """
+    rnd = random.Random()
+    rnd.seed(seed)
+    if isinstance(tests, unittest.TestSuite):
+        tests = _flatten_suite(tests)
+    tests = rnd.sample(tests, int(len(tests) * ratio))
+    tests = sorted(tests, key=lambda case: case.id())
+    return unittest.TestSuite(tests)
 
 
 class ParallelTestRunner(runner.TextTestRunner):
