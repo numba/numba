@@ -18,6 +18,10 @@ def matmulcore(A, B, C):
                 C[i, j] += A[i, k] * B[k, j]
 
 
+def axpy(a, x, y, out):
+    out[0] = a * x  + y
+
+
 class TestGUFunc(unittest.TestCase):
     target = 'cpu'
 
@@ -33,7 +37,7 @@ class TestGUFunc(unittest.TestCase):
 
         self.assertTrue((C == Gold).all())
 
-    def test_gufunc(self, target='cpu'):
+    def test_gufunc(self):
         gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
                              target=self.target)
         gufunc.add((float32[:, :], float32[:, :], float32[:, :]))
@@ -48,9 +52,22 @@ class TestGUFunc(unittest.TestCase):
 
         self.assertTrue(np.allclose(C, Gold))
 
+    def test_ufunc_like(self):
+        # Test problem that the stride of "scalar" gufunc argument not properly
+        # handled when the actual argument is an array,
+        # causing the same value (first value) being repeated.
+        gufunc = GUVectorize(axpy, '(), (), () -> ()', target=self.target)
+        gufunc.add('(intp, intp, intp, intp[:])')
+        gufunc = gufunc.build_ufunc()
+
+        x = np.arange(10, dtype=np.intp)
+        out = gufunc(x, x, x)
+
+        np.testing.assert_equal(out, x * x + x)
+
+
 class TestGUFuncParallel(TestGUFunc):
     target = 'parallel'
-
 
 
 class TestGUVectorizeScalar(unittest.TestCase):
@@ -151,4 +168,3 @@ class TestGUVectorizeScalarParallel(TestGUVectorizeScalar):
 
 if __name__ == '__main__':
     unittest.main()
-
