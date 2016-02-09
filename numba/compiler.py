@@ -781,7 +781,8 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
 
-    infer = typeinfer.TypeInferer(typingctx, interp)
+    warnings = errors.WarningsFixer(errors.NumbaWarning)
+    infer = typeinfer.TypeInferer(typingctx, interp, warnings)
 
     # Seed argument types
     for index, (name, ty) in enumerate(zip(interp.bytecode.arg_names, args)):
@@ -798,6 +799,9 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     infer.build_constraint()
     infer.propagate()
     typemap, restype, calltypes = infer.unify()
+
+    # Output all Numba warnings
+    warnings.flush()
 
     return typemap, restype, calltypes
 
