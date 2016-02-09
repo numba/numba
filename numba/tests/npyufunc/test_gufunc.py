@@ -53,9 +53,9 @@ class TestGUFunc(unittest.TestCase):
         self.assertTrue(np.allclose(C, Gold))
 
     def test_ufunc_like(self):
-        # Test problem that "scalar" gufunc argument but properly incremented
-        # when the actual argument is an array.  Causing the same value (first
-        # value) being repeated.
+        # Test problem that the stride of "scalar" gufunc argument not properly
+        # handled when the actual argument is an array,
+        # causing the same value (first value) being repeated.
         gufunc = GUVectorize(axpy, '(), (), () -> ()', target=self.target)
         gufunc.add('(intp, intp, intp, intp[:])')
         gufunc = gufunc.build_ufunc()
