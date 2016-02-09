@@ -1,9 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
+import array
 import numpy as np
+import sys
 
 from numba import unittest_support as unittest
-from numba import jit, cffi_support, types
+from numba import jit, cffi_support, types, errors
 from numba.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase
 
@@ -86,16 +88,41 @@ class TestCFFI(TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         self.assertEqual(pyfunc(), cfunc())
 
-    def _test_pass_numpy_array(self, pyfunc, dtype):
+    def check_vector_sin(self, cfunc, x, y):
+        cfunc(x, y)
+        np.testing.assert_allclose(y, np.sin(x))
+
+    def _test_from_buffer_numpy_array(self, pyfunc, dtype):
         x = np.arange(10).astype(dtype)
+        y = np.zeros_like(x)
         cfunc = jit(nopython=True)(pyfunc)
-        np.testing.assert_equal(pyfunc(x), cfunc(x))
+        self.check_vector_sin(cfunc, x, y)
 
-    def test_pass_numpy_array_float32(self):
-        self._test_pass_numpy_array(mod.vector_sin_float32, np.float32)
+    def test_from_buffer_float32(self):
+        self._test_from_buffer_numpy_array(mod.vector_sin_float32, np.float32)
 
-    def test_pass_numpy_array_float64(self):
-        self._test_pass_numpy_array(mod.vector_sin_float64, np.float64)
+    def test_from_buffer_float64(self):
+        self._test_from_buffer_numpy_array(mod.vector_sin_float64, np.float64)
+
+    @unittest.skipIf(sys.version_info < (3,),
+                     "buffer protocol on array.array needs Python 3+")
+    def test_from_buffer_pyarray(self):
+        pyfunc = mod.vector_sin_float32
+        cfunc = jit(nopython=True)(pyfunc)
+        x = array.array("f", range(10))
+        y = array.array("f", [0] * len(x))
+        self.check_vector_sin(cfunc, x, y)
+
+    def test_from_buffer_error(self):
+        pyfunc = mod.vector_sin_float32
+        cfunc = jit(nopython=True)(pyfunc)
+        # Non-contiguous array
+        x = np.arange(10).astype(np.float32)[::2]
+        y = np.zeros_like(x)
+        with self.assertRaises(errors.TypingError) as raises:
+            cfunc(x, y)
+        self.assertIn("from_buffer() unsupported on non-contiguous buffers",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':

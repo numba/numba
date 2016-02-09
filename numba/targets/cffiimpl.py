@@ -10,7 +10,7 @@ from . import arrayobj
 
 registry = Registry()
 
-@registry.lower('ffi.from_buffer', types.Array)
+@registry.lower('ffi.from_buffer', types.Buffer)
 def from_buffer(context, builder, sig, args):
     assert len(sig.args) == 1
     assert len(args) == 1

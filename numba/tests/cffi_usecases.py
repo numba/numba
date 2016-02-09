@@ -141,12 +141,8 @@ def use_user_defined_symbols():
 # (cffi_usecases_ool.ffi is a CompiledFFI object) so we use both in these
 # functions.
 
-def vector_sin_float32(x):
-    y = np.empty_like(x)
+def vector_sin_float32(x, y):
     vsSin(len(x), ffi.from_buffer(x), ffi_ool.from_buffer(y))
-    return y
 
-def vector_sin_float64(x):
-    y = np.empty_like(x)
+def vector_sin_float64(x, y):
     vdSin(len(x), ffi.from_buffer(x), ffi_ool.from_buffer(y))
-    return y
