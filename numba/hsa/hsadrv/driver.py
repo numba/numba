@@ -1156,10 +1156,9 @@ def _make_mem_finalizer(dtor):
         allocations = context.allocations
 
         def core():
-            def cleanup():
-                if allocations:
-                    del allocations[handle.value]
-                dtor(handle)
+            if allocations:
+                del allocations[handle.value]
+            dtor(handle)
         return core
 
     return mem_finalize
