@@ -465,9 +465,15 @@ class CUDAKernel(CUDAKernelBase):
         Convert arguments to ctypes and append to kernelargs
         """
         if isinstance(ty, types.Array):
-            devary, conv = devicearray.auto_device(val, stream=stream)
-            if conv:
-                retr.append(lambda: devary.copy_to_host(val, stream=stream))
+            if isinstance(ty, types.SmartArrayType):
+                devary = val.gpu()
+                retr.append(lambda: val.gpu_changed())
+                outer_parent = ctypes.c_void_p(0)
+                kernelargs.append(outer_parent)
+            else:
+                devary, conv = devicearray.auto_device(val, stream=stream)
+                if conv:
+                    retr.append(lambda: devary.copy_to_host(val, stream=stream))
 
             c_intp = ctypes.c_ssize_t
 
