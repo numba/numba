@@ -872,6 +872,16 @@ class PythonAPI(object):
         args.append(self.context.get_constant_null(types.pyobject))
         return self.builder.call(fn, args)
 
+    def call_method(self, callee, method, objargs = None):
+        cstr = self.context.insert_const_string(self.module, method)
+        fnty = Type.function(self.pyobj, [self.pyobj, self.cstring], var_arg=True)
+        fn = self._get_function(fnty, name="PyObject_CallMethod")
+        args = [callee, cstr]
+        if objargs:
+            args.extend(objargs)
+        args.append(self.context.get_constant_null(types.pyobject))
+        return self.builder.call(fn, args)
+
     def call(self, callee, args=None, kws=None):
         if args is None:
             args = self.get_null_object()
