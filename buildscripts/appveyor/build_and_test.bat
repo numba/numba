@@ -1,5 +1,5 @@
-@rem This script will run in a single cmd environment, allowing to activate
-@rem the environment
+@rem This script will build and test numba.  llvmlite is installed from
+@rem the repos, so as not to have to build it separately.
 
 conda config --add channels numba
 conda create -q -n testenv python=%CONDA_PY% numpy=%CONDA_NPY% llvmlite cffi scipy
@@ -11,4 +11,4 @@ call activate testenv
 @rem (Python 3.4+ only)
 @rem Also, note %CMD_IN_ENV% is needed for distutils/setuptools-based tests
 
-%CMD_IN_ENV% python runtests.py -bv --random 0.1
+%CMD_IN_ENV% python runtests.py -b
