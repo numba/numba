@@ -74,6 +74,9 @@ class NumbaTestProgram(unittest.main):
     profile = False
     multiprocess = False
     list = False
+    tags = None
+    random_select = None
+    random_seed = 42
 
     def __init__(self, *args, **kwargs):
         # Disable interpreter fallback if we are running the test suite

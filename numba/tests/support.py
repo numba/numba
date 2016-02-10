@@ -36,6 +36,11 @@ skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
 _known_tags = set(['important'])
 
 def tag(*tags):
+    """
+    Tag a test method with the given tags.
+    Can be used in conjunction with the --tags command-line argument
+    for runtests.py.
+    """
     for t in tags:
         if t not in _known_tags:
             raise ValueError("unknown tag: %r" % (t,))
