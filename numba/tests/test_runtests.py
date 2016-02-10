@@ -44,9 +44,9 @@ class TestCase(unittest.TestCase):
             self.assertLessEqual(number, maxsize)
 
     def test_default(self):
-        self.check_testsuite_size('', 7000, 8000)
+        self.check_testsuite_size('', 6000, 8000)
     def test_all(self):
-        self.check_testsuite_size('numba.tests', 7000, 8000)
+        self.check_testsuite_size('numba.tests', 6000, 8000)
     def test_cuda(self):
         self.check_testsuite_size('numba.cuda.tests', 0, 400)
     def test_module(self):
