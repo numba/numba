@@ -68,14 +68,14 @@ class TestProduct(TestCase):
     def check_func(self, pyfunc, cfunc, args):
         expected = pyfunc(*args)
         got = cfunc(*args)
-        self.assertPreciseEqual(got, expected)
+        self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)
 
     def check_func_out(self, pyfunc, cfunc, args, out):
         expected = np.copy(out)
         got = np.copy(out)
         self.assertIs(pyfunc(*args, out=expected), expected)
         self.assertIs(cfunc(*args, out=got), got)
-        self.assertPreciseEqual(got, expected)
+        self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)
 
     def assert_mismatching_sizes(self, cfunc, args, is_out=False):
         with self.assertRaises(ValueError) as raises:
