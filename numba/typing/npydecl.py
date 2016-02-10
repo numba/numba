@@ -1,6 +1,9 @@
 from __future__ import absolute_import, print_function
 
+import warnings
+
 import numpy
+
 from .. import types, utils
 from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
                         Registry, signature)
@@ -9,8 +12,8 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
                              from_dtype, as_dtype, resolve_output_type)
 from ..numpy_support import version as numpy_version
-
 from ..errors import TypingError
+from ..config import PerformanceWarning
 
 registry = Registry()
 infer = registry.register
@@ -710,10 +713,8 @@ class MatMulTyperMixin(object):
             all_args = (a, b)
 
         if not all(x.layout in 'CF' for x in (a, b)):
-            # Numpy seems to allow non-contiguous arguments, but we
-            # don't (we would need to copy before calling BLAS)
-            raise TypingError("%s only supported on "
-                              "contiguous arrays" % (self.func_name,))
+            warnings.warn("%s is faster on contiguous arrays, called on %s"
+                          % (self.func_name, (a, b)), PerformanceWarning)
         if not all(x.dtype == a.dtype for x in all_args):
             raise TypingError("%s arguments must all have "
                               "the same dtype" % (self.func_name,))
@@ -752,10 +753,8 @@ class VDot(CallableTemplate):
             if not all(x.ndim == 1 for x in (a, b)):
                 raise TypingError("np.vdot() only supported on 1-D arrays")
             if not all(x.layout in 'CF' for x in (a, b)):
-                # Numpy seems to allow non-contiguous arguments, but we
-                # don't (we would need to copy before calling BLAS)
-                raise TypingError("np.vdot() only supported on "
-                                  "contiguous arrays")
+                warnings.warn("np.vdot() is faster on contiguous arrays, called on %s"
+                              % ((a, b),), PerformanceWarning)
             if not all(x.dtype == a.dtype for x in (a, b)):
                 raise TypingError("np.vdot() arguments must all have "
                                   "the same dtype")

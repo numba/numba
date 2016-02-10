@@ -1,7 +1,9 @@
 from __future__ import division
 
+import contextlib
 from itertools import product
 import sys
+import warnings
 
 import numpy as np
 
@@ -48,17 +50,32 @@ class TestProduct(TestCase):
     def sample_matrix(self, m, n, dtype):
         return self.sample_vector(m * n, dtype).reshape((m, n))
 
+    @contextlib.contextmanager
+    def check_contiguity_warning(self, pyfunc):
+        """
+        Check performance warning(s) for non-contiguity.
+        """
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', errors.PerformanceWarning)
+            yield
+        self.assertGreaterEqual(len(w), 1)
+        self.assertIs(w[0].category, errors.PerformanceWarning)
+        self.assertIn("faster on contiguous arrays", str(w[0].message))
+        self.assertEqual(w[0].filename, pyfunc.__code__.co_filename)
+        # This works because our functions are one-liners
+        self.assertEqual(w[0].lineno, pyfunc.__code__.co_firstlineno + 1)
+
     def check_func(self, pyfunc, cfunc, args):
         expected = pyfunc(*args)
         got = cfunc(*args)
-        self.assertPreciseEqual(got, expected)
+        self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)
 
     def check_func_out(self, pyfunc, cfunc, args, out):
         expected = np.copy(out)
         got = np.copy(out)
         self.assertIs(pyfunc(*args, out=expected), expected)
         self.assertIs(cfunc(*args, out=got), got)
-        self.assertPreciseEqual(got, expected)
+        self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)
 
     def assert_mismatching_sizes(self, cfunc, args, is_out=False):
         with self.assertRaises(ValueError) as raises:
@@ -82,6 +99,8 @@ class TestProduct(TestCase):
             a = self.sample_vector(n, dtype)
             b = self.sample_vector(n, dtype)
             self.check_func(pyfunc, cfunc, (a, b))
+            # Non-contiguous
+            self.check_func(pyfunc, cfunc, (a[::-1], b[::-1]))
 
         # Mismatching sizes
         a = self.sample_vector(n - 1, np.float64)
@@ -117,6 +136,8 @@ class TestProduct(TestCase):
                 a = self.sample_matrix(m, n, dtype)
                 b = self.sample_vector(n, dtype)
                 yield a, b
+            # Non-contiguous
+            yield a[::-1], b[::-1]
 
         cfunc2 = jit(nopython=True)(pyfunc2)
         if pyfunc3 is not None:
@@ -172,6 +193,8 @@ class TestProduct(TestCase):
                 a = self.sample_matrix(m, k, dtype)
                 b = self.sample_matrix(k, n, dtype)
                 yield a, b
+            # Non-contiguous
+            yield a[::-1], b[::-1]
 
         cfunc2 = jit(nopython=True)(pyfunc2)
         if pyfunc3 is not None:
@@ -242,6 +265,28 @@ class TestProduct(TestCase):
         Test matrix @ matrix
         """
         self.check_dot_mm(matmul_usecase, None, "'@'")
+
+    @needs_matmul
+    def test_contiguity_warnings(self):
+        m, k, n = 2, 3, 4
+        dtype = np.float64
+        a = self.sample_matrix(m, k, dtype)[::-1]
+        b = self.sample_matrix(k, n, dtype)[::-1]
+        out = np.empty((m, n), dtype)
+
+        cfunc = jit(nopython=True)(dot2)
+        with self.check_contiguity_warning(cfunc.py_func):
+            cfunc(a, b)
+        cfunc = jit(nopython=True)(dot3)
+        with self.check_contiguity_warning(cfunc.py_func):
+            cfunc(a, b, out)
+
+        a = self.sample_vector(n, dtype)[::-1]
+        b = self.sample_vector(n, dtype)[::-1]
+
+        cfunc = jit(nopython=True)(vdot)
+        with self.check_contiguity_warning(cfunc.py_func):
+            cfunc(a, b)
 
 
 def invert_matrix(a):

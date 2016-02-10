@@ -22,7 +22,7 @@ from numba.typing.templates import fold_arguments
 from numba.typing.typeof import typeof
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method, next
-from .config import NumbaWarning
+from .errors import NumbaWarning
 
 
 class OmittedArg(object):

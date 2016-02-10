@@ -14,7 +14,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import utils, vectorize, jit, generated_jit, types
-from numba.config import NumbaWarning
+from numba.errors import NumbaWarning
 from .support import TestCase
 
 
