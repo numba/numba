@@ -15,6 +15,8 @@ from .pycc.decorators import export, exportmany
 # Re-export all type names
 from .types import *
 
+from .smartarray import SmartArray
+
 # Re export decorators
 jit = decorators.jit
 autojit = decorators.autojit
