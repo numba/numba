@@ -15,7 +15,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import utils, vectorize, jit, generated_jit, types
 from numba.errors import NumbaWarning
-from .support import TestCase
+from .support import TestCase, tag
 
 
 def dummy(x):
@@ -211,6 +211,7 @@ class TestSignatureHandling(BaseTest):
     Test support for various parameter passing styles.
     """
 
+    @tag('important')
     def test_named_args(self):
         """
         Test passing named arguments to a dispatcher.
@@ -298,6 +299,7 @@ class TestGeneratedDispatcher(TestCase):
     Tests for @generated_jit.
     """
 
+    @tag('important')
     def test_generated(self):
         f = generated_jit(nopython=True)(generated_usecase)
         self.assertEqual(f(8), 8 - 5)
@@ -361,6 +363,7 @@ class TestDispatcherMethods(TestCase):
         self.assertPreciseEqual(foo(1), 3)
         self.assertPreciseEqual(foo(1.5), 3)
 
+    @tag('important')
     def test_inspect_llvm(self):
         # Create a jited function
         @jit
@@ -549,6 +552,7 @@ class TestCache(TestCase):
         self.assertPreciseEqual(f(2.5, 3), 6.5)
         self.check_cache(6)  # 2 index, 4 data
 
+    @tag('important')
     def test_caching(self):
         self.check_cache(0)
         mod = self.import_module()

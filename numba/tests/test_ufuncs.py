@@ -16,7 +16,7 @@ from numba import vectorize
 from numba.config import PYVERSION
 from numba.errors import LoweringError, TypingError
 from .support import (TestCase, CompilationCache, skip_on_numpy_16,
-                      is_on_numpy_16, MemoryLeakMixin)
+                      is_on_numpy_16, MemoryLeakMixin, tag)
 
 from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
@@ -300,21 +300,25 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     ############################################################################
     # Math operations
+
     def test_add_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.add, flags=flags)
 
+    @tag('important')
     def test_add_ufunc_npm(self):
         self.test_add_ufunc(flags=no_pyobj_flags)
 
     def test_subtract_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.subtract, flags=flags)
 
+    @tag('important')
     def test_subtract_ufunc_npm(self):
         self.test_subtract_ufunc(flags=no_pyobj_flags)
 
     def test_multiply_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.multiply, flags=flags)
 
+    @tag('important')
     def test_multiply_ufunc_npm(self):
         self.test_multiply_ufunc(flags=no_pyobj_flags)
 
@@ -327,6 +331,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
         self.binary_ufunc_test(np.divide, flags=flags, int_output_type=int_out_type)
 
+    @tag('important')
     def test_divide_ufunc_npm(self):
         self.test_divide_ufunc(flags=no_pyobj_flags)
 
@@ -345,12 +350,14 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_true_divide_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.true_divide, flags=flags, int_output_type=types.float64)
 
+    @tag('important')
     def test_true_divide_ufunc_npm(self):
         self.test_true_divide_ufunc(flags=no_pyobj_flags)
 
     def test_floor_divide_ufunc(self):
         self.binary_ufunc_test(np.floor_divide)
 
+    @tag('important')
     def test_floor_divide_ufunc_npm(self):
         self.binary_ufunc_test(np.floor_divide, flags=no_pyobj_flags)
 
@@ -361,30 +368,35 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                               skip_inputs=[types.Array(types.uint32, 1, 'C'), types.uint32],
                               flags=flags)
 
+    @tag('important')
     def test_negative_ufunc_npm(self):
         self.test_negative_ufunc(flags=no_pyobj_flags)
 
     def test_power_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.power, flags=flags)
 
+    @tag('important')
     def test_power_ufunc_npm(self):
         self.test_power_ufunc(flags=no_pyobj_flags)
 
     def test_remainder_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.remainder, flags=flags)
 
+    @tag('important')
     def test_remainder_ufunc_npm(self):
         self.test_remainder_ufunc(flags=no_pyobj_flags)
 
     def test_mod_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.mod, flags=flags)
 
+    @tag('important')
     def test_mod_ufunc_npm(self):
         self.test_mod_ufunc(flags=no_pyobj_flags)
 
     def test_fmod_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.fmod, flags=flags)
 
+    @tag('important')
     def test_fmod_ufunc_npm(self):
         self.test_fmod_ufunc(flags=no_pyobj_flags)
 
@@ -397,90 +409,105 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                 (np.float64(np.finfo(np.float64).min), types.float64)
                 ])
 
+    @tag('important')
     def test_abs_ufunc_npm(self):
         self.test_abs_ufunc(flags=no_pyobj_flags)
 
     def test_absolute_ufunc(self, flags=enable_pyobj_flags):
         self.test_abs_ufunc(flags=flags, ufunc=np.absolute)
 
+    @tag('important')
     def test_absolute_ufunc_npm(self):
         self.test_absolute_ufunc(flags=no_pyobj_flags)
 
     def test_fabs_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.fabs, flags=flags, kinds='f')
 
+    @tag('important')
     def test_fabs_ufunc_npm(self):
         self.test_fabs_ufunc(flags=no_pyobj_flags)
 
     def test_rint_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.rint, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_rint_ufunc_npm(self):
         self.test_rint_ufunc(flags=no_pyobj_flags)
 
     def test_sign_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.sign, flags=flags)
 
+    @tag('important')
     def test_sign_ufunc_npm(self):
         self.test_sign_ufunc(flags=no_pyobj_flags)
 
     def test_conj_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.conj, flags=flags)
 
+    @tag('important')
     def test_conj_ufunc_npm(self):
         self.test_conj_ufunc(flags=no_pyobj_flags)
 
     def test_exp_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.exp, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_exp_ufunc_npm(self):
         self.test_exp_ufunc(flags=no_pyobj_flags)
 
     def test_exp2_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.exp2, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_exp2_ufunc_npm(self):
         self.test_exp2_ufunc(flags=no_pyobj_flags)
 
     def test_log_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.log, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_log_ufunc_npm(self):
         self.test_log_ufunc(flags=no_pyobj_flags)
 
     def test_log2_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.log2, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_log2_ufunc_npm(self):
         self.test_log2_ufunc(flags=no_pyobj_flags)
 
     def test_log10_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.log10, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_log10_ufunc_npm(self):
         self.test_log10_ufunc(flags=no_pyobj_flags)
 
     def test_expm1_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.expm1, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_expm1_ufunc_npm(self):
         self.test_expm1_ufunc(flags=no_pyobj_flags)
 
     def test_log1p_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.log1p, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_log1p_ufunc_npm(self):
         self.test_log1p_ufunc(flags=no_pyobj_flags)
 
     def test_sqrt_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.sqrt, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_sqrt_ufunc_npm(self):
         self.test_sqrt_ufunc(flags=no_pyobj_flags)
 
     def test_square_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.square, flags=flags)
 
+    @tag('important')
     def test_square_ufunc_npm(self):
         self.test_square_ufunc(flags=no_pyobj_flags)
 
@@ -494,12 +521,14 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                    types.Array(types.int64, 1, 'C'), types.int64]
         self.unary_ufunc_test(np.reciprocal, skip_inputs=to_skip, flags=flags)
 
+    @tag('important')
     def test_reciprocal_ufunc_npm(self):
         self.test_reciprocal_ufunc(flags=no_pyobj_flags)
 
     def test_conjugate_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.conjugate, flags=flags)
 
+    @tag('important')
     def test_conjugate_ufunc_npm(self):
         self.test_conjugate_ufunc(flags=no_pyobj_flags)
 
@@ -510,18 +539,21 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_sin_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.sin, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_sin_ufunc_npm(self):
         self.test_sin_ufunc(flags=no_pyobj_flags)
 
     def test_cos_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.cos, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_cos_ufunc_npm(self):
         self.test_cos_ufunc(flags=no_pyobj_flags)
 
     def test_tan_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.tan, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_tan_ufunc_npm(self):
         self.test_tan_ufunc(flags=no_pyobj_flags)
 
@@ -558,18 +590,21 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_sinh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.sinh, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_sinh_ufunc_npm(self):
         self.test_sinh_ufunc(flags=no_pyobj_flags)
 
     def test_cosh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.cosh, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_cosh_ufunc_npm(self):
         self.test_cosh_ufunc(flags=no_pyobj_flags)
 
     def test_tanh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.tanh, flags=flags, kinds='cf')
 
+    @tag('important')
     def test_tanh_ufunc_npm(self):
         self.test_tanh_ufunc(flags=no_pyobj_flags)
 
@@ -635,30 +670,35 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_bitwise_and_ufunc(self, flags=enable_pyobj_flags):
         self.binary_int_ufunc_test(np.bitwise_and, flags=flags)
 
+    @tag('important')
     def test_bitwise_and_ufunc_npm(self):
         self.test_bitwise_and_ufunc(flags=no_pyobj_flags)
 
     def test_bitwise_or_ufunc(self, flags=enable_pyobj_flags):
         self.binary_int_ufunc_test(np.bitwise_or, flags=flags)
 
+    @tag('important')
     def test_bitwise_or_ufunc_npm(self):
         self.test_bitwise_or_ufunc(flags=no_pyobj_flags)
 
     def test_bitwise_xor_ufunc(self, flags=enable_pyobj_flags):
         self.binary_int_ufunc_test(np.bitwise_xor, flags=flags)
 
+    @tag('important')
     def test_bitwise_xor_ufunc_npm(self):
         self.test_bitwise_xor_ufunc(flags=no_pyobj_flags)
 
     def test_invert_ufunc(self, flags=enable_pyobj_flags):
         self.unary_int_ufunc_test(np.invert, flags=flags)
 
+    @tag('important')
     def test_invert_ufunc_npm(self):
         self.test_invert_ufunc(flags=no_pyobj_flags)
 
     def test_bitwise_not_ufunc(self, flags=enable_pyobj_flags):
         self.unary_int_ufunc_test(np.bitwise_not, flags=flags)
 
+    @tag('important')
     def test_bitwise_not_ufunc_npm(self):
         self.test_bitwise_not_ufunc(flags=no_pyobj_flags)
 
@@ -678,36 +718,42 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_greater_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.greater, flags=flags)
 
+    @tag('important')
     def test_greater_ufunc_npm(self):
         self.test_greater_ufunc(flags=no_pyobj_flags)
 
     def test_greater_equal_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.greater_equal, flags=flags)
 
+    @tag('important')
     def test_greater_equal_ufunc_npm(self):
         self.test_greater_equal_ufunc(flags=no_pyobj_flags)
 
     def test_less_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.less, flags=flags)
 
+    @tag('important')
     def test_less_ufunc_npm(self):
         self.test_less_ufunc(flags=no_pyobj_flags)
 
     def test_less_equal_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.less_equal, flags=flags)
 
+    @tag('important')
     def test_less_equal_ufunc_npm(self):
         self.test_less_equal_ufunc(flags=no_pyobj_flags)
 
     def test_not_equal_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.not_equal, flags=flags)
 
+    @tag('important')
     def test_not_equal_ufunc_npm(self):
         self.test_not_equal_ufunc(flags=no_pyobj_flags)
 
     def test_equal_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.equal, flags=flags)
 
+    @tag('important')
     def test_equal_ufunc_npm(self):
         self.test_equal_ufunc(flags=no_pyobj_flags)
 
@@ -738,12 +784,14 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_maximum_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.maximum, flags=flags)
 
+    @tag('important')
     def test_maximum_ufunc_npm(self):
         self.test_maximum_ufunc(flags=no_pyobj_flags)
 
     def test_minimum_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.minimum, flags=flags)
 
+    @tag('important')
     def test_minimum_ufunc_npm(self):
         self.test_minimum_ufunc(flags=no_pyobj_flags)
 
@@ -765,30 +813,35 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_isfinite_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.isfinite, flags=flags)
 
+    @tag('important')
     def test_isfinite_ufunc_npm(self):
         self.test_isfinite_ufunc(flags=no_pyobj_flags)
 
     def test_isinf_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.isinf, flags=flags)
 
+    @tag('important')
     def test_isinf_ufunc_npm(self):
         self.test_isinf_ufunc(flags=no_pyobj_flags)
 
     def test_isnan_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.isnan, flags=flags)
 
+    @tag('important')
     def test_isnan_ufunc_npm(self):
         self.test_isnan_ufunc(flags=no_pyobj_flags)
 
     def test_signbit_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.signbit, flags=flags)
 
+    @tag('important')
     def test_signbit_ufunc_npm(self):
         self.test_signbit_ufunc(flags=no_pyobj_flags)
 
     def test_copysign_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.copysign, flags=flags, kinds='f')
 
+    @tag('important')
     def test_copysign_ufunc_npm(self):
         self.test_copysign_ufunc(flags=no_pyobj_flags)
 
@@ -819,18 +872,21 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_floor_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.floor, flags=flags, kinds='f')
 
+    @tag('important')
     def test_floor_ufunc_npm(self):
         self.test_floor_ufunc(flags=no_pyobj_flags)
 
     def test_ceil_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.ceil, flags=flags, kinds='f')
 
+    @tag('important')
     def test_ceil_ufunc_npm(self):
         self.test_ceil_ufunc(flags=no_pyobj_flags)
 
     def test_trunc_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.trunc, flags=flags, kinds='f')
 
+    @tag('important')
     def test_trunc_ufunc_npm(self):
         self.test_trunc_ufunc(flags=no_pyobj_flags)
 
@@ -946,6 +1002,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         if not numpy_support.strict_ufunc_typing:
             self.binary_ufunc_mixed_types_test(np.divide, flags=no_pyobj_flags)
 
+    @tag('important')
     def test_broadcasting(self):
 
         # Test unary ufunc
@@ -1245,6 +1302,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
     def test_unary_positive_array_op(self):
         self.unary_op_test('+')
 
+    @tag('important')
     def test_unary_negative_array_op(self):
         self.unary_op_test('-')
 
@@ -1257,12 +1315,15 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
     # ____________________________________________________________
     # Inplace operators
 
+    @tag('important')
     def test_inplace_add(self):
         self.inplace_float_op_test('+=', [-1, 1.5, 3], [-5, 0, 2.5])
 
+    @tag('important')
     def test_inplace_sub(self):
         self.inplace_float_op_test('-=', [-1, 1.5, 3], [-5, 0, 2.5])
 
+    @tag('important')
     def test_inplace_mul(self):
         self.inplace_float_op_test('*=', [-1, 1.5, 3], [-5, 0, 2.5])
 
@@ -1275,6 +1336,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
     def test_inplace_remainder(self):
         self.inplace_float_op_test('%=', [-1, 1.5, 3], [-5, 2, 2.5])
 
+    @tag('important')
     def test_inplace_pow(self):
         self.inplace_float_op_test('**=', [-1, 1.5, 3], [-5, 2, 2.5])
 
@@ -1287,6 +1349,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
     def test_inplace_xor(self):
         self.inplace_int_op_test('^=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
 
+    @tag('important')
     def test_inplace_lshift(self):
         self.inplace_int_op_test('<<=', [0, 5, -10, -51], [0, 1, 4, 14])
 
@@ -1318,60 +1381,78 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
     # ____________________________________________________________
     # Binary operators
 
+    @tag('important')
     def test_add_array_op(self):
         self.binary_op_test('+')
 
+    @tag('important')
     def test_subtract_array_op(self):
         self.binary_op_test('-')
 
+    @tag('important')
     def test_multiply_array_op(self):
         self.binary_op_test('*')
 
+    @tag('important')
     def test_divide_array_op(self):
         int_out_type = None
         if PYVERSION >= (3, 0):
             int_out_type = types.float64
         self.binary_op_test('/', int_output_type=int_out_type)
 
+    @tag('important')
     def test_floor_divide_array_op(self):
         self.binary_op_test('//')
 
+    @tag('important')
     def test_remainder_array_op(self):
         self.binary_op_test('%')
 
+    @tag('important')
     def test_power_array_op(self):
         self.binary_op_test('**')
 
+    @tag('important')
     def test_left_shift_array_op(self):
         self.binary_int_op_test('<<', positive_rhs=True)
 
+    @tag('important')
     def test_right_shift_array_op(self):
         self.binary_int_op_test('>>', positive_rhs=True)
 
+    @tag('important')
     def test_bitwise_and_array_op(self):
         self.binary_int_op_test('&')
 
+    @tag('important')
     def test_bitwise_or_array_op(self):
         self.binary_int_op_test('|')
 
+    @tag('important')
     def test_bitwise_xor_array_op(self):
         self.binary_int_op_test('^')
 
+    @tag('important')
     def test_equal_array_op(self):
         self.binary_op_test('==')
 
+    @tag('important')
     def test_greater_array_op(self):
         self.binary_op_test('>')
 
+    @tag('important')
     def test_greater_equal_array_op(self):
         self.binary_op_test('>=')
 
+    @tag('important')
     def test_less_array_op(self):
         self.binary_op_test('<')
 
+    @tag('important')
     def test_less_equal_array_op(self):
         self.binary_op_test('<=')
 
+    @tag('important')
     def test_not_equal_array_op(self):
         self.binary_op_test('!=')
 

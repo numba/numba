@@ -1,11 +1,12 @@
 from __future__ import absolute_import, print_function, division
-from numba import unittest_support as unittest
-from numba.decorators import jit
-from numba import float32
+
 import numpy as np
 import numpy.core.umath_tests as ut
+
+from numba import unittest_support as unittest
+from numba import void, float32, jit, guvectorize
 from numba.npyufunc import GUVectorize
-from numba import guvectorize
+from ..support import tag
 
 
 def matmulcore(A, B, C):
@@ -25,24 +26,7 @@ def axpy(a, x, y, out):
 class TestGUFunc(unittest.TestCase):
     target = 'cpu'
 
-    def test_numba(self):
-        jit_matmulcore = jit((float32[:, :], float32[:, :], float32[:,:]))(matmulcore)
-
-        A = np.arange(16, dtype=np.float32).reshape(4, 4)
-        B = np.arange(16, dtype=np.float32).reshape(4, 4)
-        C = np.zeros(16, dtype=np.float32).reshape(4, 4)
-        Gold = np.matrix(A) * np.matrix(B)
-
-        jit_matmulcore(A, B, C)
-
-        self.assertTrue((C == Gold).all())
-
-    def test_gufunc(self):
-        gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
-                             target=self.target)
-        gufunc.add((float32[:, :], float32[:, :], float32[:, :]))
-        gufunc = gufunc.build_ufunc()
-
+    def check_matmul_gufunc(self, gufunc):
         matrix_ct = 1001
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
         B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
@@ -51,6 +35,23 @@ class TestGUFunc(unittest.TestCase):
         Gold = ut.matrix_multiply(A, B)
 
         self.assertTrue(np.allclose(C, Gold))
+
+    @tag('important')
+    def test_gufunc(self):
+        gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
+                             target=self.target)
+        gufunc.add((float32[:, :], float32[:, :], float32[:, :]))
+        gufunc = gufunc.build_ufunc()
+
+        self.check_matmul_gufunc(gufunc)
+
+    @tag('important')
+    def test_guvectorize_decor(self):
+        gufunc = guvectorize([void(float32[:,:], float32[:,:], float32[:,:])],
+                             '(m,n),(n,p)->(m,p)',
+                             target=self.target)(matmulcore)
+
+        self.check_matmul_gufunc(gufunc)
 
     def test_ufunc_like(self):
         # Test problem that the stride of "scalar" gufunc argument not properly
@@ -76,6 +77,7 @@ class TestGUVectorizeScalar(unittest.TestCase):
     """
     target = 'cpu'
 
+    @tag('important')
     def test_scalar_output(self):
         """
         Note that scalar output is a 0-dimension array that acts as
@@ -101,6 +103,7 @@ class TestGUVectorizeScalar(unittest.TestCase):
         for i in range(inp.shape[0]):
             assert out[i] == inp[i].sum()
 
+    @tag('important')
     def test_scalar_input(self):
 
         @guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)',
@@ -165,6 +168,7 @@ class TestGUVectorizeScalar(unittest.TestCase):
 
 class TestGUVectorizeScalarParallel(TestGUVectorizeScalar):
     target = 'parallel'
+
 
 if __name__ == '__main__':
     unittest.main()

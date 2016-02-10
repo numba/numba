@@ -105,6 +105,11 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('-l', '--list', dest='list',
                             action='store_true',
                             help='List tests without running them')
+        parser.add_argument('--tags', dest='tags', type=str,
+                            help='Comma-separated list of tags to select '
+                                 'a subset of the test suite')
+        parser.add_argument('--random', dest='random_select', type=float,
+                            help='Random proportion of tests to select')
         parser.add_argument('--profile', dest='profile',
                             action='store_true',
                             help='Profile the test run')
@@ -124,6 +129,14 @@ class NumbaTestProgram(unittest.main):
         if not hasattr(self, 'test') or not self.test.countTestCases():
             self.testNames = (self.defaultTest,)
             self.createTests()
+
+        if self.tags:
+            tags = [s.strip() for s in self.tags.split(',')]
+            self.test = _choose_tagged_tests(self.test, tags)
+
+        if self.random_select:
+            self.test = _choose_random_tests(self.test, self.random_select,
+                                             self.random_seed)
 
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
@@ -175,6 +188,52 @@ class NumbaTestProgram(unittest.main):
                 p.dump_stats(filename)
         else:
             run_tests_real()
+
+
+def _flatten_suite(test):
+    """
+    Expand nested suite into list of test cases.
+    """
+    if isinstance(test, (unittest.TestSuite, list, tuple)):
+        tests = []
+        for x in test:
+            tests.extend(_flatten_suite(x))
+        return tests
+    else:
+        return [test]
+
+
+def _choose_tagged_tests(tests, tags):
+    selected = []
+    tags = set(tags)
+    for test in _flatten_suite(tests):
+        assert isinstance(test, unittest.TestCase)
+        func = getattr(test, test._testMethodName)
+        try:
+            # Look up the method's underlying function (Python 2)
+            func = func.im_func
+        except AttributeError:
+            pass
+        try:
+            if func.tags & tags:
+                selected.append(test)
+        except AttributeError:
+            # Test method doesn't have any tags
+            pass
+    return unittest.TestSuite(selected)
+
+
+def _choose_random_tests(tests, ratio, seed):
+    """
+    Choose a given proportion of tests at random.
+    """
+    rnd = random.Random()
+    rnd.seed(seed)
+    if isinstance(tests, unittest.TestSuite):
+        tests = _flatten_suite(tests)
+    tests = rnd.sample(tests, int(len(tests) * ratio))
+    tests = sorted(tests, key=lambda case: case.id())
+    return unittest.TestSuite(tests)
 
 
 # The reference leak detection code is liberally taken and adapted from
@@ -290,18 +349,6 @@ class RefleakTestResult(runner.TextTestResult):
 
 class RefleakTestRunner(runner.TextTestRunner):
     resultclass = RefleakTestResult
-
-
-def _flatten_suite(test):
-    """Expand suite into list of tests
-    """
-    if isinstance(test, unittest.TestSuite):
-        tests = []
-        for x in test:
-            tests.extend(_flatten_suite(x))
-        return tests
-    else:
-        return [test]
 
 
 class ParallelTestResult(runner.TextTestResult):

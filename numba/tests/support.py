@@ -33,6 +33,26 @@ skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
                                    "test requires Numpy 1.7 or later")
 
 
+_known_tags = set(['important'])
+
+def tag(*tags):
+    for t in tags:
+        if t not in _known_tags:
+            raise ValueError("unknown tag: %r" % (t,))
+
+    def decorate(func):
+        if (not callable(func) or isinstance(func, type)
+            or not func.__name__.startswith('test_')):
+            raise TypeError("@tag(...) should be used on test methods")
+        try:
+            s = func.tags
+        except AttributeError:
+            s = func.tags = set()
+        s.update(tags)
+        return func
+    return decorate
+
+
 class CompilationCache(object):
     """
     A cache of compilation results for various signatures and flags.

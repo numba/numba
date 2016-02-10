@@ -18,7 +18,7 @@ except ImportError:
 from numba import unittest_support as unittest
 from numba.pycc import find_shared_ending, find_pyext_ending, main
 from numba.pycc.decorators import clear_export_registry
-from .support import TestCase
+from .support import TestCase, tag
 
 from numba.tests.support import static_temp_directory
 
@@ -193,6 +193,7 @@ class TestCC(BasePYCCTest):
             with self.assertRaises(ZeroDivisionError):
                 lib.div(1, 0)
 
+    @tag('important')
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
             res = lib.power(2, 7)
@@ -218,6 +219,7 @@ class TestCC(BasePYCCTest):
                 """ % {'expected': expected}
             self.check_cc_compiled_in_subprocess(lib, code)
 
+    @tag('important')
     def test_compile_nrt(self):
         with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
             # Sanity check

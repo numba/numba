@@ -5,7 +5,7 @@ import numpy
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import errors, types, typeof
-from .support import TestCase, MemoryLeakMixin
+from .support import TestCase, MemoryLeakMixin, tag
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -123,18 +123,21 @@ class TestUnpack(MemoryLeakMixin, TestCase):
         a = numpy.zeros(shape=(1, 2, 3))
         self.assertPreciseEqual(cfunc(a), pyfunc(a))
 
+    @tag('important')
     def test_unpack_shape_npm(self):
         self.test_unpack_shape(flags=no_pyobj_flags)
 
     def test_unpack_range(self, flags=force_pyobj_flags):
         self.run_nullary_func(unpack_range, flags)
 
+    @tag('important')
     def test_unpack_range_npm(self):
         self.test_unpack_range(flags=no_pyobj_flags)
 
     def test_unpack_tuple(self, flags=force_pyobj_flags):
         self.run_nullary_func(unpack_tuple, flags)
 
+    @tag('important')
     def test_unpack_tuple_npm(self):
         self.test_unpack_tuple(flags=no_pyobj_flags)
 
@@ -147,6 +150,7 @@ class TestUnpack(MemoryLeakMixin, TestCase):
     def test_unpack_nested_heterogenous_tuple(self, flags=force_pyobj_flags):
         self.run_nullary_func(unpack_nested_heterogenous_tuple, flags)
 
+    @tag('important')
     def test_unpack_nested_heterogenous_tuple_npm(self):
         self.test_unpack_nested_heterogenous_tuple(flags=no_pyobj_flags)
 
@@ -209,6 +213,7 @@ class TestUnpack(MemoryLeakMixin, TestCase):
     def test_conditional_swap(self):
         self.check_conditional_swap()
 
+    @tag('important')
     def test_conditional_swap_npm(self):
         self.check_conditional_swap(no_pyobj_flags)
 

@@ -7,7 +7,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types
-from .support import captured_stdout
+from .support import captured_stdout, tag
 
 
 enable_pyobj_flags = Flags()
@@ -29,6 +29,7 @@ def print_empty():
 
 class TestPrint(unittest.TestCase):
 
+    @tag('important')
     def test_print(self):
         pyfunc = print_value
 
@@ -72,6 +73,7 @@ class TestPrint(unittest.TestCase):
             self.assertEqual(sys.stdout.getvalue(),
                              '[0 1 2 3 4 5 6 7 8 9]\n')
 
+    @tag('important')
     def test_print_multiple_values(self):
         pyfunc = print_values
         cr = compile_isolated(pyfunc, (types.int32,) * 3)
@@ -80,6 +82,7 @@ class TestPrint(unittest.TestCase):
             cfunc(1, 2, 3)
             self.assertEqual(sys.stdout.getvalue(), '1 2 3\n')
 
+    @tag('important')
     def test_print_empty(self):
         pyfunc = print_empty
         cr = compile_isolated(pyfunc, ())
