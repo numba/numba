@@ -7,7 +7,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import typeof
 from numba.compiler import compile_isolated
-from .support import TestCase, skip_on_numpy_16, MemoryLeakMixin
+from .support import TestCase, skip_on_numpy_16, MemoryLeakMixin, tag
 
 
 def array_cumprod(arr):
@@ -122,41 +122,49 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     Test array reduction methods and functions such as .sum(), .max(), etc.
     """
 
+    @tag('important')
     def test_sum_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_sum, arr)
         self.assertPreciseEqual(npr, nbr)
 
+    @tag('important')
     def test_mean_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_mean, arr)
         self.assertPreciseEqual(npr, nbr, prec="double")
 
+    @tag('important')
     def test_var_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_var, arr)
         self.assertPreciseEqual(npr, nbr, prec="double")
 
+    @tag('important')
     def test_std_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_std, arr)
         self.assertPreciseEqual(npr, nbr, prec="double")
 
+    @tag('important')
     def test_min_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_min, arr)
         self.assertPreciseEqual(npr, nbr)
 
+    @tag('important')
     def test_max_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_max, arr)
         self.assertPreciseEqual(npr, nbr)
 
+    @tag('important')
     def test_argmin_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_argmin, arr)
         self.assertPreciseEqual(npr, nbr)
 
+    @tag('important')
     def test_argmax_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_argmax, arr)
@@ -244,12 +252,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         expected, got = run_comparative(pyfunc, arr)
         self.assertPreciseEqual(got, expected)
 
+    @tag('important')
     def test_array_cumsum(self):
         self.check_cumulative(array_cumsum)
 
     def test_array_cumsum_global(self):
         self.check_cumulative(array_cumsum_global)
 
+    @tag('important')
     def test_array_cumprod(self):
         self.check_cumulative(array_cumprod)
 

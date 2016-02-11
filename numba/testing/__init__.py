@@ -6,9 +6,10 @@ from os.path import join, isfile, relpath, normpath, splitext
 from fnmatch import fnmatch
 import functools
 
-from .main import NumbaTestProgram, SerialSuite
+from .main import NumbaTestProgram, SerialSuite, make_tag_decorator
 import numba.unittest_support as unittest
 from numba import config
+
 
 def load_testsuite(loader, dir):
     """Find tests in 'dir'."""

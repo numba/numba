@@ -8,7 +8,7 @@ import sys
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import types
-from .support import TestCase
+from .support import TestCase, tag
 from .complex_usecases import *
 
 enable_pyobj_flags = Flags()
@@ -122,6 +122,7 @@ class TestComplex(BaseComplexTest, TestCase):
                        (types.complex64, types.complex64)]
         self.run_binary(div_usecase, value_types, values, flags=flags)
 
+    @tag('important')
     def test_div_npm(self):
         self.test_div(flags=no_pyobj_flags)
 
@@ -173,12 +174,14 @@ class TestCMath(BaseComplexTest, TestCase):
     def test_isnan(self, flags=enable_pyobj_flags):
         self.check_predicate_func(isnan_usecase, enable_pyobj_flags)
 
+    @tag('important')
     def test_isnan_npm(self):
         self.check_predicate_func(isnan_usecase, no_pyobj_flags)
 
     def test_isinf(self, flags=enable_pyobj_flags):
         self.check_predicate_func(isinf_usecase, enable_pyobj_flags)
 
+    @tag('important')
     def test_isinf_npm(self):
         self.check_predicate_func(isinf_usecase, no_pyobj_flags)
 
