@@ -22,6 +22,36 @@ except ImportError:
     from Queue import Empty as TimeoutError
 
 
+def make_tag_decorator(known_tags):
+    """
+    Create a decorator allowing tests to be tagged with the *known_tags*.
+    """
+
+    def tag(*tags):
+        """
+        Tag a test method with the given tags.
+        Can be used in conjunction with the --tags command-line argument
+        for runtests.py.
+        """
+        for t in tags:
+            if t not in known_tags:
+                raise ValueError("unknown tag: %r" % (t,))
+
+        def decorate(func):
+            if (not callable(func) or isinstance(func, type)
+                or not func.__name__.startswith('test_')):
+                raise TypeError("@tag(...) should be used on test methods")
+            try:
+                s = func.tags
+            except AttributeError:
+                s = func.tags = set()
+            s.update(tags)
+            return func
+        return decorate
+
+    return tag
+
+
 class TestLister(object):
     """Simply list available tests rather than running them."""
     def __init__(self):
@@ -207,6 +237,9 @@ def _flatten_suite(test):
 
 
 def _choose_tagged_tests(tests, tags):
+    """
+    Select tests that are tagged with at least one of the given tags.
+    """
     selected = []
     tags = set(tags)
     for test in _flatten_suite(tests):

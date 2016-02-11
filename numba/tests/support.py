@@ -12,7 +12,7 @@ import tempfile
 
 import numpy as np
 
-from numba import config, errors, typing, utils, numpy_support
+from numba import config, errors, typing, utils, numpy_support, testing
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
@@ -33,29 +33,7 @@ skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
                                    "test requires Numpy 1.7 or later")
 
 
-_known_tags = set(['important'])
-
-def tag(*tags):
-    """
-    Tag a test method with the given tags.
-    Can be used in conjunction with the --tags command-line argument
-    for runtests.py.
-    """
-    for t in tags:
-        if t not in _known_tags:
-            raise ValueError("unknown tag: %r" % (t,))
-
-    def decorate(func):
-        if (not callable(func) or isinstance(func, type)
-            or not func.__name__.startswith('test_')):
-            raise TypeError("@tag(...) should be used on test methods")
-        try:
-            s = func.tags
-        except AttributeError:
-            s = func.tags = set()
-        s.update(tags)
-        return func
-    return decorate
+tag = testing.make_tag_decorator(['important'])
 
 
 class CompilationCache(object):
