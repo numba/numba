@@ -339,14 +339,14 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.ravel")
     def resolve_ravel(self, ary, args, kws):
+        # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        if ary.layout not in 'CF':
-            raise TypeError("ravel() support contiguous array only")
-        return signature(ary.copy(ndim=1))
+        return signature(ary.copy(ndim=1, layout='C'))
 
     @bound_function("array.flatten")
     def resolve_flatten(self, ary, args, kws):
+        # Only support no argument version (default order='C')
         assert not kws
         assert not args
         return signature(ary.copy(ndim=1, layout='C'))

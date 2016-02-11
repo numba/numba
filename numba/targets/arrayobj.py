@@ -1201,6 +1201,7 @@ def array_reshape(context, builder, sig, args):
     res = ret._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
+
 @lower_builtin('array.reshape', types.Array, types.VarArg(types.Any))
 def array_reshape_vararg(context, builder, sig, args):
     # types
@@ -1223,10 +1224,21 @@ def array_reshape_vararg(context, builder, sig, args):
 
 @lower_builtin('array.ravel', types.Array)
 def array_ravel(context, builder, sig, args):
-    assert sig.args[0].layout in 'CF'
-
-    def imp(ary):
+    # Only support no argument version (default order='C')
+    def imp_nocopy(ary):
+        """No copy version"""
         return ary.reshape(ary.size)
+
+    def imp_copy(ary):
+        """Copy version"""
+        return ary.flatten()
+
+    # If the input array is C layout already, use the nocopy version
+    if sig.args[0].layout == 'C':
+        imp = imp_nocopy
+    # otherwise, use flatten under-the-hood
+    else:
+        imp = imp_copy
 
     res = context.compile_internal(builder, imp, sig, args)
     res = impl_ret_new_ref(context, builder, sig.return_type, res)

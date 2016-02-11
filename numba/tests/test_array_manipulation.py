@@ -164,16 +164,27 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.test_flatten_array(flags=no_pyobj_flags, layout='A')
 
     def test_ravel_array(self, flags=enable_pyobj_flags):
-        a = np.arange(9).reshape(3, 3)
+        def check(a, assume_layout):
+            # compile
+            pyfunc = ravel_array
+            arraytype1 = typeof(a)
+            self.assertEqual(arraytype1.layout, assume_layout)
+            cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
+            cfunc = cr.entry_point
 
-        pyfunc = ravel_array
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+            expected = pyfunc(a)
+            got = cfunc(a)
+            np.testing.assert_equal(expected, got)
 
-        expected = pyfunc(a)
-        got = cfunc(a)
-        np.testing.assert_equal(expected, got)
+        # Check 2D
+        check(np.arange(9).reshape(3, 3), assume_layout='C')
+        check(np.arange(9).reshape(3, 3, order='F'), assume_layout='F')
+        check(np.arange(18).reshape(3, 3, 2)[:, :, 0], assume_layout='A')
+
+        # Check 3D
+        check(np.arange(18).reshape(2, 3, 3), assume_layout='C')
+        check(np.arange(18).reshape(2, 3, 3, order='F'), assume_layout='F')
+        check(np.arange(36).reshape(2, 3, 3, 2)[:, :, :, 0], assume_layout='A')
 
     def test_ravel_array_size(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
