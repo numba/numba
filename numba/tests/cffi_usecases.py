@@ -6,6 +6,7 @@ import numpy as np
 
 from numba import cffi_support
 from numba.tests.support import static_temp_directory
+from numba.types import complex128
 
 
 def load_inline_module():
@@ -44,15 +45,24 @@ def load_ool_module():
     """
     from cffi import FFI
 
-    defs = """
-    double sin(double x);
-    double cos(double x);
-    void vsSin(int n, float* x, float* y);
-    void vdSin(int n, double* x, double* y);
-    int foo(int a, int b, int c);
+    numba_complex = """
+    typedef struct _numba_complex {
+        double real;
+        double imag;
+    } numba_complex;
     """
 
-    source = """
+    defs = numba_complex + """
+    double sin(double x);
+    double cos(double x);
+    int foo(int a, int b, int c);
+    void vsSin(int n, float* x, float* y);
+    void vdSin(int n, double* x, double* y);
+    void vector_real(numba_complex *c, double *real, int n);
+    void vector_imag(numba_complex *c, double *imag, int n);
+    """
+
+    source = numba_complex + """
     static int foo(int a, int b, int c)
     {
         return a + b * c;
@@ -69,6 +79,18 @@ def load_ool_module():
         for (i=0; i<n; i++)
             y[i] = sin(x[i]);
     }
+
+    static void vector_real(numba_complex *c, double *real, int n) {
+        int i;
+        for (i = 0; i < n; i++)
+            real[i] = c[i].real;
+    }
+
+    static void vector_imag(numba_complex *c, double *imag, int n) {
+        int i;
+        for (i = 0; i < n; i++)
+            imag[i] = c[i].imag;
+    }
     """
 
     ffi = FFI()
@@ -80,6 +102,8 @@ def load_ool_module():
     try:
         import cffi_usecases_ool as mod
         cffi_support.register_module(mod)
+        cffi_support.register_type(mod.ffi.typeof('struct _numba_complex'),
+                                   complex128)
         return mod.ffi, mod
     finally:
         sys.path.remove(tmpdir)
@@ -103,6 +127,7 @@ def init_ool():
     Same as init() for OOL mode.
     """
     global ffi_ool, cffi_sin_ool, cffi_cos_ool, cffi_foo, vsSin, vdSin
+    global vector_real, vector_imag
 
     if ffi_ool is None:
         ffi_ool, mod = load_ool_module()
@@ -111,6 +136,8 @@ def init_ool():
         cffi_foo = mod.lib.foo
         vsSin = mod.lib.vsSin
         vdSin = mod.lib.vdSin
+        vector_real = mod.lib.vector_real
+        vector_imag = mod.lib.vector_imag
         del mod
 
 ffi = ffi_ool = None
@@ -146,3 +173,12 @@ def vector_sin_float32(x, y):
 
 def vector_sin_float64(x, y):
     vdSin(len(x), ffi.from_buffer(x), ffi_ool.from_buffer(y))
+
+
+# For testing pointer to structs from buffers
+
+def vector_extract_real(x, y):
+    vector_real(ffi.from_buffer(x), ffi.from_buffer(y), len(x))
+
+def vector_extract_imag(x, y):
+    vector_imag(ffi.from_buffer(x), ffi.from_buffer(y), len(x))
