@@ -47,7 +47,7 @@ def _fill_ufunc_db(ufunc_db):
     # some of these imports would cause a problem of circular
     # imports if done at global scope when importing the numba
     # module.
-    from . import builtins, npyfuncs, cmathimpl
+    from . import builtins, npyfuncs, mathimpl, cmathimpl
     from numba import numpy_support
 
     v = numpy_support.version
@@ -487,15 +487,15 @@ def _fill_ufunc_db(ufunc_db):
     }
 
     ufunc_db[np.deg2rad] = {
-        'f->f': npyfuncs.np_real_deg2rad_impl,
-        'd->d': npyfuncs.np_real_deg2rad_impl,
+        'f->f': mathimpl.radians_float_impl,
+        'd->d': mathimpl.radians_float_impl,
     }
 
     ufunc_db[np.radians] = ufunc_db[np.deg2rad]
 
     ufunc_db[np.rad2deg] = {
-        'f->f': npyfuncs.np_real_rad2deg_impl,
-        'd->d': npyfuncs.np_real_rad2deg_impl,
+        'f->f': mathimpl.degrees_float_impl,
+        'd->d': mathimpl.degrees_float_impl,
     }
 
     ufunc_db[np.degrees] = ufunc_db[np.rad2deg]

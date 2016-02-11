@@ -1,85 +1,60 @@
 # References https://gist.github.com/dan-blanchard/7045057
-language: python
+# and https://docs.travis-ci.com/user/trusty-ci-environment/
+
+dist: trusty
 
 matrix:
   include:
-    - python: 2.6
-      env: NUMPY="numpy=1.6"
-    - python: 2.7
-      env: NUMPY="numpy=1.7"
-    - python: 3.3
-      env: NUMPY="numpy=1.8"
-    - python: 3.4
-      env: NUMPY="numpy=1.9"
-    - python: 3.5-dev
-      # TODO: change this to 1.10 when we're ok
-      env: NUMPY="numpy=1.10"
+    - env: PYTHON=2.6 NUMPY="numpy=1.6"
+    - env: PYTHON=2.7 NUMPY="numpy=1.7"
+    - env: PYTHON=3.3 NUMPY="numpy=1.8"
+    - env: PYTHON=3.4 NUMPY="numpy=1.9"
+    - env: PYTHON=3.5 NUMPY="numpy=1.10"
 
 branches:
   only:
     - master
-    - llvmlite2
-
-sudo: false
-
-addons:
-  apt:
-    sources:
-      - ubuntu-toolchain-r-test
-    packages:
-      - g++-4.8
 
 before_install:
   # Install Miniconda
-  - wget http://repo.continuum.io/miniconda/Miniconda3-3.7.0-Linux-x86_64.sh -O miniconda.sh
+  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
   - export PATH=$HOME/miniconda3/bin:$PATH
-  - PY_MAJOR_MINOR=${TRAVIS_PYTHON_VERSION:0:3}
   # Setup environment
   - conda update --yes conda
-  - conda create -n travisci --yes python=$PY_MAJOR_MINOR $NUMPY cffi pip
+  # Scipy and CFFI are optional dependencies, but exercised in the test suite
+  - conda create -n travisci --yes python=$PYTHON $NUMPY cffi pip scipy
   - source activate travisci
   - CONDA_INSTALL="conda install --yes -q"
   - PIP_INSTALL="pip install -q"
   # Install llvmdev (separate channel, for now)
-  - $CONDA_INSTALL -c numba llvmdev="3.6*"
+  - $CONDA_INSTALL -c numba llvmdev="3.7*"
   # Install unittest2 for Python 2
-  - if [ $PY_MAJOR_MINOR == "2.6" ]; then $CONDA_INSTALL unittest2 argparse; fi
+  - if [ $PYTHON == "2.6" ]; then $CONDA_INSTALL unittest2 argparse; fi
   # Install enum34 and singledispatch for Python < 3.4
-  - if [ $PY_MAJOR_MINOR \< "3.4" ]; then $CONDA_INSTALL enum34; fi
-  - if [ $PY_MAJOR_MINOR \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
+  - if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
+  - if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
   # Install funcsigs for Python < 3.3
-  - if [ $PY_MAJOR_MINOR \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
+  - if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
   # Install dependencies for building the documentation
   - $CONDA_INSTALL sphinx pygments
   - $PIP_INSTALL sphinxjp.themecore sphinxjp.themes.basicstrap
 
-  # Install boost for impyla
-  #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
-  # Install pytest for impyla
-  #- conda install --yes pytest
-
 install:
     # Build and install llvmlite from source
-    - export CXX=g++-4.8
     - git clone git://github.com/numba/llvmlite.git -q
     - cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
     # Build numba extensions without silencing compile errors
     - python setup.py build_ext -q
     # Install numba
     - python setup.py install -q >/dev/null
-    # Install impyla
-    #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then export LLVM_CONFIG_PATH=$(which llvm-config); fi
-    #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME ; git clone https://github.com/cloudera/impyla.git -q; fi
-    #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd impyla ; make ; python setup.py install; fi
 
 script:
     # Ensure that the documentation builds without warnings
     - cd $TRAVIS_BUILD_DIR/docs ; make SPHINXOPTS=-W clean html
     # Run the Numba test suite
-    - cd ~ ; NUMBA_ENABLE_CUDASIM=1 python -m numba.testing -b -m
-    #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME; py.test --udf $HOME/impyla/impala/tests/test_udf_compile.py; fi
+    - cd ~ ; NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests
 
 notifications:
   email: false

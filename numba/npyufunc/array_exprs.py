@@ -12,7 +12,7 @@ from ..targets import npyimpl
 from .dufunc import DUFunc
 
 
-@rewrites.register_rewrite
+@rewrites.register_rewrite('after-inference')
 class RewriteArrayExprs(rewrites.Rewrite):
     '''The RewriteArrayExprs class is responsible for finding array
     expressions in Numba intermediate representation code, and
@@ -26,7 +26,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
         if 'arrayexpr' not in special_ops:
             special_ops['arrayexpr'] = _lower_array_expr
 
-    def match(self, block, typemap, calltypes):
+    def match(self, interp, block, typemap, calltypes):
         '''Using typing and a basic block, search the basic block for array
         expressions.  Returns True when one or more matches were
         found, False otherwise.
@@ -43,9 +43,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
             self.array_assigns = array_assigns
             const_assigns = {}
             self.const_assigns = const_assigns
-            assignments = (instr
-                           for instr in block.body
-                           if isinstance(instr, ir.Assign))
+            assignments = block.find_insts(ir.Assign)
             for instr in assignments:
                 target_name = instr.target.name
                 expr = instr.value
@@ -64,8 +62,8 @@ class RewriteArrayExprs(rewrites.Rewrite):
                         func_type = typemap[expr.func.name]
                         # Note: func_type can be a types.Dispatcher, which
                         #       doesn't have the `.template` attribute.
-                        if hasattr(func_type, 'template'):
-                            func_key = getattr(func_type.template, 'key', None)
+                        if isinstance(func_type, types.Function):
+                            func_key = func_type.typing_key
                             if isinstance(func_key, (ufunc, DUFunc)):
                                 # If so, match it as a potential subexpression.
                                 array_assigns[target_name] = instr
@@ -91,7 +89,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
         if ir_op in ('unary', 'binop'):
             return ir_expr.fn
         elif ir_op == 'call':
-            return self.typemap[ir_expr.func.name].template.key
+            return self.typemap[ir_expr.func.name].typing_key
         raise NotImplementedError(
             "Don't know how to find the operator for '{0}' expressions.".format(
                 ir_op))
@@ -179,7 +177,8 @@ class RewriteArrayExprs(rewrites.Rewrite):
         replace_map, dead_vars, used_vars = self._handle_matches()
         # Part 2: Using the information above, rewrite the target
         # basic block.
-        result = ir.Block(self.crnt_block.scope, self.crnt_block.loc)
+        result = self.crnt_block.copy()
+        result.clear()
         delete_map = {}
         for instr in self.crnt_block.body:
             if isinstance(instr, ir.Assign):

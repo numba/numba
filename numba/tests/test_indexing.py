@@ -7,7 +7,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils, njit, errors, typeof
+from numba import types, utils, njit, errors, typeof, numpy_support
 from .support import TestCase
 
 
@@ -743,6 +743,44 @@ class TestSetItem(TestCase):
         with self.assertRaises(ValueError):
             cfunc(np.zeros_like(arg), arg, 0, 0, 1)
 
+    def check_1d_slicing_set_sequence(self, flags, seqty, seq):
+        """
+        Generic sequence to 1d slice assignment
+        """
+        pyfunc = slicing_1d_usecase_set
+        dest_type = types.Array(types.int32, 1, 'C')
+        argtys = (dest_type, seqty, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        N = 10
+        k = len(seq)
+        arg = np.arange(N, dtype=np.int32)
+        args = (seq, 1, -N + k + 1, 1)
+        expected = pyfunc(arg.copy(), *args)
+        got = cfunc(arg.copy(), *args)
+        self.assertPreciseEqual(expected, got)
+
+        if numpy_support.version != (1, 7):
+            # Numpy 1.7 doesn't always raise an error here (object mode)
+            args = (seq, 1, -N + k, 1)
+            with self.assertRaises(ValueError) as raises:
+                cfunc(arg.copy(), *args)
+
+    def test_1d_slicing_set_tuple(self, flags=enable_pyobj_flags):
+        """
+        Tuple to 1d slice assignment
+        """
+        self.check_1d_slicing_set_sequence(
+            flags, types.UniTuple(types.int16, 2), (8, -42))
+
+    def test_1d_slicing_set_list(self, flags=enable_pyobj_flags):
+        """
+        List to 1d slice assignment
+        """
+        self.check_1d_slicing_set_sequence(
+            flags, types.List(types.int16), [8, -42])
+
     def test_1d_slicing_broadcast(self, flags=enable_pyobj_flags):
         """
         scalar to 1d slice assignment
@@ -782,6 +820,12 @@ class TestSetItem(TestCase):
 
     def test_1d_slicing_set_npm(self):
         self.test_1d_slicing_set(flags=Noflags)
+
+    def test_1d_slicing_set_list_npm(self):
+        self.test_1d_slicing_set_list(flags=Noflags)
+
+    def test_1d_slicing_set_tuple_npm(self):
+        self.test_1d_slicing_set_tuple(flags=Noflags)
 
     def test_1d_slicing_broadcast_npm(self):
         self.test_1d_slicing_broadcast(flags=Noflags)
@@ -862,6 +906,87 @@ class TestSetItem(TestCase):
             setitem_usecase(arr, 1, 42)
         self.assertIn("Cannot modify value of type readonly array",
                       str(raises.exception))
+
+
+class TestTyping(TestCase):
+    """
+    Check typing of basic indexing operations
+    """
+
+    def test_layout(self):
+        """
+        Check an appropriate layout is inferred for the result of array
+        indexing.
+        """
+        from numba.typing import arraydecl
+        from numba.types import intp, ellipsis, slice2_type, slice3_type
+
+        func = arraydecl.get_array_index_type
+
+        cty = types.Array(types.float64, 3, 'C')
+        fty = types.Array(types.float64, 3, 'F')
+        aty = types.Array(types.float64, 3, 'A')
+
+        indices = [
+            # Tuples of (indexing arguments, keeps "C" layout, keeps "F" layout)
+            ((), True, True),
+            ((ellipsis,), True, True),
+
+            # Indexing from the left => can sometimes keep "C" layout
+            ((intp,), True, False),
+            ((slice2_type,), True, False),
+            ((intp, slice2_type), True, False),
+            ((slice2_type, intp), False, False),
+            ((slice2_type, slice2_type), False, False),
+            # Strided slices = > "A" layout
+            ((intp, slice3_type), False, False),
+            ((slice3_type,), False, False),
+
+            # Indexing from the right => can sometimes keep "F" layout
+            ((ellipsis, intp,), False, True),
+            ((ellipsis, slice2_type,), False, True),
+            ((ellipsis, intp, slice2_type,), False, False),
+            ((ellipsis, slice2_type, intp,), False, True),
+            ((ellipsis, slice2_type, slice2_type,), False, False),
+            # Strided slices = > "A" layout
+            ((ellipsis, slice3_type,), False, False),
+            ((ellipsis, slice3_type, intp,), False, False),
+
+            # Indexing from both sides => only if all dimensions are indexed
+            ((intp, ellipsis, intp,), False, False),
+            ((slice2_type, ellipsis, slice2_type,), False, False),
+            ((intp, intp, slice2_type,), True, False),
+            ((intp, ellipsis, intp, slice2_type,), True, False),
+            ((slice2_type, intp, intp,), False, True),
+            ((slice2_type, intp, ellipsis, intp,), False, True),
+            ((intp, slice2_type, intp,), False, False),
+            # Strided slices = > "A" layout
+            ((slice3_type, intp, intp,), False, False),
+            ((intp, intp, slice3_type,), False, False),
+            ]
+
+        for index_tuple, keep_c, _ in indices:
+            index = types.Tuple(index_tuple)
+            r = func(cty, index)
+            self.assertEqual(tuple(r.index), index_tuple)
+            self.assertEqual(r.result.layout, 'C' if keep_c else 'A',
+                             index_tuple)
+            self.assertFalse(r.advanced)
+
+        for index_tuple, _, keep_f in indices:
+            index = types.Tuple(index_tuple)
+            r = func(fty, index)
+            self.assertEqual(tuple(r.index), index_tuple)
+            self.assertEqual(r.result.layout, 'F' if keep_f else 'A',
+                             index_tuple)
+            self.assertFalse(r.advanced)
+
+        for index_tuple, _, _ in indices:
+            index = types.Tuple(index_tuple)
+            r = func(aty, index)
+            self.assertEqual(tuple(r.index), index_tuple)
+            self.assertEqual(r.result.layout, 'A')
+            self.assertFalse(r.advanced)
 
 
 if __name__ == '__main__':

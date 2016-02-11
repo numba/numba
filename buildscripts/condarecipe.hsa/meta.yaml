@@ -1,12 +1,12 @@
 package:
   name: numba-hsa
-  version: "0.20.0"
+  version: 0.21.0
 
 source:
   path: ../..
 
 build:
-  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+  number: 0
   entry_points:
     - pycc = numba.pycc:main
     - numba = numba.numba_entry:main
@@ -17,17 +17,17 @@ requirements:
   build:
     - python
     - argparse        [py26]
-    - numpy
+    - numpy x.x
     # On channel https://binstar.org/numba/
-    - llvmlite 0.6*
+    - llvmlite 0.9.*
     - funcsigs       [py26 or py27]
     - singledispatch [py26 or py27 or py33]
   run:
     - python
     - argparse        [py26]
-    - numpy
+    - numpy x.x
     # On channel https://binstar.org/numba/
-    - llvmlite 0.6*
+    - llvmlite 0.9.*
     - funcsigs       [py26 or py27]
     - singledispatch [py26 or py27 or py33]
     - libhlc

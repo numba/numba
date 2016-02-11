@@ -4,7 +4,8 @@ import os
 import pprint
 from collections import defaultdict
 
-from .errors import NotDefinedError, RedefinedError, VerificationError
+from .errors import (NotDefinedError, RedefinedError, VerificationError,
+                     ConstantInferenceError)
 
 
 class Loc(object):
@@ -129,8 +130,15 @@ class Expr(Inst):
         self.op = op
         self.loc = loc
         self._kws = kws
-        for k, v in kws.items():
-            setattr(self, k, v)
+
+    def __getattr__(self, name):
+        return self._kws[name]
+
+    def __setattr__(self, name, value):
+        if name in ('op', 'loc', '_kws'):
+            self.__dict__[name] = value
+        else:
+            self._kws[name] = value
 
     @classmethod
     def binop(cls, fn, lhs, rhs, loc):
@@ -210,9 +218,10 @@ class Expr(Inst):
         return cls(op=op, loc=loc, value=value, index=index)
 
     @classmethod
-    def static_getitem(cls, value, index, loc):
+    def static_getitem(cls, value, index, index_var, loc):
         op = 'static_getitem'
-        return cls(op=op, loc=loc, value=value, index=index)
+        return cls(op=op, loc=loc, value=value, index=index,
+                   index_var=index_var)
 
     @classmethod
     def cast(cls, value, loc):
@@ -239,7 +248,7 @@ class Expr(Inst):
         return self._rec_list_vars(self._kws)
 
     def infer_constant(self):
-        raise TypeError("cannot make a constant of %s" % (self,))
+        raise ConstantInferenceError("cannot make a constant of %s" % (self,))
 
 
 class SetItem(Stmt):
@@ -255,6 +264,22 @@ class SetItem(Stmt):
 
     def __repr__(self):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
+
+
+class StaticSetItem(Stmt):
+    """
+    target[constant index] = value
+    """
+
+    def __init__(self, target, index, index_var, value, loc):
+        self.target = target
+        self.index = index
+        self.index_var = index_var
+        self.value = value
+        self.loc = loc
+
+    def __repr__(self):
+        return '%s[%r] = %s' % (self.target, self.index, self.value)
 
 
 class DelItem(Stmt):
@@ -324,6 +349,30 @@ class Raise(Stmt):
         return "raise %s" % self.exception
 
 
+class StaticRaise(Stmt):
+    """
+    Raise an exception class and arguments known at compile-time.
+    Note that if *exc_class* is None, a bare "raise" statement is implied
+    (i.e. re-raise the current exception).
+    """
+    is_terminator = True
+    is_exit = True
+
+    def __init__(self, exc_class, exc_args, loc):
+        self.exc_class = exc_class
+        self.exc_args = exc_args
+        self.loc = loc
+
+    def __str__(self):
+        if self.exc_class is None:
+            return "raise"
+        elif self.exc_args is None:
+            return "raise %s" % (self.exc_class,)
+        else:
+            return "raise %s(%s)" % (self.exc_class,
+                                     ", ".join(map(repr, self.exc_args)))
+
+
 class Return(Stmt):
     is_terminator = True
     is_exit = True
@@ -391,6 +440,9 @@ class Arg(object):
 
     def __repr__(self):
         return 'arg(%d, name=%s)' % (self.index, self.name)
+
+    def infer_constant(self):
+        raise ConstantInferenceError("cannot make a constant of %s" % (self,))
 
 
 class Const(object):
@@ -577,6 +629,30 @@ class Block(object):
         self.body = []
         self.loc = loc
 
+    def copy(self):
+        block = Block(self.scope, self.loc)
+        block.body = self.body[:]
+        return block
+
+    def find_exprs(self, op=None):
+        """
+        Iterate over exprs of the given *op* in this block.
+        """
+        for inst in self.body:
+            if isinstance(inst, Assign):
+                expr = inst.value
+                if isinstance(expr, Expr):
+                    if op is None or expr.op == op:
+                        yield expr
+
+    def find_insts(self, cls=None):
+        """
+        Iterate over insts of the given class in this block.
+        """
+        for inst in self.body:
+            if isinstance(inst, cls):
+                yield inst
+
     def prepend(self, inst):
         assert isinstance(inst, Stmt)
         self.body.insert(0, inst)
@@ -588,6 +664,9 @@ class Block(object):
     def remove(self, inst):
         assert isinstance(inst, Stmt)
         del self.body[self.body.index(inst)]
+
+    def clear(self):
+        del self.body[:]
 
     def dump(self, file=sys.stdout):
         for inst in self.body:

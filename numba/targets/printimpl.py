@@ -4,18 +4,17 @@ This file implements print functionality for the CPU.
 from __future__ import print_function, absolute_import, division
 from llvmlite.llvmpy.core import Type
 from numba import types, typing, cgutils
-from numba.targets.imputils import implement, Registry, impl_ret_untracked
+from numba.targets.imputils import Registry, impl_ret_untracked
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 
 # FIXME: the current implementation relies on CPython API even in
 #        nopython mode.
 
 
-@register
-@implement(types.print_item_type, types.Kind(types.Integer))
+@lower("print_item", types.Integer)
 def int_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -29,8 +28,7 @@ def int_print_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement(types.print_item_type, types.Kind(types.Float))
+@lower("print_item", types.Float)
 def real_print_impl(context, builder, sig, args):
     [x] = args
     py = context.get_python_api(builder)
@@ -42,8 +40,18 @@ def real_print_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement(types.print_item_type, types.Kind(types.CharSeq))
+@lower("print_item", types.Boolean)
+def bool_print_impl(context, builder, sig, args):
+    [x] = args
+    py = context.get_python_api(builder)
+    boolobj = py.bool_from_bool(x)
+    py.print_object(boolobj)
+    py.decref(boolobj)
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower("print_item", types.CharSeq)
 def print_charseq(context, builder, sig, args):
     [tx] = sig.args
     [x] = args
@@ -59,13 +67,12 @@ def print_charseq(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement(types.print_type, types.VarArg(types.Any))
+@lower(print, types.VarArg(types.Any))
 def print_varargs(context, builder, sig, args):
     py = context.get_python_api(builder)
     for i, (argtype, argval) in enumerate(zip(sig.args, args)):
         signature = typing.signature(types.none, argtype)
-        imp = context.get_function(types.print_item_type, signature)
+        imp = context.get_function("print_item", signature)
         imp(builder, [argval])
         if i < len(args) - 1:
             py.print_string(' ')

@@ -198,6 +198,12 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
             self.assertEqual(str(raises.exception),
                              "total size of new array must be unchanged")
 
+        def check_err_multiple_negative(arr, shape):
+            with self.assertRaises(ValueError) as raises:
+                run(arr, shape)
+            self.assertEqual(str(raises.exception),
+                             "multiple negative shape value")
+
         # C-contiguous
         arr = np.arange(24)
         check(arr, (24,))
@@ -226,6 +232,17 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
         check_err_shape(arr, (2, 3, 4))
         check_err_shape(arr, (6, 4))
         check_err_shape(arr, (2, 12))
+
+        # Test negative shape value
+        arr = np.arange(25).reshape(5,5)
+        check(arr, -1)
+        check(arr, (-1,))
+        check(arr, (-1, 5))
+        check(arr, (5, -1, 5))
+        check(arr, (5, 5, -1))
+        check_err_size(arr, (-1, 4))
+        check_err_multiple_negative(arr, (-1, -2, 5, 5))
+        check_err_multiple_negative(arr, (5, 5, -1, -1))
 
     def test_array_view(self):
 
@@ -510,6 +527,14 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             self.assertEqual(got.dtype, expected.dtype)
             np.testing.assert_array_equal(got, expected)
 
+        def check_scal(scal):
+            x = 4
+            y = 5
+            cres = compile_isolated(pyfunc, (typeof(scal), typeof(x), typeof(y)))
+            expected = pyfunc(scal, x, y)
+            got = cres.entry_point(scal, x, y)
+            self.assertPreciseEqual(got, expected)
+
         arr = np.int16([1, 0, -1, 0])
         check_arr(arr)
         arr = np.bool_([1, 0, 1])
@@ -526,6 +551,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         for v in (0.0, 1.5, float('nan')):
             arr = np.array([v]).reshape(())
             check_arr(arr)
+
+        for x in (0, 1, True, False, 2.5, 0j):
+            check_scal(x)
 
 
 class TestArrayComparisons(TestCase):

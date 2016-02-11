@@ -1,3 +1,4 @@
+include MANIFEST.in
 include README.rst setup.py runtests.py versioneer.py CHANGE_LOG AUTHORS LICENSE
 
 recursive-include numba *.c *.cpp *.h *.hpp *.inc

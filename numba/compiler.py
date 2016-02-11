@@ -9,7 +9,7 @@ import warnings
 import traceback
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
-                   lowering, objmode, irpasses, utils, config,
+                   lowering, objmode, irpasses, utils, config, errors,
                    types, ir, looplifting, macro, types, rewrites)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
@@ -117,7 +117,7 @@ _LowerResult = namedtuple("_LowerResult", [
 def get_function_attributes(func):
     '''
     Extract the function attributes from a Python function or object with
-    *py_func* attribute, such as CPUOverloaded.
+    *py_func* attribute, such as CPUDispatcher.
 
     Returns an instance of FunctionAttributes.
     '''
@@ -240,7 +240,7 @@ class _PipelineManager(object):
             is_final_pipeline = pipeline_name == self.pipeline_order[-1]
             for stage, stage_name in self.pipeline_stages[pipeline_name]:
                 try:
-                    res = stage()
+                    stage()
                 except _EarlyPipelineCompletion as e:
                     return e.result
                 except BaseException as e:
@@ -254,7 +254,7 @@ class _PipelineManager(object):
                         status.fail_reason = patched_exception
                         break
             else:
-                return res
+                return None
 
         # TODO save all error information
         raise CompilerError("All pipelines have failed")
@@ -268,6 +268,8 @@ class Pipeline(object):
                  locals):
         # Make sure the environment is reloaded
         config.reload_config()
+        typingctx.refresh()
+        targetctx.refresh()
 
         self.typingctx = typingctx
 
@@ -285,9 +287,17 @@ class Pipeline(object):
         self.return_type = return_type
         self.flags = flags
         self.locals = locals
+
+        # Results of various steps of the compilation pipeline
+        self.interp = None
         self.bc = None
+        self.func = None
         self.func_attr = None
         self.lifted = None
+        self.lifted_from = None
+        self.typemap = None
+        self.calltypes = None
+        self.type_annotation = None
 
         self.status = _CompileStatus(
             can_fallback=self.flags.enable_pyobject,
@@ -309,7 +319,7 @@ class Pipeline(object):
                     # Clear all references attached to the traceback
                     e = e.with_traceback(None)
                 warnings.warn_explicit('%s: %s' % (msg, e),
-                                       config.NumbaWarning,
+                                       errors.NumbaWarning,
                                        self.func_attr.filename,
                                        self.func_attr.lineno)
 
@@ -330,7 +340,7 @@ class Pipeline(object):
                     # Clear all references attached to the traceback
                     e = e.with_traceback(None)
                 warnings.warn_explicit('%s: %s' % (msg, e),
-                                       config.NumbaWarning,
+                                       errors.NumbaWarning,
                                        self.func_attr.filename,
                                        self.func_attr.lineno)
 
@@ -354,7 +364,8 @@ class Pipeline(object):
             bc = self.extract_bytecode(func)
         except BaseException as e:
             if self.status.can_giveup:
-                return self.stage_compile_interp_mode()
+                self.stage_compile_interp_mode()
+                return self.cr
             else:
                 raise e
 
@@ -462,18 +473,32 @@ class Pipeline(object):
             legalize_return_type(self.return_type, self.interp,
                                  self.targetctx)
 
+    def stage_generic_rewrites(self):
+        """
+        Perform any intermediate representation rewrites before type
+        inference.
+        """
+        assert self.interp
+        with self.fallback_context('Internal error in pre-inference rewriting '
+                                   'pass encountered during compilation of '
+                                   'function "%s"' % (self.func_attr.name,)):
+            rewrites.rewrite_registry.apply('before-inference',
+                                            self, self.interp)
+
     def stage_nopython_rewrites(self):
         """
-        Perform any intermediate representation rewrites.
+        Perform any intermediate representation rewrites after type
+        inference.
         """
         # Ensure we have an IR container (interp), and type information.
         assert self.interp
         assert isinstance(getattr(self, 'typemap', None), dict)
         assert isinstance(getattr(self, 'calltypes', None), dict)
-        with self.fallback_context('Internal error in rewriting pass '
-                                   'encountered during compilation of '
+        with self.fallback_context('Internal error in post-inference rewriting '
+                                   'pass encountered during compilation of '
                                    'function "%s"' % (self.func_attr.name,)):
-            rewrites.rewrite_registry.apply(self, self.interp.blocks)
+            rewrites.rewrite_registry.apply('after-inference',
+                                            self, self.interp)
 
     def stage_annotate_type(self):
         """
@@ -539,29 +564,28 @@ class Pipeline(object):
 
         lowered = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
-        cr = compile_result(typing_context=self.typingctx,
-                            target_context=self.targetctx,
-                            entry_point=lowered.cfunc,
-                            typing_error=self.status.fail_reason,
-                            type_annotation=self.type_annotation,
-                            library=self.library,
-                            call_helper=lowered.call_helper,
-                            signature=signature,
-                            objectmode=objectmode,
-                            interpmode=False,
-                            lifted=self.lifted,
-                            fndesc=lowered.fndesc,
-                            environment=lowered.env,
-                            has_dynamic_globals=lowered.has_dynamic_globals,
-                            )
-        return cr
+        self.cr = compile_result(typing_context=self.typingctx,
+                                 target_context=self.targetctx,
+                                 entry_point=lowered.cfunc,
+                                 typing_error=self.status.fail_reason,
+                                 type_annotation=self.type_annotation,
+                                 library=self.library,
+                                 call_helper=lowered.call_helper,
+                                 signature=signature,
+                                 objectmode=objectmode,
+                                 interpmode=False,
+                                 lifted=self.lifted,
+                                 fndesc=lowered.fndesc,
+                                 environment=lowered.env,
+                                 has_dynamic_globals=lowered.has_dynamic_globals,
+                                 )
 
     def stage_objectmode_backend(self):
         """
         Lowering for object mode
         """
         lowerfn = self.backend_object_mode
-        res = self._backend(lowerfn, objectmode=True)
+        self._backend(lowerfn, objectmode=True)
 
         # Warn if compiled function in object mode and force_pyobject not set
         if not self.flags.force_pyobject:
@@ -569,22 +593,21 @@ class Pipeline(object):
                 warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % (self.func_attr.name,)
             else:
                 warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % (self.func_attr.name,)
-            warnings.warn_explicit(warn_msg, config.NumbaWarning,
+            warnings.warn_explicit(warn_msg, errors.NumbaWarning,
                                    self.func_attr.filename,
                                    self.func_attr.lineno)
             if self.flags.release_gil:
                 warn_msg = "Code running in object mode won't allow parallel execution despite nogil=True."
-                warnings.warn_explicit(warn_msg, config.NumbaWarning,
+                warnings.warn_explicit(warn_msg, errors.NumbaWarning,
                                        self.func_attr.filename,
                                        self.func_attr.lineno)
-        return res
 
     def stage_nopython_backend(self):
         """
         Do lowering for nopython
         """
         lowerfn = self.backend_nopython_mode
-        return self._backend(lowerfn, objectmode=False)
+        self._backend(lowerfn, objectmode=False)
 
     def stage_compile_interp_mode(self):
         """
@@ -592,17 +615,23 @@ class Pipeline(object):
         """
         args = [types.pyobject] * len(self.args)
         signature = typing.signature(types.pyobject, *args)
-        cr = compile_result(typing_context=self.typingctx,
-                            target_context=self.targetctx,
-                            entry_point=self.func,
-                            typing_error=self.status.fail_reason,
-                            type_annotation="<Interpreter mode function>",
-                            signature=signature,
-                            objectmode=False,
-                            interpmode=True,
-                            lifted=(),
-                            fndesc=None,)
-        return cr
+        self.cr = compile_result(typing_context=self.typingctx,
+                                 target_context=self.targetctx,
+                                 entry_point=self.func,
+                                 typing_error=self.status.fail_reason,
+                                 type_annotation="<Interpreter mode function>",
+                                 signature=signature,
+                                 objectmode=False,
+                                 interpmode=True,
+                                 lifted=(),
+                                 fndesc=None,)
+
+    def stage_cleanup(self):
+        """
+        Cleanup intermediate results to release resources.
+        """
+        if self.interp is not None:
+            self.interp.reset()
 
     def _compile_bytecode(self):
         pm = _PipelineManager()
@@ -610,11 +639,14 @@ class Pipeline(object):
         if not self.flags.force_pyobject:
             pm.create_pipeline("nopython")
             pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
+            if not self.flags.no_rewrites:
+                pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
             if not self.flags.no_rewrites:
                 pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
             pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
+            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
         if self.status.can_fallback or self.flags.force_pyobject:
             pm.create_pipeline("object")
@@ -622,13 +654,21 @@ class Pipeline(object):
             pm.add_stage(self.stage_objectmode_frontend, "object mode frontend")
             pm.add_stage(self.stage_annotate_type, "annotate type")
             pm.add_stage(self.stage_objectmode_backend, "object mode backend")
+            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
         if self.status.can_giveup:
             pm.create_pipeline("interp")
             pm.add_stage(self.stage_compile_interp_mode, "compiling with interpreter mode")
+            pm.add_stage(self.stage_cleanup, "cleanup intermediate results")
 
         pm.finalize()
-        return pm.run(self.status)
+        res = pm.run(self.status)
+        if res is not None:
+            # Early pipeline completion
+            return res
+        else:
+            assert self.cr is not None
+            return self.cr
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
@@ -741,7 +781,8 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
 
-    infer = typeinfer.TypeInferer(typingctx, interp)
+    warnings = errors.WarningsFixer(errors.NumbaWarning)
+    infer = typeinfer.TypeInferer(typingctx, interp, warnings)
 
     # Seed argument types
     for index, (name, ty) in enumerate(zip(interp.bytecode.arg_names, args)):
@@ -758,6 +799,9 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     infer.build_constraint()
     infer.propagate()
     typemap, restype, calltypes = infer.unify()
+
+    # Output all Numba warnings
+    warnings.flush()
 
     return typemap, restype, calltypes
 

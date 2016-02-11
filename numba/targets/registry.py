@@ -14,12 +14,14 @@ class CPUTarget(TargetDescriptor):
     target_context = cpu.CPUContext(typing_context)
 
 
-class CPUOverloaded(dispatcher.Overloaded):
+class CPUDispatcher(dispatcher.Dispatcher):
     targetdescr = CPUTarget()
 
 
 class TargetRegistry(utils.UniqueDict):
     """
+    A registry of API implementations for various backends.
+
     Attributes
     ----------
     ondemand:
@@ -39,5 +41,5 @@ class TargetRegistry(utils.UniqueDict):
         return super(TargetRegistry, self).__getitem__(item)
 
 
-target_registry = TargetRegistry()
-target_registry['cpu'] = CPUOverloaded
+dispatcher_registry = TargetRegistry()
+dispatcher_registry['cpu'] = CPUDispatcher

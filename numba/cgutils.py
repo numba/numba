@@ -94,16 +94,28 @@ class _StructProxy(object):
         self._be_type = self._get_be_type(self._datamodel)
         assert not is_pointer(self._be_type)
 
-        if ref is not None:
-            assert value is None
-            if ref.type.pointee != self._be_type:
-                raise AssertionError("bad ref type: expected %s, got %s"
-                                     % (self._be_type.as_pointer(), ref.type))
-            self._value = ref
-        else:
-            self._value = alloca_once(self._builder, self._be_type, zfill=True)
-            if value is not None:
-                self._builder.store(value, self._value)
+        outer_ref, ref = self._make_refs(ref)
+        if ref.type.pointee != self._be_type:
+            raise AssertionError("bad ref type: expected %s, got %s"
+                                 % (self._be_type.as_pointer(), ref.type))
+
+        if value is not None:
+            if value.type != outer_ref.type.pointee:
+                raise AssertionError("bad value type: expected %s, got %s"
+                                     % (outer_ref.type.pointee, value.type))
+            self._builder.store(value, outer_ref)
+
+        self._value = ref
+        self._outer_ref = outer_ref
+
+    def _make_refs(self, ref):
+        """
+        Return an (outer ref, value ref) pair.  By default, these are
+        the same pointers, but a derived class may override this.
+        """
+        if ref is None:
+            ref = alloca_once(self._builder, self._be_type, zfill=True)
+        return ref, ref
 
     def _get_be_type(self, datamodel):
         raise NotImplementedError
@@ -177,13 +189,13 @@ class _StructProxy(object):
         """
         Return the LLVM pointer to the underlying structure.
         """
-        return self._value
+        return self._outer_ref
 
     def _getvalue(self):
         """
         Load and return the value of the underlying LLVM structure.
         """
-        return self._builder.load(self._value)
+        return self._builder.load(self._outer_ref)
 
     def _setvalue(self, value):
         """Store the value in this structure"""
@@ -521,7 +533,7 @@ def for_range_slice_generic(builder, start, stop, step):
     A helper wrapper for for_range_slice().  This is a context manager which
     yields two for_range_slice()-alike context managers, the first for
     the positive step case, the second for the negative step case.
-    
+
     Use:
         with for_range_slice_generic(...) as (pos_range, neg_range):
             with pos_range as (idx, count):
@@ -531,7 +543,7 @@ def for_range_slice_generic(builder, start, stop, step):
     """
     intp = start.type
     is_pos_step = builder.icmp_signed('>=', step, ir.Constant(intp, 0))
-    
+
     pos_for_range = for_range_slice(builder, start, stop, step, intp, inc=True)
     neg_for_range = for_range_slice(builder, start, stop, step, intp, inc=False)
 
@@ -721,13 +733,6 @@ def guard_null(context, builder, value, exc_tuple):
         exc = exc_tuple[0]
         exc_args = exc_tuple[1:] or None
         context.call_conv.return_user_exc(builder, exc, exc_args)
-
-def guard_invalid_slice(context, builder, slicestruct):
-    """
-    Guard against *slicestruct* having a zero step (and raise ValueError).
-    """
-    guard_null(context, builder, slicestruct.step,
-               (ValueError, "slice step cannot be zero"))
 
 def guard_memory_error(context, builder, pointer, msg=None):
     """
@@ -965,3 +970,28 @@ def muladd_with_overflow(builder, a, b, c):
     res = builder.extract_value(s, 0)
     ovf = builder.or_(prod_ovf, builder.extract_value(s, 1))
     return res, ovf
+
+
+def printf(builder, format, *args):
+    """
+    Calls printf().
+    Argument `format` is expected to be a Python string.
+    Values to be printed are listed in `args`.
+
+    Note: There is no checking to ensure there is correct number of values
+    in `args` and there type matches the declaration in the format string.
+    """
+    assert isinstance(format, str)
+    mod = builder.module
+    # Make global constant for format string
+    cstring = ir.IntType(8).as_pointer()
+    fmt_bytes = make_bytearray((format + '\00').encode('ascii'))
+    global_fmt = global_constant(mod, "printf_format", fmt_bytes)
+    fnty = ir.FunctionType(Type.int(), [cstring], var_arg=True)
+    # Insert printf()
+    fn = mod.get_global('printf')
+    if fn is None:
+        fn = ir.Function(mod, fnty, name="printf")
+    # Call
+    ptr_fmt = builder.bitcast(global_fmt, cstring)
+    return builder.call(fn, [ptr_fmt] + list(args))

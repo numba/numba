@@ -142,9 +142,9 @@ class BaseLower(object):
         self.library.add_ir_module(self.module)
 
     def extract_function_arguments(self):
-        rawfnargs = self.call_conv.get_arguments(self.function)
-        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
-        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
+        self.fnargs = self.call_conv.decode_arguments(self.builder,
+                                                      self.fndesc.argtypes,
+                                                      self.function)
         return self.fnargs
 
     def lower_normal_function(self, fndesc):
@@ -269,32 +269,25 @@ class Lower(BaseLower):
             retval = self.context.get_return_value(self.builder, ty, val)
             self.call_conv.return_value(self.builder, retval)
 
-        elif isinstance(inst, ir.SetItem):
-            target = self.loadvar(inst.target.name)
-            value = self.loadvar(inst.value.name)
-            index = self.loadvar(inst.index.name)
-
-            targetty = self.typeof(inst.target.name)
-            valuety = self.typeof(inst.value.name)
-            indexty = self.typeof(inst.index.name)
-
+        elif isinstance(inst, ir.StaticSetItem):
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
-            impl = self.context.get_function('setitem', signature)
-
-            # Convert argument to match
-            if isinstance(targetty, types.Optional):
-                target = self.context.cast(self.builder, target, targetty,
-                                           targetty.type)
+            try:
+                impl = self.context.get_function('static_setitem', signature)
+            except NotImplementedError:
+                return self.lower_setitem(inst.target, inst.index_var, inst.value, signature)
             else:
-                assert targetty == signature.args[0]
+                target = self.loadvar(inst.target.name)
+                value = self.loadvar(inst.value.name)
+                valuety = self.typeof(inst.value.name)
+                value = self.context.cast(self.builder, value, valuety,
+                                          signature.args[2])
+                return impl(self.builder, (target, inst.index, value))
 
-            index = self.context.cast(self.builder, index, indexty,
-                                      signature.args[1])
-            value = self.context.cast(self.builder, value, valuety,
-                                      signature.args[2])
-
-            return impl(self.builder, (target, index, value))
+        elif isinstance(inst, ir.SetItem):
+            signature = self.fndesc.calltypes[inst]
+            assert signature is not None
+            return self.lower_setitem(inst.target, inst.index, inst.value, signature)
 
         elif isinstance(inst, ir.DelItem):
             target = self.loadvar(inst.target.name)
@@ -340,33 +333,43 @@ class Lower(BaseLower):
 
             return impl(self.builder, (target, value))
 
-        elif isinstance(inst, ir.Raise):
-            self.lower_raise(inst)
+        elif isinstance(inst, ir.StaticRaise):
+            self.lower_static_raise(inst)
 
         else:
             raise NotImplementedError(type(inst))
 
-    def lower_raise(self, inst):
-        if inst.exception is None:
+    def lower_setitem(self, target_var, index_var, value_var, signature):
+        target = self.loadvar(target_var.name)
+        value = self.loadvar(value_var.name)
+        index = self.loadvar(index_var.name)
+
+        targetty = self.typeof(target_var.name)
+        valuety = self.typeof(value_var.name)
+        indexty = self.typeof(index_var.name)
+
+        impl = self.context.get_function('setitem', signature)
+
+        # Convert argument to match
+        if isinstance(targetty, types.Optional):
+            target = self.context.cast(self.builder, target, targetty,
+                                       targetty.type)
+        else:
+            assert targetty == signature.args[0]
+
+        index = self.context.cast(self.builder, index, indexty,
+                                  signature.args[1])
+        value = self.context.cast(self.builder, value, valuety,
+                                  signature.args[2])
+
+        return impl(self.builder, (target, index, value))
+
+    def lower_static_raise(self, inst):
+        if inst.exc_class is None:
             # Reraise
             self.return_exception(None)
         else:
-            exctype = self.typeof(inst.exception.name)
-            if isinstance(exctype, types.ExceptionInstance):
-                # raise <instance> => find the instantiation site
-                excdef = self.interp.get_definition(inst.exception)
-                if (not isinstance(excdef, ir.Expr) or excdef.op != 'call'
-                    or excdef.kws):
-                    raise NotImplementedError("unsupported kind of raising")
-                # Try to infer the args tuple
-                args = tuple(self.interp.get_definition(arg).infer_constant()
-                             for arg in excdef.args)
-            elif isinstance(exctype, types.ExceptionClass):
-                args = None
-            else:
-                raise NotImplementedError("cannot raise value of type %s"
-                                          % (exctype,))
-            self.return_exception(exctype.exc_class, args)
+            self.return_exception(inst.exc_class, inst.exc_args)
 
     def lower_assign(self, ty, inst):
         value = inst.value
@@ -391,11 +394,16 @@ class Lower(BaseLower):
             return res
 
         elif isinstance(value, ir.Arg):
-            val = self.fnargs[value.index]
             # Cast from the argument type to the local variable type
             # (note the "arg.FOO" convention as used in typeinfer)
-            oty = self.typeof("arg." + value.name)
-            res = self.context.cast(self.builder, val, oty, ty)
+            argty = self.typeof("arg." + value.name)
+            if isinstance(argty, types.Omitted):
+                pyval = argty.value
+                res = self.context.get_constant_generic(self.builder, ty,
+                                                        pyval)
+            else:
+                val = self.fnargs[value.index]
+                res = self.context.cast(self.builder, val, argty, ty)
             self.incref(ty, res)
             return res
 
@@ -438,6 +446,21 @@ class Lower(BaseLower):
         res = impl(self.builder, (lhs, rhs))
         return self.context.cast(self.builder, res,
                                  signature.return_type, resty)
+
+    def lower_getitem(self, resty, expr, value, index, signature):
+        baseval = self.loadvar(value.name)
+        indexval = self.loadvar(index.name)
+        impl = self.context.get_function("getitem", signature)
+        argvals = (baseval, indexval)
+        argtyps = (self.typeof(value.name),
+                   self.typeof(index.name))
+        castvals = [self.context.cast(self.builder, av, at, ft)
+                    for av, at, ft in zip(argvals, argtyps,
+                                          signature.args)]
+        res = impl(self.builder, castvals)
+        return self.context.cast(self.builder, res,
+                                 signature.return_type,
+                                 resty)
 
     def _cast_var(self, var, ty):
         """
@@ -678,55 +701,47 @@ class Lower(BaseLower):
             if isinstance(resty, types.BoundFunction):
                 # if we are getting out a method, assume we have typed this
                 # properly and just build a bound function object
-                res = self.context.get_bound_function(self.builder, val, ty)
+                casted = self.context.cast(self.builder, val, ty, resty.this)
+                res = self.context.get_bound_function(self.builder, casted,
+                                                      resty.this)
                 self.incref(resty, res)
                 return res
             else:
-                impl = self.context.get_attribute(val, ty, expr.attr)
+                impl = self.context.get_getattr(ty, expr.attr)
+                attrty = self.context.typing_context.resolve_getattr(ty,
+                                                                     expr.attr)
 
                 if impl is None:
                     # ignore the attribute
                     return self.context.get_dummy_value()
                 else:
                     res = impl(self.context, self.builder, ty, val, expr.attr)
+
+                # Cast the attribute type to the expected output type
+                res = self.context.cast(self.builder, res, attrty, resty)
             return res
 
         elif expr.op == "static_getitem":
-            baseval = self.loadvar(expr.value.name)
-            indexval = self.context.get_constant(types.intp, expr.index)
-            if cgutils.is_struct(baseval.type):
-                # Statically extract the given element from the structure
-                # (structures aren't dynamically indexable).
-                res = self.builder.extract_value(baseval, expr.index)
-                self.incref(resty, res)
-                return res
-            else:
+            signature = typing.signature(resty, self.typeof(expr.value.name),
+                                         types.Const(expr.index))
+            try:
+                # Both get_function() and the returned implementation can
+                # raise NotImplementedError if the types aren't supported
+                impl = self.context.get_function("static_getitem", signature)
+                return impl(self.builder, (self.loadvar(expr.value.name), expr.index))
+            except NotImplementedError:
+                if expr.index_var is None:
+                    raise
                 # Fall back on the generic getitem() implementation
                 # for this type.
-                signature = typing.signature(resty,
-                                             self.typeof(expr.value.name),
-                                             types.intp)
-                impl = self.context.get_function("getitem", signature)
-                argvals = (baseval, indexval)
-                res = impl(self.builder, argvals)
-                return self.context.cast(self.builder, res,
-                                         signature.return_type, resty)
+                signature = self.fndesc.calltypes[expr]
+                return self.lower_getitem(resty, expr, expr.value,
+                                          expr.index_var, signature)
 
         elif expr.op == "getitem":
-            baseval = self.loadvar(expr.value.name)
-            indexval = self.loadvar(expr.index.name)
             signature = self.fndesc.calltypes[expr]
-            impl = self.context.get_function("getitem", signature)
-            argvals = (baseval, indexval)
-            argtyps = (self.typeof(expr.value.name),
-                       self.typeof(expr.index.name))
-            castvals = [self.context.cast(self.builder, av, at, ft)
-                        for av, at, ft in zip(argvals, argtyps,
-                                              signature.args)]
-            res = impl(self.builder, castvals)
-            return self.context.cast(self.builder, res,
-                                     signature.return_type,
-                                     resty)
+            return self.lower_getitem(resty, expr, expr.value, expr.index,
+                                      signature)
 
         elif expr.op == "build_tuple":
             itemvals = [self.loadvar(i.name) for i in expr.items]

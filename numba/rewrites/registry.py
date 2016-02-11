@@ -1,18 +1,18 @@
 from __future__ import print_function, division, absolute_import
 
-from . import config
+from collections import defaultdict
+
+from numba import config
+
 
 class Rewrite(object):
     '''Defines the abstract base class for Numba rewrites.
     '''
 
-    def __init__(self, pipeline, *args, **kws):
-        '''Constructor for the Rewrite class.  Stashes any construction
-        arguments into attributes of the same name.
+    def __init__(self, pipeline):
+        '''Constructor for the Rewrite class.
         '''
         self.pipeline = pipeline
-        self.args = args
-        self.kws = kws
 
     def match(self, block, typemap, calltypes):
         '''Overload this method to check an IR block for matching terms in the
@@ -30,37 +30,46 @@ class Rewrite(object):
 class RewriteRegistry(object):
     '''Defines a registry for Numba rewrites.
     '''
+    _kinds = frozenset(['before-inference', 'after-inference'])
 
     def __init__(self):
         '''Constructor for the rewrite registry.  Initializes the rewrites
         member to an empty list.
         '''
-        self.rewrites = []
+        self.rewrites = defaultdict(list)
 
-    def register(self, rewrite_cls):
-        '''Add a subclass of Rewrite to the registry.
-        '''
-        if not issubclass(rewrite_cls, Rewrite):
-            raise TypeError('{0} is not a subclass of Rewrite'.format(
-                rewrite_cls))
-        self.rewrites.append(rewrite_cls)
-        return rewrite_cls
+    def register(self, kind):
+        """
+        Decorator adding a subclass of Rewrite to the registry for
+        the given *kind*.
+        """
+        if not kind in self._kinds:
+            raise KeyError("invalid kind %r" % (kind,))
+        def do_register(rewrite_cls):
+            if not issubclass(rewrite_cls, Rewrite):
+                raise TypeError('{0} is not a subclass of Rewrite'.format(
+                    rewrite_cls))
+            self.rewrites[kind].append(rewrite_cls)
+            return rewrite_cls
+        return do_register
 
-    def apply(self, pipeline, blocks):
+    def apply(self, kind, pipeline, interp):
         '''Given a pipeline and a dictionary of basic blocks, exhaustively
         attempt to apply all registered rewrites to all basic blocks.
         '''
+        assert kind in self._kinds
+        blocks = interp.blocks
         old_blocks = blocks.copy()
-        for rewrite_cls in self.rewrites:
+        for rewrite_cls in self.rewrites[kind]:
             # Exhaustively apply a rewrite until it stops matching.
             rewrite = rewrite_cls(pipeline)
             work_list = list(blocks.items())
             while work_list:
                 key, block = work_list.pop()
-                matches = rewrite.match(block, pipeline.typemap,
+                matches = rewrite.match(interp, block, pipeline.typemap,
                                         pipeline.calltypes)
                 if matches:
-                    if config.DUMP_IR:
+                    if config.DEBUG or config.DUMP_IR:
                         print("_" * 70)
                         print("REWRITING:")
                         block.dump()
@@ -68,7 +77,7 @@ class RewriteRegistry(object):
                     new_block = rewrite.apply()
                     blocks[key] = new_block
                     work_list.append((key, new_block))
-                    if config.DUMP_IR:
+                    if config.DEBUG or config.DUMP_IR:
                         new_block.dump()
                         print("_" * 70)
         # If any blocks were changed, perform a sanity check.

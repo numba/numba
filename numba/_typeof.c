@@ -433,7 +433,7 @@ hash_writer(const void *key)
         while (--len >= 0)
             x = (1000003*x) ^ *p++;
         x ^= writer->n;
-        if (x == -1)
+        if (x == (Py_uhash_t) -1)
             x = -2;
     }
     return x;

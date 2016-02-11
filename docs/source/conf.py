@@ -281,4 +281,5 @@ texinfo_documents = [
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('https://docs.scipy.org/doc/numpy', None),
+    'llvmlite': ('http://llvmlite.pydata.org/en/latest/', None),
     }

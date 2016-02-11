@@ -1,4 +1,130 @@
 
+Version 0.23.1
+--------------
+
+This is a bug-fix release to address several regressions introduced
+in the 0.23.0 release, and a couple other issues.
+
+Fixes:
+
+* Issue #1645: CUDA ufuncs were broken in 0.23.0.
+* Issue #1638: Check tuple sizes when passing a list of tuples.
+* Issue #1630: Parallel ufunc would keep eating CPU even after finishing
+  under Windows.
+* Issue #1628: Fix ctypes and cffi tests under Windows with Python 3.5.
+* Issue #1627: Fix xrange() support.
+* PR #1611: Rewrite variable liveness analysis.
+* Issue #1610: Allow nested calls between explicitly-typed ufuncs.
+* Issue #1593: Fix `*args` in object mode.
+
+
+Version 0.23.0
+--------------
+
+This release introduces JIT classes using the new ``@jitclass`` decorator,
+allowing user-defined structures for nopython mode.  Other improvements
+and bug fixes are listed below.
+
+Improvements:
+
+* PR #1609: Speed up some simple math functions by inlining them
+  in their caller
+* PR #1571: Implement JIT classes
+* PR #1584: Improve typing of array indexing
+* PR #1583: Allow printing booleans
+* PR #1542: Allow negative values in np.reshape()
+* PR #1560: Support vector and matrix dot product, including ``np.dot()``
+  and the ``@`` operator in Python 3.5
+* PR #1546: Support field lookup on record arrays and scalars (i.e.
+  ``array['field']`` in addition to ``array.field``)
+* PR #1440: Support the HSA wavebarrier() and activelanepermute_wavewidth()
+  intrinsics
+* PR #1540: Support np.angle()
+* PR #1543: Implement CPU multithreaded gufuncs (target="parallel")
+* PR #1551: Allow scalar arguments in np.where(), np.empty_like().
+* PR #1516: Add some more examples from NumbaPro
+* PR #1517: Support np.sinc()
+
+Fixes:
+
+* Issue #1603: Fix calling a non-cached function from a cached function
+* Issue #1594: Ensure a list is homogenous when unboxing
+* Issue #1595: Replace deprecated use of get_pointer_to_function()
+* Issue #1586: Allow tests to be run by different users on the same machine
+* Issue #1587: Make CudaAPIError picklable
+* Issue #1568: Fix using Numba from inside Visual Studio 2015
+* Issue #1559: Fix serializing a jit function referring a renamed module
+* PR #1508: Let reshape() accept integer argument(s), not just a tuple
+* Issue #1545: Improve error checking when unboxing list objects
+* Issue #1538: Fix array broadcasting in CUDA gufuncs
+* Issue #1526: Fix a reference count handling bug
+
+
+Version 0.22.1
+--------------
+
+This is a bug-fix release to resolve some packaging issues and other
+problems found in the 0.22.0 release.
+
+Fixes:
+
+* PR #1515: Include MANIFEST.in in MANIFEST.in so that sdist still works from
+  source tar files.
+* PR #1518: Fix reference counting bug caused by hidden alias
+* PR #1519: Fix erroneous assert when passing nopython=True to guvectorize.
+* PR #1521: Fix cuda.test()
+
+Version 0.22.0
+--------------
+
+This release features several highlights: Python 3.5 support, Numpy 1.10
+support, Ahead-of-Time compilation of extension modules, additional
+vectorization features that were previously only available with the
+proprietary extension NumbaPro, improvements in array indexing.
+
+Improvements:
+
+* PR #1497: Allow scalar input type instead of size-1 array to @guvectorize
+* PR #1480: Add distutils support for AOT compilation
+* PR #1460: Create a new API for Ahead-of-Time (AOT) compilation
+* PR #1451: Allow passing Python lists to JIT-compiled functions, and
+  reflect mutations on function return
+* PR #1387: Numpy 1.10 support
+* PR #1464: Support cffi.FFI.from_buffer()
+* PR #1437: Propagate errors raised from Numba-compiled ufuncs; also,
+  let "division by zero" and other math errors produce a warning instead
+  of exiting the function early
+* PR #1445: Support a subset of fancy indexing
+* PR #1454: Support "out-of-line" CFFI modules
+* PR #1442: Improve array indexing to support more kinds of basic slicing
+* PR #1409: Support explicit CUDA memory fences
+* PR #1435: Add support for vectorize() and guvectorize() with HSA
+* PR #1432: Implement numpy.nonzero() and numpy.where()
+* PR #1416: Add support for vectorize() and guvectorize() with CUDA,
+  as originally provided in NumbaPro
+* PR #1424: Support in-place array operators
+* PR #1414: Python 3.5 support
+* PR #1404: Add the parallel ufunc functionality originally provided in
+  NumbaPro
+* PR #1393: Implement sorting on arrays and lists
+* PR #1415: Add functions to estimate the occupancy of a CUDA kernel
+* PR #1360: The JIT cache now stores the compiled object code, yielding
+  even larger speedups.
+* PR #1402: Fixes for the ARMv7 (armv7l) architecture under Linux
+* PR #1400: Add the cuda.reduce() decorator originally provided in NumbaPro
+
+Fixes:
+
+* PR #1483: Allow np.empty_like() and friends on non-contiguous arrays
+* Issue #1471: Allow caching JIT functions defined in IPython
+* PR #1457: Fix flat indexing of boolean arrays
+* PR #1421: Allow calling Numpy ufuncs, without an explicit output, on
+  non-contiguous arrays
+* Issue #1411: Fix crash when unpacking a tuple containing a Numba-allocated array
+* Issue #1394: Allow unifying range_state32 and range_state64
+* Issue #1373: Fix code generation error on lists of bools
+
+
 Version 0.21.0
 --------------
 

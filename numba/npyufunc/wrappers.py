@@ -511,6 +511,9 @@ class GUArrayArg(object):
                             name="data")
         self.data = data
 
+        core_step_ptr = builder.gep(steps, [offset], name="core.step.ptr")
+        core_step = builder.load(core_step_ptr)
+
         if isinstance(typ, types.Array):
             as_scalar = not syms
 
@@ -542,9 +545,6 @@ class GUArrayArg(object):
                      if as_scalar
                      else _ArrayArgLoader)
 
-            core_step_ptr = builder.gep(steps, [offset], name="core.step.ptr")
-            core_step = builder.load(core_step_ptr)
-
             self._loader = ldcls(dtype=typ.dtype,
                                  ndim=ndim,
                                  core_step=core_step,
@@ -556,7 +556,7 @@ class GUArrayArg(object):
             if syms:
                 raise TypeError("scalar type {0} given for non scalar "
                                 "argument #{1}".format(typ, i + 1))
-            self._loader = _ScalarArgLoader(dtype=typ)
+            self._loader = _ScalarArgLoader(dtype=typ, stride=core_step)
 
     def get_array_at_offset(self, ind):
         return self._loader.load(context=self.context, builder=self.builder,
@@ -567,13 +567,17 @@ class _ScalarArgLoader(object):
     """
     Handle GFunc argument loading where a scalar type is used in the core
     function.
+    Note: It still has a stride because the input to the gufunc can be an array
+          for this argument.
     """
 
-    def __init__(self, dtype):
+    def __init__(self, dtype, stride):
         self.dtype = dtype
+        self.stride = stride
 
     def load(self, context, builder, data, ind):
-        # Always load from base position, ignoring `ind`
+        # Load at base + ind * stride
+        data = builder.gep(data, [builder.mul(ind, self.stride)])
         dptr = builder.bitcast(data,
                                context.get_data_type(self.dtype).as_pointer())
         return builder.load(dptr)

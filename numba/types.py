@@ -159,16 +159,41 @@ class RawPointer(Dummy):
     """
 
 
-class Kind(Type):
-    def __init__(self, of):
-        if not isinstance(of, type) or not issubclass(of, Type):
-            raise TypeError("expected a Type subclass, got %r" % (of,))
-        self.of = of
-        super(Kind, self).__init__("kind(%s)" % of)
+class Const(Dummy):
+    """
+    A compile-time constant, for (internal) use when a type is needed for
+    lookup.
+    """
+
+    def __init__(self, value):
+        self.value = value
+        # We want to support constants of non-hashable values, therefore
+        # fall back on the value's id() if necessary.
+        try:
+            hash(value)
+        except TypeError:
+            self._key = id(value)
+        else:
+            self._key = value
+        super(Const, self).__init__("const(%r)" % (value,))
 
     @property
     def key(self):
-        return self.of
+        return type(self.value), self._key
+
+
+class Omitted(Opaque):
+    """
+    An omitted function argument with a default value.
+    """
+
+    def __init__(self, value):
+        self.value = value
+        super(Omitted, self).__init__("omitted(default=%r)" % (value,))
+
+    @property
+    def key(self):
+        return type(self.value), id(self.value)
 
 
 class VarArg(Type):
@@ -209,21 +234,106 @@ class Macro(Type):
 
 
 class Function(Callable, Opaque):
+    """
+    Base type class for some function types.
+    """
+
     def __init__(self, template):
-        self.template = template
-        name = "%s(%s)" % (self.__class__.__name__, template.key)
+        if isinstance(template, (list, tuple)):
+            self.templates = tuple(template)
+            keys = set(temp.key for temp in self.templates)
+            if len(keys) != 1:
+                raise ValueError("incompatible templates: keys = %s"
+                                 % (this,))
+            self.typing_key, = keys
+        else:
+            self.templates = (template,)
+            self.typing_key = template.key
+        self._impl_keys = {}
+        name = "%s(%s)" % (self.__class__.__name__, self.typing_key)
         super(Function, self).__init__(name)
 
     @property
     def key(self):
-        return self.template
+        return self.typing_key, self.templates
+
+    def augment(self, other):
+        """
+        Augment this function type with the other function types' templates,
+        so as to support more input types.
+        """
+        if type(other) is type(self) and other.typing_key == self.typing_key:
+            return type(self)(self.templates + other.templates)
+
+    def get_impl_key(self, sig):
+        """
+        Get the implementation key (used by the target context) for the
+        given signature.
+        """
+        return self._impl_keys[sig.args]
+
+    def get_call_type(self, context, args, kws):
+        for temp_cls in self.templates:
+            temp = temp_cls(context)
+            sig = temp.apply(args, kws)
+            if sig is not None:
+                self._impl_keys[sig.args] = temp.get_impl_key(sig)
+                return sig
+
+    def get_call_signatures(self):
+        sigs = []
+        is_param = False
+        for temp in self.templates:
+            sigs += getattr(temp, 'cases', [])
+            is_param = is_param or hasattr(temp, 'generic')
+        return sigs, is_param
+
+
+class BoundFunction(Callable, Opaque):
+    """
+    A function with an implicit first argument (denoted as *this* below).
+    """
+
+    def __init__(self, template, this):
+        # Create a derived template with an attribute *this*
+        newcls = type(template.__name__ + '.' + str(this), (template,),
+                      dict(this=this))
+        self.template = newcls
+        self.typing_key = self.template.key
+        self.this = this
+        name = "%s(%s for %s)" % (self.__class__.__name__,
+                                  self.typing_key, self.this)
+        super(BoundFunction, self).__init__(name)
+
+    def unify(self, typingctx, other):
+        if (isinstance(other, BoundFunction) and
+            self.typing_key == other.typing_key):
+            this = typingctx.unify_pairs(self.this, other.this)
+            if this != pyobject:
+                # XXX is it right that both template instances are distinct?
+                return self.copy(this=this)
+
+    def copy(self, this):
+        return type(self)(self.template, this)
+
+    @property
+    def key(self):
+        return self.typing_key, self.this
+
+    def get_impl_key(self, sig):
+        """
+        Get the implementation key (used by the target context) for the
+        given signature.
+        """
+        return self.typing_key
 
     def get_call_type(self, context, args, kws):
         return self.template(context).apply(args, kws)
 
     def get_call_signatures(self):
         sigs = getattr(self.template, 'cases', [])
-        return sigs, hasattr(self.template, 'generic')
+        is_param = hasattr(self.template, 'generic')
+        return sigs, is_param
 
 
 class NamedTupleClass(Callable, Opaque):
@@ -234,7 +344,7 @@ class NamedTupleClass(Callable, Opaque):
     def __init__(self, instance_class):
         self.instance_class = instance_class
         name = "class(%s)" % (instance_class)
-        super(NamedTupleClass, self).__init__(name, param=True)
+        super(NamedTupleClass, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
         # Overriden by the __call__ constructor resolution in typing.collections
@@ -256,7 +366,7 @@ class NumberClass(Callable, DTypeSpec, Opaque):
     def __init__(self, instance_type):
         self.instance_type = instance_type
         name = "class(%s)" % (instance_type,)
-        super(NumberClass, self).__init__(name, param=True)
+        super(NumberClass, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
         # Overriden by the __call__ constructor resolution in typing.builtins
@@ -323,34 +433,47 @@ class WeakType(Type):
 
 
 class Dispatcher(WeakType, Callable, Dummy):
+    """
+    Type class for @jit-compiled functions.
+    """
 
-    def __init__(self, overloaded):
-        self._store_object(overloaded)
-        super(Dispatcher, self).__init__("Dispatcher(%s)" % overloaded)
+    def __init__(self, dispatcher):
+        self._store_object(dispatcher)
+        super(Dispatcher, self).__init__("Dispatcher(%s)" % dispatcher)
 
     def get_call_type(self, context, args, kws):
-        template, args, kws = self.overloaded.get_call_template(args, kws)
+        """
+        Resolve a call to this dispatcher using the given argument types.
+        A signature returned and it is ensured that a compiled specialization
+        is available for it.
+        """
+        template, pysig, args, kws = self.dispatcher.get_call_template(args, kws)
         sig = template(context).apply(args, kws)
-        sig.pysig = self.pysig
+        sig.pysig = pysig
         return sig
 
     def get_call_signatures(self):
-        sigs = self.overloaded.nopython_signatures
+        sigs = self.dispatcher.nopython_signatures
         return sigs, True
 
     @property
-    def overloaded(self):
+    def dispatcher(self):
         """
-        A strong reference to the underlying Dispatcher instance.
+        A strong reference to the underlying numba.dispatcher.Dispatcher instance.
         """
         return self._get_object()
 
-    @property
-    def pysig(self):
+    def get_overload(self, sig):
         """
-        A inspect.Signature object corresponding to this type.
+        Get the compiled overload for the given signature.
         """
-        return self.overloaded._pysig
+        return self.dispatcher.get_overload(sig.args)
+
+    def get_impl_key(self, sig):
+        """
+        Get the implementation key for the given signature.
+        """
+        return self.get_overload(sig)
 
 
 class ExternalFunctionPointer(Function):
@@ -394,7 +517,7 @@ class ExternalFunctionPointer(Function):
 
 class ExternalFunction(Function):
     """
-    A named native function (resolvable by LLVM).
+    A named native function (resolvable by LLVM) accepting an explicit signature.
     For internal use only.
     """
 
@@ -430,27 +553,6 @@ class NumbaFunction(Function):
         return self.fndesc.unique_name, self.sig
 
 
-class BoundFunction(Function):
-    def __init__(self, template, this):
-        self.this = this
-        # Create a derived template with an attribute *this*
-        newcls = type(template.__name__ + '.' + str(this), (template,),
-                      dict(this=this))
-        super(BoundFunction, self).__init__(newcls)
-
-    def unify(self, typingctx, other):
-        if (isinstance(other, BoundFunction) and
-            self.template.key == other.template.key):
-            this = typingctx.unify_pairs(self.this, other.this)
-            if this != pyobject:
-                # XXX is it right that both template instances are distinct?
-                return BoundFunction(self.template, this)
-
-    @property
-    def key(self):
-        return self.template.key, self.this
-
-
 class Pair(Type):
     """
     A heterogenous pair.
@@ -478,7 +580,7 @@ class SimpleIterableType(IterableType):
 
     def __init__(self, name, iterator_type):
         self._iterator_type = iterator_type
-        super(SimpleIterableType, self).__init__(name, param=True)
+        super(SimpleIterableType, self).__init__(name)
 
     @property
     def iterator_type(self):
@@ -489,7 +591,7 @@ class SimpleIteratorType(IteratorType):
 
     def __init__(self, name, yield_type):
         self._yield_type = yield_type
-        super(SimpleIteratorType, self).__init__(name, param=True)
+        super(SimpleIteratorType, self).__init__(name)
 
     @property
     def yield_type(self):
@@ -501,7 +603,7 @@ class RangeType(SimpleIterableType):
     def __init__(self, dtype):
         self.dtype = dtype
         name = "range_state_%s" % (dtype,)
-        super(SimpleIterableType, self).__init__(name, param=True)
+        super(SimpleIterableType, self).__init__(name)
         self._iterator_type = RangeIteratorType(self.dtype)
 
     def unify(self, typingctx, other):
@@ -515,7 +617,7 @@ class RangeIteratorType(SimpleIteratorType):
 
     def __init__(self, dtype):
         name = "range_iter_%s" % (dtype,)
-        super(SimpleIteratorType, self).__init__(name, param=True)
+        super(SimpleIteratorType, self).__init__(name)
         self._yield_type = dtype
 
     def unify(self, typingctx, other):
@@ -637,7 +739,7 @@ class CharSeq(Type):
     def __init__(self, count):
         self.count = count
         name = "[char x %d]" % count
-        super(CharSeq, self).__init__(name, param=True)
+        super(CharSeq, self).__init__(name)
 
     @property
     def key(self):
@@ -650,7 +752,7 @@ class UnicodeCharSeq(Type):
     def __init__(self, count):
         self.count = count
         name = "[unichr x %d]" % count
-        super(UnicodeCharSeq, self).__init__(name, param=True)
+        super(UnicodeCharSeq, self).__init__(name)
 
     @property
     def key(self):
@@ -712,7 +814,7 @@ class ArrayIterator(SimpleIteratorType):
         super(ArrayIterator, self).__init__(name, yield_type)
 
 
-class Buffer(IterableType):
+class Buffer(IterableType, ArrayCompatible):
     """
     Type class for objects providing the buffer protocol.
     Derived classes exist for more specific cases.
@@ -739,11 +841,15 @@ class Buffer(IterableType):
             if readonly:
                 type_name = "readonly %s" % type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
-        super(Buffer, self).__init__(name, param=True)
+        super(Buffer, self).__init__(name)
 
     @property
     def iterator_type(self):
         return ArrayIterator(self)
+
+    @property
+    def as_array(self):
+        return self
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
@@ -874,7 +980,7 @@ class ArrayCTypes(Type):
         # even though they are not implemented, yet.
         self.ndim = arytype.ndim
         name = "ArrayCTypes(ndim={0})".format(self.ndim)
-        super(ArrayCTypes, self).__init__(name, param=True)
+        super(ArrayCTypes, self).__init__(name)
 
     @property
     def key(self):
@@ -888,7 +994,7 @@ class ArrayFlags(Type):
     def __init__(self, arytype):
         self.array_type = arytype
         name = "ArrayFlags({0})".format(self.array_type)
-        super(ArrayFlags, self).__init__(name, param=True)
+        super(ArrayFlags, self).__init__(name)
 
     @property
     def key(self):
@@ -1030,7 +1136,7 @@ class UniTuple(BaseAnonymousTuple, _HomogenousTuple):
         self.dtype = dtype
         self.count = count
         name = "(%s x %d)" % (dtype, count)
-        super(UniTuple, self).__init__(name, param=True)
+        super(UniTuple, self).__init__(name)
 
     @property
     def key(self):
@@ -1087,7 +1193,7 @@ class Tuple(BaseAnonymousTuple, _HeterogenousTuple):
         self.types = tuple(types)
         self.count = len(self.types)
         name = "(%s)" % ', '.join(str(i) for i in self.types)
-        super(Tuple, self).__init__(name, param=True)
+        super(Tuple, self).__init__(name)
 
     @property
     def key(self):
@@ -1118,7 +1224,7 @@ class NamedUniTuple(_HomogenousTuple, BaseNamedTuple):
         self.fields = tuple(cls._fields)
         self.instance_class = cls
         name = "%s(%s x %d)" % (cls.__name__, dtype, count)
-        super(NamedUniTuple, self).__init__(name, param=True)
+        super(NamedUniTuple, self).__init__(name)
         self._iterator_type = UniTupleIter(self)
 
     @property
@@ -1134,7 +1240,7 @@ class NamedTuple(_HeterogenousTuple, BaseNamedTuple):
         self.fields = tuple(cls._fields)
         self.instance_class = cls
         name = "%s(%s)" % (cls.__name__, ', '.join(str(i) for i in self.types))
-        super(NamedTuple, self).__init__(name, param=True)
+        super(NamedTuple, self).__init__(name)
 
     @property
     def key(self):
@@ -1152,7 +1258,7 @@ class List(MutableSequence):
         self.reflected = reflected
         cls_name = "reflected list" if reflected else "list"
         name = "%s(%s)" % (cls_name, self.dtype)
-        super(List, self).__init__(name=name, param=True)
+        super(List, self).__init__(name=name)
 
     def copy(self, dtype=None, reflected=None):
         if dtype is None:
@@ -1211,7 +1317,7 @@ class ListPayload(Type):
     def __init__(self, list_type):
         self.list_type = list_type
         name = 'payload(%s)' % list_type
-        super(ListPayload, self).__init__(name, param=True)
+        super(ListPayload, self).__init__(name)
 
     @property
     def key(self):
@@ -1228,7 +1334,7 @@ class MemInfoPointer(Type):
     def __init__(self, dtype):
         self.dtype = dtype
         name = "memory-managed *%s" % dtype
-        super(MemInfoPointer, self).__init__(name, param=True)
+        super(MemInfoPointer, self).__init__(name)
 
     @property
     def key(self):
@@ -1244,7 +1350,7 @@ class CPointer(Type):
     def __init__(self, dtype):
         self.dtype = dtype
         name = "*%s" % dtype
-        super(CPointer, self).__init__(name, param=True)
+        super(CPointer, self).__init__(name)
 
     @property
     def key(self):
@@ -1269,7 +1375,7 @@ class EphemeralArray(Type):
         self.dtype = dtype
         self.count = count
         name = "*%s[%d]" % (dtype, count)
-        super(EphemeralArray, self).__init__(name, param=True)
+        super(EphemeralArray, self).__init__(name)
 
     @property
     def key(self):
@@ -1282,7 +1388,7 @@ class Object(Type):
     def __init__(self, clsobj):
         self.cls = clsobj
         name = "Object(%s)" % clsobj.__name__
-        super(Object, self).__init__(name, param=True)
+        super(Object, self).__init__(name)
 
     @property
     def key(self):
@@ -1295,7 +1401,7 @@ class Optional(Type):
         assert not isinstance(typ, (Optional, NoneType))
         self.type = typ
         name = "?%s" % typ
-        super(Optional, self).__init__(name, param=True)
+        super(Optional, self).__init__(name)
 
     @property
     def key(self):
@@ -1361,7 +1467,7 @@ class ExceptionClass(Callable, Phantom):
         assert issubclass(exc_class, BaseException)
         name = "%s" % (exc_class.__name__)
         self.exc_class = exc_class
-        super(ExceptionClass, self).__init__(name, param=True)
+        super(ExceptionClass, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
         return self.get_call_signatures()[0][0]
@@ -1386,15 +1492,141 @@ class ExceptionInstance(Phantom):
         assert issubclass(exc_class, BaseException)
         name = "%s(...)" % (exc_class.__name__,)
         self.exc_class = exc_class
-        super(ExceptionInstance, self).__init__(name, param=True)
+        super(ExceptionInstance, self).__init__(name)
 
     @property
     def key(self):
         return self.exc_class
 
 
-class Slice3Type(Type):
-    pass
+class SliceType(Type):
+
+    def __init__(self, name, members):
+        assert members in (2, 3)
+        self.members = members
+        self.has_step = members >= 3
+        super(SliceType, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.members
+
+
+class ClassInstanceType(Type):
+    """
+    The type of a jitted class *instance*.  It will be the return-type
+    of the constructor of the class.
+    """
+    mutable = True
+    name_prefix = "instance"
+
+    def __init__(self, class_type):
+        self.class_type = class_type
+        name = "{0}.{1}".format(self.name_prefix, self.class_type.name)
+        super(ClassInstanceType, self).__init__(name)
+
+    def get_data_type(self):
+        return ClassDataType(self)
+
+    def get_reference_type(self):
+        return self
+
+    @property
+    def key(self):
+        return self.class_type.key
+
+    @property
+    def classname(self):
+        return self.class_type.class_def.__name__
+
+    @property
+    def jitprops(self):
+        return self.class_type.jitprops
+
+    @property
+    def jitmethods(self):
+        return self.class_type.jitmethods
+
+    @property
+    def struct(self):
+        return self.class_type.struct
+
+    @property
+    def methods(self):
+        return self.class_type.methods
+
+
+class ClassType(Callable, Opaque):
+    """
+    The type of the jitted class (not instance).  When the type of a class
+    is called, its constructor is invoked.
+    """
+    mutable = True
+    name_prefix = "jitclass"
+    instance_type_class = ClassInstanceType
+
+    def __init__(self, class_def, ctor_template_cls, struct, jitmethods,
+                 jitprops):
+        self.class_def = class_def
+        self.ctor_template = self._specialize_template(ctor_template_cls)
+        self.jitmethods = jitmethods
+        self.jitprops = jitprops
+        self.struct = struct
+        self.methods = dict((k, v.py_func) for k, v in self.jitmethods.items())
+        fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
+        name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, class_def.__name__,
+                                           id(class_def), fielddesc)
+        super(ClassType, self).__init__(name)
+        self.instance_type = self.instance_type_class(self)
+
+    def get_call_type(self, context, args, kws):
+        return self.ctor_template(context).apply(args, kws)
+
+    def get_call_signatures(self):
+        return (), True
+
+    def _specialize_template(self, basecls):
+        return type(basecls.__name__, (basecls,), dict(key=self))
+
+
+class DeferredType(Type):
+    """
+    Represents a type that will be defined later.  It must be defined
+    before it is materialized (used in the compiler).  Once defined, it
+    behaves exactly as the type it is defining.
+    """
+    def __init__(self):
+        self._define = None
+        name = "{0}#{1}".format(type(self).__name__, id(self))
+        super(DeferredType, self).__init__(name)
+
+    def get(self):
+        if self._define is None:
+            raise RuntimeError("deferred type not defined")
+        return self._define
+
+    def define(self, typ):
+        if self._define is not None:
+            raise TypeError("deferred type already defined")
+        if not isinstance(typ, Type):
+            raise TypeError("arg is not a Type; got: {0}".format(type(typ)))
+        self._define = typ
+
+    def unify(self, typingctx, other):
+        return typingctx.unify_pairs(self.get(), other)
+
+
+class ClassDataType(Type):
+    """
+    Internal only.
+    Represents the data of the instance.  The representation of
+    ClassInstanceType contains a pointer to a ClassDataType which represents
+    a C structure that contains all the data fields of the class instance.
+    """
+    def __init__(self, classtyp):
+        self.class_type = classtyp
+        name = "data.{0}".format(self.class_type.name)
+        super(ClassDataType, self).__init__(name)
 
 
 # Short names
@@ -1434,15 +1666,6 @@ float64 = Float('float64')
 complex64 = Complex('complex64', float32)
 complex128 = Complex('complex128', float64)
 
-len_type = Phantom('len')
-range_type = Phantom('range')
-slice_type = Phantom('slice')
-abs_type = Phantom('abs')
-neg_type = Phantom('neg')
-print_type = Phantom('print')
-print_item_type = Phantom('print-item')
-sign_type = Phantom('sign')
-
 range_iter32_type = RangeIteratorType(int32)
 range_iter64_type = RangeIteratorType(int64)
 unsigned_range_iter64_type = RangeIteratorType(uint64)
@@ -1450,8 +1673,8 @@ range_state32_type = RangeType(int32)
 range_state64_type = RangeType(int64)
 unsigned_range_state64_type = RangeType(uint64)
 
-# slice2_type = Type('slice2_type')
-slice3_type = Slice3Type('slice3_type')
+slice2_type = SliceType('slice<a:b>', 2)
+slice3_type = SliceType('slice<a:b:c>', 3)
 
 signed_domain = frozenset([int8, int16, int32, int64])
 unsigned_domain = frozenset([uint8, uint16, uint32, uint64])
@@ -1529,6 +1752,7 @@ def promote_numeric_type(ty):
 
     return res
 
+deferred_type = DeferredType
 
 __all__ = '''
 int8
@@ -1580,4 +1804,5 @@ c16
 optional
 ffi_forced_object
 ffi
+deferred_type
 '''.split()

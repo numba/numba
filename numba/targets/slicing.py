@@ -8,8 +8,7 @@ from llvmlite import ir
 
 from numba.six.moves import zip_longest
 from numba import cgutils, types, typing
-from .imputils import (builtin, builtin_attr, implement,
-                       impl_attribute, impl_attribute_generic,
+from .imputils import (lower_builtin, lower_getattr,
                        iternext_impl, impl_ret_borrowed,
                        impl_ret_new_ref, impl_ret_untracked)
 
@@ -110,6 +109,14 @@ def fix_stride(builder, slice, stride):
     """
     return builder.mul(slice.step, stride)
 
+def guard_invalid_slice(context, builder, typ, slicestruct):
+    """
+    Guard against *slicestruct* having a zero step (and raise ValueError).
+    """
+    if typ.has_step:
+        cgutils.guard_null(context, builder, slicestruct.step,
+                           (ValueError, "slice step cannot be zero"))
+
 
 def get_defaults(context):
     """
@@ -122,19 +129,19 @@ def get_defaults(context):
 #---------------------------------------------------------------------------
 # The slice structure
 
-class Slice(cgutils.Structure):
-    _fields = [('start', types.intp),
-               ('stop', types.intp),
-               ('step', types.intp), ]
+def make_slice(context, builder, typ, value=None):
+    """
+    Create a slice structure, optionally initialized from the given LLVM
+    *value*.
+    """
+    cls = cgutils.create_struct_proxy(typ)
+    return cls(context, builder, value=value)
 
 
-@builtin
-@implement(types.slice_type, types.VarArg(types.Any))
+@lower_builtin(slice, types.VarArg(types.Any))
 def slice_constructor_impl(context, builder, sig, args):
-    maxint = (1 << (context.address_size - 1)) - 1
-
     slice_args = []
-    for ty, val, default in zip_longest(sig.args, args, (0, maxint, 1)):
+    for ty, val, default in zip_longest(sig.args, args, get_defaults(context)):
         if ty in (types.none, None):
             # Omitted or None
             slice_args.append(context.get_constant(types.intp, default))
@@ -142,29 +149,30 @@ def slice_constructor_impl(context, builder, sig, args):
             slice_args.append(val)
     start, stop, step = slice_args
 
-    slice3 = Slice(context, builder)
-    slice3.start = start
-    slice3.stop = stop
-    slice3.step = step
+    ty = sig.return_type
+    sli = make_slice(context, builder, sig.return_type)
+    sli.start = start
+    sli.stop = stop
+    sli.step = step
 
-    res = slice3._getvalue()
+    res = sli._getvalue()
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@builtin_attr
-@impl_attribute(types.slice3_type, "start")
+@lower_getattr(types.SliceType, "start")
 def slice_start_impl(context, builder, typ, value):
-    slice3 = Slice(context, builder, value)
-    return slice3.start
+    sli = make_slice(context, builder, typ, value)
+    return sli.start
 
-@builtin_attr
-@impl_attribute(types.slice3_type, "stop")
+@lower_getattr(types.SliceType, "stop")
 def slice_stop_impl(context, builder, typ, value):
-    slice3 = Slice(context, builder, value)
-    return slice3.stop
+    sli = make_slice(context, builder, typ, value)
+    return sli.stop
 
-@builtin_attr
-@impl_attribute(types.slice3_type, "step")
+@lower_getattr(types.SliceType, "step")
 def slice_step_impl(context, builder, typ, value):
-    slice3 = Slice(context, builder, value)
-    return slice3.step
+    if typ.has_step:
+        sli = make_slice(context, builder, typ, value)
+        return sli.step
+    else:
+        return context.get_constant(types.intp, 1)

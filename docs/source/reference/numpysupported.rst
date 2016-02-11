@@ -55,7 +55,8 @@ The operations supported on scalar Numpy numbers are the same as on the
 equivalent built-in types such as ``int`` or ``float``.  You can use
 a type's constructor to convert from a different type or width.
 
-Structured scalars support attribute getting and setting.
+Structured scalars support attribute getting and setting, as well as
+member lookup using constant strings.
 
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
@@ -149,9 +150,29 @@ The following methods of Numpy arrays are supported:
 Functions
 =========
 
+Linear algebra
+--------------
+
+Basic linear algebra is supported on 1-D and 2-D contiguous arrays of
+floating-point and complex numbers.
+
+* :func:`numpy.dot`
+* :func:`numpy.vdot`
+* On Python 3.5 and above, the matrix multiplication operator from
+  :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
+* :func:`numpy.linalg.inv`
+
+.. note::
+   The implementation of these functions needs Scipy 0.16+ to be installed.
+
+Other functions
+---------------
+
 The following top-level functions are supported:
 
 * :func:`numpy.arange`
+* :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.diag`
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.eye`
@@ -166,12 +187,14 @@ The following top-level functions are supported:
 * :func:`numpy.ones`
 * :func:`numpy.ones_like`
 * :func:`numpy.round_`
+* :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.where`
 * :func:`numpy.zeros`
 * :func:`numpy.zeros_like`
 
-The following constructors are supported, only with a numeric input:
+The following constructors are supported, both with a numeric input (to
+construct a scalar) or a sequence (to construct an array):
 
 * :class:`numpy.bool_`
 * :class:`numpy.complex64`
@@ -190,6 +213,18 @@ The following constructors are supported, only with a numeric input:
 * :class:`numpy.uint64`
 * :class:`numpy.uintc`
 * :class:`numpy.uintp`
+
+Literal arrays
+--------------
+
+.. XXX should this part of the user's guide?
+
+Neither Python nor Numba has actual array literals, but you can construct
+arbitrary arrays by calling :func:`numpy.array` on a nested tuple::
+
+   a = numpy.array(((a, b, c), (d, e, f)))
+
+(nested lists are not yet supported by Numba)
 
 
 Modules

@@ -23,7 +23,7 @@
  */
 
 static void
-pyobject_dtor(void *ptr, void* info) {
+pyobject_dtor(void *ptr, size_t size, void* info) {
     PyGILState_STATE gstate;
     PyObject *ownerobj = info;
 

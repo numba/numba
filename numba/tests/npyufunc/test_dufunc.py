@@ -5,15 +5,20 @@ import numpy as np
 
 from numba import njit
 from numba.npyufunc import dufunc
-from .support import MemoryLeakMixin
+from ..support import MemoryLeakMixin
+
 
 def pyuadd(a0, a1):
     return a0 + a1
 
+
 class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
 
+    def nopython_dufunc(self, pyfunc):
+        return dufunc.DUFunc(pyfunc, targetoptions=dict(nopython=True))
+
     def test_frozen(self):
-        duadd = dufunc.DUFunc(pyuadd, nopython=True)
+        duadd = self.nopython_dufunc(pyuadd)
         self.assertFalse(duadd._frozen)
         duadd._frozen = True
         self.assertTrue(duadd._frozen)
@@ -23,11 +28,11 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
             duadd(np.linspace(0,1,10), np.linspace(1,2,10))
 
     def test_scalar(self):
-        duadd = dufunc.DUFunc(pyuadd, nopython=True)
+        duadd = self.nopython_dufunc(pyuadd)
         self.assertEqual(pyuadd(1,2), duadd(1,2))
 
     def test_npm_call(self):
-        duadd = dufunc.DUFunc(pyuadd, nopython=True)
+        duadd = self.nopython_dufunc(pyuadd)
         @njit
         def npmadd(a0, a1, o0):
             duadd(a0, a1, o0)
@@ -48,7 +53,7 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         np.testing.assert_array_equal(Y0 + Y2, out2)
 
     def test_npm_call_implicit_output(self):
-        duadd = dufunc.DUFunc(pyuadd, nopython=True)
+        duadd = self.nopython_dufunc(pyuadd)
         @njit
         def npmadd(a0, a1):
             return duadd(a0, a1)
@@ -68,7 +73,7 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         self.assertEqual(out3, 3.)
 
     def test_ufunc_props(self):
-        duadd = dufunc.DUFunc(pyuadd, nopython=True)
+        duadd = self.nopython_dufunc(pyuadd)
         self.assertEqual(duadd.nin, 2)
         self.assertEqual(duadd.nout, 1)
         self.assertEqual(duadd.nargs, duadd.nin + duadd.nout)

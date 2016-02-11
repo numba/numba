@@ -5,8 +5,9 @@ From NumbaPro
 from __future__ import print_function, division, absolute_import
 
 import dis
-import sys
 import inspect
+import sys
+from types import CodeType, ModuleType
 from collections import namedtuple
 
 from numba import errors, utils
@@ -33,6 +34,9 @@ def get_code_object(obj):
 
 
 def _make_bytecode_table():
+    # Note some opcodes are supported here for analysis but not later
+    # in the compilation pipeline.
+
     if sys.version_info[:2] == (2, 6):  # python 2.6
         version_specific = [
             ('JUMP_IF_FALSE', 2),
@@ -80,6 +84,12 @@ def _make_bytecode_table():
             ('STORE_MAP', 0),
         ]
 
+    if sys.version_info[:2] >= (3, 5):   # python 3.5+
+        version_specific += [
+            ('BINARY_MATRIX_MULTIPLY', 0),
+            ('INPLACE_MATRIX_MULTIPLY', 0),
+        ]
+
     bytecodes = [
         # opname, operandlen
         ('BINARY_ADD', 0),
@@ -124,10 +134,13 @@ def _make_bytecode_table():
         ('JUMP_ABSOLUTE', 2),
         ('JUMP_FORWARD', 2),
         ('LOAD_ATTR', 2),
+        ('LOAD_CLOSURE', 2),
         ('LOAD_CONST', 2),
         ('LOAD_FAST', 2),
         ('LOAD_GLOBAL', 2),
         ('LOAD_DEREF', 2),
+        ('MAKE_CLOSURE', 2),
+        ('MAKE_FUNCTION', 2),
         ('POP_BLOCK', 0),
         ('POP_TOP', 0),
         ('RAISE_VARARGS', 2),
@@ -136,6 +149,7 @@ def _make_bytecode_table():
         ('ROT_TWO', 0),
         ('SETUP_LOOP', 2),
         ('STORE_ATTR', 2),
+        ('STORE_DEREF', 2),
         ('STORE_FAST', 2),
         ('STORE_SUBSCR', 0),
         ('UNARY_POSITIVE', 0),
@@ -280,7 +294,7 @@ class ByteCodeBase(object):
     __slots__ = (
         'func', 'func_name', 'func_qualname', 'filename',
         'pysig', 'co_names', 'co_varnames', 'co_consts', 'co_freevars',
-        'table', 'labels', 'arg_count', 'arg_names',
+        'table', 'labels', 'arg_count', 'arg_names', 'used_globals',
         )
 
     def __init__(self, func, func_qualname, pysig, filename, co_names,
@@ -328,6 +342,43 @@ class ByteCodeBase(object):
         return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
                          for i in utils.iteritems(self.table))
 
+    @classmethod
+    def _compute_used_globals(cls, func, table, co_consts, co_names):
+        """
+        Compute the globals used by the function with the given
+        bytecode table.
+        """
+        d = {}
+        globs = func.__globals__
+        builtins = globs['__builtins__']
+        if isinstance(builtins, ModuleType):
+            builtins = builtins.__dict__
+        # Look for LOAD_GLOBALs in the bytecode
+        for inst in table.values():
+            if inst.opname == 'LOAD_GLOBAL':
+                name = co_names[inst.arg]
+                if name not in d:
+                    try:
+                        value = globs[name]
+                    except KeyError:
+                        value = builtins[name]
+                    d[name] = value
+        # Add globals used by any nested code object
+        for co in co_consts:
+            if isinstance(co, CodeType):
+                subtable = utils.SortedMap(ByteCodeIter(co))
+                d.update(cls._compute_used_globals(func, subtable,
+                                                   co.co_consts, co.co_names))
+        return d
+
+    def get_used_globals(self):
+        """
+        Get a {name: value} map of the globals used by this code
+        object and any nested code objects.
+        """
+        return self._compute_used_globals(self.func, self.table,
+                                          self.co_consts, self.co_names)
+
 
 class CustomByteCode(ByteCodeBase):
     """
@@ -344,9 +395,8 @@ class ByteCode(ByteCodeBase):
         if not code:
             raise errors.ByteCodeSupportError(
                 "%s does not provide its bytecode" % func)
-        if code.co_cellvars:
-            raise NotImplementedError("cell vars are not supported")
 
+        # A map of {offset: ByteCodeInst}
         table = utils.SortedMap(ByteCodeIter(code))
         labels = set(dis.findlabels(code.co_code))
         labels.add(0)

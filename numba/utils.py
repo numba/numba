@@ -95,6 +95,8 @@ operator_map = [
 
 if not IS_PY3:
     operator_map.append(('div', 'idiv', '/?'))
+if sys.version_info >= (3, 5):
+    operator_map.append(('matmul', 'imatmul', '@'))
 
 # Map of known in-place operators to their corresponding copying operators
 inplace_map = dict((op + '=', op)
@@ -283,6 +285,25 @@ def bit_length(intval):
         return len(bin(intval)) - 2
     else:
         return len(bin(-intval - 1)) - 2
+
+
+def stream_list(lst):
+    """
+    Given a list, return an infinite iterator of iterators.
+    Each iterator iterates over the list from the last seen point up to
+    the current end-of-list.
+
+    In effect, each iterator will give the newly appended elements from the
+    previous iterator instantiation time.
+    """
+    def sublist_iterator(start, stop):
+        return iter(lst[start:stop])
+
+    start = 0
+    while True:
+        stop = len(lst)
+        yield sublist_iterator(start, stop)
+        start = stop
 
 
 class BenchmarkResult(object):

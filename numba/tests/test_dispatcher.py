@@ -13,8 +13,8 @@ import warnings
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import utils, vectorize, jit
-from numba.config import NumbaWarning
+from numba import utils, vectorize, jit, generated_jit, types
+from numba.errors import NumbaWarning
 from .support import TestCase
 
 
@@ -38,21 +38,39 @@ def star_defaults(x, y=2, *z):
     return x, y, z
 
 
-class TestDispatcher(TestCase):
+def generated_usecase(x, y=5):
+    if isinstance(x, types.Complex):
+        def impl(x, y):
+            return x + y
+    else:
+        def impl(x, y):
+            return x - y
+    return impl
+
+def bad_generated_usecase(x, y=5):
+    if isinstance(x, types.Complex):
+        def impl(x):
+            return x
+    else:
+        def impl(x, y=6):
+            return x - y
+    return impl
+
+
+class BaseTest(TestCase):
+
+    jit_args = dict(nopython=True)
 
     def compile_func(self, pyfunc):
         def check(*args, **kwargs):
             expected = pyfunc(*args, **kwargs)
             result = f(*args, **kwargs)
             self.assertPreciseEqual(result, expected)
-        f = jit(nopython=True)(pyfunc)
+        f = jit(**self.jit_args)(pyfunc)
         return f, check
 
-    def test_numba_interface(self):
-        """
-        Check that vectorize can accept a decorated object.
-        """
-        vectorize('f8(f8)')(jit(dummy))
+
+class TestDispatcher(BaseTest):
 
     def test_no_argument(self):
         @jit
@@ -125,81 +143,6 @@ class TestDispatcher(TestCase):
             t.join()
         self.assertFalse(errors)
 
-    def test_named_args(self):
-        """
-        Test passing named arguments to a dispatcher.
-        """
-        f, check = self.compile_func(addsub)
-        check(3, z=10, y=4)
-        check(3, 4, 10)
-        check(x=3, y=4, z=10)
-        # All calls above fall under the same specialization
-        self.assertEqual(len(f.overloads), 1)
-        # Errors
-        with self.assertRaises(TypeError) as cm:
-            f(3, 4, y=6, z=7)
-        self.assertIn("too many arguments: expected 3, got 4",
-                      str(cm.exception))
-        with self.assertRaises(TypeError) as cm:
-            f()
-        self.assertIn("not enough arguments: expected 3, got 0",
-                      str(cm.exception))
-        with self.assertRaises(TypeError) as cm:
-            f(3, 4, y=6)
-        self.assertIn("missing argument 'z'", str(cm.exception))
-
-    def test_default_args(self):
-        """
-        Test omitting arguments with a default value.
-        """
-        f, check = self.compile_func(addsub_defaults)
-        check(3, z=10, y=4)
-        check(3, 4, 10)
-        check(x=3, y=4, z=10)
-        # Now omitting some values
-        check(3, z=10)
-        check(3, 4)
-        check(x=3, y=4)
-        check(3)
-        check(x=3)
-        # All calls above fall under the same specialization
-        self.assertEqual(len(f.overloads), 1)
-        # Errors
-        with self.assertRaises(TypeError) as cm:
-            f(3, 4, y=6, z=7)
-        self.assertIn("too many arguments: expected 3, got 4",
-                      str(cm.exception))
-        with self.assertRaises(TypeError) as cm:
-            f()
-        self.assertIn("not enough arguments: expected at least 1, got 0",
-                      str(cm.exception))
-        with self.assertRaises(TypeError) as cm:
-            f(y=6, z=7)
-        self.assertIn("missing argument 'x'", str(cm.exception))
-
-    def test_star_args(self):
-        """
-        Test a compiled function with starargs in the signature.
-        """
-        f, check = self.compile_func(star_defaults)
-        check(4)
-        check(4, 5)
-        check(4, 5, 6)
-        check(4, 5, 6, 7)
-        check(4, 5, 6, 7, 8)
-        check(x=4)
-        check(x=4, y=5)
-        check(4, y=5)
-        with self.assertRaises(TypeError) as cm:
-            f(4, 5, y=6)
-        self.assertIn("some keyword arguments unexpected", str(cm.exception))
-        with self.assertRaises(TypeError) as cm:
-            f(4, 5, z=6)
-        self.assertIn("some keyword arguments unexpected", str(cm.exception))
-        with self.assertRaises(TypeError) as cm:
-            f(4, x=6)
-        self.assertIn("some keyword arguments unexpected", str(cm.exception))
-
     def test_explicit_signatures(self):
         f = jit("(int64,int64)")(add)
         # Approximate match (unsafe conversion)
@@ -261,6 +204,125 @@ class TestDispatcher(TestCase):
         self.assertEqual(str(cm.exception),
                          "No matching definition for argument type(s) "
                          "complex128, complex128")
+
+
+class TestSignatureHandling(BaseTest):
+    """
+    Test support for various parameter passing styles.
+    """
+
+    def test_named_args(self):
+        """
+        Test passing named arguments to a dispatcher.
+        """
+        f, check = self.compile_func(addsub)
+        check(3, z=10, y=4)
+        check(3, 4, 10)
+        check(x=3, y=4, z=10)
+        # All calls above fall under the same specialization
+        self.assertEqual(len(f.overloads), 1)
+        # Errors
+        with self.assertRaises(TypeError) as cm:
+            f(3, 4, y=6, z=7)
+        self.assertIn("too many arguments: expected 3, got 4",
+                      str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f()
+        self.assertIn("not enough arguments: expected 3, got 0",
+                      str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(3, 4, y=6)
+        self.assertIn("missing argument 'z'", str(cm.exception))
+
+    def test_default_args(self):
+        """
+        Test omitting arguments with a default value.
+        """
+        f, check = self.compile_func(addsub_defaults)
+        check(3, z=10, y=4)
+        check(3, 4, 10)
+        check(x=3, y=4, z=10)
+        # Now omitting some values
+        check(3, z=10)
+        check(3, 4)
+        check(x=3, y=4)
+        check(3)
+        check(x=3)
+        # Errors
+        with self.assertRaises(TypeError) as cm:
+            f(3, 4, y=6, z=7)
+        self.assertIn("too many arguments: expected 3, got 4",
+                      str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f()
+        self.assertIn("not enough arguments: expected at least 1, got 0",
+                      str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(y=6, z=7)
+        self.assertIn("missing argument 'x'", str(cm.exception))
+
+    def test_star_args(self):
+        """
+        Test a compiled function with starargs in the signature.
+        """
+        f, check = self.compile_func(star_defaults)
+        check(4)
+        check(4, 5)
+        check(4, 5, 6)
+        check(4, 5, 6, 7)
+        check(4, 5, 6, 7, 8)
+        check(x=4)
+        check(x=4, y=5)
+        check(4, y=5)
+        with self.assertRaises(TypeError) as cm:
+            f(4, 5, y=6)
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(4, 5, z=6)
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            f(4, x=6)
+        self.assertIn("some keyword arguments unexpected", str(cm.exception))
+
+
+class TestSignatureHandlingObjectMode(TestSignatureHandling):
+    """
+    Sams as TestSignatureHandling, but in object mode.
+    """
+
+    jit_args = dict(forceobj=True)
+
+
+class TestGeneratedDispatcher(TestCase):
+    """
+    Tests for @generated_jit.
+    """
+
+    def test_generated(self):
+        f = generated_jit(nopython=True)(generated_usecase)
+        self.assertEqual(f(8), 8 - 5)
+        self.assertEqual(f(x=8), 8 - 5)
+        self.assertEqual(f(x=8, y=4), 8 - 4)
+        self.assertEqual(f(1j), 5 + 1j)
+        self.assertEqual(f(1j, 42), 42 + 1j)
+        self.assertEqual(f(x=1j, y=7), 7 + 1j)
+
+    def test_signature_errors(self):
+        """
+        Check error reporting when implementation signature doesn't match
+        generating function signature.
+        """
+        f = generated_jit(nopython=True)(bad_generated_usecase)
+        # Mismatching # of arguments
+        with self.assertRaises(TypeError) as raises:
+            f(1j)
+        self.assertIn("should be compatible with signature '(x, y=5)', but has signature '(x)'",
+                      str(raises.exception))
+        # Mismatching defaults
+        with self.assertRaises(TypeError) as raises:
+            f(1)
+        self.assertIn("should be compatible with signature '(x, y=5)', but has signature '(x, y=6)'",
+                      str(raises.exception))
 
 
 class TestDispatcherMethods(TestCase):
@@ -402,7 +464,9 @@ class TestCache(TestCase):
         shutil.rmtree(self.tempdir)
 
     def import_module(self):
-        # Import a fresh version of the test module
+        # Import a fresh version of the test module.  All jitted functions
+        # in the test module will start anew and load overloads from
+        # the on-disk cache if possible.
         old = sys.modules.pop(self.modname, None)
         if old is not None:
             # Make sure cached bytecode is removed
@@ -444,7 +508,9 @@ class TestCache(TestCase):
         pass
 
     def run_in_separate_process(self):
-        # Cached functions can be run from a distinct process
+        # Cached functions can be run from a distinct process.
+        # Also stresses issue #1603: uncached function calling cached function
+        # shouldn't fail compiling.
         code = """if 1:
             import sys
 
@@ -452,7 +518,9 @@ class TestCache(TestCase):
             mod = __import__(%(modname)r)
             assert mod.add_usecase(2, 3) == 6
             assert mod.add_objmode_usecase(2, 3) == 6
+            assert mod.outer_uncached(3, 2) == 2
             assert mod.outer(3, 2) == 2
+            assert mod.generated_usecase(3, 2) == 1
             packed_rec = mod.record_return(mod.packed_arr, 1)
             assert tuple(packed_rec) == (2, 43.5), packed_rec
             aligned_rec = mod.record_return(mod.aligned_arr, 1)
@@ -505,6 +573,10 @@ class TestCache(TestCase):
         self.assertPreciseEqual(tuple(rec), (2, 43.5))
         self.check_cache(9)  # 3 index, 6 data
 
+        f = mod.generated_usecase
+        self.assertPreciseEqual(f(3, 2), 1)
+        self.assertPreciseEqual(f(3j, 2), 2 + 3j)
+
         # Check the code runs ok from another process
         self.run_in_separate_process()
 
@@ -513,6 +585,15 @@ class TestCache(TestCase):
         mod = self.import_module()
         self.assertPreciseEqual(mod.inner(3, 2), 6)
         self.check_cache(2)  # 1 index, 1 data
+        # Uncached outer function shouldn't fail (issue #1603)
+        f = mod.outer_uncached
+        self.assertPreciseEqual(f(3, 2), 2)
+        self.check_cache(2)  # 1 index, 1 data
+        mod = self.import_module()
+        f = mod.outer_uncached
+        self.assertPreciseEqual(f(3, 2), 2)
+        self.check_cache(2)  # 1 index, 1 data
+        # Cached outer will create new cache entries
         f = mod.outer
         self.assertPreciseEqual(f(3, 2), 2)
         self.check_cache(4)  # 2 index, 2 data
@@ -524,8 +605,12 @@ class TestCache(TestCase):
         mod = self.import_module()
         self.assertPreciseEqual(mod.outer(3, 2), 2)
         self.check_cache(4)  # 2 index, 2 data
+        self.assertPreciseEqual(mod.outer_uncached(3, 2), 2)
+        self.check_cache(4)  # same
+        mod = self.import_module()
         f = mod.inner
         self.assertPreciseEqual(f(3, 2), 6)
+        self.check_cache(4)  # same
         self.assertPreciseEqual(f(3.5, 2), 6.5)
         self.check_cache(5)  # 2 index, 3 data
 
@@ -589,9 +674,11 @@ class TestCache(TestCase):
         mod = self.import_module()
         mod.add_usecase(2, 3)
         mod.add_objmode_usecase(2, 3)
+        mod.outer_uncached(2, 3)
         mod.outer(2, 3)
         mod.record_return(mod.packed_arr, 0)
         mod.record_return(mod.aligned_arr, 1)
+        mod.generated_usecase(2, 3)
         mtimes = self.get_cache_mtimes()
 
         mod2 = self.import_module()

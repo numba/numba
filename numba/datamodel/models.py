@@ -131,11 +131,14 @@ class DataModel(object):
 
 @register_default(types.Boolean)
 class BooleanModel(DataModel):
+    _bit_type = ir.IntType(1)
+    _byte_type = ir.IntType(8)
+
     def get_value_type(self):
-        return ir.IntType(1)
+        return self._bit_type
 
     def get_data_type(self):
-        return ir.IntType(8)
+        return self._byte_type
 
     def get_return_type(self):
         return self.get_data_type()
@@ -218,9 +221,10 @@ class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
     """
+    _ptr_type = ir.IntType(8).as_pointer()
 
     def __init__(self, dmm, fe_type):
-        be_type = ir.IntType(8).as_pointer()
+        be_type = self._ptr_type
         super(OpaqueModel, self).__init__(dmm, fe_type, be_type)
 
 
@@ -289,8 +293,13 @@ class EphemeralPointerModel(PointerModel):
 @register_default(types.EphemeralArray)
 class EphemeralArrayModel(PointerModel):
 
+    def __init__(self, dmm, fe_type):
+        super(EphemeralArrayModel, self).__init__(dmm, fe_type)
+        self._data_type = ir.ArrayType(self._pointee_be_type,
+                                       self._fe_type.count)
+
     def get_data_type(self):
-        return ir.ArrayType(self._pointee_be_type, self._fe_type.count)
+        return self._data_type
 
     def as_data(self, builder, value):
         values = [builder.load(cgutils.gep_inbounds(builder, value, i))
@@ -323,14 +332,16 @@ class UniTupleModel(DataModel):
         super(UniTupleModel, self).__init__(dmm, fe_type)
         self._elem_model = dmm.lookup(fe_type.dtype)
         self._count = len(fe_type)
+        self._value_type = ir.ArrayType(self._elem_model.get_value_type(),
+                                        self._count)
+        self._data_type = ir.ArrayType(self._elem_model.get_data_type(),
+                                       self._count)
 
     def get_value_type(self):
-        elem_type = self._elem_model.get_value_type()
-        return ir.ArrayType(elem_type, self._count)
+        return self._value_type
 
     def get_data_type(self):
-        elem_type = self._elem_model.get_data_type()
-        return ir.ArrayType(elem_type, self._count)
+        return self._data_type
 
     def get_return_type(self):
         return self.get_value_type()
@@ -378,7 +389,7 @@ class UniTupleModel(DataModel):
     def traverse(self, builder, value):
         values = cgutils.unpack_tuple(builder, value, count=self._count)
         return zip([self._fe_type.dtype] * len(values), values)
-    
+
     def inner_types(self):
         return self._elem_model.traverse_types()
 
@@ -391,6 +402,9 @@ class CompositeModel(DataModel):
 
 
 class StructModel(CompositeModel):
+    _value_type = None
+    _data_type = None
+
     def __init__(self, dmm, fe_type, members):
         super(StructModel, self).__init__(dmm, fe_type)
         if members:
@@ -399,13 +413,24 @@ class StructModel(CompositeModel):
             self._fields = self._members = ()
         self._models = tuple([self._dmm.lookup(t) for t in self._members])
 
+    def get_member_fe_type(self, name):
+        """
+        StructModel-specific: get the Numba type of the field named *name*.
+        """
+        pos = self.get_field_position(name)
+        return self._members[pos]
+
     def get_value_type(self):
-        elems = [t.get_value_type() for t in self._models]
-        return ir.LiteralStructType(elems)
+        if self._value_type is None:
+            self._value_type = ir.LiteralStructType([t.get_value_type()
+                                                    for t in self._models])
+        return self._value_type
 
     def get_data_type(self):
-        elems = [t.get_data_type() for t in self._models]
-        return ir.LiteralStructType(elems)
+        if self._data_type is None:
+            self._data_type = ir.LiteralStructType([t.get_data_type()
+                                                    for t in self._models])
+        return self._data_type
 
     def get_argument_type(self):
         return tuple([t.get_argument_type() for t in self._models])
@@ -572,6 +597,9 @@ class StructModel(CompositeModel):
         return self._models[pos]
 
     def traverse(self, builder, value):
+        if value.type != self.get_value_type():
+            args = self.get_value_type(), value.type
+            raise TypeError("expecting {0} but got {1}".format(*args))
         out = [(self.get_type(k), self.get(builder, value, k))
                 for k in self._fields]
         return out
@@ -720,17 +748,18 @@ class RecordModel(CompositeModel):
         super(RecordModel, self).__init__(dmm, fe_type)
         self._models = [self._dmm.lookup(t) for _, t in fe_type.members]
         self._be_type = ir.ArrayType(ir.IntType(8), fe_type.size)
+        self._be_ptr_type = self._be_type.as_pointer()
 
     def get_value_type(self):
         """Passed around as reference to underlying data
         """
-        return self._be_type.as_pointer()
+        return self._be_ptr_type
 
     def get_argument_type(self):
-        return self.get_value_type()
+        return self._be_ptr_type
 
     def get_return_type(self):
-        return self.get_value_type()
+        return self._be_ptr_type
 
     def get_data_type(self):
         return self._be_type
@@ -840,13 +869,14 @@ class UniTupleIter(StructModel):
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
 
-@register_default(types.Slice3Type)
-class Slice3(StructModel):
+@register_default(types.SliceType)
+class SliceModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('start', types.intp),
                    ('stop', types.intp),
-                   ('step', types.intp)]
-        super(Slice3, self).__init__(dmm, fe_type, members)
+                   ('step', types.intp),
+                   ]
+        super(SliceModel, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.NPDatetime)
@@ -909,15 +939,16 @@ class GeneratorModel(CompositeModel):
         self._be_type = ir.LiteralStructType(
             [self._dmm.lookup(types.int32).get_value_type(),
              self._args_be_type, self._state_be_type])
+        self._be_ptr_type = self._be_type.as_pointer()
 
     def get_value_type(self):
         """
         The generator closure is passed around as a reference.
         """
-        return self._be_type.as_pointer()
+        return self._be_ptr_type
 
     def get_argument_type(self):
-        return self.get_value_type()
+        return self._be_ptr_type
 
     def get_return_type(self):
         return self._be_type
@@ -995,3 +1026,83 @@ def handle_numpy_ndenumerate_type(dmm, ty):
 def handle_bound_function(dmm, ty):
     # The same as the underlying type
     return dmm[ty.this]
+
+
+@register_default(types.DeferredType)
+class DeferredStructModel(CompositeModel):
+    def __init__(self, dmm, fe_type):
+        super(DeferredStructModel, self).__init__(dmm, fe_type)
+        self.typename = "deferred.{0}".format(id(fe_type))
+        self.actual_fe_type = fe_type.get()
+
+    def get_value_type(self):
+        return ir.global_context.get_identified_type(self.typename + '.value')
+
+    def get_data_type(self):
+        return ir.global_context.get_identified_type(self.typename + '.data')
+
+    def get_argument_type(self):
+        return self._actual_model.get_argument_type()
+
+    def as_argument(self, builder, value):
+        inner = self.get(builder, value)
+        return self._actual_model.as_argument(builder, inner)
+
+    def from_argument(self, builder, value):
+        res = self._actual_model.from_argument(builder, value)
+        return self.set(builder, self.make_uninitialized(), res)
+
+    def from_data(self, builder, value):
+        self._define()
+        elem = self.get(builder, value)
+        value = self._actual_model.from_data(builder, elem)
+        out = self.make_uninitialized()
+        return self.set(builder, out, value)
+
+    def as_data(self, builder, value):
+        self._define()
+        elem = self.get(builder, value)
+        value = self._actual_model.as_data(builder, elem)
+        out = self.make_uninitialized(kind='data')
+        return self.set(builder, out, value)
+
+    def from_return(self, builder, value):
+        return value
+
+    def as_return(self, builder, value):
+        return value
+
+    def get(self, builder, value):
+        return builder.extract_value(value, [0])
+
+    def set(self, builder, value, content):
+        return builder.insert_value(value, content, [0])
+
+    def make_uninitialized(self, kind='value'):
+        self._define()
+        if kind == 'value':
+            ty = self.get_value_type()
+        else:
+            ty = self.get_data_type()
+        return ir.Constant(ty, ir.Undefined)
+
+    def _define(self):
+        valty = self.get_value_type()
+        self._define_value_type(valty)
+        datty = self.get_data_type()
+        self._define_data_type(datty)
+
+    def _define_value_type(self, value_type):
+        if value_type.is_opaque:
+            value_type.set_body(self._actual_model.get_value_type())
+
+    def _define_data_type(self, data_type):
+        if data_type.is_opaque:
+            data_type.set_body(self._actual_model.get_data_type())
+
+    @property
+    def _actual_model(self):
+        return self._dmm.lookup(self.actual_fe_type)
+
+    def traverse(self, builder, value):
+        return [(self.actual_fe_type, builder.extract_value(value, [0]))]

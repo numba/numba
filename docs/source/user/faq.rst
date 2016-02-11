@@ -127,5 +127,25 @@ modules" button, and add ``numba`` inside the text box that pops up.
 To see the setting take effect, be sure to restart the IPython console or
 kernel.
 
+.. _llvm-locale-bug:
+
+Why does Numba complain about the current locale?
+-------------------------------------------------
+
+If you get an error message such as the following::
+
+   RuntimeError: Failed at nopython (nopython mode backend)
+   LLVM will produce incorrect floating-point code in the current locale
+
+it means you have hit a LLVM bug which causes incorrect handling of
+floating-point constants.  This is known to happen with certain third-party
+libraries such as the Qt backend to matplotlib.
+
+To work around the bug, you need to force back the locale to its default
+value, for example::
+
+   import locale
+   locale.setlocale(locale.LC_NUMERIC, 'C')
+
 
 .. _NumbaPro: http://docs.continuum.io/numbapro/

@@ -63,7 +63,8 @@ class Hsa_get_local_size(ConcreteTemplate):
 @intrinsic
 class Hsa_barrier(ConcreteTemplate):
     key = hsa.barrier
-    cases = [signature(types.void, types.uint32)]
+    cases = [signature(types.void, types.uint32),
+             signature(types.void)]
 
 
 @intrinsic
@@ -71,6 +72,18 @@ class Hsa_mem_fence(ConcreteTemplate):
     key = hsa.mem_fence
     cases = [signature(types.void, types.uint32)]
 
+
+@intrinsic
+class Hsa_wavebarrier(ConcreteTemplate):
+    key = hsa.wavebarrier
+    cases = [signature(types.void)]
+
+@intrinsic
+class Hsa_activelanepermute_wavewidth(ConcreteTemplate):
+    key = hsa.activelanepermute_wavewidth
+    # parameter: src, laneid, identity, useidentity
+    cases = [signature(ty, ty, types.uint32, ty, types.bool_)
+             for ty in (types.integer_domain|types.real_domain)]
 
 # hsa.shared submodule -------------------------------------------------------
 
@@ -142,6 +155,12 @@ class HsaModuleTemplate(AttributeTemplate):
 
     def resolve_mem_fence(self, mod):
         return types.Function(Hsa_mem_fence)
+
+    def resolve_wavebarrier(self, mod):
+        return types.Function(Hsa_wavebarrier)
+
+    def resolve_activelanepermute_wavewidth(self, mod):
+        return types.Function(Hsa_activelanepermute_wavewidth)
 
     def resolve_shared(self, mod):
         return types.Module(hsa.shared)

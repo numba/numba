@@ -167,10 +167,17 @@ def ldexp(x, e):
     return math.ldexp(x, e)
 
 
+def get_constants():
+    return math.pi, math.e
+
+
 class TestMathLib(TestCase):
 
     def setUp(self):
         self.ccache = CompilationCache()
+
+    def test_constants(self):
+        self.run_nullary_func(get_constants, no_pyobj_flags)
 
     def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
                   prec='exact', **kwargs):
@@ -198,8 +205,11 @@ class TestMathLib(TestCase):
     def check_predicate_func(self, pyfunc, flags=enable_pyobj_flags):
         x_types = [types.int16, types.int32, types.int64,
                    types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float32, types.float64, types.float64]
-        x_values = [0, 0, 0, 0, 0, 0, float('inf'), 0.0, float('inf'), 0.0]
+                   types.float32, types.float32, types.float32,
+                   types.float64, types.float64, types.float64]
+        x_values = [0, 0, 0, 0, 0, 0,
+                    float('inf'), 0.0, float('nan'),
+                    float('inf'), 0.0, float('nan')]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     def test_sin(self, flags=enable_pyobj_flags):
@@ -372,7 +382,7 @@ class TestMathLib(TestCase):
                    types.uint16, types.uint32, types.uint64,
                    types.float32, types.float64]
         x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags, prec='double')
 
     def test_asinh_npm(self):
         self.test_asinh(flags=no_pyobj_flags)
@@ -394,7 +404,7 @@ class TestMathLib(TestCase):
                    types.uint16, types.uint32, types.uint64,
                    types.float32, types.float64]
         x_values = [0, 0, 0, 0, 0, 0, 0.1, 0.1]
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags, prec='double')
 
     def test_atanh_npm(self):
         self.test_atanh(flags=no_pyobj_flags)
@@ -526,7 +536,8 @@ class TestMathLib(TestCase):
         pyfunc = erf
         x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
         x_types = [types.float32, types.float64] * (len(x_values) // 2)
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags,
+                       prec='double', ulps=2)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erf_npm(self):
@@ -537,7 +548,8 @@ class TestMathLib(TestCase):
         pyfunc = erfc
         x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
         x_types = [types.float32, types.float64] * (len(x_values) // 2)
-        self.run_unary(pyfunc, x_types, x_values, flags)
+        self.run_unary(pyfunc, x_types, x_values, flags,
+                       prec='double', ulps=4)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc_npm(self):
@@ -551,7 +563,8 @@ class TestMathLib(TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags, prec='double', ulps=3)
         x_values = [-0.1, 0.1, 2.5, 10.1, 50., float('inf')]
         x_types = [types.float64] * len(x_values)
-        self.run_unary(pyfunc, x_types, x_values, flags, prec='double', ulps=3)
+        self.run_unary(pyfunc, x_types, x_values, flags,
+                       prec='double', ulps=8)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma_npm(self):

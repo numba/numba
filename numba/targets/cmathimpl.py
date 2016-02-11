@@ -10,13 +10,13 @@ import math
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
 
-from numba.targets.imputils import implement, Registry, impl_ret_untracked
+from numba.targets.imputils import Registry, impl_ret_untracked
 from numba import types, cgutils, utils
 from numba.typing import signature
 from . import builtins, mathimpl
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 
 def is_nan(builder, z):
@@ -32,8 +32,7 @@ def is_finite(builder, z):
                         mathimpl.is_finite(builder, z.imag))
 
 
-@register
-@implement(cmath.isnan, types.Kind(types.Complex))
+@lower(cmath.isnan, types.Complex)
 def isnan_float_impl(context, builder, sig, args):
     [typ] = sig.args
     [value] = args
@@ -42,8 +41,7 @@ def isnan_float_impl(context, builder, sig, args):
     res = is_nan(builder, z)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@register
-@implement(cmath.isinf, types.Kind(types.Complex))
+@lower(cmath.isinf, types.Complex)
 def isinf_float_impl(context, builder, sig, args):
     [typ] = sig.args
     [value] = args
@@ -54,8 +52,7 @@ def isinf_float_impl(context, builder, sig, args):
 
 
 if utils.PYVERSION >= (3, 2):
-    @register
-    @implement(cmath.isfinite, types.Kind(types.Complex))
+    @lower(cmath.isfinite, types.Complex)
     def isfinite_float_impl(context, builder, sig, args):
         [typ] = sig.args
         [value] = args
@@ -65,8 +62,7 @@ if utils.PYVERSION >= (3, 2):
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement(cmath.rect, types.Kind(types.Float), types.Kind(types.Float))
+@lower(cmath.rect, types.Float, types.Float)
 def rect_impl(context, builder, sig, args):
     [r, phi] = args
     # We can't call math.isfinite() inside rect() below because it
@@ -123,8 +119,7 @@ def intrinsic_complex_unary(inner_func):
 NAN = float('nan')
 INF = float('inf')
 
-@register
-@implement(cmath.exp, types.Kind(types.Complex))
+@lower(cmath.exp, types.Complex)
 @intrinsic_complex_unary
 def exp_impl(x, y, x_is_finite, y_is_finite):
     """cmath.exp(x + y j)"""
@@ -165,8 +160,7 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
         else:
             return complex(r, r)
 
-@register
-@implement(cmath.log, types.Kind(types.Complex))
+@lower(cmath.log, types.Complex)
 @intrinsic_complex_unary
 def log_impl(x, y, x_is_finite, y_is_finite):
     """cmath.log(x + y j)"""
@@ -175,8 +169,7 @@ def log_impl(x, y, x_is_finite, y_is_finite):
     return complex(a, b)
 
 
-@register
-@implement(cmath.log, types.Kind(types.Complex), types.Kind(types.Complex))
+@lower(cmath.log, types.Complex, types.Complex)
 def log_base_impl(context, builder, sig, args):
     """cmath.log(z, base)"""
     [z, base] = args
@@ -188,8 +181,7 @@ def log_base_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@register
-@implement(cmath.log10, types.Kind(types.Complex))
+@lower(cmath.log10, types.Complex)
 def log10_impl(context, builder, sig, args):
     LN_10 = 2.302585092994045684
 
@@ -204,23 +196,20 @@ def log10_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@register
-@implement(cmath.phase, types.Kind(types.Complex))
+@lower(cmath.phase, types.Complex)
 @intrinsic_complex_unary
 def phase_impl(x, y, x_is_finite, y_is_finite):
     """cmath.phase(x + y j)"""
     return math.atan2(y, x)
 
-@register
-@implement(cmath.polar, types.Kind(types.Complex))
+@lower(cmath.polar, types.Complex)
 @intrinsic_complex_unary
 def polar_impl(x, y, x_is_finite, y_is_finite):
     """cmath.polar(x + y j)"""
     return math.hypot(x, y), math.atan2(y, x)
 
 
-@register
-@implement(cmath.sqrt, types.Kind(types.Complex))
+@lower(cmath.sqrt, types.Complex)
 def sqrt_impl(context, builder, sig, args):
     # We risk spurious overflow for components >= FLT_MAX / (1 + sqrt(2)).
     THRES = mathimpl.FLT_MAX / (1 + math.sqrt(2))
@@ -271,8 +260,7 @@ def sqrt_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@register
-@implement(cmath.cos, types.Kind(types.Complex))
+@lower(cmath.cos, types.Complex)
 def cos_impl(context, builder, sig, args):
     def cos_impl(z):
         """cmath.cos(z) = cmath.cosh(z j)"""
@@ -281,8 +269,7 @@ def cos_impl(context, builder, sig, args):
     res = context.compile_internal(builder, cos_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@register
-@implement(cmath.cosh, types.Kind(types.Complex))
+@lower(cmath.cosh, types.Complex)
 def cosh_impl(context, builder, sig, args):
     def cosh_impl(z):
         """cmath.cosh(z)"""
@@ -311,8 +298,7 @@ def cosh_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@register
-@implement(cmath.sin, types.Kind(types.Complex))
+@lower(cmath.sin, types.Complex)
 def sin_impl(context, builder, sig, args):
     def sin_impl(z):
         """cmath.sin(z) = -j * cmath.sinh(z j)"""
@@ -322,8 +308,7 @@ def sin_impl(context, builder, sig, args):
     res = context.compile_internal(builder, sin_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@register
-@implement(cmath.sinh, types.Kind(types.Complex))
+@lower(cmath.sinh, types.Complex)
 def sinh_impl(context, builder, sig, args):
     def sinh_impl(z):
         """cmath.sinh(z)"""
@@ -349,8 +334,7 @@ def sinh_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@register
-@implement(cmath.tan, types.Kind(types.Complex))
+@lower(cmath.tan, types.Complex)
 def tan_impl(context, builder, sig, args):
     def tan_impl(z):
         """cmath.tan(z) = -j * cmath.tanh(z j)"""
@@ -360,8 +344,7 @@ def tan_impl(context, builder, sig, args):
     res = context.compile_internal(builder, tan_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@register
-@implement(cmath.tanh, types.Kind(types.Complex))
+@lower(cmath.tanh, types.Complex)
 def tanh_impl(context, builder, sig, args):
     def tanh_impl(z):
         """cmath.tanh(z)"""
@@ -389,8 +372,7 @@ def tanh_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@register
-@implement(cmath.acos, types.Kind(types.Complex))
+@lower(cmath.acos, types.Complex)
 def acos_impl(context, builder, sig, args):
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
@@ -416,8 +398,7 @@ def acos_impl(context, builder, sig, args):
     res = context.compile_internal(builder, acos_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@register
-@implement(cmath.acosh, types.Kind(types.Complex))
+@lower(cmath.acosh, types.Complex)
 def acosh_impl(context, builder, sig, args):
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
@@ -443,8 +424,7 @@ def acosh_impl(context, builder, sig, args):
     res = context.compile_internal(builder, acosh_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@register
-@implement(cmath.asinh, types.Kind(types.Complex))
+@lower(cmath.asinh, types.Complex)
 def asinh_impl(context, builder, sig, args):
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
@@ -468,8 +448,7 @@ def asinh_impl(context, builder, sig, args):
     res = context.compile_internal(builder, asinh_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@register
-@implement(cmath.asin, types.Kind(types.Complex))
+@lower(cmath.asin, types.Complex)
 def asin_impl(context, builder, sig, args):
     def asin_impl(z):
         """cmath.asin(z) = -j * cmath.asinh(z j)"""
@@ -479,8 +458,7 @@ def asin_impl(context, builder, sig, args):
     res = context.compile_internal(builder, asin_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@register
-@implement(cmath.atan, types.Kind(types.Complex))
+@lower(cmath.atan, types.Complex)
 def atan_impl(context, builder, sig, args):
     def atan_impl(z):
         """cmath.atan(z) = -j * cmath.atanh(z j)"""
@@ -494,8 +472,7 @@ def atan_impl(context, builder, sig, args):
     res = context.compile_internal(builder, atan_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@register
-@implement(cmath.atanh, types.Kind(types.Complex))
+@lower(cmath.atanh, types.Complex)
 def atanh_impl(context, builder, sig, args):
     LN_4 = math.log(4)
     THRES_LARGE = math.sqrt(mathimpl.FLT_MAX / 4)

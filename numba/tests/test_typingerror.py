@@ -4,6 +4,8 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types
 from numba.errors import TypingError
+from .support import TestCase
+
 import math
 
 
@@ -32,6 +34,9 @@ def imprecise_list():
     l = []
     return len(l)
 
+def unknown_module():
+    return numpyz.int32(0)
+
 
 class TestTypingError(unittest.TestCase):
 
@@ -39,7 +44,7 @@ class TestTypingError(unittest.TestCase):
         try:
             compile_isolated(foo, ())
         except TypingError as e:
-            self.assertTrue(e.msg.startswith("Untyped global name"))
+            self.assertTrue(e.msg.startswith("Untyped global name"), e.msg)
         else:
             self.fail("Should raise error")
 
@@ -47,9 +52,15 @@ class TestTypingError(unittest.TestCase):
         try:
             compile_isolated(bar, (types.int32,))
         except TypingError as e:
-            self.assertTrue(e.msg.startswith("Unknown attribute"))
+            self.assertTrue(e.msg.startswith("Unknown attribute"), e.msg)
         else:
             self.fail("Should raise error")
+
+    def test_unknown_module(self):
+        # This used to print "'object' object has no attribute 'int32'"
+        with self.assertRaises(TypingError) as raises:
+            compile_isolated(unknown_module, ())
+        self.assertIn("Untyped global name 'numpyz'", str(raises.exception))
 
     def test_issue_868(self):
         '''

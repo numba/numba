@@ -4,7 +4,7 @@ from collections import namedtuple
 
 from numba import types
 from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                    builtin, builtin_attr, signature,
+                                    infer, infer_getattr, signature,
                                     bound_function)
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
@@ -38,7 +38,7 @@ def get_array_index_type(ary, idx):
                 raise TypeError("only one ellipsis allowed in array index "
                                 "(got %s)" % (idx,))
             ellipsis_met = True
-        elif ty is types.slice3_type:
+        elif isinstance(ty, types.SliceType):
             pass
         elif isinstance(ty, types.Integer):
             # Normalize integer index
@@ -66,6 +66,10 @@ def get_array_index_type(ary, idx):
 
     # Check indices and result dimensionality
     all_indices = left_indices + right_indices
+    if ellipsis_met:
+        assert right_indices[0] is types.ellipsis
+        del right_indices[0]
+
     n_indices = len(all_indices) - ellipsis_met
     if n_indices > ary.ndim:
         raise TypeError("cannot index %s with %d indices: %s"
@@ -90,6 +94,26 @@ def get_array_index_type(ary, idx):
 
         # Infer layout
         layout = ary.layout
+
+        def keeps_contiguity(ty, is_innermost):
+            # A slice can only keep an array contiguous if it is the
+            # innermost index and it is not strided
+            return (ty is types.ellipsis or isinstance(ty, types.Integer)
+                    or (is_innermost and isinstance(ty, types.SliceType)
+                        and not ty.has_step))
+
+        def check_contiguity(outer_indices):
+            """
+            Whether indexing with the given indices (from outer to inner in
+            physical layout order) can keep an array contiguous.
+            """
+            for ty in outer_indices[:-1]:
+                if not keeps_contiguity(ty, False):
+                    return False
+            if outer_indices and not keeps_contiguity(outer_indices[-1], True):
+                return False
+            return True
+
         if layout == 'C':
             # Integer indexing on the left keeps the array C-contiguous
             if n_indices == ary.ndim:
@@ -98,12 +122,8 @@ def get_array_index_type(ary, idx):
                 right_indices = []
             if right_indices:
                 layout = 'A'
-            else:
-                for ty in left_indices:
-                    if ty is not types.ellipsis and not isinstance(ty, types.Integer):
-                        # Slicing cannot guarantee to keep the array contiguous
-                        layout = 'A'
-                        break
+            elif not check_contiguity(left_indices):
+                layout = 'A'
         elif layout == 'F':
             # Integer indexing on the right keeps the array F-contiguous
             if n_indices == ary.ndim:
@@ -112,12 +132,8 @@ def get_array_index_type(ary, idx):
                 left_indices = []
             if left_indices:
                 layout = 'A'
-            else:
-                for ty in right_indices:
-                    if ty is not types.ellipsis and not isinstance(ty, types.Integer):
-                        # Slicing cannot guarantee to keep the array contiguous
-                        layout = 'A'
-                        break
+            elif not check_contiguity(right_indices[::-1]):
+                layout = 'A'
 
         res = ary.copy(ndim=ndim, layout=layout)
 
@@ -130,7 +146,7 @@ def get_array_index_type(ary, idx):
     return Indexing(idx, res, advanced)
 
 
-@builtin
+@infer
 class GetItemBuffer(AbstractTemplate):
     key = "getitem"
 
@@ -141,7 +157,7 @@ class GetItemBuffer(AbstractTemplate):
         if out is not None:
             return signature(out.result, ary, out.index)
 
-@builtin
+@infer
 class SetItemBuffer(AbstractTemplate):
     key = "setitem"
 
@@ -160,17 +176,29 @@ class SetItemBuffer(AbstractTemplate):
         res = out.result
         if isinstance(res, types.Array):
             # Indexing produces an array
-            if not isinstance(val, types.Array):
-                # Allow scalar broadcasting
-                res = res.dtype
-            elif (val.ndim == res.ndim and
-                  self.context.can_convert(val.dtype, res.dtype)):
-                # Allow assignement of same-dimensionality compatible-dtype array
-                res = val
+            if isinstance(val, types.Array):
+                if (val.ndim == res.ndim and
+                    self.context.can_convert(val.dtype, res.dtype)):
+                    # Allow assignement of same-dimensionality compatible-dtype array
+                    res = val
+                else:
+                    # NOTE: array broadcasting is unsupported
+                    return
+            elif isinstance(val, types.Sequence):
+                if (res.ndim == 1 and
+                    self.context.can_convert(val.dtype, res.dtype)):
+                    # Allow assignement of sequence to 1d array
+                    res = val
+                else:
+                    # NOTE: sequence-to-array broadcasting is unsupported
+                    return
             else:
-                # Unexpected dimensionality of assignment source
-                # (array broadcasting is unsupported)
-                return
+                # Allow scalar broadcasting
+                if self.context.can_convert(val, res.dtype):
+                    res = res.dtype
+                else:
+                    # Incompatible scalar type
+                    return
         elif not isinstance(val, types.Array):
             # Single item assignment
             res = val
@@ -189,7 +217,7 @@ def normalize_shape(shape):
         return shape
 
 
-@builtin_attr
+@infer_getattr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
 
@@ -252,6 +280,15 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.reshape")
     def resolve_reshape(self, ary, args, kws):
+        def sentry_shape_scalar(ty):
+            if ty in types.number_domain:
+                # Guard against non integer type
+                if not isinstance(ty, types.Integer):
+                    raise TypeError("reshape() arg cannot be {0}".format(ty))
+                return True
+            else:
+                return False
+
         assert not kws
         if ary.layout not in 'CF':
             # only work for contiguous array
@@ -261,7 +298,7 @@ class ArrayAttribute(AttributeTemplate):
             # single arg
             shape, = args
 
-            if shape in types.number_domain:
+            if sentry_shape_scalar(shape):
                 ndim = 1
             else:
                 shape = normalize_shape(shape)
@@ -277,7 +314,7 @@ class ArrayAttribute(AttributeTemplate):
 
         else:
             # vararg case
-            if any(a not in types.number_domain for a in args):
+            if any(not sentry_shape_scalar(a) for a in args):
                 raise TypeError("reshape({0}) is not supported".format(
                     ', '.join(args)))
 
@@ -321,7 +358,54 @@ class ArrayAttribute(AttributeTemplate):
                 return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
 
 
-@builtin_attr
+@infer
+class StaticGetItemArray(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for record and structured arrays
+        ary, idx = args
+        if (isinstance(ary, types.Array) and isinstance(idx, str) and
+            isinstance(ary.dtype, types.Record)):
+            if idx in ary.dtype.fields:
+                return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
+
+
+@infer_getattr
+class RecordAttribute(AttributeTemplate):
+    key = types.Record
+
+    def generic_resolve(self, record, attr):
+        ret = record.typeof(attr)
+        assert ret
+        return ret
+
+@infer
+class StaticGetItemRecord(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for records
+        record, idx = args
+        if isinstance(record, types.Record) and isinstance(idx, str):
+            ret = record.typeof(idx)
+            assert ret
+            return ret
+
+@infer
+class StaticSetItemRecord(AbstractTemplate):
+    key = "static_setitem"
+
+    def generic(self, args, kws):
+        # Resolution of members for record and structured arrays
+        record, idx, value = args
+        if isinstance(record, types.Record) and isinstance(idx, str):
+            expectedty = record.typeof(idx)
+            if self.context.can_convert(value, expectedty) is not None:
+                return signature(types.void, record, types.Const(idx), value)
+
+
+@infer_getattr
 class ArrayCTypesAttribute(AttributeTemplate):
     key = types.ArrayCTypes
 
@@ -329,7 +413,7 @@ class ArrayCTypesAttribute(AttributeTemplate):
         return types.uintp
 
 
-@builtin_attr
+@infer_getattr
 class ArrayFlagsAttribute(AttributeTemplate):
     key = types.ArrayFlags
 
@@ -343,7 +427,7 @@ class ArrayFlagsAttribute(AttributeTemplate):
         return types.boolean
 
 
-@builtin_attr
+@infer_getattr
 class NestedArrayAttribute(ArrayAttribute):
     key = types.NestedArray
 
@@ -357,6 +441,8 @@ def _expand_integer(ty):
             return max(types.intp, ty)
         else:
             return max(types.uintp, ty)
+    elif isinstance(ty, types.Boolean):
+        return types.intp
     else:
         return ty
 
@@ -377,7 +463,7 @@ def generic_expand_cumulative(self, args, kws):
 def generic_hetero_real(self, args, kws):
     assert not args
     assert not kws
-    if self.this.dtype in types.integer_domain:
+    if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
         return signature(types.float64, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
@@ -416,7 +502,7 @@ install_array_method("argmin", generic_index)
 install_array_method("argmax", generic_index)
 
 
-@builtin
+@infer
 class CmpOpEqArray(AbstractTemplate):
     key = '=='
 

@@ -1,9 +1,10 @@
 from __future__ import absolute_import, print_function, division
-from numba import unittest_support as unittest
+
 import numpy as np
+
+from numba import unittest_support as unittest
 from numba import int32, uint32, float32, float64
 from numba import vectorize
-from timeit import default_timer as time
 
 
 def vector_add(a, b):

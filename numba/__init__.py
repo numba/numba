@@ -4,7 +4,7 @@ Expose top-level symbols that are safe for import *
 from __future__ import print_function, division, absolute_import
 import re
 
-from . import testing, decorators
+from . import runtests, decorators
 from . import errors, special, types, config
 
 # Re-export typeof
@@ -19,6 +19,7 @@ from .types import *
 jit = decorators.jit
 autojit = decorators.autojit
 njit = decorators.njit
+generated_jit = decorators.generated_jit
 
 # Re export vectorize decorators
 from .npyufunc import vectorize, guvectorize
@@ -26,8 +27,11 @@ from .npyufunc import vectorize, guvectorize
 # Re export from_dtype
 from .numpy_support import from_dtype
 
-# Re-export test entrypoint
-test = testing.test
+# Re export jitclass
+from .jitclass import jitclass
+
+# Keep this for backward compatibility.
+test = runtests.main
 
 # Try to initialize cuda
 from . import cuda
@@ -43,10 +47,12 @@ export
 exportmany
 cuda
 from_dtype
+jitclass
 """.split() + types.__all__ + special.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 6, 0)
+_min_llvmlite_version = (0, 9, 0)
+_min_llvm_version = (3, 7, 0)
 
 def _ensure_llvm():
     """
@@ -71,9 +77,16 @@ def _ensure_llvm():
         # Not matching?
         warnings.warn("llvmlite version format not recognized!")
 
-    from llvmlite.binding import check_jit_execution
-    check_jit_execution()
+    from llvmlite.binding import llvm_version_info, check_jit_execution
 
+    if llvm_version_info < _min_llvm_version:
+        msg = ("Numba requires at least version %d.%d.%d of LLVM.\n"
+               "Installed llvmlite is built against version %d.%d.%d.\n"
+               "Please update llvmlite." %
+               (_min_llvm_version + llvm_version_info))
+        raise ImportError(msg)
+
+    check_jit_execution()
 
 _ensure_llvm()
 

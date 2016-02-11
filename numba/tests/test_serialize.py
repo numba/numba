@@ -18,7 +18,7 @@ class TestDispatcherPickling(TestCase):
             meth(proto, *args, **kwargs)
 
     def simulate_fresh_target(self):
-        dispatcher_cls = registry.target_registry['cpu']
+        dispatcher_cls = registry.dispatcher_registry['cpu']
         # Simulate fresh targetdescr
         dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)()
 
@@ -89,6 +89,19 @@ class TestDispatcherPickling(TestCase):
     def test_call_dyn_func_objmode(self):
         # Same with an object mode function
         self.run_with_protocols(self.check_call, dyn_func_objmode, 36, (6,))
+
+    def test_renamed_module(self):
+        # Issue #1559: using a renamed module (e.g. `import numpy as np`)
+        # should not fail serializing
+        expected = get_renamed_module(0.0)
+        self.run_with_protocols(self.check_call, get_renamed_module,
+                                expected, (0.0,))
+
+    def test_call_generated(self):
+        self.run_with_protocols(self.check_call, generated_add,
+                                46, (1, 2))
+        self.run_with_protocols(self.check_call, generated_add,
+                                1j + 7, (1j, 2))
 
     def test_other_process(self):
         """

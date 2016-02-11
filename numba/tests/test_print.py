@@ -32,26 +32,20 @@ class TestPrint(unittest.TestCase):
     def test_print(self):
         pyfunc = print_value
 
-        cr = compile_isolated(pyfunc, (types.int32,))
-        cfunc = cr.entry_point
-        for val in (1, -234):
-            with captured_stdout():
-                cfunc(val)
-                self.assertEqual(sys.stdout.getvalue(), str(val) + '\n')
+        def check_values(typ, values):
+            cr = compile_isolated(pyfunc, (typ,))
+            cfunc = cr.entry_point
+            for val in values:
+                with captured_stdout():
+                    cfunc(val)
+                    self.assertEqual(sys.stdout.getvalue(), str(val) + '\n')
 
-        cr = compile_isolated(pyfunc, (types.int64,))
-        cfunc = cr.entry_point
-        for val in (1, -234, 123456789876543210, -123456789876543210):
-            with captured_stdout():
-                cfunc(val)
-                self.assertEqual(sys.stdout.getvalue(), str(val) + '\n')
-
-        cr = compile_isolated(pyfunc, (types.uint64,))
-        cfunc = cr.entry_point
-        for val in (1, 234, 123456789876543210, 2**63 + 123):
-            with captured_stdout():
-                cfunc(val)
-                self.assertEqual(sys.stdout.getvalue(), str(val) + '\n')
+        check_values(types.int32, (1, -234))
+        check_values(types.int64, (1, -234,
+                                   123456789876543210, -123456789876543210))
+        check_values(types.uint64, (1, 234,
+                                   123456789876543210, 2**63 + 123))
+        check_values(types.boolean, (True, False))
 
         cr = compile_isolated(pyfunc, (types.float32,))
         cfunc = cr.entry_point

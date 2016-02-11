@@ -38,8 +38,12 @@ class BasePYCCTest(TestCase):
 
     def setUp(self):
         self.tmpdir = static_temp_directory('test_pycc')
+        # Make sure temporary files and directories created by
+        # distutils don't clutter the top-level /tmp
+        tempfile.tempdir = self.tmpdir
 
     def tearDown(self):
+        tempfile.tempdir = None
         # Since we're executing the module-under-test several times
         # from the same process, we must clear the exports registry
         # between invocations.
@@ -172,7 +176,7 @@ class TestCC(BasePYCCTest):
         f = self._test_module.cc.output_file
         self.assertFalse(os.path.exists(f), f)
         self.assertTrue(os.path.basename(f).startswith('pycc_test_simple.'), f)
-        if sys.platform == 'linux':
+        if sys.platform.startswith('linux'):
             self.assertTrue(f.endswith('.so'), f)
             if sys.version_info >= (3,):
                 self.assertIn('.cpython', f)

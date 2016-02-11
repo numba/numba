@@ -52,7 +52,9 @@ def module_getattr_folding(constants, block):
                 if rhs.op == 'getattr':
                     if rhs.value.name in constants:
                         base = constants[rhs.value.name]
-                        constants[inst.target.name] = getattr(base, rhs.attr)
+                        if hasattr(base, rhs.attr):
+                            constants[inst.target.name] = getattr(base,
+                                                                  rhs.attr)
 
                 elif rhs.op == 'build_tuple':
                     if all(i.name in constants for i in rhs.items):
@@ -129,7 +131,7 @@ def expand_macros_in_block(constants, block):
                 # Non-calling macro must be triggered by get attribute
                 base = constants.get(rhs.value.name)
                 if base is not None:
-                    value = getattr(base, rhs.attr)
+                    value = getattr(base, rhs.attr, None)
                     if isinstance(value, Macro):
                         macro = value
                         if not macro.callable:

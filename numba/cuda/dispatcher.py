@@ -183,6 +183,15 @@ class CUDAGenerializedUFunc(GenerializedUFunc):
                                          dtype=ary.dtype,
                                          gpu_data=ary.gpu_data)
 
+    def _broadcast_add_axis(self, ary, newshape):
+        newax = len(newshape) - len(ary.shape)
+        # Add 0 strides for missing dimension
+        newstrides = (0,) * newax + ary.strides
+        return devicearray.DeviceNDArray(shape=newshape,
+                                         strides=newstrides,
+                                         dtype=ary.dtype,
+                                         gpu_data=ary.gpu_data)
+
 
 class CUDAUFuncMechanism(UFuncMechanism):
     """

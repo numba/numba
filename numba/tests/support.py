@@ -158,9 +158,12 @@ class TestCase(unittest.TestCase):
         Return the strides of the given array, fixed for comparison.
         Strides for 0- or 1-sized dimensions are ignored.
         """
-        return [stride / arr.itemsize
-                for (stride, shape) in zip(arr.strides, arr.shape)
-                if shape > 1]
+        if arr.size == 0:
+            return [0] * arr.ndim
+        else:
+            return [stride / arr.itemsize
+                    for (stride, shape) in zip(arr.strides, arr.shape)
+                    if shape > 1]
 
     def assertStridesEqual(self, first, second):
         """
@@ -172,10 +175,21 @@ class TestCase(unittest.TestCase):
                          "strides differ")
 
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
-                           msg=None):
+                           msg=None, ignore_sign_on_zero=False,
+                           abs_tol=None
+                           ):
         """
-        Test that two scalars have similar types and are equal up to
-        a computed precision.
+        Versatile equality testing function with more built-in checks than
+        standard assertEqual().
+
+        For arrays, test that layout, dtype, shape are identical, and
+        recursively call assertPreciseEqual() on the contents.
+
+        For other sequences, recursively call assertPreciseEqual() on
+        the contents.
+
+        For scalars, test that two scalars or have similar types and are
+        equal up to a computed precision.
         If the scalars are instances of exact types or if *prec* is
         'exact', they are compared exactly.
         If the scalars are instances of inexact types (float, complex)
@@ -183,12 +197,22 @@ class TestCase(unittest.TestCase):
         is computed according to the value of *prec*: 53 bits if *prec*
         is 'double', 24 bits if *prec* is single.  This number of bits
         can be lowered by raising the *ulps* value.
+        ignore_sign_on_zero can be set to True if zeros are to be considered
+        equal regardless of their sign bit.
+        abs_tol if this is set to a float value its value is used in the
+        following. If, however, this is set to the string "eps" then machine
+        precision of the type(first) is used in the following instead. This
+        kwarg is used to check if the absolute difference in value between first
+        and second is less than the value set, if so the numbers being compared
+        are considered equal. (This is to handle small numbers typically of
+        magnitude less than machine precision).
 
         Any value of *prec* other than 'exact', 'single' or 'double'
         will raise an error.
         """
         try:
-            self._assertPreciseEqual(first, second, prec, ulps, msg)
+            self._assertPreciseEqual(first, second, prec, ulps, msg,
+                ignore_sign_on_zero, abs_tol)
         except AssertionError as exc:
             failure_msg = str(exc)
             # Fall off of the 'except' scope to avoid Python 3 exception
@@ -199,7 +223,8 @@ class TestCase(unittest.TestCase):
         self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
 
     def _assertPreciseEqual(self, first, second, prec='exact', ulps=1,
-                            msg=None):
+                            msg=None, ignore_sign_on_zero=False,
+                            abs_tol=None):
         """Recursive workhorse for assertPreciseEqual()."""
 
         def _assertNumberEqual(first, second, delta=None):
@@ -207,20 +232,23 @@ class TestCase(unittest.TestCase):
                 or math.isinf(first) or math.isinf(second)):
                 self.assertEqual(first, second, msg=msg)
                 # For signed zeros
-                try:
-                    if math.copysign(1, first) != math.copysign(1, second):
-                        self.fail(
-                            self._formatMessage(msg,
-                                                "%s != %s" % (first, second)))
-                except TypeError:
-                    pass
+                if not ignore_sign_on_zero:
+                    try:
+                        if math.copysign(1, first) != math.copysign(1, second):
+                            self.fail(
+                                self._formatMessage(msg,
+                                                    "%s != %s" %
+                                                    (first, second)))
+                    except TypeError:
+                        pass
             else:
                 self.assertAlmostEqual(first, second, delta=delta, msg=msg)
 
         first_family = self._detect_family(first)
         second_family = self._detect_family(second)
 
-        assertion_message = "Type Family mismatch. (%s != %s)" % (first_family, second_family)
+        assertion_message = "Type Family mismatch. (%s != %s)" % (first_family,
+            second_family)
         if msg:
             assertion_message += ': %s' % (msg,)
         self.assertEqual(first_family, second_family, msg=assertion_message)
@@ -239,20 +267,22 @@ class TestCase(unittest.TestCase):
             self.assertEqual(first.flags.writeable, second.flags.writeable,
                              "different mutability")
             # itemsize is already checked by the dtype test above
-            self.assertEqual(self._fix_strides(first), self._fix_strides(second),
-                             "different strides")
+            self.assertEqual(self._fix_strides(first),
+                self._fix_strides(second), "different strides")
             if first.dtype != dtype:
                 first = first.astype(dtype)
             if second.dtype != dtype:
                 second = second.astype(dtype)
             for a, b in zip(first.flat, second.flat):
-                self._assertPreciseEqual(a, b, prec, ulps, msg)
+                self._assertPreciseEqual(a, b, prec, ulps, msg,
+                                         ignore_sign_on_zero, abs_tol)
             return
 
         if compare_family == "sequence":
             self.assertEqual(len(first), len(second), msg=msg)
             for a, b in zip(first, second):
-                self._assertPreciseEqual(a, b, prec, ulps, msg)
+                self._assertPreciseEqual(a, b, prec, ulps, msg,
+                                         ignore_sign_on_zero, abs_tol)
             return
 
         if compare_family == "exact":
@@ -279,6 +309,18 @@ class TestCase(unittest.TestCase):
         except TypeError:
             # Not floats.
             pass
+
+        # if absolute comparison is set, use it
+        if abs_tol is not None:
+            if abs_tol == "eps":
+                rtol = np.finfo(type(first)).eps
+            elif isinstance(abs_tol, float):
+                rtol = abs_tol
+            else:
+                raise ValueError("abs_tol is not \"eps\" or a float, found %s"
+                    % abs_tol)
+            if abs(first - second) < rtol:
+                return
 
         exact_comparison = exact_comparison or prec == 'exact'
 
@@ -371,7 +413,14 @@ def static_temp_directory(dirname):
     DLL under Windows (this is a bit fragile if stale files can influence the
     result of future test runs).
     """
-    tmpdir = os.path.join(tempfile.gettempdir(), dirname)
+    if os.name == 'nt':
+        # Under Windows, gettempdir() points to the user-local temp dir
+        tmpdir = os.path.join(tempfile.gettempdir(), dirname)
+    else:
+        # Mix the UID into the directory name to allow different users to
+        # run the test suite without permission errors (issue #1586)
+        tmpdir = os.path.join(tempfile.gettempdir(),
+                              "%s.%s" % (dirname, os.getuid()))
     try:
         os.mkdir(tmpdir)
     except OSError as e:
@@ -420,14 +469,17 @@ class MemoryLeak(object):
 
     def memory_leak_teardown(self):
         if self.__enable_leak_check:
-            old = self.__init_stats
-            new = rtsys.get_allocation_stats()
-            total_alloc = new.alloc - old.alloc
-            total_free = new.free - old.free
-            total_mi_alloc = new.mi_alloc - old.mi_alloc
-            total_mi_free = new.mi_free - old.mi_free
-            self.assertEqual(total_alloc, total_free)
-            self.assertEqual(total_mi_alloc, total_mi_free)
+            self.assert_no_memory_leak()
+
+    def assert_no_memory_leak(self):
+        old = self.__init_stats
+        new = rtsys.get_allocation_stats()
+        total_alloc = new.alloc - old.alloc
+        total_free = new.free - old.free
+        total_mi_alloc = new.mi_alloc - old.mi_alloc
+        total_mi_free = new.mi_free - old.mi_free
+        self.assertEqual(total_alloc, total_free)
+        self.assertEqual(total_mi_alloc, total_mi_free)
 
     def disable_leak_check(self):
         # For per-test use when MemoryLeakMixin is injected into a TestCase

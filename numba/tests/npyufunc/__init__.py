@@ -1,12 +1,9 @@
-from __future__ import print_function, division, absolute_import
+from unittest.suite import TestSuite
+from numba.testing import load_testsuite
+from os.path import dirname
 
-from numba import unittest_support as unittest
-from numba.testing import discover_tests, run_tests
+def load_tests(loader, tests, pattern):
+    suite = TestSuite()
+    suite.addTests(load_testsuite(loader, dirname(__file__)))
+    return suite
 
-
-def runtests(modname):
-    suite = discover_tests(modname)
-    return run_tests(suite).wasSuccessful()
-
-def test():
-    return runtests(__name__)

@@ -12,7 +12,7 @@ race condition.
 #ifdef _MSC_VER
     /* Windows */
     #include <windows.h>
-	#include <process.h>
+    #include <process.h>
     #define NUMBA_WINTHREAD
 #else
     /* PThread */
@@ -28,7 +28,8 @@ race condition.
 
 static cas_function_t *cas = NULL;
 
-void cas_wait(volatile int *ptr, const int old, const int repl) {
+static void
+cas_wait(volatile int *ptr, const int old, const int repl) {
     int out = repl;
     int timeout = 1;   /* starting from 1us nap */
     static const int MAX_WAIT_TIME = 20 * 1000; /* max wait is 20ms */
@@ -57,7 +58,8 @@ static void reset_after_fork(void);
 /* PThread */
 #ifdef NUMBA_PTHREAD
 
-thread_pointer numba_new_thread(void *worker, void *arg)
+static thread_pointer
+numba_new_thread(void *worker, void *arg)
 {
     int status;
     pthread_attr_t attr;
@@ -79,7 +81,8 @@ thread_pointer numba_new_thread(void *worker, void *arg)
     return (thread_pointer)th;
 }
 
-void take_a_nap(int usec) {
+static void
+take_a_nap(int usec) {
     usleep(usec);
 }
 
@@ -95,8 +98,7 @@ typedef struct {
     void *arg;
 } callobj;
 
-static
-unsigned __stdcall
+static unsigned __stdcall
 bootstrap(void *call)
 {
     callobj *obj = (callobj*)call;
@@ -104,17 +106,19 @@ bootstrap(void *call)
     void *arg = obj->arg;
     HeapFree(GetProcessHeap(), 0, obj);
     func(arg);
-	_endthreadex(0);
+    _endthreadex(0);
     return 0;
 }
 
-thread_pointer numba_new_thread(void *worker, void *arg)
+static thread_pointer
+numba_new_thread(void *worker, void *arg)
 {
     uintptr_t handle;
     unsigned threadID;
     callobj *obj;
 
-	if (sizeof(handle) > sizeof(void*)) return 0;
+    if (sizeof(handle) > sizeof(void*))
+        return 0;
 
     obj = (callobj*)HeapAlloc(GetProcessHeap(), 0, sizeof(*obj));
     if (!obj)
@@ -124,15 +128,16 @@ thread_pointer numba_new_thread(void *worker, void *arg)
     obj->arg = arg;
 
     handle = _beginthreadex(NULL, 0, bootstrap, obj, 0, &threadID);
-    if (handle == -1) return 0;
+    if (handle == -1)
+        return 0;
     return (thread_pointer)handle;
 }
 
-void take_a_nap(int usec) {
-    /* MS does not have usec resolution sleep function.
-    Sleeping for zero second will yield this thread.
-    */
-    Sleep(0);
+static void
+take_a_nap(int usec) {
+    /* Note that Sleep(0) will relinquish the current time slice, allowing
+       other threads to run. */
+    Sleep(usec / 1000);
 }
 
 
@@ -153,11 +158,13 @@ static Queue *queues = NULL;
 static int queue_count;
 static int queue_pivot = 0;
 
-void set_cas(void *ptr) {
+static void
+set_cas(void *ptr) {
     cas = ptr;
 }
 
-void add_task(void *fn, void *args, void *dims, void *steps, void *data) {
+static void
+add_task(void *fn, void *args, void *dims, void *steps, void *data) {
     void (*func)(void *args, void *dims, void *steps, void *data) = fn;
 
     Queue *queue = &queues[queue_pivot];
@@ -173,7 +180,6 @@ void add_task(void *fn, void *args, void *dims, void *steps, void *data) {
     if ( ++queue_pivot == queue_count ) {
         queue_pivot = 0;
     }
-
 }
 
 static
@@ -191,8 +197,8 @@ void thread_worker(void *arg) {
     }
 }
 
-void launch_threads(int count) {
-    if ( !queues ) {
+static void launch_threads(int count) {
+    if (!queues) {
         /* If queues are not yet allocated,
            create them, one for each thread. */
        int i;
@@ -208,14 +214,14 @@ void launch_threads(int count) {
     }
 }
 
-void synchronize(void) {
+static void synchronize(void) {
     int i;
     for (i = 0; i < queue_count; ++i) {
         cas_wait(&queues[i].lock, DONE, IDLE);
     }
 }
 
-void ready(void) {
+static void ready(void) {
     int i;
     for (i = 0; i < queue_count; ++i) {
         cas_wait(&queues[i].lock, IDLE, READY);
@@ -224,8 +230,8 @@ void ready(void) {
 
 static void reset_after_fork(void)
 {
-  free(queues);
-  queues = NULL;
+    free(queues);
+    queues = NULL;
 }
 
 MOD_INIT(workqueue) {

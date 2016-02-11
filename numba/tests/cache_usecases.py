@@ -8,7 +8,7 @@ See test_dispatcher.py.
 
 import numpy as np
 
-from numba import jit
+from numba import jit, generated_jit, types
 
 from numba.tests.ctypes_usecases import c_sin
 
@@ -29,12 +29,27 @@ def add_nocache_usecase(x, y):
     return x + y + Z
 
 
+@generated_jit(cache=True, nopython=True)
+def generated_usecase(x, y):
+    if isinstance(x, types.Complex):
+        def impl(x, y):
+            return x + y
+    else:
+        def impl(x, y):
+            return x - y
+    return impl
+
+
 @jit(cache=True, nopython=True)
 def inner(x, y):
     return x + y + Z
 
 @jit(cache=True, nopython=True)
 def outer(x, y):
+    return inner(-y, x)
+
+@jit(cache=False, nopython=True)
+def outer_uncached(x, y):
     return inner(-y, x)
 
 

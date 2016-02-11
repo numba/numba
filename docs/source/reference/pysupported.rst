@@ -17,7 +17,7 @@ Constructs
 ----------
 
 Numba strives to support as much of the Python language as possible, but
-some language features are not available inside Numba-compiled functions:
+some language features are not available inside Numba-compiled functions. The following Python language features are not currently supported:
 
 * Function definition
 * Class definition
@@ -85,17 +85,23 @@ The following attributes and methods are supported:
 tuple
 -----
 
-Tuple construction and unpacking is supported, as well as the following
-operations:
+The following operations are supported:
 
+* tuple construction
+* tuple unpacking
 * comparison between tuples
 * iteration and indexing over homogenous tuples
+* addition (concatenation) between tuples
+* slicing tuples with a constant slice
 
 list
 ----
 
 Creating and returning lists from JIT-compiled functions is supported,
-as well as all methods and operations.
+as well as all methods and operations.  Lists must be strictly homogenous:
+Numba will reject any list containing objects of different types, even if
+the types are compatible (for example, ``[1, 2.5]`` is rejected as it
+contains a :class:`int` and a :class:`float`).
 
 .. note::
    When passing a list into a JIT-compiled function, any modifications
@@ -283,6 +289,7 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.idiv` (Python 2 only)
 * :func:`operator.ifloordiv`
 * :func:`operator.ilshift`
+* :func:`operator.imatmul` (Python 3.5 and above)
 * :func:`operator.imod`
 * :func:`operator.imul`
 * :func:`operator.invert`
@@ -295,6 +302,7 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.le`
 * :func:`operator.lshift`
 * :func:`operator.lt`
+* :func:`operator.matmul` (Python 3.5 and above)
 * :func:`operator.mod`
 * :func:`operator.mul`
 * :func:`operator.ne`
@@ -366,7 +374,7 @@ Third-party modules
 --------
 
 Similarly to ctypes, Numba is able to call into `cffi`_-declared external
-functions, using the following C types:
+functions, using the following C types and any derived pointer types:
 
 * :c:type:`char`
 * :c:type:`short`
@@ -388,18 +396,15 @@ functions, using the following C types:
 * :c:type:`uint64_t`
 * :c:type:`float`
 * :c:type:`double`
-* :c:type:`char *`
-* :c:type:`void *`
-* :c:type:`uint8_t *`
-* :c:type:`float *`
-* :c:type:`double *`
 * :c:type:`ssize_t`
 * :c:type:`size_t`
 * :c:type:`void`
 
-The ``from_buffer`` method of ``cffi.FFI`` and ``CompiledFFI`` objects is
-supported for passing NumPy arrays of ``float32`` and ``float64`` values to C
-function parameters of type ``float *`` and ``double *`` respectively.
+The ``from_buffer()`` method of ``cffi.FFI`` and ``CompiledFFI`` objects is
+supported for passing Numpy arrays and other buffer-like objects.  Only
+*contiguous* arguments are accepted.  The argument to ``from_buffer()``
+is converted to a raw pointer of the appropriate C type (for example a
+``double *`` for a ``float64`` array).
 
 Out-of-line cffi modules must be registered with Numba prior to the use of any
 of their functions from within Numba-compiled functions:
