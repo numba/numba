@@ -11,4 +11,4 @@ call activate testenv
 @rem (Python 3.4+ only)
 @rem Also, note %CMD_IN_ENV% is needed for distutils/setuptools-based tests
 
-%CMD_IN_ENV% python runtests.py -b
+%CMD_IN_ENV% python runtests.py -b --tags important
