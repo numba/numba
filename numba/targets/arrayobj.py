@@ -1247,7 +1247,10 @@ def array_ravel(context, builder, sig, args):
 
 @lower_builtin('array.flatten', types.Array)
 def array_flatten(context, builder, sig, args):
+    # Only support flattening to C layout currently.
     def imp(ary):
+        # Allocate new array and walk the input array in with array.flat in
+        # C order to populate the output.
         out = numpy.empty(ary.size, dtype=ary.dtype)
         for i, v in enumerate(ary.flat):
             out[i] = v
