@@ -558,6 +558,7 @@ def mat_inv(context, builder, sig, args):
     # Allocate the array in which the pivot indices are stored.
     ipiv_t = types.Array(types.intc, 1, 'C')
     i = _empty_nd_impl(context, builder, ipiv_t, (m,))
+    ipiv = i._getvalue()
 
     info = cgutils.alloca_once(builder, ll_intc)
 
@@ -574,10 +575,12 @@ def mat_inv(context, builder, sig, args):
         with builder.if_else(invalid_arg) as (then, otherwise):
             raise_err = context.call_conv.return_user_exc
             with then:
+                context.nrt_decref(builder, ipiv_t, ipiv)
                 raise_err(builder, ValueError,
                           ('One argument passed to getrf is invalid',)
                           )
             with otherwise:
+                context.nrt_decref(builder, ipiv_t, ipiv)
                 raise_err(builder, ValueError,
                           ('Matrix is singular and cannot be inverted',)
                           )
@@ -592,6 +595,7 @@ def mat_inv(context, builder, sig, args):
     lapack_error = builder.icmp_signed('!=', info_val, zero)
 
     with builder.if_then(lapack_error, False):
+        context.nrt_decref(builder, ipiv_t, ipiv)
         raise_err = context.call_conv.return_user_exc
         raise_err(builder, ValueError,
                   ('One argument passed to getri is invalid',)
@@ -626,6 +630,9 @@ def mat_inv(context, builder, sig, args):
     lapack_error = builder.icmp_signed('!=', info_val, zero)
     invalid_arg = builder.icmp_signed('<', info_val, zero)
 
+    context.nrt_decref(builder, wty, work)
+    context.nrt_decref(builder, ipiv_t, ipiv)
+
     with builder.if_then(lapack_error, False):
         with builder.if_else(invalid_arg) as (then, otherwise):
             raise_err = context.call_conv.return_user_exc
@@ -638,7 +645,7 @@ def mat_inv(context, builder, sig, args):
                           ('Matrix is singular and cannot be inverted',)
                           )
 
-    return impl_ret_borrowed(context, builder, sig.return_type, out)
+    return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
 @lower_builtin(numpy.linalg.inv, types.Array)
