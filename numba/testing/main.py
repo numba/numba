@@ -148,8 +148,6 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('--profile', dest='profile',
                             action='store_true',
                             help='Profile the test run')
-        parser.add_argument('--random', dest='random_select', type=float,
-                            help='Random proportion of tests to select')
         return parser
 
     def parseArgs(self, argv):
