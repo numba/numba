@@ -1338,17 +1338,20 @@ numba_unpack_slice(PyObject *obj,
                      Py_TYPE(slice)->tp_name);
         return -1;
     }
-#define FETCH_MEMBER(NAME)                                      \
+#define FETCH_MEMBER(NAME, DEFAULT)                             \
     if (slice->NAME != Py_None) {                               \
         Py_ssize_t v = PyNumber_AsSsize_t(slice->NAME,          \
                                           PyExc_OverflowError); \
         if (v == -1 && PyErr_Occurred())                        \
             return -1;                                          \
         *NAME = v;                                              \
+    }                                                           \
+    else {                                                      \
+        *NAME = DEFAULT;                                        \
     }
-    FETCH_MEMBER(start)
-    FETCH_MEMBER(stop)
-    FETCH_MEMBER(step)
+    FETCH_MEMBER(step, 1)
+    FETCH_MEMBER(stop, (*step > 0) ? PY_SSIZE_T_MAX : PY_SSIZE_T_MIN)
+    FETCH_MEMBER(start, 0)
     return 0;
 
 #undef FETCH_MEMBER
