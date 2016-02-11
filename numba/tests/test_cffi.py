@@ -104,6 +104,18 @@ class TestCFFI(TestCase):
     def test_from_buffer_float64(self):
         self._test_from_buffer_numpy_array(mod.vector_sin_float64, np.float64)
 
+    def test_from_buffer_struct(self):
+        n = 10
+        x = np.arange(n) + np.arange(n * 2, n * 3) * 1j
+        y = np.zeros(n)
+        real_cfunc = jit(nopython=True)(mod.vector_extract_real)
+        real_cfunc(x, y)
+        np.testing.assert_equal(x.real, y)
+        imag_cfunc = jit(nopython=True)(mod.vector_extract_imag)
+        imag_cfunc(x, y)
+        np.testing.assert_equal(x.imag, y)
+
+
     @unittest.skipIf(sys.version_info < (3,),
                      "buffer protocol on array.array needs Python 3+")
     def test_from_buffer_pyarray(self):
