@@ -28,28 +28,38 @@ class TypeVar(object):
         self.var = var
         self.type = None
         self.locked = False
+        # Stores source location of first definition
+        self.define_loc = None
 
-    def add_type(self, tp):
+    def add_type(self, tp, loc):
         assert isinstance(tp, types.Type), type(tp)
 
         if self.locked:
             if tp != self.type:
                 if self.context.can_convert(tp, self.type) is None:
-                    raise TypingError("No conversion from %s to %s for "
-                                      "'%s'" % (tp, self.type, self.var))
+                    msg = ("No conversion from %s to %s for '%s', "
+                           "defined at %s")
+                    raise TypingError(msg % (tp, self.type, self.var,
+                                             self.define_loc),
+                                      loc=loc)
         else:
             if self.type is not None:
                 unified = self.context.unify_pairs(self.type, tp)
                 if unified is types.pyobject:
-                    raise TypingError("cannot unify %s and %s for '%s'"
-                                      % (self.type, tp, self.var))
+                    msg = "cannot unify %s and %s for '%s', defined at %s"
+                    raise TypingError(msg % (self.type, tp, self.var,
+                                             self.define_loc),
+                                      loc=loc)
             else:
+                # First time definition
                 unified = tp
+                self.define_loc = loc
+
             self.type = unified
 
         return self.type
 
-    def lock(self, tp):
+    def lock(self, tp, loc):
         assert isinstance(tp, types.Type), type(tp)
         assert not self.locked
 
@@ -58,14 +68,16 @@ class TypeVar(object):
         if (self.type is not None and
             self.context.can_convert(self.type, tp) is None):
             raise TypingError("No conversion from %s to %s for "
-                                "'%s'" % (tp, self.type, self.var))
+                              "'%s'" % (tp, self.type, self.var))
 
         self.type = tp
         self.locked = True
+        if self.define_loc is None:
+            self.define_loc = loc
 
-    def union(self, other):
+    def union(self, other, loc):
         if other.type is not None:
-            self.add_type(other.type)
+            self.add_type(other.type, loc=loc)
 
         return self.type
 
@@ -136,13 +148,14 @@ class Propagate(object):
 
     def __call__(self, typeinfer):
         typevars = typeinfer.typevars
-        typeinfer.copy_type(self.src, self.dst)
+        typeinfer.copy_type(self.src, self.dst, loc=self.loc)
         # If `dst` is refined, notify us
         typeinfer.refine_map[self.dst] = self
 
     def refine(self, typeinfer, target_type):
         # Do not back-propagate to locked variables (e.g. constants)
-        typeinfer.add_type(self.src, target_type, unless_locked=True)
+        typeinfer.add_type(self.src, target_type, unless_locked=True,
+                           loc=self.loc)
 
 
 class ArgConstraint(object):
@@ -160,7 +173,7 @@ class ArgConstraint(object):
         ty = src.getone()
         if isinstance(ty, types.Omitted):
             ty = typeinfer.context.resolve_value_type(ty.value)
-        typeinfer.add_type(self.dst, ty)
+        typeinfer.add_type(self.dst, ty, loc=self.loc)
 
 
 class BuildTupleConstraint(object):
@@ -179,7 +192,7 @@ class BuildTupleConstraint(object):
             else:
                 # empty tuples fall here as well
                 tup = types.Tuple(vals)
-            typeinfer.add_type(self.target, tup)
+            typeinfer.add_type(self.target, tup, loc=self.loc)
 
 
 class BuildListConstraint(object):
@@ -193,11 +206,13 @@ class BuildListConstraint(object):
         oset = typevars[self.target]
         tsets = [typevars[i.name].get() for i in self.items]
         if not tsets:
-            typeinfer.add_type(self.target, types.List(types.undefined))
+            typeinfer.add_type(self.target, types.List(types.undefined),
+                               loc=self.loc)
         else:
             for typs in itertools.product(*tsets):
                 unified = typeinfer.context.unify_types(*typs)
-                typeinfer.add_type(self.target, types.List(unified))
+                typeinfer.add_type(self.target, types.List(unified),
+                                   loc=self.loc)
 
 
 class ExhaustIterConstraint(object):
@@ -213,7 +228,7 @@ class ExhaustIterConstraint(object):
         for tp in typevars[self.iterator.name].get():
             if isinstance(tp, types.BaseTuple):
                 if len(tp) == self.count:
-                    typeinfer.add_type(self.target, tp)
+                    typeinfer.add_type(self.target, tp, loc=self.loc)
                 else:
                     raise ValueError("wrong tuple length for %r: "
                                      "expected %d, got %d"
@@ -221,7 +236,7 @@ class ExhaustIterConstraint(object):
             elif isinstance(tp, types.IterableType):
                 tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
                                      count=self.count)
-                typeinfer.add_type(self.target, tup)
+                typeinfer.add_type(self.target, tup, loc=self.loc)
 
 
 class PairFirstConstraint(object):
@@ -237,7 +252,7 @@ class PairFirstConstraint(object):
             if not isinstance(tp, types.Pair):
                 # XXX is this an error?
                 continue
-            typeinfer.add_type(self.target, tp.first_type)
+            typeinfer.add_type(self.target, tp.first_type, loc=self.loc)
 
 
 class PairSecondConstraint(object):
@@ -253,7 +268,7 @@ class PairSecondConstraint(object):
             if not isinstance(tp, types.Pair):
                 # XXX is this an error?
                 continue
-            typeinfer.add_type(self.target, tp.second_type)
+            typeinfer.add_type(self.target, tp.second_type, loc=self.loc)
 
 
 class StaticGetItemConstraint(object):
@@ -276,7 +291,7 @@ class StaticGetItemConstraint(object):
             itemty = typeinfer.context.resolve_static_getitem(value=ty,
                                                               index=self.index)
             if itemty is not None:
-                typeinfer.add_type(self.target, itemty)
+                typeinfer.add_type(self.target, itemty, loc=self.loc)
             elif self.fallback is not None:
                 self.fallback(typeinfer)
 
@@ -336,7 +351,7 @@ class CallConstraint(object):
             head = headtemp.format(fnty, ', '.join(map(str, args)))
             msg = '\n'.join([head, desc])
             raise TypingError(msg, loc=self.loc)
-        typeinfer.add_type(self.target, sig.return_type)
+        typeinfer.add_type(self.target, sig.return_type, loc=self.loc)
         # If the function is a bound function and its receiver type
         # was refined, propagate it.
         if (isinstance(fnty, types.BoundFunction)
@@ -374,13 +389,13 @@ class GetAttrConstraint(object):
             if attrty is None:
                 raise UntypedAttributeError(ty, self.attr, loc=self.inst.loc)
             else:
-                typeinfer.add_type(self.target, attrty)
+                typeinfer.add_type(self.target, attrty, loc=self.loc)
         typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, target_type):
         if isinstance(target_type, types.BoundFunction):
             recvr = target_type.this
-            typeinfer.add_type(self.value.name, recvr)
+            typeinfer.add_type(self.value.name, recvr, loc=self.loc)
             source_constraint = typeinfer.refine_map.get(self.value.name)
             if source_constraint is not None:
                 source_constraint.refine(typeinfer, recvr)
@@ -555,7 +570,7 @@ class TypeInferer(object):
     def seed_type(self, name, typ):
         """All arguments should be seeded.
         """
-        self.lock_type(name, typ)
+        self.lock_type(name, typ, loc=None)
 
     def seed_return(self, typ):
         """Seeding of return value is optional.
@@ -563,7 +578,7 @@ class TypeInferer(object):
         for blk in utils.itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
-                self.lock_type(inst.value.name, typ)
+                self.lock_type(inst.value.name, typ, loc=None)
 
     def build_constraint(self):
         for blk in utils.itervalues(self.blocks):
@@ -586,25 +601,25 @@ class TypeInferer(object):
         if errors:
             raise errors[0]
 
-    def add_type(self, var, tp, unless_locked=False):
+    def add_type(self, var, tp, loc, unless_locked=False):
         assert isinstance(var, str), type(var)
         tv = self.typevars[var]
         if unless_locked and tv.locked:
             return
         oldty = tv.type
-        unified = tv.add_type(tp)
+        unified = tv.add_type(tp, loc=loc)
         if unified != oldty:
             self.propagate_refined_type(var, unified)
 
     def add_calltype(self, inst, signature):
         self.calltypes[inst] = signature
 
-    def copy_type(self, src_var, dest_var):
-        unified = self.typevars[dest_var].union(self.typevars[src_var])
+    def copy_type(self, src_var, dest_var, loc):
+        unified = self.typevars[dest_var].union(self.typevars[src_var], loc=loc)
 
-    def lock_type(self, var, tp):
+    def lock_type(self, var, tp, loc):
         tv = self.typevars[var]
-        tv.lock(tp)
+        tv.lock(tp, loc=loc)
 
     def propagate_refined_type(self, updated_var, updated_type):
         source_constraint = self.refine_map.get(updated_var)
@@ -772,11 +787,12 @@ class TypeInferer(object):
                                               loc=inst.loc))
 
     def typeof_const(self, inst, target, const):
-        self.lock_type(target.name, self.resolve_value_type(inst, const))
+        self.lock_type(target.name, self.resolve_value_type(inst, const),
+                       loc=inst.loc)
 
     def typeof_yield(self, inst, target, yield_):
         # Sending values into generators isn't supported.
-        self.add_type(target.name, types.none)
+        self.add_type(target.name, types.none, loc=inst.loc)
 
     def sentry_modified_builtin(self, inst, gvar):
         """
@@ -805,7 +821,7 @@ class TypeInferer(object):
 
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)
-            self.lock_type(target.name, typ)
+            self.lock_type(target.name, typ, loc=inst.loc)
             self.assumed_immutables.add(inst)
         else:
             raise TypingError("Untyped global name '%s'" % gvar.name,
@@ -815,7 +831,7 @@ class TypeInferer(object):
         if expr.op == 'call':
             if isinstance(expr.func, ir.Intrinsic):
                 sig = expr.func.type
-                self.add_type(target.name, sig.return_type)
+                self.add_type(target.name, sig.return_type, loc=inst.loc)
                 self.add_calltype(expr, sig)
             else:
                 self.typeof_call(inst, target, expr)
