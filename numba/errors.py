@@ -69,8 +69,19 @@ class WarningsFixer(object):
 
 
 class NumbaError(Exception):
-    pass
+    @property
+    def contexts(self):
+        try:
+            return self._contexts
+        except AttributeError:
+            self._contexts = lst = []
+            return lst
 
+    def add_context(self, msg):
+        self.contexts.append(msg)
+        newmsg = '{0}\n[{1}] During: {2}'.format(self, len(self.contexts), msg)
+        self.args = (newmsg,)
+        return self
 
 class IRError(NumbaError):
     """
@@ -157,6 +168,29 @@ class ConstantInferenceError(NumbaError):
     """
     Failure during constant inference.
     """
+
+
+class InternalError(NumbaError):
+    """
+    For wrapping internal error occured with in the compiler
+    """
+    def __init__(self, exception):
+        super(InternalError, self).__init__(str(exception))
+        self.old_execption = exception
+        self.with_traceback(exception.__traceback__)
+
+def _format_msg(fmt, args, kwargs):
+    return fmt.format(*args, **kwargs)
+
+@contextlib.contextmanager
+def new_error_context(fmt_, *args, **kwargs):
+    try:
+        yield
+    except NumbaError as e:
+        e.add_context(_format_msg(fmt_, args, kwargs))
+        raise
+    except Exception as e:
+        raise InternalError(e).add_context(_format_msg(fmt_, args, kwargs))
 
 
 __all__ += [name for (name, value) in globals().items()
