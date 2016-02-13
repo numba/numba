@@ -283,7 +283,7 @@ class HSAKernel(HSAKernelBase):
         # contains lambdas to execute on return
         retr = []
         for ty, val in zip(self.argument_types, args):
-            _unpack_argument(ty, val, expanded_values, retr, ctx)
+            _unpack_argument(ty, val, expanded_values, retr)
 
         # Insert kernel arguments
         base = 0
@@ -316,7 +316,7 @@ class HSAKernel(HSAKernelBase):
             kernarg_region.free(kernargs)
 
 
-def _unpack_argument(ty, val, kernelargs, retr, context):
+def _unpack_argument(ty, val, kernelargs, retr):
     """
     Convert arguments to ctypes and append to kernelargs
     """
@@ -324,9 +324,9 @@ def _unpack_argument(ty, val, kernelargs, retr, context):
         c_intp = ctypes.c_ssize_t
         # if a dgpu is present, move the data to the device.
         if dgpu_present():
-            devary, conv = devicearray.auto_device(val, context)
+            devary, conv = devicearray.auto_device(val, devices.get_context())
             if conv:
-                retr.append(lambda: devary.copy_to_host(context, val))
+                retr.append(lambda: devary.copy_to_host(val))
             data = devary.device_ctypes_pointer
         else:
             data = ctypes.c_void_p(val.ctypes.data)

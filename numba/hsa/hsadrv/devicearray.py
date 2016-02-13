@@ -1,5 +1,5 @@
 """
-A HSA dGPU backed ND Array is recognized by checking the __hsa_dGPU_memory__
+A HSA dGPU backed ND Array is recognized by checking the __hsa_memory__
 attribute on the object.  If it exists and evaluate to True, it must define
 shape, strides, dtype and size attributes similar to a NumPy ndarray.
 """
@@ -50,7 +50,7 @@ def require_hsa_ndarray(obj):
 class DeviceNDArrayBase(object):
     """Base class for an on dGPU NDArray representation cf. numpy.ndarray
     """
-    __hsa_dGPU_memory__ = True
+    __hsa_memory__ = True
     __hsa_ndarray__ = True     # There must be dgpu_data attribute as a result
 
     def __init__(self, shape, strides, dtype, dgpu_data=None):
@@ -87,11 +87,12 @@ class DeviceNDArrayBase(object):
                                           self.strides, self.dtype.itemsize)
                 # find a coarse region on the dGPU
                 dgpu_data = devices.get_context().memalloc(self.alloc_size)
-            else:
-                raise NotImplemented("Use of existing memory not supported.")
-                # TODO: write the equiv so preallocated memory
-                # blocks can be used.
-                # self.alloc_size = _driver.device_memory_size(dgpu_data)
+            else: # we have some preallocated dgpu_memory
+                sz = getattr(dgpu_data, '_hsa_memsize_', None)
+                if sz is None:
+                    raise ValueError('dgpu_data as no _hsa_memsize_ attribute')
+                assert sz >= 0
+                self.alloc_size = sz
         else:
             dgpu_data = None
             self.alloc_size = 0
@@ -138,7 +139,7 @@ class DeviceNDArrayBase(object):
 
         _driver.host_to_dGPU(context, self, ary, sz)
 
-    def copy_to_host(self, context, ary=None):
+    def copy_to_host(self, ary=None):
         """Copy ``self`` to ``ary`` or create a new Numpy ndarray
         if ``ary`` is ``None``.
 
@@ -180,6 +181,8 @@ class DeviceNDArrayBase(object):
 
         # a location for the data exists as `hostary`
         assert self.alloc_size >= 0, "Negative memory size"
+
+        context = devices.get_context()
 
         # copy the data from the device to the hostary
         if self.alloc_size != 0:
