@@ -66,9 +66,9 @@ def overload(func):
 
     def decorate(overload_func):
         template = make_overload_template(func, overload_func)
-        ty = types.Function(template)
+        infer(template)
         if hasattr(func, '__module__'):
-            infer_global(func, ty)
+            infer_global(func, types.Function(template))
         return overload_func
 
     return decorate
