@@ -96,8 +96,8 @@ def map_type(cffi_type):
     Map CFFI type to numba type.
     """
     kind = getattr(cffi_type, 'kind', '')
-    if kind in ('struct', 'union'):
-        raise TypeError("No support for CFFI %s" % (kind,))
+    if kind == 'union':
+        raise TypeError("No support for CFFI union")
     elif kind == 'function':
         if cffi_type.ellipsis:
             raise TypeError("vararg function is not supported")
@@ -122,6 +122,8 @@ def make_function_type(cffi_func):
     Return a Numba type for the given CFFI function pointer.
     """
     cffi_type = _ool_func_types.get(cffi_func) or ffi.typeof(cffi_func)
+    if getattr(cffi_type, 'kind', '') == 'struct':
+        raise TypeError('No support for CFFI struct values')
     sig = map_type(cffi_type)
     return types.ExternalFunctionPointer(sig, get_pointer=get_pointer)
 
@@ -178,3 +180,10 @@ def register_module(mod):
             addr = mod.ffi.addressof(mod.lib, f.__name__)
             _ool_func_ptr[f] = int(mod.ffi.cast("uintptr_t", addr))
         _ffi_instances.add(mod.ffi)
+
+def register_type(cffi_type, numba_type):
+    """
+    Add typing for a given CFFI type to the typemap
+    """
+    tm = _type_map()
+    tm[cffi_type] = numba_type
