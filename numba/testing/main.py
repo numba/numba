@@ -1,14 +1,15 @@
 from __future__ import print_function, division, absolute_import
 
-import sys
-import os
-import warnings
-import time
-import gc
 import collections
 import contextlib
 import cProfile
+import gc
 import multiprocessing
+import os
+import random
+import sys
+import time
+import warnings
 
 import numba.unittest_support as unittest
 from unittest import result, runner, signals, suite, loader, case
