@@ -1,7 +1,10 @@
-#!/usr/bin/env python
+from __future__ import division, print_function
 
-import unittest
+import sys
 import subprocess
+
+from numba import unittest_support as unittest
+
 
 def check_output(*popenargs, **kwargs):
     # Provide this for backward-compatibility until we drop Python 2.6 support.
@@ -45,7 +48,7 @@ class TestCase(unittest.TestCase):
         return lines
 
     def check_all(self, ids):
-        lines = self.check_testsuite_size(ids, 6000, 8000)
+        lines = self.check_testsuite_size(ids, 5000, 8000)
         # CUDA should be included by default
         self.assertTrue(any('numba.cuda.tests.' in line for line in lines))
         # As well as subpackage
@@ -72,10 +75,14 @@ class TestCase(unittest.TestCase):
     def test_subpackage(self):
         self.check_testsuite_size(['numba.tests.npyufunc'], 50, 200)
 
+    @unittest.skipIf(sys.version_info < (3, 4),
+                     "'--random' only supported on Python 3.4 or higher")
     def test_random(self):
         self.check_testsuite_size(['--random', '0.1', 'numba.tests.npyufunc'],
                                   5, 20)
 
+    @unittest.skipIf(sys.version_info < (3, 4),
+                     "'--tags' only supported on Python 3.4 or higher")
     def test_tags(self):
         self.check_testsuite_size(['--tags', 'important', 'numba.tests.npyufunc'],
                                   20, 50)
