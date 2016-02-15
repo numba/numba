@@ -4,9 +4,11 @@ Numba-specific errors and warnings.
 
 from __future__ import print_function, division, absolute_import
 
+import sys
 import contextlib
 from collections import defaultdict
 import warnings
+from numba import six
 
 
 # Filled at the end
@@ -177,10 +179,11 @@ class InternalError(NumbaError):
     def __init__(self, exception):
         super(InternalError, self).__init__(str(exception))
         self.old_execption = exception
-        self.with_traceback(exception.__traceback__)
+
 
 def _format_msg(fmt, args, kwargs):
     return fmt.format(*args, **kwargs)
+
 
 @contextlib.contextmanager
 def new_error_context(fmt_, *args, **kwargs):
@@ -190,7 +193,8 @@ def new_error_context(fmt_, *args, **kwargs):
         e.add_context(_format_msg(fmt_, args, kwargs))
         raise
     except Exception as e:
-        raise InternalError(e).add_context(_format_msg(fmt_, args, kwargs))
+        newerr = InternalError(e).add_context(_format_msg(fmt_, args, kwargs))
+        six.reraise(InternalError, newerr, sys.exc_info()[2])
 
 
 __all__ += [name for (name, value) in globals().items()
