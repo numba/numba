@@ -178,7 +178,7 @@ class InternalError(NumbaError):
     """
     def __init__(self, exception):
         super(InternalError, self).__init__(str(exception))
-        self.old_execption = exception
+        self.old_exception = exception
 
 
 def _format_msg(fmt, args, kwargs):
