@@ -37,6 +37,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             choices = [slice(None, None, None),
                        slice(1, N - 1, None),
                        slice(0, None, 2),
+                       slice(N - 1, None, -2),
                        slice(-N + 1, -1, None),
                        slice(-1, -N, -2),
                        ]
