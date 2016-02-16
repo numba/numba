@@ -2,6 +2,11 @@
 Getting started
 ===============
 
+Compatibility
+-------------
+
+Numba is compatible with Python 2.6 up to 3.5, and Numpy versions 1.6 to 1.10.
+
 Installing using Conda
 ----------------------
 
