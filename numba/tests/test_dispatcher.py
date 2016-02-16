@@ -205,6 +205,43 @@ class TestDispatcher(BaseTest):
                          "No matching definition for argument type(s) "
                          "complex128, complex128")
 
+    def test_disabled_compilation(self):
+        @jit
+        def foo(a):
+            return a
+
+        foo.compile("(float32,)")
+        foo.disable_compile()
+        with self.assertRaises(RuntimeError) as raises:
+            foo.compile("(int32,)")
+        self.assertEqual(str(raises.exception), "compilation disabled")
+        self.assertEqual(len(foo.signatures), 1)
+
+    def test_disabled_compilation_through_list(self):
+        @jit(["(float32,)", "(int32,)"])
+        def foo(a):
+            return a
+
+        with self.assertRaises(RuntimeError) as raises:
+            foo.compile("(complex64,)")
+        self.assertEqual(str(raises.exception), "compilation disabled")
+        self.assertEqual(len(foo.signatures), 2)
+
+    def test_disabled_compilation_nested_call(self):
+        @jit(["(intp,)"])
+        def foo(a):
+            return a
+
+        @jit
+        def bar():
+            foo(1)
+            foo(np.ones(1))  # no matching definition
+
+        with self.assertRaises(TypeError) as raises:
+            bar()
+        m = "No matching definition for argument type(s) array(float64, 1d, C)"
+        self.assertEqual(str(raises.exception), m)
+
 
 class TestSignatureHandling(BaseTest):
     """
