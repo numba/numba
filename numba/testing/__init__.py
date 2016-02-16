@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import numba.unittest_support as unittest
+
 import sys
 import os
 from os.path import join, isfile, relpath, normpath, splitext
@@ -7,8 +9,8 @@ from fnmatch import fnmatch
 import functools
 
 from .main import NumbaTestProgram, SerialSuite
-import numba.unittest_support as unittest
 from numba import config
+
 
 def load_testsuite(loader, dir):
     """Find tests in 'dir'."""

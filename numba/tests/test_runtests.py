@@ -1,7 +1,8 @@
-#!/usr/bin/env python
 
-import unittest
+from numba import unittest_support as unittest
+
 import subprocess
+
 
 def check_output(*popenargs, **kwargs):
     # Provide this for backward-compatibility until we drop Python 2.6 support.
