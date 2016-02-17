@@ -13,7 +13,7 @@ from numba import utils, cgutils, types
 from numba.utils import cached_property
 from numba.targets import (
     callconv, cffiimpl, codegen, externals, intrinsics, listobj, cmathimpl,
-    mathimpl, npyimpl, operatorimpl, printimpl, randomimpl)
+    mathimpl, npyimpl, operatorimpl, printimpl, randomimpl, setobj)
 from .options import TargetOptions
 from numba.runtime import rtsys
 

@@ -12,7 +12,7 @@ from .typeof import typeof, Purpose
 # Initialize declarations
 from . import (
     builtins, arraydecl, cmathdecl, listdecl, mathdecl, npdatetime, npydecl,
-    operatordecl, randomdecl)
+    operatordecl, randomdecl, setdecl)
 from numba import utils
 from . import ctypes_utils, cffi_utils, bufproto
 
@@ -516,4 +516,5 @@ class Context(BaseContext):
         self.install_registry(npydecl.registry)
         self.install_registry(operatordecl.registry)
         self.install_registry(randomdecl.registry)
+        self.install_registry(setdecl.registry)
         self.install_registry(cffi_utils.registry)

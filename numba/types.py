@@ -1324,6 +1324,64 @@ class ListPayload(Type):
         return self.list_type
 
 
+class Set(Container):
+    """
+    """
+    mutable = True
+
+    def __init__(self, dtype):
+        assert isinstance(dtype, Hashable)
+        self.dtype = dtype
+        cls_name = "set"
+        name = "%s(%s)" % (cls_name, self.dtype)
+        super(Set, self).__init__(name=name)
+
+    @property
+    def key(self):
+        return self.dtype
+
+    @property
+    def iterator_type(self):
+        # FIXME
+        1/0
+
+    def is_precise(self):
+        return self.dtype.is_precise()
+
+    def copy(self, dtype=None):
+        if dtype is None:
+            dtype = self.dtype
+        return Set(dtype)
+
+
+class SetPayload(Type):
+    """
+    Internal type class for the dynamically-allocated payload of a set.
+    """
+
+    def __init__(self, set_type):
+        self.set_type = set_type
+        name = 'payload(%s)' % set_type
+        super(SetPayload, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.set_type
+
+
+class SetEntry(Type):
+    """
+    """
+    def __init__(self, set_type):
+        self.set_type = set_type
+        name = 'entry(%s)' % set_type
+        super(SetEntry, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.set_type
+
+
 class MemInfoPointer(Type):
     """
     Pointer to a Numba "meminfo" (i.e. the information for a managed

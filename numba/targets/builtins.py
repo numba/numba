@@ -1151,6 +1151,15 @@ for ty in (types.Integer, types.Float, types.Complex):
 
 lower_builtin('not', types.boolean)(number_not_impl)
 
+
+#------------------------------------------------------------------------------
+# Hashing numbers
+
+@lower_builtin(hash, types.Integer)
+def hash_int(context, builder, sig, args):
+    return context.cast(builder, args[0], sig.args[0], sig.return_type)
+
+
 #------------------------------------------------------------------------------
 
 def make_pair(first_type, second_type):

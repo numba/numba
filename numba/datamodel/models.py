@@ -682,6 +682,45 @@ class ListIterModel(StructModel):
         super(ListIterModel, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.SetEntry)
+class SetEntryModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        dtype = fe_type.set_type.dtype
+        members = [
+            # -1 = empty, -2 = deleted
+            ('hash', types.intp),
+            ('value', dtype),
+        ]
+        super(SetEntryModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.SetPayload)
+class SetPayloadModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        entry_type = types.SetEntry(fe_type.set_type)
+        members = [
+            # Number of active + deleted entries
+            ('fill', types.intp),
+            # Number of active entries
+            ('used', types.intp),
+            # Allocated size - 1 (size being a power of 2)
+            ('mask', types.intp),
+            # Actually an inlined var-sized array
+            ('entries', entry_type),
+        ]
+        super(SetPayloadModel, self).__init__(dmm, fe_type, members)
+
+@register_default(types.Set)
+class SetModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        payload_type = types.SetPayload(fe_type)
+        members = [
+            # The meminfo data points to a SetPayload
+            ('meminfo', types.MemInfoPointer(payload_type)),
+        ]
+        super(SetModel, self).__init__(dmm, fe_type, members)
+
+
 @register_default(types.Array)
 @register_default(types.Buffer)
 @register_default(types.ByteArray)
