@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 
 from collections import namedtuple
+import ctypes
 import enum
 import sys
 
@@ -65,6 +66,12 @@ def _typeof_buffer(val, c):
         return type_class(dtype, m.ndim, layout=layout,
                           readonly=m.readonly)
 
+
+@typeof_impl.register(ctypes._CFuncPtr)
+def typeof_ctypes_function(val, c):
+    from .ctypes_utils import is_ctypes_funcptr, make_function_type
+    if is_ctypes_funcptr(val):
+        return make_function_type(val)
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):
