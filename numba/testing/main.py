@@ -11,8 +11,9 @@ import os
 import random
 import sys
 import time
-from unittest import result, runner, signals, suite, loader, case
 import warnings
+
+from unittest import result, runner, signals, suite, loader, case
 
 from .loader import TestLoader
 from numba.utils import PYVERSION, StringIO
