@@ -178,7 +178,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
             expected = pyfunc(a)
             got = cfunc(a)
+            # Check result matches
             np.testing.assert_equal(expected, got)
+            # Check copying behavior
+            py_copied = (a.ctypes.data != expected.ctypes.data)
+            nb_copied = (a.ctypes.data != got.ctypes.data)
+            self.assertEqual(py_copied, assume_layout != 'C')
+            self.assertEqual(py_copied, nb_copied)
 
         check_method = partial(generic_check, ravel_array)
         check_function = partial(generic_check, numpy_ravel_array)
