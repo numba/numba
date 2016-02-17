@@ -7,8 +7,10 @@ import contextlib
 import errno
 import math
 import os
+import shutil
 import sys
 import tempfile
+import time
 
 import numpy as np
 
@@ -409,27 +411,63 @@ def tweak_code(func, codestring=None, consts=None):
                       co.co_lnotab)
     func.__code__ = new_code
 
-def static_temp_directory(dirname):
-    """
-    Create a directory in the temp dir with a given name. Statically-named
-    temp dirs created using this function are needed because we can't delete a
-    DLL under Windows (this is a bit fragile if stale files can influence the
-    result of future test runs).
-    """
-    if os.name == 'nt':
-        # Under Windows, gettempdir() points to the user-local temp dir
-        tmpdir = os.path.join(tempfile.gettempdir(), dirname)
-    else:
-        # Mix the UID into the directory name to allow different users to
-        # run the test suite without permission errors (issue #1586)
-        tmpdir = os.path.join(tempfile.gettempdir(),
-                              "%s.%s" % (dirname, os.getuid()))
+
+_trashcan_dir = 'numba-tests'
+
+if os.name == 'nt':
+    # Under Windows, gettempdir() points to the user-local temp dir
+    _trashcan_dir = os.path.join(tempfile.gettempdir(), _trashcan_dir)
+else:
+    # Mix the UID into the directory name to allow different users to
+    # run the test suite without permission errors (issue #1586)
+    _trashcan_dir = os.path.join(tempfile.gettempdir(),
+                                 "%s.%s" % (_trashcan_dir, os.getuid()))
+
+# Stale temporary directories are deleted after they are older than this value.
+# The test suite probably won't ever take longer than this...
+_trashcan_timeout = 24 * 3600  # 1 day
+
+def _create_trashcan_dir():
     try:
-        os.mkdir(tmpdir)
+        os.mkdir(_trashcan_dir)
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
-    return tmpdir
+
+def _purge_trashcan_dir():
+    freshness_threshold = time.time() - _trashcan_timeout
+    for fn in sorted(os.listdir(_trashcan_dir)):
+        fn = os.path.join(_trashcan_dir, fn)
+        try:
+            st = os.stat(fn)
+            if st.st_mtime < freshness_threshold:
+                shutil.rmtree(fn, ignore_errors=True)
+        except OSError as e:
+            # In parallel testing, several processes can attempt to
+            # remove the same entry at once, ignore.
+            if e.errno != errno.ENOENT:
+                raise
+
+def _create_trashcan_subdir(prefix):
+    _purge_trashcan_dir()
+    path = tempfile.mkdtemp(prefix=prefix + '-', dir=_trashcan_dir)
+    return path
+
+def temp_directory(prefix):
+    """
+    Create a temporary directory with the given *prefix* that will survive
+    at least as long as this process invocation.  The temporary directory
+    will be eventually deleted when it becomes stale enough.
+
+    This is necessary because a DLL file can't be deleted while in use
+    under Windows.
+
+    An interesting side-effect is to be able to inspect the test files
+    shortly after a test suite run.
+    """
+    _create_trashcan_dir()
+    return _create_trashcan_subdir(prefix)
+
 
 # From CPython
 
