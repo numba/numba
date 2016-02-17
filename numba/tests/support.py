@@ -14,7 +14,7 @@ import time
 
 import numpy as np
 
-from numba import config, errors, typing, utils, numpy_support
+from numba import config, errors, typing, utils, numpy_support, testing
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
@@ -33,6 +33,9 @@ no_pyobj_flags = Flags()
 is_on_numpy_16 = numpy_support.version == (1, 6)
 skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
                                    "test requires Numpy 1.7 or later")
+
+
+tag = testing.make_tag_decorator(['important'])
 
 
 class CompilationCache(object):
