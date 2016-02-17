@@ -309,6 +309,37 @@ def box_array(typ, val, c):
         c.pyapi.incref(parent)
         return parent
 
+@box(types.SmartArrayType)
+def box_smart_array(type, value, c):
+    # First build a Numpy array object, then wrap it in a SmartArray
+    a = cgutils.create_struct_proxy(type)(c.context, c.builder, value=value)
+    # if 'parent' is set, we are re-boxing an object, so use the same logic
+    # as reflect.
+    obj = a.parent
+    res = cgutils.alloca_once_value(c.builder, obj)
+    with c.builder.if_else(cgutils.is_not_null(c.builder, obj)) as (has_parent, otherwise):
+        with has_parent:
+            c.pyapi.incref(obj)
+            retn = c.pyapi.call_method(obj, "host_changed")
+            with c.builder.if_else(cgutils.is_not_null(c.builder, retn)) as (success, failure):
+                with success:
+                    c.pyapi.decref(retn)
+                with failure:
+                    c.pyapi.raise_object()
+        with otherwise:
+            # box into a new array:
+            classobj = c.pyapi.unserialize(c.pyapi.serialize_object(type.pyclass))
+            arrayobj = c.box(type.as_array, a.data)
+            # Adopt arrayobj rather than copying it.
+            false = c.pyapi.bool_from_bool(cgutils.false_bit)
+            obj = c.pyapi.call_function_objargs(classobj, (arrayobj,false))
+            c.pyapi.decref(classobj)
+            c.pyapi.decref(arrayobj)
+            c.pyapi.decref(false)
+            c.builder.store(obj, res)
+
+    return c.builder.load(res)
+
 @unbox(types.Buffer)
 def unbox_buffer(typ, obj, c):
     """
@@ -357,6 +388,32 @@ def unbox_array(typ, obj, c):
     failed = cgutils.is_not_null(c.builder, errcode)
     return NativeValue(c.builder.load(aryptr), is_error=failed)
 
+
+@unbox(types.SmartArrayType)
+def unbox_smart_array(type, obj, c):
+    a = cgutils.create_struct_proxy(type)(c.context, c.builder)
+    arr = c.pyapi.call_method(obj, "host")
+    with c.builder.if_else(cgutils.is_not_null(c.builder, arr)) as (success, failure):
+        with success:
+            a.data = c.unbox(type.as_array, arr).value
+            a.parent = obj
+            c.pyapi.decref(arr)
+        with failure:
+            c.pyapi.raise_object()
+
+    return NativeValue(a._getvalue())
+
+
+@reflect(types.SmartArrayType)
+def reflect_smart_array(type, value, c):
+    a = cgutils.create_struct_proxy(type)(c.context, c.builder, value)
+    arr = a.parent
+    retn = c.pyapi.call_method(arr, "host_changed")
+    with c.builder.if_else(cgutils.is_not_null(c.builder, retn)) as (success, failure):
+        with success:
+            c.pyapi.decref(retn)
+        with failure:
+            c.pyapi.raise_object()
 
 @box(types.Tuple)
 @box(types.UniTuple)
