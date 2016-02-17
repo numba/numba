@@ -425,7 +425,7 @@ else:
 
 # Stale temporary directories are deleted after they are older than this value.
 # The test suite probably won't ever take longer than this...
-_trashcan_timeout = 24 * 3600
+_trashcan_timeout = 24 * 3600  # 1 day
 
 def _create_trashcan_dir():
     try:
