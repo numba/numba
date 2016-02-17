@@ -914,12 +914,23 @@ class Angle(CallableTemplate):
     Typing template for np.angle()
     """
     def generic(self):
-        def typer(ref, deg = False):
-            if isinstance(ref, types.Array):
-                return ref.copy(dtype=ref.underlying_float)
+        def typer(z, deg=False):
+            if isinstance(z, types.Array):
+                dtype = z.dtype
             else:
-                return types.float64
+                dtype = z
+            if isinstance(dtype, types.Complex):
+                ret_dtype = dtype.underlying_float
+            elif isinstance(dtype, types.Float):
+                ret_dtype = dtype
+            else:
+                return
+            if isinstance(z, types.Array):
+                return z.copy(dtype=ret_dtype)
+            else:
+                return ret_dtype
         return typer
+
 
 @infer_global(numpy.diag)
 class DiagCtor(CallableTemplate):
@@ -927,8 +938,8 @@ class DiagCtor(CallableTemplate):
     Typing template for np.diag()
     """
     def generic(self):
-        def typer(ref, k = 0):
-            if(isinstance(ref, types.Array)):
+        def typer(ref, k=0):
+            if isinstance(ref, types.Array):
                 if ref.ndim == 1:
                     rdim = 2
                 elif ref.ndim == 2:

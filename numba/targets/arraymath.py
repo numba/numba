@@ -438,41 +438,43 @@ def scalar_sinc(context, builder, sig, args):
                                    locals=dict(c=scalar_dtype))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(numpy.angle, types.Number)
-def scalar_angle(context, builder, sig, args):
-    def scalar_angle_impl(val):
-          return numpy.arctan2(val.imag, val.real)
-    res = context.compile_internal(builder, scalar_angle_impl,
-                                      sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
+@lower_builtin(numpy.angle, types.Number)
 @lower_builtin(numpy.angle, types.Number, types.Boolean)
 def scalar_angle_kwarg(context, builder, sig, args):
-    def scalar_angle_impl(val, deg=False):
+    deg_mult = sig.return_type(180 / numpy.pi)
+    def scalar_angle_impl(val, deg):
         if deg:
-            scal = 180/numpy.pi
-            return numpy.arctan2(val.imag, val.real) * scal
+            return numpy.arctan2(val.imag, val.real) * deg_mult
         else:
             return numpy.arctan2(val.imag, val.real)
+
+    if len(args) == 1:
+        args = args + (cgutils.false_bit,)
+        sig = signature(sig.return_type, *(sig.args + (types.boolean,)))
     res = context.compile_internal(builder, scalar_angle_impl,
-                                      sig, args)
+                                   sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @lower_builtin(numpy.angle, types.Array)
 @lower_builtin(numpy.angle, types.Array, types.Boolean)
 def array_angle_kwarg(context, builder, sig, args):
     arg = sig.args[0]
-    if isinstance(arg.dtype, types.Complex):
-        retty = arg.dtype.underlying_float
-    else:
-        retty = arg.dtype
-    def array_angle_impl(arr, deg=False):
-        out = numpy.zeros_like(arr, dtype=retty)
+    ret_dtype = sig.return_type.dtype
+
+    def array_angle_impl(arr, deg):
+        out = numpy.zeros_like(arr, dtype=ret_dtype)
         for index, val in numpy.ndenumerate(arr):
             out[index] = numpy.angle(val, deg)
         return out
+
+    if len(args) == 1:
+        args = args + (cgutils.false_bit,)
+        sig = signature(sig.return_type, *(sig.args + (types.boolean,)))
+
     res = context.compile_internal(builder, array_angle_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @lower_builtin(numpy.nonzero, types.Array)
 @lower_builtin("array.nonzero", types.Array)

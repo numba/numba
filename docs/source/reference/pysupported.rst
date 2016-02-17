@@ -406,6 +406,13 @@ supported for passing Numpy arrays and other buffer-like objects.  Only
 is converted to a raw pointer of the appropriate C type (for example a
 ``double *`` for a ``float64`` array).
 
+Additional type mappings for the conversion from a buffer to the appropriate C
+type may be registered with Numba. This may include struct types, though it is
+only permitted to call functions that accept pointers to structs - passing a
+struct by value is unsupported. For registering a mapping, use:
+
+.. function:: numba.cffi_support.register_type(cffi_type, numba_type)
+
 Out-of-line cffi modules must be registered with Numba prior to the use of any
 of their functions from within Numba-compiled functions:
 

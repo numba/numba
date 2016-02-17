@@ -56,6 +56,15 @@ def slicing_1d_usecase6(a, stop):
         total += b[i] * (i + 1)
     return total
 
+def slicing_1d_usecase7(a, start):
+    # Omitted stop with negative step (issue #1690)
+    b = a[start::-2]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
+
 def slicing_2d_usecase(a, start1, stop1, step1, start2, stop2, step2):
     # The index is a homogenous tuple of slices
     return a[start1:stop1:step1, start2:stop2:step2]
@@ -258,20 +267,17 @@ class TestGetItem(TestCase):
     def test_1d_slicing4_npm(self):
         self.test_1d_slicing4(flags=Noflags)
 
-    def test_1d_slicing5(self, flags=enable_pyobj_flags):
-        pyfunc = slicing_1d_usecase5
+    def check_1d_slicing_with_arg(self, pyfunc, flags):
+        args = list(range(-9, 10))
+
         arraytype = types.Array(types.int32, 1, 'C')
         argtys = (arraytype, types.int32)
         cr = compile_isolated(pyfunc, argtys, flags=flags)
         cfunc = cr.entry_point
 
         a = np.arange(10, dtype='i4')
-
-        args = [3, 2, 10, 0, 5]
-
         for arg in args:
             self.assertEqual(pyfunc(a, arg), cfunc(a, arg))
-
 
         # Any
         arraytype = types.Array(types.int32, 1, 'A')
@@ -285,8 +291,26 @@ class TestGetItem(TestCase):
         for arg in args:
             self.assertEqual(pyfunc(a, arg), cfunc(a, arg))
 
+    def test_1d_slicing5(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase5
+        self.check_1d_slicing_with_arg(pyfunc, flags)
+
     def test_1d_slicing5_npm(self):
         self.test_1d_slicing5(flags=Noflags)
+
+    def test_1d_slicing6(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase6
+        self.check_1d_slicing_with_arg(pyfunc, flags)
+
+    def test_1d_slicing6_npm(self):
+        self.test_1d_slicing6(flags=Noflags)
+
+    def test_1d_slicing7(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase7
+        self.check_1d_slicing_with_arg(pyfunc, flags)
+
+    def test_1d_slicing7_npm(self):
+        self.test_1d_slicing7(flags=Noflags)
 
     def test_2d_slicing(self, flags=enable_pyobj_flags):
         """

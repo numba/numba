@@ -1,7 +1,6 @@
-import sys
-from numba.testing import run_tests
 
 def _main(argv, **kwds):
+    from numba.testing import run_tests
     # This helper function assumes the first element of argv
     # is the name of the calling program.
     # The 'main' API function is invoked in-process, and thus
@@ -15,6 +14,7 @@ def main(*argv, **kwds):
     return _main(['<main>'] + list(argv), **kwds)
 
 if __name__ == '__main__':
+    import sys
     # For parallel testing under Windows
     from multiprocessing import freeze_support
     freeze_support()
