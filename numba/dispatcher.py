@@ -436,6 +436,8 @@ class Dispatcher(_DispatcherBase):
         return self
 
     def compile(self, sig):
+        if not self._can_compile:
+            raise RuntimeError("compilation disabled")
         with self._compile_lock:
             args, return_type = sigutils.normalize_signature(sig)
             # Don't recompile if signature already exists

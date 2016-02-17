@@ -1,13 +1,16 @@
 from __future__ import absolute_import, print_function
+
 import ctypes
+
 import numpy as np
+
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
 from numba import njit, typeof
 from numba import unittest_support as unittest
 from numba import jitclass
 from numba.utils import OrderedDict
-from .support import TestCase, MemoryLeakMixin
+from .support import TestCase, MemoryLeakMixin, tag
 
 
 class TestJitClass(TestCase, MemoryLeakMixin):
@@ -70,6 +73,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         return Vector2
 
+    @tag('important')
     def test_jit_class_1(self):
         Float2AndArray = self._make_Float2AndArray()
         Vector2 = self._make_Vector2()
@@ -92,11 +96,12 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(b, 3 + 4)
         self.assertPreciseEqual(c, inp)
 
+    @tag('important')
     def test_jitclass_usage_from_python(self):
         Float2AndArray = self._make_Float2AndArray()
 
         @njit
-        def idenity(obj):
+        def identity(obj):
             return obj
 
         @njit
@@ -110,7 +115,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(obj._numba_type_.class_type,
                          Float2AndArray.class_type)
         # Use jit class instance in numba
-        other = idenity(obj)
+        other = identity(obj)
         self.assertEqual(obj._meminfo.refcount, 2)
         self.assertEqual(other._meminfo.refcount, 2)
         self.assertEqual(other._meminfo.data, other._dataptr)
@@ -157,6 +162,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertTrue(Foo(True).val)
         self.assertFalse(Foo(False).val)
 
+    @tag('important')
     def test_deferred_type(self):
         node_type = deferred_type()
 
@@ -267,6 +273,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(str(raises.exception),
                          "class members are not yet supported: constant")
 
+    @tag('important')
     def test_user_getter_setter(self):
         @jitclass([('attr', int32)])
         class Foo(object):

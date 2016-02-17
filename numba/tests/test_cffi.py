@@ -7,7 +7,7 @@ import sys
 from numba import unittest_support as unittest
 from numba import jit, cffi_support, types, errors
 from numba.compiler import compile_isolated, Flags
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, tag
 
 import numba.tests.cffi_usecases as mod
 
@@ -45,6 +45,7 @@ class TestCFFI(TestCase):
     def test_sin_function(self):
         self._test_function(mod.use_cffi_sin)
 
+    @tag('important')
     def test_sin_function_npm(self):
         self._test_function(mod.use_cffi_sin, flags=no_pyobj_flags)
 
@@ -98,6 +99,7 @@ class TestCFFI(TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         self.check_vector_sin(cfunc, x, y)
 
+    @tag('important')
     def test_from_buffer_float32(self):
         self._test_from_buffer_numpy_array(mod.vector_sin_float32, np.float32)
 

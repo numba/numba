@@ -4,7 +4,7 @@ import numpy as np
 from numba import types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from .support import TestCase
+from .support import TestCase, tag
 
 
 looplift_flags = Flags()
@@ -192,9 +192,11 @@ class TestLoopLifting(TestCase):
     def test_lift3(self):
         self.check_lift_ok(lift3, (types.intp,), (123,))
 
+    @tag('important')
     def test_lift4(self):
         self.check_lift_ok(lift4, (types.intp,), (123,))
 
+    @tag('important')
     def test_lift_gen1(self):
         self.check_lift_generator_ok(lift_gen1, (types.intp,), (123,))
 

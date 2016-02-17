@@ -7,6 +7,7 @@ from pprint import pprint
 import sys
 import warnings
 import traceback
+from .tracing import trace, event
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
                    lowering, objmode, irpasses, utils, config, errors,
@@ -237,9 +238,11 @@ class _PipelineManager(object):
         assert self._finalized, "PM must be finalized before run()"
         res = None
         for pipeline_name in self.pipeline_order:
+            event(pipeline_name)
             is_final_pipeline = pipeline_name == self.pipeline_order[-1]
             for stage, stage_name in self.pipeline_stages[pipeline_name]:
                 try:
+                    event(stage_name)
                     stage()
                 except _EarlyPipelineCompletion as e:
                     return e.result

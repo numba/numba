@@ -15,7 +15,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import utils, vectorize, jit, generated_jit, types
 from numba.errors import NumbaWarning
-from .support import TestCase
+from .support import TestCase, tag, temp_directory
 
 
 def dummy(x):
@@ -205,12 +205,50 @@ class TestDispatcher(BaseTest):
                          "No matching definition for argument type(s) "
                          "complex128, complex128")
 
+    def test_disabled_compilation(self):
+        @jit
+        def foo(a):
+            return a
+
+        foo.compile("(float32,)")
+        foo.disable_compile()
+        with self.assertRaises(RuntimeError) as raises:
+            foo.compile("(int32,)")
+        self.assertEqual(str(raises.exception), "compilation disabled")
+        self.assertEqual(len(foo.signatures), 1)
+
+    def test_disabled_compilation_through_list(self):
+        @jit(["(float32,)", "(int32,)"])
+        def foo(a):
+            return a
+
+        with self.assertRaises(RuntimeError) as raises:
+            foo.compile("(complex64,)")
+        self.assertEqual(str(raises.exception), "compilation disabled")
+        self.assertEqual(len(foo.signatures), 2)
+
+    def test_disabled_compilation_nested_call(self):
+        @jit(["(intp,)"])
+        def foo(a):
+            return a
+
+        @jit
+        def bar():
+            foo(1)
+            foo(np.ones(1))  # no matching definition
+
+        with self.assertRaises(TypeError) as raises:
+            bar()
+        m = "No matching definition for argument type(s) array(float64, 1d, C)"
+        self.assertEqual(str(raises.exception), m)
+
 
 class TestSignatureHandling(BaseTest):
     """
     Test support for various parameter passing styles.
     """
 
+    @tag('important')
     def test_named_args(self):
         """
         Test passing named arguments to a dispatcher.
@@ -298,6 +336,7 @@ class TestGeneratedDispatcher(TestCase):
     Tests for @generated_jit.
     """
 
+    @tag('important')
     def test_generated(self):
         f = generated_jit(nopython=True)(generated_usecase)
         self.assertEqual(f(8), 8 - 5)
@@ -361,6 +400,7 @@ class TestDispatcherMethods(TestCase):
         self.assertPreciseEqual(foo(1), 3)
         self.assertPreciseEqual(foo(1.5), 3)
 
+    @tag('important')
     def test_inspect_llvm(self):
         # Create a jited function
         @jit
@@ -451,7 +491,7 @@ class TestCache(TestCase):
     modname = "caching_test_fodder"
 
     def setUp(self):
-        self.tempdir = tempfile.mkdtemp()
+        self.tempdir = temp_directory('test_dispatcher_cache')
         sys.path.insert(0, self.tempdir)
         self.modfile = os.path.join(self.tempdir, self.modname + ".py")
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
@@ -461,7 +501,6 @@ class TestCache(TestCase):
     def tearDown(self):
         sys.modules.pop(self.modname, None)
         sys.path.remove(self.tempdir)
-        shutil.rmtree(self.tempdir)
 
     def import_module(self):
         # Import a fresh version of the test module.  All jitted functions
@@ -549,6 +588,7 @@ class TestCache(TestCase):
         self.assertPreciseEqual(f(2.5, 3), 6.5)
         self.check_cache(6)  # 2 index, 4 data
 
+    @tag('important')
     def test_caching(self):
         self.check_cache(0)
         mod = self.import_module()

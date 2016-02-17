@@ -9,7 +9,7 @@ from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
 from numba.numpy_support import as_dtype, strict_ufunc_typing
-from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin
+from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin, tag
 
 
 def np_around_array(arr, decimals, out):
@@ -175,6 +175,7 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
     def test_around_array(self):
         self.check_round_array(np_around_array)
 
+    @tag('important')
     def test_array_reshape(self):
         pyfunc = array_reshape
         def run(arr, shape):
@@ -436,9 +437,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_array_transpose(self):
         self.check_layout_dependent_func(array_transpose)
 
+    @tag('important')
     def test_array_T(self):
         self.check_layout_dependent_func(array_T)
 
+    @tag('important')
     def test_array_copy(self):
         self.check_layout_dependent_func(array_copy)
 

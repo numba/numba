@@ -1,13 +1,12 @@
 from __future__ import print_function, absolute_import
 
 from collections import namedtuple
-import ctypes
 import enum
 import sys
 
 import numpy as np
 
-from numba import numpy_support, types, utils
+from numba import numpy_support, types, utils, smartarray
 
 
 class Purpose(enum.Enum):
@@ -146,3 +145,9 @@ def _typeof_ndarray(val, c):
     layout = numpy_support.map_layout(val)
     readonly = not val.flags.writeable
     return types.Array(dtype, val.ndim, layout, readonly=readonly)
+
+@typeof_impl.register(smartarray.SmartArray)
+def typeof_array(val, c):
+    arrty = typeof_impl(val.host(), c)
+    return types.SmartArrayType(arrty.dtype, arrty.ndim, arrty.layout, type(val))
+

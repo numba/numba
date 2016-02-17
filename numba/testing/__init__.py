@@ -8,7 +8,7 @@ from os.path import join, isfile, relpath, normpath, splitext
 from fnmatch import fnmatch
 import functools
 
-from .main import NumbaTestProgram, SerialSuite
+from .main import NumbaTestProgram, SerialSuite, make_tag_decorator
 from numba import config
 
 

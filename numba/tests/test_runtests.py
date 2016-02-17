@@ -1,6 +1,8 @@
+from __future__ import division, print_function
 
 from numba import unittest_support as unittest
 
+import sys
 import subprocess
 
 
@@ -21,13 +23,13 @@ class TestCase(unittest.TestCase):
     """These test cases are meant to test the Numba test infrastructure itself.
     Therefore, the logic used here shouldn't use numba.testing, but only the upstream
     unittest, and run the numba test suite only in a subprocess."""
-    
 
-    def check_testsuite_size(self, ids, minsize, maxsize=None):
-        """Check that the reported numbers of tests in 'id' are 
-        in the (minsize, maxsize) range, or are equal to minsize if maxsize is None."""
-
-        cmd = ['python', '-m', 'numba.runtests', '-l'] + list(ids)
+    def check_testsuite_size(self, args, minsize, maxsize=None):
+        """
+        Check that the reported numbers of tests are in the
+        (minsize, maxsize) range, or are equal to minsize if maxsize is None.
+        """
+        cmd = ['python', '-m', 'numba.runtests', '-l'] + list(args)
         lines = check_output(cmd).decode().splitlines()
         lines = [line for line in lines if line.strip()]
         last_line = lines[-1]
@@ -44,7 +46,7 @@ class TestCase(unittest.TestCase):
         return lines
 
     def check_all(self, ids):
-        lines = self.check_testsuite_size(ids, 7000, 8000)
+        lines = self.check_testsuite_size(ids, 5000, 8000)
         # CUDA should be included by default
         self.assertTrue(any('numba.cuda.tests.' in line for line in lines))
         # As well as subpackage
@@ -71,7 +73,18 @@ class TestCase(unittest.TestCase):
     def test_subpackage(self):
         self.check_testsuite_size(['numba.tests.npyufunc'], 50, 200)
 
+    @unittest.skipIf(sys.version_info < (3, 4),
+                     "'--random' only supported on Python 3.4 or higher")
+    def test_random(self):
+        self.check_testsuite_size(['--random', '0.1', 'numba.tests.npyufunc'],
+                                  5, 20)
+
+    @unittest.skipIf(sys.version_info < (3, 4),
+                     "'--tags' only supported on Python 3.4 or higher")
+    def test_tags(self):
+        self.check_testsuite_size(['--tags', 'important', 'numba.tests.npyufunc'],
+                                  20, 50)
+
 
 if __name__ == '__main__':
     unittest.main()
-    
