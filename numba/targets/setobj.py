@@ -241,7 +241,7 @@ class SetInstance(_SetPayloadMixin):
     def add(self, item):
         context = self._context
         builder = self._builder
-        # XXX first resize if necessary
+        # FIXME first resize if necessary
 
         h = get_hash_value(context, builder, self._ty.dtype, item)
         found, i = self.lookup(item, h)
@@ -259,6 +259,14 @@ class SetInstance(_SetPayloadMixin):
             with builder.if_then(is_hash_empty(context, builder, old_hash),
                                  likely=True):
                 self.fill = builder.add(self.fill, one)
+
+    def contains(self, item):
+        context = self._context
+        builder = self._builder
+
+        h = get_hash_value(context, builder, self._ty.dtype, item)
+        found, i = self.lookup(item, h)
+        return found
 
     @classmethod
     def allocate_ex(cls, context, builder, set_type, nitems=None):
@@ -430,16 +438,10 @@ def set_len(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     return inst.used
 
-
-#@lower_builtin("in", types.Any, types.List)
-#def in_list(context, builder, sig, args):
-    #def list_contains_impl(value, lst):
-        #for elem in lst:
-            #if elem == value:
-                #return True
-        #return False
-
-    #return context.compile_internal(builder, list_contains_impl, sig, args)
+@lower_builtin("in", types.Any, types.Set)
+def in_set(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[1], args[1])
+    return inst.contains(args[0])
 
 
 #-------------------------------------------------------------------------------
