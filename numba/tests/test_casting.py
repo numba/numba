@@ -95,6 +95,7 @@ class TestCasting(unittest.TestCase):
             return a
 
         self.assertEqual(foo(2), 2)
+        self.assertIsNone(foo(None))
 
 
 if __name__ == '__main__':
