@@ -1,6 +1,7 @@
 """
-Contains function decorators and target_registry
+Define @jit and related decorators.
 """
+
 from __future__ import print_function, division, absolute_import
 import warnings
 
@@ -23,7 +24,7 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
-class DisableJitWrapper(object):
+class _DisableJitWrapper(object):
     def __init__(self, py_func):
         self.py_func = py_func
 
@@ -51,11 +52,11 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
         Mapping of local variable names to Numba types. Used to override the
         types deduced by Numba's type inference engine.
 
-    targets: str
+    target: str
         Specifies the target platform to compile for. Valid targets are cpu,
         gpu, npyufunc, and cuda. Defaults to cpu.
 
-    targetoptions: 
+    targetoptions:
         For a cpu target, valid options are:
             nopython: bool
                 Set to True to disable the use of PyObjects and Python API
@@ -150,16 +151,17 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False, **opti
         return wrapper
 
 
-def _jit(sigs, locals, target, cache, targetoptions):
-    dispatcher = registry.target_registry[target]
+def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
+    dispatcher = registry.dispatcher_registry[target]
 
     def wrapper(func):
         if config.ENABLE_CUDASIM and target == 'cuda':
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
-            return DisableJitWrapper(func)
+            return _DisableJitWrapper(func)
         disp = dispatcher(py_func=func, locals=locals,
-                          targetoptions=targetoptions)
+                          targetoptions=targetoptions,
+                          **dispatcher_args)
         if cache:
             disp.enable_caching()
         if sigs is not None:
@@ -169,6 +171,21 @@ def _jit(sigs, locals, target, cache, targetoptions):
         return disp
 
     return wrapper
+
+
+def generated_jit(function=None, target='cpu', cache=False, **options):
+    """
+    This decorator allows flexible type-based compilation
+    of a jitted function.  It works as `@jit`, except that the decorated
+    function is called at compile-time with the *types* of the arguments
+    and should return an implementation function for those types.
+    """
+    wrapper = _jit(sigs=None, locals={}, target=target, cache=cache,
+                   targetoptions=options, impl_kind='generated')
+    if function is not None:
+        return wrapper(function)
+    else:
+        return wrapper
 
 
 def njit(*args, **kws):
@@ -183,5 +200,3 @@ def njit(*args, **kws):
         warnings.warn('forceobj is set for njit and is ignored', RuntimeWarning)
     kws.update({'nopython': True})
     return jit(*args, **kws)
-
-

@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 from numba import types, cgutils
 
-from .imputils import builtin_cast
+from .imputils import lower_cast
 
 
 def make_optional(valtype):
@@ -20,7 +20,7 @@ def always_return_false_impl(context, builder, sig, args):
     return cgutils.false_bit
 
 
-@builtin_cast(types.Optional, types.Optional)
+@lower_cast(types.Optional, types.Optional)
 def optional_to_optional(context, builder, fromty, toty, val):
     """
     The handling of optional->optional cast must be special cased for
@@ -53,7 +53,7 @@ def optional_to_optional(context, builder, fromty, toty, val):
     return outoptval._getvalue()
 
 
-@builtin_cast(types.Any, types.Optional)
+@lower_cast(types.Any, types.Optional)
 def any_to_optional(context, builder, fromty, toty, val):
     if fromty == types.none:
         return context.make_optional_none(builder, toty.type)
@@ -61,7 +61,8 @@ def any_to_optional(context, builder, fromty, toty, val):
         val = context.cast(builder, val, fromty, toty.type)
         return context.make_optional_value(builder, toty.type, val)
 
-@builtin_cast(types.Optional, types.Any)
+
+@lower_cast(types.Optional, types.Any)
 def optional_to_any(context, builder, fromty, toty, val):
     optty = context.make_optional(fromty)
     optval = optty(context, builder, value=val)

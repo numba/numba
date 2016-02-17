@@ -2,7 +2,8 @@ from os.path import dirname, join
 from unittest.case import TestCase
 from unittest.suite import TestSuite
 from subprocess import STDOUT, call, check_output, CalledProcessError
-from numba.tests.ddt import ddt, data
+from numba.testing.ddt import ddt, data, unpack
+from numba.testing.notebook import *
 from numba import cuda
 
 test_scripts = [
@@ -47,6 +48,12 @@ if cuda.is_available():
     'vectorize/cuda_polynomial.py',
     ])
 
+notebooks = [#'j0 in Numba.ipynb', # contains errors
+             'Failure.ipynb',
+             'LinearRegr.ipynb',
+             'numba.ipynb',
+             'Using Numba.ipynb']
+    
 @ddt
 class TestExample(TestCase):
     """Test adapter to validate example applets."""
@@ -62,8 +69,19 @@ class TestExample(TestCase):
             print(e.output)
         self.assertEqual(status, 0)
 
+@ddt
+class NBTest(NotebookTest):
 
+    @data(*notebooks)
+    def test(self, nb):
+        test = 'check_error' # This is the only currently supported test type
+        notebook=join(dirname(dirname(__file__)), 'notebooks', nb)
+        self._test_notebook(notebook, test)
+
+        
 def load_tests(loader, tests, pattern):
 
-    return loader.loadTestsFromTestCase(TestExample)
-
+    notebooks = loader.loadTestsFromTestCase(NBTest)
+    examples = loader.loadTestsFromTestCase(TestExample)
+    return TestSuite([notebooks, examples])
+    

@@ -8,10 +8,8 @@ import math
 
 from llvmlite import ir
 from numba import types, cgutils, typing
-from numba.targets.imputils import (builtin, builtin_attr, builtin_cast,
-                                    implement, impl_attribute,
-                                    impl_attribute_generic, iternext_impl,
-                                    impl_ret_borrowed,
+from numba.targets.imputils import (lower_builtin, lower_cast,
+                                    iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.utils import cached_property
 from . import quicksort, slicing
@@ -379,8 +377,7 @@ def build_list(context, builder, list_type, items):
     return impl_ret_new_ref(context, builder, list_type, inst.value)
 
 
-@builtin
-@implement(list, types.IterableType)
+@lower_builtin(list, types.IterableType)
 def list_constructor(context, builder, sig, args):
 
     def list_impl(iterable):
@@ -394,8 +391,7 @@ def list_constructor(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Various operations
 
-@builtin
-@implement(types.len_type, types.List)
+@lower_builtin(len, types.List)
 def list_len(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     return inst.size
@@ -408,14 +404,12 @@ def make_listiter_cls(iterator_type):
     """
     return cgutils.create_struct_proxy(iterator_type)
 
-@builtin
-@implement('getiter', types.List)
+@lower_builtin('getiter', types.List)
 def getiter_list(context, builder, sig, args):
     inst = ListIterInstance.from_list(context, builder, sig.return_type, args[0])
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
-@builtin
-@implement('iternext', types.ListIter)
+@lower_builtin('iternext', types.ListIter)
 @iternext_impl
 def iternext_listiter(context, builder, sig, args, result):
     inst = ListIterInstance(context, builder, sig.args[0], args[0])
@@ -430,8 +424,7 @@ def iternext_listiter(context, builder, sig, args, result):
         inst.index = builder.add(index, context.get_constant(types.intp, 1))
 
 
-@builtin
-@implement('getitem', types.List, types.Integer)
+@lower_builtin('getitem', types.List, types.Integer)
 def getitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
@@ -441,8 +434,7 @@ def getitem_list(context, builder, sig, args):
 
     return impl_ret_borrowed(context, builder, sig.return_type, result)
 
-@builtin
-@implement('setitem', types.List, types.Integer, types.Any)
+@lower_builtin('setitem', types.List, types.Integer, types.Any)
 def setitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
@@ -453,8 +445,7 @@ def setitem_list(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@builtin
-@implement('getitem', types.List, types.SliceType)
+@lower_builtin('getitem', types.List, types.SliceType)
 def getslice_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     slice = slicing.make_slice(context, builder, sig.args[1], args[1])
@@ -477,8 +468,7 @@ def getslice_list(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
 
-@builtin
-@implement('setitem', types.List, types.SliceType, types.Any)
+@lower_builtin('setitem', types.List, types.SliceType, types.Any)
 def setitem_list(context, builder, sig, args):
     dest = ListInstance(context, builder, sig.args[0], args[0])
     src = ListInstance(context, builder, sig.args[2], args[2])
@@ -538,8 +528,7 @@ def setitem_list(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@builtin
-@implement('delitem', types.List, types.SliceType)
+@lower_builtin('delitem', types.List, types.SliceType)
 def setitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     slice = slicing.make_slice(context, builder, sig.args[1], args[1])
@@ -567,8 +556,7 @@ def setitem_list(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@builtin
-@implement("in", types.Any, types.List)
+@lower_builtin("in", types.Any, types.List)
 def in_list(context, builder, sig, args):
     def list_contains_impl(value, lst):
         for elem in lst:
@@ -580,8 +568,7 @@ def in_list(context, builder, sig, args):
 
 
 # XXX should there be a specific module for Sequence or collection base classes?
-@builtin
-@implement(bool, types.Sequence)
+@lower_builtin(bool, types.Sequence)
 def sequence_bool(context, builder, sig, args):
     def sequence_bool_impl(seq):
         return len(seq) != 0
@@ -589,8 +576,7 @@ def sequence_bool(context, builder, sig, args):
     return context.compile_internal(builder, sequence_bool_impl, sig, args)
 
 
-@builtin
-@implement("+", types.List, types.List)
+@lower_builtin("+", types.List, types.List)
 def list_add(context, builder, sig, args):
     a = ListInstance(context, builder, sig.args[0], args[0])
     b = ListInstance(context, builder, sig.args[1], args[1])
@@ -612,8 +598,7 @@ def list_add(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
-@builtin
-@implement("+=", types.List, types.List)
+@lower_builtin("+=", types.List, types.List)
 def list_add_inplace(context, builder, sig, args):
     assert sig.args[0].dtype == sig.return_type.dtype
     dest = _list_extend_list(context, builder, sig, args)
@@ -621,8 +606,7 @@ def list_add_inplace(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, dest.value)
 
 
-@builtin
-@implement("*", types.List, types.Integer)
+@lower_builtin("*", types.List, types.Integer)
 def list_mul(context, builder, sig, args):
     src = ListInstance(context, builder, sig.args[0], args[0])
     src_size = src.size
@@ -642,8 +626,7 @@ def list_mul(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
-@builtin
-@implement("*=", types.List, types.Integer)
+@lower_builtin("*=", types.List, types.Integer)
 def list_mul_inplace(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     src_size = inst.size
@@ -666,8 +649,7 @@ def list_mul_inplace(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Comparisons
 
-@builtin
-@implement('is', types.List, types.List)
+@lower_builtin('is', types.List, types.List)
 def list_is(context, builder, sig, args):
     a = ListInstance(context, builder, sig.args[0], args[0])
     b = ListInstance(context, builder, sig.args[1], args[1])
@@ -675,8 +657,7 @@ def list_is(context, builder, sig, args):
     mb = builder.ptrtoint(b.meminfo, cgutils.intp_t)
     return builder.icmp_signed('==', ma, mb)
 
-@builtin
-@implement('==', types.List, types.List)
+@lower_builtin('==', types.List, types.List)
 def list_eq(context, builder, sig, args):
     aty, bty = sig.args
     a = ListInstance(context, builder, aty, args[0])
@@ -700,8 +681,7 @@ def list_eq(context, builder, sig, args):
 
     return builder.load(res)
 
-@builtin
-@implement('!=', types.List, types.List)
+@lower_builtin('!=', types.List, types.List)
 def list_ne(context, builder, sig, args):
 
     def list_ne_impl(a, b):
@@ -709,8 +689,7 @@ def list_ne(context, builder, sig, args):
 
     return context.compile_internal(builder, list_ne_impl, sig, args)
 
-@builtin
-@implement('<=', types.List, types.List)
+@lower_builtin('<=', types.List, types.List)
 def list_le(context, builder, sig, args):
 
     def list_le_impl(a, b):
@@ -725,8 +704,7 @@ def list_le(context, builder, sig, args):
 
     return context.compile_internal(builder, list_le_impl, sig, args)
 
-@builtin
-@implement('<', types.List, types.List)
+@lower_builtin('<', types.List, types.List)
 def list_lt(context, builder, sig, args):
 
     def list_lt_impl(a, b):
@@ -741,8 +719,7 @@ def list_lt(context, builder, sig, args):
 
     return context.compile_internal(builder, list_lt_impl, sig, args)
 
-@builtin
-@implement('>=', types.List, types.List)
+@lower_builtin('>=', types.List, types.List)
 def list_ge(context, builder, sig, args):
 
     def list_ge_impl(a, b):
@@ -750,8 +727,7 @@ def list_ge(context, builder, sig, args):
 
     return context.compile_internal(builder, list_ge_impl, sig, args)
 
-@builtin
-@implement('>', types.List, types.List)
+@lower_builtin('>', types.List, types.List)
 def list_gt(context, builder, sig, args):
 
     def list_gt_impl(a, b):
@@ -762,8 +738,7 @@ def list_gt(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Methods
 
-@builtin
-@implement("list.append", types.List, types.Any)
+@lower_builtin("list.append", types.List, types.Any)
 def list_append(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     item = args[1]
@@ -775,24 +750,21 @@ def list_append(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@builtin
-@implement("list.clear", types.List)
+@lower_builtin("list.clear", types.List)
 def list_clear(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     inst.resize(context.get_constant(types.intp, 0))
 
     return context.get_dummy_value()
 
-@builtin
-@implement("list.copy", types.List)
+@lower_builtin("list.copy", types.List)
 def list_copy(context, builder, sig, args):
     def list_copy_impl(lst):
         return list(lst)
 
     return context.compile_internal(builder, list_copy_impl, sig, args)
 
-@builtin
-@implement("list.count", types.List, types.Any)
+@lower_builtin("list.count", types.List, types.Any)
 def list_count(context, builder, sig, args):
 
     def list_count_impl(lst, value):
@@ -821,8 +793,7 @@ def _list_extend_list(context, builder, sig, args):
 
     return dest
 
-@builtin
-@implement("list.extend", types.List, types.IterableType)
+@lower_builtin("list.extend", types.List, types.IterableType)
 def list_extend(context, builder, sig, args):
     if isinstance(sig.args[1], types.List):
         # Specialize for list operands, for speed.
@@ -837,8 +808,7 @@ def list_extend(context, builder, sig, args):
 
     return context.compile_internal(builder, list_extend, sig, args)
 
-@builtin
-@implement("list.index", types.List, types.Any)
+@lower_builtin("list.index", types.List, types.Any)
 def list_index(context, builder, sig, args):
 
     def list_index_impl(lst, value):
@@ -850,8 +820,7 @@ def list_index(context, builder, sig, args):
 
     return context.compile_internal(builder, list_index_impl, sig, args)
 
-@builtin
-@implement("list.index", types.List, types.Any,
+@lower_builtin("list.index", types.List, types.Any,
            types.Integer)
 def list_index(context, builder, sig, args):
 
@@ -869,8 +838,7 @@ def list_index(context, builder, sig, args):
 
     return context.compile_internal(builder, list_index_impl, sig, args)
 
-@builtin
-@implement("list.index", types.List, types.Any,
+@lower_builtin("list.index", types.List, types.Any,
            types.Integer, types.Integer)
 def list_index(context, builder, sig, args):
 
@@ -892,8 +860,7 @@ def list_index(context, builder, sig, args):
 
     return context.compile_internal(builder, list_index_impl, sig, args)
 
-@builtin
-@implement("list.insert", types.List, types.Integer,
+@lower_builtin("list.insert", types.List, types.Integer,
            types.Any)
 def list_insert(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
@@ -910,8 +877,7 @@ def list_insert(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@builtin
-@implement("list.pop", types.List)
+@lower_builtin("list.pop", types.List)
 def list_pop(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
 
@@ -923,8 +889,7 @@ def list_pop(context, builder, sig, args):
     inst.resize(n)
     return res
 
-@builtin
-@implement("list.pop", types.List, types.Integer)
+@lower_builtin("list.pop", types.List, types.Integer)
 def list_pop(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     idx = inst.fix_index(args[1])
@@ -942,8 +907,7 @@ def list_pop(context, builder, sig, args):
     inst.resize(n)
     return res
 
-@builtin
-@implement("list.remove", types.List, types.Any)
+@lower_builtin("list.remove", types.List, types.Any)
 def list_remove(context, builder, sig, args):
 
     def list_remove_impl(lst, value):
@@ -956,8 +920,7 @@ def list_remove(context, builder, sig, args):
 
     return context.compile_internal(builder, list_remove_impl, sig, args)
 
-@builtin
-@implement("list.reverse", types.List)
+@lower_builtin("list.reverse", types.List)
 def list_reverse(context, builder, sig, args):
 
     def list_reverse_impl(lst):
@@ -991,9 +954,8 @@ def load_sorts():
     g['_sorting_init'] = True
 
 
-@builtin
-@implement("list.sort", types.List)
-@implement("list.sort", types.List, types.Boolean)
+@lower_builtin("list.sort", types.List)
+@lower_builtin("list.sort", types.List, types.Boolean)
 def list_sort(context, builder, sig, args):
     load_sorts()
 
@@ -1009,9 +971,8 @@ def list_sort(context, builder, sig, args):
 
     return context.compile_internal(builder, list_sort_impl, sig, args)
 
-@builtin
-@implement(sorted, types.IterableType)
-@implement(sorted, types.IterableType, types.Boolean)
+@lower_builtin(sorted, types.IterableType)
+@lower_builtin(sorted, types.IterableType, types.Boolean)
 def sorted_impl(context, builder, sig, args):
     if len(args) == 1:
         sig = typing.signature(sig.return_type, *sig.args + (types.boolean,))
@@ -1028,7 +989,7 @@ def sorted_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 # Implicit casting
 
-@builtin_cast(types.List, types.List)
+@lower_cast(types.List, types.List)
 def list_to_list(context, builder, fromty, toty, val):
     # Casting from non-reflected to reflected
     assert fromty.dtype == toty.dtype

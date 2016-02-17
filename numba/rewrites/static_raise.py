@@ -21,27 +21,13 @@ class RewriteConstRaises(Rewrite):
         """
         Break down constant exception.
         """
-        if isinstance(const, Exception):
+        if isinstance(const, BaseException):
             return const.__class__, const.args
         elif self._is_exception_type(const):
             return const, None
         else:
-            raise NotImplementedError
-
-    def _break_call(self, interp, call):
-        """
-        Break down call expression giving an exception instance.
-        """
-        if call.kws or call.vararg:
-            raise NotImplementedError
-        try:
-            exc_type = interp.get_definition(call.func).infer_constant()
-            exc_args = tuple(interp.get_definition(arg).infer_constant()
-                             for arg in call.args)
-        except (KeyError, TypeError):
-            # Not all exception arguments are constants
-            raise NotImplementedError
-        return exc_type, exc_args
+            raise NotImplementedError("unsupported exception constant %r"
+                                      % (const,))
 
     def match(self, interp, block, typemap, calltypes):
         self.raises = raises = {}
@@ -54,26 +40,8 @@ class RewriteConstRaises(Rewrite):
                 exc_type, exc_args = None, None
             else:
                 # raise <something> => find the definition site for <something>
-                try:
-                    excdef = interp.get_definition(inst.exception)
-                except KeyError:
-                    continue
-                if isinstance(excdef, ir.Expr) and excdef.op == 'call':
-                    # Is it the result of calling a constant?
-                    try:
-                        exc_type, exc_args = self._break_call(interp, excdef)
-                    except NotImplementedError:
-                        continue
-                else:
-                    # Is it a compile-time constant?
-                    try:
-                        const = excdef.infer_constant()
-                    except TypeError:
-                        continue
-                    try:
-                        exc_type, exc_args = self._break_constant(interp, const)
-                    except NotImplementedError:
-                        continue
+                const = interp.infer_constant(inst.exception)
+                exc_type, exc_args = self._break_constant(interp, const)
             raises[inst] = exc_type, exc_args
 
         return len(raises) > 0

@@ -160,6 +160,7 @@ floating-point and complex numbers.
 * :func:`numpy.vdot`
 * On Python 3.5 and above, the matrix multiplication operator from
   :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
+* :func:`numpy.linalg.inv`
 
 .. note::
    The implementation of these functions needs Scipy 0.16+ to be installed.
@@ -170,6 +171,8 @@ Other functions
 The following top-level functions are supported:
 
 * :func:`numpy.arange`
+* :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.diag`
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.eye`
@@ -190,7 +193,8 @@ The following top-level functions are supported:
 * :func:`numpy.zeros`
 * :func:`numpy.zeros_like`
 
-The following constructors are supported, only with a numeric input:
+The following constructors are supported, both with a numeric input (to
+construct a scalar) or a sequence (to construct an array):
 
 * :class:`numpy.bool_`
 * :class:`numpy.complex64`
@@ -209,6 +213,18 @@ The following constructors are supported, only with a numeric input:
 * :class:`numpy.uint64`
 * :class:`numpy.uintc`
 * :class:`numpy.uintp`
+
+Literal arrays
+--------------
+
+.. XXX should this part of the user's guide?
+
+Neither Python nor Numba has actual array literals, but you can construct
+arbitrary arrays by calling :func:`numpy.array` on a nested tuple::
+
+   a = numpy.array(((a, b, c), (d, e, f)))
+
+(nested lists are not yet supported by Numba)
 
 
 Modules

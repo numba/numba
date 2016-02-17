@@ -8,12 +8,13 @@ import numpy
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import jit, types
-from .support import MemoryLeakMixin
+from .support import MemoryLeakMixin, tag
 from .ctypes_usecases import *
 
 
 class TestCTypes(MemoryLeakMixin, unittest.TestCase):
 
+    @tag('important')
     def test_c_sin(self):
         pyfunc = use_c_sin
         cres = compile_isolated(pyfunc, [types.double])
@@ -68,7 +69,7 @@ class TestCTypes(MemoryLeakMixin, unittest.TestCase):
     def test_untyped_function(self):
         with self.assertRaises(TypeError) as raises:
             compile_isolated(use_c_untyped, [types.double])
-        self.assertIn("ctypes function 'exp' doesn't define its argument types",
+        self.assertIn("ctypes function '_numba_test_exp' doesn't define its argument types",
                       str(raises.exception))
 
     def test_python_call_back(self):
@@ -127,6 +128,7 @@ class TestCTypes(MemoryLeakMixin, unittest.TestCase):
         for got in outputs:
             self.assertEqual(expected, got)
 
+    @tag('important')
     def test_passing_array_ctypes_data(self):
         def pyfunc(arr):
             return c_take_array_ptr(arr.ctypes.data)

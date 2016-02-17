@@ -62,8 +62,8 @@ class RewriteArrayExprs(rewrites.Rewrite):
                         func_type = typemap[expr.func.name]
                         # Note: func_type can be a types.Dispatcher, which
                         #       doesn't have the `.template` attribute.
-                        if hasattr(func_type, 'template'):
-                            func_key = getattr(func_type.template, 'key', None)
+                        if isinstance(func_type, types.Function):
+                            func_key = func_type.typing_key
                             if isinstance(func_key, (ufunc, DUFunc)):
                                 # If so, match it as a potential subexpression.
                                 array_assigns[target_name] = instr
@@ -89,7 +89,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
         if ir_op in ('unary', 'binop'):
             return ir_expr.fn
         elif ir_op == 'call':
-            return self.typemap[ir_expr.func.name].template.key
+            return self.typemap[ir_expr.func.name].typing_key
         raise NotImplementedError(
             "Don't know how to find the operator for '{0}' expressions.".format(
                 ir_op))

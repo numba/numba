@@ -7,8 +7,8 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils, njit, errors, typeof
-from .support import TestCase
+from numba import types, utils, njit, errors, typeof, numpy_support
+from .support import TestCase, tag
 
 
 enable_pyobj_flags = Flags()
@@ -55,6 +55,15 @@ def slicing_1d_usecase6(a, stop):
     for i in range(b.shape[0]):
         total += b[i] * (i + 1)
     return total
+
+def slicing_1d_usecase7(a, start):
+    # Omitted stop with negative step (issue #1690)
+    b = a[start::-2]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
 
 def slicing_2d_usecase(a, start1, stop1, step1, start2, stop2, step2):
     # The index is a homogenous tuple of slices
@@ -258,20 +267,17 @@ class TestGetItem(TestCase):
     def test_1d_slicing4_npm(self):
         self.test_1d_slicing4(flags=Noflags)
 
-    def test_1d_slicing5(self, flags=enable_pyobj_flags):
-        pyfunc = slicing_1d_usecase5
+    def check_1d_slicing_with_arg(self, pyfunc, flags):
+        args = list(range(-9, 10))
+
         arraytype = types.Array(types.int32, 1, 'C')
         argtys = (arraytype, types.int32)
         cr = compile_isolated(pyfunc, argtys, flags=flags)
         cfunc = cr.entry_point
 
         a = np.arange(10, dtype='i4')
-
-        args = [3, 2, 10, 0, 5]
-
         for arg in args:
             self.assertEqual(pyfunc(a, arg), cfunc(a, arg))
-
 
         # Any
         arraytype = types.Array(types.int32, 1, 'A')
@@ -285,8 +291,26 @@ class TestGetItem(TestCase):
         for arg in args:
             self.assertEqual(pyfunc(a, arg), cfunc(a, arg))
 
+    def test_1d_slicing5(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase5
+        self.check_1d_slicing_with_arg(pyfunc, flags)
+
     def test_1d_slicing5_npm(self):
         self.test_1d_slicing5(flags=Noflags)
+
+    def test_1d_slicing6(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase6
+        self.check_1d_slicing_with_arg(pyfunc, flags)
+
+    def test_1d_slicing6_npm(self):
+        self.test_1d_slicing6(flags=Noflags)
+
+    def test_1d_slicing7(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase7
+        self.check_1d_slicing_with_arg(pyfunc, flags)
+
+    def test_1d_slicing7_npm(self):
+        self.test_1d_slicing7(flags=Noflags)
 
     def test_2d_slicing(self, flags=enable_pyobj_flags):
         """
@@ -427,6 +451,7 @@ class TestGetItem(TestCase):
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
+    @tag('important')
     def test_3d_slicing_npm(self):
         self.test_3d_slicing(flags=Noflags)
 
@@ -510,6 +535,7 @@ class TestGetItem(TestCase):
         a = np.arange(20, dtype='i4').reshape(5, 4)[::2]
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
 
+    @tag('important')
     def test_integer_indexing_1d_for_2d_npm(self):
         self.test_integer_indexing_1d_for_2d(flags=Noflags)
 
@@ -540,6 +566,7 @@ class TestGetItem(TestCase):
         self.assertEqual(pyfunc(a, 2, 2), cfunc(a, 2, 2))
         self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
 
+    @tag('important')
     def test_2d_integer_indexing_npm(self):
         self.test_2d_integer_indexing(flags=Noflags)
 
@@ -743,6 +770,44 @@ class TestSetItem(TestCase):
         with self.assertRaises(ValueError):
             cfunc(np.zeros_like(arg), arg, 0, 0, 1)
 
+    def check_1d_slicing_set_sequence(self, flags, seqty, seq):
+        """
+        Generic sequence to 1d slice assignment
+        """
+        pyfunc = slicing_1d_usecase_set
+        dest_type = types.Array(types.int32, 1, 'C')
+        argtys = (dest_type, seqty, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        N = 10
+        k = len(seq)
+        arg = np.arange(N, dtype=np.int32)
+        args = (seq, 1, -N + k + 1, 1)
+        expected = pyfunc(arg.copy(), *args)
+        got = cfunc(arg.copy(), *args)
+        self.assertPreciseEqual(expected, got)
+
+        if numpy_support.version != (1, 7):
+            # Numpy 1.7 doesn't always raise an error here (object mode)
+            args = (seq, 1, -N + k, 1)
+            with self.assertRaises(ValueError) as raises:
+                cfunc(arg.copy(), *args)
+
+    def test_1d_slicing_set_tuple(self, flags=enable_pyobj_flags):
+        """
+        Tuple to 1d slice assignment
+        """
+        self.check_1d_slicing_set_sequence(
+            flags, types.UniTuple(types.int16, 2), (8, -42))
+
+    def test_1d_slicing_set_list(self, flags=enable_pyobj_flags):
+        """
+        List to 1d slice assignment
+        """
+        self.check_1d_slicing_set_sequence(
+            flags, types.List(types.int16), [8, -42])
+
     def test_1d_slicing_broadcast(self, flags=enable_pyobj_flags):
         """
         scalar to 1d slice assignment
@@ -783,12 +848,19 @@ class TestSetItem(TestCase):
     def test_1d_slicing_set_npm(self):
         self.test_1d_slicing_set(flags=Noflags)
 
+    def test_1d_slicing_set_list_npm(self):
+        self.test_1d_slicing_set_list(flags=Noflags)
+
+    def test_1d_slicing_set_tuple_npm(self):
+        self.test_1d_slicing_set_tuple(flags=Noflags)
+
     def test_1d_slicing_broadcast_npm(self):
         self.test_1d_slicing_broadcast(flags=Noflags)
 
     def test_1d_slicing_add_npm(self):
         self.test_1d_slicing_add(flags=Noflags)
 
+    @tag('important')
     def test_2d_slicing_set(self, flags=enable_pyobj_flags):
         """
         2d to 2d slice assignment

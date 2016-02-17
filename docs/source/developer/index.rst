@@ -1,4 +1,6 @@
 
+.. _developer-manual:
+
 Developer Manual
 ================
 
@@ -6,8 +8,6 @@ Developer Manual
 
    contributing.rst
    architecture.rst
-   extending-frontend.rst
-   extending-backend.rst
    dispatching.rst
    generators.rst
    numba-runtime.rst

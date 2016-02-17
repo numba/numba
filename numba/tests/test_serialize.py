@@ -7,7 +7,7 @@ import sys
 from numba import unittest_support as unittest
 from numba.errors import TypingError
 from numba.targets import registry
-from .support import TestCase
+from .support import TestCase, tag
 from .serialize_usecases import *
 
 
@@ -18,7 +18,7 @@ class TestDispatcherPickling(TestCase):
             meth(proto, *args, **kwargs)
 
     def simulate_fresh_target(self):
-        dispatcher_cls = registry.target_registry['cpu']
+        dispatcher_cls = registry.dispatcher_registry['cpu']
         # Simulate fresh targetdescr
         dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)()
 
@@ -37,17 +37,20 @@ class TestDispatcherPickling(TestCase):
         new_func = pickle.loads(pickled)
         check_result(new_func)
 
+    @tag('important')
     def test_call_with_sig(self):
         self.run_with_protocols(self.check_call, add_with_sig, 5, (1, 4))
         # Compilation has been disabled => float inputs will be coerced to int
         self.run_with_protocols(self.check_call, add_with_sig, 5, (1.2, 4.2))
 
+    @tag('important')
     def test_call_without_sig(self):
         self.run_with_protocols(self.check_call, add_without_sig, 5, (1, 4))
         self.run_with_protocols(self.check_call, add_without_sig, 5.5, (1.2, 4.3))
         # Object mode is enabled
         self.run_with_protocols(self.check_call, add_without_sig, "abc", ("a", "bc"))
 
+    @tag('important')
     def test_call_nopython(self):
         self.run_with_protocols(self.check_call, add_nopython, 5.5, (1.2, 4.3))
         # Object mode is disabled
@@ -97,6 +100,13 @@ class TestDispatcherPickling(TestCase):
         self.run_with_protocols(self.check_call, get_renamed_module,
                                 expected, (0.0,))
 
+    def test_call_generated(self):
+        self.run_with_protocols(self.check_call, generated_add,
+                                46, (1, 2))
+        self.run_with_protocols(self.check_call, generated_add,
+                                1j + 7, (1j, 2))
+
+    @tag('important')
     def test_other_process(self):
         """
         Check that reconstructing doesn't depend on resources already

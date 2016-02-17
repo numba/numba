@@ -279,8 +279,7 @@ def unbox_slice(typ, obj, c):
     Convert object *obj* to a native slice structure.
     """
     from . import slicing
-    ok, start, stop, step = \
-        c.pyapi.slice_as_ints(obj, slicing.get_defaults(c.context))
+    ok, start, stop, step = c.pyapi.slice_as_ints(obj)
     sli = slicing.make_slice(c.context, c.builder, typ)
     sli.start = start
     sli.stop = stop
@@ -396,29 +395,46 @@ def unbox_tuple(typ, obj, c):
     n = len(typ)
     values = []
     cleanups = []
-    is_error = cgutils.false_bit
+    lty = c.context.get_value_type(typ)
+
+    is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+    value_ptr = cgutils.alloca_once(c.builder, lty)
+
+    # Issue #1638: need to check the tuple size
+    actual_size = c.pyapi.tuple_size(obj)
+    size_matches = c.builder.icmp_unsigned('==', actual_size,
+                                            ir.Constant(actual_size.type, n))
+    with c.builder.if_then(c.builder.not_(size_matches), likely=False):
+        c.pyapi.err_format(
+            "PyExc_ValueError",
+            "size mismatch for tuple, expected %d element(s) but got %%zd" % (n,),
+            actual_size)
+        c.builder.store(cgutils.true_bit, is_error_ptr)
+
+    # We unbox the items even if not `size_matches`, to avoid issues with
+    # the generated IR (instruction doesn't dominate all uses)
     for i, eltype in enumerate(typ):
         elem = c.pyapi.tuple_getitem(obj, i)
         native = c.unbox(eltype, elem)
         values.append(native.value)
-        is_error = c.builder.or_(is_error, native.is_error)
+        with c.builder.if_then(native.is_error, likely=False):
+            c.builder.store(cgutils.true_bit, is_error_ptr)
         if native.cleanup is not None:
             cleanups.append(native.cleanup)
 
+    value = c.context.make_tuple(c.builder, typ, values)
+    c.builder.store(value, value_ptr)
+
     if cleanups:
-        def cleanup():
-            for func in reversed(cleanups):
-                func()
+        with c.builder.if_then(size_matches, likely=True):
+            def cleanup():
+                for func in reversed(cleanups):
+                    func()
     else:
         cleanup = None
 
-    # XXX should we use context.make_tuple()
-    if isinstance(typ, types.UniTuple):
-        value = cgutils.pack_array(c.builder, values,
-                                   c.context.get_value_type(typ.dtype))
-    else:
-        value = cgutils.make_anonymous_struct(c.builder, values)
-    return NativeValue(value, is_error=is_error, cleanup=cleanup)
+    return NativeValue(c.builder.load(value_ptr), cleanup=cleanup,
+                       is_error=c.builder.load(is_error_ptr))
 
 
 @box(types.List)
@@ -454,6 +470,57 @@ def box_list(typ, val, c):
     return c.builder.load(res)
 
 
+def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
+    """
+    Construct a new native list from a Python list.
+    """
+    # Allocate a new native list
+    ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
+    with c.builder.if_else(ok, likely=True) as (if_ok, if_not_ok):
+        with if_ok:
+            list.size = size
+            zero = ir.Constant(size.type, 0)
+            with c.builder.if_then(c.builder.icmp_signed('>', size, zero),
+                                   likely=True):
+                # Traverse Python list and unbox objects into native list
+                expected_typobj = c.pyapi.get_type(c.pyapi.list_getitem(obj, zero))
+                with cgutils.for_range(c.builder, size) as loop:
+                    itemobj = c.pyapi.list_getitem(obj, loop.index)
+                    typobj = c.pyapi.get_type(itemobj)
+
+                    # Mandate that objects all have the same exact type
+                    type_mismatch = c.builder.icmp_signed('!=', typobj,
+                                                          expected_typobj)
+                    with c.builder.if_then(type_mismatch, likely=False):
+                        c.builder.store(cgutils.true_bit, errorptr)
+                        c.pyapi.err_set_string("PyExc_TypeError",
+                                               "can't unbox heterogenous list")
+                        loop.do_break()
+
+                    # XXX we don't call native cleanup for each
+                    # list element, since that would require keeping
+                    # of which unboxings have been successful.
+                    native = c.unbox(typ.dtype, itemobj)
+                    with c.builder.if_then(native.is_error, likely=False):
+                        c.builder.store(cgutils.true_bit, errorptr)
+                    list.setitem(loop.index, native.value)
+
+            if typ.reflected:
+                list.parent = obj
+            # Stuff meminfo pointer into the Python object for
+            # later reuse.
+            c.pyapi.list_set_private_data(obj, list.meminfo)
+            list.set_dirty(False)
+            c.builder.store(list.value, listptr)
+
+        with if_not_ok:
+            c.builder.store(cgutils.true_bit, errorptr)
+
+    # If an error occurred, drop the whole native list
+    with c.builder.if_then(c.builder.load(errorptr)):
+        c.context.nrt_decref(c.builder, typ, list.value)
+
+
 @unbox(types.List)
 def unbox_list(typ, obj, c):
     """
@@ -483,32 +550,7 @@ def unbox_list(typ, obj, c):
             c.builder.store(list.value, listptr)
 
         with otherwise:
-            # Allocate a new native list
-            ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
-            with c.builder.if_else(ok, likely=True) as (if_ok, if_not_ok):
-                with if_ok:
-                    list.size = size
-                    with cgutils.for_range(c.builder, size) as loop:
-                        itemobj = c.pyapi.list_getitem(obj, loop.index)
-                        # XXX we don't call native cleanup for each
-                        # list element, since that would require keeping
-                        # of which unboxings have been successful.
-                        native = c.unbox(typ.dtype, itemobj)
-                        with c.builder.if_then(native.is_error, likely=False):
-                            c.builder.store(cgutils.true_bit, errorptr)
-                        list.setitem(loop.index, native.value)
-                    if typ.reflected:
-                        list.parent = obj
-                    # Stuff meminfo pointer into the Python object for
-                    # later reuse.
-                    c.pyapi.list_set_private_data(obj, list.meminfo)
-                    c.builder.store(list.value, listptr)
-                with if_not_ok:
-                    c.builder.store(cgutils.true_bit, errorptr)
-
-            # If an error occurred, drop the whole native list
-            with c.builder.if_then(c.builder.load(errorptr)):
-                c.context.nrt_decref(c.builder, typ, list.value)
+            _python_list_to_native(typ, obj, c, size, listptr, errorptr)
 
     def cleanup():
         # Clean up the stuffed pointer, as the meminfo is now invalid.

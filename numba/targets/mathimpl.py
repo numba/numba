@@ -9,14 +9,14 @@ import sys
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
 
-from numba.targets.imputils import implement, Registry, impl_ret_untracked
+from numba.targets.imputils import Registry, impl_ret_untracked
 from numba import types, cgutils, utils
 from numba.typing import signature
 from . import builtins
 
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 
 # Helpers, shared with cmathimpl.
@@ -49,11 +49,9 @@ def is_finite(builder, val):
     """
     Return a condition testing whether *val* is a finite.
     """
-    pos_inf = lc.Constant.real(val.type, float("+inf"))
-    neg_inf = lc.Constant.real(val.type, float("-inf"))
-    isnotposinf = builder.fcmp(lc.FCMP_ONE, val, pos_inf)
-    isnotneginf = builder.fcmp(lc.FCMP_ONE, val, neg_inf)
-    return builder.and_(isnotposinf, isnotneginf)
+    # is_finite(x)  <=>  x - x != NaN
+    val_minus_val = builder.fsub(val, val)
+    return builder.fcmp_ordered('==', val_minus_val, val_minus_val)
 
 def f64_as_int64(builder, val):
     """
@@ -90,6 +88,14 @@ def negate_real(builder, val):
     # The negative zero forces LLVM to handle signed zeros properly.
     return builder.fsub(lc.Constant.real(val.type, -0.0), val)
 
+def call_fp_intrinsic(builder, name, args):
+    """
+    Call a LLVM intrinsic floating-point operation.
+    """
+    mod = builder.module
+    intr = lc.Function.intrinsic(mod, name, [a.type for a in args])
+    return builder.call(intr, args)
+
 
 def _unary_int_input_wrapper_impl(wrapped_impl):
     """
@@ -108,33 +114,17 @@ def _unary_int_input_wrapper_impl(wrapped_impl):
 
     return implementer
 
-def unary_math_int_impl(fn, f64impl):
-    impl = _unary_int_input_wrapper_impl(f64impl)
-    for input_type in [types.intp, types.uintp, types.int64, types.uint64]:
-        register(implement(fn, input_type)(impl))
+def unary_math_int_impl(fn, float_impl):
+    impl = _unary_int_input_wrapper_impl(float_impl)
+    lower(fn, types.Integer)(impl)
 
 def unary_math_intr(fn, intrcode):
-    @register
-    @implement(fn, types.float32)
-    def f32impl(context, builder, sig, args):
-        [val] = args
-        mod = builder.module
-        lty = context.get_value_type(types.float32)
-        intr = lc.Function.intrinsic(mod, intrcode, [lty])
-        res = builder.call(intr, args)
+    @lower(fn, types.Float)
+    def float_impl(context, builder, sig, args):
+        res = call_fp_intrinsic(builder, intrcode, args)
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
-    @register
-    @implement(fn, types.float64)
-    def f64impl(context, builder, sig, args):
-        [val] = args
-        mod = builder.module
-        lty = context.get_value_type(types.float64)
-        intr = lc.Function.intrinsic(mod, intrcode, [lty])
-        res = builder.call(intr, args)
-        return impl_ret_untracked(context, builder, sig.return_type, res)
-
-    unary_math_int_impl(fn, f64impl)
+    unary_math_int_impl(fn, float_impl)
 
 
 def _float_input_unary_math_extern_impl(extern_func, input_type, restype=None):
@@ -166,8 +156,8 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
     f_restype = types.int64 if int_restype else None
     f32impl = _float_input_unary_math_extern_impl(f32extern, types.float32, f_restype)
     f64impl = _float_input_unary_math_extern_impl(f64extern, types.float64, f_restype)
-    register(implement(fn, types.float32)(f32impl))
-    register(implement(fn, types.float64)(f64impl))
+    lower(fn, types.float32)(f32impl)
+    lower(fn, types.float64)(f64impl)
 
     if int_restype:
         # If asked for an integral return type, we choose the input type
@@ -175,7 +165,7 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
         for input_type in [types.intp, types.uintp, types.int64, types.uint64]:
             impl = _unary_int_input_wrapper_impl(
                 _float_input_unary_math_extern_impl(f64extern, types.float64, input_type))
-            register(implement(fn, input_type)(impl))
+            lower(fn, input_type)(impl)
     else:
         unary_math_int_impl(fn, f64impl)
 
@@ -218,79 +208,57 @@ unary_math_extern(math.sqrt, "sqrtf", "sqrt")
 unary_math_extern(math.trunc, "truncf", "trunc", True)
 
 
-@register
-@implement(math.isnan, types.Float)
+@lower(math.isnan, types.Float)
 def isnan_float_impl(context, builder, sig, args):
     [val] = args
     res = is_nan(builder, val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@register
-@implement(math.isnan, types.Integer)
+@lower(math.isnan, types.Integer)
 def isnan_int_impl(context, builder, sig, args):
     res = cgutils.false_bit
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement(math.isinf, types.Float)
+@lower(math.isinf, types.Float)
 def isinf_float_impl(context, builder, sig, args):
     [val] = args
     res = is_inf(builder, val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@register
-@implement(math.isinf, types.Integer)
+@lower(math.isinf, types.Integer)
 def isinf_int_impl(context, builder, sig, args):
     res = cgutils.false_bit
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 if utils.PYVERSION >= (3, 2):
-    @register
-    @implement(math.isfinite, types.Float)
+    @lower(math.isfinite, types.Float)
     def isfinite_float_impl(context, builder, sig, args):
         [val] = args
         res = is_finite(builder, val)
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
-    @register
-    @implement(math.isfinite, types.Integer)
+    @lower(math.isfinite, types.Integer)
     def isfinite_int_impl(context, builder, sig, args):
         res = cgutils.true_bit
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-# XXX copysign should use the corresponding LLVM intrinsic
-
-@register
-@implement(math.copysign, types.float32, types.float32)
-def copysign_f32_impl(context, builder, sig, args):
-    a = f32_as_int32(builder, args[0])
-    b = f32_as_int32(builder, args[1])
-    a = builder.and_(a, lc.Constant.int(a.type, FLOAT_ABS_MASK))
-    b = builder.and_(b, lc.Constant.int(b.type, FLOAT_SIGN_MASK))
-    res = builder.or_(a, b)
-    res = int32_as_f32(builder, res)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@register
-@implement(math.copysign, types.float64, types.float64)
-def copysign_f64_impl(context, builder, sig, args):
-    a = f64_as_int64(builder, args[0])
-    b = f64_as_int64(builder, args[1])
-    a = builder.and_(a, lc.Constant.int(a.type, DOUBLE_ABS_MASK))
-    b = builder.and_(b, lc.Constant.int(b.type, DOUBLE_SIGN_MASK))
-    res = builder.or_(a, b)
-    res =  int64_as_f64(builder, res)
+@lower(math.copysign, types.Float, types.Float)
+def copysign_float_impl(context, builder, sig, args):
+    lty = args[0].type
+    mod = builder.module
+    fn = mod.get_or_insert_function(lc.Type.function(lty, (lty, lty)),
+                                    'llvm.copysign.%s' % lty.intrinsic_name)
+    res = builder.call(fn, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 # -----------------------------------------------------------------------------
 
 
-@register
-@implement(math.frexp, types.Float)
+@lower(math.frexp, types.Float)
 def frexp_impl(context, builder, sig, args):
     val, = args
     fltty = context.get_data_type(sig.args[0])
@@ -307,8 +275,7 @@ def frexp_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement(math.ldexp, types.Float, types.intc)
+@lower(math.ldexp, types.Float, types.intc)
 def ldexp_impl(context, builder, sig, args):
     val, exp = args
     fltty, intty = map(context.get_data_type, sig.args)
@@ -325,8 +292,7 @@ def ldexp_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-@register
-@implement(math.atan2, types.int64, types.int64)
+@lower(math.atan2, types.int64, types.int64)
 def atan2_s64_impl(context, builder, sig, args):
     [y, x] = args
     y = builder.sitofp(y, Type.double())
@@ -334,8 +300,7 @@ def atan2_s64_impl(context, builder, sig, args):
     fsig = signature(types.float64, types.float64, types.float64)
     return atan2_f64_impl(context, builder, fsig, (y, x))
 
-@register
-@implement(math.atan2, types.uint64, types.uint64)
+@lower(math.atan2, types.uint64, types.uint64)
 def atan2_u64_impl(context, builder, sig, args):
     [y, x] = args
     y = builder.uitofp(y, Type.double())
@@ -344,8 +309,7 @@ def atan2_u64_impl(context, builder, sig, args):
     return atan2_f64_impl(context, builder, fsig, (y, x))
 
 
-@register
-@implement(math.atan2, types.float32, types.float32)
+@lower(math.atan2, types.float32, types.float32)
 def atan2_f32_impl(context, builder, sig, args):
     assert len(args) == 2
     mod = builder.module
@@ -354,8 +318,7 @@ def atan2_f32_impl(context, builder, sig, args):
     res = builder.call(fn, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@register
-@implement(math.atan2, types.float64, types.float64)
+@lower(math.atan2, types.float64, types.float64)
 def atan2_f64_impl(context, builder, sig, args):
     assert len(args) == 2
     mod = builder.module
@@ -370,8 +333,7 @@ def atan2_f64_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-@register
-@implement(math.hypot, types.int64, types.int64)
+@lower(math.hypot, types.int64, types.int64)
 def hypot_s64_impl(context, builder, sig, args):
     [x, y] = args
     y = builder.sitofp(y, Type.double())
@@ -380,8 +342,7 @@ def hypot_s64_impl(context, builder, sig, args):
     res = hypot_float_impl(context, builder, fsig, (x, y))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@register
-@implement(math.hypot, types.uint64, types.uint64)
+@lower(math.hypot, types.uint64, types.uint64)
 def hypot_u64_impl(context, builder, sig, args):
     [x, y] = args
     y = builder.sitofp(y, Type.double())
@@ -391,8 +352,7 @@ def hypot_u64_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@register
-@implement(math.hypot, types.Float, types.Float)
+@lower(math.hypot, types.Float, types.Float)
 def hypot_float_impl(context, builder, sig, args):
     def hypot(x, y):
         if math.isinf(x):
@@ -407,63 +367,33 @@ def hypot_float_impl(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-@register
-@implement(math.radians, types.float64)
-def radians_f64_impl(context, builder, sig, args):
+@lower(math.radians, types.Float)
+def radians_float_impl(context, builder, sig, args):
     [x] = args
-    rate = builder.fdiv(x, context.get_constant(types.float64, 360))
-    pi = context.get_constant(types.float64, math.pi)
-    two = context.get_constant(types.float64, 2)
-    twopi = builder.fmul(pi, two)
-    res = builder.fmul(rate, twopi)
+    coef = context.get_constant(sig.return_type, math.pi / 180)
+    res = builder.fmul(x, coef)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@register
-@implement(math.radians, types.float32)
-def radians_f32_impl(context, builder, sig, args):
-    [x] = args
-    rate = builder.fdiv(x, context.get_constant(types.float32, 360))
-    pi = context.get_constant(types.float32, math.pi)
-    two = context.get_constant(types.float32, 2)
-    twopi = builder.fmul(pi, two)
-    res = builder.fmul(rate, twopi)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-unary_math_int_impl(math.radians, radians_f64_impl)
+unary_math_int_impl(math.radians, radians_float_impl)
 
 # -----------------------------------------------------------------------------
 
-@register
-@implement(math.degrees, types.float64)
-def degrees_f64_impl(context, builder, sig, args):
+@lower(math.degrees, types.Float)
+def degrees_float_impl(context, builder, sig, args):
     [x] = args
-    full = context.get_constant(types.float64, 360)
-    pi = context.get_constant(types.float64, math.pi)
-    two = context.get_constant(types.float64, 2)
-    twopi = builder.fmul(pi, two)
-    res = builder.fmul(builder.fdiv(x, twopi), full)
+    coef = context.get_constant(sig.return_type, 180 / math.pi)
+    res = builder.fmul(x, coef)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@register
-@implement(math.degrees, types.float32)
-def degrees_f32_impl(context, builder, sig, args):
-    [x] = args
-    full = context.get_constant(types.float32, 360)
-    pi = context.get_constant(types.float32, math.pi)
-    two = context.get_constant(types.float32, 2)
-    twopi = builder.fmul(pi, two)
-    res = builder.fdiv(builder.fmul(x, full), twopi)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-unary_math_int_impl(math.degrees, degrees_f64_impl)
+unary_math_int_impl(math.degrees, degrees_float_impl)
 
 # -----------------------------------------------------------------------------
 
 for ty in types.unsigned_domain:
-    register(implement(math.pow, types.float64, ty)(builtins.int_power_impl))
+    lower(math.pow, types.float64, ty)(builtins.int_power_impl)
 for ty in types.signed_domain:
-    register(implement(math.pow, types.float64, ty)(builtins.int_power_impl))
+    lower(math.pow, types.float64, ty)(builtins.int_power_impl)
 
 ty = types.Float
-register(implement(math.pow, ty, ty)(builtins.real_power_impl))
+lower(math.pow, ty, ty)(builtins.real_power_impl)
 

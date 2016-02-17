@@ -202,6 +202,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="Py_DecRef")
         self.builder.call(fn, [obj])
 
+    def get_type(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="numba_py_type")
+        return self.builder.call(fn, [obj])
+
     #
     # Argument unpacking
     #
@@ -254,6 +259,15 @@ class PythonAPI(object):
         if isinstance(msg, str):
             msg = self.context.insert_const_string(self.module, msg)
         return self.builder.call(fn, (exctype, msg))
+
+    def err_format(self, exctype, msg, *format_args):
+        fnty = Type.function(Type.void(), [self.pyobj, self.cstring], var_arg=True)
+        fn = self._get_function(fnty, name="PyErr_Format")
+        if isinstance(exctype, str):
+            exctype = self.get_c_object(exctype)
+        if isinstance(msg, str):
+            msg = self.context.insert_const_string(self.module, msg)
+        return self.builder.call(fn, (exctype, msg) + tuple(format_args))
 
     def raise_object(self, exc=None):
         """
@@ -649,16 +663,16 @@ class PythonAPI(object):
     # Concrete slice API
     #
 
-    def slice_as_ints(self, obj, defaults):
+    def slice_as_ints(self, obj):
         """
         Read the members of a slice of integers.
+
         Returns a (ok, start, stop, step) tuple where ok is a boolean and
         the following members are pointer-sized ints.
         """
-        defaults = [ir.Constant(self.py_ssize_t, v) for v in defaults]
-        pstart = cgutils.alloca_once_value(self.builder, defaults[0])
-        pstop = cgutils.alloca_once_value(self.builder, defaults[1])
-        pstep = cgutils.alloca_once_value(self.builder, defaults[2])
+        pstart = cgutils.alloca_once(self.builder, self.py_ssize_t)
+        pstop = cgutils.alloca_once(self.builder, self.py_ssize_t)
+        pstep = cgutils.alloca_once(self.builder, self.py_ssize_t)
         fnty = Type.function(Type.int(),
                              [self.pyobj] + [self.py_ssize_t.as_pointer()] * 3)
         fn = self._get_function(fnty, name="numba_unpack_slice")

@@ -4,7 +4,7 @@ from collections import namedtuple
 
 from numba import types
 from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                    builtin, builtin_attr, signature,
+                                    infer, infer_getattr, signature,
                                     bound_function)
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
@@ -146,7 +146,7 @@ def get_array_index_type(ary, idx):
     return Indexing(idx, res, advanced)
 
 
-@builtin
+@infer
 class GetItemBuffer(AbstractTemplate):
     key = "getitem"
 
@@ -157,7 +157,7 @@ class GetItemBuffer(AbstractTemplate):
         if out is not None:
             return signature(out.result, ary, out.index)
 
-@builtin
+@infer
 class SetItemBuffer(AbstractTemplate):
     key = "setitem"
 
@@ -176,17 +176,29 @@ class SetItemBuffer(AbstractTemplate):
         res = out.result
         if isinstance(res, types.Array):
             # Indexing produces an array
-            if not isinstance(val, types.Array):
-                # Allow scalar broadcasting
-                res = res.dtype
-            elif (val.ndim == res.ndim and
-                  self.context.can_convert(val.dtype, res.dtype)):
-                # Allow assignement of same-dimensionality compatible-dtype array
-                res = val
+            if isinstance(val, types.Array):
+                if (val.ndim == res.ndim and
+                    self.context.can_convert(val.dtype, res.dtype)):
+                    # Allow assignement of same-dimensionality compatible-dtype array
+                    res = val
+                else:
+                    # NOTE: array broadcasting is unsupported
+                    return
+            elif isinstance(val, types.Sequence):
+                if (res.ndim == 1 and
+                    self.context.can_convert(val.dtype, res.dtype)):
+                    # Allow assignement of sequence to 1d array
+                    res = val
+                else:
+                    # NOTE: sequence-to-array broadcasting is unsupported
+                    return
             else:
-                # Unexpected dimensionality of assignment source
-                # (array broadcasting is unsupported)
-                return
+                # Allow scalar broadcasting
+                if self.context.can_convert(val, res.dtype):
+                    res = res.dtype
+                else:
+                    # Incompatible scalar type
+                    return
         elif not isinstance(val, types.Array):
             # Single item assignment
             res = val
@@ -205,7 +217,7 @@ def normalize_shape(shape):
         return shape
 
 
-@builtin_attr
+@infer_getattr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
 
@@ -332,7 +344,7 @@ class ArrayAttribute(AttributeTemplate):
                 return ary.copy(dtype=ary.dtype.typeof(attr), layout='A')
 
 
-@builtin
+@infer
 class StaticGetItemArray(AbstractTemplate):
     key = "static_getitem"
 
@@ -345,7 +357,7 @@ class StaticGetItemArray(AbstractTemplate):
                 return ary.copy(dtype=ary.dtype.typeof(idx), layout='A')
 
 
-@builtin_attr
+@infer_getattr
 class RecordAttribute(AttributeTemplate):
     key = types.Record
 
@@ -354,7 +366,7 @@ class RecordAttribute(AttributeTemplate):
         assert ret
         return ret
 
-@builtin
+@infer
 class StaticGetItemRecord(AbstractTemplate):
     key = "static_getitem"
 
@@ -366,7 +378,7 @@ class StaticGetItemRecord(AbstractTemplate):
             assert ret
             return ret
 
-@builtin
+@infer
 class StaticSetItemRecord(AbstractTemplate):
     key = "static_setitem"
 
@@ -379,7 +391,7 @@ class StaticSetItemRecord(AbstractTemplate):
                 return signature(types.void, record, types.Const(idx), value)
 
 
-@builtin_attr
+@infer_getattr
 class ArrayCTypesAttribute(AttributeTemplate):
     key = types.ArrayCTypes
 
@@ -387,7 +399,7 @@ class ArrayCTypesAttribute(AttributeTemplate):
         return types.uintp
 
 
-@builtin_attr
+@infer_getattr
 class ArrayFlagsAttribute(AttributeTemplate):
     key = types.ArrayFlags
 
@@ -401,7 +413,7 @@ class ArrayFlagsAttribute(AttributeTemplate):
         return types.boolean
 
 
-@builtin_attr
+@infer_getattr
 class NestedArrayAttribute(ArrayAttribute):
     key = types.NestedArray
 
@@ -415,6 +427,8 @@ def _expand_integer(ty):
             return max(types.intp, ty)
         else:
             return max(types.uintp, ty)
+    elif isinstance(ty, types.Boolean):
+        return types.intp
     else:
         return ty
 
@@ -435,7 +449,7 @@ def generic_expand_cumulative(self, args, kws):
 def generic_hetero_real(self, args, kws):
     assert not args
     assert not kws
-    if self.this.dtype in types.integer_domain:
+    if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
         return signature(types.float64, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
@@ -474,7 +488,7 @@ install_array_method("argmin", generic_index)
 install_array_method("argmax", generic_index)
 
 
-@builtin
+@infer
 class CmpOpEqArray(AbstractTemplate):
     key = '=='
 

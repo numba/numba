@@ -19,7 +19,7 @@ import itertools
 import traceback
 
 from numba import ir, types, utils, config, six
-from .errors import TypingError
+from .errors import TypingError, UntypedAttributeError
 
 
 class TypeVar(object):
@@ -107,17 +107,20 @@ class ConstraintNetwork(object):
         """
         errors = []
         for constraint in self.constraints:
-            try:
-                constraint(typeinfer)
-            except TypingError as e:
-                errors.append(e)
-            except Exception:
-                msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
-                e = TypingError(msg.format(con=constraint,
-                                           err=traceback.format_exc(),
-                                           sep='--%<' +'-' * 65),
-                                loc=constraint.loc)
-                errors.append(e)
+            loc = constraint.loc
+            with typeinfer.warnings.catch_warnings(filename=loc.filename,
+                                                   lineno=loc.line):
+                try:
+                    constraint(typeinfer)
+                except TypingError as e:
+                    errors.append(e)
+                except Exception:
+                    msg = "Internal error at {con}:\n{sep}\n{err}{sep}\n"
+                    e = TypingError(msg.format(con=constraint,
+                                               err=traceback.format_exc(),
+                                               sep='--%<' +'-' * 65),
+                                    loc=constraint.loc)
+                    errors.append(e)
         return errors
 
 
@@ -140,6 +143,24 @@ class Propagate(object):
     def refine(self, typeinfer, target_type):
         # Do not back-propagate to locked variables (e.g. constants)
         typeinfer.add_type(self.src, target_type, unless_locked=True)
+
+
+class ArgConstraint(object):
+
+    def __init__(self, dst, src, loc):
+        self.dst = dst
+        self.src = src
+        self.loc = loc
+
+    def __call__(self, typeinfer):
+        typevars = typeinfer.typevars
+        src = typevars[self.src]
+        if not src.defined:
+            return
+        ty = src.getone()
+        if isinstance(ty, types.Omitted):
+            ty = typeinfer.context.resolve_value_type(ty.value)
+        typeinfer.add_type(self.dst, ty)
 
 
 class BuildTupleConstraint(object):
@@ -323,8 +344,7 @@ class CallConstraint(object):
             and sig.recvr != fnty.this):
             refined_this = context.unify_pairs(sig.recvr, fnty.this)
             if refined_this.is_precise():
-                refined_fnty = types.BoundFunction(fnty.template,
-                                                   this=refined_this)
+                refined_fnty = fnty.copy(this=refined_this)
                 typeinfer.propagate_refined_type(self.func, refined_fnty)
 
         self.signature = sig
@@ -350,12 +370,9 @@ class GetAttrConstraint(object):
         typevars = typeinfer.typevars
         valtys = typevars[self.value.name].get()
         for ty in valtys:
-            try:
-                attrty = typeinfer.context.resolve_getattr(value=ty, attr=self.attr)
-            except KeyError:
-                args = (self.attr, ty, self.value.name, self.inst)
-                msg = "Unknown attribute '%s' for %s %s %s" % args
-                raise TypingError(msg, loc=self.inst.loc)
+            attrty = typeinfer.context.resolve_getattr(ty, self.attr)
+            if attrty is None:
+                raise UntypedAttributeError(ty, self.attr, loc=self.inst.loc)
             else:
                 typeinfer.add_type(self.target, attrty)
         typeinfer.refine_map[self.target] = self
@@ -499,7 +516,7 @@ class TypeInferer(object):
     Operates on block that shares the same ir.Scope.
     """
 
-    def __init__(self, context, interp):
+    def __init__(self, context, interp, warnings):
         self.context = context
         self.blocks = interp.blocks
         self.generator_info = interp.generator_info
@@ -507,6 +524,7 @@ class TypeInferer(object):
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constraints = ConstraintNetwork()
+        self.warnings = warnings
 
         # { index: mangled name }
         self.arg_names = {}
@@ -573,8 +591,10 @@ class TypeInferer(object):
         tv = self.typevars[var]
         if unless_locked and tv.locked:
             return
+        oldty = tv.type
         unified = tv.add_type(tp)
-        self.propagate_refined_type(var, unified)
+        if unified != oldty:
+            self.propagate_refined_type(var, unified)
 
     def add_calltype(self, inst, signature):
         self.calltypes[inst] = signature
@@ -747,9 +767,9 @@ class TypeInferer(object):
 
     def typeof_arg(self, inst, target, arg):
         src_name = self._mangle_arg_name(arg.name)
-        self.constraints.append(Propagate(dst=target.name,
-                                          src=src_name,
-                                          loc=inst.loc))
+        self.constraints.append(ArgConstraint(dst=target.name,
+                                              src=src_name,
+                                              loc=inst.loc))
 
     def typeof_const(self, inst, target, const):
         self.lock_type(target.name, self.resolve_value_type(inst, const))

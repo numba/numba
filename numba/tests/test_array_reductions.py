@@ -7,7 +7,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import typeof
 from numba.compiler import compile_isolated
-from .support import TestCase, skip_on_numpy_16, MemoryLeakMixin
+from .support import TestCase, skip_on_numpy_16, MemoryLeakMixin, tag
 
 
 def array_cumprod(arr):
@@ -81,9 +81,19 @@ def array_median_global(arr):
 
 
 def base_test_arrays(dtype):
-    a1 = np.arange(10, dtype=dtype) + 1
-    a2 = np.arange(10, dtype=dtype).reshape(2, 5) + 1
-    a3 = (np.arange(60, dtype=dtype))[::2].reshape((2, 5, 3), order='A')
+    if dtype == np.bool_:
+        def factory(n):
+            assert n % 2 == 0
+            return np.bool_([0, 1] * (n // 2))
+    else:
+        def factory(n):
+            return np.arange(n, dtype=dtype) + 1
+
+    a1 = factory(10)
+    a2 = factory(10).reshape(2, 5)
+    # The prod() of this array fits in a 32-bit int
+    a3 = (factory(12))[::-1].reshape((2, 3, 2), order='A')
+    assert not (a3.flags.c_contiguous or a3.flags.f_contiguous)
 
     return [a1, a2, a3]
 
@@ -94,6 +104,8 @@ def full_test_arrays(dtype):
     if dtype == np.float32:
         array_list += [a / 10 for a in array_list]
 
+    for a in array_list:
+        assert a.dtype == np.dtype(dtype)
     return array_list
 
 def run_comparative(compare_func, test_array):
@@ -110,41 +122,49 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     Test array reduction methods and functions such as .sum(), .max(), etc.
     """
 
+    @tag('important')
     def test_sum_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_sum, arr)
         self.assertPreciseEqual(npr, nbr)
 
+    @tag('important')
     def test_mean_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_mean, arr)
         self.assertPreciseEqual(npr, nbr, prec="double")
 
+    @tag('important')
     def test_var_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_var, arr)
         self.assertPreciseEqual(npr, nbr, prec="double")
 
+    @tag('important')
     def test_std_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_std, arr)
         self.assertPreciseEqual(npr, nbr, prec="double")
 
+    @tag('important')
     def test_min_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_min, arr)
         self.assertPreciseEqual(npr, nbr)
 
+    @tag('important')
     def test_max_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_max, arr)
         self.assertPreciseEqual(npr, nbr)
 
+    @tag('important')
     def test_argmin_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_argmin, arr)
         self.assertPreciseEqual(npr, nbr)
 
+    @tag('important')
     def test_argmax_basic(self):
         arr = np.arange(100)
         npr, nbr = run_comparative(array_argmax, arr)
@@ -232,12 +252,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         expected, got = run_comparative(pyfunc, arr)
         self.assertPreciseEqual(got, expected)
 
+    @tag('important')
     def test_array_cumsum(self):
         self.check_cumulative(array_cumsum)
 
     def test_array_cumsum_global(self):
         self.check_cumulative(array_cumsum_global)
 
+    @tag('important')
     def test_array_cumprod(self):
         self.check_cumulative(array_cumprod)
 
@@ -362,11 +384,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_max, array_max_global,
                            array_argmin, array_argmin_global,
                            array_argmax, array_argmax_global]
-        dtypes_to_test = [np.int32, np.float32]
+        dtypes_to_test = [np.int32, np.float32, np.bool_]
 
         # Install tests on class
         for dt in dtypes_to_test:
-            for red_func, test_array in product(reduction_funcs, full_test_arrays(dt)):
+            test_arrays = full_test_arrays(dt)
+            for red_func, test_array in product(reduction_funcs, test_arrays):
                 # Create the name for the test function
                 test_name = "test_{0}_{1}_{2}d".format(red_func.__name__, test_array.dtype.name, test_array.ndim)
 

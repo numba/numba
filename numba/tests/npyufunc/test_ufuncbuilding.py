@@ -5,10 +5,11 @@ import sys
 import numpy
 
 from numba import config, unittest_support as unittest
-from numba.npyufunc.ufuncbuilder import UFuncBuilder, GUFuncBuilder
+from numba.npyufunc.ufuncbuilder import GUFuncBuilder
 from numba import vectorize, guvectorize
 from numba.npyufunc import PyUFunc_One
-from numba.tests import support
+from numba.npyufunc.dufunc import DUFunc as UFuncBuilder
+from ..support import tag
 
 
 def add(a, b):
@@ -28,6 +29,20 @@ def guadd(a, b, c):
     for i in range(x):
         for j in range(y):
             c[i, j] = a[i, j] + b[i, j]
+
+@vectorize(nopython=True)
+def inner(a, b):
+    return a + b
+
+@vectorize(["int64(int64, int64)"], nopython=True)
+def inner_explicit(a, b):
+    return a + b
+
+def outer(a, b):
+    return inner(a, b)
+
+def outer_explicit(a, b):
+    return inner_explicit(a, b)
 
 
 class Dummy: pass
@@ -51,6 +66,7 @@ def guerror(a, b, c):
 
 class TestUfuncBuilding(unittest.TestCase):
 
+    @tag('important')
     def test_basic_ufunc(self):
         ufb = UFuncBuilder(add)
         cres = ufb.add("int32(int32, int32)")
@@ -105,6 +121,26 @@ class TestUfuncBuilding(unittest.TestCase):
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
 
+    def test_nested_call(self):
+        """
+        Check nested call to an implicitly-typed ufunc.
+        """
+        builder = UFuncBuilder(outer,
+                               targetoptions={'nopython': True})
+        builder.add("(int64, int64)")
+        ufunc = builder.build_ufunc()
+        self.assertEqual(ufunc(-1, 3), 2)
+
+    def test_nested_call_explicit(self):
+        """
+        Check nested call to an explicitly-typed ufunc.
+        """
+        builder = UFuncBuilder(outer_explicit,
+                               targetoptions={'nopython': True})
+        builder.add("(int64, int64)")
+        ufunc = builder.build_ufunc()
+        self.assertEqual(ufunc(-1, 3), 2)
+
 
 class TestUfuncBuildingJitDisabled(TestUfuncBuilding):
 
@@ -134,6 +170,7 @@ class TestGUfuncBuilding(unittest.TestCase):
         self.assertEqual(ufunc.__name__, "guadd")
         self.assertIn("A generalized addition", ufunc.__doc__)
 
+    @tag('important')
     def test_gufunc_struct(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
         cres = gufb.add("void(complex64[:,:], complex64[:,:], complex64[:,:])")
@@ -190,6 +227,7 @@ class TestVectorizeDecor(unittest.TestCase):
         self.assertTrue(numpy.all(a + a == b))
         self.assertEqual(b.dtype, numpy.dtype('int32'))
 
+    @tag('important')
     def test_vectorize_bool_return(self):
         ufunc = vectorize(['bool_(int32, int32)'])(equals)
         a = numpy.arange(10, dtype='int32')
@@ -197,6 +235,7 @@ class TestVectorizeDecor(unittest.TestCase):
         self.assertTrue(numpy.all(r))
         self.assertEqual(r.dtype, numpy.dtype('bool_'))
 
+    @tag('important')
     def test_vectorize_identity(self):
         sig = 'int32(int32, int32)'
         for identity in self._supported_identities:
@@ -228,6 +267,7 @@ class TestVectorizeDecor(unittest.TestCase):
         ufunc = vectorize(identity=PyUFunc_One, nopython=True)(mul)
         self.assertTrue(numpy.all(ufunc(a,b) == (a * b)))
 
+    @tag('important')
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)")(guadd)
@@ -236,6 +276,7 @@ class TestVectorizeDecor(unittest.TestCase):
         self.assertTrue(numpy.all(a + a == b))
         self.assertEqual(b.dtype, numpy.dtype('int32'))
 
+    @tag('important')
     def test_guvectorize_no_output(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y),(x,y)")(guadd)
@@ -258,6 +299,7 @@ class TestVectorizeDecor(unittest.TestCase):
         with self.assertRaises(MyException):
             ufunc(a, a)
 
+    @tag('important')
     def test_guvectorize_identity(self):
         args = (['(int32[:,:], int32[:,:], int32[:,:])'], "(x,y),(x,y)->(x,y)")
         for identity in self._supported_identities:

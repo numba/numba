@@ -142,9 +142,9 @@ class BaseLower(object):
         self.library.add_ir_module(self.module)
 
     def extract_function_arguments(self):
-        rawfnargs = self.call_conv.get_arguments(self.function)
-        arginfo = self.context.get_arg_packer(self.fndesc.argtypes)
-        self.fnargs = arginfo.from_arguments(self.builder, rawfnargs)
+        self.fnargs = self.call_conv.decode_arguments(self.builder,
+                                                      self.fndesc.argtypes,
+                                                      self.function)
         return self.fnargs
 
     def lower_normal_function(self, fndesc):
@@ -326,8 +326,6 @@ class Lower(BaseLower):
             assert signature is not None
             assert signature.args[0] == targetty
             impl = self.context.get_setattr(inst.attr, signature)
-            assert impl is not None, "missing impl for setattr " \
-                                     "({0}).{1}".format(targetty, inst.attr)
 
             # Convert argument to match
             value = self.context.cast(self.builder, value, valuety,
@@ -396,11 +394,16 @@ class Lower(BaseLower):
             return res
 
         elif isinstance(value, ir.Arg):
-            val = self.fnargs[value.index]
             # Cast from the argument type to the local variable type
             # (note the "arg.FOO" convention as used in typeinfer)
-            oty = self.typeof("arg." + value.name)
-            res = self.context.cast(self.builder, val, oty, ty)
+            argty = self.typeof("arg." + value.name)
+            if isinstance(argty, types.Omitted):
+                pyval = argty.value
+                res = self.context.get_constant_generic(self.builder, ty,
+                                                        pyval)
+            else:
+                val = self.fnargs[value.index]
+                res = self.context.cast(self.builder, val, argty, ty)
             self.incref(ty, res)
             return res
 
@@ -704,7 +707,7 @@ class Lower(BaseLower):
                 self.incref(resty, res)
                 return res
             else:
-                impl = self.context.get_attribute(val, ty, expr.attr)
+                impl = self.context.get_getattr(ty, expr.attr)
                 attrty = self.context.typing_context.resolve_getattr(ty,
                                                                      expr.attr)
 

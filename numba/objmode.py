@@ -49,6 +49,10 @@ class PyLower(BaseLower):
     def pre_lower(self):
         super(PyLower, self).pre_lower()
         self.init_pyapi()
+        # Pre-computed for later use
+        from .dispatcher import OmittedArg
+        self.omitted_typobj = self.pyapi.unserialize(
+            self.pyapi.serialize_object(OmittedArg))
 
     def post_lower(self):
         pass
@@ -152,9 +156,23 @@ class PyLower(BaseLower):
         elif isinstance(value, ir.Yield):
             return self.lower_yield(value)
         elif isinstance(value, ir.Arg):
-            value = self.fnargs[value.index]
-            self.incref(value)
-            return value
+            obj = self.fnargs[value.index]
+            # When an argument is omitted, the dispatcher hands it as
+            # _OmittedArg(<default value>)
+            typobj = self.pyapi.get_type(obj)
+            slot = cgutils.alloca_once_value(self.builder, obj)
+            is_omitted = self.builder.icmp_unsigned('==', typobj,
+                                                    self.omitted_typobj)
+            with self.builder.if_else(is_omitted, likely=False) as (omitted, present):
+                with present:
+                    self.incref(obj)
+                    self.builder.store(obj, slot)
+                with omitted:
+                    # The argument is omitted => get the default value
+                    obj = self.pyapi.object_getattr_string(obj, 'value')
+                    self.builder.store(obj, slot)
+
+            return self.builder.load(slot)
         else:
             raise NotImplementedError(type(value), value)
 
@@ -217,17 +235,23 @@ class PyLower(BaseLower):
         elif expr.op == 'call':
             argvals = [self.loadvar(a.name) for a in expr.args]
             fn = self.loadvar(expr.func.name)
+            args = self.pyapi.tuple_pack(argvals)
+            if expr.vararg:
+                # Expand *args
+                new_args = self.pyapi.number_add(args,
+                                                 self.loadvar(expr.vararg.name))
+                self.decref(args)
+                args = new_args
             if not expr.kws:
-                # No keyword
-                ret = self.pyapi.call_function_objargs(fn, argvals)
+                # No named arguments
+                ret = self.pyapi.call(fn, args, None)
             else:
-                # Have Keywords
+                # Named arguments
                 keyvalues = [(k, self.loadvar(v.name)) for k, v in expr.kws]
-                args = self.pyapi.tuple_pack(argvals)
                 kws = self.pyapi.dict_pack(keyvalues)
                 ret = self.pyapi.call(fn, args, kws)
                 self.decref(kws)
-                self.decref(args)
+            self.decref(args)
             self.check_error(ret)
             return ret
         elif expr.op == 'getattr':

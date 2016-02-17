@@ -61,11 +61,12 @@ class FunctionDescriptor(object):
         self.restype = restype
         # Argument types
         if argtypes is not None:
+            assert isinstance(argtypes, tuple), argtypes
             self.argtypes = argtypes
         else:
             # Get argument types from the type inference result
             # (note the "arg.FOO" convention as used in typeinfer
-            self.argtypes = [self.typemap['arg.' + a] for a in args]
+            self.argtypes = tuple(self.typemap['arg.' + a] for a in args)
         mangler = default_mangler if mangler is None else mangler
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.

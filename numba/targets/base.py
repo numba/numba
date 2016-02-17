@@ -3,7 +3,6 @@ from __future__ import print_function
 from collections import namedtuple, defaultdict
 import copy
 import sys
-from types import MethodType
 
 import numpy
 
@@ -16,11 +15,11 @@ from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, user_generator,
-                                    builtin_registry, impl_attribute,
-                                    impl_ret_borrowed)
+                                    builtin_registry, impl_ret_borrowed,
+                                    RegistryLoader)
 from . import (
-    arrayobj, arraymath, builtins, iterators, rangeobj, optional, slicing,
-    tupleobj, imputils)
+    arrayobj, arraymath, builtins, iterators, linalg, rangeobj, optional,
+    slicing, tupleobj, imputils)
 from numba import datamodel
 
 try:
@@ -34,9 +33,18 @@ PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
 
 
-class Overloads(object):
+class OverloadSelector(object):
+    """
+    An object matching an actual signature against a registry of formal
+    signatures and choosing the best candidate, if any.
+
+    In the current implementation:
+    - a "signature" is a tuple of type classes or type instances
+    - the "best candidate" is simply the first match
+    """
+
     def __init__(self):
-        # A list of (args tuple, implementation)
+        # A list of (formal args tuple, value)
         self.versions = []
 
     def find(self, sig):
@@ -78,8 +86,12 @@ class Overloads(object):
             assert issubclass(formal, types.Type)
             return True
 
-    def append(self, impl, sig):
-        self.versions.append((sig, impl))
+    def append(self, value, sig):
+        """
+        Add a formal signature and its associated value.
+        """
+        assert isinstance(sig, tuple), (value, sig)
+        self.versions.append((sig, value))
 
 
 @utils.runonce
@@ -139,17 +151,20 @@ class BaseContext(object):
 
     def __init__(self, typing_context):
         _load_global_helpers()
+
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
 
-        self._defns = defaultdict(Overloads)
-        self._attrs = defaultdict(Overloads)
-        self._casts = Overloads()
+        # A mapping of installed registries to their loaders
+        self._registries = {}
+        # Declarations loaded from registries and other sources
+        self._defns = defaultdict(OverloadSelector)
+        self._getattrs = defaultdict(OverloadSelector)
+        self._setattrs = defaultdict(OverloadSelector)
+        self._casts = OverloadSelector()
+        # Other declarations
         self._generators = {}
         self.special_ops = {}
-
-        self.install_registry(builtin_registry)
-
         self.cached_internal_func = {}
 
         self.data_model_manager = datamodel.default_manager
@@ -161,7 +176,19 @@ class BaseContext(object):
         """
         For subclasses to add initializer
         """
-        pass
+
+    def refresh(self):
+        """
+        Refresh context with new declarations from known registries.
+        Useful for third-party extensions.
+        """
+        self.install_registry(builtin_registry)
+        self.load_additional_registries()
+
+    def load_additional_registries(self):
+        """
+        Load target-specific registries.  Can be overriden by subclasses.
+        """
 
     def get_arg_packer(self, fe_args):
         return datamodel.ArgPacker(self.data_model_manager, fe_args)
@@ -186,18 +213,27 @@ class BaseContext(object):
         Install a *registry* (a imputils.Registry instance) of function
         and attribute implementations.
         """
-        self.insert_func_defn(registry.functions)
-        self.insert_attr_defn(registry.attributes)
-        self._insert_cast_defn(registry.casts)
+        try:
+            loader = self._registries[registry]
+        except KeyError:
+            loader = RegistryLoader(registry)
+            self._registries[registry] = loader
+        self.insert_func_defn(loader.new_registrations('functions'))
+        self._insert_getattr_defn(loader.new_registrations('getattrs'))
+        self._insert_setattr_defn(loader.new_registrations('setattrs'))
+        self._insert_cast_defn(loader.new_registrations('casts'))
 
     def insert_func_defn(self, defns):
-        for impl, func_sigs in defns:
-            for func, sig in func_sigs:
-                self._defns[func].append(impl, sig.args)
+        for impl, func, sig in defns:
+            self._defns[func].append(impl, sig)
 
-    def insert_attr_defn(self, defns):
-        for impl in defns:
-            self._attrs[impl.attr].append(impl, impl.signature.args)
+    def _insert_getattr_defn(self, defns):
+        for impl, attr, sig in defns:
+            self._getattrs[attr].append(impl, sig)
+
+    def _insert_setattr_defn(self, defns):
+        for impl, attr, sig in defns:
+            self._setattrs[attr].append(impl, sig)
 
     def _insert_cast_defn(self, defns):
         for impl, sig in defns:
@@ -205,14 +241,14 @@ class BaseContext(object):
 
     def insert_user_function(self, func, fndesc, libs=()):
         impl = user_function(fndesc, libs)
-        self._defns[func].append(impl, impl.signature.args)
+        self._defns[func].append(impl, impl.signature)
 
     def add_user_function(self, func, fndesc, libs=()):
         if func not in self._defns:
             msg = "{func} is not a registered user function"
             raise KeyError(msg.format(func=func))
         impl = user_function(fndesc, libs)
-        self._defns[func].append(impl, impl.signature.args)
+        self._defns[func].append(impl, impl.signature)
 
     def insert_generator(self, genty, gendesc, libs=()):
         assert isinstance(genty, types.Generator)
@@ -407,92 +443,31 @@ class BaseContext(object):
         lty = self.get_value_type(ty)
         return Constant.null(lty)
 
-    def get_setattr(self, attr, sig):
-        typ = sig.args[0]
-        if isinstance(typ, types.Record):
-            self.sentry_record_alignment(typ, attr)
-
-            offset = typ.offset(attr)
-            elemty = typ.typeof(attr)
-
-            def imp(context, builder, sig, args):
-                valty = sig.args[1]
-                [target, val] = args
-                dptr = cgutils.get_record_member(builder, target, offset,
-                                                 self.get_data_type(elemty))
-                val = context.cast(builder, val, valty, elemty)
-                align = None if typ.aligned else 1
-                self.pack_value(builder, elemty, val, dptr, align=align)
-
-            return _wrap_impl(imp, self, sig)
-
-        elif isinstance(typ, types.ClassInstanceType):
-            def imp(context, builder, sig, args):
-                if attr in typ.struct:
-                    instance_struct = cgutils.create_struct_proxy(typ)
-                    [this, val] = args
-                    inst = instance_struct(context, builder, value=this)
-                    data_ptr = inst.data
-                    data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
-                                                              kind='data')
-                    data = data_struct(context, builder, ref=data_ptr)
-
-                    # Get old value
-                    attr_type = typ.struct[attr]
-                    oldvalue = getattr(data, attr)
-
-                    # Store n
-                    setattr(data, attr, val)
-                    context.nrt_incref(builder, attr_type, val)
-
-                    # Delete old value
-                    context.nrt_decref(builder, attr_type, oldvalue)
-                elif attr in typ.jitprops:
-                    setter = typ.jitprops[attr]['set']
-                    setter.compile(sig)
-                    cres = setter._compileinfos[sig.args]
-                    out = context.call_internal(builder, cres.fndesc,
-                                                cres.signature, args)
-                    return imputils.impl_ret_new_ref(context, builder,
-                                                     cres.signature, out)
-
-                else:
-                    msg = 'attribute {0!r} not implemented'.format(attr)
-                    raise NotImplementedError(msg)
-
-            return _wrap_impl(imp, self, sig)
-
     def get_function(self, fn, sig):
         """
         Return the implementation of function *fn* for signature *sig*.
         The return value is a callable with the signature (builder, args).
         """
-        if isinstance(fn, (types.Function)):
-            key = fn.template.key
-
-            if isinstance(key, MethodType):
-                overloads = self._defns[key.im_func]
-
-            elif sig.recvr:
-                sig = typing.signature(sig.return_type,
-                                       *((sig.recvr,) + sig.args))
-                overloads = self._defns[key]
-            else:
-                overloads = self._defns[key]
-
-        elif isinstance(fn, types.Dispatcher):
-            key = fn.overloaded.get_overload(sig.args)
+        sig = sig.as_function()
+        if isinstance(fn, (types.Function, types.BoundFunction,
+                           types.Dispatcher)):
+            key = fn.get_impl_key(sig)
             overloads = self._defns[key]
         else:
             key = fn
             overloads = self._defns[key]
+
         try:
             return _wrap_impl(overloads.find(sig.args), self, sig)
         except NotImplementedError:
             pass
         if isinstance(fn, types.Type):
             # It's a type instance => try to find a definition for the type class
-            return self.get_function(type(fn), sig)
+            try:
+                return self.get_function(type(fn), sig)
+            except NotImplementedError:
+                # Raise exception for the type instance, for a better error message
+                pass
         raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
 
     def get_generator_desc(self, genty):
@@ -509,35 +484,73 @@ class BaseContext(object):
         assert self.get_value_type(ty) == obj.type
         return obj
 
-    def get_attribute(self, val, typ, attr):
+    def get_getattr(self, typ, attr):
+        """
+        Get the getattr() implementation for the given type and attribute name.
+        The return value is a callable with the signature
+        (context, builder, typ, val, attr).
+        """
         if isinstance(typ, types.Module):
             # Implement getattr for module-level globals.
             # We are treating them as constants.
             # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
-            if attrty is not None and not isinstance(attrty, types.Dummy):
+            if attrty is None or isinstance(attrty, types.Dummy):
+                # No implementation required for dummies (functions, modules...),
+                # which are dealt with later
+                return None
+            else:
                 pyval = getattr(typ.pymod, attr)
                 llval = self.get_constant(attrty, pyval)
-                @impl_attribute(typ, attr, attrty)
-                def imp(context, builder, typ, val):
+                def imp(context, builder, typ, val, attr):
                     return impl_ret_borrowed(context, builder, attrty, llval)
                 return imp
-            # No implementation required for dummies (functions, modules...),
-            # which are dealt with later
-            return None
 
-        # Lookup specific attribute implementation for this type
-        overloads = self._attrs[attr]
+        # Lookup specific getattr implementation for this type and attribute
+        overloads = self._getattrs[attr]
         try:
             return overloads.find((typ,))
         except NotImplementedError:
             pass
         # Lookup generic getattr implementation for this type
-        overloads = self._attrs[None]
+        overloads = self._getattrs[None]
         try:
             return overloads.find((typ,))
         except NotImplementedError:
-            raise Exception("No definition for lowering %s.%s" % (typ, attr))
+            pass
+
+        raise NotImplementedError("No definition for lowering %s.%s" % (typ, attr))
+
+    def get_setattr(self, attr, sig):
+        """
+        Get the setattr() implementation for the given attribute name
+        and signature.
+        The return value is a callable with the signature (builder, args).
+        """
+        assert len(sig.args) == 2
+        typ = sig.args[0]
+        valty = sig.args[1]
+
+        def wrap_setattr(impl):
+            def wrapped(builder, args):
+                return impl(self, builder, sig, args, attr)
+            return wrapped
+
+        # Lookup specific setattr implementation for this type and attribute
+        overloads = self._setattrs[attr]
+        try:
+            return wrap_setattr(overloads.find((typ, valty)))
+        except NotImplementedError:
+            pass
+        # Lookup generic setattr implementation for this type
+        overloads = self._setattrs[None]
+        try:
+            return wrap_setattr(overloads.find((typ, valty)))
+        except NotImplementedError:
+            pass
+
+        raise NotImplementedError("No definition for lowering %s.%s = %s"
+                                  % (typ, attr, valty))
 
     def get_argument_value(self, builder, ty, val):
         """
@@ -796,7 +809,6 @@ class BaseContext(object):
         """
         Create a tuple of the given *typ* containing the *values*.
         """
-        # XXX Use cgutils.pack_array / cgutils.make_anonymous_struct ?
         tup = self.get_constant_undef(typ)
         for i, val in enumerate(values):
             tup = builder.insert_value(tup, val, i)
@@ -1006,6 +1018,12 @@ class BaseContext(object):
 
 
 class _wrap_impl(object):
+    """
+    A wrapper object to call an implementation function with some predefined
+    (context, signature) arguments.
+    The wrapper also forwards attribute queries, which is important.
+    """
+
     def __init__(self, imp, context, sig):
         self._imp = imp
         self._context = context

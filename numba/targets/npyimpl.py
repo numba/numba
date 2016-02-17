@@ -13,14 +13,14 @@ from collections import namedtuple
 from llvmlite.llvmpy import core as lc
 
 from . import builtins, ufunc_db, arrayobj
-from .imputils import implement, Registry, impl_ret_new_ref
+from .imputils import Registry, impl_ret_new_ref
 from .. import typing, types, cgutils, numpy_support, utils
 from ..config import PYVERSION
-from ..numpy_support import ufunc_find_matching_loop
+from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper
 from ..typing import npydecl
 
 registry = Registry()
-register = registry.register
+lower = registry.lower
 
 
 ########################################################################
@@ -107,11 +107,11 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
         that update_indices assumes the same. This method returns the
         indices as values
         """
-        bld=self.array.builder
+        bld = self.array.builder
         return [bld.load(index) for index in self.indices]
 
 
-class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
+class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
                                                'shape', 'strides', 'data',
                                                'layout', 'base_type', 'ndim',
                                                'return_val'))):
@@ -156,11 +156,11 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
     _ScalarHelper or _ArrayHelper) class to handle the argument.
     using the polymorphic interface of the Helper classes, scalar
     and array cases can be handled with the same code"""
-    if isinstance(tyinp, types.Array):
+    if isinstance(tyinp, types.ArrayCompatible):
         ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
         shape   = cgutils.unpack_tuple(bld, ary.shape, tyinp.ndim)
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
-        return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data,
+        return _ArrayHelper(ctxt, bld, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
     elif tyinp in types.number_domain | set([types.boolean]):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
@@ -210,7 +210,7 @@ def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
             dest_index += 1
     return dest_index
 
-def _build_array(context, builder, array_ty, arg_arrays):
+def _build_array(context, builder, array_ty, input_types, inputs):
     """Utility function to handle allocation of an implicit output array
     given the target context, builder, output array type, and a list of
     _ArrayHelper instances.
@@ -237,12 +237,12 @@ def _build_array(context, builder, array_ty, arg_arrays):
     # For each argument, try to broadcast onto the destination shape,
     # mutating along any axis where the argument shape is not one and
     # the destination shape is one.
-    for arg_number, arg in enumerate(arg_arrays):
+    for arg_number, arg in enumerate(inputs):
         if not hasattr(arg, "ndim"): # Skip scalar arguments
             continue
         arg_ndim = make_intp_const(arg.ndim)
         for index in range(arg.ndim):
-            builder.store(builder.extract_value(arg.ary.shape, index),
+            builder.store(arg.shape[index],
                           cgutils.gep_inbounds(builder, src_shape, index))
         arg_result = context.compile_internal(
             builder, _broadcast_onto, _broadcast_onto_sig,
@@ -253,12 +253,36 @@ def _build_array(context, builder, array_ty, arg_arrays):
                 arg_number,)
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
+    real_array_ty = array_ty.as_array
+
     dest_shape_tup = tuple(builder.load(dest_shape_addr)
                            for dest_shape_addr in dest_shape_addrs)
-    array_val = arrayobj._empty_nd_impl(context, builder, array_ty,
+    array_val = arrayobj._empty_nd_impl(context, builder, real_array_ty,
                                         dest_shape_tup)
-    return _prepare_argument(context, builder, array_val._getvalue(), array_ty,
-                             where='implicit output argument')
+
+    # Get the best argument to call __array_wrap__ on
+    array_wrapper_index = select_array_wrapper(input_types)
+    array_wrapper_ty = input_types[array_wrapper_index]
+    try:
+        # __array_wrap__(source wrapped array, out array) -> out wrapped array
+        array_wrap = context.get_function('__array_wrap__',
+                                          array_ty(array_wrapper_ty, real_array_ty))
+    except NotImplementedError:
+        # If it's the same priority as a regular array, assume we
+        # should use the allocated array unchanged.
+        if array_wrapper_ty.array_priority != types.Array.array_priority:
+            raise
+        out_val = array_val._getvalue()
+    else:
+        wrap_args = (inputs[array_wrapper_index].return_val, array_val._getvalue())
+        out_val = array_wrap(builder, wrap_args)
+
+    ndim = array_ty.ndim
+    shape   = cgutils.unpack_tuple(builder, array_val.shape, ndim)
+    strides = cgutils.unpack_tuple(builder, array_val.strides, ndim)
+    return _ArrayHelper(context, builder, shape, strides, array_val.data,
+                        array_ty.layout, array_ty.dtype, ndim,
+                        out_val)
 
 
 def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
@@ -279,8 +303,8 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
                  for arg, tyarg in zip(args, sig.args)]
     if not explicit_output:
         ret_ty = sig.return_type
-        if isinstance(ret_ty, types.Array):
-            output = _build_array(context, builder, ret_ty, arguments)
+        if isinstance(ret_ty, types.ArrayCompatible):
+            output = _build_array(context, builder, ret_ty, sig.args, arguments)
         else:
             output = _prepare_argument(
                 context, builder,
@@ -330,11 +354,12 @@ class _Kernel(object):
         complex to real/int casts.
 
         """
-        if fromty in types.complex_domain and toty not in types.complex_domain:
+        if (isinstance(fromty, types.Complex) and
+            not isinstance(toty, types.Complex)):
             # attempt conversion of the real part to the specified type.
             # note that NumPy issues a warning in this kind of conversions
             newty = fromty.underlying_float
-            attr = self.context.get_attribute(val, fromty, 'real')
+            attr = self.context.get_getattr(fromty, 'real')
             val = attr(self.context, self.builder, fromty, val, 'real')
             fromty = newty
             # let the regular cast do the rest...
@@ -408,9 +433,9 @@ def register_unary_ufunc_kernel(ufunc, kernel):
     _any = types.Any
 
     # (array or scalar, out=array)
-    register(implement(ufunc, _any, types.Array)(unary_ufunc))
+    lower(ufunc, _any, types.Array)(unary_ufunc)
     # (array or scalar)
-    register(implement(ufunc, _any)(unary_ufunc_no_explicit_output))
+    lower(ufunc, _any)(unary_ufunc_no_explicit_output)
 
     _kernels[ufunc] = kernel
 
@@ -426,9 +451,9 @@ def register_binary_ufunc_kernel(ufunc, kernel):
     _any = types.Any
 
     # (array or scalar, array o scalar, out=array)
-    register(implement(ufunc, _any, _any, types.Array)(binary_ufunc))
+    lower(ufunc, _any, _any, types.Array)(binary_ufunc)
     # (scalar, scalar)
-    register(implement(ufunc, _any, _any)(binary_ufunc_no_explicit_output))
+    lower(ufunc, _any, _any)(binary_ufunc_no_explicit_output)
 
     _kernels[ufunc] = kernel
 
@@ -438,7 +463,7 @@ def register_unary_operator_kernel(operator, kernel):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
     _arr_kind = types.Array
-    register(implement(operator, _arr_kind)(lower_unary_operator))
+    lower(operator, _arr_kind)(lower_unary_operator)
 
 
 def register_binary_operator_kernel(operator, kernel):
@@ -459,10 +484,10 @@ def register_binary_operator_kernel(operator, kernel):
     _arr_kind = types.Array
     formal_sigs = [(_arr_kind, _arr_kind), (_any, _arr_kind), (_arr_kind, _any)]
     for sig in formal_sigs:
-        register(implement(operator, *sig)(lower_binary_operator))
+        lower(operator, *sig)(lower_binary_operator)
         inplace = operator + '='
         if inplace in utils.inplace_map:
-            register(implement(inplace, *sig)(lower_inplace_operator))
+            lower(inplace, *sig)(lower_inplace_operator)
 
 
 ################################################################################
@@ -477,8 +502,7 @@ for ufunc in ufunc_db.get_ufuncs():
         raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
 
 
-@register
-@implement('+', types.Array)
+@lower('+', types.Array)
 def array_positive_impl(context, builder, sig, args):
     '''Lowering function for +(array) expressions.  Defined here
     (numba.targets.npyimpl) since the remaining array-operator

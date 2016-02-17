@@ -53,34 +53,6 @@ def andor(x, y):
 andornopython = jit(nopython=True)(andor)
 
 
-def ifelse1(x, y):
-    if x > y:
-        return 1
-    elif x == 0 or y == 0:
-        return 2
-    else:
-        return 3
-
-
-def ifelse2(x, y):
-    if x > 0:
-        if y > 0:
-            return 1
-        elif y < 0:
-            return 1
-        else:
-            return 0
-    elif x < 0:
-        return 1
-    else:
-        return 0
-
-
-def ifelse3(x, y):
-    if x == y:
-        return 1
-
-
 def string_concat(x, y):
     a = "whatzup"
     return a + str(x + y)
@@ -115,14 +87,3 @@ def blackscholes_cnd(d):
     if d > 0:
         ret_val = 1.0 - ret_val
     return ret_val
-
-
-def slicing(a, start, stop, step):
-    """
-    NoPython mode cannot create new array object that out live the scope of
-    the function because the array data buffer is borrowed from an object in
-    the function scope or from an argument.  Returning array would require
-    stealing the data buffer reference or copying the array content.
-    """
-    return a[start:stop:step]
-

@@ -7,112 +7,147 @@ from __future__ import print_function, absolute_import, division
 import inspect
 import functools
 
-from .. import typing, cgutils, types
+from .. import typing, cgutils, types, utils
+from .. typing.templates import BaseRegistryLoader
 
-
-# Global registries for implementations of builtin operations
-# (functions, attributes, type casts)
 
 class Registry(object):
+    """
+    A registry of function and attribute implementations.
+    """
     def __init__(self):
         self.functions = []
-        self.attributes = []
+        self.getattrs = []
+        self.setattrs = []
         self.casts = []
 
-    def register(self, impl):
-        sigs = impl.function_signatures
-        impl.function_signatures = []
-        self.functions.append((impl, sigs))
+    def lower(self, func, *argtys):
+        """
+        Decorate an implementation of *func* for the given argument types.
+        *func* may be an actual global function object, or any
+        pseudo-function supported by Numba, such as "getitem".
+
+        The decorated implementation has the signature
+        (context, builder, sig, args).
+        """
+        def decorate(impl):
+            self.functions.append((impl, func, argtys))
+            return impl
+        return decorate
+
+    def _decorate_attr(self, impl, ty, attr, impl_list, decorator):
+        real_impl = decorator(impl, ty, attr)
+        impl_list.append((real_impl, attr, real_impl.signature))
         return impl
 
-    def register_attr(self, item):
-        curr_item = item
-        while hasattr(curr_item, '__wrapped__'):
-            self.attributes.append(curr_item)
-            curr_item = curr_item.__wrapped__
-        return item
+    def lower_getattr(self, ty, attr):
+        """
+        Decorate an implementation of __getattr__ for type *ty* and
+        the attribute *attr*.
 
-    def register_cast(self, impl, sig):
-        self.casts.append((impl, sig))
+        The decorated implementation will have the signature
+        (context, builder, typ, val).
+        """
+        def decorate(impl):
+            return self._decorate_attr(impl, ty, attr, self.getattrs,
+                                       _decorate_getattr)
+        return decorate
 
+    def lower_getattr_generic(self, ty):
+        """
+        Decorate the fallback implementation of __getattr__ for type *ty*.
+
+        The decorated implementation will have the signature
+        (context, builder, typ, val, attr).  The implementation is
+        called for attributes which haven't been explicitly registered
+        with lower_getattr().
+        """
+        return self.lower_getattr(ty, None)
+
+    def lower_setattr(self, ty, attr):
+        """
+        Decorate an implementation of __setattr__ for type *ty* and
+        the attribute *attr*.
+
+        The decorated implementation will have the signature
+        (context, builder, sig, args).
+        """
+        def decorate(impl):
+            return self._decorate_attr(impl, ty, attr, self.setattrs,
+                                       _decorate_setattr)
+        return decorate
+
+    def lower_setattr_generic(self, ty):
+        """
+        Decorate the fallback implementation of __setattr__ for type *ty*.
+
+        The decorated implementation will have the signature
+        (context, builder, sig, args, attr).  The implementation is
+        called for attributes which haven't been explicitly registered
+        with lower_setattr().
+        """
+        return self.lower_setattr(ty, None)
+
+    def lower_cast(self, fromty, toty):
+        """
+        Decorate the implementation of implicit conversion between
+        *fromty* and *toty*.
+
+        The decorated implementation will have the signature
+        (context, builder, fromty, toty, val).
+        """
+        def decorate(impl):
+            self.casts.append((impl, (fromty, toty)))
+            return impl
+        return decorate
+
+
+class RegistryLoader(BaseRegistryLoader):
+    """
+    An incremental loader for a target registry.
+    """
+    registry_items = ('functions', 'getattrs', 'setattrs', 'casts')
+
+
+# Global registry for implementations of builtin operations
+# (functions, attributes, type casts)
 builtin_registry = Registry()
-builtin = builtin_registry.register
-builtin_attr = builtin_registry.register_attr
+
+lower_builtin = builtin_registry.lower
+lower_getattr = builtin_registry.lower_getattr
+lower_getattr_generic = builtin_registry.lower_getattr_generic
+lower_setattr = builtin_registry.lower_setattr
+lower_setattr_generic = builtin_registry.lower_setattr_generic
+lower_cast = builtin_registry.lower_cast
 
 
-def implement(func, *argtys):
-    """
-    Decorator marking the decorated function as implementing *func*
-    for the given argument types.
-    """
-    def wrapper(impl):
-        try:
-            sigs = impl.function_signatures
-        except AttributeError:
-            sigs = impl.function_signatures = []
-        sigs.append((func, typing.signature(types.Any, *argtys)))
-        return impl
+def _decorate_getattr(impl, ty, attr):
+    real_impl = impl
 
-    return wrapper
-
-
-def impl_attribute(ty, attr, rtype=None):
-    """
-    Decorator marking the decorated function as implementing
-    attribute *attr* for the given type.
-    """
-    def wrapper(impl):
-        real_impl = impl
-        while hasattr(real_impl, "__wrapped__"):
-            real_impl = real_impl.__wrapped__
-
-        @functools.wraps(impl)
+    if attr is not None:
         def res(context, builder, typ, value, attr):
             return real_impl(context, builder, typ, value)
-
-        if rtype is None:
-            res.signature = typing.signature(types.Any, ty)
-        else:
-            res.signature = typing.signature(rtype, ty)
-        res.attr = attr
-        res.__wrapped__ = impl
-        return res
-
-    return wrapper
-
-
-def impl_attribute_generic(ty):
-    """
-    Decorator marking the decorated function as implementing
-    __getattr__ for the given type.
-    """
-    def wrapper(impl):
-        real_impl = impl
-        while hasattr(real_impl, "__wrapped__"):
-            real_impl = real_impl.__wrapped__
-
-        @functools.wraps(impl)
+    else:
         def res(context, builder, typ, value, attr):
             return real_impl(context, builder, typ, value, attr)
 
-        res.signature = typing.signature(types.Any, ty)
-        res.attr = None
-        res.__wrapped__ = impl
-        return res
+    res.signature = (ty,)
+    res.attr = attr
+    return res
 
-    return wrapper
+def _decorate_setattr(impl, ty, attr):
+    real_impl = impl
 
+    if attr is not None:
+        def res(context, builder, sig, args, attr):
+            return real_impl(context, builder, sig, args)
+    else:
+        def res(context, builder, sig, args, attr):
+            return real_impl(context, builder, sig, args, attr)
 
-def builtin_cast(fromty, toty):
-    """
-    Decorator marking the decorated function as implementing
-    an implicit conversion between the given types.
-    """
-    def wrapper(impl):
-        builtin_registry.register_cast(impl, (fromty, toty))
-        return impl
-
-    return wrapper
+    res.signature = (ty, types.Any)
+    res.attr = attr
+    return res
 
 
 def user_function(fndesc, libs):
@@ -146,7 +181,7 @@ def user_function(fndesc, libs):
 
         return impl_ret_new_ref(context, builder, fndesc.restype, retval)
 
-    imp.signature = typing.signature(fndesc.restype, *fndesc.argtypes)
+    imp.signature = fndesc.argtypes
     imp.libs = tuple(libs)
     return imp
 
@@ -184,7 +219,7 @@ def iterator_impl(iterable_type, iterator_type):
             iterobj = cls(context, builder, value)
             return iternext(iterobj, context, builder, result)
 
-        builtin(implement('iternext', iterator_type)(iternext_wrapper))
+        lower_builtin('iternext', iterator_type)(iternext_wrapper)
         return cls
 
     return wrapper
@@ -307,4 +342,3 @@ def impl_ret_untracked(ctx, builder, retty, ret):
     The return type is not a NRT object.
     """
     return ret
-

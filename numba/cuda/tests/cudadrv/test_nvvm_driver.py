@@ -22,15 +22,6 @@ class TestNvvmDriver(unittest.TestCase):
         else:
             return gpu32
 
-    def test_nvvm_compile(self):
-        nvvmir = self.get_ptx()
-        cu = CompilationUnit()
-
-        cu.add_module(nvvmir.encode('utf8'))
-        ptx = cu.compile().decode('utf8')
-        self.assertTrue('simple' in ptx)
-        self.assertTrue('ave' in ptx)
-
     def test_nvvm_compile_simple(self):
         nvvmir = self.get_ptx()
         ptx = llvm_to_ptx(nvvmir).decode('utf8')
@@ -133,7 +124,7 @@ entry:
 %add = add i32 %mul, %2
 %call = call i32 @ave(i32 %add, i32 %add)
 %idxprom = sext i32 %add to i64
-%arrayidx = getelementptr inbounds i32* %data, i64 %idxprom
+%arrayidx = getelementptr inbounds i32, i32* %data, i64 %idxprom
 store i32 %call, i32* %arrayidx, align 4
 ret void
 }
@@ -168,7 +159,7 @@ entry:
 %add = add i32 %mul, %2
 %call = call i32 @ave(i32 %add, i32 %add)
 %idxprom = sext i32 %add to i64
-%arrayidx = getelementptr inbounds i32* %data, i64 %idxprom
+%arrayidx = getelementptr inbounds i32, i32* %data, i64 %idxprom
 store i32 %call, i32* %arrayidx, align 4
 ret void
 }

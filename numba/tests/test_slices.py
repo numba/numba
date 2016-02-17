@@ -28,11 +28,23 @@ class TestSlices(TestCase):
             got = cfunc(sl)
             self.assertPreciseEqual(got, (d, e, f))
 
-        maxint = sys.maxsize
+        maxposint = sys.maxsize
+        maxnegint = -maxposint - 1
         cfunc = jit(nopython=True)(slice_passing)
+
+        # Positive steps
         start_cases = [(None, 0), (42, 42), (-1, -1)]
-        stop_cases = [(None, maxint), (9, 9), (-11, -11)]
-        step_cases = [(None, 1), (12, 12), (-33, -33)]
+        stop_cases = [(None, maxposint), (9, 9), (-11, -11)]
+        step_cases = [(None, 1), (12, 12)]
+        for (a, d), (b, e), (c, f) in itertools.product(start_cases,
+                                                        stop_cases,
+                                                        step_cases):
+            check(a, b, c, d, e, f)
+
+        # Negative steps
+        start_cases = [(None, 0), (42, 42), (-1, -1)]
+        stop_cases = [(None, maxnegint), (9, 9), (-11, -11)]
+        step_cases = [(-1, -1), (-12, -12)]
         for (a, d), (b, e), (c, f) in itertools.product(start_cases,
                                                         stop_cases,
                                                         step_cases):

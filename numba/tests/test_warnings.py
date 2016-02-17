@@ -4,7 +4,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import jit
-from numba.config import NumbaWarning
+from numba.errors import NumbaWarning
 
 
 class TestBuiltins(unittest.TestCase):

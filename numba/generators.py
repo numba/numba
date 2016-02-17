@@ -24,7 +24,7 @@ class GeneratorDescriptor(FunctionDescriptor):
         assert isinstance(gentype, types.Generator)
         restype = gentype.yield_type
         args = ['gen']
-        argtypes = [gentype]
+        argtypes = (gentype,)
         qualname = fndesc.qualname + '.next'
         unique_name = fndesc.unique_name + '.next'
         self = cls(fndesc.native, fndesc.modname, qualname, unique_name,

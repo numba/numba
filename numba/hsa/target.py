@@ -20,11 +20,11 @@ CC_SPIR_FUNC = "spir_func"
 
 
 class HSATypingContext(typing.BaseContext):
-    def init(self):
+    def load_additional_registries(self):
         from . import hsadecl, mathdecl
 
-        self.install(hsadecl.registry)
-        self.install(mathdecl.registry)
+        self.install_registry(hsadecl.registry)
+        self.install_registry(mathdecl.registry)
 
 
 # -----------------------------------------------------------------------------
@@ -64,14 +64,16 @@ class HSATargetContext(BaseContext):
     generic_addrspace = SPIR_GENERIC_ADDRSPACE
 
     def init(self):
-        from . import hsaimpl, mathimpl
-
-        self.insert_func_defn(hsaimpl.registry.functions)
-        self.insert_func_defn(mathimpl.registry.functions)
         self._internal_codegen = codegen.JITHSACodegen("numba.hsa.jit")
         self._target_data = DATALAYOUT[utils.MACHINE_BITS]
         # Override data model manager
         self.data_model_manager = hsa_data_model_manager
+
+    def load_additional_registries(self):
+        from . import hsaimpl, mathimpl
+
+        self.insert_func_defn(hsaimpl.registry.functions)
+        self.insert_func_defn(mathimpl.registry.functions)
 
     @cached_property
     def call_conv(self):

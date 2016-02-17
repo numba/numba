@@ -1,20 +1,19 @@
 from __future__ import print_function, division, absolute_import
 
-import sys
-import os
-import warnings
-import time
-import gc
-import functools
 import collections
 import contextlib
 import cProfile
+import gc
 import multiprocessing
-from fnmatch import fnmatch
-from os.path import dirname, join, abspath, relpath
+import os
+import random
+import sys
+import time
+import warnings
 
 import numba.unittest_support as unittest
 from unittest import result, runner, signals, suite, loader, case
+from .loader import TestLoader
 from numba.utils import PYVERSION, StringIO
 from numba import config
 
@@ -22,6 +21,36 @@ try:
     from multiprocessing import TimeoutError
 except ImportError:
     from Queue import Empty as TimeoutError
+
+
+def make_tag_decorator(known_tags):
+    """
+    Create a decorator allowing tests to be tagged with the *known_tags*.
+    """
+
+    def tag(*tags):
+        """
+        Tag a test method with the given tags.
+        Can be used in conjunction with the --tags command-line argument
+        for runtests.py.
+        """
+        for t in tags:
+            if t not in known_tags:
+                raise ValueError("unknown tag: %r" % (t,))
+
+        def decorate(func):
+            if (not callable(func) or isinstance(func, type)
+                or not func.__name__.startswith('test_')):
+                raise TypeError("@tag(...) should be used on test methods")
+            try:
+                s = func.tags
+            except AttributeError:
+                s = func.tags = set()
+            s.update(tags)
+            return func
+        return decorate
+
+    return tag
 
 
 class TestLister(object):
@@ -41,72 +70,21 @@ class TestLister(object):
 class SerialSuite(unittest.TestSuite):
     """A simple marker to make sure tests in this suite are run serially.
 
-    Note: As the suite to going through the internal of unittest,
-          It may get unpacked and stuff into a plain TestSuite.
-          We need to set an attribute on the TestCase object to mark the
-          TestCase has a parallel test.
+    Note: As the suite is going through internals of unittest,
+          it may get unpacked and stuffed into a plain TestSuite.
+          We need to set an attribute on the TestCase objects to
+          remember they should not be run in parallel.
     """
 
     def addTest(self, test):
         if not isinstance(test, unittest.TestCase):
+            # It's a sub-suite, recurse
             for t in test:
                 self.addTest(t)
         else:
-            test._numba_parallel_test_ = True
+            # It's a test case, mark it serial
+            test._numba_parallel_test_ = False
             super(SerialSuite, self).addTest(test)
-
-
-def load_testsuite(loader, dir):
-    """Find tests in 'dir'."""
-
-    suite = unittest.TestSuite()
-    files = []
-    for f in os.listdir(dir):
-        path = join(dir, f)
-        if os.path.isfile(path) and fnmatch(f, 'test_*.py'):
-            files.append(f)
-        elif os.path.isfile(join(path, '__init__.py')):
-            suite.addTests(loader.discover(path))
-    for f in files:
-        # turn 'f' into a filename relative to the toplevel dir...
-        f = relpath(join(dir, f), loader._top_level_dir)
-        # ...and translate it to a module name.
-        f = os.path.splitext(os.path.normpath(f.replace(os.path.sep, '.')))[0]
-        suite.addTests(loader.loadTestsFromName(f))
-    return suite
-
-
-class TestLoader(loader.TestLoader):
-
-    _top_level_dir = dirname(dirname(__file__))
-
-    def discover(self, start_dir, pattern='test*.py', top_level_dir=None):
-        """Upstream discover doesn't consider top-level 'load_tests' functions.
-        If we find load_tests in start_dir, deal with it here. Otherwise
-        forward the call to the base class."""
-        top = top_level_dir or self._top_level_dir
-        location = top and join(abspath(top), start_dir) or start_dir
-        if os.path.isfile(join(location, '__init__.py')):
-            name = self._get_name_from_path(location)
-            try:
-                package = self._get_module_from_name(name)
-                load_tests = getattr(package, 'load_tests', None)
-                if load_tests:
-                    return load_tests(self, [], pattern)
-            except case.SkipTest as e:
-                return loader._make_skipped_test(name, e, self.suiteClass)
-            else:
-                return super(TestLoader, self).discover(start_dir, pattern, top)
-        else:
-            try:
-                __import__(start_dir)
-                module = sys.modules[start_dir]
-                load_tests = getattr(module, 'load_tests', None)
-                if load_tests:
-                    return load_tests(self, [], pattern)
-            except:
-                pass
-            return super(TestLoader, self).discover(start_dir, pattern, top)
 
 
 # "unittest.main" is really the TestProgram class!
@@ -127,6 +105,9 @@ class NumbaTestProgram(unittest.main):
     profile = False
     multiprocess = False
     list = False
+    tags = None
+    random_select = None
+    random_seed = 42
 
     def __init__(self, *args, **kwargs):
         # Disable interpreter fallback if we are running the test suite
@@ -134,9 +115,8 @@ class NumbaTestProgram(unittest.main):
             warnings.warn("Unset INTERPRETER_FALLBACK")
             config.COMPATIBILITY_MODE = False
 
-        # The default test loader is buggy in its handling of load_tests().
-        # See http://bugs.python.org/issue25520
-        kwargs['testLoader'] = TestLoader()
+        topleveldir = kwargs.pop('topleveldir', None)
+        kwargs['testLoader'] = TestLoader(topleveldir)
 
         # HACK to force unittest not to change warning display options
         # (so that NumbaWarnings don't appear all over the place)
@@ -159,6 +139,11 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('-l', '--list', dest='list',
                             action='store_true',
                             help='List tests without running them')
+        parser.add_argument('--tags', dest='tags', type=str,
+                            help='Comma-separated list of tags to select '
+                                 'a subset of the test suite')
+        parser.add_argument('--random', dest='random_select', type=float,
+                            help='Random proportion of tests to select')
         parser.add_argument('--profile', dest='profile',
                             action='store_true',
                             help='Profile the test run')
@@ -173,25 +158,32 @@ class NumbaTestProgram(unittest.main):
             argv.remove('-m')
             self.multiprocess = True
         super(NumbaTestProgram, self).parseArgs(argv)
-        # in Python 2.7, the 'discover' option isn't implicit.
-        # So if no test names were provided and 'self.test' is empty,
-        # we assume discovery hasn't been done yet.
-        if (not getattr(self, 'testNames', None) and
-            not self.test or (isinstance(self.test, suite.BaseTestSuite) and
-                              not self.test.countTestCases())):
-            self._do_discovery([])
+        # If at this point self.test doesn't exist, it is because
+        # no test ID was given in argv. Use the default instead.
+        if not hasattr(self, 'test') or not self.test.countTestCases():
+            self.testNames = (self.defaultTest,)
+            self.createTests()
+
+        if self.tags:
+            tags = [s.strip() for s in self.tags.split(',')]
+            self.test = _choose_tagged_tests(self.test, tags)
+
+        if self.random_select:
+            self.test = _choose_random_tests(self.test, self.random_select,
+                                             self.random_seed)
+
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
             # running with '-q'.
             self.buffer = True
 
     def _do_discovery(self, argv, Loader=None):
-        """Upstream _do_discovery doesn't find our load_tests() functions."""
-
-        loader = TestLoader() if Loader is None else Loader()
-        topdir = abspath(dirname(dirname(__file__)))
-        tests = loader.discover(join(topdir, 'numba/tests'), '*.py', topdir)
-        self.test = unittest.TestSuite(tests)
+        # Upstream uses a default start_dir of '.', which assumes we only ever
+        # run the tests from the top-level directory.
+        # So, if no 'start' argument is given in argv, inject one, to satisfy our CI builders.
+        if argv == []:
+            argv = [self.testLoader._top_level_dir]
+            super(NumbaTestProgram, self)._do_discovery(argv, Loader)
 
     def runTests(self):
         if self.refleak:
@@ -230,6 +222,55 @@ class NumbaTestProgram(unittest.main):
                 p.dump_stats(filename)
         else:
             run_tests_real()
+
+
+def _flatten_suite(test):
+    """
+    Expand nested suite into list of test cases.
+    """
+    if isinstance(test, (unittest.TestSuite, list, tuple)):
+        tests = []
+        for x in test:
+            tests.extend(_flatten_suite(x))
+        return tests
+    else:
+        return [test]
+
+
+def _choose_tagged_tests(tests, tags):
+    """
+    Select tests that are tagged with at least one of the given tags.
+    """
+    selected = []
+    tags = set(tags)
+    for test in _flatten_suite(tests):
+        assert isinstance(test, unittest.TestCase)
+        func = getattr(test, test._testMethodName)
+        try:
+            # Look up the method's underlying function (Python 2)
+            func = func.im_func
+        except AttributeError:
+            pass
+        try:
+            if func.tags & tags:
+                selected.append(test)
+        except AttributeError:
+            # Test method doesn't have any tags
+            pass
+    return unittest.TestSuite(selected)
+
+
+def _choose_random_tests(tests, ratio, seed):
+    """
+    Choose a given proportion of tests at random.
+    """
+    rnd = random.Random()
+    rnd.seed(seed)
+    if isinstance(tests, unittest.TestSuite):
+        tests = _flatten_suite(tests)
+    tests = rnd.sample(tests, int(len(tests) * ratio))
+    tests = sorted(tests, key=lambda case: case.id())
+    return unittest.TestSuite(tests)
 
 
 # The reference leak detection code is liberally taken and adapted from
@@ -347,18 +388,6 @@ class RefleakTestRunner(runner.TextTestRunner):
     resultclass = RefleakTestResult
 
 
-def _flatten_suite(test):
-    """Expand suite into list of tests
-    """
-    if isinstance(test, unittest.TestSuite):
-        tests = []
-        for x in test:
-            tests.extend(_flatten_suite(x))
-        return tests
-    else:
-        return [test]
-
-
 class ParallelTestResult(runner.TextTestResult):
     """
     A TestResult able to inject results from other results.
@@ -467,18 +496,23 @@ class _MinimalRunner(object):
 
 
 def _split_nonparallel_tests(test):
-    """split test suite into parallel and serial tests."""
+    """
+    Split test suite into parallel and serial tests.
+    """
     ptests = []
     stests = []
     if isinstance(test, unittest.TestSuite):
+        # It's a sub-suite, recurse
         for t in test:
             p, s = _split_nonparallel_tests(t)
             ptests.extend(p)
             stests.extend(s)
-    elif getattr(test, "_numba_parallel_test_", False):
-        stests.extend(_flatten_suite(test))
-    else:
+    elif getattr(test, "_numba_parallel_test_", True):
+        # Test case is suitable for parallel execution (default)
         ptests = [test]
+    else:
+        # Test case explicitly disallows parallel execution
+        stests = _flatten_suite(test)
     return ptests, stests
 
 
@@ -540,50 +574,3 @@ class ParallelTestRunner(runner.TextTestRunner):
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
-
-
-def allow_interpreter_mode(fn):
-    """Temporarily re-enable intepreter mode
-    """
-    @functools.wraps(fn)
-    def _core(*args, **kws):
-        config.COMPATIBILITY_MODE = True
-        try:
-            fn(*args, **kws)
-        finally:
-            config.COMPATIBILITY_MODE = False
-    return _core
-
-
-def run_tests(argv=None, xmloutput=None, verbosity=1, nomultiproc=False):
-    """
-    args
-    ----
-    - xmloutput [str or None]
-        Path of XML output directory (optional)
-    - verbosity [int]
-        Verbosity level of tests output
-
-    Returns the TestResult object after running the test *suite*.
-    """
-
-    if xmloutput is not None:
-        import xmlrunner
-        runner = xmlrunner.XMLTestRunner(output=xmloutput)
-    else:
-        runner = None
-    prog = NumbaTestProgram(argv=argv,
-                            module=None,
-                            testRunner=runner, exit=False,
-                            verbosity=verbosity,
-                            nomultiproc=nomultiproc)
-    return prog.result
-
-
-def test(*args, **kwargs):
-
-    return run_tests(argv=['<main>'] + list(args), **kwargs).wasSuccessful()
-
-
-if __name__ == "__main__":
-    sys.exit(0 if run_tests(sys.argv) else 1)

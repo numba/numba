@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import functools
+import locale
 import sys
 import weakref
 
@@ -95,6 +96,7 @@ class CodeLibrary(object):
 
         See discussion in https://github.com/numba/numba/pull/890
         """
+        self._ensure_finalized()
         if self._shared_module is not None:
             return self._shared_module
         mod = self._final_module
@@ -159,6 +161,9 @@ class CodeLibrary(object):
         Finalization involves various stages of code optimization and
         linking.
         """
+        # Report any LLVM-related problems to the user
+        self._codegen._check_llvm_bugs()
+
         self._raise_if_finalized()
 
         if config.DUMP_FUNC_OPT:
@@ -315,11 +320,13 @@ class CodeLibrary(object):
     def serialize_using_object_code(self):
         """
         Serialize this library using its object code as the cached
-        representation.
+        representation.  We also include its bitcode for further inlining
+        with other libraries.
         """
         self._ensure_finalized()
-        ll_module = self._final_module
-        return (self._name, 'object', self._get_compiled_object())
+        data = (self._get_compiled_object(),
+                self._get_module_for_linking().as_bitcode())
+        return (self._name, 'object', data)
 
     @classmethod
     def _unserialize(cls, codegen, state):
@@ -332,8 +339,10 @@ class CodeLibrary(object):
             self._finalize_final_module()
             return self
         elif kind == 'object':
+            object_code, shared_bitcode = data
             self.enable_object_caching()
-            self._set_compiled_object(data)
+            self._set_compiled_object(object_code)
+            self._shared_module = ll.parse_bitcode(shared_bitcode)
             self._finalize_final_module()
             return self
         else:
@@ -399,9 +408,7 @@ class BaseCPUCodegen(object):
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
         engine = ll.create_mcjit_compiler(llvm_module, tm)
-        tli = ll.create_target_library_info(llvm_module.triple)
 
-        self._tli = tli
         self._tm = tm
         self._engine = engine
         self._target_data = engine.target_data
@@ -447,7 +454,6 @@ class BaseCPUCodegen(object):
         pm = ll.create_module_pass_manager()
         dl = ll.create_target_data(self._data_layout)
         dl.add_pass(pm)
-        self._tli.add_pass(pm)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
@@ -456,7 +462,6 @@ class BaseCPUCodegen(object):
     def _function_pass_manager(self, llvm_module):
         pm = ll.create_function_pass_manager(llvm_module)
         self._target_data.add_pass(pm)
-        self._tli.add_pass(pm)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
@@ -474,6 +479,36 @@ class BaseCPUCodegen(object):
         pmb = lp.create_pass_manager_builder(
             opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
         return pmb
+
+    def _check_llvm_bugs(self):
+        """
+        Guard against some well-known LLVM bug(s).
+        """
+        # Check the locale bug at https://github.com/numba/numba/issues/1569
+        # Note we can't cache the result as locale settings can change
+        # accross a process's lifetime.  Also, for this same reason,
+        # the check here is a mere heuristic (there may be a race condition
+        # between now and actually compiling IR).
+        ir = """
+            define double @func()
+            {
+                ret double 1.23e+01
+            }
+            """
+        mod = ll.parse_assembly(ir)
+        ir_out = str(mod)
+        if "12.3" in ir_out or "1.23" in ir_out:
+            # Everything ok
+            return
+        if "1.0" in ir_out:
+            loc = locale.getlocale()
+            raise RuntimeError(
+                "LLVM will produce incorrect floating-point code "
+                "in the current locale %s.\nPlease read "
+                "http://numba.pydata.org/numba-doc/dev/user/faq.html#llvm-locale-bug "
+                "for more information."
+                % (loc,))
+        raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))
 
     def magic_tuple(self):
         """

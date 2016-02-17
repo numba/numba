@@ -1,5 +1,71 @@
+"""
+Numba-specific errors and warnings.
+"""
 
+from __future__ import print_function, division, absolute_import
+
+import contextlib
+from collections import defaultdict
+import warnings
+
+
+# Filled at the end
 __all__ = []
+
+
+class NumbaWarning(Warning):
+    """
+    Base category for all Numba compiler warnings.
+    """
+
+class PerformanceWarning(NumbaWarning):
+    """
+    Warning category for when an operation might not be
+    as fast as expected.
+    """
+
+
+class WarningsFixer(object):
+    """
+    An object "fixing" warnings of a given category caught during
+    certain phases.  The warnings can have their filename and lineno fixed,
+    and they are deduplicated as well.
+    """
+
+    def __init__(self, category):
+        self._category = category
+        # {(filename, lineno, category) -> messages}
+        self._warnings = defaultdict(set)
+
+    @contextlib.contextmanager
+    def catch_warnings(self, filename=None, lineno=None):
+        """
+        Store warnings and optionally fix their filename and lineno.
+        """
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter('always', self._category)
+            yield
+
+        for w in wlist:
+            msg = str(w.message)
+            if issubclass(w.category, self._category):
+                # Store warnings of this category for deduplication
+                filename = filename or w.filename
+                lineno = lineno or w.lineno
+                self._warnings[filename, lineno, w.category].add(msg)
+            else:
+                # Simply emit other warnings again
+                warnings.warn_explicit(msg, w.category,
+                                       w.filename, w.lineno)
+
+    def flush(self):
+        """
+        Emit all stored warnings.
+        """
+        for (filename, lineno, category), messages in sorted(self._warnings.items()):
+            for msg in sorted(messages):
+                warnings.warn_explicit(msg, category, filename, lineno)
+        self._warnings.clear()
 
 
 class NumbaError(Exception):
@@ -69,10 +135,10 @@ class TypingError(NumbaError):
 
 
 class UntypedAttributeError(TypingError):
-    def __init__(self, value, attr):
+    def __init__(self, value, attr, loc=None):
         msg = 'Unknown attribute "{attr}" of type {type}'.format(type=value,
-                                                              attr=attr)
-        super(UntypedAttributeError, self).__init__(msg)
+                                                                 attr=attr)
+        super(UntypedAttributeError, self).__init__(msg, loc=loc)
 
 
 class ByteCodeSupportError(NumbaError):
@@ -87,5 +153,12 @@ class CompilerError(NumbaError):
     """
 
 
+class ConstantInferenceError(NumbaError):
+    """
+    Failure during constant inference.
+    """
+
+
 __all__ += [name for (name, value) in globals().items()
-            if not name.startswith('_') and issubclass(value, Exception)]
+            if not name.startswith('_') and isinstance(value, type)
+               and issubclass(value, (Exception, Warning))]

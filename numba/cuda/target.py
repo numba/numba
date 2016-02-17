@@ -21,13 +21,13 @@ from . import codegen, nvvmutils
 
 
 class CUDATypingContext(typing.BaseContext):
-    def init(self):
+    def load_additional_registries(self):
         from . import cudadecl, cudamath
 
-        self.install(cudadecl.registry)
-        self.install(cudamath.registry)
-        self.install(cmathdecl.registry)
-        self.install(operatordecl.registry)
+        self.install_registry(cudadecl.registry)
+        self.install_registry(cudamath.registry)
+        self.install_registry(cmathdecl.registry)
+        self.install_registry(operatordecl.registry)
 
 # -----------------------------------------------------------------------------
 # Implementation
@@ -44,16 +44,16 @@ class CUDATargetContext(BaseContext):
         return self._internal_codegen._create_empty_module(name)
 
     def init(self):
-        from . import cudaimpl, printimpl, libdevice
-
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
+        self._target_data = ll.create_target_data(nvvm.default_data_layout)
 
+    def load_additional_registries(self):
+        from . import cudaimpl, printimpl, libdevice
         self.install_registry(cudaimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(libdevice.registry)
         self.install_registry(cmathimpl.registry)
         self.install_registry(operatorimpl.registry)
-        self._target_data = ll.create_target_data(nvvm.default_data_layout)
 
     def codegen(self):
         return self._internal_codegen
