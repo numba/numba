@@ -1,5 +1,6 @@
 from __future__ import print_function
 import numpy as np
+from functools import partial
 
 from numba.compiler import compile_isolated, Flags
 from numba import types, from_dtype, errors, typeof
@@ -31,6 +32,10 @@ def ravel_array(a):
 
 def ravel_array_size(a):
     return a.ravel().size
+
+
+def numpy_ravel_array(a):
+    return np.ravel(a)
 
 
 def transpose_array(a):
@@ -164,9 +169,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.test_flatten_array(flags=no_pyobj_flags, layout='A')
 
     def test_ravel_array(self, flags=enable_pyobj_flags):
-        def check(a, assume_layout):
+        def generic_check(pyfunc, a, assume_layout):
             # compile
-            pyfunc = ravel_array
             arraytype1 = typeof(a)
             self.assertEqual(arraytype1.layout, assume_layout)
             cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
@@ -175,6 +179,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             expected = pyfunc(a)
             got = cfunc(a)
             np.testing.assert_equal(expected, got)
+
+        check_method = partial(generic_check, ravel_array)
+        check_function = partial(generic_check, numpy_ravel_array)
+
+        def check(*args, **kwargs):
+            check_method(*args, **kwargs)
+            check_function(*args, **kwargs)
 
         # Check 2D
         check(np.arange(9).reshape(3, 3), assume_layout='C')

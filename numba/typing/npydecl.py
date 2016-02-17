@@ -367,7 +367,7 @@ def _numpy_redirect(fname):
     infer_global(numpy_function, types.Function(cls))
 
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'median', 'var', 'std',
-             'cumsum', 'cumprod', 'argmin', 'argmax', 'nonzero']:
+             'cumsum', 'cumprod', 'argmin', 'argmax', 'nonzero', 'ravel']:
     _numpy_redirect(func)
 
 

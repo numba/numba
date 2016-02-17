@@ -1245,6 +1245,14 @@ def array_ravel(context, builder, sig, args):
     return res
 
 
+@lower_builtin(numpy.ravel, types.Array)
+def np_ravel(context, builder, sig, args):
+    def np_ravel_impl(a):
+        return a.ravel()
+
+    return context.compile_internal(builder, np_ravel_impl, sig, args)
+
+
 @lower_builtin('array.flatten', types.Array)
 def array_flatten(context, builder, sig, args):
     # Only support flattening to C layout currently.
