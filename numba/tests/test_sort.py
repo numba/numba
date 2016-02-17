@@ -12,7 +12,7 @@ from numba.compiler import compile_isolated, Flags
 from numba import jit, types, utils
 import numba.unittest_support as unittest
 from numba import testing
-from .support import TestCase, MemoryLeakMixin
+from .support import TestCase, MemoryLeakMixin, tag
 
 from numba.targets.quicksort import make_py_quicksort, make_jit_quicksort
 from .timsort import make_py_timsort, make_jit_timsort, MergeRun
@@ -155,6 +155,7 @@ class BaseTimsortTest(BaseSortingTest):
         f = self.timsort.merge_init
         return f(keys)
 
+    @tag('important')
     def test_binarysort(self):
         n = 20
         def check(l, n, start=0):
@@ -240,6 +241,7 @@ class BaseTimsortTest(BaseSortingTest):
         for i in range(len(l) - 1):
             check(l, i, n)
 
+    @tag('important')
     def test_gallop_left(self):
         n = 20
         f = self.timsort.gallop_left
@@ -626,6 +628,7 @@ class BaseQuicksortTest(BaseSortingTest):
         l = self.duprandom_list(n)
         check(l, n)
 
+    @tag('important')
     def test_run_quicksort(self):
         f = self.quicksort.run_quicksort
 
@@ -724,6 +727,7 @@ class TestNumpySort(TestCase):
             orig = np.random.randint(99, size=size)
             self.check_sort_inplace(pyfunc, cfunc, orig)
 
+    @tag('important')
     def test_array_sort_float(self):
         pyfunc = sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -758,6 +762,7 @@ class TestNumpySort(TestCase):
 
 class TestPythonSort(TestCase):
 
+    @tag('important')
     def test_list_sort(self):
         pyfunc = list_sort_usecase
         cfunc = jit(nopython=True)(pyfunc)

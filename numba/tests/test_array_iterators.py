@@ -5,7 +5,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
-from .support import TestCase, CompilationCache, MemoryLeakMixin
+from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
 
 
 def array_iter(arr):
@@ -112,6 +112,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     def check_array_ndenumerate_sum(self, arr, arrty):
         self.check_array_unary(arr, arrty, array_ndenumerate_sum)
 
+    @tag('important')
     def test_array_iter(self):
         # Test iterating over a 1d array
         arr = np.arange(6)
@@ -133,6 +134,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arr = np.bool_([1, 0, 0, 1]).reshape((2, 2))
         self.check_array_view_iter(arr, 1)
 
+    @tag('important')
     def test_array_flat_3d(self):
         arr = np.arange(24).reshape(4, 2, 3)
 
@@ -238,6 +240,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         for i in range(arr.size):
             check(arr, i)
 
+    @tag('important')
     def test_array_ndenumerate_2d(self):
         arr = np.arange(12).reshape(4, 3)
         arrty = typeof(arr)
@@ -290,6 +293,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(cfunc(0, 3), func(0, 3))
         self.assertPreciseEqual(cfunc(0, 0), func(0, 0))
 
+    @tag('important')
     def test_np_ndindex_array(self):
         func = np_ndindex_array
         arr = np.arange(12, dtype=np.int32)

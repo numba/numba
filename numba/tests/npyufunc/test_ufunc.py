@@ -5,6 +5,8 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import float32
 from numba.npyufunc import Vectorize
+from ..support import tag
+
 
 dtype = np.float32
 a = np.arange(80, dtype=dtype).reshape(8, 10)
@@ -45,6 +47,7 @@ vectorizers = [
 
 
 class TestUFuncs(unittest.TestCase):
+
     def _test_ufunc_attributes(self, cls, a, b, *args):
         "Test ufunc attributes"
         vectorizer = cls(add, *args)
@@ -66,6 +69,7 @@ class TestUFuncs(unittest.TestCase):
         info = (cls, a.shape)
         self.assertTrue(np.all(ufunc(a, b, c, d) == a + b + c + d), info)
 
+    @tag('important')
     def test_ufunc_attributes(self):
         for v in vectorizers: # 1D
             self._test_ufunc_attributes(v, a[0], b[0])
@@ -75,6 +79,7 @@ class TestUFuncs(unittest.TestCase):
             self._test_ufunc_attributes(v, a[:, np.newaxis, :],
                                         b[np.newaxis, :, :])
 
+    @tag('important')
     def test_broadcasting(self):
         for v in vectorizers: # 1D
             self._test_broadcasting(v, a[0], b[0], c[0], d[0])
@@ -84,6 +89,7 @@ class TestUFuncs(unittest.TestCase):
             self._test_broadcasting(v, a[:, np.newaxis, :], b[np.newaxis, :, :],
                                     c[:, np.newaxis, :], d[np.newaxis, :, :])
 
+    @tag('important')
     def test_implicit_broadcasting(self):
         for v in vectorizers:
             vectorizer = v(add)

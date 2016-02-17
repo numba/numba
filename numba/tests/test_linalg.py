@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 
 import contextlib
 from itertools import product
@@ -9,7 +9,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import jit, errors
-from .support import TestCase
+from .support import TestCase, tag
 from .matmul_usecase import matmul_usecase, needs_matmul, needs_blas
 
 try:
@@ -239,6 +239,7 @@ class TestProduct(TestCase):
             out = np.empty((m, n), np.float32)
             self.assert_mismatching_dtypes(cfunc3, (a, b, out), func_name)
 
+    @tag('important')
     def test_dot_mm(self):
         """
         Test matrix * matrix np.dot()
@@ -266,7 +267,7 @@ class TestProduct(TestCase):
         """
         self.check_dot_mm(matmul_usecase, None, "'@'")
 
-    @needs_matmul
+    @needs_blas
     def test_contiguity_warnings(self):
         m, k, n = 2, 3, 4
         dtype = np.float64
@@ -335,6 +336,7 @@ class TestLinalgInv(TestCase):
         msg = "Matrix is singular and cannot be inverted"
         self.assert_error(cfunc, args, msg)
 
+    @tag('important')
     @needs_lapack
     def test_linalg_inv(self):
         """

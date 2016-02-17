@@ -6,7 +6,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import types, jit, typeof
-from .support import MemoryLeakMixin, TestCase
+from .support import MemoryLeakMixin, TestCase, tag
 
 
 def getitem_usecase(a, b):
@@ -111,6 +111,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
         self.check_getitem_indices(arr, indices)
 
+    @tag('important')
     def test_getitem_array(self):
         # Test advanced indexing with a single array index
         N = 4
