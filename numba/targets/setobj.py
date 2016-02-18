@@ -40,14 +40,13 @@ def make_entry_cls(set_type):
     return cgutils.create_struct_proxy(types.SetEntry(set_type), kind='data')
 
 
-def get_payload(context, builder, set_type, value):
+def get_payload_struct(context, builder, set_type, ptr):
     """
     Given a set value and type, get its payload structure (as a
     reference, so that mutations are seen by all).
     """
     payload_type = context.get_data_type(types.SetPayload(set_type))
-    payload = context.nrt_meminfo_data(builder, value.meminfo)
-    payload = builder.bitcast(payload, payload_type.as_pointer())
+    payload = builder.bitcast(ptr, payload_type.as_pointer())
     return make_payload_cls(set_type)(context, builder, ref=payload)
 
 
@@ -55,7 +54,7 @@ def get_entry_size(context, set_type):
     """
     Return the entry size for the given set type.
     """
-    llty = context.get_data_type(types.SetPayload(set_type))
+    llty = context.get_data_type(types.SetEntry(set_type))
     return context.get_abi_sizeof(llty)
 
 
@@ -68,6 +67,8 @@ FALLBACK = -43
 
 MINSIZE = 4
 #MINSIZE = 16
+
+DEBUG_ALLOCS = False
 
 
 def get_hash_value(context, builder, typ, value):
@@ -108,8 +109,16 @@ def is_hash_used(context, builder, h):
 SetLoop = collections.namedtuple('SetLoop', ('entry', 'do_break'))
 
 
-class _SetPayloadMixin(object):
-    # XXX use composition rather than inheritance for the Payload?
+class _SetPayload(object):
+
+    def __init__(self, context, builder, set_type, ptr):
+        payload = get_payload_struct(context, builder, set_type, ptr)
+        self._context = context
+        self._builder = builder
+        self._ty = set_type
+        self._payload = payload
+        self._entries = payload._get_ptr_by_name('entries')
+        self._ptr = ptr
 
     @property
     def mask(self):
@@ -138,48 +147,36 @@ class _SetPayloadMixin(object):
 
     @property
     def entries(self):
-        return self._payload._get_ptr_by_name('entries')
+        """
+        A pointer to the start of the entries array.
+        """
+        return self._entries
 
-    def get_entry(self, entries, idx):
+    @property
+    def ptr(self):
         """
-        Get entry number *idx* in the *entries* table.
+        A pointer to the start of the NRT-allocated area.
         """
-        ptr = cgutils.gep(self._builder, entries, idx)
-        entry = make_entry_cls(self._ty)(self._context, self._builder, ref=ptr)
+        return self._ptr
+
+    def get_entry(self, idx):
+        """
+        Get entry number *idx*.
+        """
+        entry_ptr = cgutils.gep(self._builder, self._entries, idx)
+        entry = make_entry_cls(self._ty)(self._context, self._builder,
+                                         ref=entry_ptr)
         return entry
 
-
-class SetInstance(_SetPayloadMixin):
-
-    def __init__(self, context, builder, set_type, set_val):
-        self._context = context
-        self._builder = builder
-        self._ty = set_type
-        self._entrysize = get_entry_size(context, set_type)
-        self._entrymodel = context.data_model_manager[types.SetPayload(set_type)]
-        self._datamodel = context.data_model_manager[set_type.dtype]
-        self._set = make_set_cls(set_type)(context, builder, set_val)
-
-    @property
-    def dtype(self):
-        return self._ty.dtype
-
-    @property
-    def _payload(self):
-        # This cannot be cached as it can be reallocated!
-        return get_payload(self._context, self._builder, self._ty, self._set)
-
-    @property
-    def value(self):
-        return self._set._getvalue()
-
-    @property
-    def meminfo(self):
-        return self._set.meminfo
-
-    def _lookup(self, entries, item, h):
+    def _lookup(self, item, h):
         """
         Lookup the *item* with the given hash values in the entries.
+
+        Return a (found, entry index) tuple:
+        - If found is true, <entry index> points to the entry containing
+          the item.
+        - If found is false, <entry index> points to the empty entry that
+          the item can be written to.
         """
         context = self._context
         builder = self._builder
@@ -209,7 +206,7 @@ class SetInstance(_SetPayloadMixin):
 
         with builder.goto_block(bb_body):
             i = builder.load(index)
-            entry = self.get_entry(entries, i)
+            entry = self.get_entry(i)
             entry_hash = entry.hash
 
             with builder.if_then(builder.icmp_unsigned('==', h, entry_hash)):
@@ -249,35 +246,70 @@ class SetInstance(_SetPayloadMixin):
         return found, builder.load(index)
 
     @contextlib.contextmanager
-    def _iterate(self, entries, size):
+    def _iterate(self):
         """
-        Iterate over the *size* *entries*.
-        A SetLoop is yielded.
+        Iterate over the payload's entries.  Yield a SetLoop.
         """
         context = self._context
         builder = self._builder
 
         intp_t = context.get_value_type(types.intp)
         one = ir.Constant(intp_t, 1)
+        size = builder.add(self.mask, one)
 
         with cgutils.for_range(builder, size) as range_loop:
-            entry = self.get_entry(entries, range_loop.index)
+            entry = self.get_entry(range_loop.index)
             is_used = is_hash_used(context, builder, entry.hash)
             with builder.if_then(is_used):
                 loop = SetLoop(entry=entry, do_break=range_loop.do_break)
                 yield loop
 
-    def _add_entry(self, entries, item, h, do_resize=True):
+
+class SetInstance(object):
+
+    def __init__(self, context, builder, set_type, set_val):
+        self._context = context
+        self._builder = builder
+        self._ty = set_type
+        self._entrysize = get_entry_size(context, set_type)
+        self._entrymodel = context.data_model_manager[types.SetPayload(set_type)]
+        self._datamodel = context.data_model_manager[set_type.dtype]
+        self._set = make_set_cls(set_type)(context, builder, set_val)
+
+    @property
+    def dtype(self):
+        return self._ty.dtype
+
+    @property
+    def payload(self):
+        """
+        The _SetPayload for this set.
+        """
+        # This cannot be cached as the pointer can move around!
         context = self._context
         builder = self._builder
 
-        found, i = self._lookup(entries, item, h)
+        ptr = self._context.nrt_meminfo_data(builder, self.meminfo)
+        return _SetPayload(context, builder, self._ty, ptr)
+
+    @property
+    def value(self):
+        return self._set._getvalue()
+
+    @property
+    def meminfo(self):
+        return self._set.meminfo
+
+    def _add_entry(self, payload, item, h, do_resize=True):
+        context = self._context
+        builder = self._builder
+
+        found, i = payload._lookup(item, h)
         not_found = builder.not_(found)
-        payload = self._payload
 
         with builder.if_then(not_found):
             # Not found => add it
-            entry = self.get_entry(entries, i)
+            entry = payload.get_entry(i)
             old_hash = entry.hash
             entry.hash = h
             entry.key = item
@@ -297,17 +329,17 @@ class SetInstance(_SetPayloadMixin):
         context = self._context
         builder = self._builder
 
-        entries = self.entries
+        payload = self.payload
         h = get_hash_value(context, builder, self._ty.dtype, item)
-        self._add_entry(entries, item, h)
+        self._add_entry(payload, item, h)
 
     def contains(self, item):
         context = self._context
         builder = self._builder
 
-        entries = self.entries
+        payload = self.payload
         h = get_hash_value(context, builder, self._ty.dtype, item)
-        found, i = self._lookup(entries, item, h)
+        found, i = payload._lookup(item, h)
         return found
 
     @classmethod
@@ -353,9 +385,11 @@ class SetInstance(_SetPayloadMixin):
         one = ir.Constant(intp_t, 1)
         two = ir.Constant(intp_t, 2)
 
+        payload = self.payload
+
         # Ensure number of entries >= 2 * used
         min_entries = builder.shl(nitems, one)
-        size = builder.add(self.mask, one)
+        size = builder.add(payload.mask, one)
         need_resize = builder.icmp_unsigned('>=', min_entries, size)
 
         with builder.if_then(need_resize, likely=False):
@@ -379,13 +413,14 @@ class SetInstance(_SetPayloadMixin):
 
             new_size = builder.load(new_size_p)
 
-            #context.printf(builder, "upsize to %zd items: mask = %zd, min entries = %zd, new size = %zd\n",
-                           #(nitems, self.mask, min_entries, new_size))
+            if DEBUG_ALLOCS:
+                context.printf(builder,
+                               "upsize to %zd items: current size = %zd, "
+                               "min entries = %zd, new size = %zd\n",
+                               (nitems, size, min_entries, new_size))
 
             # Allocate new entries
-            old_entries = self.entries
-            old_size = size
-            old_ptr = context.nrt_meminfo_data(builder, self.meminfo)
+            old_payload = payload
 
             ok = self._allocate_payload(new_size, realloc=True)
             with builder.if_then(builder.not_(ok), likely=False):
@@ -393,13 +428,13 @@ class SetInstance(_SetPayloadMixin):
                                                   ("cannot grow set",))
 
             # Re-insert old entries
-            entries = self.entries
-            with self._iterate(old_entries, old_size) as loop:
+            payload = self.payload
+            with old_payload._iterate() as loop:
                 entry = loop.entry
-                self._add_entry(entries, entry.key, entry.hash,
+                self._add_entry(payload, entry.key, entry.hash,
                                 do_resize=False)
 
-            self._free_payload(old_ptr)
+            self._free_payload(old_payload.ptr)
 
     def _allocate_payload(self, nentries, realloc=False):
         """
@@ -417,10 +452,11 @@ class SetInstance(_SetPayloadMixin):
         zero = ir.Constant(intp_t, 0)
         one = ir.Constant(intp_t, 1)
 
-        payload_type = context.get_data_type(types.ListPayload(self._ty))
+        payload_type = context.get_data_type(types.SetPayload(self._ty))
         payload_size = context.get_abi_sizeof(payload_type)
-
         entry_size = get_entry_size(context, self._ty)
+        # Account for the fact that the payload struct already contains an entry
+        payload_size -= entry_size
 
         # Total allocation size = <payload header size> + nentries * entry_size
         allocsize, ovf = cgutils.muladd_with_overflow(builder, nentries,
@@ -446,17 +482,17 @@ class SetInstance(_SetPayloadMixin):
                 with if_ok:
                     if not realloc:
                         self._set.meminfo = meminfo
+                    payload = self.payload
                     # Initialize entries to 0xff (EMPTY)
-                    ptr = context.nrt_meminfo_data(builder, meminfo)
-                    cgutils.memset(builder, ptr, allocsize, 0xFF)
-                    payload = self._payload
+                    cgutils.memset(builder, payload.ptr, allocsize, 0xFF)
                     payload.used = zero
                     payload.fill = zero
                     new_mask = builder.sub(nentries, one)
-                    #context.printf(builder,
-                                   #"allocated %zd bytes for set at %p: setting mask to %zd\n",
-                                   #(allocsize, ptr, new_mask))
                     payload.mask = new_mask
+                    if DEBUG_ALLOCS:
+                        context.printf(builder,
+                                       "allocated %zd bytes for set at %p: mask = %zd\n",
+                                       (allocsize, payload.ptr, new_mask))
 
         return builder.load(ok)
 
@@ -494,7 +530,7 @@ def set_constructor(context, builder, sig, args):
 @lower_builtin(len, types.Set)
 def set_len(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
-    return inst.used
+    return inst.payload.used
 
 @lower_builtin("in", types.Any, types.Set)
 def in_set(context, builder, sig, args):
@@ -509,8 +545,6 @@ def in_set(context, builder, sig, args):
 def set_add(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     item = args[1]
-
-    n = inst.used
     inst.add(item)
 
     return context.get_dummy_value()

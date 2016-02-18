@@ -204,6 +204,8 @@ class ListInstance(_ListPayloadMixin):
         payload_size = context.get_abi_sizeof(payload_type)
 
         itemsize = get_itemsize(context, list_type)
+        # Account for the fact that the payload struct contains one entry
+        payload_size -= itemsize
 
         ok = cgutils.alloca_once_value(builder, cgutils.true_bit)
         self = cls(context, builder, list_type, None)
@@ -265,6 +267,8 @@ class ListInstance(_ListPayloadMixin):
         def _payload_realloc(new_allocated):
             payload_type = context.get_data_type(types.ListPayload(self._ty))
             payload_size = context.get_abi_sizeof(payload_type)
+            # Account for the fact that the payload struct contains one entry
+            payload_size -= itemsize
 
             allocsize, ovf = cgutils.muladd_with_overflow(
                 builder, new_allocated,
