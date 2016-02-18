@@ -13,18 +13,30 @@ import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
 import numba.unittest_support as unittest
-from .support import TestCase, enable_pyobj_flags, MemoryLeakMixin, tag
+from .support import TestCase, enable_pyobj_flags, nrt_flags, MemoryLeakMixin, tag
 
 
-def build_set_literal_usecase(*args):
+def _build_set_literal_usecase(code, args):
     ns = {}
-    src = """if 1:
-    def build_set():
-        return {%s}
-    """ % ', '.join(repr(arg) for arg in args)
+    src = code % {'initializer': ', '.join(repr(arg) for arg in args)}
     code = compile(src, '<>', 'exec')
     eval(code, ns)
     return ns['build_set']
+
+def set_literal_return_usecase(args):
+    code = """if 1:
+    def build_set():
+        return {%(initializer)s}
+    """
+    return _build_set_literal_usecase(code, args)
+
+def set_literal_convert_usecase(args):
+    code = """if 1:
+    def build_set():
+        my_set = {%(initializer)s}
+        return list(my_set)
+    """
+    return _build_set_literal_usecase(code, args)
 
 
 def constructor_usecase(arg):
@@ -42,28 +54,11 @@ def iterator_usecase(arg):
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
                                      "set literals unavailable before Python 2.7")
 
-class TestSetLiterals(TestCase):
 
-    @needs_set_literals
-    def test_build_set(self, flags=enable_pyobj_flags):
-        pyfunc = build_set_literal_usecase(1, 2, 3, 2)
-        self.run_nullary_func(pyfunc, flags=flags)
-
-    @needs_set_literals
-    def test_build_heterogenous_set(self, flags=enable_pyobj_flags):
-        pyfunc = build_set_literal_usecase(1, 2.0, 3j, 2)
-        self.run_nullary_func(pyfunc, flags=flags)
-        # Check that items are inserted in the right order (here the
-        # result will be {2}, not {2.0})
-        pyfunc = build_set_literal_usecase(2.0, 2)
-        got, expected = self.run_nullary_func(pyfunc, flags=flags)
-        self.assertIs(type(got.pop()), type(expected.pop()))
-
-
-class TestSets(MemoryLeakMixin, TestCase):
+class BaseTest(MemoryLeakMixin, TestCase):
 
     def setUp(self):
-        super(TestSets, self).setUp()
+        super(BaseTest, self).setUp()
         self.rnd = np.random.RandomState(42)
 
     def duplicates_array(self, n):
@@ -79,6 +74,38 @@ class TestSets(MemoryLeakMixin, TestCase):
         """
         a = np.arange(n ** 2)
         return self.rnd.choice(a, (n,))
+
+
+class TestSetLiterals(BaseTest):
+
+    @needs_set_literals
+    def test_build_set(self, flags=enable_pyobj_flags):
+        pyfunc = set_literal_return_usecase((1, 2, 3, 2))
+        self.run_nullary_func(pyfunc, flags=flags)
+
+    @needs_set_literals
+    def test_build_heterogenous_set(self, flags=enable_pyobj_flags):
+        pyfunc = set_literal_return_usecase((1, 2.0, 3j, 2))
+        self.run_nullary_func(pyfunc, flags=flags)
+        # Check that items are inserted in the right order (here the
+        # result will be {2}, not {2.0})
+        pyfunc = set_literal_return_usecase((2.0, 2))
+        got, expected = self.run_nullary_func(pyfunc, flags=flags)
+        self.assertIs(type(got.pop()), type(expected.pop()))
+
+    @needs_set_literals
+    def test_build_set_nopython(self):
+        arg = list(self.sparse_array(50))
+        #arg = (1, 2, 3, 42, 5, 3)
+        pyfunc = set_literal_convert_usecase(arg)
+        cfunc = jit(nopython=True)(pyfunc)
+
+        expected = pyfunc()
+        got = cfunc()
+        self.assertPreciseEqual(sorted(expected), sorted(got))
+
+
+class TestSets(BaseTest):
 
     def test_constructor(self):
         pyfunc = constructor_usecase

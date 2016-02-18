@@ -112,6 +112,12 @@ class CPUContext(BaseContext):
         """
         return listobj.build_list(self, builder, list_type, items)
 
+    def build_set(self, builder, set_type, items):
+        """
+        Build a set from the Numba *set_type* and its initial *items*.
+        """
+        return setobj.build_set(self, builder, set_type, items)
+
     def post_lowering(self, mod, library):
         if self.is32bit:
             # 32-bit machine needs to replace all 64-bit div/rem to avoid

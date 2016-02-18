@@ -182,7 +182,8 @@ class BuildTupleConstraint(object):
             typeinfer.add_type(self.target, tup)
 
 
-class BuildListConstraint(object):
+class _BuildContainerConstraint(object):
+
     def __init__(self, target, items, loc):
         self.target = target
         self.items = items
@@ -193,11 +194,21 @@ class BuildListConstraint(object):
         oset = typevars[self.target]
         tsets = [typevars[i.name].get() for i in self.items]
         if not tsets:
-            typeinfer.add_type(self.target, types.List(types.undefined))
+            typeinfer.add_type(self.target,
+                               self.container_type(types.undefined))
         else:
             for typs in itertools.product(*tsets):
                 unified = typeinfer.context.unify_types(*typs)
-                typeinfer.add_type(self.target, types.List(unified))
+                typeinfer.add_type(self.target,
+                                   self.container_type(unified))
+
+
+class BuildListConstraint(_BuildContainerConstraint):
+    container_type = types.List
+
+
+class BuildSetConstraint(_BuildContainerConstraint):
+    container_type = types.Set
 
 
 class ExhaustIterConstraint(object):
@@ -862,6 +873,10 @@ class TypeInferer(object):
         elif expr.op == 'build_list':
             constraint = BuildListConstraint(target.name, items=expr.items,
                                              loc=inst.loc)
+            self.constraints.append(constraint)
+        elif expr.op == 'build_set':
+            constraint = BuildSetConstraint(target.name, items=expr.items,
+                                            loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'cast':
             self.constraints.append(Propagate(dst=target.name,

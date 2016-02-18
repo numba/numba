@@ -661,17 +661,30 @@ class SetIterInstance(object):
             self.index = self._builder.add(loop.index, one)
             loop.do_break()
 
-        #nitems = inst.size
-        #is_valid = builder.icmp_signed('<', index, nitems)
-        #result.set_valid(is_valid)
-
-        #with builder.if_then(is_valid):
-            #result.yield_(inst.getitem(index))
-            #inst.index = builder.add(index, context.get_constant(types.intp, 1))
-
 
 #-------------------------------------------------------------------------------
 # Constructors
+
+def build_set(context, builder, set_type, items):
+    """
+    Build a set of the given type, containing the given items.
+    """
+    nitems = len(items)
+    inst = SetInstance.allocate(context, builder, set_type, nitems)
+
+    # XXX preallocate the set so as to avoid resizes?
+
+    # Populate set.  We don't want to inline the insertion code for
+    # each item, instead we create a LLVM array and iterate over it.
+    array = cgutils.pack_array(builder, items)
+    array_ptr = cgutils.alloca_once_value(builder, array)
+
+    count = context.get_constant(types.intp, nitems)
+    with cgutils.for_range(builder, count) as loop:
+        item = builder.load(cgutils.gep(builder, array_ptr, 0, loop.index))
+        inst.add(item)
+
+    return impl_ret_new_ref(context, builder, set_type, inst.value)
 
 @lower_builtin(set, types.IterableType)
 def set_constructor(context, builder, sig, args):
@@ -688,7 +701,6 @@ def set_constructor(context, builder, sig, args):
     set_update(context, builder, update_sig, update_args)
 
     return impl_ret_new_ref(context, builder, set_type, inst.value)
-
 
 
 #-------------------------------------------------------------------------------
