@@ -216,7 +216,7 @@ class ListInstance(_ListPayloadMixin):
             builder.store(cgutils.false_bit, ok)
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
+            meminfo = context.nrt_meminfo_new_varsize(builder, size=allocsize)
             with builder.if_else(cgutils.is_null(builder, meminfo),
                                  likely=False) as (if_error, if_ok):
                 with if_error:

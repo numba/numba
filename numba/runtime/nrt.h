@@ -183,10 +183,13 @@ size_t NRT_MemInfo_size(NRT_MemInfo* mi);
  * NRT API for resizable buffers.
  */
 VISIBILITY_HIDDEN
-NRT_MemInfo *NRT_MemInfo_varsize_alloc(size_t size);
+NRT_MemInfo *NRT_MemInfo_new_varsize(size_t size);
+VISIBILITY_HIDDEN
+void *NRT_MemInfo_varsize_alloc(NRT_MemInfo *mi, size_t size);
 VISIBILITY_HIDDEN
 void *NRT_MemInfo_varsize_realloc(NRT_MemInfo *mi, size_t size);
-
+VISIBILITY_HIDDEN
+void NRT_MemInfo_varsize_free(NRT_MemInfo *mi, void *ptr);
 
 /*
  * Print debug info to FILE

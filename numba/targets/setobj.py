@@ -4,6 +4,8 @@ Support for native homogenous lists.
 
 from __future__ import print_function, absolute_import, division
 
+import collections
+import contextlib
 import math
 
 from llvmlite import ir
@@ -38,7 +40,7 @@ def make_entry_cls(set_type):
     return cgutils.create_struct_proxy(types.SetEntry(set_type), kind='data')
 
 
-def get_set_payload(context, builder, set_type, value):
+def get_payload(context, builder, set_type, value):
     """
     Given a set value and type, get its payload structure (as a
     reference, so that mutations are seen by all).
@@ -63,6 +65,9 @@ def get_entry_size(context, set_type):
 EMPTY = -1
 DELETED = -2
 FALLBACK = -43
+
+MINSIZE = 4
+#MINSIZE = 16
 
 
 def get_hash_value(context, builder, typ, value):
@@ -100,6 +105,9 @@ def is_hash_used(context, builder, h):
     return builder.icmp_unsigned('<', h, deleted)
 
 
+SetLoop = collections.namedtuple('SetLoop', ('entry', 'do_break'))
+
+
 class _SetPayloadMixin(object):
 
     @property
@@ -131,13 +139,11 @@ class _SetPayloadMixin(object):
     def entries(self):
         return self._payload._get_ptr_by_name('entries')
 
-    def get_entry(self, idx, entries=None):
+    def get_entry(self, entries, idx):
         """
-        Get entry number idx.
+        Get entry number *idx* in the *entries* table.
         """
-        if entries is None:
-            entries = self.entries
-        ptr = cgutils.gep(self._builder, self.entries, idx)
+        ptr = cgutils.gep(self._builder, entries, idx)
         entry = make_entry_cls(self._ty)(self._context, self._builder, ref=ptr)
         return entry
 
@@ -157,10 +163,12 @@ class SetInstance(_SetPayloadMixin):
     def dtype(self):
         return self._ty.dtype
 
+    # XXX set ._payload manually when resizing to avoid generating too much IR?
+
     @property
     def _payload(self):
-        # This cannot be cached as it can be reallocated
-        return get_set_payload(self._context, self._builder, self._ty, self._set)
+        # This cannot be cached as it can be reallocated!
+        return get_payload(self._context, self._builder, self._ty, self._set)
 
     @property
     def value(self):
@@ -170,7 +178,7 @@ class SetInstance(_SetPayloadMixin):
     def meminfo(self):
         return self._set.meminfo
 
-    def lookup(self, item, h):
+    def _lookup(self, entries, item, h):
         context = self._context
         builder = self._builder
 
@@ -199,7 +207,7 @@ class SetInstance(_SetPayloadMixin):
 
         with builder.goto_block(bb_body):
             i = builder.load(index)
-            entry = self.get_entry(i)
+            entry = self.get_entry(entries, i)
             entry_hash = entry.hash
 
             with builder.if_then(builder.icmp_unsigned('==', h, entry_hash)):
@@ -238,34 +246,65 @@ class SetInstance(_SetPayloadMixin):
 
         return found, builder.load(index)
 
-    def add(self, item):
+    @contextlib.contextmanager
+    def _iterate(self, entries, size):
+        """
+        Iterate over the *size* *entries*.
+        A SetLoop is yielded.
+        """
         context = self._context
         builder = self._builder
-        # FIXME first resize if necessary
 
-        h = get_hash_value(context, builder, self._ty.dtype, item)
-        found, i = self.lookup(item, h)
-        with builder.if_then(builder.not_(found)):
+        intp_t = context.get_value_type(types.intp)
+        one = ir.Constant(intp_t, 1)
+
+        with cgutils.for_range(builder, size) as range_loop:
+            entry = self.get_entry(entries, range_loop.index)
+            is_used = is_hash_used(context, builder, entry.hash)
+            with builder.if_then(is_used):
+                loop = SetLoop(entry=entry, do_break=range_loop.do_break)
+                yield loop
+
+    def _add_entry(self, entries, item, h, do_resize=True):
+        context = self._context
+        builder = self._builder
+
+        found, i = self._lookup(entries, item, h)
+        not_found = builder.not_(found)
+
+        with builder.if_then(not_found):
             # Not found => add it
-            entry = self.get_entry(i)
+            entry = self.get_entry(entries, i)
             old_hash = entry.hash
             entry.hash = h
             entry.value = item
             # used++
             used = self.used
             one = ir.Constant(used.type, 1)
-            self.used = builder.add(used, one)
+            used = self.used = builder.add(used, one)
             # fill++ if entry wasn't a deleted one
             with builder.if_then(is_hash_empty(context, builder, old_hash),
                                  likely=True):
                 self.fill = builder.add(self.fill, one)
+            # Grow table if necessary
+            if do_resize:
+                self.upsize(used)
+
+    def add(self, item):
+        context = self._context
+        builder = self._builder
+
+        entries = self.entries
+        h = get_hash_value(context, builder, self._ty.dtype, item)
+        self._add_entry(entries, item, h)
 
     def contains(self, item):
         context = self._context
         builder = self._builder
 
+        entries = self.entries
         h = get_hash_value(context, builder, self._ty.dtype, item)
-        found, i = self.lookup(item, h)
+        found, i = self._lookup(entries, item, h)
         return found
 
     @classmethod
@@ -279,45 +318,11 @@ class SetInstance(_SetPayloadMixin):
         intp_t = context.get_value_type(types.intp)
 
         # XXX for now, ignore nitems and choose a default value
-        if nitems is None:
-            nitems = 16
+        nentries = ir.Constant(intp_t, MINSIZE)
 
-        if isinstance(nitems, int):
-            nitems = ir.Constant(intp_t, nitems)
-        zero = ir.Constant(intp_t, 0)
-        one = ir.Constant(intp_t, 1)
-
-        payload_type = context.get_data_type(types.ListPayload(set_type))
-        payload_size = context.get_abi_sizeof(payload_type)
-
-        entry_size = get_entry_size(context, set_type)
-
-        ok = cgutils.alloca_once_value(builder, cgutils.true_bit)
         self = cls(context, builder, set_type, None)
-
-        # Total allocation size = <payload header size> + nitems * entry_size
-        allocsize, ovf = cgutils.muladd_with_overflow(builder, nitems,
-                                                      ir.Constant(intp_t, entry_size),
-                                                      ir.Constant(intp_t, payload_size))
-        with builder.if_then(ovf, likely=False):
-            builder.store(cgutils.false_bit, ok)
-
-        with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
-            with builder.if_else(cgutils.is_null(builder, meminfo),
-                                 likely=False) as (if_error, if_ok):
-                with if_error:
-                    builder.store(cgutils.false_bit, ok)
-                with if_ok:
-                    # Initialize entries to 0xff (empty)
-                    ptr = context.nrt_meminfo_data(builder, meminfo)
-                    cgutils.memset(builder, ptr, allocsize, 0xFF)
-                    self._set.meminfo = meminfo
-                    self._payload.used = zero
-                    self._payload.fill = zero
-                    self._payload.mask = builder.sub(nitems, one)
-
-        return builder.load(ok), self
+        ok = self._allocate_payload(nentries)
+        return ok, self
 
     @classmethod
     def allocate(cls, context, builder, set_type, nitems=None):
@@ -333,87 +338,134 @@ class SetInstance(_SetPayloadMixin):
                                               ("cannot allocate set",))
         return self
 
-    def resize(self, nitems):
+    def upsize(self, nitems):
         """
-        Ensure the set is properly sized for the given number of used entries.
-
-        *new_size* should be a power of 2!
+        When adding to the set, ensure it is properly sized for the given
+        number of used entries.
         """
         context = self._context
         builder = self._builder
         intp_t = nitems.type
 
-        context.call_conv.return_user_exc(builder, MemoryError,
-                                          ("cannot allocate set",))
-        return
+        one = ir.Constant(intp_t, 1)
+        two = ir.Constant(intp_t, 2)
 
-        #def _payload_realloc(new_allocated):
-            #payload_type = context.get_data_type(types.SetPayload(self._ty))
-            #payload_size = context.get_abi_sizeof(payload_type)
+        # Ensure number of entries >= 2 * used
+        min_entries = builder.shl(nitems, one)
+        size = builder.add(self.mask, one)
+        need_resize = builder.icmp_unsigned('>=', min_entries, size)
 
-            #allocsize, ovf = cgutils.muladd_with_overflow(
-                #builder, new_allocated,
-                #ir.Constant(intp_t, itemsize),
-                #ir.Constant(intp_t, payload_size))
-            #with builder.if_then(ovf, likely=False):
-                #context.call_conv.return_user_exc(builder, MemoryError,
-                                                  #("cannot resize set",))
+        with builder.if_then(need_resize, likely=False):
+            # Find out next suitable size
+            new_size_p = cgutils.alloca_once_value(builder, size)
 
-            #ptr = context.nrt_meminfo_varsize_realloc(builder, self._list.meminfo,
-                                                      #size=allocsize)
-            #cgutils.guard_memory_error(context, builder, ptr,
-                                       #"cannot resize set")
-            #self._payload.mask = builder.sub(new_allocated, one)
+            bb_body = builder.append_basic_block("calcsize.body")
+            bb_end = builder.append_basic_block("calcsize.end")
 
-        #context = self._context
-        #builder = self._builder
-        #intp_t = nitems.type
+            builder.branch(bb_body)
 
-        #itemsize = get_entry_size(context, self._ty)
-        #allocated = self._payload.allocated
+            with builder.goto_block(bb_body):
+                # Multiply by 4 (ensuring size remains a power of two)
+                new_size = builder.load(new_size_p)
+                new_size = builder.shl(new_size, two)
+                builder.store(new_size, new_size_p)
+                is_too_small = builder.icmp_unsigned('>=', min_entries, new_size)
+                builder.cbranch(is_too_small, bb_body, bb_end)
 
-        #one = ir.Constant(intp_t, 1)
-        #two = ir.Constant(intp_t, 2)
-        #eight = ir.Constant(intp_t, 8)
+            builder.position_at_end(bb_end)
 
-        ## Desired new_size >= nitems * 2 (to limit collisions)
-        #new_size = builder.shl(nitems, one)
+            new_size = builder.load(new_size_p)
 
-        ## allocated < new_size
-        #is_too_small = builder.icmp_signed('<', allocated, new_size)
-        ## (allocated >> 2) > new_size
-        #is_too_large = builder.icmp_signed('>', builder.ashr(allocated, two), new_size)
+            #context.printf(builder, "upsize to %zd items: mask = %zd, min entries = %zd, new size = %zd\n",
+                           #(nitems, self.mask, min_entries, new_size))
 
-        #with builder.if_then(is_too_large, likely=False):
-            ## Exact downsize to requested size
-            ## NOTE: is_too_large must be aggressive enough to avoid repeated
-            ## upsizes and downsizes when growing a list.
-            #_payload_realloc(new_size)
+            # Allocate new entries
+            old_entries = self.entries
+            old_size = size
+            old_ptr = context.nrt_meminfo_data(builder, self.meminfo)
 
-        #with builder.if_then(is_too_small, likely=False):
-            ## Upsize with moderate over-allocation (size + size >> 2 + 8)
-            #new_allocated = builder.add(eight,
-                                        #builder.add(new_size,
-                                                    #builder.ashr(new_size, two)))
-            #_payload_realloc(new_allocated)
+            ok = self._allocate_payload(new_size, realloc=True)
+            with builder.if_then(builder.not_(ok), likely=False):
+                context.call_conv.return_user_exc(builder, MemoryError,
+                                                  ("cannot grow set",))
+
+            # Re-insert old entries
+            entries = self.entries
+            with self._iterate(old_entries, old_size) as loop:
+                entry = loop.entry
+                self._add_entry(entries, entry.value, entry.hash,
+                                do_resize=False)
+
+            self._free_payload(old_ptr)
+
+    def _allocate_payload(self, nentries, realloc=False):
+        """
+        Allocate and initialize payload for the given number of entries.
+        If *realloc* is True, the existing meminfo is reused.
+
+        CAUTION: *nentries* must be a power of 2!
+        """
+        context = self._context
+        builder = self._builder
+
+        ok = cgutils.alloca_once_value(builder, cgutils.true_bit)
+
+        intp_t = context.get_value_type(types.intp)
+        zero = ir.Constant(intp_t, 0)
+        one = ir.Constant(intp_t, 1)
+
+        payload_type = context.get_data_type(types.ListPayload(self._ty))
+        payload_size = context.get_abi_sizeof(payload_type)
+
+        entry_size = get_entry_size(context, self._ty)
+
+        # Total allocation size = <payload header size> + nentries * entry_size
+        allocsize, ovf = cgutils.muladd_with_overflow(builder, nentries,
+                                                      ir.Constant(intp_t, entry_size),
+                                                      ir.Constant(intp_t, payload_size))
+        with builder.if_then(ovf, likely=False):
+            builder.store(cgutils.false_bit, ok)
+
+        with builder.if_then(builder.load(ok), likely=True):
+            if realloc:
+                meminfo = self._set.meminfo
+                ptr = context.nrt_meminfo_varsize_alloc(builder, meminfo,
+                                                        size=allocsize)
+                alloc_ok = cgutils.is_null(builder, ptr)
+            else:
+                meminfo = context.nrt_meminfo_new_varsize(builder, size=allocsize)
+                alloc_ok = cgutils.is_null(builder, meminfo)
+
+            with builder.if_else(cgutils.is_null(builder, meminfo),
+                                 likely=False) as (if_error, if_ok):
+                with if_error:
+                    builder.store(cgutils.false_bit, ok)
+                with if_ok:
+                    if not realloc:
+                        self._set.meminfo = meminfo
+                    # Initialize entries to 0xff (EMPTY)
+                    ptr = context.nrt_meminfo_data(builder, meminfo)
+                    cgutils.memset(builder, ptr, allocsize, 0xFF)
+                    payload = self._payload
+                    payload.used = zero
+                    payload.fill = zero
+                    new_mask = builder.sub(nentries, one)
+                    #context.printf(builder,
+                                   #"allocated %zd bytes for set at %p: setting mask to %zd\n",
+                                   #(allocsize, ptr, new_mask))
+                    payload.mask = new_mask
+
+        return builder.load(ok)
+
+    def _free_payload(self, ptr):
+        """
+        Allocate an old payload at *ptr*.
+        """
+        self._context.nrt_meminfo_varsize_free(self._builder, self.meminfo, ptr)
 
 
 #-------------------------------------------------------------------------------
 # Constructors
-
-#def build_list(context, builder, list_type, items):
-    #"""
-    #Build a list of the given type, containing the given items.
-    #"""
-    #nitems = len(items)
-    #inst = SetInstance.allocate(context, builder, list_type, nitems)
-    ## Populate list
-    #inst.size = context.get_constant(types.intp, nitems)
-    #for i, val in enumerate(items):
-        #inst.setitem(context.get_constant(types.intp, i), val)
-
-    #return impl_ret_new_ref(context, builder, list_type, inst.value)
-
 
 @lower_builtin(set, types.IterableType)
 def set_constructor(context, builder, sig, args):
@@ -453,8 +505,6 @@ def set_add(context, builder, sig, args):
     item = args[1]
 
     n = inst.used
-    #new_size = builder.add(n, ir.Constant(n.type, 1))
-    #inst.resize(new_size)
     inst.add(item)
 
     return context.get_dummy_value()

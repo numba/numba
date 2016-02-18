@@ -343,7 +343,7 @@ nrt_varsize_dtor(void *ptr, size_t size, void *info) {
     NRT_Free(ptr);
 }
 
-NRT_MemInfo *NRT_MemInfo_varsize_alloc(size_t size)
+NRT_MemInfo *NRT_MemInfo_new_varsize(size_t size)
 {
     NRT_MemInfo *mi;
     void *data = NRT_Allocate(size);
@@ -354,6 +354,22 @@ NRT_MemInfo *NRT_MemInfo_varsize_alloc(size_t size)
     NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_alloc size=%zu "
                               "-> meminfo=%p, data=%p\n", size, mi, data));
     return mi;
+}
+
+void *NRT_MemInfo_varsize_alloc(NRT_MemInfo *mi, size_t size)
+{
+    if (mi->dtor != nrt_varsize_dtor) {
+        nrt_fatal_error("ERROR: NRT_MemInfo_varsize_alloc called "
+                        "with a non varsize-allocated meminfo");
+        return NULL;  /* unreachable */
+    }
+    mi->data = NRT_Allocate(size);
+    if (mi->data == NULL)
+        return NULL;
+    mi->size = size;
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_alloc %p size=%zu "
+                              "-> data=%p\n", mi, size, mi->data));
+    return mi->data;
 }
 
 void *NRT_MemInfo_varsize_realloc(NRT_MemInfo *mi, size_t size)
@@ -370,6 +386,13 @@ void *NRT_MemInfo_varsize_realloc(NRT_MemInfo *mi, size_t size)
     NRT_Debug(nrt_debug_print("NRT_MemInfo_varsize_realloc %p size=%zu "
                               "-> data=%p\n", mi, size, mi->data));
     return mi->data;
+}
+
+void NRT_MemInfo_varsize_free(NRT_MemInfo *mi, void *ptr)
+{
+    NRT_Free(ptr);
+    if (ptr == mi->data)
+        mi->data = NULL;
 }
 
 /*
