@@ -5,6 +5,7 @@ Assorted utilities for use in tests.
 import cmath
 import contextlib
 import errno
+import gc
 import math
 import os
 import shutil
@@ -518,6 +519,8 @@ class MemoryLeak(object):
     __enable_leak_check = True
 
     def memory_leak_setup(self):
+        # Clean up any NRT-backed objects hanging in a dead reference cycle
+        gc.collect()
         self.__init_stats = rtsys.get_allocation_stats()
 
     def memory_leak_teardown(self):
