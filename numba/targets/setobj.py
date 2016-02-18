@@ -109,6 +109,7 @@ SetLoop = collections.namedtuple('SetLoop', ('entry', 'do_break'))
 
 
 class _SetPayloadMixin(object):
+    # XXX use composition rather than inheritance for the Payload?
 
     @property
     def mask(self):
@@ -154,16 +155,14 @@ class SetInstance(_SetPayloadMixin):
         self._context = context
         self._builder = builder
         self._ty = set_type
-        self._set = make_set_cls(set_type)(context, builder, set_val)
         self._entrysize = get_entry_size(context, set_type)
         self._entrymodel = context.data_model_manager[types.SetPayload(set_type)]
         self._datamodel = context.data_model_manager[set_type.dtype]
+        self._set = make_set_cls(set_type)(context, builder, set_val)
 
     @property
     def dtype(self):
         return self._ty.dtype
-
-    # XXX set ._payload manually when resizing to avoid generating too much IR?
 
     @property
     def _payload(self):
@@ -179,6 +178,9 @@ class SetInstance(_SetPayloadMixin):
         return self._set.meminfo
 
     def _lookup(self, entries, item, h):
+        """
+        Lookup the *item* with the given hash values in the entries.
+        """
         context = self._context
         builder = self._builder
 
@@ -271,6 +273,7 @@ class SetInstance(_SetPayloadMixin):
 
         found, i = self._lookup(entries, item, h)
         not_found = builder.not_(found)
+        payload = self._payload
 
         with builder.if_then(not_found):
             # Not found => add it
@@ -279,13 +282,13 @@ class SetInstance(_SetPayloadMixin):
             entry.hash = h
             entry.key = item
             # used++
-            used = self.used
+            used = payload.used
             one = ir.Constant(used.type, 1)
-            used = self.used = builder.add(used, one)
+            used = payload.used = builder.add(used, one)
             # fill++ if entry wasn't a deleted one
             with builder.if_then(is_hash_empty(context, builder, old_hash),
                                  likely=True):
-                self.fill = builder.add(self.fill, one)
+                payload.fill = builder.add(payload.fill, one)
             # Grow table if necessary
             if do_resize:
                 self.upsize(used)
@@ -471,6 +474,9 @@ class SetInstance(_SetPayloadMixin):
 def set_constructor(context, builder, sig, args):
     set_type = sig.return_type
     items_type, = sig.args
+
+    # TODO: if the argument has a len(), preallocate the set so as to
+    # avoid resizes
 
     inst = SetInstance.allocate(context, builder, set_type)
     # Populate set
