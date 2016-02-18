@@ -18,9 +18,7 @@ except ImportError:
 from numba import unittest_support as unittest
 from numba.pycc import find_shared_ending, find_pyext_ending, main
 from numba.pycc.decorators import clear_export_registry
-from .support import TestCase, tag
-
-from numba.tests.support import temp_directory
+from .support import TestCase, tag, import_dynamic, temp_directory
 
 base_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -53,7 +51,7 @@ class BasePYCCTest(TestCase):
     def check_c_ext(self, extdir, name):
         sys.path.append(extdir)
         try:
-            lib = __import__(name)
+            lib = import_dynamic(name)
             yield lib
         finally:
             sys.path.remove(extdir)

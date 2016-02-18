@@ -196,10 +196,20 @@ def notrace(*args, **kwds):
     else:
         return decorator
 
+def doevent(msg):
+    msg = ['== ', tls.indent * ' ', msg]
+    logger = logging.getLogger('trace')
+    logger.info(''.join(msg))
+
+def noevent(msg):
+    pass
+
 if config.TRACE:
     logger = logging.getLogger('trace')
     logger.setLevel(logging.INFO)
     logger.handlers = [logging.StreamHandler()]
     trace = dotrace
+    event = doevent
 else:
     trace = notrace
+    event = noevent

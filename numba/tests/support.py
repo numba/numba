@@ -469,6 +469,18 @@ def temp_directory(prefix):
     return _create_trashcan_subdir(prefix)
 
 
+def import_dynamic(modname):
+    """
+    Import and return a module of the given name.  Care is taken to
+    avoid issues due to Python's internal directory caching.
+    """
+    if sys.version_info >= (3, 3):
+        import importlib
+        importlib.invalidate_caches()
+    __import__(modname)
+    return sys.modules[modname]
+
+
 # From CPython
 
 @contextlib.contextmanager

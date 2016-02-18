@@ -970,6 +970,24 @@ class Array(Buffer):
                 and (self.aligned or not other.aligned)):
                 return Conversion.safe
 
+class SmartArrayType(Array):
+
+    def __init__(self, dtype, ndim, layout, pyclass):
+        self.pyclass = pyclass
+        super(SmartArrayType, self).__init__(dtype, ndim, layout, name='numba_array')
+
+    @property
+    def as_array(self):
+        return Array(self.dtype, self.ndim, self.layout)
+
+    def copy(self, dtype=None, ndim=None, layout=None):
+        if dtype is None:
+            dtype = self.dtype
+        if ndim is None:
+            ndim = self.ndim
+        if layout is None:
+            layout = self.layout
+        return type(self)(dtype, ndim, layout, self.pyclass)
 
 class ArrayCTypes(Type):
     """

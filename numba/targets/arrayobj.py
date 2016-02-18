@@ -1201,6 +1201,7 @@ def array_reshape(context, builder, sig, args):
     res = ret._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
+
 @lower_builtin('array.reshape', types.Array, types.VarArg(types.Any))
 def array_reshape_vararg(context, builder, sig, args):
     # types
@@ -1219,6 +1220,53 @@ def array_reshape_vararg(context, builder, sig, args):
     new_sig = typing.signature(sig.return_type, aryty, shapety)
     new_args = ary, shape
     return array_reshape(context, builder, new_sig, new_args)
+
+
+@lower_builtin('array.ravel', types.Array)
+def array_ravel(context, builder, sig, args):
+    # Only support no argument version (default order='C')
+    def imp_nocopy(ary):
+        """No copy version"""
+        return ary.reshape(ary.size)
+
+    def imp_copy(ary):
+        """Copy version"""
+        return ary.flatten()
+
+    # If the input array is C layout already, use the nocopy version
+    if sig.args[0].layout == 'C':
+        imp = imp_nocopy
+    # otherwise, use flatten under-the-hood
+    else:
+        imp = imp_copy
+
+    res = context.compile_internal(builder, imp, sig, args)
+    res = impl_ret_new_ref(context, builder, sig.return_type, res)
+    return res
+
+
+@lower_builtin(numpy.ravel, types.Array)
+def np_ravel(context, builder, sig, args):
+    def np_ravel_impl(a):
+        return a.ravel()
+
+    return context.compile_internal(builder, np_ravel_impl, sig, args)
+
+
+@lower_builtin('array.flatten', types.Array)
+def array_flatten(context, builder, sig, args):
+    # Only support flattening to C layout currently.
+    def imp(ary):
+        # Allocate new array and walk the input array in with array.flat in
+        # C order to populate the output.
+        out = numpy.empty(ary.size, dtype=ary.dtype)
+        for i, v in enumerate(ary.flat):
+            out[i] = v
+        return out
+
+    res = context.compile_internal(builder, imp, sig, args)
+    res = impl_ret_new_ref(context, builder, sig.return_type, res)
+    return res
 
 
 def _change_dtype(context, builder, oldty, newty, ary):

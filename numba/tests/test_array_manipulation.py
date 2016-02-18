@@ -1,5 +1,6 @@
 from __future__ import print_function
 import numpy as np
+from functools import partial
 
 from numba.compiler import compile_isolated, Flags
 from numba import types, from_dtype, errors, typeof
@@ -31,6 +32,10 @@ def ravel_array(a):
 
 def ravel_array_size(a):
     return a.ravel().size
+
+
+def numpy_ravel_array(a):
+    return np.ravel(a)
 
 
 def transpose_array(a):
@@ -139,11 +144,18 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # This will trigger the expectedFailure
         self.assert_no_memory_leak()
 
-    def test_flatten_array(self, flags=enable_pyobj_flags):
+    def test_flatten_array(self, flags=enable_pyobj_flags, layout='C'):
         a = np.arange(9).reshape(3, 3)
+        if layout == 'F':
+            a = a.T
 
         pyfunc = flatten_array
         arraytype1 = typeof(a)
+        if layout == 'A':
+            # Force A layout
+            arraytype1 = arraytype1.copy(layout='A')
+
+        self.assertEqual(arraytype1.layout, layout)
         cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
         cfunc = cr.entry_point
 
@@ -152,22 +164,44 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(expected, got)
 
     def test_flatten_array_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_flatten_array(flags=no_pyobj_flags)
-
-        self.assertIn("flatten", str(raises.exception))
+        self.test_flatten_array(flags=no_pyobj_flags)
+        self.test_flatten_array(flags=no_pyobj_flags, layout='F')
+        self.test_flatten_array(flags=no_pyobj_flags, layout='A')
 
     def test_ravel_array(self, flags=enable_pyobj_flags):
-        a = np.arange(9).reshape(3, 3)
+        def generic_check(pyfunc, a, assume_layout):
+            # compile
+            arraytype1 = typeof(a)
+            self.assertEqual(arraytype1.layout, assume_layout)
+            cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
+            cfunc = cr.entry_point
 
-        pyfunc = ravel_array
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+            expected = pyfunc(a)
+            got = cfunc(a)
+            # Check result matches
+            np.testing.assert_equal(expected, got)
+            # Check copying behavior
+            py_copied = (a.ctypes.data != expected.ctypes.data)
+            nb_copied = (a.ctypes.data != got.ctypes.data)
+            self.assertEqual(py_copied, assume_layout != 'C')
+            self.assertEqual(py_copied, nb_copied)
 
-        expected = pyfunc(a)
-        got = cfunc(a)
-        np.testing.assert_equal(expected, got)
+        check_method = partial(generic_check, ravel_array)
+        check_function = partial(generic_check, numpy_ravel_array)
+
+        def check(*args, **kwargs):
+            check_method(*args, **kwargs)
+            check_function(*args, **kwargs)
+
+        # Check 2D
+        check(np.arange(9).reshape(3, 3), assume_layout='C')
+        check(np.arange(9).reshape(3, 3, order='F'), assume_layout='F')
+        check(np.arange(18).reshape(3, 3, 2)[:, :, 0], assume_layout='A')
+
+        # Check 3D
+        check(np.arange(18).reshape(2, 3, 3), assume_layout='C')
+        check(np.arange(18).reshape(2, 3, 3, order='F'), assume_layout='F')
+        check(np.arange(36).reshape(2, 3, 3, 2)[:, :, :, 0], assume_layout='A')
 
     def test_ravel_array_size(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
@@ -182,16 +216,10 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(expected, got)
 
     def test_ravel_array_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_ravel_array(flags=no_pyobj_flags)
-
-        self.assertIn("ravel", str(raises.exception))
+        self.test_ravel_array(flags=no_pyobj_flags)
 
     def test_ravel_array_size_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_ravel_array_size(flags=no_pyobj_flags)
-
-        self.assertIn("ravel", str(raises.exception))
+        self.test_ravel_array_size(flags=no_pyobj_flags)
 
     def test_transpose_array(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)

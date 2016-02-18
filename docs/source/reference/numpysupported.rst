@@ -142,6 +142,9 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.sort` (without arguments)
 * :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
+* :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
+* :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
+
 
 .. warning::
    Sorting may be slightly slower than Numpy's implementation.
@@ -192,6 +195,9 @@ The following top-level functions are supported:
 * :func:`numpy.where`
 * :func:`numpy.zeros`
 * :func:`numpy.zeros_like`
+* :func:`numpy.ravel` (no order argument; 'C' order only)
+* :func:`numpy.flatten` (no order argument; 'C' order only)
+
 
 The following constructors are supported, both with a numeric input (to
 construct a scalar) or a sequence (to construct an array):
