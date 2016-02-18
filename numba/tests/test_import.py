@@ -47,6 +47,6 @@ class TestNumbaImport(TestCase):
             raise AssertionError("process failed with code %s: stderr follows\n%s\n"
                                  % (popen.returncode, err.decode()))
 
-        modlist = set(eval(out))
+        modlist = set(eval(out.strip()))
         unexpected = set(blacklist) & set(modlist)
         self.assertFalse(unexpected, "some modules unexpectedly imported")
