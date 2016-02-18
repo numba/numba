@@ -18,9 +18,7 @@ except ImportError:
 from numba import unittest_support as unittest
 from numba.pycc import find_shared_ending, find_pyext_ending, main
 from numba.pycc.decorators import clear_export_registry
-from .support import TestCase, tag
-
-from numba.tests.support import static_temp_directory
+from .support import TestCase, tag, import_dynamic, temp_directory
 
 base_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -37,7 +35,7 @@ def unset_macosx_deployment_target():
 class BasePYCCTest(TestCase):
 
     def setUp(self):
-        self.tmpdir = static_temp_directory('test_pycc')
+        self.tmpdir = temp_directory('test_pycc')
         # Make sure temporary files and directories created by
         # distutils don't clutter the top-level /tmp
         tempfile.tempdir = self.tmpdir
@@ -53,7 +51,7 @@ class BasePYCCTest(TestCase):
     def check_c_ext(self, extdir, name):
         sys.path.append(extdir)
         try:
-            lib = __import__(name)
+            lib = import_dynamic(name)
             yield lib
         finally:
             sys.path.remove(extdir)
@@ -241,13 +239,10 @@ class TestDistutilsSupport(TestCase):
     def setUp(self):
         # Copy the test project into a temp directory to avoid
         # keeping any build leftovers in the source tree
-        self.tmpdir = tempfile.mkdtemp(prefix='test_pycc_distutils-')
+        self.tmpdir = temp_directory('test_pycc_distutils')
         source_dir = os.path.join(base_path, 'pycc_distutils_usecase')
         self.usecase_dir = os.path.join(self.tmpdir, 'work')
         shutil.copytree(source_dir, self.usecase_dir)
-
-    def tearDown(self):
-        shutil.rmtree(self.tmpdir)
 
     def check_setup_py(self, setup_py_file):
         # Compute PYTHONPATH to ensure the child processes see this Numba

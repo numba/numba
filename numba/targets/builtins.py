@@ -13,7 +13,7 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        lower_cast, iternext_impl,
                        impl_ret_borrowed, impl_ret_untracked)
 from . import optional
-from .. import typing, types, cgutils, utils, intrinsics
+from .. import typing, types, cgutils, utils
 
 
 @lower_builtin('is not', types.Any, types.Any)
@@ -1419,37 +1419,6 @@ def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, Type.int())
     return context.cast(builder, asint, types.int32, toty)
-
-
-# -----------------------------------------------------------------------------
-
-@lower_builtin(intrinsics.array_ravel, types.Array)
-def array_ravel_impl(context, builder, sig, args):
-    [arrty] = sig.args
-    [arr] = args
-    flatarrty = sig.return_type
-
-    flatarrcls = context.make_array(flatarrty)
-    arrcls = context.make_array(arrty)
-
-    flatarr = flatarrcls(context, builder)
-    arr = arrcls(context, builder, value=arr)
-
-    shapes = cgutils.unpack_tuple(builder, arr.shape, arrty.ndim)
-    size = reduce(builder.mul, shapes)
-    strides = cgutils.unpack_tuple(builder, arr.strides, arrty.ndim)
-    unit_stride = strides[0] if arrty.layout == 'F' else strides[-1]
-
-    context.populate_array(flatarr,
-                           data=arr.data,
-                           shape=cgutils.pack_array(builder, [size]),
-                           strides=cgutils.pack_array(builder, [unit_stride]),
-                           itemsize=arr.itemsize,
-                           parent=arr.parent)
-
-    res = flatarr._getvalue()
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
-
 
 # -----------------------------------------------------------------------------
 

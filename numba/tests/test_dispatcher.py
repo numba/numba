@@ -15,7 +15,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import utils, vectorize, jit, generated_jit, types
 from numba.errors import NumbaWarning
-from .support import TestCase, tag
+from .support import TestCase, tag, temp_directory, import_dynamic
 
 
 def dummy(x):
@@ -491,7 +491,7 @@ class TestCache(TestCase):
     modname = "caching_test_fodder"
 
     def setUp(self):
-        self.tempdir = tempfile.mkdtemp()
+        self.tempdir = temp_directory('test_dispatcher_cache')
         sys.path.insert(0, self.tempdir)
         self.modfile = os.path.join(self.tempdir, self.modname + ".py")
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
@@ -501,7 +501,6 @@ class TestCache(TestCase):
     def tearDown(self):
         sys.modules.pop(self.modname, None)
         sys.path.remove(self.tempdir)
-        shutil.rmtree(self.tempdir)
 
     def import_module(self):
         # Import a fresh version of the test module.  All jitted functions
@@ -523,7 +522,7 @@ class TestCache(TestCase):
                 except OSError as e:
                     if e.errno != errno.ENOENT:
                         raise
-        mod = __import__(self.modname)
+        mod = import_dynamic(self.modname)
         self.assertEqual(mod.__file__.rstrip('co'), self.modfile)
         return mod
 
