@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import contextlib
 import pickle
 import subprocess
 import sys
@@ -17,10 +18,18 @@ class TestDispatcherPickling(TestCase):
         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             meth(proto, *args, **kwargs)
 
+    @contextlib.contextmanager
     def simulate_fresh_target(self):
         dispatcher_cls = registry.dispatcher_registry['cpu']
+        old_descr = dispatcher_cls.targetdescr
         # Simulate fresh targetdescr
         dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)()
+        try:
+            yield
+        finally:
+            # Be sure to reinstantiate old descriptor, otherwise other
+            # objects may be out of sync.
+            dispatcher_cls.targetdescr = old_descr
 
     def check_call(self, proto, func, expected_result, args):
         def check_result(func):
@@ -33,9 +42,9 @@ class TestDispatcherPickling(TestCase):
         # Control
         check_result(func)
         pickled = pickle.dumps(func, proto)
-        self.simulate_fresh_target()
-        new_func = pickle.loads(pickled)
-        check_result(new_func)
+        with self.simulate_fresh_target():
+            new_func = pickle.loads(pickled)
+            check_result(new_func)
 
     @tag('important')
     def test_call_with_sig(self):

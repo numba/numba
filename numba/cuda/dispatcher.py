@@ -7,20 +7,13 @@ from numba.targets.options import TargetOptions
 from numba import cuda
 from numba.cuda import jit, autojit
 from numba.cuda.cudadrv import devicearray
+from .descriptor import CUDATargetDesc
 from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
                                         GUFuncCallSteps)
 
 
-class CUDATargetOptions(TargetOptions):
-    OPTIONS = {}
-
-
-class CUDATarget(TargetDescriptor):
-    options = CUDATargetOptions
-
-
 class CUDADispatcher(object):
-    targetdescr = CUDATarget
+    targetdescr = CUDATargetDesc
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         assert not locals

@@ -1,12 +1,14 @@
 from __future__ import print_function, absolute_import, division
+
 from . import devices, driver
-from numba.targets.registry import CPUTarget
+from numba.targets.registry import cpu_target
 
 
 def _calc_array_sizeof(ndim):
-    """Use the ABI size in the CPU target
     """
-    ctx = CPUTarget.target_context
+    Use the ABI size in the CPU target
+    """
+    ctx = cpu_target.target_context
     return ctx.calc_array_sizeof(ndim)
 
 

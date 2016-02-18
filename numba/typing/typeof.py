@@ -8,7 +8,6 @@ import sys
 import numpy as np
 
 from numba import numpy_support, types, utils, smartarray
-from . import bufproto, cffi_utils
 
 
 class Purpose(enum.Enum):
@@ -40,6 +39,7 @@ def typeof_impl(val, c):
 
     # cffi is handled here as it does not expose a public base class
     # for exported functions or CompiledFFI instances.
+    from . import cffi_utils
     if cffi_utils.SUPPORTED:
         if cffi_utils.is_cffi_func(val):
             return cffi_utils.make_function_type(val)
@@ -51,6 +51,7 @@ def typeof_impl(val, c):
 
 def _typeof_buffer(val, c):
     if sys.version_info >= (2, 7):
+        from . import bufproto
         try:
             m = memoryview(val)
         except TypeError:
@@ -65,6 +66,12 @@ def _typeof_buffer(val, c):
         return type_class(dtype, m.ndim, layout=layout,
                           readonly=m.readonly)
 
+
+@typeof_impl.register(ctypes._CFuncPtr)
+def typeof_ctypes_function(val, c):
+    from .ctypes_utils import is_ctypes_funcptr, make_function_type
+    if is_ctypes_funcptr(val):
+        return make_function_type(val)
 
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):

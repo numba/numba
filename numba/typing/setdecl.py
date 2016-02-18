@@ -26,8 +26,6 @@ class SetBuiltin(AbstractTemplate):
                 if isinstance(dtype, types.Hashable):
                     return signature(types.Set(dtype), iterable)
 
-#infer_global(set, types.Function(SetBuiltin))
-
 
 @infer_getattr
 class SetAttribute(AttributeTemplate):
