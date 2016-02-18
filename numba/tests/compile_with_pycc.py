@@ -2,9 +2,8 @@ import cmath
 
 import numpy as np
 
-from numba import exportmany, export
 from numba import float32
-from numba.pycc import CC
+from numba.pycc import CC, exportmany, export
 
 
 #

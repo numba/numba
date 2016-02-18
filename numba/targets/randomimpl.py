@@ -30,13 +30,18 @@ N = 624
 N_const = ir.Constant(int32_t, N)
 
 
+_pid = None
+
 def random_init():
     """
     Initialize the random states with system entropy.
     """
-    b = os.urandom(N * 4)
-    for n in ('py_random_state', 'np_random_state'):
-        _helperlib.rnd_seed(_helperlib.c_helpers[n], b)
+    global _pid
+    if _pid != os.getpid():
+        b = os.urandom(N * 4)
+        for n in ('py_random_state', 'np_random_state'):
+            _helperlib.rnd_seed(_helperlib.c_helpers[n], b)
+        _pid = os.getpid()
 
 
 # This is the same struct as rnd_state_t in _helperlib.c.

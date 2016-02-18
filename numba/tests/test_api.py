@@ -26,9 +26,6 @@ class TestNumbaModule(TestCase):
         # errors
         self.check_member("NumbaError")
         self.check_member("TypingError")
-        # pycc
-        self.check_member("export")
-        self.check_member("exportmany")
         # types
         self.check_member("int32")
         # misc

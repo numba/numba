@@ -6,7 +6,6 @@ import re
 import numpy
 
 from . import errors, types, config, npdatetime
-from .targets import ufunc_db
 
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
@@ -223,6 +222,7 @@ def supported_ufunc_loop(ufunc, loop):
     legacy and when implementing new ufuncs the ufunc_db should be preferred,
     as it allows for a more fine-grained incremental support.
     """
+    from .targets import ufunc_db
     loop_sig = loop.ufunc_sig
     try:
         # check if the loop has a codegen description in the

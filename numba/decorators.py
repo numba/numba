@@ -8,7 +8,6 @@ import warnings
 from . import config, sigutils
 from .errors import DeprecationError
 from .targets import registry
-from . import cuda
 
 # -----------------------------------------------------------------------------
 # Decorators
@@ -156,6 +155,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
     def wrapper(func):
         if config.ENABLE_CUDASIM and target == 'cuda':
+            from . import cuda
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
             return _DisableJitWrapper(func)
