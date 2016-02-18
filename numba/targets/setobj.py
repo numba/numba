@@ -213,7 +213,7 @@ class SetInstance(_SetPayloadMixin):
             with builder.if_then(builder.icmp_unsigned('==', h, entry_hash)):
                 # Hashes are equal, compare values
                 # (note this also ensures the entry is used)
-                eq = eqfn(builder, (item, entry.value))
+                eq = eqfn(builder, (item, entry.key))
                 with builder.if_then(eq):
                     builder.branch(bb_found)
 
@@ -277,7 +277,7 @@ class SetInstance(_SetPayloadMixin):
             entry = self.get_entry(entries, i)
             old_hash = entry.hash
             entry.hash = h
-            entry.value = item
+            entry.key = item
             # used++
             used = self.used
             one = ir.Constant(used.type, 1)
@@ -393,7 +393,7 @@ class SetInstance(_SetPayloadMixin):
             entries = self.entries
             with self._iterate(old_entries, old_size) as loop:
                 entry = loop.entry
-                self._add_entry(entries, entry.value, entry.hash,
+                self._add_entry(entries, entry.key, entry.hash,
                                 do_resize=False)
 
             self._free_payload(old_ptr)

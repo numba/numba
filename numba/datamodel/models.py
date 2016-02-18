@@ -689,8 +689,7 @@ class SetEntryModel(StructModel):
         members = [
             # -1 = empty, -2 = deleted
             ('hash', types.intp),
-            # XXX s/value/item/ ?
-            ('value', dtype),
+            ('key', dtype),
         ]
         super(SetEntryModel, self).__init__(dmm, fe_type, members)
 
