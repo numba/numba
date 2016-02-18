@@ -449,8 +449,7 @@ def _purge_trashcan_dir():
         except OSError as e:
             # In parallel testing, several processes can attempt to
             # remove the same entry at once, ignore.
-            if e.errno != errno.ENOENT:
-                raise
+            pass
 
 def _create_trashcan_subdir(prefix):
     _purge_trashcan_dir()
