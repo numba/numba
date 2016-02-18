@@ -369,7 +369,8 @@ class SetInstance(object):
 
         payload = self.payload
         h = get_hash_value(context, builder, self._ty.dtype, item)
-        self._remove_entry(payload, item, h)
+        found = self._remove_entry(payload, item, h)
+        return found
 
     @classmethod
     def allocate_ex(cls, context, builder, set_type, nitems=None):
@@ -534,7 +535,6 @@ class SetInstance(object):
 
         self._free_payload(old_payload.ptr)
 
-
     def _allocate_payload(self, nentries, realloc=False):
         """
         Allocate and initialize payload for the given number of entries.
@@ -654,6 +654,17 @@ def set_discard(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     item = args[1]
     inst.discard(item)
+
+    return context.get_dummy_value()
+
+@lower_builtin("set.remove", types.Set, types.Any)
+def set_remove(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    item = args[1]
+    found = inst.discard(item)
+    with builder.if_then(builder.not_(found), likely=False):
+        context.call_conv.return_user_exc(builder, KeyError,
+                                          ("set.remove(): key not in set",))
 
     return context.get_dummy_value()
 

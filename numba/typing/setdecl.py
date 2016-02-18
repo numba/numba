@@ -48,6 +48,12 @@ class SetAttribute(AttributeTemplate):
         assert not kws
         return signature(types.none, set.dtype)
 
+    @bound_function("set.remove")
+    def resolve_remove(self, set, args, kws):
+        item, = args
+        assert not kws
+        return signature(types.none, set.dtype)
+
     @bound_function("set.update")
     def resolve_update(self, set, args, kws):
         iterable, = args
