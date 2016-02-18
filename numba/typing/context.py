@@ -61,8 +61,9 @@ class BaseContext(object):
         Refresh context with new declarations from known registries.
         Useful for third-party extensions.
         """
-        self._load_builtins()
         self.load_additional_registries()
+        # Some extensions may have augmented the builtin registry
+        self._load_builtins()
 
     def explain_function_type(self, func):
         """
