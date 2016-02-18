@@ -15,7 +15,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import utils, vectorize, jit, generated_jit, types
 from numba.errors import NumbaWarning
-from .support import TestCase, tag, temp_directory
+from .support import TestCase, tag, temp_directory, import_dynamic
 
 
 def dummy(x):
@@ -522,7 +522,7 @@ class TestCache(TestCase):
                 except OSError as e:
                     if e.errno != errno.ENOENT:
                         raise
-        mod = __import__(self.modname)
+        mod = import_dynamic(self.modname)
         self.assertEqual(mod.__file__.rstrip('co'), self.modfile)
         return mod
 

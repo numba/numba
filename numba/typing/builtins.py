@@ -4,7 +4,8 @@ import itertools
 
 import numpy
 
-from numba import types, intrinsics
+from numba import types
+
 from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, operator_map
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, infer_global, infer,
@@ -774,18 +775,6 @@ class Zip(AbstractTemplate):
         if all(isinstance(it, types.IterableType) for it in args):
             zip_type = types.ZipType(args)
             return signature(zip_type, *args)
-
-
-@infer_global(intrinsics.array_ravel)
-class Intrinsic_array_ravel(AbstractTemplate):
-    key = intrinsics.array_ravel
-
-    def generic(self, args, kws):
-        assert not kws
-        [arr] = args
-        if arr.layout in 'CF' and arr.ndim >= 1:
-            return signature(arr.copy(ndim=1), arr)
-
 
 #------------------------------------------------------------------------------
 
