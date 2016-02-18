@@ -519,19 +519,6 @@ def _split_nonparallel_tests(test):
     return ptests, stests
 
 
-def _choose_random_tests(tests, ratio, seed):
-    """
-    Choose a given proportion of tests at random.
-    """
-    rnd = random.Random()
-    rnd.seed(seed)
-    if isinstance(tests, unittest.TestSuite):
-        tests = _flatten_suite(tests)
-    tests = rnd.sample(tests, int(len(tests) * ratio))
-    tests = sorted(tests, key=lambda case: case.id())
-    return unittest.TestSuite(tests)
-
-
 class ParallelTestRunner(runner.TextTestRunner):
     """
     A test runner which delegates the actual running to a pool of child
