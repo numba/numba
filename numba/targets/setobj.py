@@ -65,8 +65,9 @@ EMPTY = -1
 DELETED = -2
 FALLBACK = -43
 
-MINSIZE = 4
-#MINSIZE = 16
+# Minimal size of entries table.  Must be a power of 2!
+#MINSIZE = 4
+MINSIZE = 16
 
 DEBUG_ALLOCS = False
 
@@ -325,6 +326,26 @@ class SetInstance(object):
             if do_resize:
                 self.upsize(used)
 
+    def _remove_entry(self, payload, item, h, do_resize=True):
+        context = self._context
+        builder = self._builder
+
+        found, i = payload._lookup(item, h)
+
+        with builder.if_then(found):
+            # Mark entry deleted
+            entry = payload.get_entry(i)
+            entry.hash = ir.Constant(h.type, DELETED)
+            # used--
+            used = payload.used
+            one = ir.Constant(used.type, 1)
+            used = payload.used = builder.sub(used, one)
+            # Shrink table if necessary
+            if do_resize:
+                self.downsize(used)
+
+        return found
+
     def add(self, item):
         context = self._context
         builder = self._builder
@@ -341,6 +362,14 @@ class SetInstance(object):
         h = get_hash_value(context, builder, self._ty.dtype, item)
         found, i = payload._lookup(item, h)
         return found
+
+    def discard(self, item):
+        context = self._context
+        builder = self._builder
+
+        payload = self.payload
+        h = get_hash_value(context, builder, self._ty.dtype, item)
+        self._remove_entry(payload, item, h)
 
     @classmethod
     def allocate_ex(cls, context, builder, set_type, nitems=None):
@@ -412,29 +441,99 @@ class SetInstance(object):
             builder.position_at_end(bb_end)
 
             new_size = builder.load(new_size_p)
-
             if DEBUG_ALLOCS:
                 context.printf(builder,
                                "upsize to %zd items: current size = %zd, "
                                "min entries = %zd, new size = %zd\n",
                                (nitems, size, min_entries, new_size))
+            self._resize(payload, new_size, "cannot grow set")
 
-            # Allocate new entries
-            old_payload = payload
+    def downsize(self, nitems):
+        """
+        When removing from the set, ensure it is properly sized for the given
+        number of used entries.
+        """
+        context = self._context
+        builder = self._builder
+        intp_t = nitems.type
 
-            ok = self._allocate_payload(new_size, realloc=True)
-            with builder.if_then(builder.not_(ok), likely=False):
-                context.call_conv.return_user_exc(builder, MemoryError,
-                                                  ("cannot grow set",))
+        one = ir.Constant(intp_t, 1)
+        two = ir.Constant(intp_t, 2)
+        minsize = ir.Constant(intp_t, MINSIZE)
 
-            # Re-insert old entries
-            payload = self.payload
-            with old_payload._iterate() as loop:
-                entry = loop.entry
-                self._add_entry(payload, entry.key, entry.hash,
-                                do_resize=False)
+        payload = self.payload
 
-            self._free_payload(old_payload.ptr)
+        # Ensure entries >= 2 * used
+        min_entries = builder.shl(nitems, one)
+        # Shrink only if size >= 4 * min_entries && size > MINSIZE
+        max_size = builder.shl(min_entries, two)
+        size = builder.add(payload.mask, one)
+        need_resize = builder.and_(
+            builder.icmp_unsigned('<=', max_size, size),
+            builder.icmp_unsigned('<', minsize, size))
+
+        with builder.if_then(need_resize, likely=False):
+            # Find out next suitable size
+            new_size_p = cgutils.alloca_once_value(builder, size)
+
+            bb_body = builder.append_basic_block("calcsize.body")
+            bb_end = builder.append_basic_block("calcsize.end")
+
+            builder.branch(bb_body)
+
+            with builder.goto_block(bb_body):
+                # Divide by 2 (ensuring size remains a power of two)
+                new_size = builder.load(new_size_p)
+                new_size = builder.lshr(new_size, one)
+                # Keep current size if new size would be < min_entries
+                is_too_small = builder.icmp_unsigned('>', min_entries, new_size)
+                with builder.if_then(is_too_small):
+                    builder.branch(bb_end)
+                builder.store(new_size, new_size_p)
+                builder.branch(bb_body)
+
+            builder.position_at_end(bb_end)
+
+            # Ensure new_size >= MINSIZE
+            new_size = builder.load(new_size_p)
+            new_size = builder.select(builder.icmp_unsigned('>=', new_size, minsize),
+                                      new_size, minsize)
+            # At this point, new_size should be < size if the factors
+            # above were chosen carefully!
+
+            if DEBUG_ALLOCS:
+                context.printf(builder,
+                               "downsize to %zd items: current size = %zd, "
+                               "min entries = %zd, new size = %zd\n",
+                               (nitems, size, min_entries, new_size))
+            self._resize(payload, new_size, "cannot shrink set")
+
+    def _resize(self, payload, nentries, errmsg):
+        """
+        Resize the payload to the given number of entries.
+
+        CAUTION: *nentries* must be a power of 2!
+        """
+        context = self._context
+        builder = self._builder
+
+        # Allocate new entries
+        old_payload = payload
+
+        ok = self._allocate_payload(nentries, realloc=True)
+        with builder.if_then(builder.not_(ok), likely=False):
+            context.call_conv.return_user_exc(builder, MemoryError,
+                                              (errmsg,))
+
+        # Re-insert old entries
+        payload = self.payload
+        with old_payload._iterate() as loop:
+            entry = loop.entry
+            self._add_entry(payload, entry.key, entry.hash,
+                            do_resize=False)
+
+        self._free_payload(old_payload.ptr)
+
 
     def _allocate_payload(self, nentries, realloc=False):
         """
@@ -489,6 +588,7 @@ class SetInstance(object):
                     payload.fill = zero
                     new_mask = builder.sub(nentries, one)
                     payload.mask = new_mask
+
                     if DEBUG_ALLOCS:
                         context.printf(builder,
                                        "allocated %zd bytes for set at %p: mask = %zd\n",
@@ -511,8 +611,8 @@ def set_constructor(context, builder, sig, args):
     set_type = sig.return_type
     items_type, = sig.args
 
-    # TODO: if the argument has a len(), preallocate the set so as to
-    # avoid resizes
+    # XXX: if the argument has a len(), preallocate the set so as to
+    # avoid resizes?
 
     inst = SetInstance.allocate(context, builder, set_type)
     # Populate set
@@ -549,39 +649,17 @@ def set_add(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-#@lower_builtin("list.clear", types.List)
-#def list_clear(context, builder, sig, args):
-    #inst = SetInstance(context, builder, sig.args[0], args[0])
-    #inst.resize(context.get_constant(types.intp, 0))
+@lower_builtin("set.discard", types.Set, types.Any)
+def set_discard(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    item = args[1]
+    inst.discard(item)
 
-    #return context.get_dummy_value()
-
-#@lower_builtin("list.copy", types.List)
-#def list_copy(context, builder, sig, args):
-    #def list_copy_impl(lst):
-        #return list(lst)
-
-    #return context.compile_internal(builder, list_copy_impl, sig, args)
-
-#def _list_extend_list(context, builder, sig, args):
-    #src = SetInstance(context, builder, sig.args[1], args[1])
-    #dest = SetInstance(context, builder, sig.args[0], args[0])
-
-    #src_size = src.size
-    #dest_size = dest.size
-    #nitems = builder.add(src_size, dest_size)
-    #dest.resize(nitems)
-    #dest.size = nitems
-
-    #with cgutils.for_range(builder, src_size) as loop:
-        #value = src.getitem(loop.index)
-        #value = context.cast(builder, value, src.dtype, dest.dtype)
-        #dest.setitem(builder.add(loop.index, dest_size), value)
-
-    #return dest
+    return context.get_dummy_value()
 
 @lower_builtin("set.update", types.Set, types.IterableType)
 def set_update(context, builder, sig, args):
+
     def set_update(cont, iterable):
         # Speed hack to avoid NRT refcount operations inside the loop
         meth = cont.add

@@ -42,6 +42,12 @@ class SetAttribute(AttributeTemplate):
         sig.recvr = set.copy(dtype=unified)
         return sig
 
+    @bound_function("set.discard")
+    def resolve_discard(self, set, args, kws):
+        item, = args
+        assert not kws
+        return signature(types.none, set.dtype)
+
     @bound_function("set.update")
     def resolve_update(self, set, args, kws):
         iterable, = args
