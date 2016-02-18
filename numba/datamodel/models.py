@@ -720,6 +720,19 @@ class SetModel(StructModel):
         ]
         super(SetModel, self).__init__(dmm, fe_type, members)
 
+@register_default(types.SetIter)
+class SetIterModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        payload_type = types.SetPayload(fe_type.set_type)
+        members = [
+            # The meminfo data points to a SetPayload (shared with the
+            # original set object)
+            ('meminfo', types.MemInfoPointer(payload_type)),
+            # The index into the entries table
+            ('index', types.EphemeralPointer(types.intp)),
+            ]
+        super(SetIterModel, self).__init__(dmm, fe_type, members)
+
 
 @register_default(types.Array)
 @register_default(types.Buffer)

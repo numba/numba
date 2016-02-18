@@ -8,6 +8,8 @@ import itertools
 import math
 import sys
 
+import numpy as np
+
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
 import numba.unittest_support as unittest
@@ -25,9 +27,16 @@ def build_set_literal_usecase(*args):
     return ns['build_set']
 
 
-def set_constructor_usecase(arg):
+def constructor_usecase(arg):
     s = set(arg)
     return len(s)
+
+def iterator_usecase(arg):
+    s = set(arg)
+    l = []
+    for v in s:
+        l.append(v)
+    return l
 
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
@@ -53,11 +62,44 @@ class TestSetLiterals(TestCase):
 
 class TestSets(MemoryLeakMixin, TestCase):
 
-    def test_set_constructor(self):
-        pyfunc = set_constructor_usecase
+    def setUp(self):
+        super(TestSets, self).setUp()
+        self.rnd = np.random.RandomState(42)
+
+    def duplicates_array(self, n):
+        """
+        Get a 1d array with many duplicate values.
+        """
+        a = np.arange(int(np.sqrt(n)))
+        return self.rnd.choice(a, (n,))
+
+    def sparse_array(self, n):
+        """
+        Get a 1d array with values spread around.
+        """
+        a = np.arange(n ** 2)
+        return self.rnd.choice(a, (n,))
+
+    def test_constructor(self):
+        pyfunc = constructor_usecase
         cfunc = jit(nopython=True)(pyfunc)
-        arg = (1, 2, 3, 2, 7)
-        self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
+        def check(arg):
+            self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
+
+        check((1, 2, 3, 2, 7))
+        check(self.duplicates_array(200))
+        check(self.sparse_array(200))
+
+    def test_iterator(self):
+        pyfunc = iterator_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arg):
+            self.assertPreciseEqual(sorted(pyfunc(arg)),
+                                    sorted(cfunc(arg)))
+
+        check((1, 2, 3, 2, 7))
+        check(self.duplicates_array(200))
+        check(self.sparse_array(200))
 
 
 if __name__ == '__main__':

@@ -25,6 +25,15 @@ def make_set_cls(set_type):
     return cgutils.create_struct_proxy(set_type)
 
 
+def make_setiter_cls(set_iter_type):
+    """
+    Return the Structure representation of the given *set_iter_type*
+    (an instance of types.SetIter).
+    """
+    # XXX reduce the duplication with make_set_cls(), make_list_cls() etc.
+    return cgutils.create_struct_proxy(set_iter_type)
+
+
 def make_payload_cls(set_type):
     """
     Return the Structure representation of the given *set_type*'s payload
@@ -107,7 +116,7 @@ def is_hash_used(context, builder, h):
     return builder.icmp_unsigned('<', h, deleted)
 
 
-SetLoop = collections.namedtuple('SetLoop', ('entry', 'do_break'))
+SetLoop = collections.namedtuple('SetLoop', ('index', 'entry', 'do_break'))
 
 
 class _SetPayload(object):
@@ -247,7 +256,7 @@ class _SetPayload(object):
         return found, builder.load(index)
 
     @contextlib.contextmanager
-    def _iterate(self):
+    def _iterate(self, start=None):
         """
         Iterate over the payload's entries.  Yield a SetLoop.
         """
@@ -258,11 +267,12 @@ class _SetPayload(object):
         one = ir.Constant(intp_t, 1)
         size = builder.add(self.mask, one)
 
-        with cgutils.for_range(builder, size) as range_loop:
+        with cgutils.for_range(builder, size, start=start) as range_loop:
             entry = self.get_entry(range_loop.index)
             is_used = is_hash_used(context, builder, entry.hash)
             with builder.if_then(is_used):
-                loop = SetLoop(entry=entry, do_break=range_loop.do_break)
+                loop = SetLoop(index=range_loop.index, entry=entry,
+                               do_break=range_loop.do_break)
                 yield loop
 
 
@@ -273,8 +283,6 @@ class SetInstance(object):
         self._builder = builder
         self._ty = set_type
         self._entrysize = get_entry_size(context, set_type)
-        self._entrymodel = context.data_model_manager[types.SetPayload(set_type)]
-        self._datamodel = context.data_model_manager[set_type.dtype]
         self._set = make_set_cls(set_type)(context, builder, set_val)
 
     @property
@@ -553,7 +561,7 @@ class SetInstance(object):
 
         payload_type = context.get_data_type(types.SetPayload(self._ty))
         payload_size = context.get_abi_sizeof(payload_type)
-        entry_size = get_entry_size(context, self._ty)
+        entry_size = self._entrysize
         # Account for the fact that the payload struct already contains an entry
         payload_size -= entry_size
 
@@ -603,6 +611,65 @@ class SetInstance(object):
         self._context.nrt_meminfo_varsize_free(self._builder, self.meminfo, ptr)
 
 
+class SetIterInstance(object):
+
+    def __init__(self, context, builder, iter_type, iter_val):
+        self._context = context
+        self._builder = builder
+        self._ty = iter_type
+        self._iter = make_setiter_cls(iter_type)(context, builder, iter_val)
+        ptr = self._context.nrt_meminfo_data(builder, self.meminfo)
+        self._payload = _SetPayload(context, builder, self._ty.set_type, ptr)
+
+    @classmethod
+    def from_set(cls, context, builder, iter_type, set_val):
+        set_inst = SetInstance(context, builder, iter_type.set_type, set_val)
+        self = cls(context, builder, iter_type, None)
+        index = context.get_constant(types.intp, 0)
+        self._iter.index = cgutils.alloca_once_value(builder, index)
+        self._iter.meminfo = set_inst.meminfo
+        return self
+
+    @property
+    def value(self):
+        return self._iter._getvalue()
+
+    @property
+    def meminfo(self):
+        return self._iter.meminfo
+
+    @property
+    def index(self):
+        return self._builder.load(self._iter.index)
+
+    @index.setter
+    def index(self, value):
+        self._builder.store(value, self._iter.index)
+
+    def iternext(self, result):
+        index = self.index
+        payload = self._payload
+        one = ir.Constant(index.type, 1)
+
+        result.set_exhausted()
+
+        with payload._iterate(start=index) as loop:
+            # An entry was found
+            entry = loop.entry
+            result.set_valid()
+            result.yield_(entry.key)
+            self.index = self._builder.add(loop.index, one)
+            loop.do_break()
+
+        #nitems = inst.size
+        #is_valid = builder.icmp_signed('<', index, nitems)
+        #result.set_valid(is_valid)
+
+        #with builder.if_then(is_valid):
+            #result.yield_(inst.getitem(index))
+            #inst.index = builder.add(index, context.get_constant(types.intp, 1))
+
+
 #-------------------------------------------------------------------------------
 # Constructors
 
@@ -636,6 +703,17 @@ def set_len(context, builder, sig, args):
 def in_set(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[1], args[1])
     return inst.contains(args[0])
+
+@lower_builtin('getiter', types.Set)
+def getiter_set(context, builder, sig, args):
+    inst = SetIterInstance.from_set(context, builder, sig.return_type, args[0])
+    return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
+
+@lower_builtin('iternext', types.SetIter)
+@iternext_impl
+def iternext_listiter(context, builder, sig, args, result):
+    inst = SetIterInstance(context, builder, sig.args[0], args[0])
+    inst.iternext(result)
 
 
 #-------------------------------------------------------------------------------

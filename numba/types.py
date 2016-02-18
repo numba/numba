@@ -1360,8 +1360,7 @@ class Set(Container):
 
     @property
     def iterator_type(self):
-        # FIXME
-        1/0
+        return SetIter(self)
 
     def is_precise(self):
         return self.dtype.is_precise()
@@ -1372,12 +1371,38 @@ class Set(Container):
         return Set(dtype)
 
 
+class SetIter(SimpleIteratorType):
+    """
+    Type class for set iterators.
+    """
+    # XXX this is the same thing as ListIter!
+
+    def __init__(self, set_type):
+        assert isinstance(set_type, Set)
+        self.set_type = set_type
+        yield_type = set_type.dtype
+        name = 'iter(%s)' % set_type
+        super(SetIter, self).__init__(name, yield_type)
+
+    # XXX This is a common pattern.  Should it be factored out somewhere?
+    def unify(self, typingctx, other):
+        if isinstance(other, SetIter):
+            set_type = typingctx.unify_pairs(self.set_type, other.set_type)
+            if set_type != pyobject:
+                return SetIter(set_type)
+
+    @property
+    def key(self):
+        return self.set_type
+
+
 class SetPayload(Type):
     """
     Internal type class for the dynamically-allocated payload of a set.
     """
 
     def __init__(self, set_type):
+        assert isinstance(set_type, Set)
         self.set_type = set_type
         name = 'payload(%s)' % set_type
         super(SetPayload, self).__init__(name)
