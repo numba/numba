@@ -62,6 +62,18 @@ def update_usecase(a, b, c):
     s.update(c)
     return list(s)
 
+def remove_usecase(a, b):
+    s = set(a)
+    for v in b:
+        s.remove(v)
+    return list(s)
+
+def discard_usecase(a, b):
+    s = set(a)
+    for v in b:
+        s.discard(v)
+    return list(s)
+
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
                                      "set literals unavailable before Python 2.7")
@@ -108,7 +120,6 @@ class TestSetLiterals(BaseTest):
     @needs_set_literals
     def test_build_set_nopython(self):
         arg = list(self.sparse_array(50))
-        #arg = (1, 2, 3, 42, 5, 3)
         pyfunc = set_literal_convert_usecase(arg)
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -158,6 +169,40 @@ class TestSets(BaseTest):
         b = self.duplicates_array(50)
         c = self.sparse_array(50)
         check(a, b, c)
+
+    def test_remove(self):
+        pyfunc = remove_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(*args):
+            self.assertPreciseEqual(sorted(pyfunc(*args)),
+                                    sorted(cfunc(*args)))
+
+        a = (1, 2, 3, 5, 8, 42)
+        b = (5, 2, 8)
+        check(a, b)
+
+    def test_remove_error(self):
+        # References are leaked on exception
+        self.disable_leak_check()
+
+        pyfunc = remove_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        with self.assertRaises(KeyError) as raises:
+            cfunc((1, 2, 3), (5, ))
+
+    def test_discard(self):
+        pyfunc = discard_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(*args):
+            self.assertPreciseEqual(sorted(pyfunc(*args)),
+                                    sorted(cfunc(*args)))
+
+        a = (1, 2, 3, 5, 8, 42)
+        b = (5, 2, 8)
+        check(a, b)
+        a = self.sparse_array(50)
+        b = self.sparse_array(50)
+        check(a, b)
 
 
 if __name__ == '__main__':
