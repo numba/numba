@@ -705,6 +705,8 @@ class SetPayloadModel(StructModel):
             ('used', types.intp),
             # Allocated size - 1 (size being a power of 2)
             ('mask', types.intp),
+            # Search finger
+            ('finger', types.intp),
             # Actually an inlined var-sized array
             ('entries', entry_type),
         ]

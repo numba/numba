@@ -156,6 +156,14 @@ class _SetPayload(object):
         self._payload.fill = value
 
     @property
+    def finger(self):
+        return self._payload.finger
+
+    @finger.setter
+    def finger(self, value):
+        self._payload.finger = value
+
+    @property
     def entries(self):
         """
         A pointer to the start of the entries array.
@@ -275,6 +283,46 @@ class _SetPayload(object):
                                do_break=range_loop.do_break)
                 yield loop
 
+    @contextlib.contextmanager
+    def _next_entry(self):
+        """
+        Yield a random entry from the payload.  Caller must ensure the
+        set isn't empty, otherwise the function won't end.
+        """
+        context = self._context
+        builder = self._builder
+
+        intp_t = context.get_value_type(types.intp)
+        zero = ir.Constant(intp_t, 0)
+        one = ir.Constant(intp_t, 1)
+        mask = self.mask
+
+        # Start walking the entries from the stored "search finger" and
+        # break as soon as we find a used entry.
+
+        bb_body = builder.append_basic_block('next_entry_body')
+        bb_end = builder.append_basic_block('next_entry_end')
+
+        index = cgutils.alloca_once_value(builder, self.finger)
+        builder.branch(bb_body)
+
+        with builder.goto_block(bb_body):
+            i = builder.load(index)
+            # ANDing with mask ensures we stay inside the table boundaries
+            i = builder.and_(mask, builder.add(i, one))
+            builder.store(i, index)
+            entry = self.get_entry(i)
+            is_used = is_hash_used(context, builder, entry.hash)
+            builder.cbranch(is_used, bb_end, bb_body)
+
+        builder.position_at_end(bb_end)
+
+        # Update the search finger with the next position.  This avoids
+        # O(n**2) behaviour when pop() is called in a loop.
+        i = builder.load(index)
+        self.finger = i
+        yield self.get_entry(i)
+
 
 class SetInstance(object):
 
@@ -309,7 +357,7 @@ class SetInstance(object):
     def meminfo(self):
         return self._set.meminfo
 
-    def _add_entry(self, payload, item, h, do_resize=True):
+    def _add_key(self, payload, item, h, do_resize=True):
         context = self._context
         builder = self._builder
 
@@ -334,23 +382,26 @@ class SetInstance(object):
             if do_resize:
                 self.upsize(used)
 
-    def _remove_entry(self, payload, item, h, do_resize=True):
+    def _remove_entry(self, payload, entry, do_resize=True):
+        # Mark entry deleted
+        entry.hash = ir.Constant(entry.hash.type, DELETED)
+        # used--
+        used = payload.used
+        one = ir.Constant(used.type, 1)
+        used = payload.used = self._builder.sub(used, one)
+        # Shrink table if necessary
+        if do_resize:
+            self.downsize(used)
+
+    def _remove_key(self, payload, item, h, do_resize=True):
         context = self._context
         builder = self._builder
 
         found, i = payload._lookup(item, h)
 
         with builder.if_then(found):
-            # Mark entry deleted
             entry = payload.get_entry(i)
-            entry.hash = ir.Constant(h.type, DELETED)
-            # used--
-            used = payload.used
-            one = ir.Constant(used.type, 1)
-            used = payload.used = builder.sub(used, one)
-            # Shrink table if necessary
-            if do_resize:
-                self.downsize(used)
+            self._remove_entry(payload, entry)
 
         return found
 
@@ -360,7 +411,7 @@ class SetInstance(object):
 
         payload = self.payload
         h = get_hash_value(context, builder, self._ty.dtype, item)
-        self._add_entry(payload, item, h)
+        self._add_key(payload, item, h)
 
     def contains(self, item):
         context = self._context
@@ -377,8 +428,22 @@ class SetInstance(object):
 
         payload = self.payload
         h = get_hash_value(context, builder, self._ty.dtype, item)
-        found = self._remove_entry(payload, item, h)
+        found = self._remove_key(payload, item, h)
         return found
+
+    def pop(self):
+        context = self._context
+        builder = self._builder
+
+        lty = context.get_value_type(self._ty.dtype)
+        key = cgutils.alloca_once(builder, lty)
+
+        payload = self.payload
+        with payload._next_entry() as entry:
+            builder.store(entry.key, key)
+            self._remove_entry(payload, entry)
+
+        return builder.load(key)
 
     @classmethod
     def allocate_ex(cls, context, builder, set_type, nitems=None):
@@ -538,8 +603,8 @@ class SetInstance(object):
         payload = self.payload
         with old_payload._iterate() as loop:
             entry = loop.entry
-            self._add_entry(payload, entry.key, entry.hash,
-                            do_resize=False)
+            self._add_key(payload, entry.key, entry.hash,
+                          do_resize=False)
 
         self._free_payload(old_payload.ptr)
 
@@ -594,6 +659,7 @@ class SetInstance(object):
                     cgutils.memset(builder, payload.ptr, allocsize, 0xFF)
                     payload.used = zero
                     payload.fill = zero
+                    payload.finger = zero
                     new_mask = builder.sub(nentries, one)
                     payload.mask = new_mask
 
@@ -753,6 +819,16 @@ def set_discard(context, builder, sig, args):
     inst.discard(item)
 
     return context.get_dummy_value()
+
+@lower_builtin("set.pop", types.Set)
+def set_pop(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    used = inst.payload.used
+    with builder.if_then(cgutils.is_null(builder, used), likely=False):
+        context.call_conv.return_user_exc(builder, KeyError,
+                                          ("set.pop(): empty set",))
+
+    return inst.pop()
 
 @lower_builtin("set.remove", types.Set, types.Any)
 def set_remove(context, builder, sig, args):

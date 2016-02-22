@@ -74,6 +74,13 @@ def discard_usecase(a, b):
         s.discard(v)
     return list(s)
 
+def pop_usecase(a):
+    s = set(a)
+    l = []
+    while len(s) > 0:
+        l.append(s.pop())
+    return l
+
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
                                      "set literals unavailable before Python 2.7")
@@ -98,6 +105,13 @@ class BaseTest(MemoryLeakMixin, TestCase):
         """
         a = np.arange(n ** 2)
         return self.rnd.choice(a, (n,))
+
+    def unordered_checker(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(*args):
+            self.assertPreciseEqual(sorted(pyfunc(*args)),
+                                    sorted(cfunc(*args)))
+        return check
 
 
 class TestSetLiterals(BaseTest):
@@ -146,10 +160,7 @@ class TestSets(BaseTest):
 
     def test_iterator(self):
         pyfunc = iterator_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-        def check(arg):
-            self.assertPreciseEqual(sorted(pyfunc(arg)),
-                                    sorted(cfunc(arg)))
+        check = self.unordered_checker(pyfunc)
 
         check((1, 2, 3, 2, 7))
         check(self.duplicates_array(200))
@@ -157,10 +168,7 @@ class TestSets(BaseTest):
 
     def test_update(self):
         pyfunc = update_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-        def check(*args):
-            self.assertPreciseEqual(sorted(pyfunc(*args)),
-                                    sorted(cfunc(*args)))
+        check = self.unordered_checker(pyfunc)
 
         a, b, c = (1, 2, 4, 9), (2, 3, 5, 11, 42), (4, 5, 6, 42)
         check(a, b, c)
@@ -172,10 +180,7 @@ class TestSets(BaseTest):
 
     def test_remove(self):
         pyfunc = remove_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-        def check(*args):
-            self.assertPreciseEqual(sorted(pyfunc(*args)),
-                                    sorted(cfunc(*args)))
+        check = self.unordered_checker(pyfunc)
 
         a = (1, 2, 3, 5, 8, 42)
         b = (5, 2, 8)
@@ -192,10 +197,7 @@ class TestSets(BaseTest):
 
     def test_discard(self):
         pyfunc = discard_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-        def check(*args):
-            self.assertPreciseEqual(sorted(pyfunc(*args)),
-                                    sorted(cfunc(*args)))
+        check = self.unordered_checker(pyfunc)
 
         a = (1, 2, 3, 5, 8, 42)
         b = (5, 2, 8)
@@ -203,6 +205,13 @@ class TestSets(BaseTest):
         a = self.sparse_array(50)
         b = self.sparse_array(50)
         check(a, b)
+
+    def test_pop(self):
+        pyfunc = pop_usecase
+        check = self.unordered_checker(pyfunc)
+
+        check((2, 3, 55, 11, 8, 42))
+        check(self.sparse_array(50))
 
 
 if __name__ == '__main__':
