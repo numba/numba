@@ -1348,7 +1348,7 @@ class Set(Container):
     mutable = True
 
     def __init__(self, dtype):
-        assert isinstance(dtype, Hashable)
+        assert isinstance(dtype, (Hashable, Undefined))
         self.dtype = dtype
         cls_name = "set"
         name = "%s(%s)" % (cls_name, self.dtype)
@@ -1369,6 +1369,12 @@ class Set(Container):
         if dtype is None:
             dtype = self.dtype
         return Set(dtype)
+
+    def unify(self, typingctx, other):
+        if isinstance(other, Set):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            if dtype != pyobject:
+                return Set(dtype)
 
 
 class SetIter(SimpleIteratorType):

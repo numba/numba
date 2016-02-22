@@ -39,6 +39,11 @@ def set_literal_convert_usecase(args):
     return _build_set_literal_usecase(code, args)
 
 
+def empty_constructor_usecase():
+    s = set()
+    s.add(1)
+    return len(s)
+
 def constructor_usecase(arg):
     s = set(arg)
     return len(s)
@@ -49,6 +54,13 @@ def iterator_usecase(arg):
     for v in s:
         l.append(v)
     return l
+
+def update_usecase(a, b, c):
+    s = set()
+    s.update(a)
+    s.update(b)
+    s.update(c)
+    return list(s)
 
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
@@ -108,6 +120,10 @@ class TestSetLiterals(BaseTest):
 class TestSets(BaseTest):
 
     def test_constructor(self):
+        pyfunc = empty_constructor_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(), pyfunc())
+
         pyfunc = constructor_usecase
         cfunc = jit(nopython=True)(pyfunc)
         def check(arg):
@@ -127,6 +143,21 @@ class TestSets(BaseTest):
         check((1, 2, 3, 2, 7))
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
+
+    def test_update(self):
+        pyfunc = update_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(*args):
+            self.assertPreciseEqual(sorted(pyfunc(*args)),
+                                    sorted(cfunc(*args)))
+
+        a, b, c = (1, 2, 4, 9), (2, 3, 5, 11, 42), (4, 5, 6, 42)
+        check(a, b, c)
+
+        a = self.sparse_array(50)
+        b = self.duplicates_array(50)
+        c = self.sparse_array(50)
+        check(a, b, c)
 
 
 if __name__ == '__main__':

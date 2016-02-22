@@ -348,6 +348,7 @@ class CallConstraint(object):
             msg = '\n'.join([head, desc])
             raise TypingError(msg, loc=self.loc)
         typeinfer.add_type(self.target, sig.return_type)
+
         # If the function is a bound function and its receiver type
         # was refined, propagate it.
         if (isinstance(fnty, types.BoundFunction)
@@ -357,6 +358,19 @@ class CallConstraint(object):
             if refined_this.is_precise():
                 refined_fnty = fnty.copy(this=refined_this)
                 typeinfer.propagate_refined_type(self.func, refined_fnty)
+
+        # If the return type is imprecise but can be unified with the
+        # target variable's inferred type, use the latter.
+        # Useful for code such as::
+        #    s = set()
+        #    s.add(1)
+        # (the set() call must be typed as int64(), not undefined())
+        if not sig.return_type.is_precise():
+            target = typevars[self.target]
+            if target.defined:
+                targetty = target.getone()
+                if context.unify_pairs(targetty, sig.return_type) == targetty:
+                    sig.return_type = targetty
 
         self.signature = sig
 

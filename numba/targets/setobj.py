@@ -674,8 +674,8 @@ def build_set(context, builder, set_type, items):
 
     # XXX preallocate the set so as to avoid resizes?
 
-    # Populate set.  We don't want to inline the insertion code for
-    # each item, instead we create a LLVM array and iterate over it.
+    # Populate set.  Inlining the insertion code for each item would be very
+    # costly, instead we create a LLVM array and iterate over it.
     array = cgutils.pack_array(builder, items)
     array_ptr = cgutils.alloca_once_value(builder, array)
 
@@ -684,6 +684,13 @@ def build_set(context, builder, set_type, items):
         item = builder.load(cgutils.gep(builder, array_ptr, 0, loop.index))
         inst.add(item)
 
+    return impl_ret_new_ref(context, builder, set_type, inst.value)
+
+
+@lower_builtin(set)
+def set_empty_constructor(context, builder, sig, args):
+    set_type = sig.return_type
+    inst = SetInstance.allocate(context, builder, set_type)
     return impl_ret_new_ref(context, builder, set_type, inst.value)
 
 @lower_builtin(set, types.IterableType)

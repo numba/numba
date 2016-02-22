@@ -20,11 +20,15 @@ class SetBuiltin(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         if args:
+            # set(iterable)
             iterable, = args
             if isinstance(iterable, types.IterableType):
                 dtype = iterable.iterator_type.yield_type
                 if isinstance(dtype, types.Hashable):
                     return signature(types.Set(dtype), iterable)
+        else:
+            # set()
+            return signature(types.Set(types.undefined))
 
 
 @infer_getattr
