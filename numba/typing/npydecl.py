@@ -200,17 +200,16 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         '''
         try:
             sig = super(NumpyRulesArrayOperator, self).generic(args, kws)
-            # Stay out of the timedelta64 range and domain; already
-            # handled elsewhere.
-            if sig is not None:
-                timedelta_test = (
-                    isinstance(sig.return_type, types.NPTimedelta) or
-                    (all(isinstance(argty, types.NPTimedelta)
-                         for argty in sig.args)))
-                if timedelta_test:
-                    sig = None
         except TypingError:
-            sig = None
+            return None
+        if sig is None:
+            return None
+        args = sig.args
+        # Only accept at least one array argument, otherwise the operator
+        # doesn't involve Numpy's ufunc machinery.
+        if not any(isinstance(arg, types.ArrayCompatible)
+                   for arg in args):
+            return None
         return sig
 
 
