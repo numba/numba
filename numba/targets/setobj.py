@@ -445,6 +445,24 @@ class SetInstance(object):
 
         return builder.load(key)
 
+    def intersect(self, other):
+        """
+        In-place intersection with *other* set.
+        """
+        context = self._context
+        builder = self._builder
+        payload = self.payload
+        other_payload = other.payload
+
+        with payload._iterate() as loop:
+            entry = loop.entry
+            found, _ = other_payload._lookup(entry.key, entry.hash)
+            with builder.if_then(builder.not_(found)):
+                self._remove_entry(payload, entry, do_resize=False)
+
+        # Final downsize
+        self.downsize(payload.used)
+
     @classmethod
     def allocate_ex(cls, context, builder, set_type, nitems=None):
         """
@@ -836,6 +854,8 @@ def iternext_listiter(context, builder, sig, args, result):
 #-------------------------------------------------------------------------------
 # Methods
 
+# One-item-at-a-time operations
+
 @lower_builtin("set.add", types.Set, types.Any)
 def set_add(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
@@ -870,6 +890,29 @@ def set_remove(context, builder, sig, args):
     with builder.if_then(builder.not_(found), likely=False):
         context.call_conv.return_user_exc(builder, KeyError,
                                           ("set.remove(): key not in set",))
+
+    return context.get_dummy_value()
+
+
+# Mutating set operations
+
+@lower_builtin("set.difference_update", types.Set, types.Set)
+def set_difference_update(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    items_type = sig.args[1]
+    items = args[1]
+
+    with for_iter(context, builder, items_type, items) as loop:
+        inst.discard(loop.value)
+
+    return context.get_dummy_value()
+
+@lower_builtin("set.intersection_update", types.Set, types.Set)
+def set_intersection_update(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    other = SetInstance(context, builder, sig.args[1], args[1])
+
+    inst.intersect(other)
 
     return context.get_dummy_value()
 

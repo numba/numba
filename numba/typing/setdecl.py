@@ -75,3 +75,18 @@ class SetAttribute(AttributeTemplate):
         sig = signature(types.none, iterable)
         sig.recvr = set.copy(dtype=unified)
         return sig
+
+    def _resolve_xxx_update(self, set, args, kws):
+        assert not kws
+        iterable, = args
+        # Set arguments only supported for now
+        if iterable == set:
+            return signature(types.none, iterable)
+
+    @bound_function("set.difference_update")
+    def resolve_difference_update(self, set, args, kws):
+        return self._resolve_xxx_update(set, args, kws)
+
+    @bound_function("set.intersection_update")
+    def resolve_intersection_update(self, set, args, kws):
+        return self._resolve_xxx_update(set, args, kws)

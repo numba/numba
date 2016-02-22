@@ -81,6 +81,23 @@ def pop_usecase(a):
         l.append(s.pop())
     return l
 
+def contains_usecase(a, b):
+    s = set(a)
+    l = []
+    for v in b:
+        l.append(v in s)
+    return l
+
+def difference_update_usecase(a, b):
+    s = set(a)
+    s.difference_update(set(b))
+    return list(s)
+
+def intersection_update_usecase(a, b):
+    s = set(a)
+    s.intersection_update(set(b))
+    return list(s)
+
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
                                      "set literals unavailable before Python 2.7")
@@ -103,7 +120,8 @@ class BaseTest(MemoryLeakMixin, TestCase):
         """
         Get a 1d array with values spread around.
         """
-        a = np.arange(n ** 2)
+        # Note two calls to sparse_array() should generate reasonable overlap
+        a = np.arange(int(n ** 1.3))
         return self.rnd.choice(a, (n,))
 
     def unordered_checker(self, pyfunc):
@@ -212,6 +230,32 @@ class TestSets(BaseTest):
 
         check((2, 3, 55, 11, 8, 42))
         check(self.sparse_array(50))
+
+    def test_contains(self):
+        pyfunc = contains_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(a, b):
+            self.assertPreciseEqual(pyfunc(a, b), cfunc(a, b))
+
+        a = (1, 2, 3, 5, 42)
+        b = (5, 2, 8, 3)
+        check(a, b)
+
+    def _test_xxx_update(self, pyfunc):
+        check = self.unordered_checker(pyfunc)
+
+        a, b = (1, 2, 4, 11), (2, 3, 5, 11, 42)
+        check(a, b)
+
+        a = self.sparse_array(50)
+        b = self.sparse_array(50)
+        check(a, b)
+
+    def test_difference_update(self):
+        self._test_xxx_update(difference_update_usecase)
+
+    def test_intersection_update(self):
+        self._test_xxx_update(intersection_update_usecase)
 
 
 if __name__ == '__main__':
