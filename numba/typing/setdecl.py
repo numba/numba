@@ -90,3 +90,7 @@ class SetAttribute(AttributeTemplate):
     @bound_function("set.intersection_update")
     def resolve_intersection_update(self, set, args, kws):
         return self._resolve_xxx_update(set, args, kws)
+
+    @bound_function("set.symmetric_difference_update")
+    def resolve_symmetric_difference_update(self, set, args, kws):
+        return self._resolve_xxx_update(set, args, kws)

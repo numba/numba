@@ -692,7 +692,7 @@ class BaseContext(object):
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
 
-    def printf(self, builder, format_string, args):
+    def printf(self, builder, format_string, *args):
         mod = builder.module
         if isinstance(format_string, str):
             cstr = self.insert_const_string(mod, format_string)

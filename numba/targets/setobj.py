@@ -357,6 +357,25 @@ class SetInstance(object):
     def meminfo(self):
         return self._set.meminfo
 
+    def _add_entry(self, payload, entry, item, h, do_resize=True):
+        context = self._context
+        builder = self._builder
+
+        old_hash = entry.hash
+        entry.hash = h
+        entry.key = item
+        # used++
+        used = payload.used
+        one = ir.Constant(used.type, 1)
+        used = payload.used = builder.add(used, one)
+        # fill++ if entry wasn't a deleted one
+        with builder.if_then(is_hash_empty(context, builder, old_hash),
+                             likely=True):
+            payload.fill = builder.add(payload.fill, one)
+        # Grow table if necessary
+        if do_resize:
+            self.upsize(used)
+
     def _add_key(self, payload, item, h, do_resize=True):
         context = self._context
         builder = self._builder
@@ -462,6 +481,30 @@ class SetInstance(object):
 
         # Final downsize
         self.downsize(payload.used)
+
+    def symmetric_difference(self, other):
+        """
+        In-place symmetric difference with *other* set.
+        """
+        context = self._context
+        builder = self._builder
+        other_payload = other.payload
+
+        with other_payload._iterate() as loop:
+            key = loop.entry.key
+            h = loop.entry.hash
+            # We must reload our payload as it may be resized during the loop
+            payload = self.payload
+            found, i = payload._lookup(key, h)
+            entry = payload.get_entry(i)
+            with builder.if_else(found) as (if_common, if_not_common):
+                with if_common:
+                    self._remove_entry(payload, entry, do_resize=False)
+                with if_not_common:
+                    self._add_entry(payload, entry, key, h)
+
+        # Final downsize
+        self.downsize(self.payload.used)
 
     @classmethod
     def allocate_ex(cls, context, builder, set_type, nitems=None):
@@ -572,7 +615,7 @@ class SetInstance(object):
                 context.printf(builder,
                                "upsize to %zd items: current size = %zd, "
                                "min entries = %zd, new size = %zd\n",
-                               (nitems, size, min_entries, new_size))
+                               nitems, size, min_entries, new_size)
             self._resize(payload, new_size, "cannot grow set")
 
     def downsize(self, nitems):
@@ -632,7 +675,7 @@ class SetInstance(object):
                 context.printf(builder,
                                "downsize to %zd items: current size = %zd, "
                                "min entries = %zd, new size = %zd\n",
-                               (nitems, size, min_entries, new_size))
+                               nitems, size, min_entries, new_size)
             self._resize(payload, new_size, "cannot shrink set")
 
     def _resize(self, payload, nentries, errmsg):
@@ -719,7 +762,7 @@ class SetInstance(object):
                     if DEBUG_ALLOCS:
                         context.printf(builder,
                                        "allocated %zd bytes for set at %p: mask = %zd\n",
-                                       (allocsize, payload.ptr, new_mask))
+                                       allocsize, payload.ptr, new_mask)
 
         return builder.load(ok)
 
@@ -896,7 +939,7 @@ def set_remove(context, builder, sig, args):
 
 # Mutating set operations
 
-@lower_builtin("set.difference_update", types.Set, types.Set)
+@lower_builtin("set.difference_update", types.Set, types.IterableType)
 def set_difference_update(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     items_type = sig.args[1]
@@ -913,6 +956,15 @@ def set_intersection_update(context, builder, sig, args):
     other = SetInstance(context, builder, sig.args[1], args[1])
 
     inst.intersect(other)
+
+    return context.get_dummy_value()
+
+@lower_builtin("set.symmetric_difference_update", types.Set, types.Set)
+def set_difference_update(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    other = SetInstance(context, builder, sig.args[1], args[1])
+
+    inst.symmetric_difference(other)
 
     return context.get_dummy_value()
 

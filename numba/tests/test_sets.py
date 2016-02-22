@@ -98,6 +98,12 @@ def intersection_update_usecase(a, b):
     s.intersection_update(set(b))
     return list(s)
 
+def symmetric_difference_update_usecase(a, b):
+    s = set(a)
+    sb = set(b)
+    s.symmetric_difference_update(sb)
+    return list(s)
+
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
                                      "set literals unavailable before Python 2.7")
@@ -247,15 +253,20 @@ class TestSets(BaseTest):
         a, b = (1, 2, 4, 11), (2, 3, 5, 11, 42)
         check(a, b)
 
-        a = self.sparse_array(50)
-        b = self.sparse_array(50)
-        check(a, b)
+        sizes = (50, 500)
+        for na, nb in itertools.product(sizes, sizes):
+            a = self.sparse_array(na)
+            b = self.sparse_array(nb)
+            check(a, b)
 
     def test_difference_update(self):
         self._test_xxx_update(difference_update_usecase)
 
     def test_intersection_update(self):
         self._test_xxx_update(intersection_update_usecase)
+
+    def test_symmetric_difference_update(self):
+        self._test_xxx_update(symmetric_difference_update_usecase)
 
 
 if __name__ == '__main__':
