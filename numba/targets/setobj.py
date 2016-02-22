@@ -12,7 +12,8 @@ from llvmlite import ir
 from numba import types, cgutils, typing
 from numba.targets.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked)
+                                    impl_ret_new_ref, impl_ret_untracked,
+                                    for_iter, call_len)
 from numba.utils import cached_property
 from . import quicksort, slicing
 
@@ -75,7 +76,6 @@ DELETED = -2
 FALLBACK = -43
 
 # Minimal size of entries table.  Must be a power of 2!
-#MINSIZE = 4
 MINSIZE = 16
 
 DEBUG_ALLOCS = False
@@ -401,7 +401,7 @@ class SetInstance(object):
 
         with builder.if_then(found):
             entry = payload.get_entry(i)
-            self._remove_entry(payload, entry)
+            self._remove_entry(payload, entry, do_resize)
 
         return found
 
@@ -455,8 +455,12 @@ class SetInstance(object):
         """
         intp_t = context.get_value_type(types.intp)
 
-        # XXX for now, ignore nitems and choose a default value
-        nentries = ir.Constant(intp_t, MINSIZE)
+        if nitems is None:
+            nentries = ir.Constant(intp_t, MINSIZE)
+        else:
+            if isinstance(nitems, int):
+                nitems = ir.Constant(intp_t, nitems)
+            nentries = cls.choose_alloc_size(context, builder, nitems)
 
         self = cls(context, builder, set_type, None)
         ok = self._allocate_payload(nentries)
@@ -475,6 +479,37 @@ class SetInstance(object):
             context.call_conv.return_user_exc(builder, MemoryError,
                                               ("cannot allocate set",))
         return self
+
+    @classmethod
+    def choose_alloc_size(cls, context, builder, nitems):
+        """
+        Choose a suitable number of entries for the given number of items.
+        """
+        intp_t = nitems.type
+        one = ir.Constant(intp_t, 1)
+        minsize = ir.Constant(intp_t, MINSIZE)
+
+        # Ensure number of entries >= 2 * used
+        min_entries = builder.shl(nitems, one)
+        # Find out first suitable power of 2, starting from MINSIZE
+        size_p = cgutils.alloca_once_value(builder, minsize)
+
+        bb_body = builder.append_basic_block("calcsize.body")
+        bb_end = builder.append_basic_block("calcsize.end")
+
+        builder.branch(bb_body)
+
+        with builder.goto_block(bb_body):
+            size = builder.load(size_p)
+            is_large_enough = builder.icmp_unsigned('>=', size, min_entries)
+            with builder.if_then(is_large_enough, likely=False):
+                builder.branch(bb_end)
+            next_size = builder.shl(size, one)
+            builder.store(next_size, size_p)
+            builder.branch(bb_body)
+
+        builder.position_at_end(bb_end)
+        return builder.load(size_p)
 
     def upsize(self, nitems):
         """
@@ -738,8 +773,6 @@ def build_set(context, builder, set_type, items):
     nitems = len(items)
     inst = SetInstance.allocate(context, builder, set_type, nitems)
 
-    # XXX preallocate the set so as to avoid resizes?
-
     # Populate set.  Inlining the insertion code for each item would be very
     # costly, instead we create a LLVM array and iterate over it.
     array = cgutils.pack_array(builder, items)
@@ -763,15 +796,14 @@ def set_empty_constructor(context, builder, sig, args):
 def set_constructor(context, builder, sig, args):
     set_type = sig.return_type
     items_type, = sig.args
+    items, = args
 
-    # XXX: if the argument has a len(), preallocate the set so as to
-    # avoid resizes?
-
-    inst = SetInstance.allocate(context, builder, set_type)
-    # Populate set
-    update_sig = typing.signature(types.none, set_type, items_type)
-    update_args = (inst.value, args[0])
-    set_update(context, builder, update_sig, update_args)
+    # If the argument has a len(), preallocate the set so as to
+    # avoid resizes.
+    n = call_len(context, builder, items_type, items)
+    inst = SetInstance.allocate(context, builder, set_type, n)
+    with for_iter(context, builder, items_type, items) as loop:
+        inst.add(loop.value)
 
     return impl_ret_new_ref(context, builder, set_type, inst.value)
 
@@ -843,11 +875,22 @@ def set_remove(context, builder, sig, args):
 
 @lower_builtin("set.update", types.Set, types.IterableType)
 def set_update(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    items_type = sig.args[1]
+    items = args[1]
 
-    def set_update(cont, iterable):
-        # Speed hack to avoid NRT refcount operations inside the loop
-        meth = cont.add
-        for v in iterable:
-            meth(v)
+    # If the argument has a len(), assume there are few collisions and
+    # presize to len(set) + len(items)
+    n = call_len(context, builder, items_type, items)
+    if n is not None:
+        new_size = builder.add(inst.payload.used, n)
+        inst.upsize(new_size)
 
-    return context.compile_internal(builder, set_update, sig, args)
+    with for_iter(context, builder, items_type, items) as loop:
+        inst.add(loop.value)
+
+    if n is not None:
+        # If we pre-grew the set, downsize in case there were many collisions
+        inst.downsize(inst.payload.used)
+
+    return context.get_dummy_value()
