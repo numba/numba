@@ -94,3 +94,21 @@ class SetAttribute(AttributeTemplate):
     @bound_function("set.symmetric_difference_update")
     def resolve_symmetric_difference_update(self, set, args, kws):
         return self._resolve_xxx_update(set, args, kws)
+
+    def _resolve_comparator(self, set, args, kws):
+        assert not kws
+        arg, = args
+        if arg == set:
+            return signature(types.boolean, arg)
+
+    @bound_function("set.isdisjoint")
+    def resolve_isdisjoint(self, set, args, kws):
+        return self._resolve_comparator(set, args, kws)
+
+    @bound_function("set.issubset")
+    def resolve_issubset(self, set, args, kws):
+        return self._resolve_comparator(set, args, kws)
+
+    @bound_function("set.issuperset")
+    def resolve_issuperset(self, set, args, kws):
+        return self._resolve_comparator(set, args, kws)

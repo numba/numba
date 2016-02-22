@@ -506,6 +506,61 @@ class SetInstance(object):
         # Final downsize
         self.downsize(self.payload.used)
 
+    def issubset(self, other):
+        context = self._context
+        builder = self._builder
+        payload = self.payload
+        other_payload = other.payload
+
+        res = cgutils.alloca_once_value(builder, cgutils.true_bit)
+        with builder.if_else(
+            builder.icmp_unsigned('>', payload.used, other_payload.used)
+            ) as (if_larger, otherwise):
+            with if_larger:
+                # len(self) > len(other) => self cannot possibly a subset
+                builder.store(cgutils.false_bit, res)
+            with otherwise:
+                # otherwise, check whether each key of self is in other
+                with payload._iterate() as loop:
+                    entry = loop.entry
+                    found, _ = other_payload._lookup(entry.key, entry.hash)
+                    with builder.if_then(builder.not_(found)):
+                        builder.store(cgutils.false_bit, res)
+                        loop.do_break()
+
+        return builder.load(res)
+
+    def isdisjoint(self, other):
+        context = self._context
+        builder = self._builder
+        payload = self.payload
+        other_payload = other.payload
+
+        res = cgutils.alloca_once_value(builder, cgutils.true_bit)
+
+        def check(smaller, larger):
+            # Loop over the smaller of the two, and search in the larger
+            with smaller._iterate() as loop:
+                entry = loop.entry
+                found, _ = larger._lookup(entry.key, entry.hash)
+                with builder.if_then(found):
+                    builder.store(cgutils.false_bit, res)
+                    loop.do_break()
+
+        with builder.if_else(
+            builder.icmp_unsigned('>', payload.used, other_payload.used)
+            ) as (if_larger, otherwise):
+
+            with if_larger:
+                # len(self) > len(other)
+                check(other_payload, payload)
+
+            with otherwise:
+                # len(self) <= len(other)
+                check(payload, other_payload)
+
+        return builder.load(res)
+
     @classmethod
     def allocate_ex(cls, context, builder, set_type, nitems=None):
         """
@@ -960,7 +1015,7 @@ def set_intersection_update(context, builder, sig, args):
     return context.get_dummy_value()
 
 @lower_builtin("set.symmetric_difference_update", types.Set, types.Set)
-def set_difference_update(context, builder, sig, args):
+def set_symmetric_difference_update(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = SetInstance(context, builder, sig.args[1], args[1])
 
@@ -989,3 +1044,27 @@ def set_update(context, builder, sig, args):
         inst.downsize(inst.payload.used)
 
     return context.get_dummy_value()
+
+
+# Predicates
+
+@lower_builtin("set.isdisjoint", types.Set, types.Set)
+def set_isdisjoint(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    other = SetInstance(context, builder, sig.args[1], args[1])
+
+    return inst.isdisjoint(other)
+
+@lower_builtin("set.issubset", types.Set, types.Set)
+def set_issubset(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    other = SetInstance(context, builder, sig.args[1], args[1])
+
+    return inst.issubset(other)
+
+@lower_builtin("set.issuperset", types.Set, types.Set)
+def set_issuperset(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    other = SetInstance(context, builder, sig.args[1], args[1])
+
+    return other.issubset(inst)

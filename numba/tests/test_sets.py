@@ -100,9 +100,17 @@ def intersection_update_usecase(a, b):
 
 def symmetric_difference_update_usecase(a, b):
     s = set(a)
-    sb = set(b)
-    s.symmetric_difference_update(sb)
+    s.symmetric_difference_update(set(b))
     return list(s)
+
+def isdisjoint_usecase(a, b):
+    return set(a).isdisjoint(set(b))
+
+def issubset_usecase(a, b):
+    return set(a).issubset(set(b))
+
+def issuperset_usecase(a, b):
+    return set(a).issuperset(set(b))
 
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
@@ -267,6 +275,26 @@ class TestSets(BaseTest):
 
     def test_symmetric_difference_update(self):
         self._test_xxx_update(symmetric_difference_update_usecase)
+
+    def _test_comparator(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(a, b):
+            self.assertPreciseEqual(pyfunc(a, b), cfunc(a, b))
+
+        a, b = map(set, [(1, 2, 4, 11), (2, 3, 5, 11, 42)])
+        args = [a & b, a - b, a | b, a ^ b]
+        args = [tuple(x) for x in args]
+        for a, b in itertools.product(args, args):
+            check(a, b)
+
+    def test_isdisjoint(self):
+        self._test_comparator(isdisjoint_usecase)
+
+    def test_issubset(self):
+        self._test_comparator(issubset_usecase)
+
+    def test_issuperset(self):
+        self._test_comparator(issuperset_usecase)
 
 
 if __name__ == '__main__':
