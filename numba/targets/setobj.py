@@ -590,21 +590,23 @@ class SetInstance(object):
         # Final downsize
         self.downsize(self.payload.used)
 
-    def issubset(self, other):
+    def issubset(self, other, strict=False):
         context = self._context
         builder = self._builder
         payload = self.payload
         other_payload = other.payload
 
+        cmp_op = '<' if strict else '<='
+
         res = cgutils.alloca_once_value(builder, cgutils.true_bit)
         with builder.if_else(
-            builder.icmp_unsigned('>', payload.used, other_payload.used)
-            ) as (if_larger, otherwise):
+            builder.icmp_unsigned(cmp_op, payload.used, other_payload.used)
+            ) as (if_smaller, if_larger):
             with if_larger:
-                # len(self) > len(other) => self cannot possibly a subset
+                # self larger than other => self cannot possibly a subset
                 builder.store(cgutils.false_bit, res)
-            with otherwise:
-                # otherwise, check whether each key of self is in other
+            with if_smaller:
+                # check whether each key of self is in other
                 with payload._iterate() as loop:
                     entry = loop.entry
                     found, _ = other_payload._lookup(entry.key, entry.hash)
@@ -642,6 +644,30 @@ class SetInstance(object):
             with otherwise:
                 # len(self) <= len(other)
                 check(payload, other_payload)
+
+        return builder.load(res)
+
+    def equals(self, other):
+        context = self._context
+        builder = self._builder
+        payload = self.payload
+        other_payload = other.payload
+
+        res = cgutils.alloca_once_value(builder, cgutils.true_bit)
+        with builder.if_else(
+            builder.icmp_unsigned('==', payload.used, other_payload.used)
+            ) as (if_same_size, otherwise):
+            with if_same_size:
+                # same sizes => check whether each key of self is in other
+                with payload._iterate() as loop:
+                    entry = loop.entry
+                    found, _ = other_payload._lookup(entry.key, entry.hash)
+                    with builder.if_then(builder.not_(found)):
+                        builder.store(cgutils.false_bit, res)
+                        loop.do_break()
+            with otherwise:
+                # different sizes => cannot possibly be equal
+                builder.store(cgutils.false_bit, res)
 
         return builder.load(res)
 
@@ -1271,6 +1297,7 @@ def set_union(context, builder, sig, args):
 
     return context.compile_internal(builder, union_impl, sig, args)
 
+
 # Predicates
 
 @lower_builtin("set.isdisjoint", types.Set, types.Set)
@@ -1280,6 +1307,7 @@ def set_isdisjoint(context, builder, sig, args):
 
     return inst.isdisjoint(other)
 
+@lower_builtin("<=", types.Set, types.Set)
 @lower_builtin("set.issubset", types.Set, types.Set)
 def set_issubset(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
@@ -1287,9 +1315,38 @@ def set_issubset(context, builder, sig, args):
 
     return inst.issubset(other)
 
+@lower_builtin(">=", types.Set, types.Set)
 @lower_builtin("set.issuperset", types.Set, types.Set)
 def set_issuperset(context, builder, sig, args):
+    def superset_impl(a, b):
+        return b.issubset(a)
+
+    return context.compile_internal(builder, superset_impl, sig, args)
+
+@lower_builtin("==", types.Set, types.Set)
+def set_isdisjoint(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = SetInstance(context, builder, sig.args[1], args[1])
 
-    return other.issubset(inst)
+    return inst.equals(other)
+
+@lower_builtin("!=", types.Set, types.Set)
+def set_ne(context, builder, sig, args):
+    def ne_impl(a, b):
+        return not a == b
+
+    return context.compile_internal(builder, ne_impl, sig, args)
+
+@lower_builtin("<", types.Set, types.Set)
+def set_lt(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    other = SetInstance(context, builder, sig.args[1], args[1])
+
+    return inst.issubset(other, strict=True)
+
+@lower_builtin(">", types.Set, types.Set)
+def set_gt(context, builder, sig, args):
+    def gt_impl(a, b):
+        return b < a
+
+    return context.compile_internal(builder, gt_impl, sig, args)

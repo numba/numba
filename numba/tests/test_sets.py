@@ -14,7 +14,8 @@ import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types
 import numba.unittest_support as unittest
-from .support import TestCase, enable_pyobj_flags, nrt_flags, MemoryLeakMixin, tag
+from .support import (TestCase, enable_pyobj_flags, MemoryLeakMixin, tag,
+                      compile_function)
 
 
 def _build_set_literal_usecase(code, args):
@@ -151,21 +152,19 @@ def union_usecase(a, b):
     s = sa.union(set(b))
     return list(s)
 
-def and_usecase(a, b):
-    s = set(a) & set(b)
-    return list(s)
 
-def or_usecase(a, b):
-    s = set(a) | set(b)
-    return list(s)
+def make_operator_usecase(op):
+    code = """def operator_usecase(a, b):
+        s = set(a) %(op)s set(b)
+        return list(s)
+    """ % dict(op=op)
+    return compile_function('operator_usecase', code, globals())
 
-def sub_usecase(a, b):
-    s = set(a) - set(b)
-    return list(s)
-
-def xor_usecase(a, b):
-    s = set(a) ^ set(b)
-    return list(s)
+def make_comparison_usecase(op):
+    code = """def comparison_usecase(a, b):
+        return set(a) %(op)s set(b)
+    """ % dict(op=op)
+    return compile_function('comparison_usecase', code, globals())
 
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
@@ -427,16 +426,34 @@ class TestSets(BaseTest):
         self._test_set_operator(union_usecase)
 
     def test_and(self):
-        self._test_set_operator(and_usecase)
+        self._test_set_operator(make_operator_usecase('&'))
 
     def test_or(self):
-        self._test_set_operator(or_usecase)
+        self._test_set_operator(make_operator_usecase('|'))
 
     def test_sub(self):
-        self._test_set_operator(sub_usecase)
+        self._test_set_operator(make_operator_usecase('-'))
 
     def test_xor(self):
-        self._test_set_operator(xor_usecase)
+        self._test_set_operator(make_operator_usecase('^'))
+
+    def test_eq(self):
+        self._test_set_operator(make_comparison_usecase('=='))
+
+    def test_ne(self):
+        self._test_set_operator(make_comparison_usecase('!='))
+
+    def test_le(self):
+        self._test_set_operator(make_comparison_usecase('<='))
+
+    def test_lt(self):
+        self._test_set_operator(make_comparison_usecase('<'))
+
+    def test_ge(self):
+        self._test_set_operator(make_comparison_usecase('>='))
+
+    def test_gt(self):
+        self._test_set_operator(make_comparison_usecase('>'))
 
 
 class OtherTypesTest(object):

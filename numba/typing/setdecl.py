@@ -157,18 +157,21 @@ class SetOperator(AbstractTemplate):
             return signature(a, *args)
 
 
-@infer
-class AndSet(SetOperator):
-    key = "&"
+class SetComparison(AbstractTemplate):
 
-@infer
-class OrSet(SetOperator):
-    key = "|"
+    def generic(self, args, kws):
+        a, b = args
+        if isinstance(a, types.Set) and isinstance(b, types.Set) and a == b:
+            return signature(types.boolean, *args)
 
-@infer
-class SubSet(SetOperator):
-    key = "-"
 
-@infer
-class XorSet(SetOperator):
-    key = "^"
+for op_key in '&|^-':
+    @infer
+    class ConcreteSetOperator(SetOperator):
+        key = op_key
+
+for op_key in ('==', '!=', '<', '<=', '>=', '>'):
+    @infer
+    class ConcreteSetComparison(SetComparison):
+        key = op_key
+
