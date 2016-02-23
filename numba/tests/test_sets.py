@@ -6,6 +6,7 @@ from collections import namedtuple
 import contextlib
 import itertools
 import math
+import random
 import sys
 
 import numpy as np
@@ -121,14 +122,23 @@ class BaseTest(MemoryLeakMixin, TestCase):
 
     def setUp(self):
         super(BaseTest, self).setUp()
-        self.rnd = np.random.RandomState(42)
+        self.rnd = random.Random(42)
+
+    def _random_choice(self, seq, n):
+        """
+        Choose *n* possibly duplicate items from sequence.
+        """
+        # np.random.choice() doesn't exist on Numpy 1.6
+        if isinstance(seq, np.ndarray):
+            seq = list(seq)
+        return np.array([self.rnd.choice(seq) for i in range(n)])
 
     def duplicates_array(self, n):
         """
         Get a 1d array with many duplicate values.
         """
         a = np.arange(int(np.sqrt(n)))
-        return self.rnd.choice(a, (n,))
+        return self._random_choice(a, n)
 
     def sparse_array(self, n):
         """
@@ -136,7 +146,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
         """
         # Note two calls to sparse_array() should generate reasonable overlap
         a = np.arange(int(n ** 1.3))
-        return self.rnd.choice(a, (n,))
+        return self._random_choice(a, n)
 
     def unordered_checker(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
