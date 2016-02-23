@@ -98,6 +98,30 @@ def tuple_ge(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '>=', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+@lower_builtin(hash, types.BaseTuple)
+def hash_tuple(context, builder, sig, args):
+    tupty, = sig.args
+    tup, = args
+    lty = context.get_value_type(sig.return_type)
+
+    h = ir.Constant(lty, 0x345678)
+    mult = ir.Constant(lty, 1000003)
+    n = ir.Constant(lty, len(tupty))
+
+    for i, ty in enumerate(tupty.types):
+        # h = h * mult
+        h = builder.mul(h, mult)
+        val = builder.extract_value(tup, i)
+        hash_impl = context.get_function(hash,
+                                         typing.signature(sig.return_type, ty))
+        h_val = hash_impl(builder, (val,))
+        # h = h ^ hash(val)
+        h = builder.xor(h, h_val)
+        # Perturb: mult = mult + len(tup)
+        mult = builder.add(mult, n)
+
+    return h
+
 
 @lower_getattr_generic(types.BaseNamedTuple)
 def namedtuple_getattr(context, builder, typ, value, attr):

@@ -172,7 +172,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
         # np.random.choice() doesn't exist on Numpy 1.6
         if isinstance(seq, np.ndarray):
             seq = list(seq)
-        return np.array([self.rnd.choice(seq) for i in range(n)])
+        return [self.rnd.choice(seq) for i in range(n)]
 
     def duplicates_array(self, n):
         """
@@ -446,6 +446,18 @@ class TestFloatSets(OtherTypesTest, BaseTest):
 
     def _range(self, stop):
         return np.arange(stop, dtype=np.float32) * np.float32(0.1)
+
+
+class TestTupleSets(OtherTypesTest, BaseTest):
+    """
+    Test sets with tuple keys.
+    """
+    def _range(self, stop):
+        a = np.arange(stop, dtype=np.int64)
+        b = a & 0x5555555555555555
+        c = (a & 0xaaaaaaaa).astype(np.int32)
+        d = ((a >> 32) & 1).astype(np.bool_)
+        return list(zip(b, c, d))
 
 
 if __name__ == '__main__':

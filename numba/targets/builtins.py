@@ -1156,12 +1156,24 @@ lower_builtin('not', types.boolean)(number_not_impl)
 # Hashing numbers
 
 @lower_builtin(hash, types.Integer)
+@lower_builtin(hash, types.Boolean)
 def hash_int(context, builder, sig, args):
-    return context.cast(builder, args[0], sig.args[0], sig.return_type)
+    ty, = sig.args
+    retty = sig.return_type
+    val, = args
+
+    if isinstance(ty, types.Integer) and ty.bitwidth > retty.bitwidth:
+        # Value is wider than hash => fold MSB into LSB
+        nbits = ty.bitwidth - retty.bitwidth
+        val = builder.add(val,
+                          builder.lshr(val, ir.Constant(val.type, nbits)))
+
+    return context.cast(builder, val, ty, retty)
 
 @lower_builtin(hash, types.Float)
 def hash_float(context, builder, sig, args):
     ty, = sig.args
+    retty = sig.return_type
     val, = args
 
     # NOTE: CPython's algorithm is more involved as it seeks to maintain
@@ -1185,7 +1197,13 @@ def hash_float(context, builder, sig, args):
     # y = *(int *)(&val)
     y = builder.load(builder.bitcast(val_p, ll_intty.as_pointer()))
 
-    return context.cast(builder, y, intty, sig.return_type)
+    if intty.bitwidth > retty.bitwidth:
+        # Value is wider than hash => fold MSB into LSB
+        nbits = intty.bitwidth - retty.bitwidth
+        y = builder.add(y,
+                        builder.lshr(y, ir.Constant(y.type, nbits)))
+
+    return context.cast(builder, y, intty, retty)
 
 @lower_builtin(hash, types.Complex)
 def hash_complex(context, builder, sig, args):

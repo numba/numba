@@ -15,7 +15,7 @@ from . import npdatetime, utils
 from .typeconv import Conversion
 
 
-class Boolean(Type):
+class Boolean(Hashable):
 
     def cast_python_value(self, value):
         return bool(value)
@@ -1063,7 +1063,7 @@ class NestedArray(Array):
         return self.dtype, self.shape
 
 
-class BaseTuple(Type):
+class BaseTuple(Hashable):
     """
     The base class for all tuple types (with a known size).
     """
