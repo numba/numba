@@ -322,8 +322,8 @@ class ListInstance(_ListPayloadMixin):
         """
         dest_ptr = self._gep(dest_idx)
         src_ptr = self._gep(src_idx)
-        cgutils.memmove(self._builder, dest_ptr, src_ptr,
-                        count, itemsize=self._itemsize)
+        cgutils.raw_memmove(self._builder, dest_ptr, src_ptr,
+                            count, itemsize=self._itemsize)
         self.set_dirty(True)
 
 

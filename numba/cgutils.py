@@ -935,6 +935,8 @@ def memcpy(builder, dst, src, count):
     * dst.type == src.type
     * count is positive
     """
+    # Note this does seem to be optimized as a raw memcpy() by LLVM
+    # whenever possible...
     assert dst.type == src.type
     with for_range(builder, count, intp=count.type) as loop:
         out_ptr = builder.gep(dst, [loop.index])
@@ -942,11 +944,7 @@ def memcpy(builder, dst, src, count):
         builder.store(builder.load(in_ptr), out_ptr)
 
 
-def memmove(builder, dst, src, count, itemsize, align=1):
-    """
-    Emit a memmove() call for `count` items of size `itemsize`
-    from `src` to `dest`.
-    """
+def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
     ptr_t = ir.IntType(8).as_pointer()
     size_t = count.type
 
@@ -959,6 +957,21 @@ def memmove(builder, dst, src, count, itemsize, align=1):
                            builder.mul(count, ir.Constant(size_t, itemsize)),
                            align,
                            is_volatile])
+
+
+def raw_memcpy(builder, dst, src, count, itemsize, align=1):
+    """
+    Emit a raw memcpy() call for `count` items of size `itemsize`
+    from `src` to `dest`.
+    """
+    return _raw_memcpy(builder, 'llvm.memcpy', dst, src, count, itemsize, align)
+
+def raw_memmove(builder, dst, src, count, itemsize, align=1):
+    """
+    Emit a raw memmove() call for `count` items of size `itemsize`
+    from `src` to `dest`.
+    """
+    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count, itemsize, align)
 
 
 def muladd_with_overflow(builder, a, b, c):
