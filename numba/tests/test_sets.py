@@ -118,10 +118,18 @@ def clear_usecase(a):
     s.clear()
     return len(s), list(s)
 
-def copy_usecase(a):
+def copy_usecase1(a):
     s = set(a)
     ss = s.copy()
-    return len(s), list(s)
+    s.pop()
+    return len(ss), list(ss)
+
+def copy_usecase2(a, b):
+    s = set(a)
+    s.remove(b)
+    ss = s.copy()
+    s.pop()
+    return len(ss), list(ss)
 
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
@@ -334,6 +342,20 @@ class TestSets(BaseTest):
 
         check((1, 2, 4, 11))
         check(self.sparse_array(50))
+
+    def test_copy(self):
+        # Source set doesn't have any deleted entries
+        pyfunc = copy_usecase1
+        check = self.unordered_checker(pyfunc)
+        check((1, 2, 4, 11))
+        check(self.sparse_array(50))
+
+        # Source set has deleted entries
+        pyfunc = copy_usecase2
+        check = self.unordered_checker(pyfunc)
+        check((1, 2, 4, 11), 2)
+        a = self.sparse_array(50)
+        check(a, a[len(a) // 2])
 
 
 if __name__ == '__main__':

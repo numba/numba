@@ -472,6 +472,45 @@ class SetInstance(object):
         minsize = ir.Constant(intp_t, MINSIZE)
         self._replace_payload(minsize)
 
+    def copy(self):
+        """
+        Return a copy of this set.
+        """
+        context = self._context
+        builder = self._builder
+
+        payload = self.payload
+        used = payload.used
+        fill = payload.fill
+
+        other = type(self)(context, builder, self._ty, None)
+
+        no_deleted_entries = builder.icmp_unsigned('==', used, fill)
+        with builder.if_else(no_deleted_entries, likely=True) \
+            as (if_no_deleted, if_deleted):
+            with if_no_deleted:
+                # No deleted entries => raw copy the payload
+                ok = other._copy_payload(payload)
+                with builder.if_then(builder.not_(ok), likely=False):
+                    context.call_conv.return_user_exc(builder, MemoryError,
+                                                      ("cannot copy set",))
+
+            with if_deleted:
+                # Deleted entries => re-insert entries one by one
+                nentries = self.choose_alloc_size(context, builder, used)
+                ok = other._allocate_payload(nentries)
+                with builder.if_then(builder.not_(ok), likely=False):
+                    context.call_conv.return_user_exc(builder, MemoryError,
+                                                      ("cannot copy set",))
+
+                other_payload = other.payload
+                with payload._iterate() as loop:
+                    entry = loop.entry
+                    other._add_key(other_payload, entry.key, entry.hash,
+                                   do_resize=False)
+
+        return other
+
     def intersect(self, other):
         """
         In-place intersection with *other* set.
@@ -849,9 +888,63 @@ class SetInstance(object):
 
     def _free_payload(self, ptr):
         """
-        Allocate an old payload at *ptr*.
+        Free an allocated old payload at *ptr*.
         """
         self._context.nrt_meminfo_varsize_free(self._builder, self.meminfo, ptr)
+
+    def _copy_payload(self, src_payload):
+        """
+        Raw-copy the given payload into self.
+        """
+        context = self._context
+        builder = self._builder
+
+        ok = cgutils.alloca_once_value(builder, cgutils.true_bit)
+
+        intp_t = context.get_value_type(types.intp)
+        zero = ir.Constant(intp_t, 0)
+        one = ir.Constant(intp_t, 1)
+
+        payload_type = context.get_data_type(types.SetPayload(self._ty))
+        payload_size = context.get_abi_sizeof(payload_type)
+        entry_size = self._entrysize
+        # Account for the fact that the payload struct already contains an entry
+        payload_size -= entry_size
+
+        mask = src_payload.mask
+        nentries = builder.add(one, mask)
+
+        # Total allocation size = <payload header size> + nentries * entry_size
+        # (note there can't be any overflow since we're reusing an existing
+        #  payload's parameters)
+        allocsize = builder.add(ir.Constant(intp_t, payload_size),
+                                builder.mul(ir.Constant(intp_t, entry_size),
+                                            nentries))
+
+        with builder.if_then(builder.load(ok), likely=True):
+            meminfo = context.nrt_meminfo_new_varsize(builder, size=allocsize)
+            alloc_ok = cgutils.is_null(builder, meminfo)
+
+            with builder.if_else(cgutils.is_null(builder, meminfo),
+                                 likely=False) as (if_error, if_ok):
+                with if_error:
+                    builder.store(cgutils.false_bit, ok)
+                with if_ok:
+                    self._set.meminfo = meminfo
+                    payload = self.payload
+                    payload.used = src_payload.used
+                    payload.fill = src_payload.fill
+                    payload.finger = zero
+                    payload.mask = mask
+                    cgutils.memcpy(builder, payload.entries,
+                                   src_payload.entries, nentries)
+
+                    if DEBUG_ALLOCS:
+                        context.printf(builder,
+                                       "allocated %zd bytes for set at %p: mask = %zd\n",
+                                       allocsize, payload.ptr, mask)
+
+        return builder.load(ok)
 
 
 class SetIterInstance(object):
@@ -1025,6 +1118,12 @@ def set_clear(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     inst.clear()
     return context.get_dummy_value()
+
+@lower_builtin("set.copy", types.Set)
+def set_copy(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    other = inst.copy()
+    return impl_ret_new_ref(context, builder, sig.return_type, other.value)
 
 @lower_builtin("set.difference_update", types.Set, types.IterableType)
 def set_difference_update(context, builder, sig, args):

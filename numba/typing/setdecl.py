@@ -50,6 +50,12 @@ class SetAttribute(AttributeTemplate):
         if not args:
             return signature(types.none)
 
+    @bound_function("set.copy")
+    def resolve_copy(self, set, args, kws):
+        assert not kws
+        if not args:
+            return signature(set)
+
     @bound_function("set.discard")
     def resolve_discard(self, set, args, kws):
         item, = args
