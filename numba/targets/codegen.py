@@ -403,8 +403,8 @@ class BaseCPUCodegen(object):
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
 
-        target = ll.Target.from_default_triple()
         tm_options = dict(cpu='', features='', opt=config.OPT)
+        target = ll.Target.from_triple(ll.get_process_triple())
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
         engine = ll.create_mcjit_compiler(llvm_module, tm)
@@ -420,7 +420,7 @@ class BaseCPUCodegen(object):
 
     def _create_empty_module(self, name):
         ir_module = lc.Module.new(name)
-        ir_module.triple = ll.get_default_triple()
+        ir_module.triple = ll.get_process_triple()
         if self._data_layout:
             ir_module.data_layout = self._data_layout
         return ir_module
