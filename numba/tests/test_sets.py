@@ -19,11 +19,8 @@ from .support import (TestCase, enable_pyobj_flags, MemoryLeakMixin, tag,
 
 
 def _build_set_literal_usecase(code, args):
-    ns = {}
-    src = code % {'initializer': ', '.join(repr(arg) for arg in args)}
-    code = compile(src, '<>', 'exec')
-    eval(code, ns)
-    return ns['build_set']
+    code = code % {'initializer': ', '.join(repr(arg) for arg in args)}
+    return compile_function('build_set', code, globals())
 
 def set_literal_return_usecase(args):
     code = """if 1:
@@ -154,14 +151,16 @@ def union_usecase(a, b):
 
 
 def make_operator_usecase(op):
-    code = """def operator_usecase(a, b):
+    code = """if 1:
+    def operator_usecase(a, b):
         s = set(a) %(op)s set(b)
         return list(s)
     """ % dict(op=op)
     return compile_function('operator_usecase', code, globals())
 
 def make_comparison_usecase(op):
-    code = """def comparison_usecase(a, b):
+    code = """if 1:
+    def comparison_usecase(a, b):
         return set(a) %(op)s set(b)
     """ % dict(op=op)
     return compile_function('comparison_usecase', code, globals())

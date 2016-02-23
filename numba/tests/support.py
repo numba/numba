@@ -385,7 +385,7 @@ def compile_function(name, code, globs):
     Given a *code* string, compile it with globals *globs* and return
     the function named *name*.
     """
-    co = compile(code, "<string>", "exec")
+    co = compile(code.rstrip(), "<string>", "single")
     ns = {}
     eval(co, globs, ns)
     return ns[name]
