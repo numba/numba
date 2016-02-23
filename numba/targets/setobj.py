@@ -78,6 +78,9 @@ FALLBACK = -43
 # Minimal size of entries table.  Must be a power of 2!
 MINSIZE = 16
 
+# Number of linear probes before switching to (kindof) double hashing
+LINEAR_PROBES = 3
+
 DEBUG_ALLOCS = False
 
 
@@ -220,10 +223,10 @@ class _SetPayload(object):
         bb_not_found = builder.append_basic_block("lookup.not_found")
         bb_end = builder.append_basic_block("lookup.end")
 
-        builder.branch(bb_body)
-
-        with builder.goto_block(bb_body):
-            i = builder.load(index)
+        def check_entry(i):
+            """
+            Check entry *i* against the value being searched for.
+            """
             entry = self.get_entry(i)
             entry_hash = entry.hash
 
@@ -236,6 +239,24 @@ class _SetPayload(object):
 
             with builder.if_then(is_hash_empty(context, builder, entry_hash)):
                 builder.branch(bb_not_found)
+
+        # First linear probing.  When the number of collisions is small,
+        # the lineary probing loop achieves better cache locality and
+        # is also slightly cheaper computationally.
+        with cgutils.for_range(builder, ir.Constant(intp_t, LINEAR_PROBES)):
+            i = builder.load(index)
+            check_entry(i)
+            i = builder.add(i, one)
+            i = builder.and_(i, mask)
+            builder.store(i, index)
+
+        # If not found after linear probing, switch to a non-linear
+        # perturbation keyed on the unmasked hash value.
+        # XXX how to tell LLVM this branch is unlikely?
+        builder.branch(bb_body)
+        with builder.goto_block(bb_body):
+            i = builder.load(index)
+            check_entry(i)
 
             # Perturb to go to next entry:
             #   perturb >>= 5
