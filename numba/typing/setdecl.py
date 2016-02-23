@@ -107,6 +107,29 @@ class SetAttribute(AttributeTemplate):
     def resolve_symmetric_difference_update(self, set, args, kws):
         return self._resolve_xxx_update(set, args, kws)
 
+    def _resolve_operator(self, set, args, kws):
+        assert not kws
+        iterable, = args
+        # Set arguments only supported for now
+        if iterable == set:
+            return signature(set, iterable)
+
+    @bound_function("set.difference")
+    def resolve_difference(self, set, args, kws):
+        return self._resolve_operator(set, args, kws)
+
+    @bound_function("set.intersection")
+    def resolve_intersection(self, set, args, kws):
+        return self._resolve_operator(set, args, kws)
+
+    @bound_function("set.symmetric_difference")
+    def resolve_symmetric_difference(self, set, args, kws):
+        return self._resolve_operator(set, args, kws)
+
+    @bound_function("set.union")
+    def resolve_union(self, set, args, kws):
+        return self._resolve_operator(set, args, kws)
+
     def _resolve_comparator(self, set, args, kws):
         assert not kws
         arg, = args

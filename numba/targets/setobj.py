@@ -529,6 +529,22 @@ class SetInstance(object):
         # Final downsize
         self.downsize(payload.used)
 
+    def difference(self, other):
+        """
+        In-place difference with *other* set.
+        """
+        context = self._context
+        builder = self._builder
+        payload = self.payload
+        other_payload = other.payload
+
+        with other_payload._iterate() as loop:
+            entry = loop.entry
+            self._remove_key(payload, entry.key, entry.hash, do_resize=False)
+
+        # Final downsize
+        self.downsize(payload.used)
+
     def symmetric_difference(self, other):
         """
         In-place symmetric difference with *other* set.
@@ -1129,11 +1145,9 @@ def set_copy(context, builder, sig, args):
 @lower_builtin("set.difference_update", types.Set, types.IterableType)
 def set_difference_update(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
-    items_type = sig.args[1]
-    items = args[1]
+    other = SetInstance(context, builder, sig.args[1], args[1])
 
-    with for_iter(context, builder, items_type, items) as loop:
-        inst.discard(loop.value)
+    inst.difference(other)
 
     return context.get_dummy_value()
 
@@ -1177,6 +1191,60 @@ def set_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+
+# Set operations creating a new set
+
+@lower_builtin("set.difference", types.Set, types.Set)
+def set_difference(context, builder, sig, args):
+    def difference_impl(a, b):
+        s = a.copy()
+        s.difference_update(b)
+        return s
+
+    return context.compile_internal(builder, difference_impl, sig, args)
+
+@lower_builtin("set.intersection", types.Set, types.Set)
+def set_intersection(context, builder, sig, args):
+    def intersection_impl(a, b):
+        if len(a) < len(b):
+            s = a.copy()
+            s.intersection_update(b)
+            return s
+        else:
+            s = b.copy()
+            s.intersection_update(a)
+            return s
+
+    return context.compile_internal(builder, intersection_impl, sig, args)
+
+@lower_builtin("set.symmetric_difference", types.Set, types.Set)
+def set_symmetric_difference(context, builder, sig, args):
+    def symmetric_difference_impl(a, b):
+        if len(a) > len(b):
+            s = a.copy()
+            s.symmetric_difference_update(b)
+            return s
+        else:
+            s = b.copy()
+            s.symmetric_difference_update(a)
+            return s
+
+    return context.compile_internal(builder, symmetric_difference_impl,
+                                    sig, args)
+
+@lower_builtin("set.union", types.Set, types.Set)
+def set_union(context, builder, sig, args):
+    def union_impl(a, b):
+        if len(a) > len(b):
+            s = a.copy()
+            s.update(b)
+            return s
+        else:
+            s = b.copy()
+            s.update(a)
+            return s
+
+    return context.compile_internal(builder, union_impl, sig, args)
 
 # Predicates
 

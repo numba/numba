@@ -131,6 +131,26 @@ def copy_usecase_deleted(a, b):
     s.pop()
     return len(ss), list(ss)
 
+def difference_usecase(a, b):
+    sa = set(a)
+    s = sa.difference(set(b))
+    return list(s)
+
+def intersection_usecase(a, b):
+    sa = set(a)
+    s = sa.intersection(set(b))
+    return list(s)
+
+def symmetric_difference_usecase(a, b):
+    sa = set(a)
+    s = sa.symmetric_difference(set(b))
+    return list(s)
+
+def union_usecase(a, b):
+    sa = set(a)
+    s = sa.union(set(b))
+    return list(s)
+
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
                                      "set literals unavailable before Python 2.7")
@@ -180,7 +200,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
     def unordered_checker(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         def check(*args):
-            expected = cfunc(*args)
+            expected = pyfunc(*args)
             got = cfunc(*args)
             self._assert_equal_unordered(expected, got)
         return check
@@ -356,6 +376,30 @@ class TestSets(BaseTest):
         check((1, 2, 4, 11), 2)
         a = self.sparse_array(50)
         check(a, a[len(a) // 2])
+
+    def _test_set_operator(self, pyfunc):
+        check = self.unordered_checker(pyfunc)
+
+        a, b = (1, 2, 4, 11), (2, 3, 5, 11, 42)
+        check(a, b)
+
+        sizes = (50, 500)
+        for na, nb in itertools.product(sizes, sizes):
+            a = self.sparse_array(na)
+            b = self.sparse_array(nb)
+            check(a, b)
+
+    def test_difference(self):
+        self._test_set_operator(difference_usecase)
+
+    def test_intersection(self):
+        self._test_set_operator(intersection_usecase)
+
+    def test_symmetric_difference(self):
+        self._test_set_operator(symmetric_difference_usecase)
+
+    def test_union(self):
+        self._test_set_operator(union_usecase)
 
 
 if __name__ == '__main__':
