@@ -107,16 +107,19 @@ class TestNumberHashing(BaseTest):
             self.assertEqual(a.dtype, np.dtype(typ))
             self.check_collection(a)
 
+    @tag('important')
     def test_ints(self):
         self.check_ints(np.int8)
         self.check_ints(np.uint16)
         self.check_ints(np.int32)
         self.check_ints(np.uint64)
 
+    @tag('important')
     def test_floats(self):
         self.check_floats(np.float32)
         self.check_floats(np.float64)
 
+    @tag('important')
     def test_complex(self):
         self.check_complex(np.complex64, np.float32)
         self.check_complex(np.complex128, np.float64)
@@ -159,6 +162,7 @@ class TestTupleHashing(BaseTest):
         self.check_tuples(self.int_samples(), split2)
         self.check_tuples(self.int_samples(), split3)
 
+    @tag('important')
     def test_heterogenous_tuples(self):
         modulo = 2**63
 

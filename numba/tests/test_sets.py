@@ -226,6 +226,7 @@ class TestSetLiterals(BaseTest):
         got, expected = self.run_nullary_func(pyfunc, flags=flags)
         self.assertIs(type(got.pop()), type(expected.pop()))
 
+    @tag('important')
     @needs_set_literals
     def test_build_set_nopython(self):
         arg = list(self.sparse_array(50))
@@ -253,6 +254,7 @@ class TestSets(BaseTest):
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
+    @tag('important')
     def test_iterator(self):
         pyfunc = iterator_usecase
         check = self.unordered_checker(pyfunc)
@@ -261,6 +263,7 @@ class TestSets(BaseTest):
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
+    @tag('important')
     def test_update(self):
         pyfunc = update_usecase
         check = self.unordered_checker(pyfunc)
@@ -290,6 +293,7 @@ class TestSets(BaseTest):
         with self.assertRaises(KeyError) as raises:
             cfunc((1, 2, 3), (5, ))
 
+    @tag('important')
     def test_discard(self):
         pyfunc = discard_usecase
         check = self.unordered_checker(pyfunc)
@@ -301,6 +305,7 @@ class TestSets(BaseTest):
         b = self.sparse_array(50)
         check(a, b)
 
+    @tag('important')
     def test_pop(self):
         pyfunc = pop_usecase
         check = self.unordered_checker(pyfunc)
@@ -308,6 +313,7 @@ class TestSets(BaseTest):
         check((2, 3, 55, 11, 8, 42))
         check(self.sparse_array(50))
 
+    @tag('important')
     def test_contains(self):
         pyfunc = contains_usecase
         cfunc = jit(nopython=True)(pyfunc)
