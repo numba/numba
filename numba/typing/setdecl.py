@@ -147,3 +147,28 @@ class SetAttribute(AttributeTemplate):
     @bound_function("set.issuperset")
     def resolve_issuperset(self, set, args, kws):
         return self._resolve_comparator(set, args, kws)
+
+
+class SetOperator(AbstractTemplate):
+
+    def generic(self, args, kws):
+        a, b = args
+        if isinstance(a, types.Set) and isinstance(b, types.Set) and a == b:
+            return signature(a, *args)
+
+
+@infer
+class AndSet(SetOperator):
+    key = "&"
+
+@infer
+class OrSet(SetOperator):
+    key = "|"
+
+@infer
+class SubSet(SetOperator):
+    key = "-"
+
+@infer
+class XorSet(SetOperator):
+    key = "^"

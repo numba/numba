@@ -1215,6 +1215,7 @@ def set_update(context, builder, sig, args):
 
 # Set operations creating a new set
 
+@lower_builtin("-", types.Set, types.Set)
 @lower_builtin("set.difference", types.Set, types.Set)
 def set_difference(context, builder, sig, args):
     def difference_impl(a, b):
@@ -1224,6 +1225,7 @@ def set_difference(context, builder, sig, args):
 
     return context.compile_internal(builder, difference_impl, sig, args)
 
+@lower_builtin("&", types.Set, types.Set)
 @lower_builtin("set.intersection", types.Set, types.Set)
 def set_intersection(context, builder, sig, args):
     def intersection_impl(a, b):
@@ -1238,6 +1240,7 @@ def set_intersection(context, builder, sig, args):
 
     return context.compile_internal(builder, intersection_impl, sig, args)
 
+@lower_builtin("^", types.Set, types.Set)
 @lower_builtin("set.symmetric_difference", types.Set, types.Set)
 def set_symmetric_difference(context, builder, sig, args):
     def symmetric_difference_impl(a, b):
@@ -1253,6 +1256,7 @@ def set_symmetric_difference(context, builder, sig, args):
     return context.compile_internal(builder, symmetric_difference_impl,
                                     sig, args)
 
+@lower_builtin("|", types.Set, types.Set)
 @lower_builtin("set.union", types.Set, types.Set)
 def set_union(context, builder, sig, args):
     def union_impl(a, b):

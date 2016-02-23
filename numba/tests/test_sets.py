@@ -151,6 +151,22 @@ def union_usecase(a, b):
     s = sa.union(set(b))
     return list(s)
 
+def and_usecase(a, b):
+    s = set(a) & set(b)
+    return list(s)
+
+def or_usecase(a, b):
+    s = set(a) | set(b)
+    return list(s)
+
+def sub_usecase(a, b):
+    s = set(a) - set(b)
+    return list(s)
+
+def xor_usecase(a, b):
+    s = set(a) ^ set(b)
+    return list(s)
+
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
                                      "set literals unavailable before Python 2.7")
@@ -409,6 +425,18 @@ class TestSets(BaseTest):
 
     def test_union(self):
         self._test_set_operator(union_usecase)
+
+    def test_and(self):
+        self._test_set_operator(and_usecase)
+
+    def test_or(self):
+        self._test_set_operator(or_usecase)
+
+    def test_sub(self):
+        self._test_set_operator(sub_usecase)
+
+    def test_xor(self):
+        self._test_set_operator(xor_usecase)
 
 
 class OtherTypesTest(object):
