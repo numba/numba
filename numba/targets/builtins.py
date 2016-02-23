@@ -1159,6 +1159,48 @@ lower_builtin('not', types.boolean)(number_not_impl)
 def hash_int(context, builder, sig, args):
     return context.cast(builder, args[0], sig.args[0], sig.return_type)
 
+@lower_builtin(hash, types.Float)
+def hash_float(context, builder, sig, args):
+    ty, = sig.args
+    val, = args
+
+    # NOTE: CPython's algorithm is more involved as it seeks to maintain
+    # the invariant that hash(float(x)) == hash(x) for every integer x
+    # exactly representable as a float.
+    # Numba doesn't care as it doesn't support heterogenous associative
+    # containers.
+
+    intty = types.Integer("int%d" % ty.bitwidth)
+    ll_intty = ir.IntType(ty.bitwidth)
+
+    # XXX Disabled as llvm.canonicalize doesn't work:
+    # http://lists.llvm.org/pipermail/llvm-dev/2016-February/095746.html
+    #func_name = "llvm.canonicalize.f%d" % (ty.bitwidth,)
+    #fnty = ir.FunctionType(val.type, (val.type,))
+    #fn = builder.module.get_or_insert_function(fnty, func_name)
+    #val = builder.call(fn, (val,))
+
+    # Take the float's binary representation as an int
+    val_p = cgutils.alloca_once_value(builder, val)
+    # y = *(int *)(&val)
+    y = builder.load(builder.bitcast(val_p, ll_intty.as_pointer()))
+
+    return context.cast(builder, y, intty, sig.return_type)
+
+@lower_builtin(hash, types.Complex)
+def hash_complex(context, builder, sig, args):
+    ty, = sig.args
+    val, = args
+    fltty = ty.underlying_float
+
+    z = context.make_complex(ty)(context, builder, val)
+    float_hash_sig = typing.signature(sig.return_type, fltty)
+    h_real = hash_float(context, builder, float_hash_sig, (z.real,))
+    h_imag = hash_float(context, builder, float_hash_sig, (z.imag,))
+    mult = ir.Constant(h_imag.type, 1000003)
+
+    return builder.add(h_real, builder.mul(h_imag, mult))
+
 
 #------------------------------------------------------------------------------
 

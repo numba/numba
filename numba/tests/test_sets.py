@@ -162,6 +162,9 @@ class BaseTest(MemoryLeakMixin, TestCase):
         super(BaseTest, self).setUp()
         self.rnd = random.Random(42)
 
+    def _range(self, stop):
+        return np.arange(int(stop))
+
     def _random_choice(self, seq, n):
         """
         Choose *n* possibly duplicate items from sequence.
@@ -175,7 +178,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
         """
         Get a 1d array with many duplicate values.
         """
-        a = np.arange(int(np.sqrt(n)))
+        a = self._range(np.sqrt(n))
         return self._random_choice(a, n)
 
     def sparse_array(self, n):
@@ -183,7 +186,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
         Get a 1d array with values spread around.
         """
         # Note two calls to sparse_array() should generate reasonable overlap
-        a = np.arange(int(n ** 1.3))
+        a = self._range(n ** 1.3)
         return self._random_choice(a, n)
 
     def _assert_equal_unordered(self, a, b):
@@ -400,6 +403,49 @@ class TestSets(BaseTest):
 
     def test_union(self):
         self._test_set_operator(union_usecase)
+
+
+class OtherTypesTest(object):
+
+    def test_constructor(self):
+        pyfunc = empty_constructor_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(), pyfunc())
+
+        pyfunc = constructor_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arg):
+            self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
+
+        check(self.duplicates_array(200))
+        check(self.sparse_array(200))
+
+    def test_iterator(self):
+        pyfunc = iterator_usecase
+        check = self.unordered_checker(pyfunc)
+
+        check(self.duplicates_array(200))
+        check(self.sparse_array(200))
+
+    def test_update(self):
+        pyfunc = update_usecase
+        check = self.unordered_checker(pyfunc)
+
+        a = self.sparse_array(50)
+        b = self.duplicates_array(50)
+        c = self.sparse_array(50)
+        check(a, b, c)
+
+
+class TestFloatSets(OtherTypesTest, BaseTest):
+    """
+    Test sets with floating-point keys.
+    """
+    # Only a few basic tests here, as the sanity of most operations doesn't
+    # depend on the key type.
+
+    def _range(self, stop):
+        return np.arange(stop, dtype=np.float32) * np.float32(0.1)
 
 
 if __name__ == '__main__':

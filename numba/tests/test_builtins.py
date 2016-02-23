@@ -77,6 +77,8 @@ def format_usecase(x, y):
 def globals_usecase():
     return globals()
 
+# NOTE: hash() is tested is test_hashing
+
 def hex_usecase(x):
     return hex(x)
 
