@@ -113,6 +113,16 @@ def issubset_usecase(a, b):
 def issuperset_usecase(a, b):
     return set(a).issuperset(set(b))
 
+def clear_usecase(a):
+    s = set(a)
+    s.clear()
+    return len(s), list(s)
+
+def copy_usecase(a):
+    s = set(a)
+    ss = s.copy()
+    return len(s), list(s)
+
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
                                      "set literals unavailable before Python 2.7")
@@ -148,11 +158,23 @@ class BaseTest(MemoryLeakMixin, TestCase):
         a = np.arange(int(n ** 1.3))
         return self._random_choice(a, n)
 
+    def _assert_equal_unordered(self, a, b):
+        if isinstance(a, tuple):
+            self.assertIsInstance(b, tuple)
+            for u, v in zip(a, b):
+                self._assert_equal_unordered(u, v)
+        elif isinstance(a, list):
+            self.assertIsInstance(b, list)
+            self.assertPreciseEqual(sorted(a), sorted(b))
+        else:
+            self.assertPreciseEqual(a, b)
+
     def unordered_checker(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         def check(*args):
-            self.assertPreciseEqual(sorted(pyfunc(*args)),
-                                    sorted(cfunc(*args)))
+            expected = cfunc(*args)
+            got = cfunc(*args)
+            self._assert_equal_unordered(expected, got)
         return check
 
 
@@ -305,6 +327,13 @@ class TestSets(BaseTest):
 
     def test_issuperset(self):
         self._test_comparator(issuperset_usecase)
+
+    def test_clear(self):
+        pyfunc = clear_usecase
+        check = self.unordered_checker(pyfunc)
+
+        check((1, 2, 4, 11))
+        check(self.sparse_array(50))
 
 
 if __name__ == '__main__':

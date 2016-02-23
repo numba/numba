@@ -464,6 +464,14 @@ class SetInstance(object):
 
         return builder.load(key)
 
+    def clear(self):
+        context = self._context
+        builder = self._builder
+
+        intp_t = context.get_value_type(types.intp)
+        minsize = ir.Constant(intp_t, MINSIZE)
+        self._replace_payload(minsize)
+
     def intersect(self, other):
         """
         In-place intersection with *other* set.
@@ -759,6 +767,24 @@ class SetInstance(object):
 
         self._free_payload(old_payload.ptr)
 
+    def _replace_payload(self, nentries):
+        """
+        Replace the payload with a new empty payload with the given number
+        of entries.
+
+        CAUTION: *nentries* must be a power of 2!
+        """
+        context = self._context
+        builder = self._builder
+
+        # Free old payload
+        self._free_payload(self.payload.ptr)
+
+        ok = self._allocate_payload(nentries, realloc=True)
+        with builder.if_then(builder.not_(ok), likely=False):
+            context.call_conv.return_user_exc(builder, MemoryError,
+                                              ("cannot reallocate set",))
+
     def _allocate_payload(self, nentries, realloc=False):
         """
         Allocate and initialize payload for the given number of entries.
@@ -993,6 +1019,12 @@ def set_remove(context, builder, sig, args):
 
 
 # Mutating set operations
+
+@lower_builtin("set.clear", types.Set)
+def set_clear(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    inst.clear()
+    return context.get_dummy_value()
 
 @lower_builtin("set.difference_update", types.Set, types.IterableType)
 def set_difference_update(context, builder, sig, args):
