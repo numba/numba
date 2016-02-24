@@ -3,21 +3,6 @@ from __future__ import print_function, division, absolute_import
 import struct
 
 from .abstract import *
-
-
-class PyObject(Dummy):
-    """
-    A generic CPython object.
-    """
-
-    def is_precise(self):
-        return False
-
-
-# XXX this one is used early by other submodules because of unify_pairs()
-pyobject = PyObject('pyobject')
-
-
 from .containers import *
 from .functions import *
 from .iterators import *
@@ -28,6 +13,7 @@ from .scalars import *
 
 # Short names
 
+pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
 ffi = Opaque('ffi')
 none = NoneType('none')

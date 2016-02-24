@@ -433,7 +433,7 @@ def _parse_nested_sequence(context, typ):
                                   % (typ,))
             dtypes.append(dtype)
         dtype = context.unify_types(*dtypes)
-        if dtype is types.pyobject:
+        if dtype is None:
             raise TypingError("cannot convert %r to a homogenous type")
         return n + 1, dtype
     else:

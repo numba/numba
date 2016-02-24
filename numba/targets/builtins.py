@@ -1228,6 +1228,7 @@ def max_impl(context, builder, sig, args):
         at, av = a
         bt, bv = b
         ty = context.typing_context.unify_types(at, bt)
+        assert ty is not None
         cav = context.cast(builder, av, at, ty)
         cbv = context.cast(builder, bv, bt, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)
@@ -1252,6 +1253,7 @@ def min_impl(context, builder, sig, args):
         at, av = a
         bt, bv = b
         ty = context.typing_context.unify_types(at, bt)
+        assert ty is not None
         cav = context.cast(builder, av, at, ty)
         cbv = context.cast(builder, bv, bt, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)

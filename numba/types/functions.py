@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from .abstract import *
 from .common import *
-from . import pyobject
 
 
 class Function(Callable, Opaque):
@@ -81,7 +80,7 @@ class BoundFunction(Callable, Opaque):
         if (isinstance(other, BoundFunction) and
             self.typing_key == other.typing_key):
             this = typingctx.unify_pairs(self.this, other.this)
-            if this != pyobject:
+            if this is not None:
                 # XXX is it right that both template instances are distinct?
                 return self.copy(this=this)
 

@@ -2,8 +2,16 @@ from __future__ import print_function, division, absolute_import
 
 from .abstract import *
 from .common import *
-from . import pyobject
 from ..typeconv import Conversion
+
+
+class PyObject(Dummy):
+    """
+    A generic CPython object.
+    """
+
+    def is_precise(self):
+        return False
 
 
 class Phantom(Dummy):
@@ -214,7 +222,7 @@ class Optional(Type):
         else:
             unified = typingctx.unify_pairs(self.type, other)
 
-        if unified != pyobject:
+        if unified is not None:
             if isinstance(unified, Optional):
                 return unified
             else:

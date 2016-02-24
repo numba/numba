@@ -130,7 +130,7 @@ class TestUnify(unittest.TestCase):
                              msg=template.format(bty, aty, unified, expected))
 
     def assert_unify_failure(self, aty, bty):
-        self.assert_unify(aty, bty, types.pyobject)
+        self.assert_unify(aty, bty, None)
 
     @tag('important')
     def test_integer(self):

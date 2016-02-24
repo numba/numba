@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 from .abstract import *
 from .common import *
 from .misc import Undefined
-from . import pyobject
 from ..typeconv import Conversion
 
 
@@ -26,7 +25,7 @@ class Pair(Type):
         if isinstance(other, Pair):
             first = typingctx.unify_pairs(self.first_type, other.first_type)
             second = typingctx.unify_pairs(self.second_type, other.second_type)
-            if first != pyobject and second != pyobject:
+            if first is not None and second is not None:
                 return Pair(first, second)
 
 
@@ -48,7 +47,7 @@ class BaseContainerIterator(SimpleIteratorType):
         cls = type(self)
         if isinstance(other, cls):
             container = typingctx.unify_pairs(self.container, other.container)
-            if container != pyobject:
+            if container is not None:
                 return cls(container)
 
     @property
@@ -206,7 +205,7 @@ class UniTuple(BaseAnonymousTuple, _HomogenousTuple):
         """
         if isinstance(other, UniTuple) and len(self) == len(other):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
-            if dtype != pyobject:
+            if dtype is not None:
                 return UniTuple(dtype=dtype, count=self.count)
 
 
@@ -260,7 +259,7 @@ class Tuple(BaseAnonymousTuple, _HeterogenousTuple):
             unified = [typingctx.unify_pairs(ta, tb)
                        for ta, tb in zip(self, other)]
 
-            if all(t != pyobject for t in unified):
+            if all(t is not None for t in unified):
                 return Tuple(unified)
 
 
@@ -323,7 +322,7 @@ class List(MutableSequence):
         if isinstance(other, List):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
             reflected = self.reflected or other.reflected
-            if dtype != pyobject:
+            if dtype is not None:
                 return List(dtype, reflected)
 
     @property
@@ -384,7 +383,7 @@ class Set(Container):
     def unify(self, typingctx, other):
         if isinstance(other, Set):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
-            if dtype != pyobject:
+            if dtype is not None:
                 return Set(dtype)
 
 

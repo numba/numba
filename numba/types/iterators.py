@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from .abstract import *
 from .common import *
-from . import pyobject
 
 
 class RangeType(SimpleIterableType):
@@ -16,7 +15,7 @@ class RangeType(SimpleIterableType):
     def unify(self, typingctx, other):
         if isinstance(other, RangeType):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
-            if dtype != pyobject:
+            if dtype is not None:
                 return RangeType(dtype)
 
 
@@ -30,7 +29,7 @@ class RangeIteratorType(SimpleIteratorType):
     def unify(self, typingctx, other):
         if isinstance(other, RangeIteratorType):
             dtype = typingctx.unify_pairs(self.yield_type, other.yield_type)
-            if dtype != pyobject:
+            if dtype is not None:
                 return RangeIteratorType(dtype)
 
 
