@@ -415,13 +415,13 @@ class SetInstance(object):
 
         return found
 
-    def add(self, item):
+    def add(self, item, do_resize=True):
         context = self._context
         builder = self._builder
 
         payload = self.payload
         h = get_hash_value(context, builder, self._ty.dtype, item)
-        self._add_key(payload, item, h)
+        self._add_key(payload, item, h, do_resize)
 
     def contains(self, item):
         context = self._context

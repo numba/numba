@@ -1327,6 +1327,26 @@ numba_reset_list_private_data(PyListObject *listobj)
         listobj->allocated = PyList_GET_SIZE(listobj);
 }
 
+NUMBA_EXPORT_FUNC(void)
+numba_set_set_private_data(PySetObject *listobj, void *ptr)
+{
+    /* FIXME */
+}
+
+NUMBA_EXPORT_FUNC(void *)
+numba_get_set_private_data(PySetObject *listobj)
+{
+    /* FIXME */
+    return NULL;
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_reset_set_private_data(PySetObject *listobj)
+{
+    /* FIXME */
+}
+
+
 NUMBA_EXPORT_FUNC(int)
 numba_unpack_slice(PyObject *obj,
                    Py_ssize_t *start, Py_ssize_t *stop, Py_ssize_t *step)

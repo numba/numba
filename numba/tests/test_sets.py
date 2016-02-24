@@ -18,6 +18,9 @@ from .support import (TestCase, enable_pyobj_flags, MemoryLeakMixin, tag,
                       compile_function)
 
 
+Point = namedtuple('Point', ('a', 'b'))
+
+
 def _build_set_literal_usecase(code, args):
     code = code % {'initializer': ', '.join(repr(arg) for arg in args)}
     return compile_function('build_set', code, globals())
@@ -164,6 +167,48 @@ def make_comparison_usecase(op):
         return set(a) %(op)s set(b)
     """ % dict(op=op)
     return compile_function('comparison_usecase', code, globals())
+
+
+def noop(x):
+    pass
+
+def unbox_usecase(x):
+    """
+    Expect a set of numbers
+    """
+    res = 0
+    for v in x:
+        res += v
+    return res
+
+def unbox_usecase2(x):
+    """
+    Expect a set of tuples
+    """
+    res = 0
+    for v in x:
+        res += len(v)
+    return res
+
+def unbox_usecase3(x):
+    """
+    Expect a (number, set of numbers) tuple.
+    """
+    a, b = x
+    res = a
+    for v in b:
+        res += v
+    return res
+
+def unbox_usecase4(x):
+    """
+    Expect a (number, set of tuples) tuple.
+    """
+    a, b = x
+    res = a
+    for v in b:
+        res += len(v)
+    return res
 
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
@@ -508,6 +553,74 @@ class TestTupleSets(OtherTypesTest, BaseTest):
         c = (a & 0xaaaaaaaa).astype(np.int32)
         d = ((a >> 32) & 1).astype(np.bool_)
         return list(zip(b, c, d))
+
+
+class TestUnboxing(BaseTest):
+    """
+    Test unboxing of Python sets into native Numba sets.
+    """
+
+    @contextlib.contextmanager
+    def assert_type_error(self, msg):
+        with self.assertRaises(TypeError) as raises:
+            yield
+        if msg is not None:
+            self.assertRegexpMatches(str(raises.exception), msg)
+
+    def check_unary(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arg):
+            expected = pyfunc(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+        return check
+
+    @tag('important')
+    def test_numbers(self):
+        check = self.check_unary(unbox_usecase)
+        check(set([1, 2]))
+        check(set([1j, 2.5j]))
+        # Check allocation and sizing
+        check(set(range(100)))
+
+    def test_tuples(self):
+        check = self.check_unary(unbox_usecase2)
+        check(set([(1, 2), (3, 4)]))
+        check(set([(1, 2j), (3, 4j)]))
+
+    @tag('important')
+    def test_set_inside_tuple(self):
+        check = self.check_unary(unbox_usecase3)
+        check((1, set([2, 3, 4])))
+
+    def test_set_of_tuples_inside_tuple(self):
+        check = self.check_unary(unbox_usecase4)
+        check((1, set([(2,), (3,)])))
+
+    def test_errors(self):
+        # Error checking should ensure the set is homogenous
+        msg = "can't unbox heterogenous set"
+        pyfunc = noop
+        cfunc = jit(nopython=True)(pyfunc)
+        val = set([1, 2.5])
+        with self.assert_type_error(msg):
+            cfunc(val)
+        # The set hasn't been changed (bogus reflecting)
+        self.assertEqual(val, set([1, 2.5]))
+        with self.assert_type_error(msg):
+            cfunc(set([1, 2j]))
+        # Same when the set is nested in a tuple or namedtuple
+        with self.assert_type_error(msg):
+            cfunc((1, set([1, 2j])))
+        with self.assert_type_error(msg):
+            cfunc(Point(1, set([1, 2j])))
+        # Tuples of different size.
+        # Note the check is really on the tuple side.
+        lst = set([(1,), (2, 3)])
+        # Depending on which tuple is examined first, we could get
+        # a IndexError or a ValueError.
+        with self.assertRaises((IndexError, ValueError)) as raises:
+            cfunc(lst)
 
 
 if __name__ == '__main__':

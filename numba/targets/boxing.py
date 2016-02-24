@@ -7,7 +7,7 @@ from llvmlite import ir
 from .. import cgutils, numpy_support, types
 from ..pythonapi import box, unbox, reflect, NativeValue
 
-from . import listobj
+from . import listobj, setobj
 
 
 #
@@ -659,6 +659,106 @@ def reflect_list(typ, val, c):
 
         # Mark the list clean, in case it is reflected twice
         list.set_dirty(False)
+
+
+def _python_set_to_native(typ, obj, c, size, setptr, errorptr):
+    """
+    Construct a new native set from a Python set.
+    """
+    # Allocate a new native set
+    ok, inst = setobj.SetInstance.allocate_ex(c.context, c.builder, typ, size)
+    with c.builder.if_else(ok, likely=True) as (if_ok, if_not_ok):
+        with if_ok:
+            # Traverse Python set and unbox objects into native set
+            typobjptr = cgutils.alloca_once_value(c.builder,
+                                                  ir.Constant(c.pyapi.pyobj, None))
+
+            with c.pyapi.set_iterate(obj) as loop:
+                itemobj = loop.value
+                # Mandate that objects all have the same exact type
+                typobj = c.pyapi.get_type(itemobj)
+                expected_typobj = c.builder.load(typobjptr)
+
+                with c.builder.if_else(
+                    cgutils.is_null(c.builder, expected_typobj),
+                    likely=False) as (if_first, if_not_first):
+                    with if_first:
+                        # First iteration => store item type
+                        c.builder.store(typobj, typobjptr)
+                    with if_not_first:
+                        # Otherwise, check item type
+                        type_mismatch = c.builder.icmp_signed('!=', typobj,
+                                                              expected_typobj)
+                        with c.builder.if_then(type_mismatch, likely=False):
+                            c.builder.store(cgutils.true_bit, errorptr)
+                            c.pyapi.err_set_string("PyExc_TypeError",
+                                                   "can't unbox heterogenous set")
+                            loop.do_break()
+
+                # XXX we don't call native cleanup for each set element,
+                # since that would require keeping track
+                # of which unboxings have been successful.
+                native = c.unbox(typ.dtype, itemobj)
+                with c.builder.if_then(native.is_error, likely=False):
+                    c.builder.store(cgutils.true_bit, errorptr)
+                inst.add(native.value, do_resize=False)
+
+            #if typ.reflected:
+                #set.parent = obj
+            # Stuff meminfo pointer into the Python object for
+            # later reuse.
+            c.pyapi.set_set_private_data(obj, inst.meminfo)
+            #set.set_dirty(False)
+            c.builder.store(inst.value, setptr)
+
+        with if_not_ok:
+            c.builder.store(cgutils.true_bit, errorptr)
+
+    # If an error occurred, drop the whole native set
+    with c.builder.if_then(c.builder.load(errorptr)):
+        c.context.nrt_decref(c.builder, typ, inst.value)
+
+
+@unbox(types.Set)
+def unbox_set(typ, obj, c):
+    """
+    Convert set *obj* to a native set.
+
+    If set was previously unboxed, we reuse the existing native set
+    to ensure consistency.
+    """
+    size = c.pyapi.set_size(obj)
+
+    errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+    setptr = cgutils.alloca_once(c.builder, c.context.get_value_type(typ))
+
+    # Use pointer-stuffing hack to see if the list was previously unboxed,
+    # if so, re-use the meminfo.
+    ptr = c.pyapi.set_get_private_data(obj)
+
+    with c.builder.if_else(cgutils.is_not_null(c.builder, ptr)) \
+        as (has_meminfo, otherwise):
+
+        with has_meminfo:
+            # Set was previously unboxed => reuse meminfo
+            # FIXME
+            pass
+            #list = listobj.ListInstance.from_meminfo(c.context, c.builder, typ, ptr)
+            #list.size = size
+            #if typ.reflected:
+                #list.parent = obj
+            #c.builder.store(list.value, listptr)
+
+        with otherwise:
+            _python_set_to_native(typ, obj, c, size, setptr, errorptr)
+
+    def cleanup():
+        # Clean up the stuffed pointer, as the meminfo is now invalid.
+        c.pyapi.set_reset_private_data(obj)
+
+    return NativeValue(c.builder.load(setptr),
+                       is_error=c.builder.load(errorptr),
+                       cleanup=cleanup)
 
 
 #
