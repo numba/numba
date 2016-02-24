@@ -286,8 +286,11 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
     }
     if (PyList_Check(val)) {
         Py_ssize_t n = PyList_GET_SIZE(val);
-        if (n == 0)
+        if (n == 0) {
+            PyErr_SetString(PyExc_ValueError,
+                            "cannot compute fingerprint of empty list");
             return -1;
+        }
         /* Only the first item is considered, as in typeof.py */
         TRY(string_writer_put_char, w, OP_LIST);
         TRY(compute_fingerprint, w, PyList_GET_ITEM(val, 0));
@@ -298,9 +301,12 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         PyObject *item;
         Py_ssize_t pos = 0;
         /* Only one item is considered, as in typeof.py */
-        if (!_PySet_NextEntry(val, &pos, &item, &h))
+        if (!_PySet_NextEntry(val, &pos, &item, &h)) {
             /* Empty set */
+            PyErr_SetString(PyExc_ValueError,
+                            "cannot compute fingerprint of empty set");
             return -1;
+        }
         TRY(string_writer_put_char, w, OP_SET);
         TRY(compute_fingerprint, w, item);
         return 0;

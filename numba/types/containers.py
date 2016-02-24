@@ -357,16 +357,17 @@ class Set(Container):
     """
     mutable = True
 
-    def __init__(self, dtype):
+    def __init__(self, dtype, reflected=False):
         assert isinstance(dtype, (Hashable, Undefined))
         self.dtype = dtype
-        cls_name = "set"
+        self.reflected = reflected
+        cls_name = "reflected set" if reflected else "set"
         name = "%s(%s)" % (cls_name, self.dtype)
         super(Set, self).__init__(name=name)
 
     @property
     def key(self):
-        return self.dtype
+        return self.dtype, self.reflected
 
     @property
     def iterator_type(self):
@@ -375,16 +376,19 @@ class Set(Container):
     def is_precise(self):
         return self.dtype.is_precise()
 
-    def copy(self, dtype=None):
+    def copy(self, dtype=None, reflected=None):
         if dtype is None:
             dtype = self.dtype
-        return Set(dtype)
+        if reflected is None:
+            reflected = self.reflected
+        return Set(dtype, reflected)
 
     def unify(self, typingctx, other):
         if isinstance(other, Set):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            reflected = self.reflected or other.reflected
             if dtype is not None:
-                return Set(dtype)
+                return Set(dtype, reflected)
 
 
 class SetIter(BaseContainerIterator):

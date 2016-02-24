@@ -140,7 +140,7 @@ def _typeof_set(val, c):
         raise ValueError("Cannot type empty set")
     item = next(iter(val))
     ty = typeof_impl(item, c)
-    return types.Set(ty)
+    return types.Set(ty, reflected=True)
 
 @typeof_impl.register(slice)
 def _typeof_slice(val, c):

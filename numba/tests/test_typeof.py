@@ -198,7 +198,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
     @tag('important')
     def test_sets(self):
         v = set([1.0, 2.0, 3.0])
-        self.assertEqual(typeof(v), types.Set(types.float64))
+        self.assertEqual(typeof(v), types.Set(types.float64, reflected=True))
 
     @tag('important')
     def test_namedtuple(self):
@@ -466,6 +466,9 @@ class TestFingerprint(TestCase):
         distinct.add(compute_fingerprint([4.5, 6.7]))
         distinct.add(compute_fingerprint([(1,)]))
 
+        with self.assertRaises(ValueError):
+            compute_fingerprint([])
+
     def test_sets(self):
         distinct = DistinctChecker()
 
@@ -477,6 +480,9 @@ class TestFingerprint(TestCase):
         distinct.add(compute_fingerprint(set([1j])))
         distinct.add(compute_fingerprint(set([4.5, 6.7])))
         distinct.add(compute_fingerprint(set([(1,)])))
+
+        with self.assertRaises(ValueError):
+            compute_fingerprint(set())
 
     def test_complicated_type(self):
         # Generating a large fingerprint

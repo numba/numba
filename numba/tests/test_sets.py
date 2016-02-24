@@ -152,6 +152,10 @@ def union_usecase(a, b):
     s = sa.union(set(b))
     return list(s)
 
+def set_return_usecase(a):
+    s = set(a)
+    return s
+
 
 def make_operator_usecase(op):
     code = """if 1:
@@ -209,6 +213,28 @@ def unbox_usecase4(x):
     for v in b:
         res += len(v)
     return res
+
+
+def reflect_simple(sa, sb):
+    sa.add(42)
+    sa.update(sb)
+    return sa, len(sa), len(sb)
+
+def reflect_conditional(sa, sb):
+    # `sa` may or may not actually reflect a Python list
+    if len(sb) > 1:
+        sa = set([11., 22., 33., 44.])
+    sa.add(42.)
+    sa.update(sb)
+    return sa, len(sa), len(sb)
+
+def reflect_exception(s):
+    s.add(42)
+    raise ZeroDivisionError
+
+def reflect_dual(sa, sb):
+    sa.add(sb.pop())
+    return sa is sb
 
 
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
@@ -312,6 +338,14 @@ class TestSets(BaseTest):
         check((1, 2, 3, 2, 7))
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
+
+    @tag('important')
+    def test_set_return(self):
+        pyfunc = set_return_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arg = (1, 2, 3, 2, 7)
+        self.assertEqual(cfunc(arg), set(arg))
 
     @tag('important')
     def test_iterator(self):
@@ -621,6 +655,74 @@ class TestUnboxing(BaseTest):
         # a IndexError or a ValueError.
         with self.assertRaises((IndexError, ValueError)) as raises:
             cfunc(lst)
+
+
+class TestSetReflection(BaseTest):
+    """
+    Test reflection of native Numba sets on Python set objects.
+    """
+
+    def check_reflection(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        samples = [(set([1., 2., 3., 4.]), set([0.])),
+                   (set([1., 2., 3., 4.]), set([5., 6., 7., 8., 9.])),
+                   ]
+        for dest, src in samples:
+            expected = set(dest)
+            got = set(dest)
+            pyres = pyfunc(expected, src)
+            with self.assertRefCount(got, src):
+                cres = cfunc(got, src)
+                self.assertPreciseEqual(cres, pyres)
+                self.assertPreciseEqual(expected, got)
+                self.assertEqual(pyres[0] is expected, cres[0] is got)
+                del pyres, cres
+
+    def test_reflect_simple(self):
+        self.check_reflection(reflect_simple)
+
+    def test_reflect_conditional(self):
+        self.check_reflection(reflect_conditional)
+
+    def test_reflect_exception(self):
+        """
+        When the function exits with an exception, sets should still be
+        reflected.
+        """
+        pyfunc = reflect_exception
+        cfunc = jit(nopython=True)(pyfunc)
+        s = set([1, 2, 3])
+        with self.assertRefCount(s):
+            with self.assertRaises(ZeroDivisionError):
+                cfunc(s)
+            self.assertPreciseEqual(s, set([1, 2, 3, 42]))
+
+    @tag('important')
+    def test_reflect_same_set(self):
+        """
+        When the same set object is reflected twice, behaviour should
+        be consistent.
+        """
+        pyfunc = reflect_dual
+        cfunc = jit(nopython=True)(pyfunc)
+        pyset = set([1, 2, 3])
+        cset = pyset.copy()
+        expected = pyfunc(pyset, pyset)
+        got = cfunc(cset, cset)
+        self.assertPreciseEqual(expected, got)
+        self.assertPreciseEqual(pyset, cset)
+        self.assertPreciseEqual(sys.getrefcount(pyset), sys.getrefcount(cset))
+
+    #def test_reflect_clean(self):
+        #"""
+        #When the list wasn't mutated, no reflection should take place.
+        #"""
+        #cfunc = jit(nopython=True)(noop)
+        ## Use a complex, as Python integers can be cached
+        #l = [12.5j]
+        #ids = [id(x) for x in l]
+        #cfunc(l)
+        #self.assertEqual([id(x) for x in l], ids)
 
 
 if __name__ == '__main__':

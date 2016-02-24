@@ -819,10 +819,20 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PySet_Add")
         return self.builder.call(fn, [set, value])
 
+    def set_clear(self, set):
+        fnty = Type.function(Type.int(), [self.pyobj])
+        fn = self._get_function(fnty, name="PySet_Clear")
+        return self.builder.call(fn, [set])
+
     def set_size(self, set):
         fnty = Type.function(self.py_ssize_t, [self.pyobj])
         fn = self._get_function(fnty, name="PySet_Size")
         return self.builder.call(fn, [set])
+
+    def set_update(self, set, iterable):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="_PySet_Update")
+        return self.builder.call(fn, [set, iterable])
 
     def set_get_private_data(self, set):
         fnty = Type.function(self.voidptr, [self.pyobj])

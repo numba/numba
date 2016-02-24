@@ -1327,25 +1327,77 @@ numba_reset_list_private_data(PyListObject *listobj)
         listobj->allocated = PyList_GET_SIZE(listobj);
 }
 
-NUMBA_EXPORT_FUNC(void)
-numba_set_set_private_data(PySetObject *listobj, void *ptr)
+
+static PyObject *private_data_dict = NULL;
+
+static PyObject *
+_get_private_data_dict(void)
 {
-    /* FIXME */
+    if (private_data_dict == NULL)
+        private_data_dict = PyDict_New();
+    return private_data_dict;
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_set_set_private_data(PyObject *setobj, void *ptr)
+{
+    PyObject *dct = _get_private_data_dict();
+    /* This assumes the reference to setobj is kept alive until the
+       call to numba_reset_set_private_data()! */
+    PyObject *key = PyLong_FromVoidPtr((void *) setobj);
+    PyObject *value = PyLong_FromVoidPtr(ptr);
+
+    if (!dct || !value || !key)
+        goto error;
+    if (PyDict_SetItem(dct, key, value))
+        goto error;
+    Py_DECREF(key);
+    Py_DECREF(value);
+    return;
+
+error:
+    Py_FatalError("unable to set private data");
 }
 
 NUMBA_EXPORT_FUNC(void *)
-numba_get_set_private_data(PySetObject *listobj)
+numba_get_set_private_data(PyObject *setobj)
 {
-    /* FIXME */
+    PyObject *dct = _get_private_data_dict();
+    PyObject *value, *key = PyLong_FromVoidPtr((void *) setobj);
+    if (!dct || !key)
+        goto error;
+
+    value = PyDict_GetItem(dct, key);
+    Py_DECREF(key);
+    if (!value)
+        return NULL;
+    else {
+        if (!PyLong_CheckExact(value))
+            goto error;
+        return PyLong_AsVoidPtr(value);
+    }
+
+error:
+    Py_FatalError("unable to get private data");
     return NULL;
 }
 
 NUMBA_EXPORT_FUNC(void)
-numba_reset_set_private_data(PySetObject *listobj)
+numba_reset_set_private_data(PyObject *setobj)
 {
-    /* FIXME */
-}
+    PyObject *dct = _get_private_data_dict();
+    PyObject *key = PyLong_FromVoidPtr((void *) setobj);
 
+    if (!key)
+        goto error;
+    if (PyDict_DelItem(dct, key))
+        PyErr_Clear();
+    Py_DECREF(key);
+    return;
+
+error:
+    Py_FatalError("unable to reset private data");
+}
 
 NUMBA_EXPORT_FUNC(int)
 numba_unpack_slice(PyObject *obj,
