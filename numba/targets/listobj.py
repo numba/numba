@@ -338,7 +338,7 @@ class ListIterInstance(_ListPayloadMixin):
 
     @classmethod
     def from_list(cls, context, builder, iter_type, list_val):
-        list_inst = ListInstance(context, builder, iter_type.list_type, list_val)
+        list_inst = ListInstance(context, builder, iter_type.container, list_val)
         self = cls(context, builder, iter_type, None)
         index = context.get_constant(types.intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)
@@ -349,7 +349,7 @@ class ListIterInstance(_ListPayloadMixin):
     def _payload(self):
         # This cannot be cached as it can be reallocated
         return get_list_payload(self._context, self._builder,
-                                self._ty.list_type, self._iter)
+                                self._ty.container, self._iter)
 
     @property
     def value(self):

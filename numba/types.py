@@ -598,6 +598,50 @@ class SimpleIteratorType(IteratorType):
         return self._yield_type
 
 
+class BaseContainerIterator(SimpleIteratorType):
+    """
+    Convenience base class for some container iterators.
+
+    Derived classes must implement the *container_class* attribute.
+    """
+
+    def __init__(self, container):
+        assert isinstance(container, self.container_class), container
+        self.container = container
+        yield_type = container.dtype
+        name = 'iter(%s)' % container
+        super(BaseContainerIterator, self).__init__(name, yield_type)
+
+    def unify(self, typingctx, other):
+        cls = type(self)
+        if isinstance(other, cls):
+            container = typingctx.unify_pairs(self.container, other.container)
+            if container != pyobject:
+                return cls(container)
+
+    @property
+    def key(self):
+        return self.container
+
+
+class BaseContainerPayload(Type):
+    """
+    Convenience base class for some container payloads.
+
+    Derived classes must implement the *container_class* attribute.
+    """
+
+    def __init__(self, container):
+        assert isinstance(container, self.container_class)
+        self.container = container
+        name = 'payload(%s)' % container
+        super(BaseContainerPayload, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.container
+
+
 class RangeType(SimpleIterableType):
 
     def __init__(self, dtype):
@@ -1170,17 +1214,11 @@ class UniTuple(BaseAnonymousTuple, _HomogenousTuple):
                 return UniTuple(dtype=dtype, count=self.count)
 
 
-class UniTupleIter(SimpleIteratorType):
-
-    def __init__(self, unituple):
-        self.unituple = unituple
-        yield_type = unituple.dtype
-        name = 'iter(%s)' % unituple
-        super(UniTupleIter, self).__init__(name, yield_type)
-
-    @property
-    def key(self):
-        return self.unituple
+class UniTupleIter(BaseContainerIterator):
+    """
+    Type class for homogenous tuple iterators.
+    """
+    container_class = _HomogenousTuple
 
 
 class _HeterogenousTuple(BaseTuple):
@@ -1267,7 +1305,7 @@ class NamedTuple(_HeterogenousTuple, BaseNamedTuple):
 
 class List(MutableSequence):
     """
-    Type class for arbitrary-sized homogenous lists.
+    Type class for (arbitrary-sized) homogenous lists.
     """
     mutable = True
 
@@ -1304,46 +1342,23 @@ class List(MutableSequence):
         return self.dtype.is_precise()
 
 
-class ListIter(SimpleIteratorType):
+class ListIter(BaseContainerIterator):
     """
     Type class for list iterators.
     """
-
-    def __init__(self, list_type):
-        self.list_type = list_type
-        yield_type = list_type.dtype
-        name = 'iter(%s)' % list_type
-        super(ListIter, self).__init__(name, yield_type)
-
-    # XXX This is a common pattern.  Should it be factored out somewhere?
-    def unify(self, typingctx, other):
-        if isinstance(other, ListIter):
-            list_type = typingctx.unify_pairs(self.list_type, other.list_type)
-            if list_type != pyobject:
-                return ListIter(list_type)
-
-    @property
-    def key(self):
-        return self.list_type
+    container_class = List
 
 
-class ListPayload(Type):
+class ListPayload(BaseContainerPayload):
     """
     Internal type class for the dynamically-allocated payload of a list.
     """
-
-    def __init__(self, list_type):
-        self.list_type = list_type
-        name = 'payload(%s)' % list_type
-        super(ListPayload, self).__init__(name)
-
-    @property
-    def key(self):
-        return self.list_type
+    container_class = List
 
 
 class Set(Container):
     """
+    Type class for homogenous sets.
     """
     mutable = True
 
@@ -1377,49 +1392,23 @@ class Set(Container):
                 return Set(dtype)
 
 
-class SetIter(SimpleIteratorType):
+class SetIter(BaseContainerIterator):
     """
     Type class for set iterators.
     """
-    # XXX this is the same thing as ListIter!
-
-    def __init__(self, set_type):
-        assert isinstance(set_type, Set)
-        self.set_type = set_type
-        yield_type = set_type.dtype
-        name = 'iter(%s)' % set_type
-        super(SetIter, self).__init__(name, yield_type)
-
-    # XXX This is a common pattern.  Should it be factored out somewhere?
-    def unify(self, typingctx, other):
-        if isinstance(other, SetIter):
-            set_type = typingctx.unify_pairs(self.set_type, other.set_type)
-            if set_type != pyobject:
-                return SetIter(set_type)
-
-    @property
-    def key(self):
-        return self.set_type
+    container_class = Set
 
 
-class SetPayload(Type):
+class SetPayload(BaseContainerPayload):
     """
     Internal type class for the dynamically-allocated payload of a set.
     """
-
-    def __init__(self, set_type):
-        assert isinstance(set_type, Set)
-        self.set_type = set_type
-        name = 'payload(%s)' % set_type
-        super(SetPayload, self).__init__(name)
-
-    @property
-    def key(self):
-        return self.set_type
+    container_class = Set
 
 
 class SetEntry(Type):
     """
+    Internal type class for the entries of a Set's hash table.
     """
     def __init__(self, set_type):
         self.set_type = set_type

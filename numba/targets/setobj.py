@@ -78,7 +78,7 @@ FALLBACK = -43
 # Minimal size of entries table.  Must be a power of 2!
 MINSIZE = 16
 
-# Number of linear probes before switching to (kindof) double hashing
+# Number of cache-friendly linear probes before switching to non-linear probing
 LINEAR_PROBES = 3
 
 DEBUG_ALLOCS = False
@@ -1019,11 +1019,11 @@ class SetIterInstance(object):
         self._ty = iter_type
         self._iter = make_setiter_cls(iter_type)(context, builder, iter_val)
         ptr = self._context.nrt_meminfo_data(builder, self.meminfo)
-        self._payload = _SetPayload(context, builder, self._ty.set_type, ptr)
+        self._payload = _SetPayload(context, builder, self._ty.container, ptr)
 
     @classmethod
     def from_set(cls, context, builder, iter_type, set_val):
-        set_inst = SetInstance(context, builder, iter_type.set_type, set_val)
+        set_inst = SetInstance(context, builder, iter_type.container, set_val)
         self = cls(context, builder, iter_type, None)
         index = context.get_constant(types.intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)

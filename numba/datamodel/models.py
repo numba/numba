@@ -651,7 +651,7 @@ class ListPayloadModel(StructModel):
             # This member is only used only for reflected lists
             ('dirty', types.boolean),
             # Actually an inlined var-sized array
-            ('data', fe_type.list_type.dtype),
+            ('data', fe_type.container.dtype),
         ]
         super(ListPayloadModel, self).__init__(dmm, fe_type, members)
 
@@ -672,7 +672,7 @@ class ListModel(StructModel):
 @register_default(types.ListIter)
 class ListIterModel(StructModel):
     def __init__(self, dmm, fe_type):
-        payload_type = types.ListPayload(fe_type.list_type)
+        payload_type = types.ListPayload(fe_type.container)
         members = [
             # The meminfo data points to a ListPayload (shared with the
             # original list object)
@@ -697,7 +697,7 @@ class SetEntryModel(StructModel):
 @register_default(types.SetPayload)
 class SetPayloadModel(StructModel):
     def __init__(self, dmm, fe_type):
-        entry_type = types.SetEntry(fe_type.set_type)
+        entry_type = types.SetEntry(fe_type.container)
         members = [
             # Number of active + deleted entries
             ('fill', types.intp),
@@ -725,7 +725,7 @@ class SetModel(StructModel):
 @register_default(types.SetIter)
 class SetIterModel(StructModel):
     def __init__(self, dmm, fe_type):
-        payload_type = types.SetPayload(fe_type.set_type)
+        payload_type = types.SetPayload(fe_type.container)
         members = [
             # The meminfo data points to a SetPayload (shared with the
             # original set object)
@@ -928,7 +928,7 @@ class FlatIter(StructModel):
 class UniTupleIter(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('index', types.EphemeralPointer(types.intp)),
-                   ('tuple', fe_type.unituple,)]
+                   ('tuple', fe_type.container,)]
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
 
