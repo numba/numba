@@ -198,9 +198,11 @@ class _StructProxy(object):
         return self._builder.load(self._outer_ref)
 
     def _setvalue(self, value):
-        """Store the value in this structure"""
+        """
+        Store the value in this structure.
+        """
         assert not is_pointer(value.type)
-        assert value.type == self._type, (value.type, self._type)
+        assert value.type == self._be_type, (value.type, self._be_type)
         self._builder.store(value, self._value)
 
 
