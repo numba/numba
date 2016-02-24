@@ -77,8 +77,7 @@ def unbox_float(typ, obj, c):
 
 @box(types.Complex)
 def box_complex(typ, val, c):
-    cmplxcls = c.context.make_complex(typ)
-    cval = cmplxcls(c.context, c.builder, value=val)
+    cval = c.context.make_complex(c.builder, typ, value=val)
 
     if typ == types.complex64:
         freal = c.builder.fpext(cval.real, c.pyapi.double)
@@ -90,8 +89,8 @@ def box_complex(typ, val, c):
 
 @unbox(types.Complex)
 def unbox_complex(typ, obj, c):
-    c128cls = c.context.make_complex(types.complex128)
-    c128 = c128cls(c.context, c.builder)
+    # First unbox to complex128, since that's what CPython gives us
+    c128 = c.context.make_complex(c.builder, types.complex128)
     ok = c.pyapi.complex_adaptor(obj, c128._getpointer())
     failed = cgutils.is_false(c.builder, ok)
 
@@ -100,8 +99,8 @@ def unbox_complex(typ, obj, c):
                                "conversion to %s failed" % (typ,))
 
     if typ == types.complex64:
-        cplxcls = c.context.make_complex(typ)
-        cplx = cplxcls(c.context, c.builder)
+        # Downcast to complex64 if necessary
+        cplx = c.context.make_complex(c.builder, typ)
         cplx.real = c.context.cast(c.builder, c128.real,
                                    types.float64, types.float32)
         cplx.imag = c.context.cast(c.builder, c128.imag,

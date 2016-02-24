@@ -81,8 +81,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         # used by numba.
 
         # First, prepare the return value
-        complex_class = context.make_complex(ty)
-        out = complex_class(context, builder)
+        out = context.make_complex(builder, ty)
         ptrargs = [cgutils.alloca_once_value(builder, arg)
                    for arg in args]
         call_args = [out._getpointer()] + ptrargs
@@ -280,8 +279,8 @@ def np_complex_div_impl(context, builder, sig, args):
     #   R.L. Smith. Algorithm 116: Complex division.
     #   Communications of the ACM, 5(8):435, 1962
 
-    complex_class = context.make_complex(sig.args[0])
-    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    in1, in2 = [context.make_complex(builder, sig.args[0], value=arg)
+                for arg in args]
 
     in1r = in1.real  # numerator.real
     in1i = in1.imag  # numerator.imag
@@ -289,7 +288,7 @@ def np_complex_div_impl(context, builder, sig, args):
     in2i = in2.imag  # denominator.imag
     ftype = in1r.type
     assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
-    out = complex_class(context, builder)
+    out = context.make_helper(builder, sig.return_type)
 
     ZERO = lc.Constant.real(ftype, 0.0)
     ONE = lc.Constant.real(ftype, 1.0)
@@ -412,8 +411,8 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     float_kind = sig.args[0].underlying_float
     floor_sig = typing.signature(float_kind, float_kind)
 
-    complex_class = context.make_complex(sig.args[0])
-    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    in1, in2 = [context.make_complex(builder, sig.args[0], value=arg)
+                for arg in args]
 
     in1r = in1.real
     in1i = in1.imag
@@ -424,7 +423,7 @@ def np_complex_floor_div_impl(context, builder, sig, args):
 
     ZERO = lc.Constant.real(ftype, 0.0)
 
-    out = complex_class(context, builder)
+    out = context.make_helper(builder, sig.return_type)
     out.imag = ZERO
 
     in2r_abs = _fabs(context, builder, in2r)
@@ -503,13 +502,12 @@ def np_complex_sign_impl(context, builder, sig, args):
     op = args[0]
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
 
     ZERO = context.get_constant(float_ty, 0.0)
     ONE  = context.get_constant(float_ty, 1.0)
     MINUS_ONE = context.get_constant(float_ty, -1.0)
     NAN = context.get_constant(float_ty, float('nan'))
-    result = complex_class(context, builder)
+    result = context.make_complex(builder, ty)
     result.real = ZERO
     result.imag = ZERO
 
@@ -542,9 +540,8 @@ def np_complex_rint_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
-    in1 = complex_class(context, builder, value=args[0])
-    out = complex_class(context, builder)
+    in1 = context.make_complex(builder, ty, value=args[0])
+    out = context.make_complex(builder, ty)
 
     inner_sig = typing.signature(*[float_ty]*2)
     out.real = np_real_rint_impl(context, builder, inner_sig, [in1.real])
@@ -597,9 +594,8 @@ def np_complex_exp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
-    in1 = complex_class(context, builder, value=args[0])
-    tmp = complex_class(context, builder)
+    in1 = context.make_complex(builder, ty, value=args[0])
+    tmp = context.make_complex(builder, ty)
     loge2 = context.get_constant(float_ty, _NPY_LOGE2)
     tmp.real = builder.fmul(loge2, in1.real)
     tmp.imag = builder.fmul(loge2, in1.imag)
@@ -651,9 +647,8 @@ def np_complex_log2_impl(context, builder, sig, args):
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
     tmp = np_complex_log_impl(context, builder, sig, args)
-    tmp = complex_class(context, builder, value=tmp)
+    tmp = context.make_complex(builder, ty, value=tmp)
     log2e = context.get_constant(float_ty, _NPY_LOG2E)
     tmp.real = builder.fmul(log2e, tmp.real)
     tmp.imag = builder.fmul(log2e, tmp.imag)
@@ -680,9 +675,8 @@ def np_complex_log10_impl(context, builder, sig, args):
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
     tmp = np_complex_log_impl(context, builder, sig, args)
-    tmp = complex_class(context, builder, value=tmp)
+    tmp = context.make_complex(builder, ty, value=tmp)
     log10e = context.get_constant(float_ty, _NPY_LOG10E)
     tmp.real = builder.fmul(log10e, tmp.real)
     tmp.imag = builder.fmul(log10e, tmp.imag)
@@ -710,12 +704,11 @@ def np_complex_expm1_impl(context, builder, sig, args):
     ty = sig.args[0]
     float_ty = ty.underlying_float
     float_unary_sig = typing.signature(*[float_ty]*2)
-    complex_class = context.make_complex(ty)
 
     MINUS_ONE = context.get_constant(float_ty, -1.0)
-    in1 = complex_class(context, builder, value=args[0])
+    in1 = context.make_complex(builder, ty, value=args[0])
     a = np_real_exp_impl(context, builder, float_unary_sig, [in1.real])
-    out = complex_class(context, builder)
+    out = context.make_complex(builder, ty)
     cos_imag = np_real_cos_impl(context, builder, float_unary_sig, [in1.imag])
     sin_imag = np_real_sin_impl(context, builder, float_unary_sig, [in1.imag])
     tmp = builder.fmul(a, cos_imag)
@@ -747,11 +740,10 @@ def np_complex_log1p_impl(context, builder, sig, args):
     float_ty = ty.underlying_float
     float_unary_sig = typing.signature(*[float_ty]*2)
     float_binary_sig = typing.signature(*[float_ty]*3)
-    complex_class = context.make_complex(ty)
 
     ONE = context.get_constant(float_ty, 1.0)
-    in1 = complex_class(context, builder, value=args[0])
-    out = complex_class(context, builder)
+    in1 = context.make_complex(builder, ty, value=args[0])
+    out = context.make_complex(builder, ty)
     real_plus_one = builder.fadd(in1.real, ONE)
     l = np_real_hypot_impl(context, builder, float_binary_sig,
                            [real_plus_one, in1.imag])
@@ -837,12 +829,11 @@ def np_complex_reciprocal_impl(context, builder, sig, args):
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
 
     ZERO = context.get_constant(float_ty, 0.0)
     ONE = context.get_constant(float_ty, 1.0)
-    in1 = complex_class(context, builder, value=args[0])
-    out = complex_class(context, builder)
+    in1 = context.make_complex(builder, ty, value=args[0])
+    out = context.make_complex(builder, ty)
     in1r = in1.real
     in1i = in1.imag
     in1r_abs = _fabs(context, builder, in1r)
@@ -946,10 +937,9 @@ def np_complex_tan_impl(context, builder, sig, args):
     ty = sig.args[0]
     float_ty = ty.underlying_float
     float_unary_sig = typing.signature(*[float_ty]*2)
-    complex_class = context.make_complex(ty)
     ONE = context.get_constant(float_ty, 1.0)
-    x = complex_class(context, builder, args[0])
-    out = complex_class(context, builder)
+    x = context.make_complex(builder, ty, args[0])
+    out = context.make_complex(builder, ty)
 
     xr = x.real
     xi = x.imag
@@ -1000,8 +990,7 @@ def _complex_expand_series(context, builder, ty, initial, x, coefs):
     """
     assert ty in types.complex_domain
     binary_sig = typing.signature(*[ty]*3)
-    complex_class = context.make_complex(ty)
-    accum = complex_class(context, builder, value=initial)
+    accum = context.make_complex(builder, ty, value=initial)
     ONE = context.get_constant(ty.underlying_float, 1.0)
     for coef in reversed(coefs):
         constant = context.get_constant(ty.underlying_float, coef)
@@ -1021,12 +1010,11 @@ def np_complex_asin_impl(context, builder, sig, args):
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
     epsilon = context.get_constant(float_ty, 1e-3)
 
     # if real or imag has magnitude over 1e-3...
-    x = complex_class(context, builder, value=args[0])
-    out = complex_class(context, builder)
+    x = context.make_complex(builder, ty, value=args[0])
+    out = context.make_complex(builder, ty)
     abs_r = _fabs(context, builder, x.real)
     abs_i = _fabs(context, builder, x.imag)
     abs_r_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_r, epsilon)
@@ -1114,12 +1102,11 @@ def np_complex_atan_impl(context, builder, sig, args):
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
     epsilon = context.get_constant(float_ty, 1e-3)
 
     # if real or imag has magnitude over 1e-3...
-    x = complex_class(context, builder, value=args[0])
-    out = complex_class(context, builder)
+    x = context.make_complex(builder, ty, value=args[0])
+    out = context.make_complex(builder, ty)
     abs_r = _fabs(context, builder, x.real)
     abs_i = _fabs(context, builder, x.imag)
     abs_r_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_r, epsilon)
@@ -1216,9 +1203,8 @@ def np_complex_sinh_impl(context, builder, sig, args):
     ty = sig.args[0]
     fty = ty.underlying_float
     fsig1 = typing.signature(*[fty]*2)
-    complex_class = context.make_complex(ty)
-    x = complex_class(context, builder, args[0])
-    out = complex_class(context, builder)
+    x = context.make_complex(builder, ty, args[0])
+    out = context.make_complex(builder, ty)
     xr = x.real
     xi = x.imag
 
@@ -1256,9 +1242,8 @@ def np_complex_cosh_impl(context, builder, sig, args):
     ty = sig.args[0]
     fty = ty.underlying_float
     fsig1 = typing.signature(*[fty]*2)
-    complex_class = context.make_complex(ty)
-    x = complex_class(context, builder, args[0])
-    out = complex_class(context, builder)
+    x = context.make_complex(builder, ty, args[0])
+    out = context.make_complex(builder, ty)
     xr = x.real
     xi = x.imag
 
@@ -1296,10 +1281,9 @@ def np_complex_tanh_impl(context, builder, sig, args):
     ty = sig.args[0]
     fty = ty.underlying_float
     fsig1 = typing.signature(*[fty]*2)
-    complex_class = context.make_complex(ty)
     ONE = context.get_constant(fty, 1.0)
-    x = complex_class(context, builder, args[0])
-    out = complex_class(context, builder)
+    x = context.make_complex(builder, ty, args[0])
+    out = context.make_complex(builder, ty)
 
     xr = x.real
     xi = x.imag
@@ -1349,12 +1333,11 @@ def np_complex_asinh_impl(context, builder, sig, args):
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
     epsilon = context.get_constant(float_ty, 1e-3)
 
     # if real or imag has magnitude over 1e-3...
-    x = complex_class(context, builder, value=args[0])
-    out = complex_class(context, builder)
+    x = context.make_complex(builder, ty, value=args[0])
+    out = context.make_complex(builder, ty)
     abs_r = _fabs(context, builder, x.real)
     abs_i = _fabs(context, builder, x.imag)
     abs_r_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_r, epsilon)
@@ -1458,12 +1441,11 @@ def np_complex_atanh_impl(context, builder, sig, args):
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    complex_class = context.make_complex(ty)
     epsilon = context.get_constant(float_ty, 1e-3)
 
     # if real or imag has magnitude over 1e-3...
-    x = complex_class(context, builder, value=args[0])
-    out = complex_class(context, builder)
+    x = context.make_complex(builder, ty, value=args[0])
+    out = context.make_complex(builder, ty)
     abs_r = _fabs(context, builder, x.real)
     abs_i = _fabs(context, builder, x.imag)
     abs_r_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_r, epsilon)
@@ -1553,8 +1535,8 @@ def np_complex_ge_impl(context, builder, sig, args):
     # ((xr > yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi >= yi))
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
-    complex_class = context.make_complex(sig.args[0])
-    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    ty = sig.args[0]
+    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1574,8 +1556,8 @@ def np_complex_le_impl(context, builder, sig, args):
     # ((xr < yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi <= yi))
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
-    complex_class = context.make_complex(sig.args[0])
-    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    ty = sig.args[0]
+    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1595,8 +1577,8 @@ def np_complex_gt_impl(context, builder, sig, args):
     # ((xr > yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi > yi))
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
-    complex_class = context.make_complex(sig.args[0])
-    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    ty = sig.args[0]
+    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1616,8 +1598,8 @@ def np_complex_lt_impl(context, builder, sig, args):
     # ((xr < yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi < yi))
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
-    complex_class = context.make_complex(sig.args[0])
-    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    ty = sig.args[0]
+    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1637,8 +1619,8 @@ def np_complex_eq_impl(context, builder, sig, args):
     # (xr == yr && xi == yi)
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
-    complex_class = context.make_complex(sig.args[0])
-    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    ty = sig.args[0]
+    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1654,8 +1636,8 @@ def np_complex_ne_impl(context, builder, sig, args):
     # (xr != yr || xi != yi)
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
-    complex_class = context.make_complex(sig.args[0])
-    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    ty = sig.args[0]
+    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1673,8 +1655,7 @@ def np_complex_ne_impl(context, builder, sig, args):
 # cgutils.is_true works in the underlying types.
 
 def _complex_is_true(context, builder, ty, val):
-    complex_class = context.make_complex(ty)
-    complex_val = complex_class(context, builder, value=val)
+    complex_val = context.make_complex(builder, ty, value=val)
     re_true = cgutils.is_true(builder, complex_val.real)
     im_true = cgutils.is_true(builder, complex_val.imag)
     return builder.or_(re_true, im_true)
@@ -1931,8 +1912,7 @@ def np_complex_isnan_impl(context, builder, sig, args):
 
     x, = args
     ty, = sig.args
-    complex_class = context.make_complex(ty)
-    complex_val = complex_class(context, builder, value=x)
+    complex_val = context.make_complex(builder, ty, value=x)
 
     return builder.fcmp(lc.FCMP_UNO, complex_val.real, complex_val.imag)
 
@@ -1961,8 +1941,7 @@ def np_complex_isfinite_impl(context, builder, sig, args):
     ty, = sig.args
     fty = ty.underlying_float
     b_f_sig = typing.signature(types.boolean, fty)
-    complex_class = context.make_complex(ty)
-    complex_val = complex_class(context, builder, value=x)
+    complex_val = context.make_complex(builder, ty, value=x)
     real_isfinite = np_real_isfinite_impl(context, builder, b_f_sig,
                                           [complex_val.real])
     imag_isfinite = np_real_isfinite_impl(context, builder, b_f_sig,
@@ -1985,8 +1964,7 @@ def np_complex_isinf_impl(context, builder, sig, args):
     ty, = sig.args
     fty = ty.underlying_float
     b_f_sig = typing.signature(types.boolean, fty)
-    complex_class = context.make_complex(ty)
-    x = complex_class(context, builder, value=args[0])
+    x = context.make_complex(builder, ty, value=args[0])
     real_isinf = np_real_isinf_impl(context, builder, b_f_sig, [x.real])
     imag_isinf = np_real_isinf_impl(context, builder, b_f_sig, [x.imag])
 

@@ -354,8 +354,7 @@ def scalar_round_unary(context, builder, sig, args):
 @lower_builtin(numpy.round, types.Complex)
 def scalar_round_unary_complex(context, builder, sig, args):
     fltty = sig.args[0].underlying_float
-    cplx_cls = context.make_complex(sig.args[0])
-    z = cplx_cls(context, builder, args[0])
+    z = context.make_complex(builder, sig.args[0], args[0])
     z.real = _np_round_float(context, builder, fltty, z.real)
     z.imag = _np_round_float(context, builder, fltty, z.imag)
     res = z._getvalue()

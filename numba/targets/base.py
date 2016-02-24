@@ -805,7 +805,7 @@ class BaseContext(object):
 
     def make_helper(self, builder, typ, value=None, ref=None):
         """
-        Get a helper object to access the *typ*'s inner members,
+        Get a helper object to access the *typ*'s members,
         for the given value or reference.
         """
         return self._make_helper(builder, typ, value, ref, kind='value')
@@ -826,9 +826,12 @@ class BaseContext(object):
         """
         return arrayobj.populate_array(arr, **kwargs)
 
-    def make_complex(self, typ):
-        cls, _ = builtins.get_complex_info(typ)
-        return cls
+    def make_complex(self, builder, typ, value=None):
+        """
+        Get a helper object to access the given complex numbers' members.
+        """
+        assert isinstance(typ, types.Complex), typ
+        return self.make_helper(builder, typ, value)
 
     def make_tuple(self, builder, typ, values):
         """

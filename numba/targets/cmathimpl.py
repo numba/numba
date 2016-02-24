@@ -36,8 +36,7 @@ def is_finite(builder, z):
 def isnan_float_impl(context, builder, sig, args):
     [typ] = sig.args
     [value] = args
-    cplx_cls = context.make_complex(typ)
-    z = cplx_cls(context, builder, value=value)
+    z = context.make_complex(builder, typ, value=value)
     res = is_nan(builder, z)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -45,8 +44,7 @@ def isnan_float_impl(context, builder, sig, args):
 def isinf_float_impl(context, builder, sig, args):
     [typ] = sig.args
     [value] = args
-    cplx_cls = context.make_complex(typ)
-    z = cplx_cls(context, builder, value=value)
+    z = context.make_complex(builder, typ, value=value)
     res = is_inf(builder, z)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -56,8 +54,7 @@ if utils.PYVERSION >= (3, 2):
     def isfinite_float_impl(context, builder, sig, args):
         [typ] = sig.args
         [value] = args
-        cplx_cls = context.make_complex(typ)
-        z = cplx_cls(context, builder, value=value)
+        z = context.make_complex(builder, typ, value=value)
         res = is_finite(builder, z)
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -100,8 +97,7 @@ def intrinsic_complex_unary(inner_func):
     def wrapper(context, builder, sig, args):
         [typ] = sig.args
         [value] = args
-        cplx_cls = context.make_complex(typ)
-        z = cplx_cls(context, builder, value=value)
+        z = context.make_complex(builder, typ, value=value)
         x = z.real
         y = z.imag
         # Same as above: math.isfinite() is unavailable on 2.x so we precompute
