@@ -14,7 +14,8 @@ import weakref
 import numpy as np
 
 from numba.utils import IS_PY3
-from numba import abstracttypes, types, typing
+from numba import types, typing
+from numba.types.abstract import _typecache
 from numba import jit, numpy_support
 from numba import unittest_support as unittest
 from numba.npdatetime import NPDATETIME_SUPPORTED
@@ -176,7 +177,7 @@ class TestTypes(TestCase):
     def test_cache_trimming(self):
         # Test that the cache doesn't grow in size when types are
         # created and disposed of.
-        cache = abstracttypes._typecache
+        cache = _typecache
         gc.collect()
         # Keep strong references to existing types, to avoid spurious failures
         existing_types = [wr() for wr in cache]
