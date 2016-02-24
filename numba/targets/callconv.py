@@ -58,8 +58,7 @@ class BaseCallConv(object):
             self.return_native_none(builder)
 
         elif retty == valty:
-            optcls = self.context.make_optional(retty)
-            optval = optcls(self.context, builder, value=value)
+            optval = self.context.make_helper(builder, retty, value=value)
 
             validbit = cgutils.as_bool_bit(builder, optval.valid)
             with builder.if_then(validbit):

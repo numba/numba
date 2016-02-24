@@ -18,46 +18,15 @@ from numba.utils import cached_property
 from . import quicksort, slicing
 
 
-def make_set_cls(set_type):
-    """
-    Return the Structure representation of the given *set_type*
-    (an instance of types.Set).
-    """
-    return cgutils.create_struct_proxy(set_type)
-
-
-def make_setiter_cls(set_iter_type):
-    """
-    Return the Structure representation of the given *set_iter_type*
-    (an instance of types.SetIter).
-    """
-    # XXX reduce the duplication with make_set_cls(), make_list_cls() etc.
-    return cgutils.create_struct_proxy(set_iter_type)
-
-
-def make_payload_cls(set_type):
-    """
-    Return the Structure representation of the given *set_type*'s payload
-    (an instance of types.Set).
-    """
-    # Note the payload is stored durably in memory, so we consider it
-    # data and not value.
-    return cgutils.create_struct_proxy(types.SetPayload(set_type),
-                                       kind='data')
-
-
-def make_entry_cls(set_type):
-    return cgutils.create_struct_proxy(types.SetEntry(set_type), kind='data')
-
-
 def get_payload_struct(context, builder, set_type, ptr):
     """
     Given a set value and type, get its payload structure (as a
     reference, so that mutations are seen by all).
     """
-    payload_type = context.get_data_type(types.SetPayload(set_type))
-    payload = builder.bitcast(ptr, payload_type.as_pointer())
-    return make_payload_cls(set_type)(context, builder, ref=payload)
+    payload_type = types.SetPayload(set_type)
+    ptrty = context.get_data_type(payload_type).as_pointer()
+    payload = builder.bitcast(ptr, ptrty)
+    return context.make_data_helper(builder, payload_type, ref=payload)
 
 
 def get_entry_size(context, set_type):
@@ -185,8 +154,9 @@ class _SetPayload(object):
         Get entry number *idx*.
         """
         entry_ptr = cgutils.gep(self._builder, self._entries, idx)
-        entry = make_entry_cls(self._ty)(self._context, self._builder,
-                                         ref=entry_ptr)
+        entry = self._context.make_data_helper(self._builder,
+                                               types.SetEntry(self._ty),
+                                               ref=entry_ptr)
         return entry
 
     def _lookup(self, item, h):
@@ -352,7 +322,7 @@ class SetInstance(object):
         self._builder = builder
         self._ty = set_type
         self._entrysize = get_entry_size(context, set_type)
-        self._set = make_set_cls(set_type)(context, builder, set_val)
+        self._set = context.make_helper(builder, set_type, set_val)
 
     @property
     def dtype(self):
@@ -1017,7 +987,7 @@ class SetIterInstance(object):
         self._context = context
         self._builder = builder
         self._ty = iter_type
-        self._iter = make_setiter_cls(iter_type)(context, builder, iter_val)
+        self._iter = context.make_helper(builder, iter_type, iter_val)
         ptr = self._context.nrt_meminfo_data(builder, self.meminfo)
         self._payload = _SetPayload(context, builder, self._ty.container, ptr)
 

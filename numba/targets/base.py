@@ -587,16 +587,14 @@ class BaseContext(object):
         """
         Extract the first element of a heterogenous pair.
         """
-        paircls = self.make_pair(ty.first_type, ty.second_type)
-        pair = paircls(self, builder, value=val)
+        pair = self.make_helper(builder, ty, val)
         return pair.first
 
     def pair_second(self, builder, val, ty):
         """
         Extract the second element of a heterogenous pair.
         """
-        paircls = self.make_pair(ty.first_type, ty.second_type)
-        pair = paircls(self, builder, value=val)
+        pair = self.make_helper(builder, ty, val)
         return pair.second
 
     def cast(self, builder, val, fromty, toty):
@@ -629,18 +627,13 @@ class BaseContext(object):
         cmpfunc = self.get_function(key, cmpsig)
         return cmpfunc(builder, (cav, cbv))
 
-    def make_optional(self, optionaltype):
-        return optional.make_optional(optionaltype.type)
-
     def make_optional_none(self, builder, valtype):
-        optcls = optional.make_optional(valtype)
-        optval = optcls(self, builder)
+        optval = self.make_helper(builder, types.Optional(valtype))
         optval.valid = cgutils.false_bit
         return optval._getvalue()
 
     def make_optional_value(self, builder, valtype, value):
-        optcls = optional.make_optional(valtype)
-        optval = optcls(self, builder)
+        optval = self.make_helper(builder, types.Optional(valtype))
         optval.valid = cgutils.true_bit
         optval.data = value
         return optval._getvalue()
@@ -798,6 +791,32 @@ class BaseContext(object):
                     rec=rectyp, attr=attr, type=elemty)
                 raise TypeError(msg)
 
+    def get_helper_class(self, typ, kind='value'):
+        """
+        Get a helper class for the given *typ*.
+        """
+        # XXX handle all types: complex, array, etc.
+        # XXX should it be a method on the model instead? this would allow a default kind...
+        return cgutils.create_struct_proxy(typ, kind)
+
+    def _make_helper(self, builder, typ, value=None, ref=None, kind='value'):
+        cls = self.get_helper_class(typ, kind)
+        return cls(self, builder, value=value, ref=ref)
+
+    def make_helper(self, builder, typ, value=None, ref=None):
+        """
+        Get a helper object to access the *typ*'s inner members,
+        for the given value or reference.
+        """
+        return self._make_helper(builder, typ, value, ref, kind='value')
+
+    def make_data_helper(self, builder, typ, ref=None):
+        """
+        As make_helper(), but considers the value as stored in memory,
+        rather than a live value.
+        """
+        return self._make_helper(builder, typ, ref=ref, kind='data')
+
     def make_array(self, typ):
         return arrayobj.make_array(typ)
 
@@ -810,12 +829,6 @@ class BaseContext(object):
     def make_complex(self, typ):
         cls, _ = builtins.get_complex_info(typ)
         return cls
-
-    def make_pair(self, first_type, second_type):
-        """
-        Create a heterogenous pair class parametered for the given types.
-        """
-        return builtins.make_pair(first_type, second_type)
 
     def make_tuple(self, builder, typ, values):
         """

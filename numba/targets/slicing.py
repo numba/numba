@@ -130,15 +130,6 @@ def get_defaults(context):
 #---------------------------------------------------------------------------
 # The slice structure
 
-def make_slice(context, builder, typ, value=None):
-    """
-    Create a slice structure, optionally initialized from the given LLVM
-    *value*.
-    """
-    cls = cgutils.create_struct_proxy(typ)
-    return cls(context, builder, value=value)
-
-
 @lower_builtin(slice, types.VarArg(types.Any))
 def slice_constructor_impl(context, builder, sig, args):
     default_start, default_stop_pos, default_stop_neg, default_step = \
@@ -169,7 +160,7 @@ def slice_constructor_impl(context, builder, sig, args):
     start = get_arg_value(0, default_start)
 
     ty = sig.return_type
-    sli = make_slice(context, builder, sig.return_type)
+    sli = context.make_helper(builder, sig.return_type)
     sli.start = start
     sli.stop = stop
     sli.step = step
@@ -180,18 +171,18 @@ def slice_constructor_impl(context, builder, sig, args):
 
 @lower_getattr(types.SliceType, "start")
 def slice_start_impl(context, builder, typ, value):
-    sli = make_slice(context, builder, typ, value)
+    sli = context.make_helper(builder, typ, value)
     return sli.start
 
 @lower_getattr(types.SliceType, "stop")
 def slice_stop_impl(context, builder, typ, value):
-    sli = make_slice(context, builder, typ, value)
+    sli = context.make_helper(builder, typ, value)
     return sli.stop
 
 @lower_getattr(types.SliceType, "step")
 def slice_step_impl(context, builder, typ, value):
     if typ.has_step:
-        sli = make_slice(context, builder, typ, value)
+        sli = context.make_helper(builder, typ, value)
         return sli.step
     else:
         return context.get_constant(types.intp, 1)

@@ -287,8 +287,7 @@ def iternext_impl(func):
 
     def wrapper(context, builder, sig, args):
         pair_type = sig.return_type
-        cls = context.make_pair(pair_type.first_type, pair_type.second_type)
-        pairobj = cls(context, builder)
+        pairobj = context.make_helper(builder, pair_type)
         func(context, builder, sig, args,
              _IternextResult(context, builder, pairobj))
         return impl_ret_borrowed(context, builder,
@@ -314,11 +313,11 @@ def call_iternext(context, builder, iterator_type, val):
     """
     itemty = iterator_type.yield_type
     pair_type = types.Pair(itemty, types.boolean)
-    paircls = context.make_pair(pair_type.first_type, pair_type.second_type)
     iternext_sig = typing.signature(pair_type, iterator_type)
     iternext_impl = context.get_function('iternext', iternext_sig)
     val = iternext_impl(builder, (val,))
-    return _IternextResult(context, builder, paircls(context, builder, val))
+    pairobj = context.make_helper(builder, pair_type, val)
+    return _IternextResult(context, builder, pairobj)
 
 
 def call_len(context, builder, ty, val):

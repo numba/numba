@@ -136,22 +136,13 @@ def namedtuple_getattr(context, builder, typ, value, attr):
 #------------------------------------------------------------------------------
 # Tuple iterators
 
-def make_unituple_iter(tupiter):
-    """
-    Return the Structure representation of the given *tupiter* (an
-    instance of types.UniTupleIter).
-    """
-    return cgutils.create_struct_proxy(tupiter)
-
-
 @lower_builtin('getiter', types.UniTuple)
 @lower_builtin('getiter', types.NamedUniTuple)
 def getiter_unituple(context, builder, sig, args):
     [tupty] = sig.args
     [tup] = args
 
-    tupitercls = make_unituple_iter(types.UniTupleIter(tupty))
-    iterval = tupitercls(context, builder)
+    iterval = context.make_helper(builder, types.UniTupleIter(tupty))
 
     index0 = context.get_constant(types.intp, 0)
     indexptr = cgutils.alloca_once(builder, index0.type)
@@ -170,8 +161,8 @@ def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
     [tupiter] = args
 
-    tupitercls = make_unituple_iter(tupiterty)
-    iterval = tupitercls(context, builder, value=tupiter)
+    iterval = context.make_helper(builder, tupiterty, value=tupiter)
+
     tup = iterval.tuple
     idxptr = iterval.index
     idx = builder.load(idxptr)

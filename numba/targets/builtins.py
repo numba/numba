@@ -486,7 +486,7 @@ def optional_is_none(context, builder, sig, args):
 
     del lty, rty, lval, rval
 
-    opt = context.make_optional(opt_type)(context, builder, opt_val)
+    opt = context.make_helper(builder, opt_type, opt_val)
     res = builder.not_(cgutils.as_bool_bit(builder, opt.valid))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -1221,10 +1221,6 @@ def hash_complex(context, builder, sig, args):
 
 
 #------------------------------------------------------------------------------
-
-def make_pair(first_type, second_type):
-    return cgutils.create_struct_proxy(types.Pair(first_type, second_type))
-
 
 @lower_builtin('getitem', types.CPointer, types.Integer)
 def getitem_cpointer(context, builder, sig, args):
