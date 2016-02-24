@@ -6,6 +6,9 @@ from numba import types
 from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
                                     infer, infer_getattr, signature,
                                     bound_function)
+# import time side effect: array operations requires typing support of sequence
+# defined in collections: e.g. array.shape[i]
+from numba.typing import collections
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
