@@ -296,7 +296,8 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         TRY(compute_fingerprint, w, PyList_GET_ITEM(val, 0));
         return 0;
     }
-    if (PyAnySet_CheckExact(val)) {
+    /* Note we only accept sets, not frozensets */
+    if (Py_TYPE(val) == &PySet_Type) {
         Py_hash_t h;
         PyObject *item;
         Py_ssize_t pos = 0;

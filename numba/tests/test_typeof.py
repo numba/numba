@@ -199,6 +199,8 @@ class TestTypeof(ValueTypingTestBase, TestCase):
     def test_sets(self):
         v = set([1.0, 2.0, 3.0])
         self.assertEqual(typeof(v), types.Set(types.float64, reflected=True))
+        v = frozenset(v)
+        self.assertIs(typeof(v), None)
 
     @tag('important')
     def test_namedtuple(self):
@@ -483,6 +485,8 @@ class TestFingerprint(TestCase):
 
         with self.assertRaises(ValueError):
             compute_fingerprint(set())
+        with self.assertRaises(NotImplementedError):
+            compute_fingerprint(frozenset([2, 3]))
 
     def test_complicated_type(self):
         # Generating a large fingerprint
