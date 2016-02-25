@@ -82,9 +82,8 @@ class BaseContext(object):
                 defns.extend(getattr(tpl, 'cases', []))
 
         else:
-            msg = "No type info available for {func} as a callable."
+            msg = "No type info available for {func!r} as a callable."
             desc.append(msg.format(func=func))
-            return desc
 
         if defns:
             desc = ['Known signatures:']

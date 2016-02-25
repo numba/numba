@@ -184,7 +184,7 @@ class _HomogenousTuple(Sequence, BaseTuple):
         return (self.dtype,) * self.count
 
 
-class UniTuple(BaseAnonymousTuple, _HomogenousTuple):
+class UniTuple(BaseAnonymousTuple, _HomogenousTuple, Sequence):
     """
     Type class for homogenous tuples.
     """

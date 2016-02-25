@@ -16,9 +16,16 @@ infer_global = registry.register_global
 
 class MappedOperator(AbstractTemplate):
 
+    # Whether the args to the operator and the operator module func are reversed
+    reverse_args = False
+
     def generic(self, args, kws):
         assert not kws
-        return self.context.resolve_function_type(self.op, args, kws)
+        args = args[::-1] if self.reverse_args else args
+        sig = self.context.resolve_function_type(self.op, args, kws)
+        if self.reverse_args and sig is not None:
+            sig = signature(sig.return_type, *sig.args[::-1])
+        return sig
 
 
 class MappedInplaceOperator(AbstractTemplate):
@@ -38,7 +45,8 @@ class MappedInplaceOperator(AbstractTemplate):
 for name, inplace_name, op in utils.operator_map:
     op_func = getattr(operator, name)
     op_type = type('Operator_' + name, (MappedOperator,),
-                   {'key': op_func, 'op': op})
+                   {'key': op_func, 'op': op,
+                    'reverse_args': op == 'in'})
     infer_global(op_func, types.Function(op_type))
 
     if inplace_name:

@@ -227,7 +227,9 @@ def list_iteration(n):
 
 def list_contains(n):
     l = list(range(n))
-    return (0 in l, 1 in l, n - 1 in l, n in l)
+    return (0 in l, 1 in l, n - 1 in l, n in l,
+            0 not in l, 1 not in l, n - 1 not in l, n not in l,
+            )
 
 def list_index1(n, v):
     l = list(range(n, 0, -1))
