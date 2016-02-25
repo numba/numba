@@ -1364,6 +1364,7 @@ numba_get_set_private_data(PyObject *setobj)
 {
     PyObject *dct = _get_private_data_dict();
     PyObject *value, *key = PyLong_FromVoidPtr((void *) setobj);
+    void *ptr;
     if (!dct || !key)
         goto error;
 
@@ -1372,9 +1373,10 @@ numba_get_set_private_data(PyObject *setobj)
     if (!value)
         return NULL;
     else {
-        if (!PyLong_CheckExact(value))
+        ptr = PyLong_AsVoidPtr(value);
+        if (ptr == NULL && PyErr_Occurred())
             goto error;
-        return PyLong_AsVoidPtr(value);
+        return ptr;
     }
 
 error:
