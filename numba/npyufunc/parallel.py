@@ -399,7 +399,7 @@ def _make_cas_function():
     # Build & Link
     llmod = ll.parse_assembly(str(mod))
 
-    target = ll.Target.from_default_triple()
+    target = ll.Target.from_triple(ll.get_process_triple())
     tm = target.create_target_machine()
     engine = ll.create_mcjit_compiler(llmod, tm)
     ptr = engine.get_function_address(fn.name)
