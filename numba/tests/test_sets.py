@@ -184,9 +184,11 @@ class BaseTest(MemoryLeakMixin, TestCase):
         Choose *n* possibly duplicate items from sequence.
         """
         # np.random.choice() doesn't exist on Numpy 1.6
+        l = [self.rnd.choice(list(seq)) for i in range(n)]
         if isinstance(seq, np.ndarray):
-            seq = list(seq)
-        return [self.rnd.choice(seq) for i in range(n)]
+            return np.array(l, dtype=seq.dtype)
+        else:
+            return l
 
     def duplicates_array(self, n):
         """
@@ -344,7 +346,7 @@ class TestSets(BaseTest):
         a, b = (1, 2, 4, 11), (2, 3, 5, 11, 42)
         check(a, b)
 
-        sizes = (50, 500)
+        sizes = (0, 50, 500)
         for na, nb in itertools.product(sizes, sizes):
             a = self.sparse_array(na)
             b = self.sparse_array(nb)
@@ -406,7 +408,7 @@ class TestSets(BaseTest):
         a, b = (1, 2, 4, 11), (2, 3, 5, 11, 42)
         check(a, b)
 
-        sizes = (50, 500)
+        sizes = (0, 50, 500)
         for na, nb in itertools.product(sizes, sizes):
             a = self.sparse_array(na)
             b = self.sparse_array(nb)
