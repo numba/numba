@@ -91,7 +91,7 @@ def _ensure_pynumpy():
     Make sure Python and Numpy have supported versions.
     """
     import warnings
-    from .numpy_support import version as np_version
+    from . import numpy_support
 
     pyver = sys.version_info[:2]
     strver = "%d.%d" % pyver
@@ -101,7 +101,8 @@ def _ensure_pynumpy():
     if pyver < (2, 6) or ((3,) <= pyver < (3, 3)):
         raise ImportError("Numba needs Python 2.6 or greater, or 3.3 or greater")
 
-    if np_version in (1, 6):
+    np_version = numpy_support.version[:2]
+    if np_version == (1, 6):
         warnings.warn("Support for Numpy %d.%d will be dropped in Numba 0.25"
                       % np_version, DeprecationWarning)
     if np_version < (1, 6):
