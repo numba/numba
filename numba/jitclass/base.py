@@ -8,7 +8,7 @@ from llvmlite import ir as llvmir
 
 from numba.utils import OrderedDict
 from numba import types
-from numba.targets.registry import CPUTarget
+from numba.targets.registry import cpu_target
 from numba import njit
 from numba.typing import templates
 from numba.datamodel import default_manager, models
@@ -162,11 +162,11 @@ def register_class_type(cls, spec, class_ctor, builder):
                                                   __doc__=docstring))
 
     # Register resolution of the class object
-    typingctx = CPUTarget.typing_context
+    typingctx = cpu_target.typing_context
     typingctx.insert_global(cls, class_type)
 
     # Register class
-    targetctx = CPUTarget.target_context
+    targetctx = cpu_target.target_context
     builder(class_type, methods, typingctx, targetctx).register()
 
     return cls

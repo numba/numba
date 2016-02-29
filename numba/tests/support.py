@@ -5,6 +5,7 @@ Assorted utilities for use in tests.
 import cmath
 import contextlib
 import errno
+import gc
 import math
 import os
 import shutil
@@ -445,8 +446,7 @@ def _purge_trashcan_dir():
         except OSError as e:
             # In parallel testing, several processes can attempt to
             # remove the same entry at once, ignore.
-            if e.errno != errno.ENOENT:
-                raise
+            pass
 
 def _create_trashcan_subdir(prefix):
     _purge_trashcan_dir()
@@ -518,6 +518,8 @@ class MemoryLeak(object):
     __enable_leak_check = True
 
     def memory_leak_setup(self):
+        # Clean up any NRT-backed objects hanging in a dead reference cycle
+        gc.collect()
         self.__init_stats = rtsys.get_allocation_stats()
 
     def memory_leak_teardown(self):

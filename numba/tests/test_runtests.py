@@ -1,9 +1,9 @@
 from __future__ import division, print_function
 
+from numba import unittest_support as unittest
+
 import sys
 import subprocess
-
-from numba import unittest_support as unittest
 
 
 def check_output(*popenargs, **kwargs):
@@ -24,13 +24,11 @@ class TestCase(unittest.TestCase):
     Therefore, the logic used here shouldn't use numba.testing, but only the upstream
     unittest, and run the numba test suite only in a subprocess."""
 
-
     def check_testsuite_size(self, args, minsize, maxsize=None):
         """
         Check that the reported numbers of tests are in the
         (minsize, maxsize) range, or are equal to minsize if maxsize is None.
         """
-
         cmd = ['python', '-m', 'numba.runtests', '-l'] + list(args)
         lines = check_output(cmd).decode().splitlines()
         lines = [line for line in lines if line.strip()]

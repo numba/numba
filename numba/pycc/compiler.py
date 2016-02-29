@@ -15,7 +15,7 @@ from numba import cgutils
 from numba.utils import IS_PY3
 from . import llvm_types as lt
 from numba.compiler import compile_extra, Flags
-from numba.targets.registry import CPUTarget
+from numba.targets.registry import cpu_target
 from numba.runtime import atomicops
 
 
@@ -114,8 +114,8 @@ class _ModuleCompiler(object):
         self.external_init_function = None
         self.use_nrt = use_nrt
 
-        self.typing_context = CPUTarget.typing_context
-        self.context = CPUTarget.target_context.with_aot_codegen(self.module_name)
+        self.typing_context = cpu_target.typing_context
+        self.context = cpu_target.target_context.with_aot_codegen(self.module_name)
 
     def _mangle_method_symbol(self, func_name):
         return "._pycc_method_%s" % (func_name,)

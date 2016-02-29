@@ -1,9 +1,12 @@
+from numba import unittest_support as unittest
+
 import gc
 from os.path import dirname, join
 import multiprocessing
 import sys
 import time
 import warnings
+
 from unittest.suite import TestSuite
 from numba.testing import load_testsuite
 from numba.testing import ddt # for backward compatibility

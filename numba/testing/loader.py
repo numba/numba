@@ -16,7 +16,7 @@ class TestLoader(loader.TestLoader):
             name = self._get_name_from_path(start_dir)
             package = self._get_module_from_name(name)
             load_tests = getattr(package, 'load_tests', None)
-            tests = self.loadTestsFromModule(package, use_load_tests=False)
+            tests = self.loadTestsFromModule(package)
             if load_tests is not None:
                 try:
                     yield load_tests(self, tests, pattern)

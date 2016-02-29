@@ -403,8 +403,9 @@ class BaseCPUCodegen(object):
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
 
-        target = ll.Target.from_default_triple()
-        tm_options = dict(cpu='', features='', opt=config.OPT)
+        target = ll.Target.from_triple(ll.get_process_triple())
+        tm_options = dict(opt=config.OPT)
+        self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
         engine = ll.create_mcjit_compiler(llvm_module, tm)
@@ -420,7 +421,7 @@ class BaseCPUCodegen(object):
 
     def _create_empty_module(self, name):
         ir_module = lc.Module.new(name)
-        ir_module.triple = ll.get_default_triple()
+        ir_module.triple = ll.get_process_triple()
         if self._data_layout:
             ir_module.data_layout = self._data_layout
         return ir_module
@@ -515,7 +516,7 @@ class BaseCPUCodegen(object):
         Return a tuple unambiguously describing the codegen behaviour.
         """
         return (self._llvm_module.triple, ll.get_host_cpu_name(),
-                config.ENABLE_AVX)
+                self._tm_features)
 
 
 class AOTCPUCodegen(BaseCPUCodegen):
@@ -527,8 +528,13 @@ class AOTCPUCodegen(BaseCPUCodegen):
     _library_class = AOTCodeLibrary
 
     def _customize_tm_options(self, options):
+        options['cpu'] = ''  # use generic cpu model for the arch
         options['reloc'] = 'pic'
         options['codemodel'] = 'default'
+        options['features'] = self._tm_features
+
+    def _customize_tm_features(self):
+        return ''
 
     def _add_module(self, module):
         pass
@@ -542,8 +548,6 @@ class JITCPUCodegen(BaseCPUCodegen):
     _library_class = JITCodeLibrary
 
     def _customize_tm_options(self, options):
-        features = []
-
         # As long as we don't want to ship the code to another machine,
         # we can specialize for this CPU.
         options['cpu'] = ll.get_host_cpu_name()
@@ -551,17 +555,27 @@ class JITCPUCodegen(BaseCPUCodegen):
         options['reloc'] = 'default'
         options['codemodel'] = 'jitdefault'
 
+        # Set feature attributes
+        options['features'] = self._tm_features
+
+        # Enable JIT debug
+        options['jitdebug'] = True
+
+    def _customize_tm_features(self):
+        # For JIT target, we will use LLVM to get the feature map
+        features = ll.get_host_cpu_features()
+
         # There are various performance issues with AVX and LLVM 3.5
         # (list at http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
         # For now we'd rather disable it, since it can pessimize the code.
         if not config.ENABLE_AVX:
-            features.append('-avx')
+            # Disable all feature with name starting with 'avx'
+            for k in features:
+                if k.startswith('avx'):
+                    features[k] = False
 
         # Set feature attributes
-        options['features'] = ','.join(features)
-
-        # Enable JIT debug
-        options['jitdebug'] = True
+        return features.flatten()
 
     def _add_module(self, module):
         self._engine.add_module(module)
