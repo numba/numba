@@ -36,7 +36,8 @@ Improvements:
 
 Fixes:
 
-* Fix #1734: NRT decref bug when variable is del'ed before being defined,
+* Issue #1722: Fix returning an optional boolean (bool or None).
+* Issue #1734: NRT decref bug when variable is del'ed before being defined,
   leading to a possible memory leak.
 * PR #1732: Fix tuple getitem regression for CUDA target.
 * PR #1718: Mishandling of optional to optional casting.
