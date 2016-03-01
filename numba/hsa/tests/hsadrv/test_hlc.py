@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import
 import numba.unittest_support as unittest
 from numba.hsa.hlc import hlc
 from numba.hsa.hsadrv import enums
+from numba.hsa.hsadrv.driver import dgpu_count
 
 SPIR_SAMPLE = """
 ; ModuleID = 'kernel.out.bc'
@@ -36,14 +37,17 @@ float addrspace(1)* nocapture %output) {
 !10 = metadata !{metadata !"Simple C/C++ TBAA"}
 """
 
-
 class TestHLC(unittest.TestCase):
+
+    # skip these, not compatible IR for LLVM 3.7
+    @unittest.skip("Incompatible IR")
     def test_hsail(self):
         hlcmod = hlc.Module()
         hlcmod.load_llvm(SPIR_SAMPLE)
         hsail = hlcmod.finalize().hsail
         self.assertIn("prog kernel &copy", hsail)
 
+    @unittest.skip("Incompatible IR")
     def test_brig(self):
         # Generate BRIG
         hlcmod = hlc.Module()
@@ -77,23 +81,6 @@ class TestHLC(unittest.TestCase):
 
         src = np.random.random(nelem).astype(np.float32)
         dst = np.zeros_like(src)
-
-
-        def dgpu_count():
-            """
-            Returns the number of discrete GPUs present on the current machine.
-            """
-            known_dgpus = frozenset([b'Fiji'])
-            known_apus = frozenset([b'Spectre'])
-            known_cpus = frozenset([b'Kaveri'])
-
-            ngpus = 0
-            for a in hsa.agents:
-                name = getattr(a, "name").lower()
-                for g in known_dgpus:
-                    if g.lower() in name:
-                        ngpus += 1
-            return ngpus
 
 
         if(dgpu_count() > 0):
