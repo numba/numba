@@ -219,7 +219,16 @@ class CUDAKernelBase(object):
         self.stream = 0
 
     def copy(self):
-        return copy.copy(self)
+        """
+        Shallow copy the instance
+        """
+        # Note: avoid using ``copy`` which calls __reduce__
+        cls = self.__class__
+        # new bare instance
+        new = cls.__new__(cls)
+        # update the internal states
+        new.__dict__.update(self.__dict__)
+        return new
 
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         if not isinstance(griddim, (tuple, list)):
@@ -630,7 +639,6 @@ class CUDAKernel(CUDAKernelBase):
         return self.autotune.closest(thread_per_block)
 
 
-
 class AutoJitCUDAKernel(CUDAKernelBase):
     '''
     CUDA Kernel object. When called, the kernel object will specialize itself
@@ -710,3 +718,25 @@ class AutoJitCUDAKernel(CUDAKernelBase):
 
         for ver, defn in utils.iteritems(self.definitions):
             defn.inspect_types(file=file)
+
+    @classmethod
+    def _rebuild(cls, func_reduced, bind, targetoptions, config):
+        """
+        Rebuild an instance.
+        """
+        func = serialize._rebuild_function(*func_reduced)
+        instance = cls(func, bind, targetoptions)
+        instance._deserialize_config(config)
+        return instance
+
+    def __reduce__(self):
+        """
+        Reduce the instance for serialization.
+        Compiled definitions are serialized in PTX form.
+        """
+        glbls = serialize._get_function_globals_for_reduction(self.py_func)
+        func_reduced = serialize._reduce_function(self.py_func, glbls)
+        config = self._serialize_config()
+        args = (self.__class__, func_reduced, self.bind, self.targetoptions,
+                config)
+        return (serialize._rebuild_reduction, args)

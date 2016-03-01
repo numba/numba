@@ -28,7 +28,6 @@ class TestPickle(unittest.TestCase):
         self.assertEqual(foo3.griddim, (5, 1, 1))
         self.assertEqual(foo3.blockdim, (8, 1, 1))
 
-
     def test_pickling_jit(self):
         @cuda.jit(device=True)
         def inner(a):
@@ -39,6 +38,16 @@ class TestPickle(unittest.TestCase):
             arr[0] = inner(arr[0])
 
         self.check_call(foo)
+
+    def test_pickling_autojit(self):
+
+        @cuda.jit(device=True)
+        def inner(a):
+            return a + 1
+
+        @cuda.jit
+        def foo(arr):
+            arr[0] = inner(arr[0])
 
 
 if __name__ == '__main__':
