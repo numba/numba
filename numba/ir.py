@@ -522,7 +522,12 @@ class Var(object):
 
 class Intrinsic(object):
     """
-    For inserting intrinsic node into the IR
+    A low-level "intrinsic" function.  Suitable as the callable of a "call"
+    expression.
+
+    The given *name* is backend-defined and will be inserted as-is
+    in the generated low-level IR.
+    The *type* is the equivalent Numba signature of calling the intrinsic.
     """
 
     def __init__(self, name, type, args):
