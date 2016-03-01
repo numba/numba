@@ -8,23 +8,30 @@ from numba.config import ENABLE_CUDASIM
 
 @unittest.skipIf(ENABLE_CUDASIM, 'pickling not supported in CUDASIM')
 class TestPickle(unittest.TestCase):
+
     def check_call(self, callee):
+        arr = np.array([100])
+        expected = callee(arr)
+
         # serialize and rebuild
         foo1 = pickle.loads(pickle.dumps(callee))
-
+        del callee
         # call rebuild function
-        arr = np.array([100])
-        foo1(arr)
-        self.assertEqual(arr[0], 101)
+        got1 = foo1(arr)
+        np.testing.assert_equal(got1, expected)
+        del got1
 
         # test serialization of previously serialized object
         foo2 = pickle.loads(pickle.dumps(foo1))
+        del foo1
         # call rebuild function
-        foo2(arr)
-        self.assertEqual(arr[0], 102)
+        got2 = foo2(arr)
+        np.testing.assert_equal(got2, expected)
+        del got2
 
         # test propagation of thread, block config
         foo3 = pickle.loads(pickle.dumps(foo2[5, 8]))
+        del foo2
         self.assertEqual(foo3.griddim, (5, 1, 1))
         self.assertEqual(foo3.blockdim, (8, 1, 1))
 
