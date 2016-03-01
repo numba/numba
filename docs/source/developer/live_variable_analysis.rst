@@ -28,7 +28,7 @@ variables.  Since each operation generates at least one temporary variable,
 a function can accumulate a high number of temporary variables if they are not
 released as soon as possible.
 Our generator implementation can benefit from early releasing of variables,
-which reduces the size of the state to suspend at each yeild point.
+which reduces the size of the state to suspend at each yield point.
 
 
 Notes on behavior of the live variable analysis
