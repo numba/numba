@@ -133,16 +133,7 @@ def compile_device_template(pyfunc, debug=False, inline=False):
 
 
 def compile_device(pyfunc, return_type, args, inline=True, debug=False):
-    cres = compile_cuda(pyfunc, return_type, args, debug=debug, inline=inline)
-    devfn = DeviceFunction(cres)
-
-    class device_function_template(ConcreteTemplate):
-        key = devfn
-        cases = [cres.signature]
-
-    cres.typing_context.insert_user_function(devfn, device_function_template)
-    cres.target_context.insert_user_function(devfn, cres.fndesc, [cres.library])
-    return devfn
+    return DeviceFunction(pyfunc, return_type, args, inline=True, debug=False)
 
 
 def declare_device_function(name, restype, argtypes):
@@ -165,14 +156,44 @@ def declare_device_function(name, restype, argtypes):
 
 
 class DeviceFunction(object):
-    def __init__(self, cres):
+
+    def __init__(self, pyfunc, return_type, args, inline, debug):
+        self.py_func = pyfunc
+        self.return_type = return_type
+        self.args = args
+        self.inline = True
+        self.debug = False
+        cres = compile_cuda(self.py_func, self.return_type, self.args,
+                            debug=self.debug, inline=self.inline)
         self.cres = cres
+        # Register
+        class device_function_template(ConcreteTemplate):
+            key = self
+            cases = [cres.signature]
+
+        cres.typing_context.insert_user_function(
+            self, device_function_template)
+        cres.target_context.insert_user_function(self, cres.fndesc,
+                                                 [cres.library])
+
+    def __reduce__(self):
+        globs = serialize._get_function_globals_for_reduction(self.py_func)
+        func_reduced = serialize._reduce_function(self.py_func, globs)
+        args = (self.__class__, func_reduced, self.return_type, self.args,
+                self.inline, self.debug)
+        return (serialize._rebuild_reduction, args)
+
+    @classmethod
+    def _rebuild(cls, func_reduced, return_type, args, inline, debug):
+        return cls(serialize._rebuild_function(*func_reduced), return_type,
+                   args, inline, debug)
 
 
 class ExternFunction(object):
     def __init__(self, name, sig):
         self.name = name
         self.sig = sig
+
 
 def _compute_thread_per_block(kernel, tpb):
     if tpb != 0:
