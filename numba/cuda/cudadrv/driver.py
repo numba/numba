@@ -145,6 +145,9 @@ def _build_reverse_error_map():
             map[code] = name
     return map
 
+def _getpid():
+    return os.getpid()
+
 
 ERROR_MAP = _build_reverse_error_map()
 
@@ -172,6 +175,7 @@ class Driver(object):
         self.devices = utils.UniqueDict()
         self.is_initialized = False
         self.initialization_error = None
+        self.pid = None
         try:
             if config.DISABLE_CUDA:
                 raise CudaSupportError("CUDA disabled by user")
@@ -187,6 +191,8 @@ class Driver(object):
         except CudaAPIError as e:
             self.initialization_error = e
             raise CudaSupportError("Error at driver init: \n%s:" % e)
+        else:
+            self.pid = _getpid()
 
     @property
     def is_available(self):
@@ -278,6 +284,10 @@ class Driver(object):
         """Get current active context in CUDA driver runtime.
         Note: Lowlevel calls that returns the handle.
         """
+        # Detect forking
+        if self.is_initialized and _getpid() != self.pid:
+            raise CudaDriverError("CUDA initialized before forking")
+
         handle = drvapi.cu_context(0)
         driver.cuCtxGetCurrent(byref(handle))
         if not handle.value:
