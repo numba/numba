@@ -1,18 +1,21 @@
 from __future__ import absolute_import, print_function
 import copy
 import sys
+import warnings
+import operator
 
 from numba import ctypes_support as ctypes
 from numba.typing.templates import AbstractTemplate
 from numba import config, compiler, types
 from numba.typing.templates import ConcreteTemplate
-from numba import funcdesc, typing, utils
+from numba import funcdesc, typing, utils, serialize
 
 from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import KernelRuntimeError
 from .api import get_current_device
+from functools import reduce
 
 
 def compile_cuda(pyfunc, return_type, args, debug, inline):
@@ -71,6 +74,17 @@ class DeviceFunctionTemplate(object):
         self.debug = debug
         self.inline = inline
         self._compileinfos = {}
+
+    def __reduce__(self):
+        glbls = serialize._get_function_globals_for_reduction(self.py_func)
+        func_reduced = serialize._reduce_function(self.py_func, glbls)
+        args = (self.__class__, func_reduced, self.debug, self.inline)
+        return (serialize._rebuild_reduction, args)
+
+    @classmethod
+    def _rebuild(cls, func_reduced, debug, inline):
+        func = serialize._rebuild_function(*func_reduced)
+        return compile_device_template(func, debug=debug, inline=inline)
 
     def compile(self, args):
         """Compile the function for the given argument types.
@@ -248,6 +262,19 @@ class CUDAKernelBase(object):
 
         return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
 
+    def _serialize_config(self):
+        """
+        Helper for serializing the grid, block and shared memory configuration.
+        CUDA stream config is not serialized.
+        """
+        return self.griddim, self.blockdim, self.sharedmem
+
+    def _deserialize_config(self, config):
+        """
+        Helper for deserializing the grid, block and shared memory
+        configuration.
+        """
+        self.griddim, self.blockdim, self.sharedmem = config
 
 class CachedPTX(object):
     """A PTX cache that uses compute capability as a cache key
@@ -321,6 +348,26 @@ class CachedCUFunction(object):
         ci = self.ccinfos[device.id]
         return ci
 
+    def __reduce__(self):
+        """
+        Reduce the instance for serialization.
+        Pre-compiled PTX code string is serialized inside the `ptx` (CachedPTX).
+        Loaded CUfunctions are discarded. They are recreated when unserialized.
+        """
+        if self.linking:
+            msg = ('cannot pickle CUDA kernel function with additional '
+                   'libraries to link against')
+            raise RuntimeError(msg)
+        args = (self.__class__, self.entry_name, self.ptx, self.linking)
+        return (serialize._rebuild_reduction, args)
+
+    @classmethod
+    def _rebuild(cls, entry_name, ptx, linking):
+        """
+        Rebuild an instance.
+        """
+        return cls(entry_name, ptx, linking)
+
 
 class CUDAKernel(CUDAKernelBase):
     '''
@@ -328,27 +375,60 @@ class CUDAKernel(CUDAKernelBase):
     object will validate that the argument types match those for which it is
     specialized, and then launch the kernel on the device.
     '''
-    def __init__(self, llvm_module, name, pretty_name,
-                 argtypes, call_helper,
-                 link=(), debug=False, fastmath=False,
-                 type_annotation=None):
+    def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
+                 link=(), debug=False, fastmath=False, type_annotation=None):
         super(CUDAKernel, self).__init__()
-        self.entry_name = name
-        self.argument_types = tuple(argtypes)
-        self.linking = tuple(link)
-        self._type_annotation = type_annotation
-
+        # initialize CUfunction
         options = {}
         if fastmath:
             options.update(dict(ftz=True,
                                 prec_sqrt=False,
                                 prec_div=False,
                                 fma=True))
-
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
-        self._func = CachedCUFunction(self.entry_name, ptx, link)
+        cufunc = CachedCUFunction(name, ptx, link)
+        # populate members
+        self.entry_name = name
+        self.argument_types = tuple(argtypes)
+        self.linking = tuple(link)
+        self._type_annotation = type_annotation
+        self._func = cufunc
         self.debug = debug
         self.call_helper = call_helper
+
+    @classmethod
+    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, config):
+        """
+        Rebuild an instance.
+        """
+        instance = cls.__new__(cls)
+        # invoke parent constructor
+        super(cls, instance).__init__()
+        # populate members
+        instance.entry_name = name
+        instance.argument_types = tuple(argtypes)
+        instance.linking = tuple(link)
+        instance._type_annotation = None
+        instance._func = cufunc
+        instance.debug = debug
+        instance.call_helper = call_helper
+        # update config
+        instance._deserialize_config(config)
+        return instance
+
+    def __reduce__(self):
+        """
+        Reduce the instance for serialization.
+        Compiled definitions are serialized in PTX form.
+        Type annotation are discarded.
+        Thread, block and shared memory configuration are serialized.
+        Stream information is discarded.
+        """
+        config = self._serialize_config()
+        args = (self.__class__, self.entry_name, self.argument_types,
+                self._func, self.linking, self.debug, self.call_helper,
+                config)
+        return (serialize._rebuild_reduction, args)
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
