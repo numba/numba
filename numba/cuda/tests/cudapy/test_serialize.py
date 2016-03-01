@@ -1,7 +1,7 @@
 from __future__ import print_function
 import pickle
 import numpy as np
-from numba import cuda
+from numba import cuda, vectorize
 from numba import unittest_support as unittest
 from numba.config import ENABLE_CUDASIM
 
@@ -55,6 +55,25 @@ class TestPickle(unittest.TestCase):
         @cuda.jit
         def foo(arr):
             arr[0] = inner(arr[0])
+
+    def test_pickling_vectorize(self):
+        @vectorize(['intp(intp)', 'float64(float64)'], target='cuda')
+        def cuda_vect(x):
+            return x * 2
+
+        # get expected result
+        ary = np.arange(10)
+        expected = cuda_vect(ary)
+        # first pickle
+        foo1 = pickle.loads(pickle.dumps(cuda_vect))
+        del cuda_vect
+        got1 = foo1(ary)
+        np.testing.assert_equal(expected, got1)
+        # second pickle
+        foo2 = pickle.loads(pickle.dumps(foo1))
+        del foo1
+        got2 = foo2(ary)
+        np.testing.assert_equal(expected, got2)
 
 
 if __name__ == '__main__':

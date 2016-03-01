@@ -24,7 +24,7 @@ class CUDAVectorize(deviceufunc.DeviceVectorize):
         return glbl
 
     def _compile_kernel(self, fnobj, sig):
-        return cuda.jit(sig)(fnobj)
+        return cuda.jit(fnobj)
 
     def build_ufunc(self):
         return dispatcher.CUDAUFuncDispatcher(self.kernelmap)
@@ -64,4 +64,3 @@ class CUDAGUFuncVectorize(deviceufunc.DeviceGUFuncVectorize):
         glbls.update({'__cuda__': cuda,
                       '__core__': corefn})
         return glbls
-
