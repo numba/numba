@@ -55,23 +55,29 @@ class BaseCallConv(object):
 
     def return_optional_value(self, builder, retty, valty, value):
         if valty == types.none:
+            # Value is none
             self.return_native_none(builder)
 
         elif retty == valty:
+            # Value is an optional, need a runtime switch
             optcls = self.context.make_optional(retty)
             optval = optcls(self.context, builder, value=value)
 
             validbit = cgutils.as_bool_bit(builder, optval.valid)
             with builder.if_then(validbit):
-                self.return_value(builder, optval.data)
+                retval = self.context.get_return_value(builder, retty.type,
+                                                       optval.data)
+                self.return_value(builder, retval)
 
             self.return_native_none(builder)
 
         elif not isinstance(valty, types.Optional):
+            # Value is not an optional, need a cast
             if valty != retty.type:
                 value = self.context.cast(builder, value, fromty=valty,
                                           toty=retty.type)
-            self.return_value(builder, value)
+            retval = self.context.get_return_value(builder, retty.type, value)
+            self.return_value(builder, retval)
 
         else:
             raise NotImplementedError("returning {0} for {1}".format(valty,

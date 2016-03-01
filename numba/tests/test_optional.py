@@ -1,11 +1,14 @@
 from __future__ import print_function, absolute_import
 
+import itertools
+
 import numpy
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, typeof, njit
 from numba import lowering
+from .support import TestCase
 
 
 def return_double_or_none(x):
@@ -21,6 +24,22 @@ def return_different_statement(x):
         return None
     else:
         return 1.2
+
+
+def return_bool_optional_or_none(x, y):
+    if y:
+        z = False
+    else:
+        z = None
+    if x == 2:
+        # A boolean
+        return True
+    elif x == 1:
+        # A runtime optional
+        return z
+    else:
+        # None
+        return None
 
 
 def is_this_a_none(x):
@@ -52,14 +71,15 @@ def a_is_not_b(a, b):
     return a is not b
 
 
-class TestOptional(unittest.TestCase):
+class TestOptional(TestCase):
+
     def test_return_double_or_none(self):
         pyfunc = return_double_or_none
         cres = compile_isolated(pyfunc, [types.boolean])
         cfunc = cres.entry_point
 
         for v in [True, False]:
-            self.assertEqual(pyfunc(v), cfunc(v))
+            self.assertPreciseEqual(pyfunc(v), cfunc(v))
 
     def test_return_different_statement(self):
         pyfunc = return_different_statement
@@ -67,7 +87,15 @@ class TestOptional(unittest.TestCase):
         cfunc = cres.entry_point
 
         for v in [True, False]:
-            self.assertEqual(pyfunc(v), cfunc(v))
+            self.assertPreciseEqual(pyfunc(v), cfunc(v))
+
+    def test_return_bool_optional_or_none(self):
+        pyfunc = return_bool_optional_or_none
+        cres = compile_isolated(pyfunc, [types.int32, types.int32])
+        cfunc = cres.entry_point
+
+        for x, y in itertools.product((0, 1, 2), (0, 1)):
+            self.assertPreciseEqual(pyfunc(x, y), cfunc(x, y))
 
     def test_is_this_a_none(self):
         pyfunc = is_this_a_none
@@ -75,7 +103,7 @@ class TestOptional(unittest.TestCase):
         cfunc = cres.entry_point
 
         for v in [-1, 0, 1, 2]:
-            self.assertEqual(pyfunc(v), cfunc(v))
+            self.assertPreciseEqual(pyfunc(v), cfunc(v))
 
     def test_is_this_a_none_objmode(self):
         pyfunc = is_this_a_none
@@ -85,7 +113,7 @@ class TestOptional(unittest.TestCase):
         cfunc = cres.entry_point
         self.assertTrue(cres.objectmode)
         for v in [-1, 0, 1, 2]:
-            self.assertEqual(pyfunc(v), cfunc(v))
+            self.assertPreciseEqual(pyfunc(v), cfunc(v))
 
     def test_a_is_b_intp(self):
         pyfunc = a_is_b
