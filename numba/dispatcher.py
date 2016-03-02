@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+import collections
 import contextlib
 import functools
 import errno
@@ -137,7 +138,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self._tm = default_type_manager
 
         # A mapping of signatures to compile results
-        self.overloads = utils.OrderedDict()
+        self.overloads = collections.OrderedDict()
 
         self.py_func = py_func
         # other parts of Numba assume the old Python 2 name for code object

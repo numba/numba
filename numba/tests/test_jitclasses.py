@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function
 
+from collections import OrderedDict
 import ctypes
 
 import numpy as np
@@ -9,7 +10,6 @@ from numba import (float32, float64, int16, int32, boolean, deferred_type,
 from numba import njit, typeof
 from numba import unittest_support as unittest
 from numba import jitclass
-from numba.utils import OrderedDict
 from .support import TestCase, MemoryLeakMixin, tag
 
 

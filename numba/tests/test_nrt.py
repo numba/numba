@@ -10,7 +10,6 @@ from numba import unittest_support as unittest
 from numba import njit
 from numba.compiler import compile_isolated, Flags, types
 from numba.runtime import rtsys
-from numba.config import PYVERSION
 from .support import MemoryLeakMixin, TestCase
 
 enable_nrt_flags = Flags()
@@ -72,7 +71,6 @@ class TestNrtMemInfo(unittest.TestCase):
         del mi
         self.assertEqual(Dummy.alive, 0)
 
-    @unittest.skipIf(PYVERSION <= (2, 7), "memoryview not supported")
     def test_fake_memoryview(self):
         d = Dummy()
         self.assertEqual(Dummy.alive, 1)
@@ -95,7 +93,6 @@ class TestNrtMemInfo(unittest.TestCase):
         del mview
         self.assertEqual(Dummy.alive, 0)
 
-    @unittest.skipIf(PYVERSION <= (2, 7), "memoryview not supported")
     def test_memoryview(self):
         from ctypes import c_uint32, c_void_p, POINTER, cast
 

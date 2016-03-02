@@ -513,14 +513,7 @@ class TestRandom(TestCase):
         """
         # Our implementation follows Python 2.7+'s.
         r = self._follow_cpython(ptr)
-        if sys.version_info >= (2, 7):
-            self._check_dist(func, r.vonmisesvariate, [(0.5, 2.5)])
-        else:
-            # Sanity check
-            for i in range(10):
-                val = func(0.5, 2.5)
-                self.assertGreaterEqual(val, 0.0)
-                self.assertLess(val, 2 * math.pi)
+        self._check_dist(func, r.vonmisesvariate, [(0.5, 2.5)])
 
     def test_random_vonmisesvariate(self):
         self._check_vonmisesvariate(jit_binary("random.vonmisesvariate"),
@@ -805,15 +798,14 @@ class TestRandom(TestCase):
                 self.assertFalse(np.all(a == b))
                 self.assertEqual(sorted(a), sorted(b))
                 a = b
-        if sys.version_info >= (2, 7):
-            # Test with an arbitrary buffer-providing object
-            b = a.copy()
-            func(memoryview(b))
-            self.assertFalse(np.all(a == b))
-            self.assertEqual(sorted(a), sorted(b))
-            # Read-only object
-            with self.assertTypingError():
-                func(memoryview(b"xyz"))
+        # Test with an arbitrary buffer-providing object
+        b = a.copy()
+        func(memoryview(b))
+        self.assertFalse(np.all(a == b))
+        self.assertEqual(sorted(a), sorted(b))
+        # Read-only object
+        with self.assertTypingError():
+            func(memoryview(b"xyz"))
 
     @tag('important')
     def test_random_shuffle(self):
