@@ -812,8 +812,10 @@ class SetInstance(object):
 
         payload = self.payload
 
-        # Ensure entries >= 2 * used
+        # Ensure entries >= max(2 * used, MINSIZE)
         min_entries = builder.shl(nitems, one)
+        min_entries = builder.select(builder.icmp_unsigned('>=', min_entries, minsize),
+                                     min_entries, minsize)
         # Shrink only if size >= 4 * min_entries && size > MINSIZE
         max_size = builder.shl(min_entries, two)
         size = builder.add(payload.mask, one)
@@ -845,8 +847,6 @@ class SetInstance(object):
 
             # Ensure new_size >= MINSIZE
             new_size = builder.load(new_size_p)
-            new_size = builder.select(builder.icmp_unsigned('>=', new_size, minsize),
-                                      new_size, minsize)
             # At this point, new_size should be < size if the factors
             # above were chosen carefully!
 
