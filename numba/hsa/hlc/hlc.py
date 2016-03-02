@@ -10,11 +10,16 @@ from collections import namedtuple
 from numba import config
 from .utils import adapt_llvm_version
 from .config import BUILTIN_PATH
+from datetime import datetime
 
 _real_check_call = check_call
 
 
 def check_call(*args, **kwargs):
+    # This is so that time is stamped against invocation
+    # such that correlations can be looked for against messages in the
+    # sys and kernel logs.
+    print(datetime.now().strftime("%b %d %H:%M:%S") ,file=sys.stdout )
     print('CMD: ' + ';'.join(args), file=sys.stdout)
     return _real_check_call(*args, **kwargs)
 

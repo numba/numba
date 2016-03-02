@@ -1218,14 +1218,8 @@ def host_to_dGPU(context, dst, src, size):
     if size < 0:
         raise ValueError("Invalid size given: %s" % size)
 
-    # dst and src are 2 pointers to memory
-    # Allocate a host accessible buffer for the transfer
-    buf = context.memalloc(size, memTypeFlags=\
-            [enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED], hostAccessible=True)
-    # Copy src->buf
-    hsa.hsa_memory_copy(device_pointer(buf), src.ctypes.data, size)
-    # Copy buf->dst
-    hsa.hsa_memory_copy(dst.device_ctypes_pointer.value, device_pointer(buf), size)
+    hsa.hsa_memory_copy(dst.device_ctypes_pointer.value, src.ctypes.data, size)
+
 
 def dGPU_to_host(context, dst, src, size):
     """
@@ -1239,12 +1233,5 @@ def dGPU_to_host(context, dst, src, size):
     if size < 0:
         raise ValueError("Invalid size given: %s" % size)
 
-    # dst and src are 2 pointers to memory
-    # Allocate a host accessible buffer for the transfer
-    buf = context.memalloc(size, memTypeFlags=\
-            [enums.HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED], hostAccessible=True)
-    # Copy src->buf
-    hsa.hsa_memory_copy(device_pointer(buf), src.device_ctypes_pointer.value, size)
-    # Copy buf->dst
-    hsa.hsa_memory_copy(host_pointer(dst), device_pointer(buf), size)
+    hsa.hsa_memory_copy(host_pointer(dst), src.device_ctypes_pointer.value, size)
 
