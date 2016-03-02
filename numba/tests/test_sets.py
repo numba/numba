@@ -254,7 +254,6 @@ class BaseTest(MemoryLeakMixin, TestCase):
         """
         Choose *n* possibly duplicate items from sequence.
         """
-        # np.random.choice() doesn't exist on Numpy 1.6
         l = [self.rnd.choice(list(seq)) for i in range(n)]
         if isinstance(seq, np.ndarray):
             return np.array(l, dtype=seq.dtype)

@@ -18,7 +18,6 @@ from numba import types, typing
 from numba.types.abstract import _typecache
 from numba import jit, numpy_support
 from numba import unittest_support as unittest
-from numba.npdatetime import NPDATETIME_SUPPORTED
 from .support import TestCase, tag
 
 
@@ -213,16 +212,15 @@ class TestTypes(TestCase):
         # Value cast
         self.assertPreciseEqual(i(42.5), 42)
         self.assertPreciseEqual(d(-5), -5.0)
-        if NPDATETIME_SUPPORTED:
-            ty = types.NPDatetime('Y')
-            self.assertPreciseEqual(ty('1900'), np.datetime64('1900', 'Y'))
-            self.assertPreciseEqual(ty('NaT'), np.datetime64('NaT', 'Y'))
-            ty = types.NPTimedelta('s')
-            self.assertPreciseEqual(ty(5), np.timedelta64(5, 's'))
-            self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT', 's'))
-            ty = types.NPTimedelta('')
-            self.assertPreciseEqual(ty(5), np.timedelta64(5))
-            self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
+        ty = types.NPDatetime('Y')
+        self.assertPreciseEqual(ty('1900'), np.datetime64('1900', 'Y'))
+        self.assertPreciseEqual(ty('NaT'), np.datetime64('NaT', 'Y'))
+        ty = types.NPTimedelta('s')
+        self.assertPreciseEqual(ty(5), np.timedelta64(5, 's'))
+        self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT', 's'))
+        ty = types.NPTimedelta('')
+        self.assertPreciseEqual(ty(5), np.timedelta64(5))
+        self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
     def test_bitwidth_number_types(self):
         """

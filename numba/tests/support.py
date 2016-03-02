@@ -34,11 +34,6 @@ nrt_flags = Flags()
 nrt_flags.set("nrt")
 
 
-is_on_numpy_16 = numpy_support.version == (1, 6)
-skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
-                                   "test requires Numpy 1.7 or later")
-
-
 tag = testing.make_tag_decorator(['important'])
 
 
