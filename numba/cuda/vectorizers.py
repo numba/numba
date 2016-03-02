@@ -18,7 +18,7 @@ class CUDAVectorize(deviceufunc.DeviceVectorize):
         return cudevfn, cudevfn.cres.signature.return_type
 
     def _get_globals(self, corefn):
-        glbl = self.pyfunc.__globals__
+        glbl = self.pyfunc.__globals__.copy()
         glbl.update({'__cuda__': cuda,
                      '__core__': corefn})
         return glbl

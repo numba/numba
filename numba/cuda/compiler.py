@@ -188,6 +188,10 @@ class DeviceFunction(object):
         return cls(serialize._rebuild_function(*func_reduced), return_type,
                    args, inline, debug)
 
+    def __repr__(self):
+        fmt = "<DeviceFunction py_func={0} signature={1}>"
+        return fmt.format(self.py_func, self.cres.signature)
+
 
 class ExternFunction(object):
     def __init__(self, name, sig):
@@ -305,6 +309,7 @@ class CUDAKernelBase(object):
         configuration.
         """
         self.griddim, self.blockdim, self.sharedmem = config
+
 
 class CachedPTX(object):
     """A PTX cache that uses compute capability as a cache key
