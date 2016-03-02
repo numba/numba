@@ -236,10 +236,13 @@ the ``add()`` function described above, the Numba IR looks like::
        del $0.3                                 []
        return $0.4                              ['$0.4']
 
-The ``del`` instructions are produced by live variable analysis.  Those
-instructions ensure references are not leaked in :term:`object mode`,
-where each variable contains an owned reference to a PyObject.  They are
-no-ops in :term:`nopython mode`.
+The ``del`` instructions are produced by :ref:`live variable analysis`.
+Those instructions ensure references are not leaked.
+In :term:`nopython mode`, some objects are tracked by the numba runtime and
+some are not.  For tracked objects, a dereference operation is emitted;
+otherwise, the instruction is an no-op.
+In :term:`object mode` each variable contains an owned reference to a PyObject.
+
 
 Stage 3: Macro expansion
 ------------------------
@@ -605,4 +608,3 @@ setting the :envvar:`NUMBA_DUMP_ASSEMBLY` environment variable to 1:
 
 The assembly output will also include the generated wrapper function that
 translates the Python arguments to native data types.
-
