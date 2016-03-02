@@ -71,6 +71,7 @@ class TestNrtMemInfo(unittest.TestCase):
         del mi
         self.assertEqual(Dummy.alive, 0)
 
+    @unittest.skipIf(sys.version_info < (3,), "memoryview not supported")
     def test_fake_memoryview(self):
         d = Dummy()
         self.assertEqual(Dummy.alive, 1)
@@ -93,6 +94,7 @@ class TestNrtMemInfo(unittest.TestCase):
         del mview
         self.assertEqual(Dummy.alive, 0)
 
+    @unittest.skipIf(sys.version_info < (3,), "memoryview not supported")
     def test_memoryview(self):
         from ctypes import c_uint32, c_void_p, POINTER, cast
 
