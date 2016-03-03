@@ -7,6 +7,12 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.hsa.hsadrv.driver import hsa, Queue, Program, Executable,\
                                     BrigModule, Context, dgpu_present
+
+
+from numba.hsa.hsadrv.devices import get_context
+import numba.hsa.api as hsaapi
+from numba import float32, float64, vectorize
+
 from numba.hsa.hsadrv import drvapi
 from numba.hsa.hsadrv import enums
 from numba.hsa.hsadrv import enums_ext
@@ -415,6 +421,57 @@ class TestContext(_TestBase):
             pass
 
 
+class TestDeviceLoop(_TestBase):
+
+
+
+    @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
+    def test_vectorize_device_loop(self):
+        """
+            Tests device preallocation computation loop
+            with a couple of data types
+        """
+        import math
+        sig = [float32(float32),
+                   float64(float64)]
+        @vectorize(sig, target='hsa')
+        def dgpu_fn(arg):
+            return math.cos(arg)
+
+        def test(ty):
+                print("Test %s" % ty)
+                data = np.array(np.random.random(100), dtype=ty)
+                out = np.empty_like(data)
+                ctx = get_context()
+                device_data = hsaapi.to_device(data, ctx)
+                res_data = hsaapi.to_device(out, ctx)
+                dgpu_fn(device_data, out = res_data)
+                result = res_data.copy_to_host()
+                gold = np.cos(data)
+                assert np.allclose(gold, result), (gold, result)
+
+        test(np.float64)
+        test(np.float32)
+
+
+    @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
+    def test_to_device_to_host(self):
+        """
+            Tests .to_device() and .copy_to_host()
+        """
+        n  = 10
+        data = np.zeros(n)
+        output = np.zeros(n)
+        @vectorize("float64(float64)", target='hsa')
+        def func(x):
+            return x + 1
+
+        ctx = get_context()
+        hsaapi.to_device(data, ctx)
+        out_device = hsaapi.to_device(output, ctx)
+        func(data, out=out_device)
+        host_output = out_device.copy_to_host()
+        np.testing.assert_equal(np.ones(n), host_output)
 
 if __name__ == '__main__':
     unittest.main()
