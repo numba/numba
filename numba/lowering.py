@@ -307,14 +307,7 @@ class Lower(BaseLower):
             return impl(self.builder, (target, index))
 
         elif isinstance(inst, ir.Del):
-            try:
-                # XXX: incorrect Del injection?
-                val = self.loadvar(inst.value)
-            except KeyError:
-                pass
-            else:
-                self.decref(self.typeof(inst.value), val)
-                self._delete_variable(inst.value)
+            self.delvar(inst.value)
 
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
@@ -781,23 +774,38 @@ class Lower(BaseLower):
 
         raise NotImplementedError(expr)
 
-    def getvar(self, name):
-        return self.varmap[name]
-
-    def loadvar(self, name):
-        ptr = self.getvar(name)
-        return self.builder.load(ptr)
-
-    def storevar(self, value, name):
-        fetype = self.typeof(name)
-
-        # Define if not already
+    def _alloca_var(self, name, fetype):
+        """
+        Ensure the given variable has an allocated stack slot.
+        """
         if name not in self.varmap:
             # If not already defined, allocate it
             llty = self.context.get_value_type(fetype)
             ptr = self.alloca_lltype(name, llty)
             # Remember the pointer
             self.varmap[name] = ptr
+
+    def getvar(self, name):
+        """
+        Get a pointer to the given variable's slot.
+        """
+        return self.varmap[name]
+
+    def loadvar(self, name):
+        """
+        Load the given variable's value.
+        """
+        ptr = self.getvar(name)
+        return self.builder.load(ptr)
+
+    def storevar(self, value, name):
+        """
+        Store the value into the given variable.
+        """
+        fetype = self.typeof(name)
+
+        # Define if not already
+        self._alloca_var(name, fetype)
 
         # Clean up existing value stored in the variable
         old = self.loadvar(name)
@@ -812,6 +820,21 @@ class Lower(BaseLower):
             raise AssertionError(msg)
 
         self.builder.store(value, ptr)
+
+    def delvar(self, name):
+        """
+        Delete the given variable.
+        """
+        fetype = self.typeof(name)
+
+        # Define if not already (may happen if the variable is deleted
+        # at the beginning of a loop, but only set later in the loop)
+        self._alloca_var(name, fetype)
+
+        ptr = self.getvar(name)
+        self.decref(fetype, self.builder.load(ptr))
+        # Zero-fill variable to avoid double frees on subsequent dels
+        self.builder.store(Constant.null(ptr.type.pointee), ptr)
 
     def alloca(self, name, type):
         lltype = self.context.get_value_type(type)
@@ -831,10 +854,3 @@ class Lower(BaseLower):
             return
 
         self.context.nrt_decref(self.builder, typ, val)
-
-    def _delete_variable(self, varname):
-        """
-        Zero-fill variable to avoid crashing due to extra ir.Del
-        """
-        storage = self.getvar(varname)
-        self.builder.store(Constant.null(storage.type.pointee), storage)

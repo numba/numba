@@ -12,3 +12,4 @@ Developer Manual
    generators.rst
    numba-runtime.rst
    rewrites.rst
+   live_variable_analysis.rst

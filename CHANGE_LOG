@@ -1,4 +1,61 @@
 
+Version 0.24.0
+--------------
+
+This release introduces several major changes, including the ``@generated_jit``
+decorator for flexible specializations as with Julia's "``@generated``" macro,
+or the SmartArray array wrapper type that allows seamless transfer of array
+data between the CPU and the GPU.
+
+This will be the last version to support Python 2.6, Python 3.3 and Numpy 1.6.
+
+Improvements:
+
+* PR #1723: Improve compatibility of JIT functions with the Python profiler.
+* PR #1509: Support array.ravel() and array.flatten().
+* PR #1676: Add SmartArray type to support transparent data management in
+  multiple address spaces (host & GPU).
+* PR #1689: Reduce startup overhead of importing Numba.
+* PR #1705: Support registration of CFFI types as corresponding to known
+  Numba types.
+* PR #1686: Document the extension API.
+* PR #1698: Improve warnings raised during type inference.
+* PR #1697: Support np.dot() and friends on non-contiguous arrays.
+* PR #1692: cffi.from_buffer() improvements (allow more pointer types,
+  allow non-Numpy buffer objects).
+* PR #1648: Add the ``@generated_jit`` decorator.
+* PR #1651: Implementation of np.linalg.inv using LAPACK.  Thanks to
+  Matthieu Dartiailh.
+* PR #1674: Support np.diag().
+* PR #1673: Improve error message when looking up an attribute on an
+  unknown global.
+* Issue #1569: Implement runtime check for the LLVM locale bug.
+* PR #1612: Switch to LLVM 3.7 in sync with llvmlite.
+* PR #1624: Allow slice assignment of sequence to array.
+* PR #1622: Support slicing tuples with a constant slice.
+
+Fixes:
+
+* Issue #1722: Fix returning an optional boolean (bool or None).
+* Issue #1734: NRT decref bug when variable is del'ed before being defined,
+  leading to a possible memory leak.
+* PR #1732: Fix tuple getitem regression for CUDA target.
+* PR #1718: Mishandling of optional to optional casting.
+* PR #1714: Fix .compile() on a JIT function not respecting ._can_compile.
+* Issue #1667: Fix np.angle() on arrays.
+* Issue #1690: Fix slicing with an omitted stop and a negative step value.
+* PR #1693: Fix gufunc bug in handling scalar formal arg with non-scalar
+  input value.
+* PR #1683: Fix parallel testing under Windows.
+* Issue #1616: Use system-provided versions of C99 math where possible.
+* Issue #1652: Reductions of bool arrays (e.g. sum() or mean()) should
+  return integers or floats, not bools.
+* Issue #1664: Fix regression when indexing a record array with a constant
+  index.
+* PR #1661: Disable AVX on old Linux kernels.
+* Issue #1636: Allow raising an exception looked up on a module.
+
+
 Version 0.23.1
 --------------
 
