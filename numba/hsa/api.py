@@ -80,9 +80,9 @@ def device_array(shape, dtype=np.float, strides=None, order='C'):
                                                          order)
     return devicearray.DeviceNDArray(shape=shape, strides=strides, dtype=dtype)
 
+from numba.hsa.hsadrv.devices import get_context
 
-#TODO: remove context from this signature
-def to_device(obj, context, copy=True, to=None):
+def to_device(obj, context=get_context(), copy=True, to=None):
     """to_device(obj, context, copy=True, to=None)
 
     Allocate and transfer a numpy ndarray or structured scalar to the device.

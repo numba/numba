@@ -8,8 +8,6 @@ import numba.unittest_support as unittest
 from numba.hsa.hsadrv.driver import hsa, Queue, Program, Executable,\
                                     BrigModule, Context, dgpu_present
 
-
-from numba.hsa.hsadrv.devices import get_context
 import numba.hsa.api as hsaapi
 from numba import float32, float64, vectorize
 
@@ -423,8 +421,6 @@ class TestContext(_TestBase):
 
 class TestDeviceLoop(_TestBase):
 
-
-
     @unittest.skipIf(not dgpu_present(), "no discrete GPU present")
     def test_vectorize_device_loop(self):
         """
@@ -442,9 +438,8 @@ class TestDeviceLoop(_TestBase):
                 print("Test %s" % ty)
                 data = np.array(np.random.random(100), dtype=ty)
                 out = np.empty_like(data)
-                ctx = get_context()
-                device_data = hsaapi.to_device(data, ctx)
-                res_data = hsaapi.to_device(out, ctx)
+                device_data = hsaapi.to_device(data)
+                res_data = hsaapi.to_device(out)
                 dgpu_fn(device_data, out = res_data)
                 result = res_data.copy_to_host()
                 gold = np.cos(data)
@@ -466,9 +461,8 @@ class TestDeviceLoop(_TestBase):
         def func(x):
             return x + 1
 
-        ctx = get_context()
-        hsaapi.to_device(data, ctx)
-        out_device = hsaapi.to_device(output, ctx)
+        hsaapi.to_device(data)
+        out_device = hsaapi.to_device(output)
         func(data, out=out_device)
         host_output = out_device.copy_to_host()
         np.testing.assert_equal(np.ones(n), host_output)

@@ -7,7 +7,6 @@ from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
 from numba.hsa.hsadrv.driver import dgpu_present
 import numba.hsa.hsadrv.devicearray as devicearray
 import numba.hsa.api as api
-from numba.hsa.hsadrv.devices import get_context
 
 class HsaUFuncDispatcher(object):
     """
@@ -53,7 +52,7 @@ class HsaUFuncMechanism(UFuncMechanism):
 
     def to_device(self, hostary, stream):
         if dgpu_present():
-            return api.to_device(hostary, get_context())
+            return api.to_device(hostary)
         else:
             return hostary
 
@@ -101,7 +100,7 @@ class _HsaGUFuncCallSteps(GUFuncCallSteps):
 
     def to_device(self, hostary):
         if dgpu_present():
-            return api.to_device(hostary, get_context())
+            return api.to_device(hostary)
         else:
             return hostary
 
