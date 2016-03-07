@@ -2078,6 +2078,17 @@ def iternext_numpy_getitem(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+@lower_builtin(len, types.NumpyFlatType)
+def iternext_numpy_getitem(context, builder, sig, args):
+    flatiterty = sig.args[0]
+    flatitercls = make_array_flat_cls(flatiterty)
+    flatiter = flatitercls(context, builder, value=args[0])
+
+    arrcls = context.make_array(flatiterty.array_type)
+    arr = arrcls(context, builder, value=builder.load(flatiter.array))
+    return arr.nitems
+
+
 @lower_builtin(numpy.ndenumerate, types.Array)
 def make_array_ndenumerate(context, builder, sig, args):
     arrty, = sig.args
@@ -2224,22 +2235,19 @@ def _zero_fill_array(context, builder, ary):
     cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems), 0)
 
 
-def _parse_empty_args(context, builder, sig, args):
+def _parse_shape(context, builder, ty, val):
     """
-    Parse the arguments of a np.empty(), np.zeros() or np.ones() call.
+    Parse the shape argument to an array constructor.
     """
-    arrshapetype = sig.args[0]
-    arrshape = args[0]
-    arrtype = sig.return_type
-
-    if isinstance(arrshapetype, types.Integer):
+    if isinstance(ty, types.Integer):
         ndim = 1
-        shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
+        shapes = [context.cast(builder, val, ty, types.intp)]
     else:
-        ndim = arrshapetype.count
-        arrshape = context.cast(builder, arrshape, arrshapetype,
+        assert isinstance(ty, types.BaseTuple)
+        ndim = ty.count
+        arrshape = context.cast(builder, val, ty,
                                 types.UniTuple(types.intp, ndim))
-        shapes = cgutils.unpack_tuple(builder, arrshape, count=ndim)
+        shapes = cgutils.unpack_tuple(builder, val, count=ndim)
 
     zero = context.get_constant_generic(builder, types.intp, 0)
     for dim in range(ndim):
@@ -2247,7 +2255,18 @@ def _parse_empty_args(context, builder, sig, args):
         with cgutils.if_unlikely(builder, is_neg):
             context.call_conv.return_user_exc(builder, ValueError,
                                               ("negative dimensions not allowed",))
-    return arrtype, shapes
+
+    return shapes
+
+
+def _parse_empty_args(context, builder, sig, args):
+    """
+    Parse the arguments of a np.empty(), np.zeros() or np.ones() call.
+    """
+    arrshapetype = sig.args[0]
+    arrshape = args[0]
+    arrtype = sig.return_type
+    return arrtype, _parse_shape(context, builder, arrshapetype, arrshape)
 
 
 def _parse_empty_like_args(context, builder, sig, args):
