@@ -820,40 +820,6 @@ class LinalgInv(CallableTemplate):
         return typer
 
 
-if numpy_version >= (1, 8):
-
-    @infer_global(numpy.linalg.svd)
-    class LinalgSVD(CallableTemplate):
-        def generic(self):
-            def typer(a, full_matrices=None):
-                if (full_matrices is not None and
-                    not isinstance(full_matrices, (types.Integer, types.Boolean))):
-                    return
-
-                _check_linalg_matrix(a, "svd")
-                # svd() returns a (u, s, v) tuple where u and v are unitary
-                # matrices and s is a vector of real singular values
-                unit_mat_ty = a.copy(layout='C')
-                if isinstance(a.dtype, types.Complex):
-                    sv_dtype = a.dtype.underlying_float
-                else:
-                    sv_dtype = a.dtype
-                sing_val_ty = types.Array(sv_dtype, 1, 'C')
-                return types.Tuple((unit_mat_ty, sing_val_ty, unit_mat_ty))
-
-            return typer
-
-    @infer_global(numpy.linalg.eig)
-    class LinalgEig(CallableTemplate):
-        def generic(self):
-            def typer(a):
-                _check_linalg_matrix(a, "eig")
-                return types.Tuple((a.copy(ndim=1, layout='C'),
-                                    a.copy(layout='C')))
-
-            return typer
-
-
 @infer_global(numpy.linalg.qr)
 class LinalgQR(CallableTemplate):
     def generic(self):

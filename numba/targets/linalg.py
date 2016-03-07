@@ -9,14 +9,17 @@ import contextlib
 from llvmlite import ir
 import numpy
 
+
 from numba import jit, types, cgutils
+
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
 from numba.extending import overload
 from numba.numpy_support import version as numpy_version
+from numba import types
 from .arrayobj import make_array, _empty_nd_impl, array_copy
-
+from ..errors import TypingError
 
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()
@@ -563,8 +566,8 @@ def mat_inv(context, builder, sig, args):
     def create_out(a):
         m, n = a.shape
         if m != n:
-            raise ValueError("np.linalg.inv can only work on square "
-                             "arrays.")
+            raise numpy.linalg.LinAlgError("Last 2 dimensions of "
+                                "the array must be square.")
         return a.copy()
 
     out = context.compile_internal(builder, create_out,
@@ -675,17 +678,25 @@ def inv(context, builder, sig, args):
         return mat_inv(context, builder, sig, args)
     else:
         assert 0
-
-
+        
 if numpy_version >= (1, 8):
+
+    def _check_linalg_matrix(a, func_name):
+        if not isinstance(a, types.Array):
+            raise TypingError("np.linalg.%s() only supported for array types"
+                            % func_name)
+        if not a.ndim == 2:
+            raise TypingError("np.linalg.%s() only supported on 2-D arrays."
+                            % func_name)
+        if not isinstance(a.dtype, (types.Float, types.Complex)):
+            raise TypingError("np.linalg.%s() only supported on "
+                            "float and complex arrays." % func_name)
 
     @overload(numpy.linalg.cholesky)
     def cho_impl(a):
         ensure_lapack()
 
-        if not isinstance(a, types.Array) or a.ndim != 2:
-            raise TypeError("cholesky() argument should be a 2-dimension array, "
-                            "got %s" % (a,))
+        _check_linalg_matrix(a, "cholesky")
 
         xxpotrf_sig = types.intc(types.int8, types.int8, types.intp,
                                  types.CPointer(a.dtype), types.intp,
@@ -699,7 +710,8 @@ if numpy_version >= (1, 8):
         def cho_impl(a):
             n = a.shape[-1]
             if a.shape[-2] != n:
-                raise numpy.linalg.LinAlgError("Last 2 dimensions of the array must be square")
+                msg = "Last 2 dimensions of the array must be square."
+                raise numpy.linalg.LinAlgError(msg)
 
             # The output is allocated in C order
             out = a.copy()
@@ -715,13 +727,253 @@ if numpy_version >= (1, 8):
                 # XXX Py_FatalError()?
                 raise RuntimeError("unable to execute xxpotrf()")
             if info[0] > 0:
-                raise numpy.linalg.LinAlgError("Matrix is not positive definite")
+                raise numpy.linalg.LinAlgError(\
+                    "Matrix is not positive definite.")
             elif info[0] < 0:
                 # Invalid parameter
-                raise RuntimeError("cholesky(): Internal error: please report an issue")
+                raise RuntimeError(\
+                    "cholesky(): Internal error: please report an issue")
             # Zero out upper triangle, in F order
             for col in range(n):
                 out[:col, col] = 0
             return out
 
         return cho_impl
+
+    @overload(numpy.linalg.eig)
+    def eig_impl(a):
+        ensure_lapack()
+
+        _check_linalg_matrix(a, "eig")
+
+        numba_ez_rgeev_sig = types.intc(     types.char,    #kind
+                                             types.char,    #jobvl
+                                             types.char,    #jobvr
+                                             types.intp,    #n
+                                             types.CPointer(a.dtype), #a
+                                             types.intp,    #lda
+                                             types.CPointer(a.dtype), #wr
+                                             types.CPointer(a.dtype), #wi
+                                             types.CPointer(a.dtype), #vl
+                                             types.intp,    #ldvl
+                                             types.CPointer(a.dtype), #vr
+                                             types.intp     #ldvr
+                                        )
+
+        numba_ez_rgeev = types.ExternalFunction("numba_ez_rgeev",
+                                                numba_ez_rgeev_sig)
+
+        numba_ez_cgeev_sig = types.intc(     types.char,    #kind
+                                             types.char,    #jobvl
+                                             types.char,    #jobvr
+                                             types.intp,    #n
+                                             types.CPointer(a.dtype), #a
+                                             types.intp,    #lda
+                                             types.CPointer(a.dtype), #w
+                                             types.CPointer(a.dtype), #vl
+                                             types.intp,    #ldvl
+                                             types.CPointer(a.dtype), #vr
+                                             types.intp  #ldvr
+                                        )
+
+        numba_ez_cgeev = types.ExternalFunction("numba_ez_cgeev",
+                                                numba_ez_cgeev_sig)
+
+        kind = ord(get_blas_kind(a.dtype, "eig"))
+
+        JOBVL = ord('N')
+        JOBVR = ord('V')
+        
+        F_layout = a.layout == 'F'
+                        
+        def real_eig_impl(a):
+            n = a.shape[-1]
+            if a.shape[-2] != n:
+                msg = "Last 2 dimensions of the array must be square."
+                raise numpy.linalg.LinAlgError(msg)
+
+            if not numpy.isfinite(a).all():
+                raise numpy.linalg.LinAlgError(
+                    "Array must not contain infs or NaNs.")
+           
+            if F_layout:
+                acpy = numpy.copy(a)
+            else:
+                acpy = numpy.asfortranarray(a)
+          
+            ldvl = 1
+            ldvr = n
+            wr = numpy.zeros(n, dtype=a.dtype)
+            wi = numpy.zeros(n, dtype=a.dtype)
+            vl = numpy.zeros((ldvl,n), dtype=a.dtype)
+            vr = numpy.zeros((ldvr,n), dtype=a.dtype)
+
+            r = numba_ez_rgeev(kind,
+                            JOBVL,
+                            JOBVR,
+                            n,
+                            acpy.ctypes,
+                            n,
+                            wr.ctypes,
+                            wi.ctypes,
+                            vl.ctypes,
+                            ldvl,
+                            vr.ctypes,
+                            ldvr)
+
+            if numpy.any(wi):
+                raise ValueError(
+                    "eig() argument must not cause a domain change.")
+            
+            # put these in to help with liveness analysis,
+            # `.ctypes` doesn't keep the vars alive
+            acpy.size
+            vl.size
+            vr.size
+            wr.size
+            wi.size
+            return (wr, vr.T)
+
+
+        def cmplx_eig_impl(a):
+            n = a.shape[-1]
+            if a.shape[-2] != n:
+                msg = "Last 2 dimensions of the array must be square."
+                raise numpy.linalg.LinAlgError(msg)
+
+            if not numpy.isfinite(a).all():
+                raise numpy.linalg.LinAlgError(
+                    "Array must not contain infs or NaNs.")
+
+            if F_layout:
+                acpy = numpy.copy(a)
+            else:
+                acpy = numpy.asfortranarray(a)
+                            
+            ldvl = 1
+            ldvr = n
+            w = numpy.zeros(n, dtype=a.dtype)
+            vl = numpy.zeros((ldvl,n), dtype=a.dtype)
+            vr = numpy.zeros((ldvr,n), dtype=a.dtype)
+
+            r = numba_ez_cgeev(kind,
+                            JOBVL,
+                            JOBVR,
+                            n,
+                            acpy.ctypes,
+                            n,
+                            w.ctypes,
+                            vl.ctypes,
+                            ldvl,
+                            vr.ctypes,
+                            ldvr)
+
+            # put these in to help with liveness analysis,
+            # `.ctypes` doesn't keep the vars alive
+            acpy.size
+            vl.size
+            vr.size
+            w.size
+            return (w, vr.T)
+
+        
+        if isinstance(a.dtype, types.scalars.Complex):
+            return cmplx_eig_impl
+        else:
+            return real_eig_impl
+
+    @overload(numpy.linalg.svd)
+    def svd_impl(a, full_matrices=1):
+        ensure_lapack()
+        
+        _check_linalg_matrix(a, "svd")
+        
+        F_layout = a.layout == 'F'
+
+        # convert typing floats to numpy floats for use in the impl
+        s_type = getattr(a.dtype, "underlying_float", a.dtype)
+        if s_type.bitwidth == 32:
+            s_dtype = numpy.float32
+        else:
+            s_dtype = numpy.float64
+        
+        numba_ez_gesdd_sig = types.intc(
+                                        types.char,              #kind
+                                        types.char,              #jobz
+                                        types.intp,              #m
+                                        types.intp,              #n
+                                        types.CPointer(a.dtype), #a
+                                        types.intp,              #lda
+                                        types.CPointer(s_type),  #s
+                                        types.CPointer(a.dtype), #u
+                                        types.intp,              #ldu
+                                        types.CPointer(a.dtype), #vt
+                                        types.intp               #ldvt
+                                       )
+        
+        numba_ez_gesdd = types.ExternalFunction("numba_ez_gesdd",
+                                                numba_ez_gesdd_sig)
+        
+        kind = ord(get_blas_kind(a.dtype, "svd"))
+   
+        JOBZ_A = ord('A')
+        JOBZ_S = ord('S')
+
+        def svd_impl(a, full_matrices=1):
+            n = a.shape[-1]
+            m = a.shape[-2]
+
+            if not numpy.isfinite(a).all():
+                raise numpy.linalg.LinAlgError(
+                    "Array must not contain infs or NaNs.")
+
+            if F_layout:
+                acpy = numpy.copy(a)
+            else:
+                acpy = numpy.asfortranarray(a)
+
+            ldu = m                
+            minmn = min(m, n)
+
+            if full_matrices:
+                JOBZ = JOBZ_A
+                ucol = m
+                ldvt = n
+            else:
+                JOBZ = JOBZ_S
+                ucol = minmn
+                ldvt = minmn
+           
+            u = numpy.zeros((ucol, ldu), dtype=a.dtype)
+            s = numpy.zeros(minmn, dtype=s_dtype)
+            vt = numpy.zeros((n, ldvt), dtype=a.dtype)
+
+            r = numba_ez_gesdd (
+                                    kind,         #kind
+                                    JOBZ,         #jobz
+                                    m,            #m
+                                    n,            #n
+                                    acpy.ctypes,  #a
+                                    m,            #lda
+                                    s.ctypes,     #s
+                                    u.ctypes,     #u
+                                    ldu,          #ldu
+                                    vt.ctypes,    #vt
+                                    ldvt          # ldvt
+                                )
+
+            # help liveness analysis
+            acpy.size
+            vt.size
+            u.size
+            s.size
+            
+            # TODO: this logic, no point in churning out a copy if no need
+            #if not issymmetrical(u):
+                #u = u.T
+            #if not issymmetrical(v):
+                #vt = vt.T
+            
+            return (u.T, s, vt.T)
+
+        return svd_impl

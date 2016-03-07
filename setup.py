@@ -81,6 +81,15 @@ ext_helperlib = Extension(name="numba._helperlib",
                                    "numba/_helperlib.c",
                                    "numba/mathnames.inc"])
 
+ext_lapack = Extension(name="numba._lapack",
+                          include_dirs=[numpy.get_include()],
+                          sources=["numba/_lapack.c"],
+                          extra_compile_args=CFLAGS,
+                          extra_link_args=install_name_tool_fixer,
+                          depends=["numba/_pymodule.h",
+                                   "numba/_math_c99.h",
+                                   "numba/_lapack.c"])
+
 ext_typeconv = Extension(name="numba.typeconv._typeconv",
                          sources=["numba/typeconv/typeconv.cpp",
                                   "numba/typeconv/_typeconv.cpp"],
