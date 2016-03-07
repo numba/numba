@@ -534,18 +534,18 @@ def setitem_list(context, builder, sig, args):
     return context.get_dummy_value()
 
 
-@lower_builtin("in", types.Any, types.List)
-def in_list(context, builder, sig, args):
-    def list_contains_impl(value, lst):
+# XXX should there be a specific module for Sequence or collection base classes?
+
+@lower_builtin("in", types.Any, types.Sequence)
+def in_seq(context, builder, sig, args):
+    def seq_contains_impl(value, lst):
         for elem in lst:
             if elem == value:
                 return True
         return False
 
-    return context.compile_internal(builder, list_contains_impl, sig, args)
+    return context.compile_internal(builder, seq_contains_impl, sig, args)
 
-
-# XXX should there be a specific module for Sequence or collection base classes?
 @lower_builtin(bool, types.Sequence)
 def sequence_bool(context, builder, sig, args):
     def sequence_bool_impl(seq):
