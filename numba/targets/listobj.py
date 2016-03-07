@@ -15,34 +15,16 @@ from numba.utils import cached_property
 from . import quicksort, slicing
 
 
-def make_list_cls(list_type):
-    """
-    Return the Structure representation of the given *list_type*
-    (an instance of types.List).
-    """
-    return cgutils.create_struct_proxy(list_type)
-
-
-def make_payload_cls(list_type):
-    """
-    Return the Structure representation of the given *list_type*'s payload
-    (an instance of types.List).
-    """
-    # Note the payload is stored durably in memory, so we consider it
-    # data and not value.
-    return cgutils.create_struct_proxy(types.ListPayload(list_type),
-                                       kind='data')
-
-
 def get_list_payload(context, builder, list_type, value):
     """
     Given a list value and type, get its payload structure (as a
     reference, so that mutations are seen by all).
     """
-    payload_type = context.get_data_type(types.ListPayload(list_type))
+    payload_type = types.ListPayload(list_type)
     payload = context.nrt_meminfo_data(builder, value.meminfo)
-    payload = builder.bitcast(payload, payload_type.as_pointer())
-    return make_payload_cls(list_type)(context, builder, ref=payload)
+    ptrty = context.get_data_type(payload_type).as_pointer()
+    payload = builder.bitcast(payload, ptrty)
+    return context.make_data_helper(builder, payload_type, ref=payload)
 
 
 def get_itemsize(context, list_type):
@@ -143,7 +125,7 @@ class ListInstance(_ListPayloadMixin):
         self._context = context
         self._builder = builder
         self._ty = list_type
-        self._list = make_list_cls(list_type)(context, builder, list_val)
+        self._list = context.make_helper(builder, list_type, list_val)
         self._itemsize = get_itemsize(context, list_type)
         self._datamodel = context.data_model_manager[list_type.dtype]
 
@@ -204,6 +186,8 @@ class ListInstance(_ListPayloadMixin):
         payload_size = context.get_abi_sizeof(payload_type)
 
         itemsize = get_itemsize(context, list_type)
+        # Account for the fact that the payload struct contains one entry
+        payload_size -= itemsize
 
         ok = cgutils.alloca_once_value(builder, cgutils.true_bit)
         self = cls(context, builder, list_type, None)
@@ -216,7 +200,7 @@ class ListInstance(_ListPayloadMixin):
             builder.store(cgutils.false_bit, ok)
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt_meminfo_varsize_alloc(builder, size=allocsize)
+            meminfo = context.nrt_meminfo_new_varsize(builder, size=allocsize)
             with builder.if_else(cgutils.is_null(builder, meminfo),
                                  likely=False) as (if_error, if_ok):
                 with if_error:
@@ -265,6 +249,8 @@ class ListInstance(_ListPayloadMixin):
         def _payload_realloc(new_allocated):
             payload_type = context.get_data_type(types.ListPayload(self._ty))
             payload_size = context.get_abi_sizeof(payload_type)
+            # Account for the fact that the payload struct contains one entry
+            payload_size -= itemsize
 
             allocsize, ovf = cgutils.muladd_with_overflow(
                 builder, new_allocated,
@@ -318,8 +304,8 @@ class ListInstance(_ListPayloadMixin):
         """
         dest_ptr = self._gep(dest_idx)
         src_ptr = self._gep(src_idx)
-        cgutils.memmove(self._builder, dest_ptr, src_ptr,
-                        count, itemsize=self._itemsize)
+        cgutils.raw_memmove(self._builder, dest_ptr, src_ptr,
+                            count, itemsize=self._itemsize)
         self.set_dirty(True)
 
 
@@ -329,12 +315,12 @@ class ListIterInstance(_ListPayloadMixin):
         self._context = context
         self._builder = builder
         self._ty = iter_type
-        self._iter = make_listiter_cls(iter_type)(context, builder, iter_val)
+        self._iter = context.make_helper(builder, iter_type, iter_val)
         self._datamodel = context.data_model_manager[iter_type.yield_type]
 
     @classmethod
     def from_list(cls, context, builder, iter_type, list_val):
-        list_inst = ListInstance(context, builder, iter_type.list_type, list_val)
+        list_inst = ListInstance(context, builder, iter_type.container, list_val)
         self = cls(context, builder, iter_type, None)
         index = context.get_constant(types.intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)
@@ -345,7 +331,7 @@ class ListIterInstance(_ListPayloadMixin):
     def _payload(self):
         # This cannot be cached as it can be reallocated
         return get_list_payload(self._context, self._builder,
-                                self._ty.list_type, self._iter)
+                                self._ty.container, self._iter)
 
     @property
     def value(self):
@@ -396,14 +382,6 @@ def list_len(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     return inst.size
 
-
-def make_listiter_cls(iterator_type):
-    """
-    Return the Structure representation of the given *iterator_type* (an
-    instance of types.ListIter).
-    """
-    return cgutils.create_struct_proxy(iterator_type)
-
 @lower_builtin('getiter', types.List)
 def getiter_list(context, builder, sig, args):
     inst = ListIterInstance.from_list(context, builder, sig.return_type, args[0])
@@ -448,7 +426,7 @@ def setitem_list(context, builder, sig, args):
 @lower_builtin('getitem', types.List, types.SliceType)
 def getslice_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
-    slice = slicing.make_slice(context, builder, sig.args[1], args[1])
+    slice = context.make_helper(builder, sig.args[1], args[1])
     slicing.guard_invalid_slice(context, builder, sig.args[1], slice)
     inst.fix_slice(slice)
 
@@ -473,7 +451,7 @@ def setitem_list(context, builder, sig, args):
     dest = ListInstance(context, builder, sig.args[0], args[0])
     src = ListInstance(context, builder, sig.args[2], args[2])
 
-    slice = slicing.make_slice(context, builder, sig.args[1], args[1])
+    slice = context.make_helper(builder, sig.args[1], args[1])
     slicing.guard_invalid_slice(context, builder, sig.args[1], slice)
     dest.fix_slice(slice)
 
@@ -531,7 +509,7 @@ def setitem_list(context, builder, sig, args):
 @lower_builtin('delitem', types.List, types.SliceType)
 def setitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
-    slice = slicing.make_slice(context, builder, sig.args[1], args[1])
+    slice = context.make_helper(builder, sig.args[1], args[1])
 
     slicing.guard_invalid_slice(context, builder, sig.args[1], slice)
     inst.fix_slice(slice)

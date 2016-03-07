@@ -201,7 +201,13 @@ class Dummy(Type):
     """
 
 
-class Number(Type):
+class Hashable(Type):
+    """
+    Base class for hashable types.
+    """
+
+
+class Number(Hashable):
     """
     Base class for number types.
     """
@@ -286,7 +292,13 @@ class IteratorType(IterableType):
         return self
 
 
-class Sequence(IterableType):
+class Container(IterableType):
+    """
+    Base class for container types.
+    """
+
+
+class Sequence(Container):
     """
     Base class for 1d sequence types.  Instances should have the *dtype*
     attribute.

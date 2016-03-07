@@ -112,6 +112,16 @@ contains a :class:`int` and a :class:`float`).
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
 
+set
+---
+
+All methods and operations on sets are supported in JIT-compiled functions.
+However, passing and returning sets from/to Python code is not supported
+(yet).
+
+Sets must be strictly homogenous: Numba will reject any set containing
+objects of different types, even if the types are compatible (for example,
+``{1, 2.5}`` is rejected as it contains a :class:`int` and a :class:`float`).
 
 None
 ----

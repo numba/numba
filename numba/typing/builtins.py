@@ -669,6 +669,16 @@ class Round(ConcreteTemplate):
     ]
 
 
+@infer_global(hash)
+class Hash(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        arg, = args
+        if isinstance(arg, types.Hashable):
+            return signature(types.intp, *args)
+
+
 #------------------------------------------------------------------------------
 
 

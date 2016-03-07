@@ -4,6 +4,8 @@ Utilities to simplify the boilerplate for native lowering.
 
 from __future__ import print_function, absolute_import, division
 
+import collections
+import contextlib
 import inspect
 import functools
 
@@ -285,8 +287,7 @@ def iternext_impl(func):
 
     def wrapper(context, builder, sig, args):
         pair_type = sig.return_type
-        cls = context.make_pair(pair_type.first_type, pair_type.second_type)
-        pairobj = cls(context, builder)
+        pairobj = context.make_helper(builder, pair_type)
         func(context, builder, sig, args,
              _IternextResult(context, builder, pairobj))
         return impl_ret_borrowed(context, builder,
@@ -312,11 +313,59 @@ def call_iternext(context, builder, iterator_type, val):
     """
     itemty = iterator_type.yield_type
     pair_type = types.Pair(itemty, types.boolean)
-    paircls = context.make_pair(pair_type.first_type, pair_type.second_type)
     iternext_sig = typing.signature(pair_type, iterator_type)
     iternext_impl = context.get_function('iternext', iternext_sig)
     val = iternext_impl(builder, (val,))
-    return _IternextResult(context, builder, paircls(context, builder, val))
+    pairobj = context.make_helper(builder, pair_type, val)
+    return _IternextResult(context, builder, pairobj)
+
+
+def call_len(context, builder, ty, val):
+    """
+    Call len() on the given value.  Return None if len() isn't defined on
+    this type.
+    """
+    try:
+        len_impl = context.get_function(len, typing.signature(types.intp, ty,))
+    except NotImplementedError:
+        return None
+    else:
+        return len_impl(builder, (val,))
+
+
+_ForIterLoop = collections.namedtuple('_ForIterLoop',
+                                      ('value', 'do_break'))
+
+
+@contextlib.contextmanager
+def for_iter(context, builder, iterable_type, val):
+    """
+    Simulate a for loop on the given iterable.  Yields a namedtuple with
+    the given members:
+    - `value` is the value being yielded
+    - `do_break` is a callable to early out of the loop
+    """
+    iterator_type = iterable_type.iterator_type
+    iterval = call_getiter(context, builder, iterable_type, val)
+
+    bb_body = builder.append_basic_block('for_iter.body')
+    bb_end = builder.append_basic_block('for_iter.end')
+
+    def do_break():
+        builder.branch(bb_end)
+
+    builder.branch(bb_body)
+
+    with builder.goto_block(bb_body):
+        res = call_iternext(context, builder, iterator_type, iterval)
+        with builder.if_then(builder.not_(res.is_valid()), likely=False):
+            builder.branch(bb_end)
+        yield _ForIterLoop(res.yielded_value(), do_break)
+        builder.branch(bb_body)
+
+    builder.position_at_end(bb_end)
+    if context.enable_nrt:
+        context.nrt_decref(builder, iterator_type, iterval)
 
 
 def impl_ret_new_ref(ctx, builder, retty, ret):

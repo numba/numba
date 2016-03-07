@@ -227,19 +227,12 @@ def update_array_info(aryty, array):
                                           get_itemsize(context, aryty))
 
 
-def make_arrayiter_cls(iterator_type):
-    """
-    Return the Structure representation of the given *iterator_type* (an
-    instance of types.ArrayIteratorType).
-    """
-    return cgutils.create_struct_proxy(iterator_type)
-
 @lower_builtin('getiter', types.Buffer)
 def getiter_array(context, builder, sig, args):
     [arrayty] = sig.args
     [array] = args
 
-    iterobj = make_arrayiter_cls(sig.return_type)(context, builder)
+    iterobj = context.make_helper(builder, sig.return_type)
 
     zero = context.get_constant(types.intp, 0)
     indexptr = cgutils.alloca_once_value(builder, zero)
@@ -277,7 +270,7 @@ def iternext_array(context, builder, sig, args, result):
         # TODO
         raise NotImplementedError("iterating over %dD array" % arrayty.ndim)
 
-    iterobj = make_arrayiter_cls(iterty)(context, builder, value=iter)
+    iterobj = context.make_helper(builder, iterty, value=iter)
     ary = make_array(arrayty)(context, builder, value=iterobj.array)
 
     nitems, = cgutils.unpack_tuple(builder, ary.shape, count=1)
@@ -325,7 +318,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
             continue
         # Regular index value
         if isinstance(idxty, types.SliceType):
-            slice = slicing.make_slice(context, builder, idxty, value=indexval)
+            slice = context.make_helper(builder, idxty, value=indexval)
             slicing.guard_invalid_slice(context, builder, idxty, slice)
             slicing.fix_slice(builder, slice, shapes[ax])
             output_indices.append(slice.start)
@@ -843,7 +836,7 @@ class FancyIndexer(object):
 
             # Regular index value
             if isinstance(idxty, types.SliceType):
-                slice = slicing.make_slice(context, builder, idxty, indexval)
+                slice = context.make_helper(builder, idxty, indexval)
                 indexer = SliceIndexer(context, builder, aryty, ary, ax,
                                        idxty, slice)
                 indexers.append(indexer)
@@ -1514,8 +1507,7 @@ def array_ctypes(context, builder, typ, value):
     # Cast void* data to uintp
     addr = builder.ptrtoint(array.data, context.get_value_type(types.uintp))
     # Create new ArrayCType structure
-    ctinfo_type = cgutils.create_struct_proxy(types.ArrayCTypes(typ))
-    ctinfo = ctinfo_type(context, builder)
+    ctinfo = context.make_helper(builder, types.ArrayCTypes(typ))
     ctinfo.data = addr
     res = ctinfo._getvalue()
     return impl_ret_untracked(context, builder, typ, res)
@@ -1529,8 +1521,7 @@ def array_flags(context, builder, typ, value):
 
 @lower_getattr(types.ArrayCTypes, "data")
 def array_ctypes_data(context, builder, typ, value):
-    ctinfo_type = cgutils.create_struct_proxy(typ)
-    ctinfo = ctinfo_type(context, builder, value=value)
+    ctinfo = context.make_helper(builder, typ, value=value)
     res = ctinfo.data
     return impl_ret_untracked(context, builder, typ, res)
 

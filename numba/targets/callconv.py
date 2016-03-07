@@ -60,8 +60,7 @@ class BaseCallConv(object):
 
         elif retty == valty:
             # Value is an optional, need a runtime switch
-            optcls = self.context.make_optional(retty)
-            optval = optcls(self.context, builder, value=value)
+            optval = self.context.make_helper(builder, retty, value=value)
 
             validbit = cgutils.as_bool_bit(builder, optval.valid)
             with builder.if_then(validbit):

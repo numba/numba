@@ -30,6 +30,9 @@ force_pyobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
 
+nrt_flags = Flags()
+nrt_flags.set("nrt")
+
 
 is_on_numpy_16 = numpy_support.version == (1, 6)
 skip_on_numpy_16 = unittest.skipIf(is_on_numpy_16,
@@ -382,7 +385,7 @@ def compile_function(name, code, globs):
     Given a *code* string, compile it with globals *globs* and return
     the function named *name*.
     """
-    co = compile(code, "<string>", "exec")
+    co = compile(code.rstrip(), "<string>", "single")
     ns = {}
     eval(co, globs, ns)
     return ns[name]

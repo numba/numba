@@ -182,7 +182,8 @@ class BuildTupleConstraint(object):
             typeinfer.add_type(self.target, tup)
 
 
-class BuildListConstraint(object):
+class _BuildContainerConstraint(object):
+
     def __init__(self, target, items, loc):
         self.target = target
         self.items = items
@@ -193,11 +194,21 @@ class BuildListConstraint(object):
         oset = typevars[self.target]
         tsets = [typevars[i.name].get() for i in self.items]
         if not tsets:
-            typeinfer.add_type(self.target, types.List(types.undefined))
+            typeinfer.add_type(self.target,
+                               self.container_type(types.undefined))
         else:
             for typs in itertools.product(*tsets):
                 unified = typeinfer.context.unify_types(*typs)
-                typeinfer.add_type(self.target, types.List(unified))
+                typeinfer.add_type(self.target,
+                                   self.container_type(unified))
+
+
+class BuildListConstraint(_BuildContainerConstraint):
+    container_type = types.List
+
+
+class BuildSetConstraint(_BuildContainerConstraint):
+    container_type = types.Set
 
 
 class ExhaustIterConstraint(object):
@@ -337,6 +348,7 @@ class CallConstraint(object):
             msg = '\n'.join([head, desc])
             raise TypingError(msg, loc=self.loc)
         typeinfer.add_type(self.target, sig.return_type)
+
         # If the function is a bound function and its receiver type
         # was refined, propagate it.
         if (isinstance(fnty, types.BoundFunction)
@@ -346,6 +358,19 @@ class CallConstraint(object):
             if refined_this.is_precise():
                 refined_fnty = fnty.copy(this=refined_this)
                 typeinfer.propagate_refined_type(self.func, refined_fnty)
+
+        # If the return type is imprecise but can be unified with the
+        # target variable's inferred type, use the latter.
+        # Useful for code such as::
+        #    s = set()
+        #    s.add(1)
+        # (the set() call must be typed as int64(), not undefined())
+        if not sig.return_type.is_precise():
+            target = typevars[self.target]
+            if target.defined:
+                targetty = target.getone()
+                if context.unify_pairs(targetty, sig.return_type) == targetty:
+                    sig.return_type = targetty
 
         self.signature = sig
 
@@ -862,6 +887,10 @@ class TypeInferer(object):
         elif expr.op == 'build_list':
             constraint = BuildListConstraint(target.name, items=expr.items,
                                              loc=inst.loc)
+            self.constraints.append(constraint)
+        elif expr.op == 'build_set':
+            constraint = BuildSetConstraint(target.name, items=expr.items,
+                                            loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'cast':
             self.constraints.append(Propagate(dst=target.name,

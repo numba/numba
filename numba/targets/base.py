@@ -587,16 +587,14 @@ class BaseContext(object):
         """
         Extract the first element of a heterogenous pair.
         """
-        paircls = self.make_pair(ty.first_type, ty.second_type)
-        pair = paircls(self, builder, value=val)
+        pair = self.make_helper(builder, ty, val)
         return pair.first
 
     def pair_second(self, builder, val, ty):
         """
         Extract the second element of a heterogenous pair.
         """
-        paircls = self.make_pair(ty.first_type, ty.second_type)
-        pair = paircls(self, builder, value=val)
+        pair = self.make_helper(builder, ty, val)
         return pair.second
 
     def cast(self, builder, val, fromty, toty):
@@ -629,18 +627,13 @@ class BaseContext(object):
         cmpfunc = self.get_function(key, cmpsig)
         return cmpfunc(builder, (cav, cbv))
 
-    def make_optional(self, optionaltype):
-        return optional.make_optional(optionaltype.type)
-
     def make_optional_none(self, builder, valtype):
-        optcls = optional.make_optional(valtype)
-        optval = optcls(self, builder)
+        optval = self.make_helper(builder, types.Optional(valtype))
         optval.valid = cgutils.false_bit
         return optval._getvalue()
 
     def make_optional_value(self, builder, valtype, value):
-        optcls = optional.make_optional(valtype)
-        optval = optcls(self, builder)
+        optval = self.make_helper(builder, types.Optional(valtype))
         optval.valid = cgutils.true_bit
         optval.data = value
         return optval._getvalue()
@@ -681,7 +674,7 @@ class BaseContext(object):
         return builder.call(funcptr, args, cconv=cconv)
 
     def print_string(self, builder, text):
-        mod = builder.basic_block.function.module
+        mod = builder.module
         cstring = GENERIC_POINTER
         fnty = Type.function(Type.int(), [cstring])
         puts = mod.get_or_insert_function(fnty, "puts")
@@ -691,6 +684,16 @@ class BaseContext(object):
         mod = builder.module
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
+
+    def printf(self, builder, format_string, *args):
+        mod = builder.module
+        if isinstance(format_string, str):
+            cstr = self.insert_const_string(mod, format_string)
+        else:
+            cstr = format_string
+        fnty = Type.function(Type.int(), (GENERIC_POINTER,), var_arg=True)
+        fn = mod.get_or_insert_function(fnty, "printf")
+        return builder.call(fn, (cstr,) + tuple(args))
 
     def get_struct_type(self, struct):
         """
@@ -788,6 +791,32 @@ class BaseContext(object):
                     rec=rectyp, attr=attr, type=elemty)
                 raise TypeError(msg)
 
+    def get_helper_class(self, typ, kind='value'):
+        """
+        Get a helper class for the given *typ*.
+        """
+        # XXX handle all types: complex, array, etc.
+        # XXX should it be a method on the model instead? this would allow a default kind...
+        return cgutils.create_struct_proxy(typ, kind)
+
+    def _make_helper(self, builder, typ, value=None, ref=None, kind='value'):
+        cls = self.get_helper_class(typ, kind)
+        return cls(self, builder, value=value, ref=ref)
+
+    def make_helper(self, builder, typ, value=None, ref=None):
+        """
+        Get a helper object to access the *typ*'s members,
+        for the given value or reference.
+        """
+        return self._make_helper(builder, typ, value, ref, kind='value')
+
+    def make_data_helper(self, builder, typ, ref=None):
+        """
+        As make_helper(), but considers the value as stored in memory,
+        rather than a live value.
+        """
+        return self._make_helper(builder, typ, ref=ref, kind='data')
+
     def make_array(self, typ):
         return arrayobj.make_array(typ)
 
@@ -797,15 +826,12 @@ class BaseContext(object):
         """
         return arrayobj.populate_array(arr, **kwargs)
 
-    def make_complex(self, typ):
-        cls, _ = builtins.get_complex_info(typ)
-        return cls
-
-    def make_pair(self, first_type, second_type):
+    def make_complex(self, builder, typ, value=None):
         """
-        Create a heterogenous pair class parametered for the given types.
+        Get a helper object to access the given complex numbers' members.
         """
-        return builtins.make_pair(first_type, second_type)
+        assert isinstance(typ, types.Complex), typ
+        return self.make_helper(builder, typ, value)
 
     def make_tuple(self, builder, typ, values):
         """
@@ -885,14 +911,18 @@ class BaseContext(object):
         """
         return lc.Module.new(name)
 
+    def _require_nrt(self):
+        if not self.enable_nrt:
+            raise RuntimeError("Require NRT")
+
     def nrt_meminfo_alloc(self, builder, size):
         """
         Allocate a new MemInfo with a data payload of `size` bytes.
 
         A pointer to the MemInfo is returned.
         """
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         mod = builder.module
         fnty = llvmir.FunctionType(void_ptr,
                                    [self.get_value_type(types.intp)])
@@ -901,8 +931,8 @@ class BaseContext(object):
         return builder.call(fn, [size])
 
     def nrt_meminfo_alloc_dtor(self, builder, size, dtor):
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         mod = builder.module
         ll_void_ptr = self.get_value_type(types.voidptr)
         fnty = llvmir.FunctionType(llvmir.IntType(8).as_pointer(),
@@ -921,8 +951,8 @@ class BaseContext(object):
 
         A pointer to the MemInfo is returned.
         """
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         mod = builder.module
         intp = self.get_value_type(types.intp)
         u32 = self.get_value_type(types.uint32)
@@ -936,7 +966,7 @@ class BaseContext(object):
             assert align.type == u32, "align must be a uint32"
         return builder.call(fn, [size, align])
 
-    def nrt_meminfo_varsize_alloc(self, builder, size):
+    def nrt_meminfo_new_varsize(self, builder, size):
         """
         Allocate a MemInfo pointing to a variable-sized data area.  The area
         is separately allocated (i.e. two allocations are made) so that
@@ -944,26 +974,57 @@ class BaseContext(object):
 
         A pointer to the MemInfo is returned.
         """
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         mod = builder.module
         fnty = llvmir.FunctionType(void_ptr,
                                    [self.get_value_type(types.intp)])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_alloc")
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_new_varsize")
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
+    def nrt_meminfo_varsize_alloc(self, builder, meminfo, size):
+        """
+        Allocate a new data area for a MemInfo created by nrt_meminfo_new_varsize().
+        The new data pointer is returned, for convenience.
+
+        Contrary to realloc(), this always allocates a new area and doesn't
+        copy the old data.  This is useful if resizing a container needs
+        more than simply copying the data area (e.g. for hash tables).
+
+        The old pointer will have to be freed with nrt_meminfo_varsize_free().
+        """
+        return self._call_nrt_varsize_alloc(builder, meminfo, size,
+                                            "NRT_MemInfo_varsize_alloc")
+
     def nrt_meminfo_varsize_realloc(self, builder, meminfo, size):
         """
-        Reallocate a data area allocated by nrt_meminfo_varsize_alloc().
+        Reallocate a data area allocated by nrt_meminfo_new_varsize().
         The new data pointer is returned, for convenience.
         """
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        return self._call_nrt_varsize_alloc(builder, meminfo, size,
+                                            "NRT_MemInfo_varsize_realloc")
+
+    def nrt_meminfo_varsize_free(self, builder, meminfo, ptr):
+        """
+        Free a memory area allocated for a NRT varsize object.
+        Note this does *not* free the NRT object itself!
+        """
+        self._require_nrt()
+
+        mod = builder.module
+        fnty = llvmir.FunctionType(llvmir.VoidType(),
+                                   [void_ptr, void_ptr])
+        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_free")
+        return builder.call(fn, (meminfo, ptr))
+
+    def _call_nrt_varsize_alloc(self, builder, meminfo, size, funcname):
+        self._require_nrt()
+
         mod = builder.module
         fnty = llvmir.FunctionType(void_ptr,
                                    [void_ptr, self.get_value_type(types.intp)])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_realloc")
+        fn = mod.get_or_insert_function(fnty, name=funcname)
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [meminfo, size])
 
@@ -973,8 +1034,8 @@ class BaseContext(object):
         managed by it.  This works for MemInfos allocated with all the
         above methods.
         """
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         from numba.runtime.atomicops import meminfo_data_ty
 
         mod = builder.module
@@ -983,8 +1044,8 @@ class BaseContext(object):
         return builder.call(fn, [meminfo])
 
     def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):
-        if not self.enable_nrt:
-            raise Exception("Require NRT")
+        self._require_nrt()
+
         from numba.runtime.atomicops import incref_decref_ty
 
         data_model = self.data_model_manager[typ]

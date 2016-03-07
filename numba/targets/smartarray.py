@@ -20,12 +20,12 @@ def type_array_wrap(context):
 @lower_builtin('__array__', types.SmartArrayType)
 def array_as_array(context, builder, sig, args):
     [argtype], [arg] = sig.args, args
-    val = cgutils.create_struct_proxy(argtype)(context, builder, ref=arg)
+    val = context.make_helper(builder, argtype, ref=arg)
     return val._get_ptr_by_name('data')
 
 @lower_builtin('__array_wrap__', types.SmartArrayType, types.Array)
 def array_wrap_array(context, builder, sig, args):
-    dest = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+    dest = context.make_helper(builder, sig.return_type)
     dest.data = args[1]
     return impl_ret_borrowed(context, builder, sig.return_type, dest._getvalue())
 

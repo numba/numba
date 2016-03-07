@@ -1,9 +1,5 @@
 from __future__ import absolute_import, print_function
 
-import random
-
-import numpy as np
-
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         CallableTemplate,  Registry, signature, bound_function,
@@ -18,8 +14,8 @@ infer_global = registry.register_global
 infer_getattr = registry.register_attr
 
 
+@infer_global(list)
 class ListBuiltin(AbstractTemplate):
-    key = list
 
     def generic(self, args, kws):
         assert not kws
@@ -29,11 +25,9 @@ class ListBuiltin(AbstractTemplate):
                 dtype = iterable.iterator_type.yield_type
                 return signature(types.List(dtype), iterable)
 
-infer_global(list, types.Function(ListBuiltin))
 
-
+@infer_global(sorted)
 class SortedBuiltin(CallableTemplate):
-    key = sorted
 
     def generic(self):
         def typer(iterable, reverse=None):
@@ -45,8 +39,6 @@ class SortedBuiltin(CallableTemplate):
             return types.List(iterable.iterator_type.yield_type)
 
         return typer
-
-infer_global(sorted, types.Function(SortedBuiltin))
 
 
 @infer_getattr
