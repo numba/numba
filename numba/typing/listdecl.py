@@ -52,9 +52,10 @@ class ListAttribute(AttributeTemplate):
         item, = args
         assert not kws
         unified = self.context.unify_pairs(list.dtype, item)
-        sig = signature(types.none, unified)
-        sig.recvr = list.copy(dtype=unified)
-        return sig
+        if unified is not None:
+            sig = signature(types.none, unified)
+            sig.recvr = list.copy(dtype=unified)
+            return sig
 
     @bound_function("list.clear")
     def resolve_clear(self, list, args, kws):
@@ -83,10 +84,10 @@ class ListAttribute(AttributeTemplate):
 
         dtype = iterable.iterator_type.yield_type
         unified = self.context.unify_pairs(list.dtype, dtype)
-      
-        sig = signature(types.none, iterable)
-        sig.recvr = list.copy(dtype=unified)
-        return sig
+        if unified is not None:
+            sig = signature(types.none, iterable)
+            sig.recvr = list.copy(dtype=unified)
+            return sig
 
     @bound_function("list.index")
     def resolve_index(self, list, args, kws):
@@ -107,9 +108,10 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         if isinstance(idx, types.Integer):
             unified = self.context.unify_pairs(list.dtype, item)
-            sig = signature(types.none, types.intp, unified)
-            sig.recvr = list.copy(dtype=unified)
-            return sig
+            if unified is not None:
+                sig = signature(types.none, types.intp, unified)
+                sig.recvr = list.copy(dtype=unified)
+                return sig
 
     @bound_function("list.pop")
     def resolve_pop(self, list, args, kws):
@@ -155,7 +157,8 @@ class AddList(AbstractTemplate):
             a, b = args
             if isinstance(a, types.List) and isinstance(b, types.List):
                 unified = self.context.unify_pairs(a, b)
-                return signature(unified, a, b)
+                if unified is not None:
+                    return signature(unified, a, b)
 
 
 @infer

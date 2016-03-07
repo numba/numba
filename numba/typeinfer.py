@@ -40,7 +40,7 @@ class TypeVar(object):
         else:
             if self.type is not None:
                 unified = self.context.unify_pairs(self.type, tp)
-                if unified is types.pyobject:
+                if unified is None:
                     raise TypingError("cannot unify %s and %s for '%s'"
                                       % (self.type, tp, self.var))
             else:
@@ -199,8 +199,9 @@ class _BuildContainerConstraint(object):
         else:
             for typs in itertools.product(*tsets):
                 unified = typeinfer.context.unify_types(*typs)
-                typeinfer.add_type(self.target,
-                                   self.container_type(unified))
+                if unified is not None:
+                    typeinfer.add_type(self.target,
+                                       self.container_type(unified))
 
 
 class BuildListConstraint(_BuildContainerConstraint):
@@ -355,7 +356,7 @@ class CallConstraint(object):
             and sig.recvr is not None
             and sig.recvr != fnty.this):
             refined_this = context.unify_pairs(sig.recvr, fnty.this)
-            if refined_this.is_precise():
+            if refined_this is not None and refined_this.is_precise():
                 refined_fnty = fnty.copy(this=refined_this)
                 typeinfer.propagate_refined_type(self.func, refined_fnty)
 
@@ -680,6 +681,9 @@ class TypeInferer(object):
         if not yield_types:
             raise TypingError("Cannot type generator: it does not yield any value")
         yield_type = self.context.unify_types(*yield_types)
+        if yield_type is None:
+            raise TypingError("Cannot type generator: cannot unify yielded types "
+                              "%s" % (yield_types,))
         return types.Generator(self.py_func, yield_type, arg_types, state_types,
                                has_finalizer=True)
 
@@ -702,7 +706,7 @@ class TypeInferer(object):
 
         if rettypes:
             unified = self.context.unify_types(*rettypes)
-            if not unified.is_precise():
+            if unified is None or not unified.is_precise():
                 raise TypingError("Can't unify return type from the "
                                   "following types: %s"
                                   % ", ".join(sorted(map(str, rettypes))))

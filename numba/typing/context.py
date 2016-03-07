@@ -465,14 +465,14 @@ class BaseContext(object):
         unified = typelist[0]
         for tp in typelist[1:]:
             unified = self.unify_pairs(unified, tp)
-            if unified is types.pyobject:
+            if unified is None:
                 break
         return unified
 
     def unify_pairs(self, first, second):
         """
         Try to unify the two given types.  A third type is returned,
-        or pyobject in case of failure.
+        or None in case of failure.
         """
         if first == second:
             return first
@@ -503,7 +503,7 @@ class BaseContext(object):
             return first
 
         # Cannot unify
-        return types.pyobject
+        return None
 
 
 class Context(BaseContext):

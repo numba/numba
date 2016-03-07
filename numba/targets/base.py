@@ -621,6 +621,7 @@ class BaseContext(object):
         at, bt = argtypes
         av, bv = args
         ty = self.typing_context.unify_types(at, bt)
+        assert ty is not None
         cav = self.cast(builder, av, at, ty)
         cbv = self.cast(builder, bv, bt, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)

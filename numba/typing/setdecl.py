@@ -40,9 +40,10 @@ class SetAttribute(AttributeTemplate):
         item, = args
         assert not kws
         unified = self.context.unify_pairs(set.dtype, item)
-        sig = signature(types.none, unified)
-        sig.recvr = set.copy(dtype=unified)
-        return sig
+        if unified is not None:
+            sig = signature(types.none, unified)
+            sig.recvr = set.copy(dtype=unified)
+            return sig
 
     @bound_function("set.clear")
     def resolve_clear(self, set, args, kws):
@@ -83,10 +84,10 @@ class SetAttribute(AttributeTemplate):
 
         dtype = iterable.iterator_type.yield_type
         unified = self.context.unify_pairs(set.dtype, dtype)
-
-        sig = signature(types.none, iterable)
-        sig.recvr = set.copy(dtype=unified)
-        return sig
+        if unified is not None:
+            sig = signature(types.none, iterable)
+            sig.recvr = set.copy(dtype=unified)
+            return sig
 
     def _resolve_xxx_update(self, set, args, kws):
         assert not kws
