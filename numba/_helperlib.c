@@ -1351,7 +1351,7 @@ numba_unpack_slice(PyObject *obj,
     }
     FETCH_MEMBER(step, 1)
     FETCH_MEMBER(stop, (*step > 0) ? PY_SSIZE_T_MAX : PY_SSIZE_T_MIN)
-    FETCH_MEMBER(start, 0)
+    FETCH_MEMBER(start, (*step > 0) ? 0 : PY_SSIZE_T_MAX)
     return 0;
 
 #undef FETCH_MEMBER
