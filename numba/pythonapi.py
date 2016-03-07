@@ -990,7 +990,7 @@ class PythonAPI(object):
         elif opstr == 'is not':
             bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
             return self.from_native_value(types.boolean, bitflag)
-        elif opstr == 'in':
+        elif opstr in ('in', 'not in'):
             fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
             fn = self._get_function(fnty, name="PySequence_Contains")
             status = self.builder.call(fn, (rhs, lhs))
@@ -1001,6 +1001,8 @@ class PythonAPI(object):
                                                Constant.null(self.pyobj))
             # If PySequence_Contains returns non-error value
             with cgutils.if_likely(self.builder, is_good):
+                if opstr == 'not in':
+                    status = self.builder.not_(status)
                 # Store the status as a boolean object
                 truncated = self.builder.trunc(status, Type.int(1))
                 self.builder.store(self.bool_from_bool(truncated),

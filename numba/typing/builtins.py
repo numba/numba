@@ -495,6 +495,16 @@ class StaticGetItemTuple(AbstractTemplate):
             return types.BaseTuple.from_types(tup.types[idx])
 
 
+# Generic implementation for "not in"
+
+@infer
+class GenericNotIn(AbstractTemplate):
+    key = "not in"
+
+    def generic(self, args, kws):
+        return self.context.resolve_function_type("in", args, kws)
+
+
 #-------------------------------------------------------------------------------
 
 @infer_getattr

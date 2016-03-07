@@ -247,6 +247,16 @@ def reflect_dual(sa, sb):
     return sa is sb
 
 
+def unique_usecase(src):
+    seen = set()
+    res = []
+    for v in src:
+        if v not in seen:
+            seen.add(v)
+            res.append(v)
+    return res
+
+
 needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
                                      "set literals unavailable before Python 2.7")
 
@@ -572,6 +582,7 @@ class OtherTypesTest(object):
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
+    @tag('important')
     def test_update(self):
         pyfunc = update_usecase
         check = self.unordered_checker(pyfunc)
@@ -739,6 +750,20 @@ class TestSetReflection(BaseTest):
         ids = [id(x) for x in s]
         cfunc(s)
         self.assertEqual([id(x) for x in s], ids)
+
+
+class TestExamples(BaseTest):
+    """
+    Examples of using sets.
+    """
+
+    @tag('important')
+    def test_unique(self):
+        pyfunc = unique_usecase
+        check = self.unordered_checker(pyfunc)
+
+        check(self.duplicates_array(200))
+        check(self.sparse_array(200))
 
 
 if __name__ == '__main__':
