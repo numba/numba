@@ -36,6 +36,9 @@ def array_flat_sum(arr):
         s = s + (i + 1) * v
     return s
 
+def array_flat_len(arr):
+    return len(arr.flat)
+
 def array_ndenumerate_sum(arr):
     s = 0
     for (i, j), v in np.ndenumerate(arr):
@@ -239,6 +242,23 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arr = arr[::2]
         for i in range(arr.size):
             check(arr, i)
+
+    def test_array_flat_len(self):
+        # Test len(array.flat)
+        pyfunc = array_flat_len
+        def check(arr):
+            cr = self.ccache.compile(pyfunc, (typeof(arr),))
+            expected = pyfunc(arr)
+            self.assertPreciseEqual(cr.entry_point(arr), expected)
+
+        arr = np.arange(24).reshape(4, 2, 3)
+        check(arr)
+        arr = arr.T
+        check(arr)
+        arr = arr[::2]
+        check(arr)
+        arr = np.array([42]).reshape(())
+        check(arr)
 
     @tag('important')
     def test_array_ndenumerate_2d(self):
