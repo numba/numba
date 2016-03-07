@@ -221,11 +221,14 @@ def reflect_simple(sa, sb):
     return sa, len(sa), len(sb)
 
 def reflect_conditional(sa, sb):
-    # `sa` may or may not actually reflect a Python list
+    # `sa` may or may not actually reflect a Python set
     if len(sb) > 1:
-        sa = set([11., 22., 33., 44.])
+        sa = set((11., 22., 33., 44.))
     sa.add(42.)
     sa.update(sb)
+    # Combine with a non-reflected set (to check method typing)
+    sc = set((55., 66.))
+    sa.symmetric_difference_update(sc)
     return sa, len(sa), len(sb)
 
 def reflect_exception(s):
@@ -715,16 +718,16 @@ class TestSetReflection(BaseTest):
         self.assertPreciseEqual(pyset, cset)
         self.assertPreciseEqual(sys.getrefcount(pyset), sys.getrefcount(cset))
 
-    #def test_reflect_clean(self):
-        #"""
-        #When the list wasn't mutated, no reflection should take place.
-        #"""
-        #cfunc = jit(nopython=True)(noop)
-        ## Use a complex, as Python integers can be cached
-        #l = [12.5j]
-        #ids = [id(x) for x in l]
-        #cfunc(l)
-        #self.assertEqual([id(x) for x in l], ids)
+    def test_reflect_clean(self):
+        """
+        When the set wasn't mutated, no reflection should take place.
+        """
+        cfunc = jit(nopython=True)(noop)
+        # Use a complex, as Python integers can be cached
+        s = set([12.5j])
+        ids = [id(x) for x in s]
+        cfunc(s)
+        self.assertEqual([id(x) for x in s], ids)
 
 
 if __name__ == '__main__':
