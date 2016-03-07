@@ -249,8 +249,7 @@ random module <pysupported-random>` (and therefore the same notes apply),
 but with an independent internal state: seeding or drawing numbers from
 one generator won't affect the other.
 
-The following functions are supported, but only with scalar output: you can't
-pass a *size* argument.
+The following functions are supported.
 
 Initialization
 ''''''''''''''

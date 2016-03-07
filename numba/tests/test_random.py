@@ -113,7 +113,20 @@ def py_f(r, num, denom):
             (py_chisquare(r, denom) * num))
 
 
-class TestInternals(TestCase):
+class BaseTest(TestCase):
+
+    def _follow_cpython(self, ptr, seed=2):
+        r = random.Random(seed)
+        _copy_py_state(r, ptr)
+        return r
+
+    def _follow_numpy(self, ptr, seed=2):
+        r = np.random.RandomState(seed)
+        _copy_np_state(r, ptr)
+        return r
+
+
+class TestInternals(BaseTest):
     """
     Test low-level internals of the implementation.
     """
@@ -181,26 +194,16 @@ class TestInternals(TestCase):
         self._check_perturb(py_state_ptr)
 
 
-class TestRandom(TestCase):
+class TestRandom(BaseTest):
 
     # NOTE: there may be cascading imprecision issues (e.g. between x87-using
     # C code and SSE-using LLVM code), which is especially brutal for some
     # iterative algorithms with sensitive exit conditions.
-    # Therefore we stick to hardcoded integers for seed values below.
+    # Therefore we stick to hardcoded integers for seed values.
 
     def setUp(self):
         # Make sure the PRNG is initialized before we set the seed
         random_init()
-
-    def _follow_cpython(self, ptr, seed=2):
-        r = random.Random(seed)
-        _copy_py_state(r, ptr)
-        return r
-
-    def _follow_numpy(self, ptr, seed=2):
-        r = np.random.RandomState(seed)
-        _copy_np_state(r, ptr)
-        return r
 
     def _check_random_seed(self, seedfunc, randomfunc):
         """
@@ -606,8 +609,10 @@ class TestRandom(TestCase):
     @tag('important')
     def test_numpy_binomial(self):
         # We follow Numpy's algorithm up to n*p == 30
-        self._follow_numpy(np_state_ptr, 0)
         binomial = jit_binary("np.random.binomial")
+        r = self._follow_numpy(np_state_ptr, 0)
+        self._check_dist(binomial, r.binomial, [(18, 0.25)])
+        # Invalid values
         self.assertRaises(ValueError, binomial, -1, 0.5)
         self.assertRaises(ValueError, binomial, 10, -0.1)
         self.assertRaises(ValueError, binomial, 10, 1.1)
@@ -854,6 +859,102 @@ class TestRandom(TestCase):
 
     def test_numpy_gauss_startup(self):
         self._check_startup_randomness("numpy_normal", (1.0, 1.0))
+
+
+class TestRandomArrays(BaseTest):
+    """
+    Test array-producing variants of np.random.* functions.
+    """
+
+    def setUp(self):
+        # Make sure the PRNG is initialized before we set the seed
+        random_init()
+
+    def _compile_array_dist(self, funcname, nargs):
+        qualname = "np.random.%s" % (funcname,)
+        argstring = ', '.join('abcd'[:nargs])
+        return jit_with_args(qualname, argstring)
+
+    def _check_array_dist(self, funcname, scalar_args):
+        """
+        Check returning an array according to a given distribution.
+        """
+        cfunc = self._compile_array_dist(funcname, len(scalar_args) + 1)
+        r = self._follow_numpy(np_state_ptr)
+        pyfunc = getattr(r, funcname)
+        for size in (8, (2, 3)):
+            args = scalar_args + (size,)
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertPreciseEqual(expected, got)
+
+    def test_numpy_randint(self):
+        cfunc = self._compile_array_dist("randint", 3)
+        low, high = 1000, 10000
+        size = (30, 30)
+        res = cfunc(low, high, size)
+        self.assertIsInstance(res, np.ndarray)
+        self.assertEqual(res.shape, size)
+        self.assertIn(res.dtype, (np.dtype('int32'), np.dtype('int64')))
+        self.assertTrue(np.all(res >= low))
+        self.assertTrue(np.all(res < high))
+        # Crude statistical tests
+        mean = (low + high) / 2
+        tol = (high - low) / 20
+        self.assertGreaterEqual(res.mean(), mean - tol)
+        self.assertLessEqual(res.mean(), mean + tol)
+
+    def test_numpy_binomial(self):
+        self._check_array_dist("binomial", (20, 0.5))
+
+    def test_numpy_exponential(self):
+        self._check_array_dist("exponential", (1.5,))
+
+    def test_numpy_gumbel(self):
+        self._check_array_dist("gumbel", (1.5, 0.5))
+
+    def test_numpy_laplace(self):
+        self._check_array_dist("laplace", (1.5, 0.5))
+
+    def test_numpy_logistic(self):
+        self._check_array_dist("logistic", (1.5, 0.5))
+
+    def test_numpy_lognormal(self):
+        self._check_array_dist("lognormal", (1.5, 2.0))
+
+    def test_numpy_logseries(self):
+        self._check_array_dist("logseries", (0.8,))
+
+    @tag('important')
+    def test_numpy_normal(self):
+        self._check_array_dist("normal", (0.5, 2.0))
+
+    def test_numpy_poisson(self):
+        self._check_array_dist("poisson", (0.8,))
+
+    def test_numpy_power(self):
+        self._check_array_dist("power", (0.8,))
+
+    def test_numpy_rayleigh(self):
+        self._check_array_dist("rayleigh", (0.8,))
+
+    def test_numpy_standard_cauchy(self):
+        self._check_array_dist("standard_cauchy", ())
+
+    def test_numpy_standard_exponential(self):
+        self._check_array_dist("standard_exponential", ())
+
+    def test_numpy_standard_normal(self):
+        self._check_array_dist("standard_normal", ())
+
+    def test_numpy_uniform(self):
+        self._check_array_dist("uniform", (0.1, 0.4))
+
+    def test_numpy_wald(self):
+        self._check_array_dist("wald", (0.1, 0.4))
+
+    def test_numpy_zipf(self):
+        self._check_array_dist("zipf", (2.5,))
 
 
 if __name__ == "__main__":

@@ -12,7 +12,8 @@ import numpy as np
 
 from llvmlite import ir
 
-from numba.targets.imputils import Registry, impl_ret_untracked
+from numba.targets.imputils import (Registry, impl_ret_untracked,
+                                    impl_ret_new_ref)
 from numba.typing import signature
 from numba import _helperlib, cgutils, types
 
@@ -164,7 +165,7 @@ def _fill_defaults(context, builder, sig, args, defaults):
     """
     ty = sig.return_type
     llty = context.get_data_type(ty)
-    args = args + [ir.Constant(llty, d) for d in defaults[len(args):]]
+    args = tuple(args) + tuple(ir.Constant(llty, d) for d in defaults[len(args):])
     sig = signature(*(ty,) * (len(args) + 1))
     return sig, args
 
@@ -1133,3 +1134,62 @@ def _shuffle_impl(context, builder, sig, args, _randrange):
             i -= 1
 
     return context.compile_internal(builder, shuffle_impl, sig, args)
+
+
+# ------------------------------------------------------------------------
+# Array-producing variants of scalar random functions
+
+for typing_key, arity in [
+    ("np.random.beta", 3),
+    ("np.random.binomial", 3),
+    ("np.random.chisquare", 2),
+    ("np.random.exponential", 2),
+    ("np.random.f", 3),
+    ("np.random.gamma", 3),
+    ("np.random.geometric", 2),
+    ("np.random.gumbel", 3),
+    ("np.random.hypergeometric", 4),
+    ("np.random.laplace", 3),
+    ("np.random.logistic", 3),
+    ("np.random.lognormal", 3),
+    ("np.random.logseries", 2),
+    ("np.random.negative_binomial", 3),
+    ("np.random.normal", 3),
+    ("np.random.pareto", 2),
+    ("np.random.poisson", 2),
+    ("np.random.power", 2),
+    ("np.random.random", 1),
+    ("np.random.randint", 3),
+    ("np.random.rayleigh", 2),
+    ("np.random.standard_cauchy", 1),
+    ("np.random.standard_exponential", 1),
+    ("np.random.standard_gamma", 2),
+    ("np.random.standard_normal", 1),
+    ("np.random.standard_t", 2),
+    ("np.random.triangular", 4),
+    ("np.random.uniform", 3),
+    ("np.random.vonmises", 3),
+    ("np.random.wald", 3),
+    ("np.random.weibull", 2),
+    ("np.random.zipf", 2),
+    ]:
+
+    @lower(typing_key, *(types.Any,) * arity)
+    def random_arr(context, builder, sig, args, typing_key=typing_key):
+        from . import arrayobj
+
+        arrty = sig.return_type
+        dtype = arrty.dtype
+        scalar_sig = signature(dtype, *sig.args[:-1])
+        scalar_args = args[:-1]
+
+        shapes = arrayobj._parse_shape(context, builder, sig.args[-1], args[-1])
+        arr = arrayobj._empty_nd_impl(context, builder, arrty, shapes)
+
+        scalar_impl = context.get_function(typing_key, scalar_sig)
+        with cgutils.for_range(builder, arr.nitems) as loop:
+            val = scalar_impl(builder, scalar_args)
+            ptr = cgutils.gep(builder, arr.data, loop.index)
+            arrayobj.store_item(context, builder, arrty, val, ptr)
+
+        return impl_ret_new_ref(context, builder, sig.return_type, arr._getvalue())

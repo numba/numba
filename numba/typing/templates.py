@@ -24,6 +24,8 @@ class Signature(object):
     __slots__ = 'return_type', 'args', 'recvr', 'pysig'
 
     def __init__(self, return_type, args, recvr, pysig=None):
+        if isinstance(args, list):
+            args = tuple(args)
         self.return_type = return_type
         self.args = args
         self.recvr = recvr
@@ -254,7 +256,9 @@ class CallableTemplate(FunctionTemplate):
             raise TypingError("unsupported call signature")
         if not isinstance(sig, Signature):
             # If not a signature, `sig` is assumed to be the return type
-            assert isinstance(sig, types.Type)
+            if not isinstance(sig, types.Type):
+                raise TypeError("invalid return type for callable template: got %r"
+                                % (sig,))
             sig = signature(sig, *bound.args)
         if self.recvr is not None:
             sig.recvr = self.recvr
