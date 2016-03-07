@@ -72,6 +72,10 @@ class ConstantInference(object):
         elif expr.op == 'getattr':
             value = self.infer_constant(expr.value.name)
             return self._infer_getattr(value, expr)
+        elif expr.op == 'build_list':
+            return [self.infer_constant(i.name) for i in expr.items]
+        elif expr.op == 'build_tuple':
+            return tuple(self.infer_constant(i.name) for i in expr.items)
         self._fail(expr)
 
     def _infer_call(self, func, expr):
@@ -85,7 +89,7 @@ class ConstantInference(object):
         self._fail(expr)
 
     def _infer_getattr(self, value, expr):
-        if isinstance(value, ModuleType):
-            # Allow looking up a constant on a module
+        if isinstance(value, (ModuleType, type)):
+            # Allow looking up a constant on a class or module
             return getattr(value, expr.attr)
         self._fail(expr)
