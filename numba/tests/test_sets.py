@@ -122,6 +122,13 @@ def copy_usecase(a):
     s.pop()
     return len(ss), list(ss)
 
+def copy_usecase_empty(a):
+    s = set(a)
+    s.clear()
+    ss = s.copy()
+    s.add(42)
+    return len(ss), list(ss)
+
 def copy_usecase_deleted(a, b):
     s = set(a)
     s.remove(b)
@@ -404,6 +411,10 @@ class TestSets(BaseTest):
         check = self.unordered_checker(pyfunc)
         check((1, 2, 4, 11))
         check(self.sparse_array(50))
+
+        pyfunc = copy_usecase_empty
+        check = self.unordered_checker(pyfunc)
+        check((1,))
 
         # Source set has deleted entries
         pyfunc = copy_usecase_deleted

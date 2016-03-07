@@ -40,7 +40,7 @@ class TypeVar(object):
         else:
             if self.type is not None:
                 unified = self.context.unify_pairs(self.type, tp)
-                if unified is types.pyobject:
+                if unified is None:
                     raise TypingError("cannot unify %s and %s for '%s'"
                                       % (self.type, tp, self.var))
             else:
