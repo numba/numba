@@ -1327,6 +1327,84 @@ numba_reset_list_private_data(PyListObject *listobj)
         listobj->allocated = PyList_GET_SIZE(listobj);
 }
 
+/*
+ * Functions for tagging an arbitrary Python object with an arbitrary pointer.
+ * These functions make strong lifetime assumptions, see below.
+ */
+
+static PyObject *private_data_dict = NULL;
+
+static PyObject *
+_get_private_data_dict(void)
+{
+    if (private_data_dict == NULL)
+        private_data_dict = PyDict_New();
+    return private_data_dict;
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_set_pyobject_private_data(PyObject *obj, void *ptr)
+{
+    PyObject *dct = _get_private_data_dict();
+    /* This assumes the reference to setobj is kept alive until the
+       call to numba_reset_set_private_data()! */
+    PyObject *key = PyLong_FromVoidPtr((void *) obj);
+    PyObject *value = PyLong_FromVoidPtr(ptr);
+
+    if (!dct || !value || !key)
+        goto error;
+    if (PyDict_SetItem(dct, key, value))
+        goto error;
+    Py_DECREF(key);
+    Py_DECREF(value);
+    return;
+
+error:
+    Py_FatalError("unable to set private data");
+}
+
+NUMBA_EXPORT_FUNC(void *)
+numba_get_pyobject_private_data(PyObject *obj)
+{
+    PyObject *dct = _get_private_data_dict();
+    PyObject *value, *key = PyLong_FromVoidPtr((void *) obj);
+    void *ptr;
+    if (!dct || !key)
+        goto error;
+
+    value = PyDict_GetItem(dct, key);
+    Py_DECREF(key);
+    if (!value)
+        return NULL;
+    else {
+        ptr = PyLong_AsVoidPtr(value);
+        if (ptr == NULL && PyErr_Occurred())
+            goto error;
+        return ptr;
+    }
+
+error:
+    Py_FatalError("unable to get private data");
+    return NULL;
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_reset_pyobject_private_data(PyObject *obj)
+{
+    PyObject *dct = _get_private_data_dict();
+    PyObject *key = PyLong_FromVoidPtr((void *) obj);
+
+    if (!key)
+        goto error;
+    if (PyDict_DelItem(dct, key))
+        PyErr_Clear();
+    Py_DECREF(key);
+    return;
+
+error:
+    Py_FatalError("unable to reset private data");
+}
+
 NUMBA_EXPORT_FUNC(int)
 numba_unpack_slice(PyObject *obj,
                    Py_ssize_t *start, Py_ssize_t *stop, Py_ssize_t *step)

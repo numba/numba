@@ -105,7 +105,7 @@ contains a :class:`int` and a :class:`float`).
 
 .. note::
    When passing a list into a JIT-compiled function, any modifications
-   made to the list will not be visible by the Python interpreter until
+   made to the list will not be visible to the Python interpreter until
    the function returns.
 
 .. warning::
@@ -116,12 +116,15 @@ set
 ---
 
 All methods and operations on sets are supported in JIT-compiled functions.
-However, passing and returning sets from/to Python code is not supported
-(yet).
 
 Sets must be strictly homogenous: Numba will reject any set containing
 objects of different types, even if the types are compatible (for example,
 ``{1, 2.5}`` is rejected as it contains a :class:`int` and a :class:`float`).
+
+.. note::
+   When passing a set into a JIT-compiled function, any modifications
+   made to the set will not be visible to the Python interpreter until
+   the function returns.
 
 None
 ----

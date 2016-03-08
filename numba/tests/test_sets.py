@@ -18,6 +18,9 @@ from .support import (TestCase, enable_pyobj_flags, MemoryLeakMixin, tag,
                       compile_function)
 
 
+Point = namedtuple('Point', ('a', 'b'))
+
+
 def _build_set_literal_usecase(code, args):
     code = code % {'initializer': ', '.join(repr(arg) for arg in args)}
     return compile_function('build_set', code, globals())
@@ -156,6 +159,10 @@ def union_usecase(a, b):
     s = sa.union(set(b))
     return list(s)
 
+def set_return_usecase(a):
+    s = set(a)
+    return s
+
 
 def make_operator_usecase(op):
     code = """if 1:
@@ -171,6 +178,73 @@ def make_comparison_usecase(op):
         return set(a) %(op)s set(b)
     """ % dict(op=op)
     return compile_function('comparison_usecase', code, globals())
+
+
+def noop(x):
+    pass
+
+def unbox_usecase(x):
+    """
+    Expect a set of numbers
+    """
+    res = 0
+    for v in x:
+        res += v
+    return res
+
+def unbox_usecase2(x):
+    """
+    Expect a set of tuples
+    """
+    res = 0
+    for v in x:
+        res += len(v)
+    return res
+
+def unbox_usecase3(x):
+    """
+    Expect a (number, set of numbers) tuple.
+    """
+    a, b = x
+    res = a
+    for v in b:
+        res += v
+    return res
+
+def unbox_usecase4(x):
+    """
+    Expect a (number, set of tuples) tuple.
+    """
+    a, b = x
+    res = a
+    for v in b:
+        res += len(v)
+    return res
+
+
+def reflect_simple(sa, sb):
+    sa.add(42)
+    sa.update(sb)
+    return sa, len(sa), len(sb)
+
+def reflect_conditional(sa, sb):
+    # `sa` may or may not actually reflect a Python set
+    if len(sb) > 1:
+        sa = set((11., 22., 33., 44.))
+    sa.add(42.)
+    sa.update(sb)
+    # Combine with a non-reflected set (to check method typing)
+    sc = set((55., 66.))
+    sa.symmetric_difference_update(sc)
+    return sa, len(sa), len(sb)
+
+def reflect_exception(s):
+    s.add(42)
+    raise ZeroDivisionError
+
+def reflect_dual(sa, sb):
+    sa.add(sb.pop())
+    return sa is sb
 
 
 def unique_usecase(src):
@@ -286,6 +360,14 @@ class TestSets(BaseTest):
         check((1, 2, 3, 2, 7))
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
+
+    @tag('important')
+    def test_set_return(self):
+        pyfunc = set_return_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arg = (1, 2, 3, 2, 7)
+        self.assertEqual(cfunc(arg), set(arg))
 
     @tag('important')
     def test_iterator(self):
@@ -532,6 +614,142 @@ class TestTupleSets(OtherTypesTest, BaseTest):
         c = (a & 0xaaaaaaaa).astype(np.int32)
         d = ((a >> 32) & 1).astype(np.bool_)
         return list(zip(b, c, d))
+
+
+class TestUnboxing(BaseTest):
+    """
+    Test unboxing of Python sets into native Numba sets.
+    """
+
+    @contextlib.contextmanager
+    def assert_type_error(self, msg):
+        with self.assertRaises(TypeError) as raises:
+            yield
+        if msg is not None:
+            self.assertRegexpMatches(str(raises.exception), msg)
+
+    def check_unary(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arg):
+            expected = pyfunc(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+        return check
+
+    @tag('important')
+    def test_numbers(self):
+        check = self.check_unary(unbox_usecase)
+        check(set([1, 2]))
+        check(set([1j, 2.5j]))
+        # Check allocation and sizing
+        check(set(range(100)))
+
+    def test_tuples(self):
+        check = self.check_unary(unbox_usecase2)
+        check(set([(1, 2), (3, 4)]))
+        check(set([(1, 2j), (3, 4j)]))
+
+    @tag('important')
+    def test_set_inside_tuple(self):
+        check = self.check_unary(unbox_usecase3)
+        check((1, set([2, 3, 4])))
+
+    def test_set_of_tuples_inside_tuple(self):
+        check = self.check_unary(unbox_usecase4)
+        check((1, set([(2,), (3,)])))
+
+    def test_errors(self):
+        # Error checking should ensure the set is homogenous
+        msg = "can't unbox heterogenous set"
+        pyfunc = noop
+        cfunc = jit(nopython=True)(pyfunc)
+        val = set([1, 2.5])
+        with self.assert_type_error(msg):
+            cfunc(val)
+        # The set hasn't been changed (bogus reflecting)
+        self.assertEqual(val, set([1, 2.5]))
+        with self.assert_type_error(msg):
+            cfunc(set([1, 2j]))
+        # Same when the set is nested in a tuple or namedtuple
+        with self.assert_type_error(msg):
+            cfunc((1, set([1, 2j])))
+        with self.assert_type_error(msg):
+            cfunc(Point(1, set([1, 2j])))
+        # Tuples of different size.
+        # Note the check is really on the tuple side.
+        lst = set([(1,), (2, 3)])
+        # Depending on which tuple is examined first, we could get
+        # a IndexError or a ValueError.
+        with self.assertRaises((IndexError, ValueError)) as raises:
+            cfunc(lst)
+
+
+class TestSetReflection(BaseTest):
+    """
+    Test reflection of native Numba sets on Python set objects.
+    """
+
+    def check_reflection(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        samples = [(set([1., 2., 3., 4.]), set([0.])),
+                   (set([1., 2., 3., 4.]), set([5., 6., 7., 8., 9.])),
+                   ]
+        for dest, src in samples:
+            expected = set(dest)
+            got = set(dest)
+            pyres = pyfunc(expected, src)
+            with self.assertRefCount(got, src):
+                cres = cfunc(got, src)
+                self.assertPreciseEqual(cres, pyres)
+                self.assertPreciseEqual(expected, got)
+                self.assertEqual(pyres[0] is expected, cres[0] is got)
+                del pyres, cres
+
+    def test_reflect_simple(self):
+        self.check_reflection(reflect_simple)
+
+    def test_reflect_conditional(self):
+        self.check_reflection(reflect_conditional)
+
+    def test_reflect_exception(self):
+        """
+        When the function exits with an exception, sets should still be
+        reflected.
+        """
+        pyfunc = reflect_exception
+        cfunc = jit(nopython=True)(pyfunc)
+        s = set([1, 2, 3])
+        with self.assertRefCount(s):
+            with self.assertRaises(ZeroDivisionError):
+                cfunc(s)
+            self.assertPreciseEqual(s, set([1, 2, 3, 42]))
+
+    @tag('important')
+    def test_reflect_same_set(self):
+        """
+        When the same set object is reflected twice, behaviour should
+        be consistent.
+        """
+        pyfunc = reflect_dual
+        cfunc = jit(nopython=True)(pyfunc)
+        pyset = set([1, 2, 3])
+        cset = pyset.copy()
+        expected = pyfunc(pyset, pyset)
+        got = cfunc(cset, cset)
+        self.assertPreciseEqual(expected, got)
+        self.assertPreciseEqual(pyset, cset)
+        self.assertPreciseEqual(sys.getrefcount(pyset), sys.getrefcount(cset))
+
+    def test_reflect_clean(self):
+        """
+        When the set wasn't mutated, no reflection should take place.
+        """
+        cfunc = jit(nopython=True)(noop)
+        # Use a complex, as Python integers can be cached
+        s = set([12.5j])
+        ids = [id(x) for x in s]
+        cfunc(s)
+        self.assertEqual([id(x) for x in s], ids)
 
 
 class TestExamples(BaseTest):

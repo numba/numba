@@ -132,6 +132,9 @@ class EnvironmentManager(object):
         return self.pyapi.list_getitem(self.env_body.consts, index)
 
 
+_IteratorLoop = namedtuple('_IteratorLoop', ('value', 'do_break'))
+
+
 class PythonAPI(object):
     """
     Code generation facilities to call into the CPython C API (and related
@@ -166,6 +169,10 @@ class PythonAPI(object):
         self.cstring = Type.pointer(Type.int(8))
         self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
+        if PYVERSION >= (3, 0):
+            self.py_hash_t = self.py_ssize_t
+        else:
+            self.py_hash_t = self.long
 
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
@@ -812,6 +819,55 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PySet_Add")
         return self.builder.call(fn, [set, value])
 
+    def set_clear(self, set):
+        fnty = Type.function(Type.int(), [self.pyobj])
+        fn = self._get_function(fnty, name="PySet_Clear")
+        return self.builder.call(fn, [set])
+
+    def set_size(self, set):
+        fnty = Type.function(self.py_ssize_t, [self.pyobj])
+        fn = self._get_function(fnty, name="PySet_Size")
+        return self.builder.call(fn, [set])
+
+    def set_update(self, set, iterable):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="_PySet_Update")
+        return self.builder.call(fn, [set, iterable])
+
+    def set_next_entry(self, set, posptr, keyptr, hashptr):
+        fnty = Type.function(Type.int(),
+                             [self.pyobj, self.py_ssize_t.as_pointer(),
+                              self.pyobj.as_pointer(), self.py_hash_t.as_pointer()])
+        fn = self._get_function(fnty, name="_PySet_NextEntry")
+        return self.builder.call(fn, (set, posptr, keyptr, hashptr))
+
+    @contextlib.contextmanager
+    def set_iterate(self, set):
+        builder = self.builder
+
+        hashptr = cgutils.alloca_once(builder, self.py_hash_t, name="hashptr")
+        keyptr = cgutils.alloca_once(builder, self.pyobj, name="keyptr")
+        posptr = cgutils.alloca_once_value(builder,
+                                           ir.Constant(self.py_ssize_t, 0),
+                                           name="posptr")
+
+        bb_body = builder.append_basic_block("bb_body")
+        bb_end = builder.append_basic_block("bb_end")
+
+        builder.branch(bb_body)
+        def do_break():
+            builder.branch(bb_end)
+
+        with builder.goto_block(bb_body):
+            r = self.set_next_entry(set, posptr, keyptr, hashptr)
+            finished = cgutils.is_null(builder, r)
+            with builder.if_then(finished, likely=False):
+                builder.branch(bb_end)
+            yield _IteratorLoop(builder.load(keyptr), do_break)
+            builder.branch(bb_body)
+
+        builder.position_at_end(bb_end)
+
     #
     # GIL APIs
     #
@@ -854,6 +910,26 @@ class PythonAPI(object):
         fnty = Type.function(Type.void(), [self.voidptr])
         fn = self._get_function(fnty, name="PyEval_RestoreThread")
         self.builder.call(fn, [thread_state])
+
+    #
+    # Generic object private data (a way of associating an arbitrary void *
+    # pointer to an arbitrary Python object).
+    #
+
+    def object_get_private_data(self, obj):
+        fnty = Type.function(self.voidptr, [self.pyobj])
+        fn = self._get_function(fnty, name="numba_get_pyobject_private_data")
+        return self.builder.call(fn, (obj,))
+
+    def object_set_private_data(self, obj, ptr):
+        fnty = Type.function(Type.void(), [self.pyobj, self.voidptr])
+        fn = self._get_function(fnty, name="numba_set_pyobject_private_data")
+        return self.builder.call(fn, (obj, ptr))
+
+    def object_reset_private_data(self, obj):
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="numba_reset_pyobject_private_data")
+        return self.builder.call(fn, (obj,))
 
 
     #

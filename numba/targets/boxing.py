@@ -7,7 +7,7 @@ from llvmlite import ir
 from .. import cgutils, numpy_support, types
 from ..pythonapi import box, unbox, reflect, NativeValue
 
-from . import listobj
+from . import listobj, setobj
 
 
 #
@@ -659,6 +659,178 @@ def reflect_list(typ, val, c):
 
         # Mark the list clean, in case it is reflected twice
         list.set_dirty(False)
+
+
+def _python_set_to_native(typ, obj, c, size, setptr, errorptr):
+    """
+    Construct a new native set from a Python set.
+    """
+    # Allocate a new native set
+    ok, inst = setobj.SetInstance.allocate_ex(c.context, c.builder, typ, size)
+    with c.builder.if_else(ok, likely=True) as (if_ok, if_not_ok):
+        with if_ok:
+            # Traverse Python set and unbox objects into native set
+            typobjptr = cgutils.alloca_once_value(c.builder,
+                                                  ir.Constant(c.pyapi.pyobj, None))
+
+            with c.pyapi.set_iterate(obj) as loop:
+                itemobj = loop.value
+                # Mandate that objects all have the same exact type
+                typobj = c.pyapi.get_type(itemobj)
+                expected_typobj = c.builder.load(typobjptr)
+
+                with c.builder.if_else(
+                    cgutils.is_null(c.builder, expected_typobj),
+                    likely=False) as (if_first, if_not_first):
+                    with if_first:
+                        # First iteration => store item type
+                        c.builder.store(typobj, typobjptr)
+                    with if_not_first:
+                        # Otherwise, check item type
+                        type_mismatch = c.builder.icmp_signed('!=', typobj,
+                                                              expected_typobj)
+                        with c.builder.if_then(type_mismatch, likely=False):
+                            c.builder.store(cgutils.true_bit, errorptr)
+                            c.pyapi.err_set_string("PyExc_TypeError",
+                                                   "can't unbox heterogenous set")
+                            loop.do_break()
+
+                # XXX we don't call native cleanup for each set element,
+                # since that would require keeping track
+                # of which unboxings have been successful.
+                native = c.unbox(typ.dtype, itemobj)
+                with c.builder.if_then(native.is_error, likely=False):
+                    c.builder.store(cgutils.true_bit, errorptr)
+                inst.add(native.value, do_resize=False)
+
+            if typ.reflected:
+                inst.parent = obj
+            # Associate meminfo pointer with the Python object for later reuse.
+            with c.builder.if_then(c.builder.not_(c.builder.load(errorptr)),
+                                   likely=False):
+                c.pyapi.object_set_private_data(obj, inst.meminfo)
+            inst.set_dirty(False)
+            c.builder.store(inst.value, setptr)
+
+        with if_not_ok:
+            c.builder.store(cgutils.true_bit, errorptr)
+
+    # If an error occurred, drop the whole native set
+    with c.builder.if_then(c.builder.load(errorptr)):
+        c.context.nrt_decref(c.builder, typ, inst.value)
+
+
+@unbox(types.Set)
+def unbox_set(typ, obj, c):
+    """
+    Convert set *obj* to a native set.
+
+    If set was previously unboxed, we reuse the existing native set
+    to ensure consistency.
+    """
+    size = c.pyapi.set_size(obj)
+
+    errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+    setptr = cgutils.alloca_once(c.builder, c.context.get_value_type(typ))
+
+    # See if the set was previously unboxed, if so, re-use the meminfo.
+    ptr = c.pyapi.object_get_private_data(obj)
+
+    with c.builder.if_else(cgutils.is_not_null(c.builder, ptr)) \
+        as (has_meminfo, otherwise):
+
+        with has_meminfo:
+            # Set was previously unboxed => reuse meminfo
+            inst = setobj.SetInstance.from_meminfo(c.context, c.builder, typ, ptr)
+            if typ.reflected:
+                inst.parent = obj
+            c.builder.store(inst.value, setptr)
+
+        with otherwise:
+            _python_set_to_native(typ, obj, c, size, setptr, errorptr)
+
+    def cleanup():
+        # Clean up the associated pointer, as the meminfo is now invalid.
+        c.pyapi.object_reset_private_data(obj)
+
+    return NativeValue(c.builder.load(setptr),
+                       is_error=c.builder.load(errorptr),
+                       cleanup=cleanup)
+
+
+def _native_set_to_python_list(typ, payload, c):
+    """
+    Create a Python list from a native set's items.
+    """
+    nitems = payload.used
+    listobj = c.pyapi.list_new(nitems)
+    ok = cgutils.is_not_null(c.builder, listobj)
+    with c.builder.if_then(ok, likely=True):
+        index = cgutils.alloca_once_value(c.builder,
+                                          ir.Constant(nitems.type, 0))
+        with payload._iterate() as loop:
+            i = c.builder.load(index)
+            item = loop.entry.key
+            itemobj = c.box(typ.dtype, item)
+            c.pyapi.list_setitem(listobj, i, itemobj)
+            i = c.builder.add(i, ir.Constant(i.type, 1))
+            c.builder.store(i, index)
+
+    return ok, listobj
+
+
+@box(types.Set)
+def box_set(typ, val, c):
+    """
+    Convert native set *val* to a set object.
+    """
+    inst = setobj.SetInstance(c.context, c.builder, typ, val)
+    obj = inst.parent
+    res = cgutils.alloca_once_value(c.builder, obj)
+
+    with c.builder.if_else(cgutils.is_not_null(c.builder, obj)) as (has_parent, otherwise):
+        with has_parent:
+            # Set is actually reflected => return the original object
+            # (note not all set instances whose *type* is reflected are
+            #  actually reflected; see numba.tests.test_sets for an example)
+            c.pyapi.incref(obj)
+
+        with otherwise:
+            # Build a new Python list and then create a set from that
+            payload = inst.payload
+            ok, listobj = _native_set_to_python_list(typ, payload, c)
+            with c.builder.if_then(ok, likely=True):
+                obj = c.pyapi.set_new(listobj)
+                c.pyapi.decref(listobj)
+                c.builder.store(obj, res)
+
+    # Steal NRT ref
+    c.context.nrt_decref(c.builder, typ, val)
+    return c.builder.load(res)
+
+@reflect(types.Set)
+def reflect_set(typ, val, c):
+    """
+    Reflect the native set's contents into the Python object.
+    """
+    if not typ.reflected:
+        return
+    inst = setobj.SetInstance(c.context, c.builder, typ, val)
+    payload = inst.payload
+
+    with c.builder.if_then(payload.dirty, likely=False):
+        obj = inst.parent
+        # XXX errors are not dealt with below
+        c.pyapi.set_clear(obj)
+
+        # Build a new Python list and then update the set with that
+        ok, listobj = _native_set_to_python_list(typ, payload, c)
+        with c.builder.if_then(ok, likely=True):
+            c.pyapi.set_update(obj, listobj)
+            c.pyapi.decref(listobj)
+
+        # Mark the set clean, in case it is reflected twice
+        inst.set_dirty(False)
 
 
 #

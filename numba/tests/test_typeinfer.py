@@ -314,6 +314,17 @@ class TestUnify(unittest.TestCase):
         bty = types.List(types.Tuple([i16]))
         self.assert_unify_failure(aty, bty)
 
+    def test_set(self):
+        # Different reflections
+        aty = types.Set(i16, reflected=True)
+        bty = types.Set(i32)
+        cty = types.Set(i32, reflected=True)
+        self.assert_unify(aty, bty, cty)
+        # Incompatible dtypes
+        aty = types.Set(i16)
+        bty = types.Set(types.Tuple([i16]))
+        self.assert_unify_failure(aty, bty)
+
     @tag('important')
     def test_range(self):
         aty = types.range_state32_type

@@ -707,6 +707,8 @@ class SetPayloadModel(StructModel):
             ('mask', types.intp),
             # Search finger
             ('finger', types.intp),
+            # This member is only used only for reflected sets
+            ('dirty', types.boolean),
             # Actually an inlined var-sized array
             ('entries', entry_type),
         ]
@@ -719,6 +721,8 @@ class SetModel(StructModel):
         members = [
             # The meminfo data points to a SetPayload
             ('meminfo', types.MemInfoPointer(payload_type)),
+            # This member is only used only for reflected sets
+            ('parent', types.pyobject),
         ]
         super(SetModel, self).__init__(dmm, fe_type, members)
 

@@ -134,6 +134,14 @@ def _typeof_list(val, c):
     ty = typeof_impl(val[0], c)
     return types.List(ty, reflected=True)
 
+@typeof_impl.register(set)
+def _typeof_set(val, c):
+    if len(val) == 0:
+        raise ValueError("Cannot type empty set")
+    item = next(iter(val))
+    ty = typeof_impl(item, c)
+    return types.Set(ty, reflected=True)
+
 @typeof_impl.register(slice)
 def _typeof_slice(val, c):
     return types.slice2_type if val.step in (None, 1) else types.slice3_type

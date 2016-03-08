@@ -136,6 +136,14 @@ class _SetPayload(object):
         self._payload.finger = value
 
     @property
+    def dirty(self):
+        return self._payload.dirty
+
+    @dirty.setter
+    def dirty(self, value):
+        self._payload.dirty = value
+
+    @property
     def entries(self):
         """
         A pointer to the start of the entries array.
@@ -348,6 +356,24 @@ class SetInstance(object):
     def meminfo(self):
         return self._set.meminfo
 
+    @property
+    def parent(self):
+        return self._set.parent
+
+    @parent.setter
+    def parent(self, value):
+        self._set.parent = value
+
+    def get_size(self):
+        """
+        Return the number of elements in the size.
+        """
+        return self.payload.used
+
+    def set_dirty(self, val):
+        if self._ty.reflected:
+            self.payload.dirty = cgutils.true_bit if val else cgutils.false_bit
+
     def _add_entry(self, payload, entry, item, h, do_resize=True):
         context = self._context
         builder = self._builder
@@ -366,6 +392,7 @@ class SetInstance(object):
         # Grow table if necessary
         if do_resize:
             self.upsize(used)
+        self.set_dirty(True)
 
     def _add_key(self, payload, item, h, do_resize=True):
         context = self._context
@@ -391,6 +418,7 @@ class SetInstance(object):
             # Grow table if necessary
             if do_resize:
                 self.upsize(used)
+            self.set_dirty(True)
 
     def _remove_entry(self, payload, entry, do_resize=True):
         # Mark entry deleted
@@ -402,6 +430,7 @@ class SetInstance(object):
         # Shrink table if necessary
         if do_resize:
             self.downsize(used)
+        self.set_dirty(True)
 
     def _remove_key(self, payload, item, h, do_resize=True):
         context = self._context
@@ -415,13 +444,13 @@ class SetInstance(object):
 
         return found
 
-    def add(self, item):
+    def add(self, item, do_resize=True):
         context = self._context
         builder = self._builder
 
         payload = self.payload
         h = get_hash_value(context, builder, self._ty.dtype, item)
-        self._add_key(payload, item, h)
+        self._add_key(payload, item, h, do_resize)
 
     def contains(self, item):
         context = self._context
@@ -462,6 +491,7 @@ class SetInstance(object):
         intp_t = context.get_value_type(types.intp)
         minsize = ir.Constant(intp_t, MINSIZE)
         self._replace_payload(minsize)
+        self.set_dirty(True)
 
     def copy(self):
         """
@@ -674,6 +704,20 @@ class SetInstance(object):
         with builder.if_then(builder.not_(ok), likely=False):
             context.call_conv.return_user_exc(builder, MemoryError,
                                               ("cannot allocate set",))
+        return self
+
+    @classmethod
+    def from_meminfo(cls, context, builder, set_type, meminfo):
+        """
+        Allocate a new set instance pointing to an existing payload
+        (a meminfo pointer).
+        Note the parent field has to be filled by the caller.
+        """
+        self = cls(context, builder, set_type, None)
+        self._set.meminfo = meminfo
+        self._set.parent = context.get_constant_null(types.pyobject)
+        context.nrt_incref(builder, set_type, self.value)
+        # Payload is part of the meminfo, no need to touch it
         return self
 
     @classmethod
@@ -903,6 +947,7 @@ class SetInstance(object):
                 with if_ok:
                     if not realloc:
                         self._set.meminfo = meminfo
+                        self._set.parent = context.get_constant_null(types.pyobject)
                     payload = self.payload
                     # Initialize entries to 0xff (EMPTY)
                     cgutils.memset(builder, payload.ptr, allocsize, 0xFF)
@@ -1083,7 +1128,7 @@ def set_constructor(context, builder, sig, args):
 @lower_builtin(len, types.Set)
 def set_len(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
-    return inst.payload.used
+    return inst.get_size()
 
 @lower_builtin("in", types.Any, types.Set)
 def in_set(context, builder, sig, args):
@@ -1320,3 +1365,21 @@ def set_gt(context, builder, sig, args):
         return b < a
 
     return context.compile_internal(builder, gt_impl, sig, args)
+
+@lower_builtin('is', types.Set, types.Set)
+def set_is(context, builder, sig, args):
+    a = SetInstance(context, builder, sig.args[0], args[0])
+    b = SetInstance(context, builder, sig.args[1], args[1])
+    ma = builder.ptrtoint(a.meminfo, cgutils.intp_t)
+    mb = builder.ptrtoint(b.meminfo, cgutils.intp_t)
+    return builder.icmp_signed('==', ma, mb)
+
+
+# -----------------------------------------------------------------------------
+# Implicit casting
+
+@lower_cast(types.Set, types.Set)
+def set_to_set(context, builder, fromty, toty, val):
+    # Casting from non-reflected to reflected
+    assert fromty.dtype == toty.dtype
+    return val

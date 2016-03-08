@@ -196,6 +196,13 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(typeof(v), types.List(types.float64, reflected=True))
 
     @tag('important')
+    def test_sets(self):
+        v = set([1.0, 2.0, 3.0])
+        self.assertEqual(typeof(v), types.Set(types.float64, reflected=True))
+        v = frozenset(v)
+        self.assertIs(typeof(v), None)
+
+    @tag('important')
     def test_namedtuple(self):
         v = Point(1, 2)
         tp_point = typeof(v)
@@ -449,6 +456,37 @@ class TestFingerprint(TestCase):
         distinct.add(compute_fingerprint((1j, 2, 3)))
         distinct.add(compute_fingerprint((1, (), np.empty(5))))
         distinct.add(compute_fingerprint((1, (), np.empty((5, 1)))))
+
+    def test_lists(self):
+        distinct = DistinctChecker()
+
+        s = compute_fingerprint([1])
+        self.assertEqual(compute_fingerprint([2, 3]), s)
+        distinct.add(s)
+
+        distinct.add(compute_fingerprint([1j]))
+        distinct.add(compute_fingerprint([4.5, 6.7]))
+        distinct.add(compute_fingerprint([(1,)]))
+
+        with self.assertRaises(ValueError):
+            compute_fingerprint([])
+
+    def test_sets(self):
+        distinct = DistinctChecker()
+
+        s = compute_fingerprint(set([1]))
+        self.assertEqual(compute_fingerprint(set([2, 3])), s)
+        distinct.add(s)
+
+        distinct.add(compute_fingerprint([1]))
+        distinct.add(compute_fingerprint(set([1j])))
+        distinct.add(compute_fingerprint(set([4.5, 6.7])))
+        distinct.add(compute_fingerprint(set([(1,)])))
+
+        with self.assertRaises(ValueError):
+            compute_fingerprint(set())
+        with self.assertRaises(NotImplementedError):
+            compute_fingerprint(frozenset([2, 3]))
 
     def test_complicated_type(self):
         # Generating a large fingerprint
