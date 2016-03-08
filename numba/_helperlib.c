@@ -855,6 +855,7 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
 {
     PyObject *module, *capi, *cobj;
     void *res = NULL;
+    const char *capsule_name;
 
     module = PyImport_ImportModule(module_name);
     if (module == NULL)
@@ -867,22 +868,12 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
     Py_DECREF(capi);
     if (cobj == NULL)
         return NULL;
-#if PY_MAJOR_VERSION >= 3 || (PY_MINOR_VERSION >= 7)
-    {
-        /* 2.7+ => Cython exports a PyCapsule */
-        const char *capsule_name = PyCapsule_GetName(cobj);
-        if (capsule_name != NULL) {
-            res = PyCapsule_GetPointer(cobj, capsule_name);
-        }
-        Py_DECREF(cobj);
+    /* 2.7+ => Cython exports a PyCapsule */
+    capsule_name = PyCapsule_GetName(cobj);
+    if (capsule_name != NULL) {
+        res = PyCapsule_GetPointer(cobj, capsule_name);
     }
-#else
-    {
-        /* 2.6 => Cython exports a legacy PyCObject */
-        res = PyCObject_AsVoidPtr(cobj);
-        Py_DECREF(cobj);
-    }
-#endif
+    Py_DECREF(cobj);
     return res;
 }
 

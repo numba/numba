@@ -117,13 +117,8 @@ class TestConversion(TestCase):
     def test_negative_to_unsigned(self):
         def f(x):
             return x
-        # TypeError is for 2.6
-        if sys.version_info >= (2, 7):
-            with self.assertRaises(OverflowError):
-                jit('uintp(uintp)', nopython=True)(f)(-5)
-        else:
-            with self.assertRaises(TypeError):
-                jit('uintp(uintp)', nopython=True)(f)(-5)
+        with self.assertRaises(OverflowError):
+            jit('uintp(uintp)', nopython=True)(f)(-5)
 
     # test the switch logic in callwraper.py:build_wrapper() works for more than one argument
     # and where the error occurs 
@@ -133,15 +128,9 @@ class TestConversion(TestCase):
                                 return_type=types.uint64)
         cfunc = cres.entry_point
         test_fail_args = ((-1, 0, 1), (0, -1, 1), (0, 1, -1))
-        # TypeError is for 2.6
-        if sys.version_info >= (2, 7):
-            with self.assertRaises(OverflowError):
-                for a, b, c in test_fail_args:
-                    cfunc(a, b, c) 
-        else:
-            with self.assertRaises(TypeError):
-                for a, b, c in test_fail_args:
-                    cfunc(a, b, c) 
+        with self.assertRaises(OverflowError):
+            for a, b, c in test_fail_args:
+                cfunc(a, b, c)
 
     # test switch logic of callwraper.py:build_wrapper() with records as function parameters
     def test_multiple_args_records(self): 
@@ -165,10 +154,8 @@ class TestConversion(TestCase):
         with self.assertRefCount(st1):
             test_fail_args = ((st1, -1, 1), (st1, 1, -1))
 
-            # TypeError is for 2.6
-            exc_type = OverflowError if sys.version_info >= (2, 7) else TypeError
             for a, b, c in test_fail_args:
-                with self.assertRaises(exc_type):
+                with self.assertRaises(OverflowError):
                     cfunc(a, b, c)
 
             del test_fail_args, a, b, c
@@ -186,9 +173,6 @@ class TestConversion(TestCase):
         """
         def f(x, y):
             pass
-        # The exception raised when passing a negative number
-        # to PyLong_AsUnsignedLongLong
-        exc_type = OverflowError if sys.version_info >= (2, 7) else TypeError
 
         def _objects(obj):
             objs = [obj]
@@ -203,17 +187,16 @@ class TestConversion(TestCase):
         with self.assertRefCount(*objects):
             cres.entry_point(obj, 1)
         with self.assertRefCount(*objects):
-            with self.assertRaises(exc_type):
+            with self.assertRaises(OverflowError):
                 cres.entry_point(obj, -1)
 
         cres = compile_isolated(f, (types.uint32, typ))
         with self.assertRefCount(*objects):
             cres.entry_point(1, obj)
         with self.assertRefCount(*objects):
-            with self.assertRaises(exc_type):
+            with self.assertRaises(OverflowError):
                 cres.entry_point(-1, obj)
 
-    @unittest.skipUnless(sys.version_info >= (2, 7), "test uses memoryview")
     def test_cleanup_buffer(self):
         mem = memoryview(bytearray(b"xyz"))
         self.check_argument_cleanup(types.Buffer(types.intc, 1, 'C'), mem)
@@ -223,13 +206,11 @@ class TestConversion(TestCase):
         recarr = np.zeros(1, dtype=dtype)
         self.check_argument_cleanup(numpy_support.from_dtype(dtype), recarr[0])
 
-    @unittest.skipUnless(sys.version_info >= (2, 7), "test uses memoryview")
     def test_cleanup_tuple(self):
         mem = memoryview(bytearray(b"xyz"))
         tp = types.UniTuple(types.Buffer(types.intc, 1, 'C'), 2)
         self.check_argument_cleanup(tp, (mem, mem))
 
-    @unittest.skipUnless(sys.version_info >= (2, 7), "test uses memoryview")
     def test_cleanup_optional(self):
         mem = memoryview(bytearray(b"xyz"))
         tp = types.Optional(types.Buffer(types.intc, 1, 'C'))

@@ -124,7 +124,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.tanh`
 * :func:`math.atan2`
 * :func:`math.exp`
-* :func:`math.expm1`             not available in Python 2.6
+* :func:`math.expm1`
 * :func:`math.fabs`
 * :func:`math.log`
 * :func:`math.log10`

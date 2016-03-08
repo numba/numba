@@ -136,8 +136,6 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         arr = np.recarray(4, dtype=dtype)
         check(arr, rec_ty, 1, "C", actual_aligned)
 
-    @unittest.skipIf(sys.version_info < (2, 7),
-                     "buffer protocol not supported on Python 2.6")
     def test_buffers(self):
         if sys.version_info >= (3,):
             b = b"xx"
@@ -388,10 +386,9 @@ class TestFingerprint(TestCase):
         self.assertEqual(compute_fingerprint(b'xx'), s)
         distinct.add(s)
         distinct.add(compute_fingerprint(bytearray()))
-        if sys.version_info >= (2, 7):
-            distinct.add(compute_fingerprint(memoryview(b'')))
-            m_uint8_1d = compute_fingerprint(memoryview(bytearray()))
-            distinct.add(m_uint8_1d)
+        distinct.add(compute_fingerprint(memoryview(b'')))
+        m_uint8_1d = compute_fingerprint(memoryview(bytearray()))
+        distinct.add(m_uint8_1d)
 
         if sys.version_info >= (3,):
             arr = array.array('B', [42])
@@ -404,20 +401,16 @@ class TestFingerprint(TestCase):
 
         arr = np.empty(16, dtype=np.uint8)
         distinct.add(compute_fingerprint(arr))
-        if sys.version_info >= (2, 7):
-            self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
+        self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
         arr = arr.reshape((4, 4))
         distinct.add(compute_fingerprint(arr))
-        if sys.version_info >= (2, 7):
-            distinct.add(compute_fingerprint(memoryview(arr)))
+        distinct.add(compute_fingerprint(memoryview(arr)))
         arr = arr.T
         distinct.add(compute_fingerprint(arr))
-        if sys.version_info >= (2, 7):
-            distinct.add(compute_fingerprint(memoryview(arr)))
+        distinct.add(compute_fingerprint(memoryview(arr)))
         arr = arr[::2]
         distinct.add(compute_fingerprint(arr))
-        if sys.version_info >= (2, 7):
-            distinct.add(compute_fingerprint(memoryview(arr)))
+        distinct.add(compute_fingerprint(memoryview(arr)))
 
         if sys.version_info >= (3,):
             m = mmap.mmap(-1, 16384)

@@ -22,8 +22,7 @@ _type_map = {
     array.array: types.PyArray,
     }
 
-if sys.version_info >= (2, 7):
-    _type_map[memoryview] = types.MemoryView
+_type_map[memoryview] = types.MemoryView
 if sys.version_info >= (3,):
     _type_map[bytes] = types.Bytes
 
