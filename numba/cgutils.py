@@ -950,15 +950,15 @@ def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
     ptr_t = ir.IntType(8).as_pointer()
     size_t = count.type
 
-    memmove = builder.module.declare_intrinsic('llvm.memmove',
-                                               [ptr_t, ptr_t, size_t])
+    memcpy = builder.module.declare_intrinsic(func_name,
+                                              [ptr_t, ptr_t, size_t])
     align = ir.Constant(ir.IntType(32), align)
     is_volatile = false_bit
-    builder.call(memmove, [builder.bitcast(dst, ptr_t),
-                           builder.bitcast(src, ptr_t),
-                           builder.mul(count, ir.Constant(size_t, itemsize)),
-                           align,
-                           is_volatile])
+    builder.call(memcpy, [builder.bitcast(dst, ptr_t),
+                          builder.bitcast(src, ptr_t),
+                          builder.mul(count, ir.Constant(size_t, itemsize)),
+                          align,
+                          is_volatile])
 
 
 def raw_memcpy(builder, dst, src, count, itemsize, align=1):

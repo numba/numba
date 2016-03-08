@@ -708,7 +708,7 @@ def _python_set_to_native(typ, obj, c, size, setptr, errorptr):
             # Associate meminfo pointer with the Python object for later reuse.
             with c.builder.if_then(c.builder.not_(c.builder.load(errorptr)),
                                    likely=False):
-                c.pyapi.set_set_private_data(obj, inst.meminfo)
+                c.pyapi.object_set_private_data(obj, inst.meminfo)
             inst.set_dirty(False)
             c.builder.store(inst.value, setptr)
 
@@ -733,9 +733,8 @@ def unbox_set(typ, obj, c):
     errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
     setptr = cgutils.alloca_once(c.builder, c.context.get_value_type(typ))
 
-    # Use pointer-stuffing hack to see if the list was previously unboxed,
-    # if so, re-use the meminfo.
-    ptr = c.pyapi.set_get_private_data(obj)
+    # See if the set was previously unboxed, if so, re-use the meminfo.
+    ptr = c.pyapi.object_get_private_data(obj)
 
     with c.builder.if_else(cgutils.is_not_null(c.builder, ptr)) \
         as (has_meminfo, otherwise):
@@ -751,8 +750,8 @@ def unbox_set(typ, obj, c):
             _python_set_to_native(typ, obj, c, size, setptr, errorptr)
 
     def cleanup():
-        # Clean up the stuffed pointer, as the meminfo is now invalid.
-        c.pyapi.set_reset_private_data(obj)
+        # Clean up the associated pointer, as the meminfo is now invalid.
+        c.pyapi.object_reset_private_data(obj)
 
     return NativeValue(c.builder.load(setptr),
                        is_error=c.builder.load(errorptr),

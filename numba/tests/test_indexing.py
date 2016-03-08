@@ -64,6 +64,14 @@ def slicing_1d_usecase7(a, start):
         total += b[i] * (i + 1)
     return total
 
+def slicing_1d_usecase8(a, start):
+    # Omitted start with negative step
+    b = a[::-2]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
 
 def slicing_2d_usecase(a, start1, stop1, step1, start2, stop2, step2):
     # The index is a homogenous tuple of slices
@@ -311,6 +319,13 @@ class TestGetItem(TestCase):
 
     def test_1d_slicing7_npm(self):
         self.test_1d_slicing7(flags=Noflags)
+
+    def test_1d_slicing8(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase8
+        self.check_1d_slicing_with_arg(pyfunc, flags)
+
+    def test_1d_slicing8_npm(self):
+        self.test_1d_slicing8(flags=Noflags)
 
     def test_2d_slicing(self, flags=enable_pyobj_flags):
         """

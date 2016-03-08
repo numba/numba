@@ -1471,3 +1471,14 @@ def type_impl(context, builder, sig, args):
     One-argument type() builtin.
     """
     return context.get_dummy_value()
+
+
+# -----------------------------------------------------------------------------
+
+@lower_builtin("not in", types.Any, types.Any)
+def not_in(context, builder, sig, args):
+    def in_impl(a, b):
+        return a in b
+
+    res = context.compile_internal(builder, in_impl, sig, args)
+    return builder.not_(res)

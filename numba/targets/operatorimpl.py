@@ -6,7 +6,7 @@ import operator
 
 from numba.targets.imputils import Registry
 from numba.targets import builtins
-from numba import types, utils
+from numba import types, utils, typing
 
 registry = Registry()
 lower = registry.lower
@@ -18,8 +18,14 @@ lower = registry.lower
 def map_operator(name, inplace_name, op):
     op_func = getattr(operator, name)
 
+    reverse_args = (op == 'in')
+
     @lower(op_func, types.VarArg(types.Any))
     def binop_impl(context, builder, sig, args):
+        print("binop_impl:", op, sig, args)
+        if reverse_args:
+            args = args[::-1]
+            sig = typing.signature(sig.return_type, *sig.args[::-1])
         impl = context.get_function(op, sig)
         return impl(builder, args)
 

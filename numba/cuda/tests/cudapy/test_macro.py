@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from numba import cuda, float32
 from numba.cuda.testing import unittest
-from numba.macro import MacroError
+from numba.errors import MacroError
 from numba.cuda.testing import skip_on_cudasim
 
 GLOBAL_CONSTANT = 5
