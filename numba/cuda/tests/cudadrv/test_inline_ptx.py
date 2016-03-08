@@ -1,6 +1,8 @@
 from __future__ import print_function, division, absolute_import
+
 from llvmlite.llvmpy.core import Module, Type, Builder, InlineAsm
 from llvmlite import binding as ll
+
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
@@ -9,10 +11,10 @@ from numba.cuda.testing import skip_on_cudasim
 @skip_on_cudasim('Inline PTX cannot be used in the simulator')
 class TestCudaInlineAsm(CUDATestCase):
     def test_inline_rsqrt(self):
-        mod = Module.new(__name__)
+        mod = Module(__name__)
         fnty = Type.function(Type.void(), [Type.pointer(Type.float())])
         fn = mod.add_function(fnty, 'cu_rsqrt')
-        bldr = Builder.new(fn.append_basic_block('entry'))
+        bldr = Builder(fn.append_basic_block('entry'))
 
         rsqrt_approx_fnty = Type.function(Type.float(), [Type.float()])
         inlineasm = InlineAsm.get(rsqrt_approx_fnty,

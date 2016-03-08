@@ -38,7 +38,7 @@ class StructureTestCase(TestCase):
                                                  name=self.id())
         assert function.is_declaration
         entry_block = function.append_basic_block('entry')
-        builder = lc.Builder.new(entry_block)
+        builder = lc.Builder(entry_block)
 
         first = [True]
 

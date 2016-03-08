@@ -190,7 +190,7 @@ def getitem_unituple(context, builder, sig, args):
 
     bbelse = builder.append_basic_block("switch.else")
     bbend = builder.append_basic_block("switch.end")
-    switch = builder.switch(idx, bbelse, n=tupty.count)
+    switch = builder.switch(idx, bbelse)
 
     with builder.goto_block(bbelse):
         context.call_conv.return_user_exc(builder, IndexError,

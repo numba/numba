@@ -28,7 +28,7 @@ class TestCompileCache(unittest.TestCase):
 
         typing_context = typing.Context()
         context = cpu.CPUContext(typing_context)
-        module = lc.Module.new("test_module")
+        module = lc.Module("test_module")
 
         sig = typing.signature(types.int32, types.int32)
         llvm_fnty = context.call_conv.get_function_type(sig.return_type,
@@ -37,7 +37,7 @@ class TestCompileCache(unittest.TestCase):
         args = context.call_conv.get_arguments(function)
         assert function.is_declaration
         entry_block = function.append_basic_block('entry')
-        builder = lc.Builder.new(entry_block)
+        builder = lc.Builder(entry_block)
 
         # Ensure the cache is empty to begin with
         self.assertEqual(0, len(context.cached_internal_func))
@@ -63,7 +63,7 @@ class TestCompileCache(unittest.TestCase):
         args2 = context.call_conv.get_arguments(function2)
         assert function2.is_declaration
         entry_block2 = function2.append_basic_block('entry')
-        builder2 = lc.Builder.new(entry_block2)
+        builder2 = lc.Builder(entry_block2)
         
         # Ensure that the same function with a different signature does not
         # reuse an entry from the cache in error

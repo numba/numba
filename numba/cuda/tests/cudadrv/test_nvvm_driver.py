@@ -29,10 +29,10 @@ class TestNvvmDriver(unittest.TestCase):
         self.assertTrue('ave' in ptx)
 
     def test_nvvm_from_llvm(self):
-        m = Module.new("test_nvvm_from_llvm")
+        m = Module("test_nvvm_from_llvm")
         fty = Type.function(Type.void(), [Type.int()])
         kernel = m.add_function(fty, name='mycudakernel')
-        bldr = Builder.new(kernel.append_basic_block('entry'))
+        bldr = Builder(kernel.append_basic_block('entry'))
         bldr.ret_void()
         set_cuda_kernel(kernel)
 

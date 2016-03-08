@@ -910,7 +910,7 @@ class BaseContext(object):
     def create_module(self, name):
         """Create a LLVM module
         """
-        return lc.Module.new(name)
+        return lc.Module(name)
 
     def _require_nrt(self):
         if not self.enable_nrt:
