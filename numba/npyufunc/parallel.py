@@ -440,10 +440,3 @@ _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
 
 if _DYLD_WORKAROUND_SET and _DYLD_WORKAROUND_VAL:
     _launch_threads()
-
-elif not _DYLD_WORKAROUND_SET:
-    # Do it automatically for python2.6 linux
-    if (sys.version_info[:2] == (2, 6) and
-            sys.platform.startswith('linux') and
-                utils.MACHINE_BITS == 64):
-        _launch_threads()

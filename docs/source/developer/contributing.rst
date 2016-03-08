@@ -178,7 +178,7 @@ also needs to pass the test suite before it is merged in.
 Platform support
 ''''''''''''''''
 
-Numba is to be kept compatible with Python 2.6, 2.7, 3.3 and 3.4 under
+Numba is to be kept compatible with Python 2.7, 3.4 and 3.5 under
 at least Linux, OS X and Windows.  Also, Numpy versions 1.6 and upwards
 are supported.
 

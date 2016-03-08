@@ -1,12 +1,11 @@
 from __future__ import absolute_import, print_function
 
-from collections import Sequence
+from collections import OrderedDict, Sequence
 import types as pytypes
 import inspect
 
 from llvmlite import ir as llvmir
 
-from numba.utils import OrderedDict
 from numba import types
 from numba.targets.registry import cpu_target
 from numba import njit
