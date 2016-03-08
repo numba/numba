@@ -20,11 +20,6 @@
 
 #include "_arraystruct.h"
 
-/* For Numpy 1.6 */
-#ifndef NPY_ARRAY_BEHAVED
-    #define NPY_ARRAY_BEHAVED NPY_BEHAVED
-#endif
-
 /*
  * PRNG support.
  */

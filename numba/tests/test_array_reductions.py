@@ -7,7 +7,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import typeof
 from numba.compiler import compile_isolated
-from .support import TestCase, skip_on_numpy_16, MemoryLeakMixin, tag
+from .support import TestCase, MemoryLeakMixin, tag
 
 
 def array_cumprod(arr):
@@ -334,12 +334,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr.fill(arrty.dtype('NaT'))
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
 
-    @skip_on_numpy_16
     def check_npdatetime(self, pyfunc):
         arr = np.arange(10).astype(dtype='M8[Y]')
         self._do_check_nptimedelta(pyfunc, arr)
 
-    @skip_on_numpy_16
     def check_nptimedelta(self, pyfunc):
         arr = np.arange(10).astype(dtype='m8[s]')
         self._do_check_nptimedelta(pyfunc, arr)

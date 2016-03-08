@@ -24,7 +24,7 @@ Dependencies
 ============
 
 * llvmlite
-* numpy (version 1.6 or higher)
+* numpy (version 1.7 or higher)
 * funcsigs (for Python 2)
 
 

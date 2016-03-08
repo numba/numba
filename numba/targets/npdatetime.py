@@ -9,10 +9,6 @@ from numba import npdatetime, types, cgutils
 from numba.targets.imputils import lower_builtin, impl_ret_untracked
 
 
-if not npdatetime.NPDATETIME_SUPPORTED:
-    raise NotImplementedError("numpy.datetime64 unsupported in this configuration")
-
-
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)
 NAT = Constant.int(TIMEDELTA64, npdatetime.NAT)

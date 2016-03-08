@@ -15,8 +15,7 @@ from numba.numpy_support import from_dtype
 from numba import vectorize
 from numba.config import PYVERSION
 from numba.errors import LoweringError, TypingError
-from .support import (TestCase, CompilationCache, skip_on_numpy_16,
-                      is_on_numpy_16, MemoryLeakMixin, tag)
+from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
 
 from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
@@ -1602,7 +1601,6 @@ class TestLoopTypesComplexNoPython(_LoopTypesTester):
 TestLoopTypesComplexNoPython.autogenerate()
 
 
-@skip_on_numpy_16
 class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]

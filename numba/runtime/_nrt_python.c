@@ -12,11 +12,6 @@
 #include "../_arraystruct.h"
 #include "nrt.h"
 
-/* For Numpy 1.6 */
-#ifndef NPY_ARRAY_BEHAVED
-    #define NPY_ARRAY_BEHAVED NPY_BEHAVED
-#endif
-
 
 /*
  * Create a NRT MemInfo for data owned by a PyObject.

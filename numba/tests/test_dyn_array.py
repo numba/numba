@@ -738,18 +738,13 @@ class TestNdZerosLike(TestNdEmptyLike):
     def check_result_value(self, ret, expected):
         np.testing.assert_equal(ret, expected)
 
-    @unittest.skipIf(numpy_version <= (1, 6),
-                     "zeros_like() broken on Numpy 1.6 with structured dtype")
     def test_like_structured(self):
         super(TestNdZerosLike, self).test_like_structured()
 
-    @unittest.skipIf(numpy_version <= (1, 6),
-                     "zeros_like() broken on Numpy 1.6 with structured dtype")
     def test_like_dtype_structured(self):
         super(TestNdZerosLike, self).test_like_dtype_structured()
 
 
-@unittest.skipIf(numpy_version < (1, 7), "test requires Numpy 1.7 or later")
 class TestNdOnesLike(TestNdZerosLike):
 
     def setUp(self):
