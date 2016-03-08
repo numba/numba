@@ -1313,6 +1313,10 @@ numba_reset_list_private_data(PyListObject *listobj)
         listobj->allocated = PyList_GET_SIZE(listobj);
 }
 
+/*
+ * Functions for tagging an arbitrary Python object with an arbitrary pointer.
+ * These functions make strong lifetime assumptions, see below.
+ */
 
 static PyObject *private_data_dict = NULL;
 
@@ -1325,12 +1329,12 @@ _get_private_data_dict(void)
 }
 
 NUMBA_EXPORT_FUNC(void)
-numba_set_set_private_data(PyObject *setobj, void *ptr)
+numba_set_pyobject_private_data(PyObject *obj, void *ptr)
 {
     PyObject *dct = _get_private_data_dict();
     /* This assumes the reference to setobj is kept alive until the
        call to numba_reset_set_private_data()! */
-    PyObject *key = PyLong_FromVoidPtr((void *) setobj);
+    PyObject *key = PyLong_FromVoidPtr((void *) obj);
     PyObject *value = PyLong_FromVoidPtr(ptr);
 
     if (!dct || !value || !key)
@@ -1346,10 +1350,10 @@ error:
 }
 
 NUMBA_EXPORT_FUNC(void *)
-numba_get_set_private_data(PyObject *setobj)
+numba_get_pyobject_private_data(PyObject *obj)
 {
     PyObject *dct = _get_private_data_dict();
-    PyObject *value, *key = PyLong_FromVoidPtr((void *) setobj);
+    PyObject *value, *key = PyLong_FromVoidPtr((void *) obj);
     void *ptr;
     if (!dct || !key)
         goto error;
@@ -1371,10 +1375,10 @@ error:
 }
 
 NUMBA_EXPORT_FUNC(void)
-numba_reset_set_private_data(PyObject *setobj)
+numba_reset_pyobject_private_data(PyObject *obj)
 {
     PyObject *dct = _get_private_data_dict();
-    PyObject *key = PyLong_FromVoidPtr((void *) setobj);
+    PyObject *key = PyLong_FromVoidPtr((void *) obj);
 
     if (!key)
         goto error;
@@ -1411,7 +1415,7 @@ numba_unpack_slice(PyObject *obj,
     }
     FETCH_MEMBER(step, 1)
     FETCH_MEMBER(stop, (*step > 0) ? PY_SSIZE_T_MAX : PY_SSIZE_T_MIN)
-    FETCH_MEMBER(start, 0)
+    FETCH_MEMBER(start, (*step > 0) ? 0 : PY_SSIZE_T_MAX)
     return 0;
 
 #undef FETCH_MEMBER

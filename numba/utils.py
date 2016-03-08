@@ -86,6 +86,8 @@ operator_map = [
     ('le', '', '<='),
     ('gt', '', '>'),
     ('ge', '', '>='),
+    # This one has its args reversed!
+    ('contains', '', 'in'),
     # Unary
     ('pos', '', '+'),
     ('neg', '', '-'),

@@ -93,7 +93,8 @@ class SetAttribute(AttributeTemplate):
         assert not kws
         iterable, = args
         # Set arguments only supported for now
-        if iterable == set:
+        # (note we can mix non-reflected and reflected arguments)
+        if isinstance(iterable, types.Set) and iterable.dtype == set.dtype:
             return signature(types.none, iterable)
 
     @bound_function("set.difference_update")
@@ -112,7 +113,8 @@ class SetAttribute(AttributeTemplate):
         assert not kws
         iterable, = args
         # Set arguments only supported for now
-        if iterable == set:
+        # (note we can mix non-reflected and reflected arguments)
+        if isinstance(iterable, types.Set) and iterable.dtype == set.dtype:
             return signature(set, iterable)
 
     @bound_function("set.difference")
