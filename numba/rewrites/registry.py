@@ -71,7 +71,7 @@ class RewriteRegistry(object):
                 if matches:
                     if config.DEBUG or config.DUMP_IR:
                         print("_" * 70)
-                        print("REWRITING:")
+                        print("REWRITING (%s):" % rewrite_cls.__name__)
                         block.dump()
                         print("_" * 60)
                     new_block = rewrite.apply()
