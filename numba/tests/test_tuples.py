@@ -61,6 +61,9 @@ def lt_usecase(a, b):
 def le_usecase(a, b):
     return a <= b
 
+def in_usecase(a, b):
+    return a in b
+
 def bool_usecase(tup):
     return bool(tup), (3 if tup else 2)
 
@@ -172,9 +175,17 @@ class TestOperations(TestCase):
         pyfunc = tuple_index
         cr = compile_isolated(pyfunc,
                               [types.UniTuple(types.int64, 3), types.int64])
-        tup = (4, 5, 6)
+        tup = (4, 3, 6)
         for i in range(len(tup)):
             self.assertPreciseEqual(cr.entry_point(tup, i), tup[i])
+
+    def test_in(self):
+        pyfunc = in_usecase
+        cr = compile_isolated(pyfunc,
+                              [types.int64, types.UniTuple(types.int64, 3)])
+        tup = (4, 1, 5)
+        for i in range(5):
+            self.assertPreciseEqual(cr.entry_point(i, tup), pyfunc(i, tup))
 
     def check_slice(self, pyfunc):
         tup = (4, 5, 6, 7)
