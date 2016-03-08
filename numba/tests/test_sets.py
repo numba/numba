@@ -172,6 +172,17 @@ def make_operator_usecase(op):
     """ % dict(op=op)
     return compile_function('operator_usecase', code, globals())
 
+def make_inplace_operator_usecase(op):
+    code = """if 1:
+    def inplace_operator_usecase(a, b):
+        sa = set(a)
+        sb = set(b)
+        sc = sa
+        sc %(op)s sb
+        return list(sc), list(sa)
+    """ % dict(op=op)
+    return compile_function('inplace_operator_usecase', code, globals())
+
 def make_comparison_usecase(op):
     code = """if 1:
     def comparison_usecase(a, b):
@@ -558,6 +569,18 @@ class TestSets(BaseTest):
 
     def test_gt(self):
         self._test_set_operator(make_comparison_usecase('>'))
+
+    def test_iand(self):
+        self._test_set_operator(make_inplace_operator_usecase('&='))
+
+    def test_ior(self):
+        self._test_set_operator(make_inplace_operator_usecase('|='))
+
+    def test_isub(self):
+        self._test_set_operator(make_inplace_operator_usecase('-='))
+
+    def test_ixor(self):
+        self._test_set_operator(make_inplace_operator_usecase('^='))
 
 
 class OtherTypesTest(object):

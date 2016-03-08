@@ -158,7 +158,8 @@ class SetOperator(AbstractTemplate):
         if len(args) != 2:
             return
         a, b = args
-        if isinstance(a, types.Set) and isinstance(b, types.Set) and a == b:
+        if (isinstance(a, types.Set) and isinstance(b, types.Set)
+            and a.dtype == b.dtype):
             return signature(a, *args)
 
 
@@ -176,6 +177,11 @@ for op_key in '&|^-':
     @infer
     class ConcreteSetOperator(SetOperator):
         key = op_key
+
+    @infer
+    class ConcreteInplaceSetOperator(SetOperator):
+        key = op_key + '='
+
 
 for op_key in ('==', '!=', '<', '<=', '>=', '>'):
     @infer
