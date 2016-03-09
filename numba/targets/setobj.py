@@ -1253,6 +1253,18 @@ def set_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+for op, op_impl in [
+    ('&=', set_intersection_update),
+    ('|=', set_update),
+    ('-=', set_difference_update),
+    ('^=', set_symmetric_difference_update),
+    ]:
+    @lower_builtin(op, types.Set, types.Set)
+    def set_inplace(context, builder, sig, args, op_impl=op_impl):
+        assert sig.return_type == sig.args[0]
+        op_impl(context, builder, sig, args)
+        return impl_ret_borrowed(context, builder, sig.args[0], args[0])
+
 
 # Set operations creating a new set
 

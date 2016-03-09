@@ -22,7 +22,6 @@ def map_operator(name, inplace_name, op):
 
     @lower(op_func, types.VarArg(types.Any))
     def binop_impl(context, builder, sig, args):
-        print("binop_impl:", op, sig, args)
         if reverse_args:
             args = args[::-1]
             sig = typing.signature(sig.return_type, *sig.args[::-1])
