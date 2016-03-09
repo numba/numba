@@ -906,6 +906,23 @@ class TestRandomArrays(BaseTest):
         self.assertGreaterEqual(res.mean(), mean - tol)
         self.assertLessEqual(res.mean(), mean + tol)
 
+    def test_numpy_random_random(self):
+        cfunc = self._compile_array_dist("random", 1)
+        size = (30, 30)
+        res = cfunc(size)
+        self.assertIsInstance(res, np.ndarray)
+        self.assertEqual(res.shape, size)
+        self.assertEqual(res.dtype, np.dtype('float64'))
+        # Results are within expected bounds
+        self.assertTrue(np.all(res >= 0.0))
+        self.assertTrue(np.all(res < 1.0))
+        # Crude statistical tests
+        self.assertTrue(np.any(res <= 0.1))
+        self.assertTrue(np.any(res >= 0.9))
+        mean = res.mean()
+        self.assertGreaterEqual(mean, 0.45)
+        self.assertLessEqual(mean, 0.55)
+
     def test_numpy_binomial(self):
         self._check_array_dist("binomial", (20, 0.5))
 
