@@ -2,14 +2,18 @@
 [run]
 branch = True
 source = numba
+concurrency = multiprocessing
+parallel = True
 
 [report]
+
+omit =
+    */__main__.py
+    numba/six.py
+    numba/_version.py
 
 exclude_lines =
     pragma: no cover
     if __name__ == .__main__.:
-
-omit =
-    */__main__.py
 
 [html]

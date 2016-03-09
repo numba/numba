@@ -542,9 +542,14 @@ class ParallelTestRunner(runner.TextTestRunner):
 
         try:
             self._run_parallel_tests(result, pool, child_runner)
-        finally:
-            # Kill the still active workers
+        except:
+            # On exception, kill still active workers immediately
             pool.terminate()
+        else:
+            # On success, close the pool cleanly
+            pool.close()
+        finally:
+            # Always join the pool (this is necessary for coverage.py)
             pool.join()
         if not result.shouldStop:
             stests = SerialSuite(self._stests)

@@ -20,18 +20,18 @@ if __name__ == "__main__":
     # otherwise some lines will be missed.
     config_file = os.path.join(
         os.path.dirname(os.path.dirname(__file__)),
-        'coverage.conf')
+        '.coveragerc')
     os.environ['COVERAGE_PROCESS_START'] = config_file
     cov = coverage.coverage(config_file=config_file)
     cov.start()
 
-    from numba import testing
+    from numba import runtests
 
     html_dir = 'htmlcov'
     try:
         # NOTE: we force single-process mode, since some hacks are needed
         # for multiprocess'ed coverage to work.
-        testing.test()
+        runtests.main(*sys.argv[1:])
     except SystemExit:
         pass
     finally:
