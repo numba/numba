@@ -11,7 +11,6 @@ from numba.compiler import compile_isolated, Flags, utils
 from numba import types
 from .support import TestCase, CompilationCache, tag
 
-PY27_AND_ABOVE = utils.PYVERSION > (2, 6)
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -290,7 +289,6 @@ class TestMathLib(TestCase):
     def test_exp_npm(self):
         self.test_exp(flags=no_pyobj_flags)
 
-    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_expm1(self, flags=enable_pyobj_flags):
         pyfunc = expm1
         x_types = [types.int16, types.int32, types.int64,
@@ -300,7 +298,6 @@ class TestMathLib(TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @tag('important')
-    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_expm1_npm(self):
         self.test_expm1(flags=no_pyobj_flags)
 
@@ -556,7 +553,6 @@ class TestMathLib(TestCase):
     def test_radians_npm(self):
         self.test_radians(flags=no_pyobj_flags)
 
-    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erf(self, flags=enable_pyobj_flags):
         pyfunc = erf
         x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
@@ -564,11 +560,9 @@ class TestMathLib(TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags,
                        prec='double', ulps=2)
 
-    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erf_npm(self):
         self.test_erf(flags=no_pyobj_flags)
 
-    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc(self, flags=enable_pyobj_flags):
         pyfunc = erfc
         x_values = [1., 1., -1., -0.0, 0.0, 0.5, 5, float('inf')]
@@ -576,11 +570,9 @@ class TestMathLib(TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags,
                        prec='double', ulps=4)
 
-    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc_npm(self):
         self.test_erfc(flags=no_pyobj_flags)
 
-    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma(self, flags=enable_pyobj_flags):
         pyfunc = gamma
         x_values = [1., -0.9, -0.5, 0.5]
@@ -591,18 +583,15 @@ class TestMathLib(TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags,
                        prec='double', ulps=8)
 
-    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma_npm(self):
         self.test_gamma(flags=no_pyobj_flags)
 
-    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_lgamma(self, flags=enable_pyobj_flags):
         pyfunc = lgamma
         x_values = [1., -0.9, -0.1, 0.1, 200., 1e10, 1e30, float('inf')]
         x_types = [types.float32, types.float64] * (len(x_values) // 2)
         self.run_unary(pyfunc, x_types, x_values, flags, prec='double')
 
-    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_lgamma_npm(self):
         self.test_lgamma(flags=no_pyobj_flags)
 

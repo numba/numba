@@ -50,21 +50,20 @@ def typeof_impl(val, c):
 
 
 def _typeof_buffer(val, c):
-    if sys.version_info >= (2, 7):
-        from . import bufproto
-        try:
-            m = memoryview(val)
-        except TypeError:
-            return
-        # Object has the buffer protocol
-        try:
-            dtype = bufproto.decode_pep3118_format(m.format, m.itemsize)
-        except ValueError:
-            return
-        type_class = bufproto.get_type_class(type(val))
-        layout = bufproto.infer_layout(m)
-        return type_class(dtype, m.ndim, layout=layout,
-                          readonly=m.readonly)
+    from . import bufproto
+    try:
+        m = memoryview(val)
+    except TypeError:
+        return
+    # Object has the buffer protocol
+    try:
+        dtype = bufproto.decode_pep3118_format(m.format, m.itemsize)
+    except ValueError:
+        return
+    type_class = bufproto.get_type_class(type(val))
+    layout = bufproto.infer_layout(m)
+    return type_class(dtype, m.ndim, layout=layout,
+                      readonly=m.readonly)
 
 
 @typeof_impl.register(ctypes._CFuncPtr)

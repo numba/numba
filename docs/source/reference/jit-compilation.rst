@@ -186,8 +186,7 @@ Vectorized functions (ufuncs and DUFuncs)
    ``"reorderable"``.  The default is None.  Both None and
    ``"reorderable"`` mean the function has no identity value;
    ``"reorderable"`` additionally specifies that reductions along multiple
-   axes can be reordered.  (Note that ``"reorderable"`` is only supported in
-   Numpy 1.7 or later.)
+   axes can be reordered.
 
    If there are several *signatures*, they must be ordered from the more
    specific to the least specific.  Otherwise, Numpy's type-based

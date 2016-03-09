@@ -185,6 +185,14 @@ class LiteralOperatorImpl(object):
     def ne_usecase(x, y):
         return x != y
 
+    @staticmethod
+    def in_usecase(x, y):
+        return x in y
+
+    @staticmethod
+    def not_in_usecase(x, y):
+        return x not in y
+
 
 class FunctionalOperatorImpl(object):
 
@@ -347,6 +355,14 @@ class FunctionalOperatorImpl(object):
     @staticmethod
     def ne_usecase(x, y):
         return operator.ne(x, y)
+
+    @staticmethod
+    def in_usecase(x, y):
+        return operator.contains(y, x)
+
+    @staticmethod
+    def not_in_usecase(x, y):
+        return not operator.contains(y, x)
 
 
 class TestOperators(TestCase):
@@ -1095,6 +1111,27 @@ class TestOperators(TestCase):
         cfunc = cres.entry_point
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
+
+    def _check_in(self, pyfunc, flags):
+        dtype = types.int64
+        cres = compile_isolated(pyfunc, (dtype, types.UniTuple(dtype, 3)),
+                                flags=flags)
+        cfunc = cres.entry_point
+        for i in (3, 4, 5, 6, 42):
+            tup = (3, 42, 5)
+            self.assertPreciseEqual(pyfunc(i, tup), cfunc(i, tup))
+
+    def test_in(self, flags=force_pyobj_flags):
+        self._check_in(self.op.in_usecase, flags)
+
+    def test_in_npm(self):
+        self.test_in(flags=Noflags)
+
+    def test_not_in(self, flags=force_pyobj_flags):
+        self._check_in(self.op.not_in_usecase, flags)
+
+    def test_not_in_npm(self):
+        self.test_not_in(flags=Noflags)
 
 
 class TestOperatorModule(TestOperators):

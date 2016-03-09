@@ -5,9 +5,7 @@ dist: trusty
 
 matrix:
   include:
-    - env: PYTHON=2.6 NUMPY="numpy=1.6"
     - env: PYTHON=2.7 NUMPY="numpy=1.7"
-    - env: PYTHON=3.3 NUMPY="numpy=1.8"
     - env: PYTHON=3.4 NUMPY="numpy=1.9"
     - env: PYTHON=3.5 NUMPY="numpy=1.10"
 
@@ -30,8 +28,6 @@ before_install:
   - PIP_INSTALL="pip install -q"
   # Install llvmdev (separate channel, for now)
   - $CONDA_INSTALL -c numba llvmdev="3.7*"
-  # Install unittest2 for Python 2
-  - if [ $PYTHON == "2.6" ]; then $CONDA_INSTALL unittest2 argparse; fi
   # Install enum34 and singledispatch for Python < 3.4
   - if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
   - if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi

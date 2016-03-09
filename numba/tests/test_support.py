@@ -6,7 +6,7 @@ import numpy as np
 
 from numba import utils
 from numba import unittest_support as unittest
-from .support import TestCase, skip_on_numpy_16
+from .support import TestCase
 
 DBL_EPSILON = 2**-52
 FLT_EPSILON = 2**-23
@@ -274,7 +274,6 @@ class TestAssertPreciseEqual(TestCase):
         self.eq(a, b, prec='double')
         self.ne(a, c, prec='double')
 
-    @skip_on_numpy_16
     def test_npdatetime(self):
         a = np.datetime64('1900', 'Y')
         b = np.datetime64('1900', 'Y')
@@ -286,7 +285,6 @@ class TestAssertPreciseEqual(TestCase):
         # Different value
         self.ne(a, d)
 
-    @skip_on_numpy_16
     def test_nptimedelta(self):
         a = np.timedelta64(1, 'h')
         b = np.timedelta64(1, 'h')

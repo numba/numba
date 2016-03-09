@@ -332,11 +332,9 @@ class TestCudaMath(unittest.TestCase):
     #------------------------------------------------------------------------------
     # test_math_expm1
 
-    if sys.version_info[:2] >= (2, 7):
-
-        def test_math_expm1(self):
-            self.unary_template_float32(math_expm1, np.expm1)
-            self.unary_template_float64(math_expm1, np.expm1)
+    def test_math_expm1(self):
+        self.unary_template_float32(math_expm1, np.expm1)
+        self.unary_template_float64(math_expm1, np.expm1)
 
     #------------------------------------------------------------------------------
     # test_math_fabs
