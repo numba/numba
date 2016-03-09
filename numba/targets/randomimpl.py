@@ -1184,9 +1184,11 @@ for typing_key, arity in [
         scalar_sig = signature(dtype, *sig.args[:-1])
         scalar_args = args[:-1]
 
+        # Allocate array...
         shapes = arrayobj._parse_shape(context, builder, sig.args[-1], args[-1])
         arr = arrayobj._empty_nd_impl(context, builder, arrty, shapes)
 
+        # ... and populate it in natural order
         scalar_impl = context.get_function(typing_key, scalar_sig)
         with cgutils.for_range(builder, arr.nitems) as loop:
             val = scalar_impl(builder, scalar_args)

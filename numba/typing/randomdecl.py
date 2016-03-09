@@ -61,6 +61,8 @@ class RandomTemplate(CallableTemplate):
                     raise TypeError("unexpected size parameter for %r"
                                     % (self.key,))
                 shape, ndim = normalize_shape(size)
+                # Type the scalar variant and wrap the result in an array
+                # of the appropriate dimensionality.
                 sig = scalar_typer(*args, **kwargs)
                 if sig is not None:
                     return signature(
@@ -298,3 +300,7 @@ class Random_shuffle(AbstractTemplate):
         arr, = args
         if isinstance(arr, types.Buffer) and arr.ndim == 1 and arr.mutable:
             return signature(types.void, arr)
+
+
+# NOTE: some functions can have @overloads in numba.targets.randomimpl,
+# and therefore don't need a typing declaration here.
