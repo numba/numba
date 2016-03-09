@@ -5,6 +5,7 @@ from collections import defaultdict, deque
 
 from numba.config import MACHINE_BITS
 from numba import cgutils
+from numba.llvmutils import _parse_assembly_threadsafe
 from llvmlite import ir, binding as llvm
 
 # Flag to enable debug print in NRT_incref and NRT_decref
@@ -327,4 +328,4 @@ def remove_redundant_nrt_refct(ll_module):
         processed += lines
 
     newll = '\n'.join(processed)
-    return llvm.parse_assembly(newll)
+    return _parse_assembly_threadsafe(newll)

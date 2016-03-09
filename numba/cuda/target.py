@@ -10,6 +10,8 @@ from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
 from numba.targets import cmathimpl, operatorimpl
+from numba.targets.codegen import (_parse_assembly_threadsafe,
+                                   _link_module_threadsafe)
 from numba.typing import cmathdecl, operatordecl
 from numba.funcdesc import transform_arg_name
 from .cudadrv import nvvm
@@ -155,7 +157,8 @@ class CUDATargetContext(BaseContext):
         # force inline
         # inline_function(status.code)
         nvvm.set_cuda_kernel(wrapfn)
-        module.link_in(ll.parse_assembly(str(wrapper_module)))
+        _link_module_threadsafe(module,
+                                _parse_assembly_threadsafe(str(wrapper_module)))
         module.verify()
 
         wrapfn = module.get_function(wrapfn.name)
@@ -230,4 +233,3 @@ class CUDATargetContext(BaseContext):
 
 class CUDACallConv(MinimalCallConv):
     pass
-

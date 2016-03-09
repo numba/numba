@@ -19,6 +19,7 @@ import llvmlite.binding as ll
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
 from numba import types, utils, cgutils
+from numba.llvmutils import _parse_assembly_threadsafe
 
 NUM_CPU = max(1, multiprocessing.cpu_count())
 
@@ -397,7 +398,7 @@ def _make_cas_function():
     builder.ret(builder.select(failed, old, out))
 
     # Build & Link
-    llmod = ll.parse_assembly(str(mod))
+    llmod = _parse_assembly_threadsafe(str(mod))
 
     target = ll.Target.from_triple(ll.get_process_triple())
     tm = target.create_target_machine()

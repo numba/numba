@@ -4,7 +4,7 @@ from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim
 
 try:
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
 except ImportError:
     has_thread_pool = False
 else:

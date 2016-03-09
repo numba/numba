@@ -3,7 +3,9 @@ from llvmlite.llvmpy import core as lc
 
 from numba.targets.codegen import BaseCPUCodegen, CodeLibrary
 from numba import utils
+from numba.llvmutils import _llvm_lock
 from .cudadrv import nvvm
+
 
 
 CUDA_TRIPLE = {32: 'nvptx-nvidia-cuda',
@@ -26,7 +28,8 @@ class CUDACodeLibrary(CodeLibrary):
 
         pm = ll.ModulePassManager()
         pmb.populate(pm)
-        pm.run(self._final_module)
+        with _llvm_lock:
+            pm.run(self._final_module)
 
     def _finalize_specific(self):
         # Fix global naming
