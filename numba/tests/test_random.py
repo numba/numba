@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import collections
 import functools
 import math
 import os
@@ -40,6 +41,15 @@ def random_randrange2(a, b):
 
 def random_randrange3(a, b, c):
     return random.randrange(a, b, c)
+
+def numpy_choice1(a):
+    return np.random.choice(a)
+
+def numpy_choice2(a, size):
+    return np.random.choice(a, size=size)
+
+def numpy_choice3(a, size, replace):
+    return np.random.choice(a, size=size, replace=replace)
 
 
 def jit_with_args(name, argstring):
@@ -947,6 +957,171 @@ class TestRandomArrays(BaseTest):
 
     def test_numpy_zipf(self):
         self._check_array_dist("zipf", (2.5,))
+
+
+class TestRandomChoice(BaseTest):
+    """
+    Test np.random.choice.
+    """
+
+    def setUp(self):
+        # Make sure the PRNG is initialized before we set the seed
+        random_init()
+
+    def _check_results(self, pop, res, replace=True):
+        """
+        Check basic expectations about a batch of samples.
+        """
+        spop = set(pop)
+        sres = set(res)
+        # All results are in the population
+        self.assertLessEqual(sres, spop)
+        # Sorted results are unlikely
+        self.assertNotEqual(sorted(res), list(res))
+        if replace:
+            # Duplicates are likely
+            self.assertLess(len(sres), len(res), res)
+        else:
+            # No duplicates
+            self.assertEqual(len(sres), len(res), res)
+
+    def _check_dist(self, pop, samples):
+        """
+        Check distribution of some samples.
+        """
+        # Sanity check that we have enough samples
+        self.assertGreaterEqual(len(samples), len(pop) * 100)
+        # Check equidistribution of samples
+        expected_frequency = len(samples) / len(pop)
+        c = collections.Counter(samples)
+        for value in pop:
+            n = c[value]
+            self.assertGreaterEqual(n, expected_frequency * 0.5)
+            self.assertLessEqual(n, expected_frequency * 2.0)
+
+    def _accumulate_array_results(self, func, nresults):
+        """
+        Accumulate array results produced by *func* until they reach
+        *nresults* elements.
+        """
+        res = []
+        while len(res) < nresults:
+            res += list(func().flat)
+        return res[:nresults]
+
+    def _check_choice_1(self, a, pop):
+        """
+        Check choice(a) against pop.
+        """
+        cfunc = jit(nopython=True)(numpy_choice1)
+        n = len(pop)
+        res = [cfunc(a) for i in range(n)]
+        self._check_results(pop, res)
+        dist = [cfunc(a) for i in range(n * 100)]
+        self._check_dist(pop, dist)
+
+    def test_choice_scalar_1(self):
+        """
+        Test choice(int)
+        """
+        n = 50
+        pop = list(range(n))
+        self._check_choice_1(n, pop)
+
+    def test_choice_array_1(self):
+        """
+        Test choice(array)
+        """
+        pop = np.arange(50) * 2 + 100
+        self._check_choice_1(pop, pop)
+
+    def _check_array_results(self, func, pop, replace=True):
+        """
+        Check array results produced by *func* and their distribution.
+        """
+        n = len(pop)
+        res = list(func().flat)
+        self._check_results(pop, res, replace)
+        dist = self._accumulate_array_results(func, n * 100)
+        self._check_dist(pop, dist)
+
+    def _check_choice_2(self, a, pop):
+        """
+        Check choice(a, size) against pop.
+        """
+        cfunc = jit(nopython=True)(numpy_choice2)
+        n = len(pop)
+        # Final sizes should be large enough, so as to stress
+        # replacement
+        sizes = [n - 10, (3, (n - 1) // 3), n * 10]
+
+        for size in sizes:
+            # Check result shape
+            res = cfunc(a, size)
+            expected_shape = size if isinstance(size, tuple) else (size,)
+            self.assertEqual(res.shape, expected_shape)
+            # Check results and their distribution
+            self._check_array_results(lambda: cfunc(a, size), pop)
+
+    def test_choice_scalar_2(self):
+        """
+        Test choice(int, size)
+        """
+        n = 50
+        pop = np.arange(n)
+        self._check_choice_2(n, pop)
+
+    def test_choice_array_2(self):
+        """
+        Test choice(array, size)
+        """
+        pop = np.arange(50) * 2 + 100
+        self._check_choice_2(pop, pop)
+
+    def _check_choice_3(self, a, pop):
+        """
+        Check choice(a, size, replace) against pop.
+        """
+        cfunc = jit(nopython=True)(numpy_choice3)
+        n = len(pop)
+        # Final sizes should be close but slightly <= n, so as to stress
+        # replacement (or not)
+        sizes = [n - 10, (3, (n - 1) // 3)]
+        replaces = [True, False]
+
+        # Check result shapes
+        for size in sizes:
+            for replace in [True, False]:
+                res = cfunc(a, size, replace)
+                expected_shape = size if isinstance(size, tuple) else (size,)
+                self.assertEqual(res.shape, expected_shape)
+
+        # Check results for replace=True
+        for size in sizes:
+            self._check_array_results(lambda: cfunc(a, size, True), pop)
+        # Check results for replace=False
+        for size in sizes:
+            self._check_array_results(lambda: cfunc(a, size, False), pop, False)
+
+        # Can't ask for more samples than population size with replace=False
+        for size in [n + 1, (3, n // 3 + 1)]:
+            with self.assertRaises(ValueError):
+                cfunc(a, size, False)
+
+    def test_choice_scalar_3(self):
+        """
+        Test choice(int, size, replace)
+        """
+        n = 50
+        pop = np.arange(n)
+        self._check_choice_3(n, pop)
+
+    def test_choice_array_3(self):
+        """
+        Test choice(array, size, replace)
+        """
+        pop = np.arange(50) * 2 + 100
+        self._check_choice_3(pop, pop)
 
 
 if __name__ == "__main__":

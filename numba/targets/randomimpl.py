@@ -12,6 +12,7 @@ import numpy as np
 
 from llvmlite import ir
 
+from numba.extending import overload
 from numba.targets.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
 from numba.typing import signature
@@ -1193,3 +1194,86 @@ for typing_key, arity in [
             arrayobj.store_item(context, builder, arrty, val, ptr)
 
         return impl_ret_new_ref(context, builder, sig.return_type, arr._getvalue())
+
+
+# ------------------------------------------------------------------------
+# np.random.choice
+
+@overload(np.random.choice)
+def choice(a, size=None, replace=True):
+    from numba import jit  # Avoid circular imports
+
+    if isinstance(a, types.Array):
+        # choice() over an array population
+        assert a.ndim == 1
+        dtype = a.dtype
+
+        @jit(nopython=True)
+        def get_source_size(a):
+            return len(a)
+
+        @jit(nopython=True)
+        def copy_source(a):
+            return a.copy()
+
+        @jit(nopython=True)
+        def getitem(a, a_i):
+            return a[a_i]
+
+    else:
+        # choice() over an implied arange() population
+        dtype = np.int64
+
+        @jit(nopython=True)
+        def get_source_size(a):
+            return a
+
+        @jit(nopython=True)
+        def copy_source(a):
+            return np.arange(a)
+
+        @jit(nopython=True)
+        def getitem(a, a_i):
+            return a_i
+
+    if size in (None, types.none):
+        def choice_impl(a, size=None, replace=True):
+            """
+            choice() implementation returning a single sample
+            (note *replace* is ignored)
+            """
+            n = get_source_size(a)
+            i = np.random.randint(0, n)
+            return getitem(a, i)
+
+    else:
+        def choice_impl(a, size=None, replace=True):
+            """
+            choice() implementation returning an array of samples
+            """
+            n = get_source_size(a)
+            if replace:
+                out = np.empty(size, dtype)
+                fl = out.flat
+                for i in range(len(fl)):
+                    j = np.random.randint(0, n)
+                    fl[i] = getitem(a, j)
+                return out
+            else:
+                # Note we have to construct the array to compute out.size
+                # (`size` can be an arbitrary int or tuple of ints)
+                out = np.empty(size, dtype)
+                if out.size > n:
+                    raise ValueError("Cannot take a larger sample than "
+                                     "population when 'replace=False'")
+                # Get a contiguous copy of the source so as to permute it
+                src = copy_source(a)
+                fl = out.flat
+                for i in range(len(fl)):
+                    j = np.random.randint(i, n)
+                    fl[i] = src[j]
+                    # Move away selected element
+                    src[j] = src[i]
+                return out
+
+    return choice_impl
