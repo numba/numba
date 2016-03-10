@@ -844,20 +844,16 @@ class BaseContext(object):
         return tup
 
     def make_constant_array(self, builder, typ, ary):
+        """
+        Create an array structure reifying the given constant array.
+        A low-level contiguous array constant is created in the LLVM IR.
+        """
         assert typ.layout == 'C'                # assumed in typeinfer.py
-        ary = numpy.ascontiguousarray(ary)
+
+        # Handle data: reify the flattened array in "C" order as a
+        # global array of bytes.
         flat = ary.flatten()
-
-        # Handle data
-        if self.is_struct_type(typ.dtype):
-            values = [self.get_constant_struct(builder, typ.dtype, flat[i])
-                      for i in range(flat.size)]
-        else:
-            values = [self.get_constant(typ.dtype, flat[i])
-                      for i in range(flat.size)]
-
-        lldtype = values[0].type
-        consts = Constant.array(lldtype, values)
+        consts = Constant.array(Type.int(8), bytearray(flat))
         data = cgutils.global_constant(builder, ".const.array.data", consts)
 
         # Handle shape
@@ -865,9 +861,9 @@ class BaseContext(object):
         shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
         cshape = Constant.array(llintp, shapevals)
 
-
-        # Handle strides
-        stridevals = [self.get_constant(types.intp, s) for s in ary.strides]
+        # Handle strides: use strides of the equivalent C-contiguous array.
+        contig = numpy.ascontiguousarray(ary)
+        stridevals = [self.get_constant(types.intp, s) for s in contig.strides]
         cstrides = Constant.array(llintp, stridevals)
 
         # Create array structure
