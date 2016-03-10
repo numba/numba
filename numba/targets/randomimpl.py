@@ -1283,3 +1283,85 @@ def choice(a, size=None, replace=True):
                 return out
 
     return choice_impl
+
+
+# ------------------------------------------------------------------------
+# np.random.multinomial
+
+@overload(np.random.multinomial)
+def multinomial(n, pvals, size=None):
+    from numba import jit  # Avoid circular imports
+
+    dtype = np.intp
+
+    @jit(nopython=True)
+    def multinomial_inner(n, pvals, out):
+        # Numpy's algorithm for multinomial()
+        fl = out.flat
+        sz = out.size
+        plen = len(pvals)
+
+        for i in range(0, sz, plen):
+            # Loop body: take a set of n experiments and fill up
+            # fl[i:i + plen] with the distribution of results.
+
+            # Current sum of outcome probabilities
+            p_sum = 1.0
+            # Current remaining number of experiments
+            n_experiments = n
+            # For each possible outcome `j`, compute the number of results
+            # with this outcome.  This is done by considering the
+            # conditional probability P(X=j | X>=j) and running a binomial
+            # distribution over the remaining number of experiments.
+            for j in range(0, plen - 1):
+                p_j = pvals[j]
+                n_j = fl[i + j] = np.random.binomial(n_experiments, p_j / p_sum)
+                n_experiments -= n_j
+                if n_experiments <= 0:
+                    # Note the output was initialized to zero
+                    break
+                p_sum -= p_j
+            if n_experiments > 0:
+                # The remaining experiments end up in the last bucket
+                fl[i + plen - 1] = n_experiments
+
+    if not isinstance(n, types.Integer):
+        raise TypeError("np.random.multinomial(): n should be an "
+                        "integer, got %s" % (n,))
+
+    if not isinstance(pvals, (types.Sequence, types.Array)):
+        raise TypeError("np.random.multinomial(): pvals should be an "
+                        "array or sequence, got %s" % (pvals,))
+
+    if size in (None, types.none):
+        def multinomial_impl(n, pvals, size=None):
+            """
+            multinomial(..., size=None)
+            """
+            out = np.zeros(len(pvals), dtype)
+            multinomial_inner(n, pvals, out)
+            return out
+
+    elif isinstance(size, types.Integer):
+        def multinomial_impl(n, pvals, size=None):
+            """
+            multinomial(..., size=int)
+            """
+            out = np.zeros((size, len(pvals)), dtype)
+            multinomial_inner(n, pvals, out)
+            return out
+
+    elif isinstance(size, types.BaseTuple):
+        def multinomial_impl(n, pvals, size=None):
+            """
+            multinomial(..., size=tuple)
+            """
+            out = np.zeros(size + (len(pvals),), dtype)
+            multinomial_inner(n, pvals, out)
+            return out
+
+    else:
+        raise TypeError("np.random.multinomial(): size should be int or "
+                        "tuple or None, got %s" % (size,))
+
+    return multinomial_impl
