@@ -50,21 +50,20 @@ def typeof_impl(val, c):
 
 
 def _typeof_buffer(val, c):
-    if sys.version_info >= (2, 7):
-        from . import bufproto
-        try:
-            m = memoryview(val)
-        except TypeError:
-            return
-        # Object has the buffer protocol
-        try:
-            dtype = bufproto.decode_pep3118_format(m.format, m.itemsize)
-        except ValueError:
-            return
-        type_class = bufproto.get_type_class(type(val))
-        layout = bufproto.infer_layout(m)
-        return type_class(dtype, m.ndim, layout=layout,
-                          readonly=m.readonly)
+    from . import bufproto
+    try:
+        m = memoryview(val)
+    except TypeError:
+        return
+    # Object has the buffer protocol
+    try:
+        dtype = bufproto.decode_pep3118_format(m.format, m.itemsize)
+    except ValueError:
+        return
+    type_class = bufproto.get_type_class(type(val))
+    layout = bufproto.infer_layout(m)
+    return type_class(dtype, m.ndim, layout=layout,
+                      readonly=m.readonly)
 
 
 @typeof_impl.register(ctypes._CFuncPtr)
@@ -133,6 +132,14 @@ def _typeof_list(val, c):
         raise ValueError("Cannot type empty list")
     ty = typeof_impl(val[0], c)
     return types.List(ty, reflected=True)
+
+@typeof_impl.register(set)
+def _typeof_set(val, c):
+    if len(val) == 0:
+        raise ValueError("Cannot type empty set")
+    item = next(iter(val))
+    ty = typeof_impl(item, c)
+    return types.Set(ty, reflected=True)
 
 @typeof_impl.register(slice)
 def _typeof_slice(val, c):

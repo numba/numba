@@ -198,9 +198,11 @@ class _StructProxy(object):
         return self._builder.load(self._outer_ref)
 
     def _setvalue(self, value):
-        """Store the value in this structure"""
+        """
+        Store the value in this structure.
+        """
         assert not is_pointer(value.type)
-        assert value.type == self._type, (value.type, self._type)
+        assert value.type == self._be_type, (value.type, self._be_type)
         self._builder.store(value, self._value)
 
 
@@ -427,16 +429,19 @@ class IfBranchObj(object):
 Loop = collections.namedtuple('Loop', ('index', 'do_break'))
 
 @contextmanager
-def for_range(builder, count, intp=None):
+def for_range(builder, count, start=None, intp=None):
     """
-    Generate LLVM IR for a for-loop in [0, count).  Yields a
-    Loop namedtuple with the following members:
+    Generate LLVM IR for a for-loop in [start, count).
+    *start* is equal to 0 by default.
+
+    Yields a Loop namedtuple with the following members:
     - `index` is the loop index's value
     - `do_break` is a no-argument callable to break out of the loop
     """
     if intp is None:
         intp = count.type
-    start = Constant.int(intp, 0)
+    if start is None:
+        start = Constant.int(intp, 0)
     stop = count
 
     bbcond = builder.append_basic_block("for.cond")
@@ -574,7 +579,7 @@ def loop_nest(builder, shape, intp):
 
 @contextmanager
 def _loop_nest(builder, shape, intp):
-    with for_range(builder, shape[0], intp) as loop:
+    with for_range(builder, shape[0], intp=intp) as loop:
         if len(shape) > 1:
             with _loop_nest(builder, shape[1:], intp) as indices:
                 yield (loop.index,) + indices
@@ -932,30 +937,43 @@ def memcpy(builder, dst, src, count):
     * dst.type == src.type
     * count is positive
     """
+    # Note this does seem to be optimized as a raw memcpy() by LLVM
+    # whenever possible...
     assert dst.type == src.type
-    with for_range(builder, count, count.type) as loop:
+    with for_range(builder, count, intp=count.type) as loop:
         out_ptr = builder.gep(dst, [loop.index])
         in_ptr = builder.gep(src, [loop.index])
         builder.store(builder.load(in_ptr), out_ptr)
 
 
-def memmove(builder, dst, src, count, itemsize, align=1):
-    """
-    Emit a memmove() call for `count` items of size `itemsize`
-    from `src` to `dest`.
-    """
+def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
     ptr_t = ir.IntType(8).as_pointer()
     size_t = count.type
 
-    memmove = builder.module.declare_intrinsic('llvm.memmove',
-                                               [ptr_t, ptr_t, size_t])
+    memcpy = builder.module.declare_intrinsic(func_name,
+                                              [ptr_t, ptr_t, size_t])
     align = ir.Constant(ir.IntType(32), align)
     is_volatile = false_bit
-    builder.call(memmove, [builder.bitcast(dst, ptr_t),
-                           builder.bitcast(src, ptr_t),
-                           builder.mul(count, ir.Constant(size_t, itemsize)),
-                           align,
-                           is_volatile])
+    builder.call(memcpy, [builder.bitcast(dst, ptr_t),
+                          builder.bitcast(src, ptr_t),
+                          builder.mul(count, ir.Constant(size_t, itemsize)),
+                          align,
+                          is_volatile])
+
+
+def raw_memcpy(builder, dst, src, count, itemsize, align=1):
+    """
+    Emit a raw memcpy() call for `count` items of size `itemsize`
+    from `src` to `dest`.
+    """
+    return _raw_memcpy(builder, 'llvm.memcpy', dst, src, count, itemsize, align)
+
+def raw_memmove(builder, dst, src, count, itemsize, align=1):
+    """
+    Emit a raw memmove() call for `count` items of size `itemsize`
+    from `src` to `dest`.
+    """
+    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count, itemsize, align)
 
 
 def muladd_with_overflow(builder, a, b, c):

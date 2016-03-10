@@ -13,7 +13,6 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import cffi_support, numpy_support, types
-from numba.npdatetime import NPDATETIME_SUPPORTED
 from numba.special import typeof
 from numba._dispatcher import compute_fingerprint
 
@@ -128,16 +127,11 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         dtype = np.dtype([('m', np.int32), ('n', 'S5')], align=True)
         rec_ty = numpy_support.from_struct_dtype(dtype)
 
-        # On Numpy 1.6, align=True doesn't align the itemsize
-        actual_aligned = numpy_support.version >= (1, 7)
-
         arr = np.empty(4, dtype=dtype)
-        check(arr, rec_ty, 1, "C", actual_aligned)
+        check(arr, rec_ty, 1, "C", True)
         arr = np.recarray(4, dtype=dtype)
-        check(arr, rec_ty, 1, "C", actual_aligned)
+        check(arr, rec_ty, 1, "C", True)
 
-    @unittest.skipIf(sys.version_info < (2, 7),
-                     "buffer protocol not supported on Python 2.6")
     def test_buffers(self):
         if sys.version_info >= (3,):
             b = b"xx"
@@ -194,6 +188,13 @@ class TestTypeof(ValueTypingTestBase, TestCase):
     def test_lists(self):
         v = [1.0] * 100
         self.assertEqual(typeof(v), types.List(types.float64, reflected=True))
+
+    @tag('important')
+    def test_sets(self):
+        v = set([1.0, 2.0, 3.0])
+        self.assertEqual(typeof(v), types.Set(types.float64, reflected=True))
+        v = frozenset(v)
+        self.assertIs(typeof(v), None)
 
     @tag('important')
     def test_namedtuple(self):
@@ -317,8 +318,6 @@ class TestFingerprint(TestCase):
         self.assertNotEqual(compute_fingerprint(v1),
                             compute_fingerprint(v2))
 
-    @unittest.skipUnless(NPDATETIME_SUPPORTED,
-                         "np.datetime64 unsupported on this version")
     def test_datetime(self):
         a = np.datetime64(1, 'Y')
         b = np.datetime64(2, 'Y')
@@ -381,10 +380,9 @@ class TestFingerprint(TestCase):
         self.assertEqual(compute_fingerprint(b'xx'), s)
         distinct.add(s)
         distinct.add(compute_fingerprint(bytearray()))
-        if sys.version_info >= (2, 7):
-            distinct.add(compute_fingerprint(memoryview(b'')))
-            m_uint8_1d = compute_fingerprint(memoryview(bytearray()))
-            distinct.add(m_uint8_1d)
+        distinct.add(compute_fingerprint(memoryview(b'')))
+        m_uint8_1d = compute_fingerprint(memoryview(bytearray()))
+        distinct.add(m_uint8_1d)
 
         if sys.version_info >= (3,):
             arr = array.array('B', [42])
@@ -397,20 +395,16 @@ class TestFingerprint(TestCase):
 
         arr = np.empty(16, dtype=np.uint8)
         distinct.add(compute_fingerprint(arr))
-        if sys.version_info >= (2, 7):
-            self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
+        self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
         arr = arr.reshape((4, 4))
         distinct.add(compute_fingerprint(arr))
-        if sys.version_info >= (2, 7):
-            distinct.add(compute_fingerprint(memoryview(arr)))
+        distinct.add(compute_fingerprint(memoryview(arr)))
         arr = arr.T
         distinct.add(compute_fingerprint(arr))
-        if sys.version_info >= (2, 7):
-            distinct.add(compute_fingerprint(memoryview(arr)))
+        distinct.add(compute_fingerprint(memoryview(arr)))
         arr = arr[::2]
         distinct.add(compute_fingerprint(arr))
-        if sys.version_info >= (2, 7):
-            distinct.add(compute_fingerprint(memoryview(arr)))
+        distinct.add(compute_fingerprint(memoryview(arr)))
 
         if sys.version_info >= (3,):
             m = mmap.mmap(-1, 16384)
@@ -449,6 +443,37 @@ class TestFingerprint(TestCase):
         distinct.add(compute_fingerprint((1j, 2, 3)))
         distinct.add(compute_fingerprint((1, (), np.empty(5))))
         distinct.add(compute_fingerprint((1, (), np.empty((5, 1)))))
+
+    def test_lists(self):
+        distinct = DistinctChecker()
+
+        s = compute_fingerprint([1])
+        self.assertEqual(compute_fingerprint([2, 3]), s)
+        distinct.add(s)
+
+        distinct.add(compute_fingerprint([1j]))
+        distinct.add(compute_fingerprint([4.5, 6.7]))
+        distinct.add(compute_fingerprint([(1,)]))
+
+        with self.assertRaises(ValueError):
+            compute_fingerprint([])
+
+    def test_sets(self):
+        distinct = DistinctChecker()
+
+        s = compute_fingerprint(set([1]))
+        self.assertEqual(compute_fingerprint(set([2, 3])), s)
+        distinct.add(s)
+
+        distinct.add(compute_fingerprint([1]))
+        distinct.add(compute_fingerprint(set([1j])))
+        distinct.add(compute_fingerprint(set([4.5, 6.7])))
+        distinct.add(compute_fingerprint(set([(1,)])))
+
+        with self.assertRaises(ValueError):
+            compute_fingerprint(set())
+        with self.assertRaises(NotImplementedError):
+            compute_fingerprint(frozenset([2, 3]))
 
     def test_complicated_type(self):
         # Generating a large fingerprint

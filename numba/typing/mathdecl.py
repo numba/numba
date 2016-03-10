@@ -8,6 +8,7 @@ infer_global = registry.register_global
 
 
 @infer_global(math.exp)
+@infer_global(math.expm1)
 @infer_global(math.fabs)
 @infer_global(math.sqrt)
 @infer_global(math.log)
@@ -27,6 +28,10 @@ infer_global = registry.register_global
 @infer_global(math.atanh)
 @infer_global(math.degrees)
 @infer_global(math.radians)
+@infer_global(math.erf)
+@infer_global(math.erfc)
+@infer_global(math.gamma)
+@infer_global(math.lgamma)
 class Math_unary(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64),
@@ -34,10 +39,6 @@ class Math_unary(ConcreteTemplate):
         signature(types.float32, types.float32),
         signature(types.float64, types.float64),
     ]
-
-if utils.PYVERSION > (2, 6):
-    for func in (math.erf, math.erfc, math.gamma, math.lgamma):
-        Math_unary = infer_global(func)(Math_unary)
 
 
 @infer_global(math.atan2)
@@ -49,10 +50,6 @@ class Math_atan2(ConcreteTemplate):
         signature(types.float64, types.float64, types.float64),
     ]
 
-if utils.PYVERSION > (2, 6):
-    @infer_global(math.expm1)
-    class Math_expm1(Math_unary):
-        pass
 
 @infer_global(math.trunc)
 class Math_converter(ConcreteTemplate):

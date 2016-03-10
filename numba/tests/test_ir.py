@@ -139,8 +139,6 @@ class TestIRDump(unittest.TestCase):
         # This exercises removal of unused temporaries.
         self.check_ir_dump(var_swapping)
 
-    @unittest.skipIf(PYVERSION < (2, 7),
-                     "2.6 bytecode gives slightly different IR dump")
     def test_var_propagate1(self):
         # This exercises generation of phi nodes.
         self.check_ir_dump(var_propagate1)

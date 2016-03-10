@@ -15,7 +15,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import config, jit, npdatetime, types, vectorize, numpy_support
 from numba.errors import TypingError
-from .support import TestCase, skip_on_numpy_16, tag
+from .support import TestCase, tag
 
 
 def value_unit(val):
@@ -78,7 +78,6 @@ def make_add_constant(const):
     return add_constant
 
 
-@skip_on_numpy_16
 class TestModuleHelpers(TestCase):
     """
     Test the various helpers in numba.npdatetime.
@@ -201,7 +200,6 @@ TD = np.timedelta64
 DT = np.datetime64
 
 
-@skip_on_numpy_16
 class TestMiscCompiling(TestCase):
 
     def test_jit_explicit_signature(self):
@@ -256,7 +254,6 @@ class TestMiscCompiling(TestCase):
         check(TD('NaT', 'D'))
 
 
-@skip_on_numpy_16
 class TestTimedeltaArithmetic(TestCase):
 
     jitargs = dict(forceobj=True)
@@ -503,13 +500,11 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD('NaT', 'ms'))
 
 
-@skip_on_numpy_16
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
 
     jitargs = dict(nopython=True)
 
 
-@skip_on_numpy_16
 class TestDatetimeArithmetic(TestCase):
 
     jitargs = dict(forceobj=True)
@@ -735,13 +730,11 @@ class TestDatetimeArithmetic(TestCase):
                 check_lt(b - np.timedelta64(1, unit), a, True)
 
 
-@skip_on_numpy_16
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
 
     jitargs = dict(nopython=True)
 
 
-@skip_on_numpy_16
 class TestMetadataScalingFactor(TestCase):
     """
     Tests than non-1 scaling factors are not supported in datetime64

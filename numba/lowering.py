@@ -752,6 +752,15 @@ class Lower(BaseLower):
                         for val, fromty in zip(itemvals, itemtys)]
             return self.context.build_list(self.builder, resty, castvals)
 
+        elif expr.op == "build_set":
+            # Insert in reverse order, as Python does
+            items = expr.items[::-1]
+            itemvals = [self.loadvar(i.name) for i in items]
+            itemtys = [self.typeof(i.name) for i in items]
+            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
+                        for val, fromty in zip(itemvals, itemtys)]
+            return self.context.build_set(self.builder, resty, castvals)
+
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)

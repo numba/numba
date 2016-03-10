@@ -3,13 +3,14 @@ Implements custom ufunc dispatch mechanism for non-CPU devices.
 """
 from __future__ import print_function, absolute_import
 
+from collections import OrderedDict
 import operator
 import warnings
 from functools import reduce
 
 import numpy as np
 
-from numba.utils import longint, OrderedDict
+from numba.utils import longint
 from numba.utils import IS_PY3
 from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
 from numba import sigutils, types

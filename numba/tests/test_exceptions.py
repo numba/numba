@@ -183,8 +183,6 @@ class TestRaising(TestCase):
         with self.assertTypingError():
             self.check_raise_invalid_class(1, flags=no_pyobj_flags)
 
-    @unittest.skipIf(sys.version_info < (2, 7),
-                     "assert statement uses unsupported 2-argument raise bytecode on 2.6")
     def check_assert_statement(self, flags):
         pyfunc = assert_usecase
         cres = compile_isolated(pyfunc, (types.int32,), flags=flags)

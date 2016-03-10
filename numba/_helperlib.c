@@ -20,11 +20,6 @@
 
 #include "_arraystruct.h"
 
-/* For Numpy 1.6 */
-#ifndef NPY_ARRAY_BEHAVED
-    #define NPY_ARRAY_BEHAVED NPY_BEHAVED
-#endif
-
 /*
  * PRNG support.
  */
@@ -855,6 +850,7 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
 {
     PyObject *module, *capi, *cobj;
     void *res = NULL;
+    const char *capsule_name;
 
     module = PyImport_ImportModule(module_name);
     if (module == NULL)
@@ -867,22 +863,12 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
     Py_DECREF(capi);
     if (cobj == NULL)
         return NULL;
-#if PY_MAJOR_VERSION >= 3 || (PY_MINOR_VERSION >= 7)
-    {
-        /* 2.7+ => Cython exports a PyCapsule */
-        const char *capsule_name = PyCapsule_GetName(cobj);
-        if (capsule_name != NULL) {
-            res = PyCapsule_GetPointer(cobj, capsule_name);
-        }
-        Py_DECREF(cobj);
+    /* 2.7+ => Cython exports a PyCapsule */
+    capsule_name = PyCapsule_GetName(cobj);
+    if (capsule_name != NULL) {
+        res = PyCapsule_GetPointer(cobj, capsule_name);
     }
-#else
-    {
-        /* 2.6 => Cython exports a legacy PyCObject */
-        res = PyCObject_AsVoidPtr(cobj);
-        Py_DECREF(cobj);
-    }
-#endif
+    Py_DECREF(cobj);
     return res;
 }
 
@@ -1327,6 +1313,84 @@ numba_reset_list_private_data(PyListObject *listobj)
         listobj->allocated = PyList_GET_SIZE(listobj);
 }
 
+/*
+ * Functions for tagging an arbitrary Python object with an arbitrary pointer.
+ * These functions make strong lifetime assumptions, see below.
+ */
+
+static PyObject *private_data_dict = NULL;
+
+static PyObject *
+_get_private_data_dict(void)
+{
+    if (private_data_dict == NULL)
+        private_data_dict = PyDict_New();
+    return private_data_dict;
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_set_pyobject_private_data(PyObject *obj, void *ptr)
+{
+    PyObject *dct = _get_private_data_dict();
+    /* This assumes the reference to setobj is kept alive until the
+       call to numba_reset_set_private_data()! */
+    PyObject *key = PyLong_FromVoidPtr((void *) obj);
+    PyObject *value = PyLong_FromVoidPtr(ptr);
+
+    if (!dct || !value || !key)
+        goto error;
+    if (PyDict_SetItem(dct, key, value))
+        goto error;
+    Py_DECREF(key);
+    Py_DECREF(value);
+    return;
+
+error:
+    Py_FatalError("unable to set private data");
+}
+
+NUMBA_EXPORT_FUNC(void *)
+numba_get_pyobject_private_data(PyObject *obj)
+{
+    PyObject *dct = _get_private_data_dict();
+    PyObject *value, *key = PyLong_FromVoidPtr((void *) obj);
+    void *ptr;
+    if (!dct || !key)
+        goto error;
+
+    value = PyDict_GetItem(dct, key);
+    Py_DECREF(key);
+    if (!value)
+        return NULL;
+    else {
+        ptr = PyLong_AsVoidPtr(value);
+        if (ptr == NULL && PyErr_Occurred())
+            goto error;
+        return ptr;
+    }
+
+error:
+    Py_FatalError("unable to get private data");
+    return NULL;
+}
+
+NUMBA_EXPORT_FUNC(void)
+numba_reset_pyobject_private_data(PyObject *obj)
+{
+    PyObject *dct = _get_private_data_dict();
+    PyObject *key = PyLong_FromVoidPtr((void *) obj);
+
+    if (!key)
+        goto error;
+    if (PyDict_DelItem(dct, key))
+        PyErr_Clear();
+    Py_DECREF(key);
+    return;
+
+error:
+    Py_FatalError("unable to reset private data");
+}
+
 NUMBA_EXPORT_FUNC(int)
 numba_unpack_slice(PyObject *obj,
                    Py_ssize_t *start, Py_ssize_t *stop, Py_ssize_t *step)
@@ -1351,7 +1415,7 @@ numba_unpack_slice(PyObject *obj,
     }
     FETCH_MEMBER(step, 1)
     FETCH_MEMBER(stop, (*step > 0) ? PY_SSIZE_T_MAX : PY_SSIZE_T_MIN)
-    FETCH_MEMBER(start, 0)
+    FETCH_MEMBER(start, (*step > 0) ? 0 : PY_SSIZE_T_MAX)
     return 0;
 
 #undef FETCH_MEMBER

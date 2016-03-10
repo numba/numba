@@ -141,9 +141,8 @@ _identities = {
     0: _internal.PyUFunc_Zero,
     1: _internal.PyUFunc_One,
     None: _internal.PyUFunc_None,
+    "reorderable": _internal.PyUFunc_ReorderableNone,
     }
-if np.__version__ >= '1.7':
-    _identities["reorderable"] = _internal.PyUFunc_ReorderableNone
 
 def parse_identity(identity):
     """

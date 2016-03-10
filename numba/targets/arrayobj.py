@@ -227,19 +227,12 @@ def update_array_info(aryty, array):
                                           get_itemsize(context, aryty))
 
 
-def make_arrayiter_cls(iterator_type):
-    """
-    Return the Structure representation of the given *iterator_type* (an
-    instance of types.ArrayIteratorType).
-    """
-    return cgutils.create_struct_proxy(iterator_type)
-
 @lower_builtin('getiter', types.Buffer)
 def getiter_array(context, builder, sig, args):
     [arrayty] = sig.args
     [array] = args
 
-    iterobj = make_arrayiter_cls(sig.return_type)(context, builder)
+    iterobj = context.make_helper(builder, sig.return_type)
 
     zero = context.get_constant(types.intp, 0)
     indexptr = cgutils.alloca_once_value(builder, zero)
@@ -277,7 +270,7 @@ def iternext_array(context, builder, sig, args, result):
         # TODO
         raise NotImplementedError("iterating over %dD array" % arrayty.ndim)
 
-    iterobj = make_arrayiter_cls(iterty)(context, builder, value=iter)
+    iterobj = context.make_helper(builder, iterty, value=iter)
     ary = make_array(arrayty)(context, builder, value=iterobj.array)
 
     nitems, = cgutils.unpack_tuple(builder, ary.shape, count=1)
@@ -325,7 +318,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
             continue
         # Regular index value
         if isinstance(idxty, types.SliceType):
-            slice = slicing.make_slice(context, builder, idxty, value=indexval)
+            slice = context.make_helper(builder, idxty, value=indexval)
             slicing.guard_invalid_slice(context, builder, idxty, slice)
             slicing.fix_slice(builder, slice, shapes[ax])
             output_indices.append(slice.start)
@@ -843,7 +836,7 @@ class FancyIndexer(object):
 
             # Regular index value
             if isinstance(idxty, types.SliceType):
-                slice = slicing.make_slice(context, builder, idxty, indexval)
+                slice = context.make_helper(builder, idxty, indexval)
                 indexer = SliceIndexer(context, builder, aryty, ary, ax,
                                        idxty, slice)
                 indexers.append(indexer)
@@ -1514,8 +1507,7 @@ def array_ctypes(context, builder, typ, value):
     # Cast void* data to uintp
     addr = builder.ptrtoint(array.data, context.get_value_type(types.uintp))
     # Create new ArrayCType structure
-    ctinfo_type = cgutils.create_struct_proxy(types.ArrayCTypes(typ))
-    ctinfo = ctinfo_type(context, builder)
+    ctinfo = context.make_helper(builder, types.ArrayCTypes(typ))
     ctinfo.data = addr
     res = ctinfo._getvalue()
     return impl_ret_untracked(context, builder, typ, res)
@@ -1529,8 +1521,7 @@ def array_flags(context, builder, typ, value):
 
 @lower_getattr(types.ArrayCTypes, "data")
 def array_ctypes_data(context, builder, typ, value):
-    ctinfo_type = cgutils.create_struct_proxy(typ)
-    ctinfo = ctinfo_type(context, builder, value=value)
+    ctinfo = context.make_helper(builder, typ, value=value)
     res = ctinfo.data
     return impl_ret_untracked(context, builder, typ, res)
 
@@ -2087,6 +2078,17 @@ def iternext_numpy_getitem(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+@lower_builtin(len, types.NumpyFlatType)
+def iternext_numpy_getitem(context, builder, sig, args):
+    flatiterty = sig.args[0]
+    flatitercls = make_array_flat_cls(flatiterty)
+    flatiter = flatitercls(context, builder, value=args[0])
+
+    arrcls = context.make_array(flatiterty.array_type)
+    arr = arrcls(context, builder, value=builder.load(flatiter.array))
+    return arr.nitems
+
+
 @lower_builtin(numpy.ndenumerate, types.Array)
 def make_array_ndenumerate(context, builder, sig, args):
     arrty, = sig.args
@@ -2233,22 +2235,19 @@ def _zero_fill_array(context, builder, ary):
     cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems), 0)
 
 
-def _parse_empty_args(context, builder, sig, args):
+def _parse_shape(context, builder, ty, val):
     """
-    Parse the arguments of a np.empty(), np.zeros() or np.ones() call.
+    Parse the shape argument to an array constructor.
     """
-    arrshapetype = sig.args[0]
-    arrshape = args[0]
-    arrtype = sig.return_type
-
-    if isinstance(arrshapetype, types.Integer):
+    if isinstance(ty, types.Integer):
         ndim = 1
-        shapes = [context.cast(builder, arrshape, arrshapetype, types.intp)]
+        shapes = [context.cast(builder, val, ty, types.intp)]
     else:
-        ndim = arrshapetype.count
-        arrshape = context.cast(builder, arrshape, arrshapetype,
+        assert isinstance(ty, types.BaseTuple)
+        ndim = ty.count
+        arrshape = context.cast(builder, val, ty,
                                 types.UniTuple(types.intp, ndim))
-        shapes = cgutils.unpack_tuple(builder, arrshape, count=ndim)
+        shapes = cgutils.unpack_tuple(builder, val, count=ndim)
 
     zero = context.get_constant_generic(builder, types.intp, 0)
     for dim in range(ndim):
@@ -2256,7 +2255,18 @@ def _parse_empty_args(context, builder, sig, args):
         with cgutils.if_unlikely(builder, is_neg):
             context.call_conv.return_user_exc(builder, ValueError,
                                               ("negative dimensions not allowed",))
-    return arrtype, shapes
+
+    return shapes
+
+
+def _parse_empty_args(context, builder, sig, args):
+    """
+    Parse the arguments of a np.empty(), np.zeros() or np.ones() call.
+    """
+    arrshapetype = sig.args[0]
+    arrshape = args[0]
+    arrtype = sig.return_type
+    return arrtype, _parse_shape(context, builder, arrshapetype, arrshape)
 
 
 def _parse_empty_like_args(context, builder, sig, args):
