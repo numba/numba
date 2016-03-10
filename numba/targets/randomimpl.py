@@ -1222,9 +1222,9 @@ def choice(a, size=None, replace=True):
         def getitem(a, a_i):
             return a[a_i]
 
-    else:
+    elif isinstance(a, types.Integer):
         # choice() over an implied arange() population
-        dtype = np.int64
+        dtype = np.intp
 
         @jit(nopython=True)
         def get_source_size(a):
@@ -1237,6 +1237,10 @@ def choice(a, size=None, replace=True):
         @jit(nopython=True)
         def getitem(a, a_i):
             return a_i
+
+    else:
+        raise TypeError("np.random.choice() first argument should be "
+                        "int or array, got %s" % (a,))
 
     if size in (None, types.none):
         def choice_impl(a, size=None, replace=True):

@@ -923,6 +923,9 @@ class TestRandomArrays(BaseTest):
         self.assertGreaterEqual(mean, 0.45)
         self.assertLessEqual(mean, 0.55)
 
+    # Sanity-check various distributions.  For convenience, we only check
+    # those distributions that produce the exact same values as Numpy's.
+
     def test_numpy_binomial(self):
         self._check_array_dist("binomial", (20, 0.5))
 
