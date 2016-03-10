@@ -40,6 +40,23 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 ('y', float32)]
         self._check_spec(spec)
 
+    def test_spec_errors(self):
+        spec1 = [('x', int), ('y', float32[:])]
+        spec2 = [(1, int32), ('y', float32[:])]
+
+        class Test(object):
+            def __init__(self):
+                pass
+
+        with self.assertRaises(TypeError) as raises:
+            jitclass(spec1)(Test)
+        self.assertEqual(str(raises.exception),
+                         "spec values should be Numba type instances, got <class 'int'>")
+        with self.assertRaises(TypeError) as raises:
+            jitclass(spec2)(Test)
+        self.assertEqual(str(raises.exception),
+                         "spec keys should be strings, got 1")
+
     def _make_Float2AndArray(self):
         spec = OrderedDict()
         spec['x'] = float32
