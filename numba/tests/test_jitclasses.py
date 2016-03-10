@@ -50,8 +50,8 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         with self.assertRaises(TypeError) as raises:
             jitclass(spec1)(Test)
-        self.assertEqual(str(raises.exception),
-                         "spec values should be Numba type instances, got <class 'int'>")
+        self.assertIn("spec values should be Numba type instances",
+                      str(raises.exception))
         with self.assertRaises(TypeError) as raises:
             jitclass(spec2)(Test)
         self.assertEqual(str(raises.exception),
