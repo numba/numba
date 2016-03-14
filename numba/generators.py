@@ -174,7 +174,7 @@ class BaseGeneratorLower(object):
         function = lower.module.get_or_insert_function(
             fnty, name=self.gendesc.llvm_finalizer_name)
         entry_block = function.append_basic_block('entry')
-        builder = Builder.new(entry_block)
+        builder = Builder(entry_block)
 
         genptrty = self.context.get_value_type(self.gentype)
         genptr = builder.bitcast(function.args[0], genptrty)

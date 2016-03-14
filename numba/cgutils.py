@@ -673,33 +673,30 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         return pointer_add(builder, data, offset)
 
 
+def _scalar_pred_against_zero(builder, value, fcond, icond):
+    nullval = Constant.null(value.type)
+    if isinstance(value.type, (ir.FloatType, ir.DoubleType)):
+        isnull = builder.fcmp(fcond, value, nullval)
+    elif isinstance(value.type, ir.IntType):
+        isnull = builder.icmp(icond, value, nullval)
+    else:
+        raise TypeError("unexpected value type %s" % (value.type,))
+    return isnull
+
+
 def is_scalar_zero(builder, value):
     """
     Return a predicate representing whether *value* is equal to zero.
     """
-    assert not is_pointer(value.type)
-    assert not is_struct(value.type)
-    nullval = Constant.null(value.type)
-    if value.type in (Type.float(), Type.double()):
-        isnull = builder.fcmp(lc.FCMP_OEQ, nullval, value)
-    else:
-        isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
-    return isnull
+    return _scalar_pred_against_zero(builder, value, lc.FCMP_OEQ, lc.ICMP_EQ)
 
 
 def is_not_scalar_zero(builder, value):
     """
     Return a predicate representin whether a *value* is not equal to zero.
-    not exactly "not is_scalar_zero" because of nans
+    (not exactly "not is_scalar_zero" because of nans)
     """
-    assert not is_pointer(value.type)
-    assert not is_struct(value.type)
-    nullval = Constant.null(value.type)
-    if value.type in (Type.float(), Type.double()):
-        isnull = builder.fcmp(lc.FCMP_UNE, nullval, value)
-    else:
-        isnull = builder.icmp(lc.ICMP_NE, nullval, value)
-    return isnull
+    return _scalar_pred_against_zero(builder, value, lc.FCMP_UNE, lc.ICMP_NE)
 
 
 def is_scalar_zero_or_nan(builder, value):
@@ -707,26 +704,17 @@ def is_scalar_zero_or_nan(builder, value):
     Return a predicate representing whether *value* is equal to either zero
     or NaN.
     """
-    assert not is_pointer(value.type)
-    assert not is_struct(value.type)
-    nullval = Constant.null(value.type)
-    if value.type in (Type.float(), Type.double()):
-        isnull = builder.fcmp(lc.FCMP_UEQ, nullval, value)
-    else:
-        isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
-    return isnull
+    return _scalar_pred_against_zero(builder, value, lc.FCMP_UEQ, lc.ICMP_EQ)
 
 is_true = is_not_scalar_zero
 is_false = is_scalar_zero
 
+
 def is_scalar_neg(builder, value):
-    """is _value_ negative?. Assumes _value_ is signed"""
-    nullval = Constant.null(value.type)
-    if value.type in (Type.float(), Type.double()):
-        isneg = builder.fcmp(lc.FCMP_OLT, value, nullval)
-    else:
-        isneg = builder.icmp(lc.ICMP_SLT, value, nullval)
-    return isneg
+    """
+    Is *value* negative?  Assumes *value* is signed.
+    """
+    return _scalar_pred_against_zero(builder, value, lc.FCMP_OLT, lc.ICMP_SLT)
 
 
 def guard_null(context, builder, value, exc_tuple):
@@ -760,25 +748,11 @@ def if_zero(builder, value, likely=False):
 guard_zero = guard_null
 
 
-def is_struct(ltyp):
-    """
-    Whether the LLVM type *typ* is a pointer type.
-    """
-    return ltyp.kind == lc.TYPE_STRUCT
-
-
 def is_pointer(ltyp):
     """
     Whether the LLVM type *typ* is a struct type.
     """
-    return ltyp.kind == lc.TYPE_POINTER
-
-
-def is_struct_ptr(ltyp):
-    """
-    Whether the LLVM type *typ* is a pointer-to-struct type.
-    """
-    return is_pointer(ltyp) and is_struct(ltyp.pointee)
+    return isinstance(ltyp, ir.PointerType)
 
 
 def get_record_member(builder, record, offset, typ):

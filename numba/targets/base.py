@@ -709,7 +709,7 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def compile_only_no_cache(self, builder, impl, sig, locals={}):
+    def compile_only_no_cache(self, builder, impl, sig, locals={}, flags=None):
         """Invoke the compiler to compile a function to be used inside a
         nopython function, but without generating code to call that
         function.
@@ -719,7 +719,8 @@ class BaseContext(object):
 
         codegen = self.codegen()
         library = codegen.create_library(impl.__name__)
-        flags = compiler.Flags()
+        if flags is None:
+            flags = compiler.Flags()
         flags.set('no_compile')
         flags.set('no_cpython_wrapper')
         cres = compiler.compile_internal(self.typing_context, self,
@@ -906,7 +907,7 @@ class BaseContext(object):
     def create_module(self, name):
         """Create a LLVM module
         """
-        return lc.Module.new(name)
+        return lc.Module(name)
 
     def _require_nrt(self):
         if not self.enable_nrt:

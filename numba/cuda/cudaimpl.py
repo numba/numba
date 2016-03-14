@@ -5,7 +5,6 @@ import operator
 
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.ee as le
 import llvmlite.binding as ll
 
 from numba.targets.imputils import Registry

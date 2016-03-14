@@ -7,8 +7,6 @@ import sys
 
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.ee as le
-import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 
 from numba import cgutils
@@ -310,7 +308,7 @@ class ModuleCompilerPy2(_ModuleCompiler):
         # Define the module initialization function.
         mod_init_fn = llvm_module.add_function(*self.module_init_definition)
         entry = mod_init_fn.append_basic_block('Entry')
-        builder = lc.Builder.new(entry)
+        builder = lc.Builder(entry)
         pyapi = self.context.get_python_api(builder)
 
         # Python C API module creation function.
@@ -471,7 +469,7 @@ class ModuleCompilerPy3(_ModuleCompiler):
         # Define the module initialization function.
         mod_init_fn = llvm_module.add_function(*self.module_init_definition)
         entry = mod_init_fn.append_basic_block('Entry')
-        builder = lc.Builder.new(entry)
+        builder = lc.Builder(entry)
         pyapi = self.context.get_python_api(builder)
 
         mod = builder.call(create_module_fn,

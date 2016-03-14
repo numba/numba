@@ -249,8 +249,7 @@ random module <pysupported-random>` (and therefore the same notes apply),
 but with an independent internal state: seeding or drawing numbers from
 one generator won't affect the other.
 
-The following functions are supported, but only with scalar output: you can't
-pass a *size* argument.
+The following functions are supported.
 
 Initialization
 ''''''''''''''
@@ -270,6 +269,9 @@ Simple random data
 
 Permutations
 ''''''''''''
+
+* :func:`numpy.random.choice`: the optional *p* argument (probabilities
+  array) is not supported
 
 * :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
   Numpy array or buffer-providing object (such as a :class:`bytearray`
@@ -291,6 +293,7 @@ Distributions
 * :func:`numpy.random.logistic`
 * :func:`numpy.random.lognormal`
 * :func:`numpy.random.logseries`
+* :func:`numpy.random.multibinomial`
 * :func:`numpy.random.negative_binomial`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`
