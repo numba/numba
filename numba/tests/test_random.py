@@ -894,7 +894,11 @@ class TestRandomArrays(BaseTest):
             args = scalar_args + (size,)
             expected = pyfunc(*args)
             got = cfunc(*args)
-            self.assertPreciseEqual(expected, got)
+            # Numpy may return int32s where we return int64s, adjust
+            if (expected.dtype == np.dtype('int32')
+                and got.dtype == np.dtype('int64')):
+                expected = expected.astype(got.dtype)
+            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
 
     def test_numpy_randint(self):
         cfunc = self._compile_array_dist("randint", 3)
