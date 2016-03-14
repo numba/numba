@@ -6,7 +6,7 @@ import sys
 
 from numpy import ufunc
 
-from .. import ir, types, rewrites, six
+from .. import compiler, ir, types, rewrites, six
 from ..typing import npydecl
 from .dufunc import DUFunc
 
@@ -336,7 +336,11 @@ def _lower_array_expr(lowerer, expr):
             inner_sig_args.append(argty)
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
-    cres = context.compile_only_no_cache(builder, impl, inner_sig)
+    # Follow the Numpy error model.  Note this also allows e.g. vectorizing
+    # division (issue #1223).
+    flags = compiler.Flags()
+    flags.set('error_model', 'numpy')
+    cres = context.compile_only_no_cache(builder, impl, inner_sig, flags=flags)
 
     # Create kernel subclass calling our native function
     from ..targets import npyimpl
