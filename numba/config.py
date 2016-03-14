@@ -120,6 +120,9 @@ class _EnvReloader(object):
         # Enable debugging of front-end operation (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
+        # Enable logging of cache operation
+        DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
+
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
 
