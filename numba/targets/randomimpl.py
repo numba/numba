@@ -768,23 +768,45 @@ def binomial_impl(context, builder, sig, args):
             raise ValueError("binomial(): n <= 0")
         if not (0.0 <= p <= 1.0):
             raise ValueError("binomial(): p outside of [0, 1]")
+        if p == 0.0:
+            return 0
+        if p == 1.0:
+            return n
+
         flipped = p > 0.5
         if flipped:
             p = 1.0 - p
         q = 1.0 - p
+
+        niters = 1
         qn = q ** n
+        while qn <= 1e-308:
+            # Underflow => split into several iterations
+            # Note this is much slower than Numpy's BTPE
+            niters <<= 2
+            n >>= 2
+            qn = q ** n
+            assert n > 0
+
         np = n * p
         bound = min(n, np + 10.0 * math.sqrt(np * q + 1))
-        while 1:
+
+        finished = False
+        total = 0
+        while niters > 0:
             X = 0
             U = _random()
             px = qn
             while X <= bound:
                 if U <= px:
-                    return n - X if flipped else X
+                    total += n - X if flipped else X
+                    niters -= 1
+                    break
                 U -= px
                 X += 1
                 px = ((n - X + 1) * p * px) / (X * q)
+
+        return total
 
     res = context.compile_internal(builder, binomial_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)

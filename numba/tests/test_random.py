@@ -621,6 +621,21 @@ class TestRandom(BaseTest):
         binomial = jit_binary("np.random.binomial")
         r = self._follow_numpy(np_state_ptr, 0)
         self._check_dist(binomial, r.binomial, [(18, 0.25)])
+        # Sanity check many values
+        for n in (100, 1000, 10000):
+            self.assertEqual(binomial(n, 0.0), 0)
+            self.assertEqual(binomial(n, 1.0), n)
+            for p in (0.0001, 0.1, 0.4, 0.49999, 0.5, 0.50001, 0.8, 0.9, 0.9999):
+                r = binomial(n, p)
+                if p > 0.5:
+                    r = n - r
+                    p = 1 - p
+                self.assertGreaterEqual(r, 0)
+                self.assertLessEqual(r, n)
+                expected = p * n
+                tol = 3 * n / math.sqrt(n)
+                self.assertGreaterEqual(r, expected - tol, (p, n, r))
+                self.assertLessEqual(r, expected + tol, (p, n, r))
         # Invalid values
         self.assertRaises(ValueError, binomial, -1, 0.5)
         self.assertRaises(ValueError, binomial, 10, -0.1)
