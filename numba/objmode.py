@@ -581,12 +581,8 @@ class PyLower(BaseLower):
         no code is inserted.
         """
         lpyobj = self.context.get_value_type(types.pyobject)
-
-        if value.type.kind == lc.TYPE_POINTER:
-            if value.type != lpyobj:
-                pass
-            else:
-                self.pyapi.decref(value)
+        if value.type == lpyobj:
+            self.pyapi.decref(value)
 
     def _freeze_string(self, string):
         """

@@ -10,7 +10,7 @@ import traceback
 from .tracing import trace, event
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
-                   lowering, objmode, irpasses, utils, config, errors,
+                   lowering, objmode, utils, config, errors,
                    types, ir, looplifting, macro, types, rewrites)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
@@ -850,14 +850,3 @@ def py_lowering_stage(targetctx, library, interp, flags):
         cfunc = targetctx.get_executable(library, fndesc, env)
         return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env,
                             has_dynamic_globals=has_dynamic_globals)
-
-
-def ir_optimize_for_py_stage(interp):
-    """
-    This passes breaks semantic for the type inferer but they reduces
-    refct calls for object mode.
-    """
-    irpasses.RemoveRedundantAssign(interp).run()
-    if config.DEBUG:
-        print("ir optimize".center(80, '-'))
-        interp.dump()

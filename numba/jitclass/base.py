@@ -96,6 +96,14 @@ class JitClassType(type):
 ##############################################################################
 # Registration utils
 
+def _validate_spec(spec):
+    for k, v in spec.items():
+        if not isinstance(k, str):
+            raise TypeError("spec keys should be strings, got %r" % (k,))
+        if not isinstance(v, types.Type):
+            raise TypeError("spec values should be Numba type instances, got %r"
+                            % (v,))
+
 def register_class_type(cls, spec, class_ctor, builder):
     """
     Internal function to create a jitclass.
@@ -110,6 +118,7 @@ def register_class_type(cls, spec, class_ctor, builder):
     # Normalize spec
     if isinstance(spec, Sequence):
         spec = OrderedDict(spec)
+    _validate_spec(spec)
 
     # Copy methods from base classes
     clsdct = {}

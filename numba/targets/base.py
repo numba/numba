@@ -709,7 +709,7 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def compile_only_no_cache(self, builder, impl, sig, locals={}):
+    def compile_only_no_cache(self, builder, impl, sig, locals={}, flags=None):
         """Invoke the compiler to compile a function to be used inside a
         nopython function, but without generating code to call that
         function.
@@ -719,7 +719,8 @@ class BaseContext(object):
 
         codegen = self.codegen()
         library = codegen.create_library(impl.__name__)
-        flags = compiler.Flags()
+        if flags is None:
+            flags = compiler.Flags()
         flags.set('no_compile')
         flags.set('no_cpython_wrapper')
         cres = compiler.compile_internal(self.typing_context, self,
@@ -844,20 +845,16 @@ class BaseContext(object):
         return tup
 
     def make_constant_array(self, builder, typ, ary):
+        """
+        Create an array structure reifying the given constant array.
+        A low-level contiguous array constant is created in the LLVM IR.
+        """
         assert typ.layout == 'C'                # assumed in typeinfer.py
-        ary = numpy.ascontiguousarray(ary)
+
+        # Handle data: reify the flattened array in "C" order as a
+        # global array of bytes.
         flat = ary.flatten()
-
-        # Handle data
-        if self.is_struct_type(typ.dtype):
-            values = [self.get_constant_struct(builder, typ.dtype, flat[i])
-                      for i in range(flat.size)]
-        else:
-            values = [self.get_constant(typ.dtype, flat[i])
-                      for i in range(flat.size)]
-
-        lldtype = values[0].type
-        consts = Constant.array(lldtype, values)
+        consts = Constant.array(Type.int(8), bytearray(flat))
         data = cgutils.global_constant(builder, ".const.array.data", consts)
 
         # Handle shape
@@ -865,9 +862,9 @@ class BaseContext(object):
         shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
         cshape = Constant.array(llintp, shapevals)
 
-
-        # Handle strides
-        stridevals = [self.get_constant(types.intp, s) for s in ary.strides]
+        # Handle strides: use strides of the equivalent C-contiguous array.
+        contig = numpy.ascontiguousarray(ary)
+        stridevals = [self.get_constant(types.intp, s) for s in contig.strides]
         cstrides = Constant.array(llintp, stridevals)
 
         # Create array structure
@@ -910,7 +907,7 @@ class BaseContext(object):
     def create_module(self, name):
         """Create a LLVM module
         """
-        return lc.Module.new(name)
+        return lc.Module(name)
 
     def _require_nrt(self):
         if not self.enable_nrt:

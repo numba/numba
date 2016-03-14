@@ -573,7 +573,7 @@ def real_divmod(context, builder, x, y):
 
     if fn.is_declaration:
         fn.linkage = lc.LINKAGE_LINKONCE_ODR
-        fnbuilder = lc.Builder.new(fn.append_basic_block('entry'))
+        fnbuilder = lc.Builder(fn.append_basic_block('entry'))
         fx, fy, pmod = fn.args
         div, mod = real_divmod_func_body(context, fnbuilder, fx, fy)
         fnbuilder.store(mod, pmod)

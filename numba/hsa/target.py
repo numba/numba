@@ -1,8 +1,11 @@
 from __future__ import print_function, absolute_import
+
 import re
+
 from llvmlite.llvmpy import core as lc
 from llvmlite import ir as llvmir
 from llvmlite import binding as ll
+
 from numba import typing, types, utils, cgutils
 from numba.utils import cached_property
 from numba import datamodel
@@ -137,7 +140,7 @@ class HSATargetContext(BaseContext):
 
         wrapper = wrapper_module.add_function(wrapperfnty, name=wrappername)
 
-        builder = lc.Builder.new(wrapper.append_basic_block(''))
+        builder = lc.Builder(wrapper.append_basic_block(''))
 
         # Adjust address space of each kernel argument
         fixed_args = []
@@ -247,7 +250,7 @@ def gen_arg_addrspace_md(fn):
     codes = []
 
     for a in fnty.args:
-        if a.kind == lc.TYPE_POINTER:
+        if cgutils.is_pointer(a):
             codes.append(SPIR_GLOBAL_ADDRSPACE)
         else:
             codes.append(SPIR_PRIVATE_ADDRSPACE)
