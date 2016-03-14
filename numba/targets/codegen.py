@@ -391,8 +391,11 @@ class JITCodeLibrary(CodeLibrary):
 
 
 class BaseCPUCodegen(object):
+    _llvm_initialized = False
 
     def __init__(self, module_name):
+        initialize_llvm()
+
         self._libraries = set()
         self._data_layout = None
         self._llvm_module = ll.parse_assembly(
@@ -420,7 +423,7 @@ class BaseCPUCodegen(object):
                                       self._library_class._object_getbuffer_hook)
 
     def _create_empty_module(self, name):
-        ir_module = lc.Module.new(name)
+        ir_module = lc.Module(name)
         ir_module.triple = ll.get_process_triple()
         if self._data_layout:
             ir_module.data_layout = self._data_layout
@@ -581,3 +584,14 @@ class JITCPUCodegen(BaseCPUCodegen):
         self._engine.add_module(module)
         # Early bind the engine method to avoid keeping a reference to self.
         return functools.partial(self._engine.remove_module, module)
+
+
+_llvm_initialized = False
+
+def initialize_llvm():
+    global _llvm_initialized
+    if not _llvm_initialized:
+        ll.initialize()
+        ll.initialize_native_target()
+        ll.initialize_native_asmprinter()
+        _llvm_initialized = True

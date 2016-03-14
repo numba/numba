@@ -217,7 +217,7 @@ class BaseLower(object):
         # Setup function
         self.function = self.context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
-        self.builder = Builder.new(self.entry_block)
+        self.builder = Builder(self.entry_block)
         self.call_helper = self.call_conv.init_call_helper(self.builder)
 
     def typeof(self, varname):
