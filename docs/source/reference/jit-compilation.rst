@@ -62,7 +62,10 @@ JIT functions
    If true, *cache* enables a file-based cache to shorten compilation times
    when the function was already compiled in a previous invocation.
    The cache is maintained in the ``__pycache__`` subdirectory of
-   the directory containing the source file.
+   the directory containing the source file; if the current user is not
+   allowed to write to it, though, it falls back to a platform-specific
+   user-wide cache directory (such as ``$HOME/.cache/numba`` on Unix
+   platforms).
 
    Not all functions can be cached, since some functionality cannot be
    always persisted to disk.  When a function cannot be cached, a
