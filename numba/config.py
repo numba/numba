@@ -85,14 +85,6 @@ class _EnvReloader(object):
             self.old_environ = dict(new_environ)
 
     def process_environ(self, environ):
-        for env_name, value in environ.items():
-            config_name = env_name[6:]
-            meth = getattr(self, 'parse_' + config_name)
-            globals()[config_name] = meth(value)
-        # Store a copy
-        self.old_environ = dict(os.environ)
-
-    def process_environ(self, environ):
         def _readenv(name, ctor, default):
             value = environ.get(name)
             if value is None:

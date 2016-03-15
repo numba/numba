@@ -30,10 +30,6 @@ class _Dummy(object):
         assert isinstance(other, _Dummy)
         return _Dummy(self.recorder, "%s + %s" % (self.name, other.name))
 
-    def __iadd__(self, other):
-        assert isinstance(other, _Dummy)
-        return _Dummy(self.recorder, "%s += %s" % (self.name, other.name))
-
     def __iter__(self):
         return _DummyIterator(self.recorder, "iter(%s)" % self.name)
 
@@ -94,11 +90,6 @@ class RefRecorder(object):
         A list of objects which haven't been deleted yet.
         """
         return [wr() for wr in self._wrs]
-        for wr in list(self._wrs):
-            o = wr()
-            if o is not None:
-                objs.append(o)
-        return objs
 
     @property
     def recorded(self):

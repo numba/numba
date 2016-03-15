@@ -187,21 +187,6 @@ class SortedMap(collections.Mapping):
         return iter(k for k, v in self._values)
 
 
-class SortedSet(collections.Set):
-    def __init__(self, seq):
-        self._set = set(seq)
-        self._values = list(sorted(self._set))
-
-    def __contains__(self, item):
-        return item in self._set
-
-    def __len__(self):
-        return len(self._values)
-
-    def __iter__(self):
-        return iter(self._values)
-
-
 class UniqueDict(dict):
     def __setitem__(self, key, value):
         if key in self:

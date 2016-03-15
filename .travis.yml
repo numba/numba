@@ -21,8 +21,8 @@ before_install:
     - export PATH=$HOME/miniconda3/bin:$PATH
     # Setup environment
     - conda update --yes conda
-    # Scipy and CFFI are optional dependencies, but exercised in the test suite
-    - conda create -n travisci --yes python=$PYTHON $NUMPY cffi pip scipy
+    # Scipy, CFFI and jinja2 are optional dependencies, but exercised in the test suite
+    - conda create -n travisci --yes python=$PYTHON $NUMPY cffi pip scipy jinja2
     - source activate travisci
     - CONDA_INSTALL="conda install --yes -q"
     - PIP_INSTALL="pip install -q"
