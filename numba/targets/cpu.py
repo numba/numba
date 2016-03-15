@@ -64,8 +64,9 @@ class CPUContext(BaseContext):
     def target_data(self):
         return self._internal_codegen.target_data
 
-    def with_aot_codegen(self, name):
-        return self.subtarget(_internal_codegen=codegen.AOTCPUCodegen(name),
+    def with_aot_codegen(self, name, **aot_options):
+        aot_codegen = codegen.AOTCPUCodegen(name, **aot_options)
+        return self.subtarget(_internal_codegen=aot_codegen,
                               aot_mode=True)
 
     def codegen(self):
