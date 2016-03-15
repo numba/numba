@@ -37,8 +37,9 @@ Ahead-of-Time compilation
 
       Recognized names for this attribute depend on the current architecture
       and LLVM version.  If you have LLVM installed, ``llc -mcpu=help``
-      will give you a list.  You can also give the value ``"host"`` which
-      will select the current host CPU.
+      will give you a list.  Examples on x86-64 are ``"ivybridge"``,
+      ``"haswell"``, ``"skylake"`` or ``"broadwell"``.  You can also give
+      the value ``"host"`` which will select the current host CPU.
 
    .. attribute:: verbose
 
