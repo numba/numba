@@ -1041,22 +1041,28 @@ class BaseContext(object):
                                         name="NRT_MemInfo_data_fast")
         return builder.call(fn, [meminfo])
 
-    def _call_nrt_incref_decref(self, builder, root_type, typ, value, funcname):
+    def _call_nrt_incref_decref(self, builder, root_type, typ, value,
+                                funcname, getters=()):
         self._require_nrt()
 
         from numba.runtime.atomicops import incref_decref_ty
 
         data_model = self.data_model_manager[typ]
 
-        members = data_model.traverse(builder, value)
-        for mt, mv in members:
-            self._call_nrt_incref_decref(builder, root_type, mt, mv, funcname)
+        members = data_model.traverse(builder)
+        for mtyp, getter in members:
+            self._call_nrt_incref_decref(builder, root_type, mtyp, value,
+                                         funcname, getters + (getter,))
 
-        try:
-            meminfo = data_model.get_nrt_meminfo(builder, value)
-        except NotImplementedError as e:
-            raise NotImplementedError("%s: %s" % (root_type, str(e)))
-        if meminfo:
+        if data_model.has_nrt_meminfo():
+            # Call the chain of getters to compute the member value
+            for getter in getters:
+                value = getter(value)
+            try:
+                meminfo = data_model.get_nrt_meminfo(builder, value)
+            except NotImplementedError as e:
+                raise NotImplementedError("%s: %s" % (root_type, str(e)))
+            assert meminfo is not None  # since has_nrt_meminfo()
             mod = builder.module
             fn = mod.get_or_insert_function(incref_decref_ty, name=funcname)
             # XXX "nonnull" causes a crash in test_dyn_array: can this
