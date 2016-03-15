@@ -40,6 +40,11 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, print out debugging information about type inference.
 
+.. envvar:: NUMBA_DEBUG_CACHE
+
+   If set to non-zero, print out information about operation of the
+   :ref:`JIT compilation cache <jit-cache>`.
+
 .. envvar:: NUMBA_TRACE
 
    If set to non-zero, trace certain function calls (function entry and exit

@@ -9,7 +9,10 @@ parallel = True
 
 omit =
     */__main__.py
+    # Vendored packages
+    numba/appdirs.py
     numba/six.py
+    numba/testing/ddt.py
     numba/_version.py
 
 exclude_lines =
