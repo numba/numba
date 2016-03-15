@@ -630,13 +630,6 @@ class Interpreter(object):
         self.current_block_offset = offset
         return blk
 
-    def block_constains_opname(self, offset, opname):
-        for offset in self.cfa.blocks[offset]:
-            inst = self.bytecode[offset]
-            if inst.opname == opname:
-                return True
-        return False
-
     # --- Bytecode handlers ---
 
     def op_PRINT_ITEM(self, inst, item, printvar, res):

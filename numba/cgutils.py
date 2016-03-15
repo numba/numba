@@ -883,22 +883,6 @@ def cbranch_or_continue(builder, cond, bbtrue):
     return bbcont
 
 
-def add_postfix(name, postfix):
-    """Add postfix to string.  If the postfix is already there, add a counter.
-    """
-    regex = "(.*{0})([0-9]*)$".format(postfix)
-    m = re.match(regex, name)
-    if m:
-        head, ct = m.group(1), m.group(2)
-        if len(ct):
-            ct = int(ct) + 1
-        else:
-            ct = 1
-
-        return "{head}{ct}".format(head=head, ct=ct)
-    return name + postfix
-
-
 def memcpy(builder, dst, src, count):
     """
     Emit a memcpy to the builder.

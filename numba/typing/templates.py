@@ -151,21 +151,6 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     return args
 
 
-def _uses_downcast(dists):
-    for d in dists:
-        if d < 0:
-            return True
-    return False
-
-
-def _sum_downcast(dists):
-    c = 0
-    for d in dists:
-        if d < 0:
-            c += abs(d)
-    return c
-
-
 class FunctionTemplate(object):
     def __init__(self, context):
         self.context = context
