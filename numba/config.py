@@ -177,8 +177,13 @@ class _EnvReloader(object):
                               "some numerical code", PerformanceWarning)
                 return False
             else:
+                # There are various performance issues with AVX and LLVM
+                # on some CPUs (list at
+                # http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
+                # For now we'd rather disable it, since it can pessimize the code.
                 cpu_name = ll.get_host_cpu_name()
-                return cpu_name not in ('corei7-avx', 'core-avx-i')
+                return cpu_name not in ('corei7-avx', 'core-avx-i',
+                                        'sandybridge', 'ivybridge')
 
         ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
 

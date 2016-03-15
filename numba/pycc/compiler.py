@@ -103,7 +103,8 @@ class _ModuleCompiler(object):
     env_def_ty = lc.Type.struct((lt._void_star, lt._int32))
     env_def_ptr = lc.Type.pointer(env_def_ty)
 
-    def __init__(self, export_entries, module_name, use_nrt=False):
+    def __init__(self, export_entries, module_name, use_nrt=False,
+                 **aot_options):
         self.module_name = module_name
         self.export_python_wrap = False
         self.dll_exports = []
@@ -113,7 +114,8 @@ class _ModuleCompiler(object):
         self.use_nrt = use_nrt
 
         self.typing_context = cpu_target.typing_context
-        self.context = cpu_target.target_context.with_aot_codegen(self.module_name)
+        self.context = cpu_target.target_context.with_aot_codegen(
+            self.module_name, **aot_options)
 
     def _mangle_method_symbol(self, func_name):
         return "._pycc_method_%s" % (func_name,)

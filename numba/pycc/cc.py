@@ -65,6 +65,7 @@ class CC(object):
         self._output_dir = os.path.dirname(self._source_path)
         self._output_file = self._toolchain.get_ext_filename(extension_name)
         self._use_nrt = True
+        self._target_cpu = ''
 
     @property
     def name(self):
@@ -102,6 +103,17 @@ class CC(object):
     @use_nrt.setter
     def use_nrt(self, value):
         self._use_nrt = value
+
+    @property
+    def target_cpu(self):
+        """
+        The target CPU model for code generation.
+        """
+        return self._target_cpu
+
+    @target_cpu.setter
+    def target_cpu(self, value):
+        self._target_cpu = value
 
     @property
     def verbose(self):
@@ -177,7 +189,7 @@ class CC(object):
 
     def _compile_object_files(self, build_dir):
         compiler = ModuleCompiler(self._export_entries, self._basename,
-                                  self._use_nrt)
+                                  self._use_nrt, cpu_name=self._target_cpu)
         compiler.external_init_function = self._init_function
         temp_obj = os.path.join(build_dir,
                                 os.path.splitext(self._output_file)[0] + '.o')
