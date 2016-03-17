@@ -340,6 +340,20 @@ class ArrayAttribute(AttributeTemplate):
         retty = ary.copy(dtype=dtype)
         return signature(retty, *args)
 
+    @bound_function("array.astype")
+    def resolve_astype(self, ary, args, kws):
+        from .npydecl import _parse_dtype
+        assert not kws
+        dtype, = args
+        dtype = _parse_dtype(dtype)
+        if not self.context.can_convert(ary.dtype, dtype):
+            raise TypeError("astype(%s) not supported on %s: "
+                            "cannot convert from %s to %s"
+                            % (dtype, ary, ary.dtype, dtype))
+        layout = ary.layout if ary.layout in 'CF' else 'C'
+        retty = ary.copy(dtype=dtype, layout=layout)
+        return signature(retty, *args)
+
     @bound_function("array.ravel")
     def resolve_ravel(self, ary, args, kws):
         # Only support no argument version (default order='C')
