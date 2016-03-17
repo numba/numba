@@ -46,16 +46,6 @@ def squeeze_array(a):
     return a.squeeze()
 
 
-def convert_array_str(a):
-    # astype takes no kws argument in numpy1.6
-    return a.astype('f4')
-
-
-def convert_array_dtype(a):
-    # astype takes no kws argument in numpy1.6
-    return a.astype(np.float32)
-
-
 def add_axis1(a):
     return np.expand_dims(a, axis=0)
 
@@ -253,42 +243,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.test_squeeze_array(flags=no_pyobj_flags)
 
         self.assertIn("squeeze", str(raises.exception))
-
-    def test_convert_array_str(self, flags=enable_pyobj_flags):
-        a = np.arange(9, dtype='i4')
-
-        pyfunc = convert_array_str
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
-
-        expected = pyfunc(a)
-        got = cfunc(a)
-        self.assertPreciseEqual(expected, got)
-
-    def test_convert_array_str_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_convert_array_str(flags=no_pyobj_flags)
-
-        self.assertIn("astype", str(raises.exception))
-
-    def test_convert_array(self, flags=enable_pyobj_flags):
-        a = np.arange(9, dtype='i4')
-
-        pyfunc = convert_array_dtype
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
-
-        expected = pyfunc(a)
-        got = cfunc(a)
-        np.testing.assert_equal(expected, got)
-
-    def test_convert_array_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_convert_array(flags=no_pyobj_flags)
-
-        self.assertIn("astype", str(raises.exception))
 
     def test_add_axis1(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
