@@ -422,6 +422,13 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         arr = np.arange(16, dtype=np.int32)[::2]
         check(arr, np.uint64)
 
+        # Invalid conversion
+        dt = np.dtype([('x', np.int8)])
+        with self.assertTypingError() as raises:
+            check(arr, dt)
+        self.assertIn('cannot convert from int32 to Record',
+                      str(raises.exception))
+
     def check_np_frombuffer(self, pyfunc):
         def run(buf):
             cres = self.ccache.compile(pyfunc, (typeof(buf),))
