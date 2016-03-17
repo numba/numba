@@ -1084,7 +1084,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         self.inplace_float_op_test('*=', [-1, 1.5, 3], [-5, 0, 2.5])
 
     def test_inplace_floordiv(self):
-        self.inplace_float_op_test('//=', [-1, 1.5, 3], [-5, 0, 2.5])
+        self.inplace_float_op_test('//=', [-1, 1.5, 3], [-5, 1.25, 2.5])
 
     def test_inplace_div(self):
         self.inplace_float_op_test('/=', [-1, 1.5, 3], [-5, 0, 2.5])
@@ -1158,6 +1158,29 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
 
     @tag('important')
     def test_floor_divide_array_op(self):
+        # Avoid floating-point zeros as x // 0.0 can have varying results
+        # depending on the algorithm (which changed accross Numpy versions)
+        self.inputs = [
+            (np.uint32(1), types.uint32),
+            (np.int32(-2), types.int32),
+            (np.int32(0), types.int32),
+            (np.uint64(4), types.uint64),
+            (np.int64(-5), types.int64),
+            (np.int64(0), types.int64),
+
+            (np.float32(-0.5), types.float32),
+            (np.float32(1.5), types.float32),
+
+            (np.float64(-2.5), types.float64),
+            (np.float64(3.5), types.float64),
+
+            (np.array([1,2], dtype='u4'), types.Array(types.uint32, 1, 'C')),
+            (np.array([3,4], dtype='u8'), types.Array(types.uint64, 1, 'C')),
+            (np.array([-1,1,5], dtype='i4'), types.Array(types.int32, 1, 'C')),
+            (np.array([-1,1,6], dtype='i8'), types.Array(types.int64, 1, 'C')),
+            (np.array([-0.5, 1.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
+            (np.array([-2.5, 3.5], dtype='f8'), types.Array(types.float64, 1, 'C')),
+            ]
         self.binary_op_test('//')
 
     @tag('important')
@@ -1438,7 +1461,8 @@ class _LoopTypesTester(TestCase):
 
         # Check each array (including inputs, to ensure they weren't
         # mutated).
-        for c_arg, py_arg in zip(c_args, py_args):
+        for dtype, py_arg, c_arg in zip(arg_dty, py_args, c_args):
+            py_arg, c_arg = self._fixup_results(dtype, py_arg, c_arg)
             typechar = c_arg.dtype.char
             ulps = self._ulps.get((ufunc.__name__, typechar), 1)
             prec = 'single' if typechar in 'fF' else 'exact'
@@ -1448,6 +1472,9 @@ class _LoopTypesTester(TestCase):
             msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
             self.assertPreciseEqual(py_arg, c_arg, prec=prec, msg=msg,
                                     ulps=ulps)
+
+    def _fixup_results(self, dtype, py_arg, c_arg):
+        return py_arg, c_arg
 
     @classmethod
     def _check_ufunc_loops(cls, ufunc):
@@ -1578,11 +1605,33 @@ class TestLoopTypesIntRightShiftNoPython(_LoopTypesTester):
 TestLoopTypesIntRightShiftNoPython.autogenerate()
 
 
+class TestLoopTypesFloorDivideNoPython(_LoopTypesTester):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.floor_divide, np.remainder]
+    _required_types = 'bBhHiIlLqQfdFD'
+    _skip_types = 'mMO' + _LoopTypesTester._skip_types
+
+    def _fixup_results(self, dtype, py_arg, c_arg):
+        if dtype.kind == 'f':
+            # Discrepancies on floating-point floor division and remainder:
+            # Numpy may return nan where Numba returns inf, e.g. 1. // 0.
+            pred = (np.isinf(c_arg) & np.isnan(py_arg))
+            # Numpy and Numba may differ in signed zeros, e.g. -0. // -1.
+            pred |= (py_arg == 0.0) & (c_arg == 0.0)
+            c_arg[pred] = py_arg[pred]
+        return py_arg, c_arg
+
+TestLoopTypesFloorDivideNoPython.autogenerate()
+
+
 class TestLoopTypesFloatNoPython(_LoopTypesTester):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
     if iswindows:
         _ufuncs.remove(np.signbit) # TODO: fix issue #758
+    _ufuncs.remove(np.floor_divide) # has its own test class
+    _ufuncs.remove(np.remainder) # has its own test class
+    _ufuncs.remove(np.mod) # same as np.remainder
     _required_types = 'fd'
     _skip_types = 'FDmMO' + _LoopTypesTester._skip_types
 
@@ -1730,7 +1779,6 @@ class TestUFuncBadArgsNoPython(TestCase):
             np.add(x, x, y)
         self.assertRaises(TypingError, compile_isolated, func, [types.float64],
                           return_type=types.float64, flags=self._compile_flags)
-
 
 
 if __name__ == '__main__':
