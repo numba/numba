@@ -195,20 +195,21 @@ class TestCC(BasePYCCTest):
             with self.assertRaises(ZeroDivisionError):
                 lib.div(1, 0)
 
+    def check_compile_for_cpu(self, cpu_name):
+        cc = self._test_module.cc
+        cc.target_cpu = cpu_name
+
+        with self.check_cc_compiled(cc) as lib:
+            res = lib.multi(123, 321)
+            self.assertPreciseEqual(res, 123 * 321)
+
     def test_compile_for_cpu(self):
         # Compiling for the host CPU should always succeed
-        cc = self._test_module.cc
-        cc.target_cpu = ll.get_host_cpu_name()
+        self.check_compile_for_cpu(ll.get_host_cpu_name())
 
-        with self.check_cc_compiled(cc) as lib:
-            res = lib.multi(123, 321)
-            self.assertPreciseEqual(res, 123 * 321)
-
-        cc.target_cpu = 'host'
-
-        with self.check_cc_compiled(cc) as lib:
-            res = lib.multi(123, 321)
-            self.assertPreciseEqual(res, 123 * 321)
+    def test_compile_for_cpu_host(self):
+        # Compiling for the host CPU should always succeed
+        self.check_compile_for_cpu("host")
 
     @tag('important')
     def test_compile_helperlib(self):
