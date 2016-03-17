@@ -137,6 +137,7 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
+* :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
