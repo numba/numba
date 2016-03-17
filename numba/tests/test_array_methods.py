@@ -65,9 +65,6 @@ def array_transpose(arr):
 def array_copy(arr):
     return arr.copy()
 
-def array_reshape(arr, newshape):
-    return arr.reshape(newshape)
-
 def array_view(arr, newtype):
     return arr.view(newtype)
 
@@ -120,16 +117,6 @@ def np_where_1(c):
 
 def np_where_3(c, x, y):
     return np.where(c, x, y)
-
-
-class TestArrayMethodsCustom(MemoryLeak, TestCase):
-    """
-    Test np.round, np.around, ndarray.reshape
-    """
-
-    def setUp(self):
-        super(TestArrayMethodsCustom, self).setUp()
-        self.ccache = CompilationCache()
 
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
@@ -229,79 +216,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_around_array(self):
         self.check_round_array(np_around_array)
-
-    @tag('important')
-    def test_array_reshape(self):
-        pyfunc = array_reshape
-        def run(arr, shape):
-            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(shape)))
-            return cres.entry_point(arr, shape)
-        def check(arr, shape):
-            expected = pyfunc(arr, shape)
-            self.memory_leak_setup()
-            got = run(arr, shape)
-            self.assertPreciseEqual(got, expected)
-            del got
-            self.memory_leak_teardown()
-        def check_err_shape(arr, shape):
-            with self.assertRaises(NotImplementedError) as raises:
-                run(arr, shape)
-            self.assertEqual(str(raises.exception),
-                             "incompatible shape for array")
-        def check_err_size(arr, shape):
-            with self.assertRaises(ValueError) as raises:
-                run(arr, shape)
-            self.assertEqual(str(raises.exception),
-                             "total size of new array must be unchanged")
-
-        def check_err_multiple_negative(arr, shape):
-            with self.assertRaises(ValueError) as raises:
-                run(arr, shape)
-            self.assertEqual(str(raises.exception),
-                             "multiple negative shape value")
-
-        # C-contiguous
-        arr = np.arange(24)
-        check(arr, (24,))
-        check(arr, (4, 6))
-        check(arr, (8, 3))
-        check(arr, (8, 1, 3))
-        check(arr, (1, 8, 1, 1, 3, 1))
-        arr = np.arange(24).reshape((2, 3, 4))
-        check(arr, (24,))
-        check(arr, (4, 6))
-        check(arr, (8, 3))
-        check(arr, (8, 1, 3))
-        check(arr, (1, 8, 1, 1, 3, 1))
-        check_err_size(arr, (25,))
-        check_err_size(arr, (8, 4))
-        arr = np.arange(24).reshape((1, 8, 1, 1, 3, 1))
-        check(arr, (24,))
-        check(arr, (4, 6))
-        check(arr, (8, 3))
-        check(arr, (8, 1, 3))
-
-        # F-contiguous
-        arr = np.arange(24).reshape((2, 3, 4)).T
-        check(arr, (4, 3, 2))
-        check(arr, (1, 4, 1, 3, 1, 2, 1))
-        check_err_shape(arr, (2, 3, 4))
-        check_err_shape(arr, (6, 4))
-        check_err_shape(arr, (2, 12))
-
-        # Test negative shape value
-        arr = np.arange(25).reshape(5,5)
-        check(arr, -1)
-        check(arr, (-1,))
-        check(arr, (-1, 5))
-        check(arr, (5, -1, 5))
-        check(arr, (5, 5, -1))
-        check_err_size(arr, (-1, 4))
-        check_err_multiple_negative(arr, (-1, -2, 5, 5))
-        check_err_multiple_negative(arr, (5, 5, -1, -1))
-
-        # Exceptions leak references
-        self.disable_leak_check()
 
     def test_array_view(self):
 
