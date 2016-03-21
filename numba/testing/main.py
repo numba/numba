@@ -546,8 +546,11 @@ class ParallelTestRunner(runner.TextTestRunner):
             # On exception, kill still active workers immediately
             pool.terminate()
         else:
-            # On success, close the pool cleanly
-            pool.close()
+            # Close the pool cleanly unless asked to early out
+            if result.shouldStop:
+                pool.terminate()
+            else:
+                pool.close()
         finally:
             # Always join the pool (this is necessary for coverage.py)
             pool.join()
