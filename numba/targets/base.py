@@ -186,6 +186,9 @@ class BaseContext(object):
             pass
         self.install_registry(builtin_registry)
         self.load_additional_registries()
+        # Also refresh typing context, since @overload declarations can
+        # affect it.
+        self.typing_context.refresh()
 
     def load_additional_registries(self):
         """

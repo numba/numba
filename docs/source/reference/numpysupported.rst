@@ -116,6 +116,8 @@ Calculation
 The following methods of Numpy arrays are supported in their basic form
 (without any optional arguments):
 
+* :meth:`~numpy.ndarray.all`
+* :meth:`~numpy.ndarray.any`
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
 * :meth:`~numpy.ndarray.cumprod`
