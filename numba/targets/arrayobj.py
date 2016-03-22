@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 
 import math
 
+from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant
 
@@ -493,6 +494,21 @@ def array_len(context, builder, sig, args):
     shapeary = ary.shape
     res = builder.extract_value(shapeary, 0)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_builtin("array.item", types.Array)
+def array_item(context, builder, sig, args):
+    aryty, = sig.args
+    ary, = args
+    ary = make_array(aryty)(context, builder, ary)
+
+    nitems = ary.nitems
+    with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
+                         likely=False):
+        msg = "item(): can only convert an array of size 1 to a Python scalar"
+        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+    return load_item(context, builder, aryty, ary.data)
 
 
 #-------------------------------------------------------------------------------

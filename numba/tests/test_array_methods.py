@@ -6,7 +6,7 @@ import sys
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import typeof, types
+from numba import jit, typeof, types
 from numba.compiler import compile_isolated
 from numba.numpy_support import as_dtype, strict_ufunc_typing
 from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin, tag
@@ -117,6 +117,9 @@ def np_where_1(c):
 
 def np_where_3(c, x, y):
     return np.where(c, x, y)
+
+def array_item(a):
+    return a.item()
 
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
@@ -518,6 +521,34 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         for x in (0, 1, True, False, 2.5, 0j):
             check_scal(x)
+
+    def test_item(self):
+        pyfunc = array_item
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_ok(arg):
+            expected = pyfunc(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        def check_err(arg):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(arg)
+            self.assertIn("item(): can only convert an array of size 1 to a Python scalar",
+                          str(raises.exception))
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Test on different kinds of scalars and 1-item arrays
+        check_ok(np.float32([1.5]))
+        check_ok(np.complex128([[1.5j]]))
+        check_ok(np.array(1.5))
+        check_ok(np.bool_(True))
+        check_ok(np.float32(1.5))
+
+        check_err(np.array([1, 2]))
+        check_err(np.array([]))
 
 
 class TestArrayComparisons(TestCase):

@@ -272,6 +272,12 @@ class ArrayAttribute(AttributeTemplate):
         retty = ary.copy(layout="C")
         return signature(retty)
 
+    @bound_function("array.item")
+    def resolve_item(self, ary, args, kws):
+        assert not kws
+        if not args:
+            return signature(ary.dtype)
+
     @bound_function("array.nonzero")
     def resolve_nonzero(self, ary, args, kws):
         assert not args
