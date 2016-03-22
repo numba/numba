@@ -807,6 +807,23 @@ class NdEnumerate(AbstractTemplate):
             return signature(enumerate_type, *args)
 
 
+@infer_global(numpy.nditer)
+class NdIter(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        arrays, = args
+
+        if isinstance(arrays, types.BaseTuple) and len(arrays) >= 1:
+            arrays = list(arrays)
+        elif isinstance(arrays, types.Array):
+            arrays = [arrays]
+        else:
+            return
+        nditerty = types.NumpyNdIterType(arrays)
+        return signature(nditerty, *args)
+
+
 @infer_global(numpy.ndindex)
 class NdIndex(AbstractTemplate):
 

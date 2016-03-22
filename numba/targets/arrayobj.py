@@ -5,6 +5,7 @@ the buffer protocol.
 
 from __future__ import print_function, absolute_import, division
 
+import functools
 import math
 
 from llvmlite import ir
@@ -12,7 +13,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant
 
 import numpy
-from numba import types, cgutils, typing
+from numba import types, cgutils, typing, utils
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, lower_getattr,
@@ -29,6 +30,7 @@ def increment_index(builder, val):
     """
     Increment an index *val*.
     """
+    # TODO: use it everywhere in this file
     one = Constant.int(val.type, 1)
     # We pass the "nsw" flag in the hope that LLVM understands the index
     # never changes sign.  Unfortunately this doesn't always work
@@ -1724,7 +1726,8 @@ def make_array_ndenumerate_cls(nditerty):
     return _make_flattening_iter_cls(nditerty, 'ndenumerate')
 
 
-def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
+def _increment_indices(context, builder, ndim, shape, indices, end_flag=None,
+                       loop_continue=None, loop_break=None):
     zero = context.get_constant(types.intp, 0)
     one = context.get_constant(types.intp, 1)
 
@@ -1738,11 +1741,17 @@ def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
         idx = increment_index(builder, builder.load(idxptr))
 
         count = shape[dim]
-        in_bounds = builder.icmp(lc.ICMP_SLT, idx, count)
+        in_bounds = builder.icmp_signed('<', idx, count)
         with cgutils.if_likely(builder, in_bounds):
+            # New index is still in bounds
             builder.store(idx, idxptr)
+            if loop_continue is not None:
+                loop_continue(dim)
             builder.branch(bbend)
+        # Index out of bounds => reset it and proceed it to outer index
         builder.store(zero, idxptr)
+        if loop_break is not None:
+            loop_break(dim)
 
     if end_flag is not None:
         builder.store(cgutils.true_byte, end_flag)
@@ -1753,6 +1762,264 @@ def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
 def _increment_indices_array(context, builder, arrty, arr, indices, end_flag=None):
     shape = cgutils.unpack_tuple(builder, arr.shape, arrty.ndim)
     _increment_indices(context, builder, arrty.ndim, shape, indices, end_flag)
+
+
+def make_nditer_cls(nditerty):
+    """
+    Return the Structure representation of the given *nditerty* (an
+    instance of types.NumpyNdIterType).
+    """
+    ndim = nditerty.ndim
+    layout = nditerty.layout
+    narrays = len(nditerty.arrays)
+    dtype = nditerty.dtype  # XXX useful?
+
+    class BaseSubIter(object):
+
+        def __init__(self, nditer, member_name, start_dim, end_dim):
+            self.nditer = nditer
+            self.member_name = member_name
+            self.start_dim = start_dim
+            self.end_dim = end_dim
+            self.ndim = end_dim - start_dim
+
+        def set_member_ptr(self, ptr):
+            setattr(self.nditer, self.member_name, ptr)
+
+        @utils.cached_property
+        def member_ptr(self):
+            return getattr(self.nditer, self.member_name)
+
+
+    class FlatSubIter(BaseSubIter):
+
+        def init_specific(self, context, builder):
+            zero = context.get_constant(types.intp, 0)
+            self.set_member_ptr(cgutils.alloca_once_value(builder, zero))
+
+        def compute_pointer(self, context, builder, indices, arrty, arr):
+            index = builder.load(self.member_ptr)
+            return builder.gep(arr.data, [index])
+
+        def loop_continue(self, context, builder, logical_dim):
+            if logical_dim == self.ndim - 1:
+                # Only increment index inside innermost logical dimension
+                index = builder.load(self.member_ptr)
+                index = increment_index(builder, index)
+                builder.store(index, self.member_ptr)
+
+        def loop_break(self, context, builder, logical_dim):
+            if logical_dim == 0:
+                # At the exit of outermost logical dimension, reset index
+                zero = context.get_constant(types.intp, 0)
+                builder.store(zero, self.member_ptr)
+            elif logical_dim == self.ndim - 1:
+                # Inside innermost logical dimension, increment index
+                index = builder.load(self.member_ptr)
+                index = increment_index(builder, index)
+                builder.store(index, self.member_ptr)
+
+
+    class IndexedSubIter(BaseSubIter):
+
+        def init_specific(self, context, builder):
+            pass
+
+        def compute_pointer(self, context, builder, indices, arrty, arr):
+            assert len(indices) == self.ndim
+            return cgutils.get_item_pointer(builder, arrty, arr,
+                                            indices, wraparound=False)
+
+        def loop_continue(self, context, builder, logical_dim):
+            pass
+
+        def loop_break(self, context, builder, logical_dim):
+            pass
+
+
+    class ZeroDimSubIter(BaseSubIter):
+
+        def init_specific(self, context, builder):
+            pass
+
+        def compute_pointer(self, context, builder, indices, arrty, arr):
+            return arr.data
+
+        def loop_continue(self, context, builder, logical_dim):
+            pass
+
+        def loop_break(self, context, builder, logical_dim):
+            pass
+
+
+    class NdIter(cgutils.create_struct_proxy(nditerty)):
+        """
+        .nditer() implementation.
+        """
+
+        @utils.cached_property
+        def subiters(self):
+            l = []
+            #print("layout:", layout, "indexers:", nditerty.indexers)
+            for i, sub in enumerate(nditerty.indexers):
+                kind, start_dim, end_dim, _ = sub
+                member_name = 'index%d' % i
+                factory = {'flat': FlatSubIter,
+                           'indexed': IndexedSubIter,
+                           '0d': ZeroDimSubIter,
+                           }[kind]
+                l.append(factory(self, member_name, start_dim, end_dim))
+            return l
+
+        def init_specific(self, context, builder, arrtys, arrays):
+            # Validate input shapes
+            main_shape = None
+            main_shape_ty = types.UniTuple(types.intp, ndim)
+            for i, arrty in enumerate(arrtys):
+                if arrty.ndim == ndim:
+                    main_shape = arrays[i].shape
+                    break
+
+            def check_shape(shape, main_shape):
+                n = len(shape)
+                for i in range(n):
+                    if shape[i] != main_shape[len(main_shape) - n + i]:
+                        raise ValueError("nditer(): operands could not be broadcast together")
+
+            for arrty, arr in zip(arrtys, arrays):
+                if arrty.ndim > 0:
+                    context.compile_internal(builder, check_shape,
+                                             signature(types.none,
+                                                       types.UniTuple(types.intp, arrty.ndim),
+                                                       main_shape_ty),
+                                             (arr.shape, main_shape))
+
+            # Initialize nditer structure
+            zero = context.get_constant(types.intp, 0)
+            self.arrays = context.make_tuple(builder, types.Tuple(arrtys),
+                                             [arr._getvalue() for arr in arrays])
+            shapes = cgutils.unpack_tuple(builder, main_shape)
+            if layout == 'F':
+                shapes = shapes[::-1]
+            indices = cgutils.alloca_once(builder, zero.type,
+                                          size=context.get_constant(types.intp,
+                                                                    ndim))
+
+            exhausted = cgutils.alloca_once_value(builder, cgutils.false_byte)
+
+            for dim in range(ndim):
+                idxptr = cgutils.gep_inbounds(builder, indices, dim)
+                builder.store(zero, idxptr)
+                # 0-sized dimensions really indicate an empty array,
+                # but we have to catch that condition early to avoid
+                # a bug inside the iteration logic.
+                dim_size = shapes[dim]
+                dim_is_empty = builder.icmp_signed('==', dim_size, zero)
+                with builder.if_then(dim_is_empty, likely=False):
+                    builder.store(cgutils.true_byte, exhausted)
+
+            self.indices = indices
+            self.exhausted = exhausted
+            self.shape = context.make_tuple(builder, main_shape_ty, shapes)
+
+            # Initialize subiterators
+            for subiter in self.subiters:
+                subiter.init_specific(context, builder)
+
+        def iternext_specific(self, context, builder, result):
+            zero = context.get_constant(types.intp, 0)
+            one = context.get_constant(types.intp, 1)
+
+            bbend = builder.append_basic_block('end')
+
+            # Branch early if exhausted
+            exhausted = cgutils.as_bool_bit(builder, builder.load(self.exhausted))
+            with cgutils.if_unlikely(builder, exhausted):
+                result.set_valid(False)
+                builder.branch(bbend)
+
+            arrtys = nditerty.arrays
+            arrays = cgutils.unpack_tuple(builder, self.arrays)
+            arrays = [context.make_array(arrty)(context, builder, value=arr)
+                      for arrty, arr in zip(arrtys, arrays)]
+            indices = self.indices
+
+            # Compute iterated results
+            result.set_valid(True)
+            views = self._make_views(context, builder, indices, arrtys, arrays)
+            views = [v._getvalue() for v in views]
+            if len(views) == 1:
+                result.yield_(views[0])
+            else:
+                result.yield_(context.make_tuple(builder, nditerty.yield_type,
+                                                 views))
+
+            shape = cgutils.unpack_tuple(builder, self.shape, ndim)
+            _increment_indices(context, builder, ndim, shape,
+                               indices, self.exhausted,
+                               functools.partial(self._loop_continue, context, builder),
+                               functools.partial(self._loop_break, context, builder),
+                               )
+
+            builder.branch(bbend)
+            builder.position_at_end(bbend)
+
+        def _loop_continue(self, context, builder, dim):
+            # XXX not valid for F iters?
+            for sub in self.subiters:
+                if sub.start_dim <= dim < sub.end_dim:
+                    sub.loop_continue(context, builder, dim - sub.start_dim)
+
+        def _loop_break(self, context, builder, dim):
+            for sub in self.subiters:
+                if sub.start_dim <= dim < sub.end_dim:
+                    sub.loop_break(context, builder, dim - sub.start_dim)
+
+        def _make_views(self, context, builder, indices, arrtys, arrays):
+            """
+            Compute the views to be yielded.
+            """
+            views = [None] * narrays
+            indexers = nditerty.indexers
+            subiters = self.subiters
+            rettys = nditerty.yield_type
+            if isinstance(rettys, types.BaseTuple):
+                rettys = list(rettys)
+            else:
+                rettys = [rettys]
+            indices = [builder.load(cgutils.gep_inbounds(builder, indices, i))
+                       for i in range(ndim)]
+
+            for sub, subiter in zip(indexers, subiters):
+                _, _, _, array_indices = sub
+                sub_indices = indices[subiter.start_dim:subiter.end_dim]
+                for i in array_indices:
+                    assert views[i] is None
+                    views[i] = self._make_view(context, builder, sub_indices,
+                                               rettys[i],
+                                               arrtys[i], arrays[i], subiter)
+            assert all(v for v in views)
+            return views
+
+        def _make_view(self, context, builder, indices, retty, arrty, arr, subiter):
+            """
+            Compute a 0d view for a given input array.
+            """
+            assert isinstance(retty, types.Array) and retty.ndim == 0
+
+            ptr = subiter.compute_pointer(context, builder, indices, arrty, arr)
+            view = context.make_array(retty)(context, builder)
+
+            itemsize = arr.itemsize
+            shape = context.make_tuple(builder, types.UniTuple(types.intp, 0), ())
+            strides = context.make_tuple(builder, types.UniTuple(types.intp, 0), ())
+            # HACK: meminfo=None avoids expensive refcounting operations
+            # on ephemeral views
+            populate_array(view, ptr, shape, strides, itemsize, meminfo=None)
+            return view
+
+
+    return NdIter
 
 
 def make_ndindex_cls(nditerty):
@@ -1915,7 +2182,6 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 pointers = cgutils.alloca_once(builder, data.type,
                                                size=context.get_constant(types.intp,
                                                                          arrty.ndim))
-                strides = cgutils.unpack_tuple(builder, arr.strides, ndim)
                 exhausted = cgutils.alloca_once_value(builder, cgutils.false_byte)
 
                 # Initialize indices and pointers with their start values.
@@ -2183,6 +2449,43 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditercls = make_ndindex_cls(nditerty)
     nditer = nditercls(context, builder, value=nditer)
 
+    nditer.iternext_specific(context, builder, result)
+
+
+def _make_array_nditer(context, builder, nditerty, arrays):
+    arrtys = nditerty.arrays
+    arrays = [context.make_array(arrty)(context, builder, value=arr)
+              for arrty, arr in zip(arrtys, arrays)]
+
+    nditer = make_nditer_cls(nditerty)(context, builder)
+    nditer.init_specific(context, builder, arrtys, arrays)
+
+    res = nditer._getvalue()
+    return impl_ret_borrowed(context, builder, nditerty, res)
+
+
+@lower_builtin(numpy.nditer, types.Array)
+def make_array_nditer(context, builder, sig, args):
+    """
+    nditer(array)
+    """
+    return _make_array_nditer(context, builder, sig.return_type, [args[0]])
+
+@lower_builtin(numpy.nditer, types.BaseTuple)
+def make_array_nditer(context, builder, sig, args):
+    """
+    nditer((array, ...))
+    """
+    return _make_array_nditer(context, builder, sig.return_type,
+                              cgutils.unpack_tuple(builder, args[0]))
+
+@lower_builtin('iternext', types.NumpyNdIterType)
+@iternext_impl
+def iternext_numpy_ndindex(context, builder, sig, args, result):
+    [nditerty] = sig.args
+    [nditer] = args
+
+    nditer = make_nditer_cls(nditerty)(context, builder, value=nditer)
     nditer.iternext_specific(context, builder, result)
 
 
