@@ -1110,10 +1110,11 @@ class NdIter(StructModel):
     def __init__(self, dmm, fe_type):
         array_types = fe_type.arrays
         ndim = fe_type.ndim
-        members = [('shape', types.UniTuple(types.intp, ndim)),
-                   ('indices', types.EphemeralArray(types.intp, ndim)),
-                   ('exhausted', types.EphemeralPointer(types.boolean)),
+        shape_len = ndim if fe_type.need_shaped_indexing else 1
+        members = [('exhausted', types.EphemeralPointer(types.boolean)),
                    ('arrays', types.Tuple(array_types)),
+                   ('shape', types.UniTuple(types.intp, shape_len)),
+                   ('indices', types.EphemeralArray(types.intp, shape_len)),
                    ]
         for i, sub in enumerate(fe_type.indexers):
             kind, start_dim, end_dim, _ = sub

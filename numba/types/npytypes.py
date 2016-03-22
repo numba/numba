@@ -143,10 +143,6 @@ class NumpyNdIterType(IteratorType):
     def __init__(self, arrays):
         self.arrays = tuple(arrays)
         assert all(isinstance(a, Array) for a in arrays)
-        dtypes = set(a.dtype for a in self.arrays)
-        if len(dtypes) > 1:
-            raise TypeError("nditer() arguments must have the same dtypes, got %s" % (self.arrays,))
-        self.dtype, = dtypes
         self.layout = self._compute_layout(self.arrays)
         self.ndim = max(a.ndim for a in self.arrays)
         name = "nditer(ndim={ndim}, layout={layout}, arrays={arrays})".format(
@@ -170,35 +166,18 @@ class NumpyNdIterType(IteratorType):
 
     @property
     def yield_type(self):
-        from . import UniTuple
-        n = len(self.arrays)
-        arrty = Array(self.dtype, 0, 'C')
-        if n > 1:
-            return UniTuple(arrty, n)
+        from . import BaseTuple
+        views = [Array(a.dtype, 0, 'C') for a in self.arrays]
+        if len(views) > 1:
+            return BaseTuple.from_types(views)
         else:
-            return arrty
-
-    @utils.cached_property
-    def indexers(self):
-        """
-        A list of (kind, ndim, indices) where:
-        - `kind` is either "flat" or "indexed"
-        - `ndim` is the indexed arrays number of dimensions
-        - `indices` is the indices of the indexed arrays in self.arrays
-        """
-        d = collections.OrderedDict()
-        layout = self.layout
-        for i, a in enumerate(self.arrays):
-            kind = 'flat' if a.layout == layout else 'indexed'
-            indexer = (kind, a.ndim)
-            d.setdefault(indexer, []).append(i)
-        return list(k + (v,) for k, v in d.items())
+            return views[0]
 
     @utils.cached_property
     def indexers(self):
         """
         A list of (kind, start_dim, end_dim, indices) where:
-        - `kind` is either "flat" or "indexed"
+        - `kind` is either "flat", "indexed" or "0d"
         - `start_dim` and `end_dim` are the dimension numbers at which
           this indexing takes place
         - `indices` is the indices of the indexed arrays in self.arrays
@@ -222,6 +201,21 @@ class NumpyNdIterType(IteratorType):
                     indexer = (kind, 0, a.ndim)
             d.setdefault(indexer, []).append(i)
         return list(k + (v,) for k, v in d.items())
+
+    @utils.cached_property
+    def need_shaped_indexing(self):
+        """
+        """
+        for kind, start_dim, end_dim, _ in self.indexers:
+            if kind == '0d':
+                pass
+            elif kind == 'flat':
+                if (start_dim, end_dim) != (0, self.ndim):
+                    # Broadcasted flat iteration needs shaped indexing
+                    return True
+            else:
+                return True
+        return False
 
 
 class NumpyNdIndexType(SimpleIteratorType):

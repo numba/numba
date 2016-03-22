@@ -237,77 +237,103 @@ class TestTypes(TestCase):
 
 class TestNdIter(TestCase):
 
-    def test_homogenous(self):
-        def check(ty, dtype, ndim, layout, indexers=None):
+    def test_properties(self):
+        def check(ty, dtypes, ndim, layout, indexers=None):
             self.assertEqual(ty.ndim, ndim)
             self.assertEqual(ty.layout, layout)
-            self.assertEqual(ty.dtype, dtype)
+            views = [types.Array(dtype, 0, "C") for dtype in dtypes]
+            if len(views) > 1:
+                self.assertEqual(ty.yield_type, types.BaseTuple.from_types(views))
+            else:
+                self.assertEqual(ty.yield_type, views[0])
             if indexers is not None:
                 self.assertEqual(ty.indexers, indexers)
 
         f32 = types.float32
+        c64 = types.complex64
+        i16 = types.int16
         a = types.Array(f32, 1, "C")
         b = types.Array(f32, 2, "C")
-        c = types.Array(f32, 2, "F")
-        d = types.Array(f32, 2, "A")
-        e = types.Array(f32, 0, "C")
+        c = types.Array(c64, 2, "F")
+        d = types.Array(i16, 2, "A")
+        e = types.Array(i16, 0, "C")
         f = types.Array(f32, 1, "A")
+        g = types.Array(f32, 0, "C")
+
+        # 0-dim iterator
+        ty = types.NumpyNdIterType((e,))
+        check(ty, (i16,), 0, "C", [('0d', 0, 0, [0])])
+        self.assertFalse(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((e, g))
+        check(ty, (i16, f32), 0, "C", [('0d', 0, 0, [0, 1])])
+        self.assertFalse(ty.need_shaped_indexing)
+
         # 1-dim iterator
         ty = types.NumpyNdIterType((a,))
-        check(ty, f32, 1, "C", [('flat', 0, 1, [0])])
+        check(ty, (f32,), 1, "C",
+              [('flat', 0, 1, [0])])
+        self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, a))
-        check(ty, f32, 1, "C", [('flat', 0, 1, [0, 1])])
+        check(ty, (f32, f32), 1, "C",
+              [('flat', 0, 1, [0, 1])])
+        self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, e, e))
-        check(ty, f32, 1, "C", [('flat', 0, 1, [0]), ('0d', 0, 0, [1, 2])])
+        check(ty, (f32, i16, i16), 1, "C",
+              [('flat', 0, 1, [0]), ('0d', 0, 0, [1, 2])])
+        self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, f))
-        check(ty, f32, 1, "C", [('flat', 0, 1, [0]), ('indexed', 0, 1, [1])])
+        check(ty, (f32, f32), 1, "C",
+              [('flat', 0, 1, [0]), ('indexed', 0, 1, [1])])
+        self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((f,))
-        check(ty, f32, 1, "C", [('indexed', 0, 1, [0])])
+        check(ty, (f32,), 1, "C", [('indexed', 0, 1, [0])])
+        self.assertTrue(ty.need_shaped_indexing)
+
         # 2-dim C-order iterator
         ty = types.NumpyNdIterType((b,))
-        check(ty, f32, 2, "C", [('flat', 0, 2, [0])])
+        check(ty, (f32,), 2, "C", [('flat', 0, 2, [0])])
+        self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((b, c))
-        check(ty, f32, 2, "C", [('flat', 0, 2, [0]), ('indexed', 0, 2, [1])])
+        check(ty, (f32, c64), 2, "C", [('flat', 0, 2, [0]), ('indexed', 0, 2, [1])])
+        self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((d,))
-        check(ty, f32, 2, "C", [('indexed', 0, 2, [0])])
+        check(ty, (i16,), 2, "C", [('indexed', 0, 2, [0])])
+        self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((b, c, d, d, e))
-        check(ty, f32, 2, "C",
+        check(ty, (f32, c64, i16, i16, i16), 2, "C",
               [('flat', 0, 2, [0]), # b
                ('indexed', 0, 2, [1, 2, 3]), # c, d, d
                ('0d', 0, 0, [4]), # e
                ])
+        self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, b, c, d, d, f))
-        check(ty, f32, 2, "C",
+        check(ty, (f32, f32, c64, i16, i16, f32), 2, "C",
               [('flat', 1, 2, [0]), # a
                ('flat', 0, 2, [1]), # b
                ('indexed', 0, 2, [2, 3, 4]), # c, d, d
                ('indexed', 1, 2, [5]), # f
                ])
+        self.assertTrue(ty.need_shaped_indexing)
+
         # 2-dim F-order iterator
         ty = types.NumpyNdIterType((c,))
-        check(ty, f32, 2, "F", [('flat', 0, 2, [0])])
+        check(ty, (c64,), 2, "F", [('flat', 0, 2, [0])])
+        self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((c, b, c, f))
-        check(ty, f32, 2, "F",
+        check(ty, (c64, f32, c64, f32), 2, "F",
               [('flat', 0, 2, [0, 2]), # c, c
                ('indexed', 0, 2, [1]), # b
                ('indexed', 0, 1, [3]), # f
                ])
+        self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((b, c, c, d, d, a, e))
-        check(ty, f32, 2, "F",
+        check(ty, (f32, c64, c64, i16, i16, f32, i16), 2, "F",
               [('indexed', 0, 2, [0, 3, 4]), # b, d, d
                ('flat', 0, 2, [1, 2]), # c, c
                ('flat', 0, 1, [5]), # a
                ('0d', 0, 0, [6]), # e
               ])
-
-    def test_heterogenous(self):
-        a = types.Array(types.float32, 1, "C")
-        b = types.Array(types.float64, 1, "C")
-        with self.assertRaises(TypeError) as raises:
-            types.NumpyNdIterType((a, b))
-        self.assertIn("nditer() arguments must have the same dtypes, "
-                      "got (array(float32, 1d, C), array(float64, 1d, C))",
-                      str(raises.exception))
+        self.assertTrue(ty.need_shaped_indexing)
 
 
 class TestPickling(TestCase):

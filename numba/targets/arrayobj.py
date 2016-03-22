@@ -1772,7 +1772,7 @@ def make_nditer_cls(nditerty):
     ndim = nditerty.ndim
     layout = nditerty.layout
     narrays = len(nditerty.arrays)
-    dtype = nditerty.dtype  # XXX useful?
+    nshapes = ndim if nditerty.need_shaped_indexing else 1
 
     class BaseSubIter(object):
 
@@ -1820,6 +1820,22 @@ def make_nditer_cls(nditerty):
                 builder.store(index, self.member_ptr)
 
 
+    class TrivialFlatSubIter(BaseSubIter):
+
+        def init_specific(self, context, builder):
+            assert not nditerty.need_shaped_indexing
+
+        def compute_pointer(self, context, builder, indices, arrty, arr):
+            assert len(indices) <= 1, len(indices)
+            return builder.gep(arr.data, indices)
+
+        def loop_continue(self, context, builder, logical_dim):
+            pass
+
+        def loop_break(self, context, builder, logical_dim):
+            pass
+
+
     class IndexedSubIter(BaseSubIter):
 
         def init_specific(self, context, builder):
@@ -1860,14 +1876,15 @@ def make_nditer_cls(nditerty):
         @utils.cached_property
         def subiters(self):
             l = []
-            #print("layout:", layout, "indexers:", nditerty.indexers)
+            factories = {'flat': FlatSubIter if nditerty.need_shaped_indexing
+                                 else TrivialFlatSubIter,
+                         'indexed': IndexedSubIter,
+                         '0d': ZeroDimSubIter,
+                         }
             for i, sub in enumerate(nditerty.indexers):
                 kind, start_dim, end_dim, _ = sub
                 member_name = 'index%d' % i
-                factory = {'flat': FlatSubIter,
-                           'indexed': IndexedSubIter,
-                           '0d': ZeroDimSubIter,
-                           }[kind]
+                factory = factories[kind]
                 l.append(factory(self, member_name, start_dim, end_dim))
             return l
 
@@ -1898,29 +1915,34 @@ def make_nditer_cls(nditerty):
             zero = context.get_constant(types.intp, 0)
             self.arrays = context.make_tuple(builder, types.Tuple(arrtys),
                                              [arr._getvalue() for arr in arrays])
+
             shapes = cgutils.unpack_tuple(builder, main_shape)
             if layout == 'F':
                 shapes = shapes[::-1]
-            indices = cgutils.alloca_once(builder, zero.type,
-                                          size=context.get_constant(types.intp,
-                                                                    ndim))
 
-            exhausted = cgutils.alloca_once_value(builder, cgutils.false_byte)
-
+            nitems = context.get_constant(types.intp, 1)
             for dim in range(ndim):
+                nitems = builder.mul(nitems, shapes[dim])
+
+            # If shape is empty, mark iterator exhausted
+            shape_is_empty = builder.icmp_signed('==', nitems, zero)
+            exhausted = builder.select(shape_is_empty, cgutils.true_byte,
+                                       cgutils.false_byte)
+
+            if not nditerty.need_shaped_indexing:
+                # Flatten shape to make iteration faster on small innermost
+                # dimensions (e.g. a (100000, 3) shape)
+                shapes = (nitems,)
+            assert len(shapes) == nshapes
+
+            indices = cgutils.alloca_once(builder, zero.type, size=nshapes)
+            for dim in range(nshapes):
                 idxptr = cgutils.gep_inbounds(builder, indices, dim)
                 builder.store(zero, idxptr)
-                # 0-sized dimensions really indicate an empty array,
-                # but we have to catch that condition early to avoid
-                # a bug inside the iteration logic.
-                dim_size = shapes[dim]
-                dim_is_empty = builder.icmp_signed('==', dim_size, zero)
-                with builder.if_then(dim_is_empty, likely=False):
-                    builder.store(cgutils.true_byte, exhausted)
 
             self.indices = indices
-            self.exhausted = exhausted
-            self.shape = context.make_tuple(builder, main_shape_ty, shapes)
+            self.shape = cgutils.pack_array(builder, shapes, zero.type)
+            self.exhausted = cgutils.alloca_once_value(builder, exhausted)
 
             # Initialize subiterators
             for subiter in self.subiters:
@@ -1954,8 +1976,8 @@ def make_nditer_cls(nditerty):
                 result.yield_(context.make_tuple(builder, nditerty.yield_type,
                                                  views))
 
-            shape = cgutils.unpack_tuple(builder, self.shape, ndim)
-            _increment_indices(context, builder, ndim, shape,
+            shape = cgutils.unpack_tuple(builder, self.shape)
+            _increment_indices(context, builder, len(shape), shape,
                                indices, self.exhausted,
                                functools.partial(self._loop_continue, context, builder),
                                functools.partial(self._loop_break, context, builder),
@@ -1965,7 +1987,6 @@ def make_nditer_cls(nditerty):
             builder.position_at_end(bbend)
 
         def _loop_continue(self, context, builder, dim):
-            # XXX not valid for F iters?
             for sub in self.subiters:
                 if sub.start_dim <= dim < sub.end_dim:
                     sub.loop_continue(context, builder, dim - sub.start_dim)
@@ -1988,7 +2009,7 @@ def make_nditer_cls(nditerty):
             else:
                 rettys = [rettys]
             indices = [builder.load(cgutils.gep_inbounds(builder, indices, i))
-                       for i in range(ndim)]
+                       for i in range(nshapes)]
 
             for sub, subiter in zip(indexers, subiters):
                 _, _, _, array_indices = sub
