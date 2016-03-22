@@ -174,6 +174,8 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
         shape = cgutils.pack_array(builder, shape, intp_t)
     if isinstance(strides, (tuple, list)):
         strides = cgutils.pack_array(builder, strides, intp_t)
+    if isinstance(itemsize, utils.INT_TYPES):
+        itemsize = intp_t(itemsize)
 
     attrs = dict(shape=shape,
                  strides=strides,
@@ -1790,6 +1792,15 @@ def make_nditer_cls(nditerty):
         def member_ptr(self):
             return getattr(self.nditer, self.member_name)
 
+        def init_specific(self, context, builder):
+            pass
+
+        def loop_continue(self, context, builder, logical_dim):
+            pass
+
+        def loop_break(self, context, builder, logical_dim):
+            pass
+
 
     class FlatSubIter(BaseSubIter):
 
@@ -1829,43 +1840,25 @@ def make_nditer_cls(nditerty):
             assert len(indices) <= 1, len(indices)
             return builder.gep(arr.data, indices)
 
-        def loop_continue(self, context, builder, logical_dim):
-            pass
-
-        def loop_break(self, context, builder, logical_dim):
-            pass
-
 
     class IndexedSubIter(BaseSubIter):
-
-        def init_specific(self, context, builder):
-            pass
 
         def compute_pointer(self, context, builder, indices, arrty, arr):
             assert len(indices) == self.ndim
             return cgutils.get_item_pointer(builder, arrty, arr,
                                             indices, wraparound=False)
 
-        def loop_continue(self, context, builder, logical_dim):
-            pass
-
-        def loop_break(self, context, builder, logical_dim):
-            pass
-
 
     class ZeroDimSubIter(BaseSubIter):
-
-        def init_specific(self, context, builder):
-            pass
 
         def compute_pointer(self, context, builder, indices, arrty, arr):
             return arr.data
 
-        def loop_continue(self, context, builder, logical_dim):
-            pass
 
-        def loop_break(self, context, builder, logical_dim):
-            pass
+    class ScalarSubIter(BaseSubIter):
+
+        def compute_pointer(self, context, builder, indices, arrty, arr):
+            return arr
 
 
     class NdIter(cgutils.create_struct_proxy(nditerty)):
@@ -1880,6 +1873,7 @@ def make_nditer_cls(nditerty):
                                  else TrivialFlatSubIter,
                          'indexed': IndexedSubIter,
                          '0d': ZeroDimSubIter,
+                         'scalar': ScalarSubIter,
                          }
             for i, sub in enumerate(nditerty.indexers):
                 kind, start_dim, end_dim, _ = sub
@@ -1889,14 +1883,34 @@ def make_nditer_cls(nditerty):
             return l
 
         def init_specific(self, context, builder, arrtys, arrays):
-            # Validate input shapes
+            zero = context.get_constant(types.intp, 0)
+
+            # Store inputs
+            self.arrays = context.make_tuple(builder, types.Tuple(arrtys),
+                                             arrays)
+            # Create slots for scalars
+            for i, ty in enumerate(arrtys):
+                if not isinstance(ty, types.Array):
+                    member_name = 'scalar%d' % i
+                    # XXX as_data()?
+                    slot = cgutils.alloca_once_value(builder, arrays[i])
+                    setattr(self, member_name, slot)
+
+            arrays = self._arrays_or_scalars(context, builder, arrtys, arrays)
+
+            # Extract iterator shape (the shape of the most-dimensional input)
             main_shape = None
             main_shape_ty = types.UniTuple(types.intp, ndim)
             for i, arrty in enumerate(arrtys):
-                if arrty.ndim == ndim:
+                if isinstance(arrty, types.Array) and arrty.ndim == ndim:
                     main_shape = arrays[i].shape
                     break
+            else:
+                # Only scalar inputs => synthesize a dummy shape
+                assert ndim == 0
+                main_shape = context.make_tuple(builder, main_shape_ty, ())
 
+            # Validate shapes of array inputs
             def check_shape(shape, main_shape):
                 n = len(shape)
                 for i in range(n):
@@ -1904,18 +1918,14 @@ def make_nditer_cls(nditerty):
                         raise ValueError("nditer(): operands could not be broadcast together")
 
             for arrty, arr in zip(arrtys, arrays):
-                if arrty.ndim > 0:
+                if isinstance(arrty, types.Array) and arrty.ndim > 0:
                     context.compile_internal(builder, check_shape,
                                              signature(types.none,
                                                        types.UniTuple(types.intp, arrty.ndim),
                                                        main_shape_ty),
                                              (arr.shape, main_shape))
 
-            # Initialize nditer structure
-            zero = context.get_constant(types.intp, 0)
-            self.arrays = context.make_tuple(builder, types.Tuple(arrtys),
-                                             [arr._getvalue() for arr in arrays])
-
+            # Compute shape and size
             shapes = cgutils.unpack_tuple(builder, main_shape)
             if layout == 'F':
                 shapes = shapes[::-1]
@@ -1962,8 +1972,7 @@ def make_nditer_cls(nditerty):
 
             arrtys = nditerty.arrays
             arrays = cgutils.unpack_tuple(builder, self.arrays)
-            arrays = [context.make_array(arrty)(context, builder, value=arr)
-                      for arrty, arr in zip(arrtys, arrays)]
+            arrays = self._arrays_or_scalars(context, builder, arrtys, arrays)
             indices = self.indices
 
             # Compute iterated results
@@ -2031,7 +2040,7 @@ def make_nditer_cls(nditerty):
             ptr = subiter.compute_pointer(context, builder, indices, arrty, arr)
             view = context.make_array(retty)(context, builder)
 
-            itemsize = arr.itemsize
+            itemsize = context.get_abi_sizeof(context.get_data_type(retty.dtype))
             shape = context.make_tuple(builder, types.UniTuple(types.intp, 0), ())
             strides = context.make_tuple(builder, types.UniTuple(types.intp, 0), ())
             # HACK: meminfo=None avoids expensive refcounting operations
@@ -2039,6 +2048,16 @@ def make_nditer_cls(nditerty):
             populate_array(view, ptr, shape, strides, itemsize, meminfo=None)
             return view
 
+        def _arrays_or_scalars(self, context, builder, arrtys, arrays):
+            # Return a list of either array structures or pointers to
+            # scalar slots
+            l = []
+            for i, (arrty, arr) in enumerate(zip(arrtys, arrays)):
+                if isinstance(arrty, types.Array):
+                    l.append(context.make_array(arrty)(context, builder, value=arr))
+                else:
+                    l.append(getattr(self, "scalar%d" % i))
+            return l
 
     return NdIter
 
@@ -2473,32 +2492,24 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
-def _make_array_nditer(context, builder, nditerty, arrays):
+@lower_builtin(numpy.nditer, types.Any)
+def make_array_nditer(context, builder, sig, args):
+    """
+    nditer(...)
+    """
+    nditerty = sig.return_type
     arrtys = nditerty.arrays
-    arrays = [context.make_array(arrty)(context, builder, value=arr)
-              for arrty, arr in zip(arrtys, arrays)]
+
+    if isinstance(sig.args[0], types.BaseTuple):
+        arrays = cgutils.unpack_tuple(builder, args[0])
+    else:
+        arrays = [args[0]]
 
     nditer = make_nditer_cls(nditerty)(context, builder)
     nditer.init_specific(context, builder, arrtys, arrays)
 
     res = nditer._getvalue()
     return impl_ret_borrowed(context, builder, nditerty, res)
-
-
-@lower_builtin(numpy.nditer, types.Array)
-def make_array_nditer(context, builder, sig, args):
-    """
-    nditer(array)
-    """
-    return _make_array_nditer(context, builder, sig.return_type, [args[0]])
-
-@lower_builtin(numpy.nditer, types.BaseTuple)
-def make_array_nditer(context, builder, sig, args):
-    """
-    nditer((array, ...))
-    """
-    return _make_array_nditer(context, builder, sig.return_type,
-                              cgutils.unpack_tuple(builder, args[0]))
 
 @lower_builtin('iternext', types.NumpyNdIterType)
 @iternext_impl

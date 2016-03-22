@@ -241,6 +241,7 @@ class TestNdIter(TestCase):
         def check(ty, dtypes, ndim, layout, indexers=None):
             self.assertEqual(ty.ndim, ndim)
             self.assertEqual(ty.layout, layout)
+            self.assertEqual(ty.dtypes, dtypes)
             views = [types.Array(dtype, 0, "C") for dtype in dtypes]
             if len(views) > 1:
                 self.assertEqual(ty.yield_type, types.BaseTuple.from_types(views))
@@ -267,6 +268,10 @@ class TestNdIter(TestCase):
         ty = types.NumpyNdIterType((e, g))
         check(ty, (i16, f32), 0, "C", [('0d', 0, 0, [0, 1])])
         self.assertFalse(ty.need_shaped_indexing)
+        ty = types.NumpyNdIterType((e, c64))
+        check(ty, (i16, c64), 0, "C",
+              [('0d', 0, 0, [0]), ('scalar', 0, 0, [1])])
+        self.assertFalse(ty.need_shaped_indexing)
 
         # 1-dim iterator
         ty = types.NumpyNdIterType((a,))
@@ -277,9 +282,12 @@ class TestNdIter(TestCase):
         check(ty, (f32, f32), 1, "C",
               [('flat', 0, 1, [0, 1])])
         self.assertFalse(ty.need_shaped_indexing)
-        ty = types.NumpyNdIterType((a, e, e))
-        check(ty, (f32, i16, i16), 1, "C",
-              [('flat', 0, 1, [0]), ('0d', 0, 0, [1, 2])])
+        ty = types.NumpyNdIterType((a, e, e, c64))
+        check(ty, (f32, i16, i16, c64), 1, "C",
+              [('flat', 0, 1, [0]), # a
+               ('0d', 0, 0, [1, 2]), # e, e
+               ('scalar', 0, 0, [3]), # c64
+               ])
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, f))
         check(ty, (f32, f32), 1, "C",

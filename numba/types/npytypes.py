@@ -141,11 +141,12 @@ class NumpyNdIterType(IteratorType):
     """
 
     def __init__(self, arrays):
+        # Note arrays can also be scalars...
         self.arrays = tuple(arrays)
-        assert all(isinstance(a, Array) for a in arrays)
         self.layout = self._compute_layout(self.arrays)
-        self.ndim = max(a.ndim for a in self.arrays)
-        name = "nditer(ndim={ndim}, layout={layout}, arrays={arrays})".format(
+        self.dtypes = tuple(getattr(a, 'dtype', a) for a in self.arrays)
+        self.ndim = max(getattr(a, 'ndim', 0) for a in self.arrays)
+        name = "nditer(ndim={ndim}, layout={layout}, inputs={arrays})".format(
             ndim=self.ndim, layout=self.layout, arrays=self.arrays)
         super(NumpyNdIterType, self).__init__(name)
 
@@ -153,6 +154,8 @@ class NumpyNdIterType(IteratorType):
     def _compute_layout(cls, arrays):
         c = collections.Counter()
         for a in arrays:
+            if not isinstance(a, Array):
+                continue
             if a.layout in 'CF' and a.ndim == 1:
                 c['C'] += 1
                 c['F'] += 1
@@ -165,9 +168,13 @@ class NumpyNdIterType(IteratorType):
         return self.arrays
 
     @property
+    def views(self):
+        return [Array(dtype, 0, 'C') for dtype in self.dtypes]
+
+    @property
     def yield_type(self):
         from . import BaseTuple
-        views = [Array(a.dtype, 0, 'C') for a in self.arrays]
+        views = self.views
         if len(views) > 1:
             return BaseTuple.from_types(views)
         else:
@@ -177,7 +184,7 @@ class NumpyNdIterType(IteratorType):
     def indexers(self):
         """
         A list of (kind, start_dim, end_dim, indices) where:
-        - `kind` is either "flat", "indexed" or "0d"
+        - `kind` is either "flat", "indexed", "0d" or "scalar"
         - `start_dim` and `end_dim` are the dimension numbers at which
           this indexing takes place
         - `indices` is the indices of the indexed arrays in self.arrays
@@ -187,7 +194,9 @@ class NumpyNdIterType(IteratorType):
         ndim = self.ndim
         assert layout in 'CF'
         for i, a in enumerate(self.arrays):
-            if a.ndim == 0:
+            if not isinstance(a, Array):
+                indexer = ('scalar', 0, 0)
+            elif a.ndim == 0:
                 indexer = ('0d', 0, 0)
             else:
                 if a.layout == layout or (a.ndim == 1 and a.layout in 'CF'):
@@ -207,7 +216,7 @@ class NumpyNdIterType(IteratorType):
         """
         """
         for kind, start_dim, end_dim, _ in self.indexers:
-            if kind == '0d':
+            if kind in ('0d', 'scalar'):
                 pass
             elif kind == 'flat':
                 if (start_dim, end_dim) != (0, self.ndim):

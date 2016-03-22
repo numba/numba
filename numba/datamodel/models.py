@@ -1113,20 +1113,29 @@ class NdIter(StructModel):
         shape_len = ndim if fe_type.need_shaped_indexing else 1
         members = [('exhausted', types.EphemeralPointer(types.boolean)),
                    ('arrays', types.Tuple(array_types)),
+                   # The iterator's main shape and indices
                    ('shape', types.UniTuple(types.intp, shape_len)),
                    ('indices', types.EphemeralArray(types.intp, shape_len)),
                    ]
+        # Indexing state for the various sub-iterators
+        # XXX use a tuple instead?
         for i, sub in enumerate(fe_type.indexers):
             kind, start_dim, end_dim, _ = sub
             member_name = 'index%d' % i
             if kind == 'flat':
                 # A single index into the flattened array
                 members.append((member_name, types.EphemeralPointer(types.intp)))
-            elif kind in ('indexed', '0d'):
+            elif kind in ('scalar', 'indexed', '0d'):
                 # Nothing required
                 pass
             else:
                 assert 0
+        # Slots holding values of the scalar args
+        # XXX use a tuple instead?
+        for i, ty in enumerate(fe_type.arrays):
+            if not isinstance(ty, types.Array):
+                member_name = 'scalar%d' % i
+                members.append((member_name, types.EphemeralPointer(ty)))
 
         super(NdIter, self).__init__(dmm, fe_type, members)
 

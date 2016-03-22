@@ -814,12 +814,12 @@ class NdIter(AbstractTemplate):
         assert not kws
         arrays, = args
 
-        if isinstance(arrays, types.BaseTuple) and len(arrays) >= 1:
+        if isinstance(arrays, types.BaseTuple):
+            if not arrays:
+                return
             arrays = list(arrays)
-        elif isinstance(arrays, types.Array):
-            arrays = [arrays]
         else:
-            return
+            arrays = [arrays]
         nditerty = types.NumpyNdIterType(arrays)
         return signature(nditerty, *args)
 
