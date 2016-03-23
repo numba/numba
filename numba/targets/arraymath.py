@@ -339,9 +339,13 @@ def array_median(context, builder, sig, args):
             elif i > k + 1:
                 high = i - 1
             elif i == k:
-                return arry[i], _select(arry, k + 1, i + 1, high)
+                _select(arry, k + 1, i + 1, high)
+                break
             else:  # i == k + 1
-                return _select(arry, k, low, i - 1), arry[i]
+                _select(arry, k, low, i - 1)
+                break
+
+        return arry[k], arry[k + 1]
 
     sig_select_two = typing.signature(types.UniTuple(dtype, 2), *sig_select_args)
     _select_two = context.compile_subroutine(builder, select_two, sig_select_two)
