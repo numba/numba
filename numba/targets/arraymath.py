@@ -273,6 +273,7 @@ def array_argmax(context, builder, sig, args):
 @lower_builtin(numpy.median, types.Array)
 def array_median(context, builder, sig, args):
     flattened = sig.args[0].copy(layout="C", ndim=1)
+    dtype = sig.args[0].dtype
 
     def partition(A, low, high):
         mid = (low + high) >> 1
@@ -305,14 +306,10 @@ def array_median(context, builder, sig, args):
                                      *(flattened, types.intp, types.intp))
     _partition = context.compile_subroutine(builder, partition, sig_partition)
 
-    def select(arry, k):
+    def select(arry, k, low, high):
         """
-        Select the k'th smaller element in array.
+        Select the k'th smallest element in array[low:high + 1].
         """
-        n = arry.shape[0]
-        high = n - 1
-        low = 0
-        # NOTE: high is inclusive
         i = _partition(arry, low, high)
         while i != k:
             if i < k:
@@ -323,21 +320,45 @@ def array_median(context, builder, sig, args):
                 i = _partition(arry, low, high)
         return arry[k]
 
-    sig_select = typing.signature(sig.args[0].dtype,
-                                  *(flattened, types.intp))
+    sig_select_args = flattened, types.intp, types.intp, types.intp
+    sig_select = typing.signature(dtype, *sig_select_args)
     _select = context.compile_subroutine(builder, select, sig_select)
+
+    def select_two(arry, k, low, high):
+        """
+        Select the k'th and k+1'th smallest elements in array[low:high + 1].
+
+        This is significantly faster than doing two independent selections
+        for k and k+1.
+        """
+        while True:
+            assert high > low  # by construction
+            i = _partition(arry, low, high)
+            if i < k:
+                low = i + 1
+            elif i > k + 1:
+                high = i - 1
+            elif i == k:
+                return arry[i], _select(arry, k + 1, i + 1, high)
+            else:  # i == k + 1
+                return _select(arry, k, low, i - 1), arry[i]
+
+    sig_select_two = typing.signature(types.UniTuple(dtype, 2), *sig_select_args)
+    _select_two = context.compile_subroutine(builder, select_two, sig_select_two)
 
     def median(arry):
         # np.median() works on the flattened array, and we need a temporary
         # workspace anyway
         temp_arry = arry.flatten()
         n = temp_arry.shape[0]
-        half = n // 2
-        if n % 2 == 0:
-            return (_select(temp_arry, half - 1) +
-                    _select(temp_arry, half)) / 2
+        low = 0
+        high = n - 1
+        half = n >> 1
+        if n & 1 == 0:
+            a, b = _select_two(temp_arry, half - 1, low, high)
+            return (a + b) / 2
         else:
-            return _select(temp_arry, half)
+            return _select(temp_arry, half, low, high)
 
     res = context.compile_internal(builder, median, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
