@@ -121,6 +121,9 @@ def np_where_3(c, x, y):
 def array_item(a):
     return a.item()
 
+def array_itemset(a, v):
+    a.itemset(v)
+
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -546,6 +549,34 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_ok(np.array(1.5))
         check_ok(np.bool_(True))
         check_ok(np.float32(1.5))
+
+        check_err(np.array([1, 2]))
+        check_err(np.array([]))
+
+    def test_itemset(self):
+        pyfunc = array_itemset
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_ok(a, v):
+            expected = a.copy()
+            got = a.copy()
+            pyfunc(expected, v)
+            cfunc(got, v)
+            self.assertPreciseEqual(got, expected)
+
+        def check_err(a):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(a, 42)
+            self.assertIn("itemset(): can only write to an array of size 1",
+                          str(raises.exception))
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Test on different kinds of 1-item arrays
+        check_ok(np.float32([1.5]), 42)
+        check_ok(np.complex128([[1.5j]]), 42)
+        check_ok(np.array(1.5), 42)
 
         check_err(np.array([1, 2]))
         check_err(np.array([]))

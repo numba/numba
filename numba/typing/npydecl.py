@@ -812,6 +812,8 @@ class NdIter(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
+        if len(args) != 1:
+            return
         arrays, = args
 
         if isinstance(arrays, types.BaseTuple):

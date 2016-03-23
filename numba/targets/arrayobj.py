@@ -515,6 +515,23 @@ def array_item(context, builder, sig, args):
     return load_item(context, builder, aryty, ary.data)
 
 
+@lower_builtin("array.itemset", types.Array, types.Any)
+def array_itemset(context, builder, sig, args):
+    aryty, valty = sig.args
+    ary, val = args
+    assert valty == aryty.dtype
+    ary = make_array(aryty)(context, builder, ary)
+
+    nitems = ary.nitems
+    with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
+                         likely=False):
+        msg = "itemset(): can only write to an array of size 1"
+        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+    store_item(context, builder, aryty, val, ary.data)
+    return context.get_dummy_value()
+
+
 #-------------------------------------------------------------------------------
 # Advanced / fancy indexing
 

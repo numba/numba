@@ -233,7 +233,7 @@ class NumpyNdIterType(IteratorType):
                 pass
             elif kind == 'flat':
                 if (start_dim, end_dim) != (0, self.ndim):
-                    # Broadcasted flat iteration needs shaped indexing
+                    # Broadcast flat iteration needs shaped indexing
                     # to know when to restart iteration.
                     return True
             else:
