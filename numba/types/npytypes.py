@@ -138,10 +138,16 @@ class NumpyNdEnumerateType(SimpleIteratorType):
 class NumpyNdIterType(IteratorType):
     """
     Type class for `np.nditer()` objects.
+
+    The layout denotes in which order the logical shape is iterated on.
+    "C" means logical order (corresponding to in-memory order in C arrays),
+    "F" means reverse logical order (corresponding to in-memory order in
+    F arrays).
     """
 
     def __init__(self, arrays):
-        # Note arrays can also be scalars...
+        # Note inputs arrays can also be scalars, in which case they are
+        # broadcast.
         self.arrays = tuple(arrays)
         self.layout = self._compute_layout(self.arrays)
         self.dtypes = tuple(getattr(a, 'dtype', a) for a in self.arrays)
@@ -169,6 +175,9 @@ class NumpyNdIterType(IteratorType):
 
     @property
     def views(self):
+        """
+        The views yielded by the iterator.
+        """
         return [Array(dtype, 0, 'C') for dtype in self.dtypes]
 
     @property
@@ -214,6 +223,10 @@ class NumpyNdIterType(IteratorType):
     @utils.cached_property
     def need_shaped_indexing(self):
         """
+        Whether iterating on this iterator requires keeping track of
+        individual indices inside the shape.  If False, only a single index
+        over the equivalent flat shape is required, which can make the
+        iterator more efficient.
         """
         for kind, start_dim, end_dim, _ in self.indexers:
             if kind in ('0d', 'scalar'):
@@ -221,6 +234,7 @@ class NumpyNdIterType(IteratorType):
             elif kind == 'flat':
                 if (start_dim, end_dim) != (0, self.ndim):
                     # Broadcasted flat iteration needs shaped indexing
+                    # to know when to restart iteration.
                     return True
             else:
                 return True

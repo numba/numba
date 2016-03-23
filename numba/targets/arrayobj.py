@@ -1864,6 +1864,9 @@ def make_nditer_cls(nditerty):
     class NdIter(cgutils.create_struct_proxy(nditerty)):
         """
         .nditer() implementation.
+
+        Note: 'F' layout means the shape is iterated in reverse logical order,
+        so indices and shapes arrays have to be reversed as well.
         """
 
         @utils.cached_property
@@ -2023,6 +2026,8 @@ def make_nditer_cls(nditerty):
             for sub, subiter in zip(indexers, subiters):
                 _, _, _, array_indices = sub
                 sub_indices = indices[subiter.start_dim:subiter.end_dim]
+                if layout == 'F':
+                    sub_indices = sub_indices[::-1]
                 for i in array_indices:
                     assert views[i] is None
                     views[i] = self._make_view(context, builder, sub_indices,
