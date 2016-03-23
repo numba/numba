@@ -3,6 +3,7 @@ import copy
 import sys
 import warnings
 import operator
+from functools import reduce
 
 from numba import ctypes_support as ctypes
 from numba.typing.templates import AbstractTemplate
@@ -15,7 +16,6 @@ from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import KernelRuntimeError
 from .api import get_current_device
-from functools import reduce
 
 
 def compile_cuda(pyfunc, return_type, args, debug, inline):

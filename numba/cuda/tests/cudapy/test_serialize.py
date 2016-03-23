@@ -3,10 +3,10 @@ import pickle
 import numpy as np
 from numba import cuda, vectorize
 from numba import unittest_support as unittest
-from numba.config import ENABLE_CUDASIM
+from numba.cuda.testing import skip_on_cudasim
 
 
-@unittest.skipIf(ENABLE_CUDASIM, 'pickling not supported in CUDASIM')
+@skip_on_cudasim('pickling not supported in CUDASIM')
 class TestPickle(unittest.TestCase):
 
     def check_call(self, callee):
@@ -55,6 +55,8 @@ class TestPickle(unittest.TestCase):
         @cuda.jit
         def foo(arr):
             arr[0] = inner(arr[0])
+
+        self.check_call(foo)
 
     def test_pickling_vectorize(self):
         @vectorize(['intp(intp)', 'float64(float64)'], target='cuda')
