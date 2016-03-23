@@ -428,6 +428,17 @@ class IfBranchObj(object):
         terminate(self.builder, self.bbend)
 
 
+def increment_index(builder, val):
+    """
+    Increment an index *val*.
+    """
+    one = Constant.int(val.type, 1)
+    # We pass the "nsw" flag in the hope that LLVM understands the index
+    # never changes sign.  Unfortunately this doesn't always work
+    # (e.g. ndindex()).
+    return builder.add(val, one, flags=['nsw'])
+
+
 Loop = collections.namedtuple('Loop', ('index', 'do_break'))
 
 @contextmanager
@@ -456,8 +467,6 @@ def for_range(builder, count, start=None, intp=None):
     bbstart = builder.basic_block
     builder.branch(bbcond)
 
-    ONE = Constant.int(intp, 1)
-
     with builder.goto_block(bbcond):
         index = builder.phi(intp, name="loop.index")
         pred = builder.icmp(lc.ICMP_SLT, index, stop)
@@ -467,7 +476,7 @@ def for_range(builder, count, start=None, intp=None):
         yield Loop(index, do_break)
         # Update bbbody as a new basic block may have been activated
         bbbody = builder.basic_block
-        incr = builder.add(index, ONE)
+        incr = increment_index(builder, index)
         terminate(builder, bbcond)
 
     index.add_incoming(start, bbstart)
@@ -524,7 +533,7 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
         yield index, count
         bbbody = builder.basic_block
         incr = builder.add(index, step)
-        next_count = builder.add(count, ir.Constant(intp, 1))
+        next_count = increment_index(builder, count)
         terminate(builder, bbcond)
 
     index.add_incoming(start, bbstart)
@@ -909,6 +918,8 @@ def memcpy(builder, dst, src, count):
 def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
     ptr_t = ir.IntType(8).as_pointer()
     size_t = count.type
+    if isinstance(itemsize, utils.INT_TYPES):
+        itemsize = ir.Constant(size_t, itemsize)
 
     memcpy = builder.module.declare_intrinsic(func_name,
                                               [ptr_t, ptr_t, size_t])
@@ -916,7 +927,7 @@ def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
     is_volatile = false_bit
     builder.call(memcpy, [builder.bitcast(dst, ptr_t),
                           builder.bitcast(src, ptr_t),
-                          builder.mul(count, ir.Constant(size_t, itemsize)),
+                          builder.mul(count, itemsize),
                           align,
                           is_volatile])
 

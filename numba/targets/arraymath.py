@@ -31,8 +31,8 @@ def array_sum(context, builder, sig, args):
 
     def array_sum_impl(arr):
         c = zero
-        for v in arr.flat:
-            c += v
+        for v in numpy.nditer(arr):
+            c += v.item()
         return c
 
     res = context.compile_internal(builder, array_sum_impl, sig, args,
@@ -45,8 +45,8 @@ def array_prod(context, builder, sig, args):
 
     def array_prod_impl(arr):
         c = 1
-        for v in arr.flat:
-            c *= v
+        for v in numpy.nditer(arr):
+            c *= v.item()
         return c
 
     res = context.compile_internal(builder, array_prod_impl, sig, args,
@@ -107,8 +107,8 @@ def array_mean(context, builder, sig, args):
         # Can't use the naive `arr.sum() / arr.size`, as it would return
         # a wrong result on integer sum overflow.
         c = zero
-        for v in arr.flat:
-            c += v
+        for v in numpy.nditer(arr):
+            c += v.item()
         return c / arr.size
 
     res = context.compile_internal(builder, array_mean_impl, sig, args,
@@ -118,15 +118,15 @@ def array_mean(context, builder, sig, args):
 @lower_builtin(numpy.var, types.Array)
 @lower_builtin("array.var", types.Array)
 def array_var(context, builder, sig, args):
-    def array_var_impl(arry):
+    def array_var_impl(arr):
         # Compute the mean
-        m = arry.mean()
+        m = arr.mean()
 
         # Compute the sum of square diffs
         ssd = 0
-        for v in arry.flat:
-            ssd += (v - m) ** 2
-        return ssd / arry.size
+        for v in numpy.nditer(arr):
+            ssd += (v.item() - m) ** 2
+        return ssd / arr.size
 
     res = context.compile_internal(builder, array_var_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -152,24 +152,28 @@ def array_min(context, builder, sig, args):
 
         def array_min_impl(arry):
             min_value = nat
-            it = arry.flat
-            for v in it:
+            it = numpy.nditer(arry)
+            for view in it:
+                v = view.item()
                 if v != nat:
                     min_value = v
                     break
 
-            for v in it:
+            for view in it:
+                v = view.item()
                 if v != nat and v < min_value:
                     min_value = v
             return min_value
 
     else:
         def array_min_impl(arry):
-            for v in arry.flat:
-                min_value = v
+            it = numpy.nditer(arry)
+            for view in it:
+                min_value = view.item()
                 break
 
-            for v in arry.flat:
+            for view in it:
+                v = view.item()
                 if v < min_value:
                     min_value = v
             return min_value
@@ -181,11 +185,13 @@ def array_min(context, builder, sig, args):
 @lower_builtin("array.max", types.Array)
 def array_max(context, builder, sig, args):
     def array_max_impl(arry):
-        for v in arry.flat:
-            max_value = v
+        it = numpy.nditer(arry)
+        for view in it:
+            max_value = view.item()
             break
 
-        for v in arry.flat:
+        for view in it:
+            v = view.item()
             if v > max_value:
                 max_value = v
         return max_value
@@ -266,63 +272,72 @@ def array_argmax(context, builder, sig, args):
 
 @lower_builtin(numpy.median, types.Array)
 def array_median(context, builder, sig, args):
+    flattened = sig.args[0].copy(layout="C", ndim=1)
 
     def partition(A, low, high):
-        mid = (low+high) // 2
-        # median of three {low, middle, high}
-        LM = A[low] <= A[mid]
-        MH = A[mid] <= A[high]
-        LH = A[low] <= A[high]
+        mid = (low + high) >> 1
+        # NOTE: the pattern of swaps below for the pivot choice and the
+        # partitioning gives good results (i.e. regular O(n log n))
+        # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
+        # risk breaking this property.
 
-        if LM == MH:
-            median3 = mid
-        elif LH != LM:
-            median3 = low
-        else:
-            median3 = high
+        # Use median of three {low, middle, high} as the pivot
+        if A[mid] < A[low]:
+            A[low], A[mid] = A[mid], A[low]
+        if A[high] < A[mid]:
+            A[high], A[mid] = A[mid], A[high]
+            if A[mid] < A[low]:
+                A[low], A[mid] = A[mid], A[low]
+        pivot = A[mid]
 
-        # choose median3 as the pivot
-        A[high], A[median3] = A[median3], A[high]
+        A[high], A[mid] = A[mid], A[high]
 
-        x = A[high]
         i = low
         for j in range(low, high):
-            if A[j] <= x:
+            if A[j] <= pivot:
                 A[i], A[j] = A[j], A[i]
                 i += 1
+
         A[i], A[high] = A[high], A[i]
         return i
 
-    sig_partition = typing.signature(types.intp, *(sig.args[0], types.intp, types.intp))
+    sig_partition = typing.signature(types.intp,
+                                     *(flattened, types.intp, types.intp))
     _partition = context.compile_subroutine(builder, partition, sig_partition)
 
     def select(arry, k):
+        """
+        Select the k'th smaller element in array.
+        """
         n = arry.shape[0]
-        # XXX: assuming flat array till array.flatten is implemented
-        # temp_arry = arry.flatten()
-        temp_arry = arry.copy()
-        high = n-1
+        high = n - 1
         low = 0
         # NOTE: high is inclusive
-        i = _partition(temp_arry, low, high)
+        i = _partition(arry, low, high)
         while i != k:
             if i < k:
-                low = i+1
-                i = _partition(temp_arry, low, high)
+                low = i + 1
+                i = _partition(arry, low, high)
             else:
-                high = i-1
-                i = _partition(temp_arry, low, high)
-        return temp_arry[k]
+                high = i - 1
+                i = _partition(arry, low, high)
+        return arry[k]
 
-    sig_select = typing.signature(sig.args[0].dtype, *(sig.args[0], types.intp))
+    sig_select = typing.signature(sig.args[0].dtype,
+                                  *(flattened, types.intp))
     _select = context.compile_subroutine(builder, select, sig_select)
 
     def median(arry):
-        n = arry.shape[0]
+        # np.median() works on the flattened array, and we need a temporary
+        # workspace anyway
+        temp_arry = arry.flatten()
+        n = temp_arry.shape[0]
+        half = n // 2
         if n % 2 == 0:
-            return (_select(arry, n//2 - 1) + _select(arry, n//2))/2
+            return (_select(temp_arry, half - 1) +
+                    _select(temp_arry, half)) / 2
         else:
-            return _select(arry, n//2)
+            return _select(temp_arry, half)
 
     res = context.compile_internal(builder, median, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -332,10 +347,8 @@ def array_median(context, builder, sig, args):
 @overload_method(types.Array, "all")
 def np_all(a):
     def flat_all(a):
-        # XXX need a primitive for the moral equivalent of ravel(order='K')
-        # (or nditer())
-        for v in a.flat:
-            if not v:
+        for v in numpy.nditer(a):
+            if not v.item():
                 return False
         return True
 
@@ -345,8 +358,8 @@ def np_all(a):
 @overload_method(types.Array, "any")
 def np_any(a):
     def flat_any(a):
-        for v in a.flat:
-            if v:
+        for v in numpy.nditer(a):
+            if v.item():
                 return True
         return False
 
