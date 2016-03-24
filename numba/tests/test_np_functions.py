@@ -40,6 +40,9 @@ def bincount2(a, w):
 def searchsorted(a, v):
     return np.searchsorted(a, v)
 
+def digitize(*args):
+    return np.digitize(*args)
+
 
 class TestNPFunctions(TestCase):
     """
@@ -324,3 +327,39 @@ class TestNPFunctions(TestCase):
                 check(a, v)
             # Sequence values
             check(a, list(values))
+
+    def test_digitize(self):
+        pyfunc = digitize
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(*args):
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertPreciseEqual(expected, got)
+
+        values = np.float64((0, 0.99, 1, 4.4, 4.5, 7, 8, 9, 9.5,
+                             float('inf'), float('-inf'), float('nan')))
+        assert len(values) == 12
+        self.rnd.shuffle(values)
+
+        bins1 = np.float64([1, 3, 4.5, 8])
+        bins2 = np.float64([1, 3, 4.5, 8, float('inf'), float('-inf')])
+        bins3 = np.float64([1, 3, 4.5, 8, float('inf'), float('-inf')]
+                           + [float('nan')] * 10)
+
+        # 2-ary digitize()
+        for bins in (bins1, bins2, bins3):
+            bins.sort()
+            for x in (values, values.reshape((3, 4))):
+                check(x, bins)
+                check(x, bins[::-1])
+
+        # 3-ary digitize()
+        for bins in (bins1, bins2, bins3):
+            bins.sort()
+            for right in (True, False):
+                check(values, bins, right)
+                check(values, bins[::-1], right)
+
+        # Sequence input
+        check(list(values), bins1)

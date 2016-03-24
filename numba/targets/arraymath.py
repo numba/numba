@@ -807,3 +807,133 @@ def searchsorted(a, v):
             return lo
 
         return searchsorted_impl
+
+
+@overload(numpy.digitize)
+def np_digitize(x, bins, right=False):
+    from numba import jit
+
+    @jit(nopython=True)
+    def are_bins_increasing(bins):
+        n = len(bins)
+        is_increasing = True
+        is_decreasing = True
+        if n > 1:
+            prev = bins[0]
+            for i in range(1, n):
+                cur = bins[i]
+                is_increasing = is_increasing and not prev > cur
+                is_decreasing = is_decreasing and not prev < cur
+                if not is_increasing and not is_decreasing:
+                    raise ValueError("bins must be monotonically increasing or decreasing")
+                prev = cur
+        return is_increasing
+
+    # NOTE: the algorithm is slightly different from searchsorted's,
+    # as the edge cases (bin boundaries, NaN) give different results.
+
+    @jit(nopython=True)
+    def digitize_scalar(x, bins, right):
+        # bins are monotonically-increasing
+        n = len(bins)
+        lo = 0
+        hi = n
+
+        if right:
+            if numpy.isnan(x):
+                # Find the first nan (i.e. the last from the end of bins,
+                # since there shouldn't be many of them in practice)
+                for i in range(n, 0, -1):
+                    if not numpy.isnan(bins[i - 1]):
+                        return i
+                return 0
+            while hi > lo:
+                mid = (lo + hi) >> 1
+                if bins[mid] < x:
+                    # mid is too low => narrow to upper bins
+                    lo = mid + 1
+                else:
+                    # mid is too high, or is a NaN => narrow to lower bins
+                    hi = mid
+        else:
+            if numpy.isnan(x):
+                # NaNs end up in the last bin
+                return n
+            while hi > lo:
+                mid = (lo + hi) >> 1
+                if bins[mid] <= x:
+                    # mid is too low => narrow to upper bins
+                    lo = mid + 1
+                else:
+                    # mid is too high, or is a NaN => narrow to lower bins
+                    hi = mid
+
+        return lo
+
+    @jit(nopython=True)
+    def digitize_scalar_decreasing(x, bins, right):
+        # bins are monotonically-decreasing
+        n = len(bins)
+        lo = 0
+        hi = n
+
+        if right:
+            if numpy.isnan(x):
+                # Find the last nan
+                for i in range(0, n):
+                    if not numpy.isnan(bins[i]):
+                        return i
+                return n
+            while hi > lo:
+                mid = (lo + hi) >> 1
+                if bins[mid] < x:
+                    # mid is too high => narrow to lower bins
+                    hi = mid
+                else:
+                    # mid is too low, or is a NaN => narrow to upper bins
+                    lo = mid + 1
+        else:
+            if numpy.isnan(x):
+                # NaNs end up in the first bin
+                return 0
+            while hi > lo:
+                mid = (lo + hi) >> 1
+                if bins[mid] <= x:
+                    # mid is too high => narrow to lower bins
+                    hi = mid
+                else:
+                    # mid is too low, or is a NaN => narrow to upper bins
+                    lo = mid + 1
+
+        return lo
+
+    if isinstance(x, types.Array):
+        # N-d array and output
+
+        def digitize_impl(x, bins, right=False):
+            is_increasing = are_bins_increasing(bins)
+            out = numpy.empty(x.shape, numpy.intp)
+            for view, outview in numpy.nditer((x, out)):
+                if is_increasing:
+                    index = digitize_scalar(view.item(), bins, right)
+                else:
+                    index = digitize_scalar_decreasing(view.item(), bins, right)
+                outview.itemset(index)
+            return out
+
+        return digitize_impl
+
+    elif isinstance(x, types.Sequence):
+        # 1-d sequence and output
+
+        def digitize_impl(x, bins, right=False):
+            is_increasing = are_bins_increasing(bins)
+            out = numpy.empty(len(x), numpy.intp)
+            for i in range(len(x)):
+                if is_increasing:
+                    out[i] = digitize_scalar(x[i], bins, right)
+                else:
+                    out[i] = digitize_scalar_decreasing(x[i], bins, right)
+            return out
+
+        return digitize_impl
