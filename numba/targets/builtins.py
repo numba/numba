@@ -10,7 +10,7 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
-                       lower_cast, iternext_impl,
+                       lower_cast, iternext_impl, call_getiter, call_iternext,
                        impl_ret_borrowed, impl_ret_untracked)
 from . import optional
 from .. import typing, types, cgutils, utils
@@ -1471,6 +1471,27 @@ def type_impl(context, builder, sig, args):
     One-argument type() builtin.
     """
     return context.get_dummy_value()
+
+
+@lower_builtin(iter, types.IterableType)
+def iter_impl(context, builder, sig, args):
+    ty, = sig.args
+    val, = args
+    iterval = call_getiter(context, builder, ty, val)
+    return iterval
+
+
+@lower_builtin(next, types.IteratorType)
+def next_impl(context, builder, sig, args):
+    iterty, = sig.args
+    iterval, = args
+
+    res = call_iternext(context, builder, iterty, iterval)
+
+    with builder.if_then(builder.not_(res.is_valid()), likely=False):
+        context.call_conv.return_user_exc(builder, StopIteration, ())
+
+    return res.yielded_value()
 
 
 # -----------------------------------------------------------------------------
