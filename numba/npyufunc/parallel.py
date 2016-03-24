@@ -19,7 +19,7 @@ import llvmlite.binding as ll
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
 from numba import types, utils, cgutils
-from numba.llvmutils import _parse_assembly_threadsafe
+
 
 NUM_CPU = max(1, multiprocessing.cpu_count())
 
@@ -383,8 +383,13 @@ def _make_cas_function():
     """
     Generate a compare-and-swap function for portability sake.
     """
+    from numba.targets.registry import cpu_target
+
+    codegen = cpu_target.target_context.codegen()
+
     # Generate IR
-    mod = lc.Module.new('generate-cas')
+    library = codegen.create_library('cas_for_parallel_ufunc')
+    mod = library.create_ir_module('cas_module')
     llint = lc.Type.int()
     llintp = lc.Type.pointer(llint)
     fnty = lc.Type.function(llint, [llintp, llint, llint])
@@ -398,13 +403,12 @@ def _make_cas_function():
     builder.ret(builder.select(failed, old, out))
 
     # Build & Link
-    llmod = _parse_assembly_threadsafe(str(mod))
+    library.add_ir_module(mod)
+    library.finalize()
 
-    target = ll.Target.from_triple(ll.get_process_triple())
-    tm = target.create_target_machine()
-    engine = ll.create_mcjit_compiler(llmod, tm)
-    ptr = engine.get_function_address(fn.name)
-    return engine, ptr
+    ptr = library.get_pointer_to_function(fn.name)
+
+    return library, ptr
 
 
 def _launch_threads():
@@ -428,10 +432,10 @@ def _init():
 
     set_cas = CFUNCTYPE(None, c_void_p)(lib.set_cas)
 
-    engine, cas_ptr = _make_cas_function()
+    library, cas_ptr = _make_cas_function()
     set_cas(c_void_p(cas_ptr))
 
-    _keepalive.append(_ProtectEngineDestroy(set_cas, engine))
+    _keepalive.append(_ProtectEngineDestroy(set_cas, library))
 
 
 _init()
