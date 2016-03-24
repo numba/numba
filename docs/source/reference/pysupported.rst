@@ -163,9 +163,11 @@ The following built-in functions are supported:
 * :func:`enumerate`
 * :class:`float`
 * :class:`int`: only the one-argument form
+* :func:`iter`: only the one-argument form
 * :func:`len`
 * :func:`min`: only the multiple-argument form
 * :func:`max`: only the multiple-argument form
+* :func:`next`: only the one-argument form
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
 * :class:`range`: semantics are similar to those of Python 3 even in Python 2:
   a range object is returned instead of an array of values.
