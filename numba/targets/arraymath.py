@@ -694,3 +694,60 @@ def np_diff_impl(a, n=1):
         return out
 
     return diff_impl
+
+
+@overload(numpy.bincount)
+def np_bincount(a, weights=None):
+    from numba import jit
+
+    def validate_sequence(seq):
+        if isinstance(seq, types.Array):
+            if seq.ndim != 1:
+                raise TypeError("bincount(): input should have dimension 1")
+        elif not isinstance(seq, types.Sequence):
+            raise TypeError("bincount(): input should be an array or sequence")
+
+    validate_sequence(a)
+    if not isinstance(a.dtype, types.Integer):
+        return
+
+    if weights not in (None, types.none):
+        validate_sequence(weights)
+        out_dtype = weights.dtype
+
+        @jit(nopython=True)
+        def validate_inputs(a, weights):
+            if len(a) != len(weights):
+                raise ValueError("bincount(): weights and list don't have the same length")
+
+        @jit(nopython=True)
+        def count_item(out, idx, val, weights):
+            out[val] += weights[idx]
+
+    else:
+        out_dtype = types.intp
+
+        @jit(nopython=True)
+        def validate_inputs(a, weights):
+            pass
+
+        @jit(nopython=True)
+        def count_item(out, idx, val, weights):
+            out[val] += 1
+
+    def bincount_impl(a, weights=None):
+        validate_inputs(a, weights)
+        n = len(a)
+
+        a_max = a[0] if n > 0 else -1
+        for i in range(1, n):
+            if a[i] < 0:
+                raise ValueError("bincount(): first argument must be non-negative")
+            a_max = max(a_max, a[i])
+
+        out = numpy.zeros(a_max + 1, out_dtype)
+        for i in range(n):
+            count_item(out, i, a[i], weights)
+        return out
+
+    return bincount_impl

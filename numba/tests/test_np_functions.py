@@ -31,6 +31,12 @@ def diff1(a):
 def diff2(a, n):
     return np.diff(a, n)
 
+def bincount1(a):
+    return np.bincount(a)
+
+def bincount2(a, w):
+    return np.bincount(a, weights=w)
+
 
 class TestNPFunctions(TestCase):
     """
@@ -39,6 +45,7 @@ class TestNPFunctions(TestCase):
 
     def setUp(self):
         self.ccache = CompilationCache()
+        self.rnd = np.random.RandomState(42)
 
     def run_unary(self, pyfunc, x_types, x_values, flags=no_pyobj_flags,
                   func_extra_types=None, func_extra_args=None,
@@ -200,7 +207,7 @@ class TestNPFunctions(TestCase):
 
     def test_diff1(self):
         pyfunc = diff1
-        cfunc = jit(nopython=True)(diff1)
+        cfunc = jit(nopython=True)(pyfunc)
         for arr in self.diff_arrays():
             expected = pyfunc(arr)
             got = cfunc(arr)
@@ -213,7 +220,7 @@ class TestNPFunctions(TestCase):
 
     def test_diff2(self):
         pyfunc = diff2
-        cfunc = jit(nopython=True)(diff2)
+        cfunc = jit(nopython=True)(pyfunc)
         for arr in self.diff_arrays():
             size = arr.shape[-1]
             for n in (0, 1, 2, 3, size - 1, size, size + 1, 421):
@@ -232,3 +239,48 @@ class TestNPFunctions(TestCase):
                 cfunc(arr, n)
             self.assertIn("order must be non-negative", str(raises.exception))
 
+    def bincount_sequences(self):
+        """
+        Some test sequences for np.bincount()
+        """
+        a = [1, 2, 5, 2, 3, 20]
+        b = np.array([5, 8, 42, 5])
+        c = self.rnd.randint(0, 100, size=300).astype(np.int8)
+        return (a, b, c)
+
+    def test_bincount1(self):
+        pyfunc = bincount1
+        cfunc = jit(nopython=True)(pyfunc)
+        for seq in self.bincount_sequences():
+            expected = pyfunc(seq)
+            got = cfunc(seq)
+            self.assertPreciseEqual(expected, got)
+
+        # Negative input
+        with self.assertRaises(ValueError) as raises:
+            cfunc([2, -1])
+        self.assertIn("first argument must be non-negative",
+                      str(raises.exception))
+
+    def test_bincount2(self):
+        pyfunc = bincount2
+        cfunc = jit(nopython=True)(pyfunc)
+        for seq in self.bincount_sequences():
+            w = [math.sqrt(x) - 2 for x in seq]
+            # weights as list, then array
+            for weights in (w, np.array(w)):
+                expected = pyfunc(seq, weights)
+                got = cfunc(seq, weights)
+                self.assertPreciseEqual(expected, got)
+
+        # Negative input
+        with self.assertRaises(ValueError) as raises:
+            cfunc([2, -1], [0, 0])
+        self.assertIn("first argument must be non-negative",
+                      str(raises.exception))
+
+        # Mismatching input sizes
+        with self.assertRaises(ValueError) as raises:
+            cfunc([2, -1], [0])
+        self.assertIn("weights and list don't have the same length",
+                      str(raises.exception))
