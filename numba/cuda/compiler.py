@@ -51,10 +51,11 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                    fastmath=False):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
-    func = cres.library.get_function(cres.fndesc.llvm_func_name)
-    kernel = cres.target_context.prepare_cuda_kernel(func,
-                                                     cres.signature.args)
-    cukern = CUDAKernel(llvm_module=cres.library._final_module,
+    fname = cres.fndesc.llvm_func_name
+    lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
+                                                          cres.signature.args)
+
+    cukern = CUDAKernel(llvm_module=lib._final_module,
                         name=kernel.name,
                         pretty_name=cres.fndesc.qualname,
                         argtypes=cres.signature.args,
@@ -420,6 +421,7 @@ class CUDAKernel(CUDAKernelBase):
                                 prec_sqrt=False,
                                 prec_div=False,
                                 fma=True))
+
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
         cufunc = CachedCUFunction(name, ptx, link)
         # populate members
