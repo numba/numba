@@ -945,33 +945,10 @@ _range = range
 def np_histogram(a, bins=10, range=None):
     from numba import jit
 
-    @jit(nopython=True)
-    def fill_histogram(hist, values, bins, bin_range):
-        nbins = len(bins) - 1
-        bin_min, bin_max = bin_range
-
-        for view in numpy.nditer(values):
-            v = view.item()
-            if not bin_min <= v <= bin_max:
-                # Value is out of bounds, ignore (this also catches NaNs)
-                continue
-            # Bisect in bins[:-1]
-            lo = 0
-            hi = nbins - 1
-            while lo < hi:
-                # Note the `+ 1` is necessary to avoid an infinite
-                # loop where mid = lo => lo = mid
-                mid = (lo + hi + 1) >> 1
-                if v < bins[mid]:
-                    hi = mid - 1
-                else:
-                    lo = mid
-            hist[lo] += 1
-
-        return hist, bins
-
-
     if isinstance(bins, (int, types.Integer)):
+        # With a uniform distribution of bins, use a fast algorithm
+        # independent of the number of bins
+
         if range in (None, types.none):
             inf = float('inf')
             def histogram_impl(a, bins=10, range=None):
@@ -987,11 +964,29 @@ def np_histogram(a, bins=10, range=None):
 
         else:
             def histogram_impl(a, bins=10, range=None):
+                if bins <= 0:
+                    raise ValueError("histogram(): `bins` should be a positive integer")
                 bin_min, bin_max = range
+                if not bin_min <= bin_max:
+                    raise ValueError("histogram(): max must be larger than min in range parameter")
+
+                hist = numpy.zeros(bins, numpy.intp)
+                if bin_max > bin_min:
+                    bin_ratio = bins / (bin_max - bin_min)
+                    for view in numpy.nditer(a):
+                        v = view.item()
+                        b = math.floor((v - bin_min) * bin_ratio)
+                        if 0 <= b < bins:
+                            hist[int(b)] += 1
+                        elif v == bin_max:
+                            hist[bins - 1] += 1
+
                 bins_array = numpy.linspace(bin_min, bin_max, bins + 1)
-                return numpy.histogram(a, bins_array)
+                return hist, bins_array
 
     else:
+        # With a custom bins array, use a bisection search
+
         def histogram_impl(a, bins, range=None):
             nbins = len(bins) - 1
             for i in _range(nbins):
@@ -999,8 +994,29 @@ def np_histogram(a, bins=10, range=None):
                 if not bins[i] <= bins[i + 1]:
                     raise ValueError("histogram(): bins must increase monotonically")
 
-            bin_range = bins[0], bins[nbins]
+            bin_min = bins[0]
+            bin_max = bins[nbins]
             hist = numpy.zeros(nbins, numpy.intp)
-            return fill_histogram(hist, a, bins, bin_range)
+
+            if nbins > 0:
+                for view in numpy.nditer(a):
+                    v = view.item()
+                    if not bin_min <= v <= bin_max:
+                        # Value is out of bounds, ignore (this also catches NaNs)
+                        continue
+                    # Bisect in bins[:-1]
+                    lo = 0
+                    hi = nbins - 1
+                    while lo < hi:
+                        # Note the `+ 1` is necessary to avoid an infinite
+                        # loop where mid = lo => lo = mid
+                        mid = (lo + hi + 1) >> 1
+                        if v < bins[mid]:
+                            hi = mid - 1
+                        else:
+                            lo = mid
+                    hist[lo] += 1
+
+            return hist, bins
 
     return histogram_impl
