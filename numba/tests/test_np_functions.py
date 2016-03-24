@@ -43,6 +43,9 @@ def searchsorted(a, v):
 def digitize(*args):
     return np.digitize(*args)
 
+def histogram(*args):
+    return np.histogram(*args)
+
 
 class TestNPFunctions(TestCase):
     """
@@ -363,3 +366,38 @@ class TestNPFunctions(TestCase):
 
         # Sequence input
         check(list(values), bins1)
+
+    def test_histogram(self):
+        pyfunc = histogram
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(*args):
+            pyhist, pybins = pyfunc(*args)
+            chist, cbins = cfunc(*args)
+            self.assertPreciseEqual(pyhist, chist)
+            # There can be a slight discrepancy in the linspace() result
+            # when `bins` is an integer...
+            self.assertPreciseEqual(pybins, cbins, prec='double', ulps=2)
+
+        def check_values(values):
+            # Explicit bins array
+            # (note Numpy seems to not support NaN bins)
+            bins = np.float64([1, 3, 4.5, 8])
+            check(values, bins)
+            check(values.reshape((3, 4)), bins)
+
+            # Explicit number of bins
+            check(values, 7)
+
+            # Explicit number of bins and bins range
+            check(values, 7, (1.0, 13.5))
+
+            # Implicit bins=10
+            check(values)
+
+        values = np.float64((0, 0.99, 1, 4.4, 4.5, 7, 8,
+                             9, 9.5, 42.5, -1.0, -0.0))
+        assert len(values) == 12
+        self.rnd.shuffle(values)
+
+        check_values(values)

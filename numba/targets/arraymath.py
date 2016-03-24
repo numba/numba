@@ -937,3 +937,70 @@ def np_digitize(x, bins, right=False):
             return out
 
         return digitize_impl
+
+
+_range = range
+
+@overload(numpy.histogram)
+def np_histogram(a, bins=10, range=None):
+    from numba import jit
+
+    @jit(nopython=True)
+    def fill_histogram(hist, values, bins, bin_range):
+        nbins = len(bins) - 1
+        bin_min, bin_max = bin_range
+
+        for view in numpy.nditer(values):
+            v = view.item()
+            if not bin_min <= v <= bin_max:
+                # Value is out of bounds, ignore (this also catches NaNs)
+                continue
+            # Bisect in bins[:-1]
+            lo = 0
+            hi = nbins - 1
+            while lo < hi:
+                # Note the `+ 1` is necessary to avoid an infinite
+                # loop where mid = lo => lo = mid
+                mid = (lo + hi + 1) >> 1
+                if v < bins[mid]:
+                    hi = mid - 1
+                else:
+                    lo = mid
+            hist[lo] += 1
+
+        return hist, bins
+
+
+    if isinstance(bins, (int, types.Integer)):
+        if range in (None, types.none):
+            inf = float('inf')
+            def histogram_impl(a, bins=10, range=None):
+                bin_min = inf
+                bin_max = -inf
+                for view in numpy.nditer(a):
+                    v = view.item()
+                    if bin_min > v:
+                        bin_min = v
+                    if bin_max < v:
+                        bin_max = v
+                return numpy.histogram(a, bins, (bin_min, bin_max))
+
+        else:
+            def histogram_impl(a, bins=10, range=None):
+                bin_min, bin_max = range
+                bins_array = numpy.linspace(bin_min, bin_max, bins + 1)
+                return numpy.histogram(a, bins_array)
+
+    else:
+        def histogram_impl(a, bins, range=None):
+            nbins = len(bins) - 1
+            for i in _range(nbins):
+                # Note this also catches NaNs
+                if not bins[i] <= bins[i + 1]:
+                    raise ValueError("histogram(): bins must increase monotonically")
+
+            bin_range = bins[0], bins[nbins]
+            hist = numpy.zeros(nbins, numpy.intp)
+            return fill_histogram(hist, a, bins, bin_range)
+
+    return histogram_impl
