@@ -9,7 +9,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
-from numba import typeof, types
+from numba import jit, typeof, types
 from .support import TestCase, CompilationCache
 
 no_pyobj_flags = Flags()
@@ -25,11 +25,16 @@ def angle1(x):
 def angle2(x, deg):
     return np.angle(x, deg)
 
+def diff1(a):
+    return np.diff(a)
+
+def diff2(a, n):
+    return np.diff(a, n)
+
 
 class TestNPFunctions(TestCase):
     """
-    Contains tests and test helpers for numpy methods the are of type
-    "class< 'function' >.
+    Tests for various Numpy functions.
     """
 
     def setUp(self):
@@ -180,3 +185,50 @@ class TestNPFunctions(TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+
+    def diff_arrays(self):
+        """
+        Some test arrays for np.diff()
+        """
+        a = np.arange(12) ** 3
+        yield a
+        b = a.reshape((3, 4))
+        yield b
+        c = np.arange(24).reshape((3, 2, 4)) ** 3
+        yield c
+
+    def test_diff1(self):
+        pyfunc = diff1
+        cfunc = jit(nopython=True)(diff1)
+        for arr in self.diff_arrays():
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
+
+        # 0-dim array
+        a = np.array(42)
+        with self.assertTypingError():
+            cfunc(a)
+
+    def test_diff2(self):
+        pyfunc = diff2
+        cfunc = jit(nopython=True)(diff2)
+        for arr in self.diff_arrays():
+            size = arr.shape[-1]
+            for n in (0, 1, 2, 3, size - 1, size, size + 1, 421):
+                expected = pyfunc(arr, n)
+                got = cfunc(arr, n)
+                self.assertPreciseEqual(expected, got)
+
+        # 0-dim array
+        arr = np.array(42)
+        with self.assertTypingError():
+            cfunc(arr, 1)
+        # Invalid `n`
+        arr = np.arange(10)
+        for n in (-1, -2, -42):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(arr, n)
+            self.assertIn("order must be non-negative", str(raises.exception))
+

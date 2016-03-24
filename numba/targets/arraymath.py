@@ -22,7 +22,7 @@ from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
 
 
 #----------------------------------------------------------------------------
-# Stats and aggregates
+# Basic stats and aggregates
 
 @lower_builtin(numpy.sum, types.Array)
 @lower_builtin("array.sum", types.Array)
@@ -652,3 +652,45 @@ def any_where(context, builder, sig, args):
 
     res = context.compile_internal(builder, scalar_where_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+#----------------------------------------------------------------------------
+# Misc functions
+
+@overload(numpy.diff)
+def np_diff_impl(a, n=1):
+    if not isinstance(a, types.Array) or a.ndim == 0:
+        return
+
+    def diff_impl(a, n=1):
+        if n == 0:
+            return a.copy()
+        if n < 0:
+            raise ValueError("diff(): order must be non-negative")
+        size = a.shape[-1]
+        out_shape = a.shape[:-1] + (max(size - n, 0),)
+        out = numpy.empty(out_shape, a.dtype)
+        if out.size == 0:
+            return out
+
+        # np.diff() works on each last dimension subarray independently.
+        # To make things easier, normalize input and output into 2d arrays
+        a2 = a.reshape((-1, size))
+        out2 = out.reshape((-1, out.shape[-1]))
+        # A scratchpad for subarrays
+        work = numpy.empty(size, a.dtype)
+
+        for major in range(a2.shape[0]):
+            # First iteration: diff a2 into work
+            for i in range(size - 1):
+                work[i] = a2[major, i + 1] - a2[major, i]
+            # Other iterations: diff work into itself
+            for niter in range(1, n):
+                for i in range(size - niter - 1):
+                    work[i] = work[i + 1] - work[i]
+            # Copy final diff into out2
+            out2[major] = work[:size - n]
+
+        return out
+
+    return diff_impl
