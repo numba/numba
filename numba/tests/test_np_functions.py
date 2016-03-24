@@ -10,6 +10,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import jit, typeof, types
+from numba.numpy_support import version as np_version
 from .support import TestCase, CompilationCache
 
 no_pyobj_flags = Flags()
@@ -349,11 +350,15 @@ class TestNPFunctions(TestCase):
         bins2 = np.float64([1, 3, 4.5, 8, float('inf'), float('-inf')])
         bins3 = np.float64([1, 3, 4.5, 8, float('inf'), float('-inf')]
                            + [float('nan')] * 10)
+        if np_version >= (1, 10):
+            xs = [values, values.reshape((3, 4))]
+        else:
+            xs = [values]
 
         # 2-ary digitize()
         for bins in (bins1, bins2, bins3):
             bins.sort()
-            for x in (values, values.reshape((3, 4))):
+            for x in xs:
                 check(x, bins)
                 check(x, bins[::-1])
 
