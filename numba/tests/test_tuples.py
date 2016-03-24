@@ -31,6 +31,10 @@ def tuple_second(tup):
 def tuple_index(tup, idx):
     return tup[idx]
 
+def tuple_index_static(tup):
+    # Note the negative index
+    return tup[-2]
+
 def tuple_slice2(tup):
     return tup[1:-1]
 
@@ -178,6 +182,11 @@ class TestOperations(TestCase):
         tup = (4, 3, 6)
         for i in range(len(tup)):
             self.assertPreciseEqual(cr.entry_point(tup, i), tup[i])
+
+        pyfunc = tuple_index_static
+        cr = compile_isolated(pyfunc, [types.UniTuple(types.int64, 4),])
+        tup = (4, 3, 42, 6)
+        self.assertPreciseEqual(cr.entry_point(tup), pyfunc(tup))
 
     def test_in(self):
         pyfunc = in_usecase
