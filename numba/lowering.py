@@ -217,7 +217,7 @@ class BaseLower(object):
         # Setup function
         self.function = self.context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
-        self.builder = Builder.new(self.entry_block)
+        self.builder = Builder(self.entry_block)
         self.call_helper = self.call_conv.init_call_helper(self.builder)
 
     def typeof(self, varname):
@@ -751,6 +751,15 @@ class Lower(BaseLower):
             castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
                         for val, fromty in zip(itemvals, itemtys)]
             return self.context.build_list(self.builder, resty, castvals)
+
+        elif expr.op == "build_set":
+            # Insert in reverse order, as Python does
+            items = expr.items[::-1]
+            itemvals = [self.loadvar(i.name) for i in items]
+            itemtys = [self.typeof(i.name) for i in items]
+            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
+                        for val, fromty in zip(itemvals, itemtys)]
+            return self.context.build_set(self.builder, resty, castvals)
 
         elif expr.op == "cast":
             val = self.loadvar(expr.value.name)

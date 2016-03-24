@@ -12,6 +12,7 @@ from llvmlite.llvmpy.core import Constant, Type
 
 import numpy
 from numba import types, cgutils, typing
+from numba.extending import overload, overload_method
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
@@ -327,6 +328,31 @@ def array_median(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+@overload(numpy.all)
+@overload_method(types.Array, "all")
+def np_all(a):
+    def flat_all(a):
+        # XXX need a primitive for the moral equivalent of ravel(order='K')
+        # (or nditer())
+        for v in a.flat:
+            if not v:
+                return False
+        return True
+
+    return flat_all
+
+@overload(numpy.any)
+@overload_method(types.Array, "any")
+def np_any(a):
+    def flat_any(a):
+        for v in a.flat:
+            if v:
+                return True
+        return False
+
+    return flat_any
+
+
 #----------------------------------------------------------------------------
 # Element-wise computations
 
@@ -354,8 +380,7 @@ def scalar_round_unary(context, builder, sig, args):
 @lower_builtin(numpy.round, types.Complex)
 def scalar_round_unary_complex(context, builder, sig, args):
     fltty = sig.args[0].underlying_float
-    cplx_cls = context.make_complex(sig.args[0])
-    z = cplx_cls(context, builder, args[0])
+    z = context.make_complex(builder, sig.args[0], args[0])
     z.real = _np_round_float(context, builder, fltty, z.real)
     z.imag = _np_round_float(context, builder, fltty, z.imag)
     res = z._getvalue()

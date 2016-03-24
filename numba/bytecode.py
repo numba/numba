@@ -36,21 +36,7 @@ def get_code_object(obj):
 def _make_bytecode_table():
     # Note some opcodes are supported here for analysis but not later
     # in the compilation pipeline.
-
-    if sys.version_info[:2] == (2, 6):  # python 2.6
-        version_specific = [
-            ('JUMP_IF_FALSE', 2),
-            ('JUMP_IF_TRUE', 2),
-        ]
-
-    if sys.version_info[:2] >= (2, 7):  # python 2.7+
-        version_specific = [
-            ('BUILD_SET', 2),
-            ('POP_JUMP_IF_FALSE', 2),
-            ('POP_JUMP_IF_TRUE', 2),
-            ('JUMP_IF_TRUE_OR_POP', 2),
-            ('JUMP_IF_FALSE_OR_POP', 2),
-        ]
+    version_specific = []
 
     if sys.version_info[0] == 2:
         version_specific += [
@@ -108,6 +94,7 @@ def _make_bytecode_table():
         ('BREAK_LOOP', 0),
         ('BUILD_LIST', 2),
         ('BUILD_MAP', 2),
+        ('BUILD_SET', 2),
         ('BUILD_SLICE', 2),
         ('BUILD_TUPLE', 2),
         ('CALL_FUNCTION', 2),
@@ -133,6 +120,8 @@ def _make_bytecode_table():
         ('INPLACE_RSHIFT', 0),
         ('JUMP_ABSOLUTE', 2),
         ('JUMP_FORWARD', 2),
+        ('JUMP_IF_TRUE_OR_POP', 2),
+        ('JUMP_IF_FALSE_OR_POP', 2),
         ('LOAD_ATTR', 2),
         ('LOAD_CLOSURE', 2),
         ('LOAD_CONST', 2),
@@ -142,6 +131,8 @@ def _make_bytecode_table():
         ('MAKE_CLOSURE', 2),
         ('MAKE_FUNCTION', 2),
         ('POP_BLOCK', 0),
+        ('POP_JUMP_IF_FALSE', 2),
+        ('POP_JUMP_IF_TRUE', 2),
         ('POP_TOP', 0),
         ('RAISE_VARARGS', 2),
         ('RETURN_VALUE', 0),

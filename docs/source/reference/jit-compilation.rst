@@ -62,7 +62,10 @@ JIT functions
    If true, *cache* enables a file-based cache to shorten compilation times
    when the function was already compiled in a previous invocation.
    The cache is maintained in the ``__pycache__`` subdirectory of
-   the directory containing the source file.
+   the directory containing the source file; if the current user is not
+   allowed to write to it, though, it falls back to a platform-specific
+   user-wide cache directory (such as ``$HOME/.cache/numba`` on Unix
+   platforms).
 
    Not all functions can be cached, since some functionality cannot be
    always persisted to disk.  When a function cannot be cached, a
@@ -186,8 +189,7 @@ Vectorized functions (ufuncs and DUFuncs)
    ``"reorderable"``.  The default is None.  Both None and
    ``"reorderable"`` mean the function has no identity value;
    ``"reorderable"`` additionally specifies that reductions along multiple
-   axes can be reordered.  (Note that ``"reorderable"`` is only supported in
-   Numpy 1.7 or later.)
+   axes can be reordered.
 
    If there are several *signatures*, they must be ordered from the more
    specific to the least specific.  Otherwise, Numpy's type-based

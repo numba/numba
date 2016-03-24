@@ -198,9 +198,11 @@ class _StructProxy(object):
         return self._builder.load(self._outer_ref)
 
     def _setvalue(self, value):
-        """Store the value in this structure"""
+        """
+        Store the value in this structure.
+        """
         assert not is_pointer(value.type)
-        assert value.type == self._type, (value.type, self._type)
+        assert value.type == self._be_type, (value.type, self._be_type)
         self._builder.store(value, self._value)
 
 
@@ -427,16 +429,19 @@ class IfBranchObj(object):
 Loop = collections.namedtuple('Loop', ('index', 'do_break'))
 
 @contextmanager
-def for_range(builder, count, intp=None):
+def for_range(builder, count, start=None, intp=None):
     """
-    Generate LLVM IR for a for-loop in [0, count).  Yields a
-    Loop namedtuple with the following members:
+    Generate LLVM IR for a for-loop in [start, count).
+    *start* is equal to 0 by default.
+
+    Yields a Loop namedtuple with the following members:
     - `index` is the loop index's value
     - `do_break` is a no-argument callable to break out of the loop
     """
     if intp is None:
         intp = count.type
-    start = Constant.int(intp, 0)
+    if start is None:
+        start = Constant.int(intp, 0)
     stop = count
 
     bbcond = builder.append_basic_block("for.cond")
@@ -574,7 +579,7 @@ def loop_nest(builder, shape, intp):
 
 @contextmanager
 def _loop_nest(builder, shape, intp):
-    with for_range(builder, shape[0], intp) as loop:
+    with for_range(builder, shape[0], intp=intp) as loop:
         if len(shape) > 1:
             with _loop_nest(builder, shape[1:], intp) as indices:
                 yield (loop.index,) + indices
@@ -668,33 +673,30 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         return pointer_add(builder, data, offset)
 
 
+def _scalar_pred_against_zero(builder, value, fcond, icond):
+    nullval = Constant.null(value.type)
+    if isinstance(value.type, (ir.FloatType, ir.DoubleType)):
+        isnull = builder.fcmp(fcond, value, nullval)
+    elif isinstance(value.type, ir.IntType):
+        isnull = builder.icmp(icond, value, nullval)
+    else:
+        raise TypeError("unexpected value type %s" % (value.type,))
+    return isnull
+
+
 def is_scalar_zero(builder, value):
     """
     Return a predicate representing whether *value* is equal to zero.
     """
-    assert not is_pointer(value.type)
-    assert not is_struct(value.type)
-    nullval = Constant.null(value.type)
-    if value.type in (Type.float(), Type.double()):
-        isnull = builder.fcmp(lc.FCMP_OEQ, nullval, value)
-    else:
-        isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
-    return isnull
+    return _scalar_pred_against_zero(builder, value, lc.FCMP_OEQ, lc.ICMP_EQ)
 
 
 def is_not_scalar_zero(builder, value):
     """
     Return a predicate representin whether a *value* is not equal to zero.
-    not exactly "not is_scalar_zero" because of nans
+    (not exactly "not is_scalar_zero" because of nans)
     """
-    assert not is_pointer(value.type)
-    assert not is_struct(value.type)
-    nullval = Constant.null(value.type)
-    if value.type in (Type.float(), Type.double()):
-        isnull = builder.fcmp(lc.FCMP_UNE, nullval, value)
-    else:
-        isnull = builder.icmp(lc.ICMP_NE, nullval, value)
-    return isnull
+    return _scalar_pred_against_zero(builder, value, lc.FCMP_UNE, lc.ICMP_NE)
 
 
 def is_scalar_zero_or_nan(builder, value):
@@ -702,26 +704,17 @@ def is_scalar_zero_or_nan(builder, value):
     Return a predicate representing whether *value* is equal to either zero
     or NaN.
     """
-    assert not is_pointer(value.type)
-    assert not is_struct(value.type)
-    nullval = Constant.null(value.type)
-    if value.type in (Type.float(), Type.double()):
-        isnull = builder.fcmp(lc.FCMP_UEQ, nullval, value)
-    else:
-        isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
-    return isnull
+    return _scalar_pred_against_zero(builder, value, lc.FCMP_UEQ, lc.ICMP_EQ)
 
 is_true = is_not_scalar_zero
 is_false = is_scalar_zero
 
+
 def is_scalar_neg(builder, value):
-    """is _value_ negative?. Assumes _value_ is signed"""
-    nullval = Constant.null(value.type)
-    if value.type in (Type.float(), Type.double()):
-        isneg = builder.fcmp(lc.FCMP_OLT, value, nullval)
-    else:
-        isneg = builder.icmp(lc.ICMP_SLT, value, nullval)
-    return isneg
+    """
+    Is *value* negative?  Assumes *value* is signed.
+    """
+    return _scalar_pred_against_zero(builder, value, lc.FCMP_OLT, lc.ICMP_SLT)
 
 
 def guard_null(context, builder, value, exc_tuple):
@@ -755,25 +748,11 @@ def if_zero(builder, value, likely=False):
 guard_zero = guard_null
 
 
-def is_struct(ltyp):
-    """
-    Whether the LLVM type *typ* is a pointer type.
-    """
-    return ltyp.kind == lc.TYPE_STRUCT
-
-
 def is_pointer(ltyp):
     """
     Whether the LLVM type *typ* is a struct type.
     """
-    return ltyp.kind == lc.TYPE_POINTER
-
-
-def is_struct_ptr(ltyp):
-    """
-    Whether the LLVM type *typ* is a pointer-to-struct type.
-    """
-    return is_pointer(ltyp) and is_struct(ltyp.pointee)
+    return isinstance(ltyp, ir.PointerType)
 
 
 def get_record_member(builder, record, offset, typ):
@@ -904,22 +883,6 @@ def cbranch_or_continue(builder, cond, bbtrue):
     return bbcont
 
 
-def add_postfix(name, postfix):
-    """Add postfix to string.  If the postfix is already there, add a counter.
-    """
-    regex = "(.*{0})([0-9]*)$".format(postfix)
-    m = re.match(regex, name)
-    if m:
-        head, ct = m.group(1), m.group(2)
-        if len(ct):
-            ct = int(ct) + 1
-        else:
-            ct = 1
-
-        return "{head}{ct}".format(head=head, ct=ct)
-    return name + postfix
-
-
 def memcpy(builder, dst, src, count):
     """
     Emit a memcpy to the builder.
@@ -932,30 +895,43 @@ def memcpy(builder, dst, src, count):
     * dst.type == src.type
     * count is positive
     """
+    # Note this does seem to be optimized as a raw memcpy() by LLVM
+    # whenever possible...
     assert dst.type == src.type
-    with for_range(builder, count, count.type) as loop:
+    with for_range(builder, count, intp=count.type) as loop:
         out_ptr = builder.gep(dst, [loop.index])
         in_ptr = builder.gep(src, [loop.index])
         builder.store(builder.load(in_ptr), out_ptr)
 
 
-def memmove(builder, dst, src, count, itemsize, align=1):
-    """
-    Emit a memmove() call for `count` items of size `itemsize`
-    from `src` to `dest`.
-    """
+def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
     ptr_t = ir.IntType(8).as_pointer()
     size_t = count.type
 
-    memmove = builder.module.declare_intrinsic('llvm.memmove',
-                                               [ptr_t, ptr_t, size_t])
+    memcpy = builder.module.declare_intrinsic(func_name,
+                                              [ptr_t, ptr_t, size_t])
     align = ir.Constant(ir.IntType(32), align)
     is_volatile = false_bit
-    builder.call(memmove, [builder.bitcast(dst, ptr_t),
-                           builder.bitcast(src, ptr_t),
-                           builder.mul(count, ir.Constant(size_t, itemsize)),
-                           align,
-                           is_volatile])
+    builder.call(memcpy, [builder.bitcast(dst, ptr_t),
+                          builder.bitcast(src, ptr_t),
+                          builder.mul(count, ir.Constant(size_t, itemsize)),
+                          align,
+                          is_volatile])
+
+
+def raw_memcpy(builder, dst, src, count, itemsize, align=1):
+    """
+    Emit a raw memcpy() call for `count` items of size `itemsize`
+    from `src` to `dest`.
+    """
+    return _raw_memcpy(builder, 'llvm.memcpy', dst, src, count, itemsize, align)
+
+def raw_memmove(builder, dst, src, count, itemsize, align=1):
+    """
+    Emit a raw memmove() call for `count` items of size `itemsize`
+    from `src` to `dest`.
+    """
+    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count, itemsize, align)
 
 
 def muladd_with_overflow(builder, a, b, c):

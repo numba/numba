@@ -1,5 +1,7 @@
 from __future__ import print_function, absolute_import
 
+from functools import partial
+
 from llvmlite import ir
 
 from numba import cgutils, types, numpy_support
@@ -84,10 +86,11 @@ class DataModel(object):
         """
         return self.from_data(builder, builder.load(ptr, align=align))
 
-    def traverse(self, builder, value):
+    def traverse(self, builder):
         """
-        Traverse contained values
-        Returns a iterable of contained (types, values)
+        Traverse contained members.
+        Returns a iterable of contained (types, getters).
+        Each getter is a one-argument function accepting a LLVM value.
         """
         return []
 
@@ -386,9 +389,11 @@ class UniTupleModel(DataModel):
     def from_return(self, builder, value):
         return value
 
-    def traverse(self, builder, value):
-        values = cgutils.unpack_tuple(builder, value, count=self._count)
-        return zip([self._fe_type.dtype] * len(values), values)
+    def traverse(self, builder):
+        def getter(i, value):
+            return builder.extract_value(value, i)
+        return [(self._fe_type.dtype, partial(getter, i))
+                for i in range(self._count)]
 
     def inner_types(self):
         return self._elem_model.traverse_types()
@@ -596,13 +601,14 @@ class StructModel(CompositeModel):
         """
         return self._models[pos]
 
-    def traverse(self, builder, value):
-        if value.type != self.get_value_type():
-            args = self.get_value_type(), value.type
-            raise TypeError("expecting {0} but got {1}".format(*args))
-        out = [(self.get_type(k), self.get(builder, value, k))
-                for k in self._fields]
-        return out
+    def traverse(self, builder):
+        def getter(k, value):
+            if value.type != self.get_value_type():
+                args = self.get_value_type(), value.type
+                raise TypeError("expecting {0} but got {1}".format(*args))
+            return self.get(builder, value, k)
+
+        return [(self.get_type(k), partial(getter, k)) for k in self._fields]
 
     def inner_types(self):
         types = []
@@ -651,7 +657,7 @@ class ListPayloadModel(StructModel):
             # This member is only used only for reflected lists
             ('dirty', types.boolean),
             # Actually an inlined var-sized array
-            ('data', fe_type.list_type.dtype),
+            ('data', fe_type.container.dtype),
         ]
         super(ListPayloadModel, self).__init__(dmm, fe_type, members)
 
@@ -672,7 +678,7 @@ class ListModel(StructModel):
 @register_default(types.ListIter)
 class ListIterModel(StructModel):
     def __init__(self, dmm, fe_type):
-        payload_type = types.ListPayload(fe_type.list_type)
+        payload_type = types.ListPayload(fe_type.container)
         members = [
             # The meminfo data points to a ListPayload (shared with the
             # original list object)
@@ -680,6 +686,64 @@ class ListIterModel(StructModel):
             ('index', types.EphemeralPointer(types.intp)),
             ]
         super(ListIterModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.SetEntry)
+class SetEntryModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        dtype = fe_type.set_type.dtype
+        members = [
+            # -1 = empty, -2 = deleted
+            ('hash', types.intp),
+            ('key', dtype),
+        ]
+        super(SetEntryModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.SetPayload)
+class SetPayloadModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        entry_type = types.SetEntry(fe_type.container)
+        members = [
+            # Number of active + deleted entries
+            ('fill', types.intp),
+            # Number of active entries
+            ('used', types.intp),
+            # Allocated size - 1 (size being a power of 2)
+            ('mask', types.intp),
+            # Search finger
+            ('finger', types.intp),
+            # This member is only used only for reflected sets
+            ('dirty', types.boolean),
+            # Actually an inlined var-sized array
+            ('entries', entry_type),
+        ]
+        super(SetPayloadModel, self).__init__(dmm, fe_type, members)
+
+@register_default(types.Set)
+class SetModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        payload_type = types.SetPayload(fe_type)
+        members = [
+            # The meminfo data points to a SetPayload
+            ('meminfo', types.MemInfoPointer(payload_type)),
+            # This member is only used only for reflected sets
+            ('parent', types.pyobject),
+        ]
+        super(SetModel, self).__init__(dmm, fe_type, members)
+
+@register_default(types.SetIter)
+class SetIterModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        payload_type = types.SetPayload(fe_type.container)
+        members = [
+            # The meminfo data points to a SetPayload (shared with the
+            # original set object)
+            ('meminfo', types.MemInfoPointer(payload_type)),
+            # The index into the entries table
+            ('index', types.EphemeralPointer(types.intp)),
+            ]
+        super(SetIterModel, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.Array)
@@ -743,12 +807,16 @@ class OptionalModel(StructModel):
     def from_return(self, builder, value):
         return self._value_model.from_return(builder, value)
 
-    def traverse(self, builder, value):
-        data = self.get(builder, value, "data")
-        valid = self.get(builder, value, "valid")
-        data = builder.select(valid, data, ir.Constant(data.type, None))
-        return [(self.get_type("data"), data),
-                (self.get_type("valid"), valid)]
+    def traverse(self, builder):
+        def get_data(value):
+            valid = get_valid(value)
+            data = self.get(builder, value, "data")
+            return builder.select(valid, data, ir.Constant(data.type, None))
+        def get_valid(value):
+            return self.get(builder, value, "valid")
+
+        return [(self.get_type("data"), get_data),
+                (self.get_type("valid"), get_valid)]
 
 
 @register_default(types.Record)
@@ -874,7 +942,7 @@ class FlatIter(StructModel):
 class UniTupleIter(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('index', types.EphemeralPointer(types.intp)),
-                   ('tuple', fe_type.unituple,)]
+                   ('tuple', fe_type.container,)]
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
 
@@ -1113,5 +1181,6 @@ class DeferredStructModel(CompositeModel):
     def _actual_model(self):
         return self._dmm.lookup(self.actual_fe_type)
 
-    def traverse(self, builder, value):
-        return [(self.actual_fe_type, builder.extract_value(value, [0]))]
+    def traverse(self, builder):
+        return [(self.actual_fe_type,
+                 lambda value: builder.extract_value(value, [0]))]

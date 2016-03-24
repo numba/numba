@@ -4,66 +4,72 @@
 dist: trusty
 
 matrix:
-  include:
-    - env: PYTHON=2.6 NUMPY="numpy=1.6"
-    - env: PYTHON=2.7 NUMPY="numpy=1.7"
-    - env: PYTHON=3.3 NUMPY="numpy=1.8"
-    - env: PYTHON=3.4 NUMPY="numpy=1.9"
-    - env: PYTHON=3.5 NUMPY="numpy=1.10"
+    include:
+        - env: PYTHON=2.7 NUMPY="numpy=1.7"
+        - env: PYTHON=3.4 NUMPY="numpy=1.9" BUILD_DOC=yes
+        - env: PYTHON=3.5 NUMPY="numpy=1.10" RUN_COVERAGE=yes
 
 branches:
-  only:
-    - master
+    only:
+        - master
 
 before_install:
-  # Install Miniconda
-  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
-  - chmod +x miniconda.sh
-  - ./miniconda.sh -b
-  - export PATH=$HOME/miniconda3/bin:$PATH
-  # Setup environment
-  - conda update --yes conda
-  # Scipy and CFFI are optional dependencies, but exercised in the test suite
-  - conda create -n travisci --yes python=$PYTHON $NUMPY cffi pip scipy
-  - source activate travisci
-  - CONDA_INSTALL="conda install --yes -q"
-  - PIP_INSTALL="pip install -q"
-  # Install llvmdev (separate channel, for now)
-  - $CONDA_INSTALL -c numba llvmdev="3.7*"
-  # Install unittest2 for Python 2
-  - if [ $PYTHON == "2.6" ]; then $CONDA_INSTALL unittest2 argparse; fi
-  # Install enum34 and singledispatch for Python < 3.4
-  - if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
-  - if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
-  # Install funcsigs for Python < 3.3
-  - if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
-  # Install dependencies for building the documentation
-  - $CONDA_INSTALL sphinx pygments
-  - $PIP_INSTALL sphinxjp.themecore sphinxjp.themes.basicstrap
+    # Install Miniconda
+    - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+    - chmod +x miniconda.sh
+    - ./miniconda.sh -b
+    - export PATH=$HOME/miniconda3/bin:$PATH
+    # Setup environment
+    - conda update --yes conda
+    # Scipy, CFFI and jinja2 are optional dependencies, but exercised in the test suite
+    - conda create -n travisci --yes python=$PYTHON $NUMPY cffi pip scipy jinja2
+    - source activate travisci
+    - CONDA_INSTALL="conda install --yes -q"
+    - PIP_INSTALL="pip install -q"
+    # Install llvmdev (separate channel, for now)
+    - $CONDA_INSTALL -c numba llvmdev="3.7*"
+    # Install enum34 and singledispatch for Python < 3.4
+    - if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
+    - if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
+    # Install funcsigs for Python < 3.3
+    - if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
+    # Install dependencies for building the documentation
+    - if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments; fi
+    - if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinxjp.themecore sphinxjp.themes.basicstrap; fi
+    # Install dependencies for code coverage (codecov.io)
+    - if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 
 install:
     # Build and install llvmlite from source
     - git clone git://github.com/numba/llvmlite.git -q
     - cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
     # Build numba extensions without silencing compile errors
-    - python setup.py build_ext -q
+    - python setup.py build_ext -q --inplace
     # Install numba
     - python setup.py install -q >/dev/null
 
 script:
     # Ensure that the documentation builds without warnings
-    - cd $TRAVIS_BUILD_DIR/docs ; make SPHINXOPTS=-W clean html
+    - cd $TRAVIS_BUILD_DIR/docs
+    - if [ "$BUILD_DOC" == "yes" ]; then make SPHINXOPTS=-W clean html; fi
+    - cd ~
     # Run the Numba test suite
-    - cd ~ ; NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests
+    # Note that coverage is run from the checkout dir to match the "source"
+    # directive in .coveragerc
+    - if [ "$RUN_COVERAGE" == "yes" ]; then cd $TRAVIS_BUILD_DIR; coverage erase; coverage run runtests.py -b -m numba.tests; fi
+    - if [ "$RUN_COVERAGE" != "yes" ]; then NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests; fi
+
+after_success:
+    - if [ "$RUN_COVERAGE" == "yes" ]; then coverage combine; codecov; fi
 
 notifications:
-  email: false
-  flowdock: "cb7bc57e58b3d42f77685f93211c03ab"
-  on_success: "change"
-  on_failure: "always" # "change"
-  webhooks:
-    urls:
-      - https://webhooks.gitter.im/e/bd67cc227432d99bf1f1
-    on_success: change
-    on_failure: always
-    on_start: false
+    email: false
+    flowdock: "cb7bc57e58b3d42f77685f93211c03ab"
+    on_success: "change"
+    on_failure: "always" # "change"
+    webhooks:
+        urls:
+            - https://webhooks.gitter.im/e/bd67cc227432d99bf1f1
+        on_success: change
+        on_failure: always
+        on_start: false

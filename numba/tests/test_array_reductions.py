@@ -5,10 +5,22 @@ from itertools import product
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import typeof
+from numba import jit, typeof
 from numba.compiler import compile_isolated
-from .support import TestCase, skip_on_numpy_16, MemoryLeakMixin, tag
+from .support import TestCase, MemoryLeakMixin, tag
 
+
+def array_all(arr):
+    return arr.all()
+
+def array_all_global(arr):
+    return np.all(arr)
+
+def array_any(arr):
+    return arr.any()
+
+def array_any_global(arr):
+    return np.any(arr)
 
 def array_cumprod(arr):
     return arr.cumprod()
@@ -121,6 +133,40 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     """
     Test array reduction methods and functions such as .sum(), .max(), etc.
     """
+
+    @tag('important')
+    def test_all_basic(self, pyfunc=array_all):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+        arr = np.float64([1.0, 0.0, float('inf'), float('nan')])
+        check(arr)
+        arr[1] = -0.0
+        check(arr)
+        arr[1] = 1.5
+        check(arr)
+        arr = arr.reshape((2, 2))
+        check(arr)
+        check(arr[::-1])
+
+    @tag('important')
+    def test_any_basic(self, pyfunc=array_any):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+        arr = np.float64([0.0, -0.0, 0.0, 0.0])
+        check(arr)
+        arr[2] = float('nan')
+        check(arr)
+        arr[2] = float('inf')
+        check(arr)
+        arr[2] = 1.5
+        check(arr)
+        arr = arr.reshape((2, 2))
+        check(arr)
+        check(arr[::-1])
 
     @tag('important')
     def test_sum_basic(self):
@@ -334,12 +380,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr.fill(arrty.dtype('NaT'))
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
 
-    @skip_on_numpy_16
     def check_npdatetime(self, pyfunc):
         arr = np.arange(10).astype(dtype='M8[Y]')
         self._do_check_nptimedelta(pyfunc, arr)
 
-    @skip_on_numpy_16
     def check_nptimedelta(self, pyfunc):
         arr = np.arange(10).astype(dtype='m8[s]')
         self._do_check_nptimedelta(pyfunc, arr)
@@ -383,7 +427,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_min, array_min_global,
                            array_max, array_max_global,
                            array_argmin, array_argmin_global,
-                           array_argmax, array_argmax_global]
+                           array_argmax, array_argmax_global,
+                           array_all, array_all_global,
+                           array_any, array_any_global,
+                           ]
         dtypes_to_test = [np.int32, np.float32, np.bool_]
 
         # Install tests on class

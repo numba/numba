@@ -1,22 +1,16 @@
 from __future__ import print_function, absolute_import
-import inspect
-import re
-from collections import Mapping, defaultdict
-import textwrap
+
+from collections import Mapping, defaultdict, OrderedDict
 from contextlib import closing
+import inspect
+import os
+import re
+import sys
+import textwrap
+
 from numba.io_support import StringIO
 from numba import ir
 import numba.dispatcher
-import os
-import sys
-
-try:
-    from collections import OrderedDict
-except ImportError:
-    try:
-        from ordereddict import OrderedDict
-    except ImportError:
-        raise ImportError("Please install the 'ordereddict' package")
 
 
 class SourceLines(Mapping):

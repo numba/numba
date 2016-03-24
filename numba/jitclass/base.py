@@ -1,12 +1,11 @@
 from __future__ import absolute_import, print_function
 
-from collections import Sequence
+from collections import OrderedDict, Sequence
 import types as pytypes
 import inspect
 
 from llvmlite import ir as llvmir
 
-from numba.utils import OrderedDict
 from numba import types
 from numba.targets.registry import cpu_target
 from numba import njit
@@ -97,6 +96,14 @@ class JitClassType(type):
 ##############################################################################
 # Registration utils
 
+def _validate_spec(spec):
+    for k, v in spec.items():
+        if not isinstance(k, str):
+            raise TypeError("spec keys should be strings, got %r" % (k,))
+        if not isinstance(v, types.Type):
+            raise TypeError("spec values should be Numba type instances, got %r"
+                            % (v,))
+
 def register_class_type(cls, spec, class_ctor, builder):
     """
     Internal function to create a jitclass.
@@ -111,6 +118,7 @@ def register_class_type(cls, spec, class_ctor, builder):
     # Normalize spec
     if isinstance(spec, Sequence):
         spec = OrderedDict(spec)
+    _validate_spec(spec)
 
     # Copy methods from base classes
     clsdct = {}
@@ -295,12 +303,10 @@ def attr_impl(context, builder, typ, value, attr):
     """
     if attr in typ.struct:
         # It's a struct field
-        inst_struct = cgutils.create_struct_proxy(typ)
-        inst = inst_struct(context, builder, value=value)
+        inst = context.make_helper(builder, typ, value=value)
         data_pointer = inst.data
-        data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
-                                                  kind='data')
-        data = data_struct(context, builder, ref=data_pointer)
+        data = context.make_data_helper(builder, typ.get_data_type(),
+                                        ref=data_pointer)
         return imputils.impl_ret_borrowed(context, builder,
                                           typ.struct[attr],
                                           getattr(data, attr))
@@ -327,12 +333,10 @@ def attr_impl(context, builder, sig, args, attr):
 
     if attr in typ.struct:
         # It's a struct member
-        instance_struct = cgutils.create_struct_proxy(typ)
-        inst = instance_struct(context, builder, value=target)
+        inst = context.make_helper(builder, typ, value=target)
         data_ptr = inst.data
-        data_struct = cgutils.create_struct_proxy(typ.get_data_type(),
-                                                  kind='data')
-        data = data_struct(context, builder, ref=data_ptr)
+        data = context.make_data_helper(builder, typ.get_data_type(),
+                                        ref=data_ptr)
 
         # Get old value
         attr_type = typ.struct[attr]
@@ -374,10 +378,8 @@ def imp_dtor(context, module, instance_type):
         alloc_fe_type = instance_type.get_data_type()
         alloc_type = context.get_value_type(alloc_fe_type)
 
-        data_struct = cgutils.create_struct_proxy(alloc_fe_type)
-
         ptr = builder.bitcast(dtor_fn.args[0], alloc_type.as_pointer())
-        data = data_struct(context, builder, ref=ptr)
+        data = context.make_helper(builder, alloc_fe_type, ref=ptr)
 
         context.nrt_decref(builder, alloc_fe_type, data._getvalue())
 
@@ -409,8 +411,7 @@ def ctor_impl(context, builder, sig, args):
     builder.store(cgutils.get_null_value(alloc_type),
                   data_pointer)
 
-    inst_struct_typ = cgutils.create_struct_proxy(inst_typ)
-    inst_struct = inst_struct_typ(context, builder)
+    inst_struct = context.make_helper(builder, inst_typ)
     inst_struct.meminfo = meminfo
     inst_struct.data = data_pointer
 

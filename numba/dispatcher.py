@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+import collections
 import contextlib
 import functools
 import errno
@@ -12,10 +13,13 @@ import os
 from .six.moves import cPickle as pickle
 import struct
 import sys
+import tempfile
 import warnings
 
+from .appdirs import AppDirs
+
 import numba
-from numba import _dispatcher, compiler, utils, types
+from numba import _dispatcher, compiler, utils, types, config
 from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
@@ -126,6 +130,15 @@ class _GeneratedFunctionCompiler(_FunctionCompiler):
         return impl
 
 
+_CompileStats = collections.namedtuple(
+    '_CompileStats', ('cache_path', 'cache_hits', 'cache_misses'))
+
+def _cache_log(msg, *args):
+    if config.DEBUG_CACHE:
+        msg = msg % args
+        print(msg)
+
+
 class _DispatcherBase(_dispatcher.Dispatcher):
     """
     Common base class for dispatcher Implementations.
@@ -137,7 +150,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self._tm = default_type_manager
 
         # A mapping of signatures to compile results
-        self.overloads = utils.OrderedDict()
+        self.overloads = collections.OrderedDict()
 
         self.py_func = py_func
         # other parts of Numba assume the old Python 2 name for code object
@@ -393,6 +406,8 @@ class Dispatcher(_DispatcherBase):
         self._impl_kind = impl_kind
         self._compiler = compiler_class(py_func, self.targetdescr,
                                         targetoptions, locals)
+        self._cache_hits = collections.Counter()
+        self._cache_misses = collections.Counter()
 
         self.typingctx.insert_global(self, types.Dispatcher(self))
 
@@ -448,6 +463,7 @@ class Dispatcher(_DispatcherBase):
             # Try to load from disk cache
             cres = self._cache.load_overload(sig, self.targetctx)
             if cres is not None:
+                self._cache_hits[sig] += 1
                 # XXX fold this in add_overload()? (also see compiler.py)
                 if not cres.objectmode and not cres.interpmode:
                     self.targetctx.insert_user_function(cres.entry_point,
@@ -455,6 +471,7 @@ class Dispatcher(_DispatcherBase):
                 self.add_overload(cres)
                 return cres.entry_point
 
+            self._cache_misses[sig] += 1
             cres = self._compiler.compile(args, return_type)
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
@@ -476,6 +493,14 @@ class Dispatcher(_DispatcherBase):
                 self.compile(sig)
         finally:
             self._can_compile = old_can_compile
+
+    @property
+    def stats(self):
+        return _CompileStats(
+            cache_path=self._cache.cache_path,
+            cache_hits=self._cache_hits,
+            cache_misses=self._cache_misses,
+            )
 
 
 class LiftedLoop(_DispatcherBase):
@@ -538,6 +563,10 @@ _dispatcher.typeof_init(dict((str(t), t._code) for t in types.number_domain))
 
 class NullCache(object):
 
+    @property
+    def cache_path(self):
+        return None
+
     def load_overload(self, sig, target_context):
         pass
 
@@ -556,6 +585,16 @@ class NullCache(object):
 
 class _CacheLocator(object):
 
+    def ensure_cache_path(self):
+        path = self.get_cache_path()
+        try:
+            os.makedirs(path)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+        # Ensure the directory is writable by trying to write a temporary file
+        tempfile.TemporaryFile(dir=path).close()
+
     def get_cache_path(self):
         raise NotImplementedError
 
@@ -570,20 +609,11 @@ class _CacheLocator(object):
         raise NotImplementedError
 
 
-class _SourceCacheLocator(_CacheLocator):
+class _SourceFileBackedLocatorMixin(object):
     """
-    A locator for functions backed by a regular Python module.
+    A cache locator mixin for functions which are backed by a well-known
+    Python source file.
     """
-
-    def __init__(self, py_func, py_file):
-        self._py_file = py_file
-        self._lineno = py_func.__code__.co_firstlineno
-
-    def get_cache_path(self):
-        # NOTE: this assumes the __pycache__ directory is writable, which
-        # is false for system installs, but true for conda environments
-        # and local work directories.
-        return os.path.join(os.path.dirname(self._py_file), '__pycache__')
 
     def get_source_stamp(self):
         st = os.stat(self._py_file)
@@ -599,7 +629,52 @@ class _SourceCacheLocator(_CacheLocator):
         if not os.path.exists(py_file):
             # Perhaps a placeholder (e.g. "<ipython-XXX>")
             return
-        return cls(py_func, py_file)
+        self = cls(py_func, py_file)
+        try:
+            self.ensure_cache_path()
+        except OSError:
+            # Cannot ensure the cache directory exists or is writable
+            return
+        return self
+
+
+class _InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
+    """
+    A locator for functions backed by a regular Python module with a
+    writable __pycache__ directory.
+    """
+
+    def __init__(self, py_func, py_file):
+        self._py_file = py_file
+        self._lineno = py_func.__code__.co_firstlineno
+        self._cache_path = os.path.join(os.path.dirname(self._py_file), '__pycache__')
+
+    def get_cache_path(self):
+        return self._cache_path
+
+
+class _UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
+    """
+    A locator for functions backed by a regular Python module, cached
+    into a user-wide cache directory.
+    """
+
+    def __init__(self, py_func, py_file):
+        self._py_file = py_file
+        self._lineno = py_func.__code__.co_firstlineno
+        appdirs = AppDirs(appname="numba", appauthor=False)
+        cache_dir = appdirs.user_cache_dir
+        cache_subpath = os.path.dirname(py_file)
+        if os.name != "nt":
+            # On non-Windows, further disambiguate by appending the entire
+            # absolute source path to the cache dir, e.g.
+            # "$HOME/.cache/numba/usr/lib/.../mypkg/mysubpkg"
+            # On Windows, this is undesirable because of path length limitations
+            cache_subpath = os.path.abspath(cache_subpath).lstrip(os.path.sep)
+        self._cache_path = os.path.join(cache_dir, cache_subpath)
+
+    def get_cache_path(self):
+        return self._cache_path
 
 
 class _IPythonCacheLocator(_CacheLocator):
@@ -645,6 +720,11 @@ class _IPythonCacheLocator(_CacheLocator):
     def from_function(cls, py_func, py_file):
         if not py_file.startswith("<ipython-"):
             return
+        try:
+            self.ensure_cache_path()
+        except OSError:
+            # Cannot ensure the cache directory exists
+            return
         return cls(py_func, py_file)
 
 
@@ -667,7 +747,8 @@ class FunctionCache(object):
     """
 
     _source_stamp = None
-    _locator_classes = [_SourceCacheLocator, _IPythonCacheLocator]
+    _locator_classes = [_InTreeCacheLocator, _UserWideCacheLocator,
+                        _IPythonCacheLocator]
 
     def __init__(self, py_func):
         try:
@@ -711,6 +792,10 @@ class FunctionCache(object):
     def __repr__(self):
         return "<%s fullname=%r>" % (self.__class__.__name__, self._fullname)
 
+    @property
+    def cache_path(self):
+        return self._cache_path
+
     def enable(self):
         self._enabled = True
         # This may be a bit strict but avoids us maintaining a magic number
@@ -749,11 +834,7 @@ class FunctionCache(object):
             return
         if not self._check_cachable(cres):
             return
-        try:
-            os.mkdir(self._cache_path)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
+        self._locator.ensure_cache_path()
         overloads = self._load_index()
         key = self._index_key(sig, cres.library.codegen)
         try:
@@ -841,6 +922,7 @@ class FunctionCache(object):
             # rest of the stream, as that may fail.
             return {}
         stamp, overloads = pickle.loads(data)
+        _cache_log("[cache] index loaded from %r", self._index_path)
         if stamp != self._source_stamp:
             # Cache is not fresh.  Stale data files will be eventually
             # overwritten, since they are numbered in incrementing order.
@@ -849,9 +931,11 @@ class FunctionCache(object):
             return overloads
 
     def _load_data(self, name, target_context):
-        with open(self._data_path(name), "rb") as f:
+        path = self._data_path(name)
+        with open(path, "rb") as f:
             data = f.read()
         tup = pickle.loads(data)
+        _cache_log("[cache] data loaded from %r", path)
         return compiler.CompileResult._rebuild(target_context, *tup)
 
     def _save_index(self, overloads):
@@ -860,12 +944,15 @@ class FunctionCache(object):
         with self._open_for_write(self._index_path) as f:
             pickle.dump(self._version, f, protocol=-1)
             f.write(data)
+        _cache_log("[cache] index saved to %r", self._index_path)
 
     def _save_data(self, name, cres):
         data = cres._reduce()
         data = self._dump(data)
-        with self._open_for_write(self._data_path(name)) as f:
+        path = self._data_path(name)
+        with self._open_for_write(path) as f:
             f.write(data)
+        _cache_log("[cache] data saved to %r", path)
 
     def _dump(self, obj):
         return pickle.dumps(obj, protocol=-1)

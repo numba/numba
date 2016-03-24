@@ -337,7 +337,25 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         dtype, = args
         dtype = _parse_dtype(dtype)
+        if dtype is None:
+            return
         retty = ary.copy(dtype=dtype)
+        return signature(retty, *args)
+
+    @bound_function("array.astype")
+    def resolve_astype(self, ary, args, kws):
+        from .npydecl import _parse_dtype
+        assert not kws
+        dtype, = args
+        dtype = _parse_dtype(dtype)
+        if dtype is None:
+            return
+        if not self.context.can_convert(ary.dtype, dtype):
+            raise TypeError("astype(%s) not supported on %s: "
+                            "cannot convert from %s to %s"
+                            % (dtype, ary, ary.dtype, dtype))
+        layout = ary.layout if ary.layout in 'CF' else 'C'
+        retty = ary.copy(dtype=dtype, layout=layout)
         return signature(retty, *args)
 
     @bound_function("array.ravel")

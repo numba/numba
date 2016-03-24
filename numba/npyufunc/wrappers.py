@@ -158,7 +158,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, envptr, env)
     arg_steps.name = "steps"
     arg_data.name = "data"
 
-    builder = Builder.new(wrapper.append_basic_block("entry"))
+    builder = Builder(wrapper.append_basic_block("entry"))
 
     loopcount = builder.load(arg_dims, name="loopcount")
 
@@ -302,7 +302,7 @@ class _GufuncWrapper(object):
         arg_steps.name = "steps"
         arg_data.name = "data"
 
-        builder = Builder.new(wrapper.append_basic_block("entry"))
+        builder = Builder(wrapper.append_basic_block("entry"))
         loopcount = builder.load(arg_dims, name="loopcount")
         pyapi = self.context.get_python_api(builder)
 

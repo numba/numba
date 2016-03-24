@@ -522,7 +522,12 @@ class Var(object):
 
 class Intrinsic(object):
     """
-    For inserting intrinsic node into the IR
+    A low-level "intrinsic" function.  Suitable as the callable of a "call"
+    expression.
+
+    The given *name* is backend-defined and will be inserted as-is
+    in the generated low-level IR.
+    The *type* is the equivalent Numba signature of calling the intrinsic.
     """
 
     def __init__(self, name, type, args):
@@ -668,7 +673,9 @@ class Block(object):
     def clear(self):
         del self.body[:]
 
-    def dump(self, file=sys.stdout):
+    def dump(self, file=None):
+        # Avoid early bind of sys.stdout as default value
+        file = file or sys.stdout
         for inst in self.body:
             inst_vars = sorted(str(v) for v in inst.list_vars())
             print('    %-40s %s' % (inst, inst_vars), file=file)

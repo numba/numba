@@ -15,6 +15,8 @@ try:
 except ImportError:
     setuptools = None
 
+import llvmlite.binding as ll
+
 from numba import unittest_support as unittest
 from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
@@ -192,6 +194,22 @@ class TestCC(BasePYCCTest):
             self.assertIs(lib.get_none(), None)
             with self.assertRaises(ZeroDivisionError):
                 lib.div(1, 0)
+
+    def check_compile_for_cpu(self, cpu_name):
+        cc = self._test_module.cc
+        cc.target_cpu = cpu_name
+
+        with self.check_cc_compiled(cc) as lib:
+            res = lib.multi(123, 321)
+            self.assertPreciseEqual(res, 123 * 321)
+
+    def test_compile_for_cpu(self):
+        # Compiling for the host CPU should always succeed
+        self.check_compile_for_cpu(ll.get_host_cpu_name())
+
+    def test_compile_for_cpu_host(self):
+        # Compiling for the host CPU should always succeed
+        self.check_compile_for_cpu("host")
 
     @tag('important')
     def test_compile_helperlib(self):

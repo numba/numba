@@ -112,7 +112,7 @@ class CUDATargetContext(BaseContext):
         func = wrapper_module.add_function(fnty, name=fname)
 
         wrapfn = wrapper_module.add_function(wrapfnty, name="cudaPy_" + func.name)
-        builder = Builder.new(wrapfn.append_basic_block(''))
+        builder = Builder(wrapfn.append_basic_block(''))
 
         # Define error handling variables
         def define_error_gv(postfix):

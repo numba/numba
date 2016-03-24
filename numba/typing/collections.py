@@ -7,25 +7,22 @@ from .templates import (AttributeTemplate, ConcreteTemplate, AbstractTemplate,
 from .builtins import normalize_1d_index
 
 
-# NOTE: "in" and "len" are defined on all sized containers, but we have
-# no need for a more fine-grained hierarchy right now.
-
 @infer
-class InSequence(AbstractTemplate):
+class InContainer(AbstractTemplate):
     key = "in"
 
     def generic(self, args, kws):
-        item, seq = args
-        if isinstance(seq, types.Sequence):
-            return signature(types.boolean, seq.dtype, seq)
+        item, cont = args
+        if isinstance(cont, types.Container):
+            return signature(types.boolean, cont.dtype, cont)
 
 @infer_global(len)
-class SequenceLen(AbstractTemplate):
+class ContainerLen(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
         (val,) = args
-        if isinstance(val, (types.Sequence)):
+        if isinstance(val, (types.Container)):
             return signature(types.intp, val)
 
 

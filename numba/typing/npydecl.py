@@ -433,7 +433,7 @@ def _parse_nested_sequence(context, typ):
                                   % (typ,))
             dtypes.append(dtype)
         dtype = context.unify_types(*dtypes)
-        if dtype is types.pyobject:
+        if dtype is None:
             raise TypingError("cannot convert %r to a homogenous type")
         return n + 1, dtype
     else:
@@ -514,9 +514,7 @@ class NdConstructorLike(CallableTemplate):
         return typer
 
 
-if numpy_version >= (1, 7):
-    # In Numpy 1.6, ones_like() was a ufunc and had a different signature.
-    infer_global(numpy.ones_like)(NdConstructorLike)
+infer_global(numpy.ones_like)(NdConstructorLike)
 
 
 if numpy_version >= (1, 8):

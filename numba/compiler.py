@@ -10,7 +10,7 @@ import traceback
 from .tracing import trace, event
 
 from numba import (bytecode, interpreter, funcdesc, typing, typeinfer,
-                   lowering, objmode, irpasses, utils, config, errors,
+                   lowering, objmode, utils, config, errors,
                    types, ir, looplifting, macro, types, rewrites)
 from numba.targets import cpu, callconv
 from numba.annotations import type_annotations
@@ -170,10 +170,13 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     Compile the function in an isolated environment (typing and target context).
     Good for testing.
     """
+    from .targets.registry import cpu_target
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)
-    return compile_extra(typingctx, targetctx, func, args, return_type, flags,
-                         locals)
+    # Register the contexts in case for nested @jit or @overload calls
+    with cpu_target.nested_context(typingctx, targetctx):
+        return compile_extra(typingctx, targetctx, func, args, return_type,
+                             flags, locals)
 
 
 class _CompileStatus(object):
@@ -770,13 +773,6 @@ def translate_stage(bytecode):
             print(("GENERATOR INFO: %s" % interp.bytecode.func_qualname).center(80, "-"))
             interp.dump_generator_info()
 
-    expanded = macro.expand_macros(interp.blocks)
-
-    if config.DUMP_IR and expanded:
-        print(("MACRO-EXPANDED IR DUMP: %s" % interp.bytecode.func_qualname)
-              .center(80, "-"))
-        interp.dump()
-
     return interp
 
 
@@ -857,14 +853,3 @@ def py_lowering_stage(targetctx, library, interp, flags):
         cfunc = targetctx.get_executable(library, fndesc, env)
         return _LowerResult(fndesc, call_helper, cfunc=cfunc, env=env,
                             has_dynamic_globals=has_dynamic_globals)
-
-
-def ir_optimize_for_py_stage(interp):
-    """
-    This passes breaks semantic for the type inferer but they reduces
-    refct calls for object mode.
-    """
-    irpasses.RemoveRedundantAssign(interp).run()
-    if config.DEBUG:
-        print("ir optimize".center(80, '-'))
-        interp.dump()

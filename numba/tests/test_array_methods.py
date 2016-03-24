@@ -65,9 +65,6 @@ def array_transpose(arr):
 def array_copy(arr):
     return arr.copy()
 
-def array_reshape(arr, newshape):
-    return arr.reshape(newshape)
-
 def array_view(arr, newtype):
     return arr.view(newtype)
 
@@ -79,6 +76,12 @@ def make_array_view(newtype):
 
 def array_sliced_view(arr, ):
     return arr[0:4].view(np.float32)[0]
+
+def make_array_astype(newtype):
+    def array_astype(arr):
+        return arr.astype(newtype)
+    return array_astype
+
 
 def np_frombuffer(b):
     """
@@ -116,14 +119,50 @@ def np_where_3(c, x, y):
     return np.where(c, x, y)
 
 
-class TestArrayMethodsCustom(MemoryLeak, TestCase):
+class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
-    Test np.round, np.around, ndarray.reshape
+    Test various array methods and array-related functions.
     """
 
     def setUp(self):
-        super(TestArrayMethodsCustom, self).setUp()
+        super(TestArrayMethods, self).setUp()
         self.ccache = CompilationCache()
+
+    def check_round_scalar(self, unary_pyfunc, binary_pyfunc):
+        base_values = [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]
+        complex_values = [x * (1 - 1j) for x in base_values]
+        int_values = [int(x) for x in base_values]
+        argtypes = (types.float64, types.float32, types.int32,
+                    types.complex64, types.complex128)
+        argvalues = [base_values, base_values, int_values,
+                     complex_values, complex_values]
+
+        pyfunc = binary_pyfunc
+        for ty, values in zip(argtypes, argvalues):
+            cres = compile_isolated(pyfunc, (ty, types.int32))
+            cfunc = cres.entry_point
+            for decimals in (1, 0, -1):
+                for v in values:
+                    if decimals > 0:
+                        v *= 10
+                    expected = _fixed_np_round(v, decimals)
+                    got = cfunc(v, decimals)
+                    self.assertPreciseEqual(got, expected)
+
+        pyfunc = unary_pyfunc
+        for ty, values in zip(argtypes, argvalues):
+            cres = compile_isolated(pyfunc, (ty,))
+            cfunc = cres.entry_point
+            for v in values:
+                expected = _fixed_np_round(v)
+                got = cfunc(v)
+                self.assertPreciseEqual(got, expected)
+
+    def test_round_scalar(self):
+        self.check_round_scalar(np_round_unary, np_round_binary)
+
+    def test_around_scalar(self):
+        self.check_round_scalar(np_around_unary, np_around_binary)
 
     def check_round_array(self, pyfunc):
         def check_round(cfunc, values, inty, outty, decimals):
@@ -169,81 +208,14 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
         argtypes = (types.complex64, types.complex128)
         check_types(argtypes, argtypes, values * (1 - 1j))
 
+        # Exceptions leak references
+        self.disable_leak_check()
+
     def test_round_array(self):
         self.check_round_array(np_round_array)
 
     def test_around_array(self):
         self.check_round_array(np_around_array)
-
-    @tag('important')
-    def test_array_reshape(self):
-        pyfunc = array_reshape
-        def run(arr, shape):
-            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(shape)))
-            return cres.entry_point(arr, shape)
-        def check(arr, shape):
-            expected = pyfunc(arr, shape)
-            self.memory_leak_setup()
-            got = run(arr, shape)
-            self.assertPreciseEqual(got, expected)
-            del got
-            self.memory_leak_teardown()
-        def check_err_shape(arr, shape):
-            with self.assertRaises(NotImplementedError) as raises:
-                run(arr, shape)
-            self.assertEqual(str(raises.exception),
-                             "incompatible shape for array")
-        def check_err_size(arr, shape):
-            with self.assertRaises(ValueError) as raises:
-                run(arr, shape)
-            self.assertEqual(str(raises.exception),
-                             "total size of new array must be unchanged")
-
-        def check_err_multiple_negative(arr, shape):
-            with self.assertRaises(ValueError) as raises:
-                run(arr, shape)
-            self.assertEqual(str(raises.exception),
-                             "multiple negative shape value")
-
-        # C-contiguous
-        arr = np.arange(24)
-        check(arr, (24,))
-        check(arr, (4, 6))
-        check(arr, (8, 3))
-        check(arr, (8, 1, 3))
-        check(arr, (1, 8, 1, 1, 3, 1))
-        arr = np.arange(24).reshape((2, 3, 4))
-        check(arr, (24,))
-        check(arr, (4, 6))
-        check(arr, (8, 3))
-        check(arr, (8, 1, 3))
-        check(arr, (1, 8, 1, 1, 3, 1))
-        check_err_size(arr, (25,))
-        check_err_size(arr, (8, 4))
-        arr = np.arange(24).reshape((1, 8, 1, 1, 3, 1))
-        check(arr, (24,))
-        check(arr, (4, 6))
-        check(arr, (8, 3))
-        check(arr, (8, 1, 3))
-
-        # F-contiguous
-        arr = np.arange(24).reshape((2, 3, 4)).T
-        check(arr, (4, 3, 2))
-        check(arr, (1, 4, 1, 3, 1, 2, 1))
-        check_err_shape(arr, (2, 3, 4))
-        check_err_shape(arr, (6, 4))
-        check_err_shape(arr, (2, 12))
-
-        # Test negative shape value
-        arr = np.arange(25).reshape(5,5)
-        check(arr, -1)
-        check(arr, (-1,))
-        check(arr, (-1, 5))
-        check(arr, (5, -1, 5))
-        check(arr, (5, 5, -1))
-        check_err_size(arr, (-1, 4))
-        check_err_multiple_negative(arr, (-1, -2, 5, 5))
-        check_err_multiple_negative(arr, (5, 5, -1, -1))
 
     def test_array_view(self):
 
@@ -319,6 +291,9 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
         check_err(arr, dt1)
         check_err(arr, dt2)
 
+        # Exceptions leak references
+        self.disable_leak_check()
+
     def test_array_sliced_view(self):
         """
         Test .view() on A layout array but has contiguous innermost dimension.
@@ -335,8 +310,39 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
 
         self.assertEqual(expect, got)
 
-    @unittest.skipIf(sys.version_info < (2, 7),
-                     "buffer protocol not supported on Python 2.6")
+    def test_array_astype(self):
+
+        def run(arr, dtype):
+            pyfunc = make_array_astype(dtype)
+            cres = self.ccache.compile(pyfunc, (typeof(arr),))
+            return cres.entry_point(arr)
+        def check(arr, dtype):
+            expected = arr.astype(dtype).copy(order='A')
+            got = run(arr, dtype)
+            self.assertPreciseEqual(got, expected)
+
+        # C-contiguous
+        arr = np.arange(24, dtype=np.int8)
+        check(arr, np.dtype('int16'))
+        check(arr, np.int32)
+        check(arr, np.float32)
+        check(arr, np.complex128)
+
+        # F-contiguous
+        arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
+        check(arr, np.float32)
+
+        # Non-contiguous
+        arr = np.arange(16, dtype=np.int32)[::2]
+        check(arr, np.uint64)
+
+        # Invalid conversion
+        dt = np.dtype([('x', np.int8)])
+        with self.assertTypingError() as raises:
+            check(arr, dt)
+        self.assertIn('cannot convert from int32 to Record',
+                      str(raises.exception))
+
     def check_np_frombuffer(self, pyfunc):
         def run(buf):
             cres = self.ccache.compile(pyfunc, (typeof(buf),))
@@ -362,6 +368,9 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
         b = np.arange(12).reshape((3, 4))
         check(b)
 
+        # Exceptions leak references
+        self.disable_leak_check()
+
         with self.assertRaises(ValueError) as raises:
             run(bytearray(b"xxx"))
         self.assertEqual("buffer size must be a multiple of element size",
@@ -372,52 +381,6 @@ class TestArrayMethodsCustom(MemoryLeak, TestCase):
 
     def test_np_frombuffer_dtype(self):
         self.check_np_frombuffer(np_frombuffer_dtype)
-
-
-class TestArrayMethods(MemoryLeakMixin, TestCase):
-    """
-    Test various array methods and array-related functions.
-    """
-
-    def setUp(self):
-        super(TestArrayMethods, self).setUp()
-        self.ccache = CompilationCache()
-
-    def check_round_scalar(self, unary_pyfunc, binary_pyfunc):
-        base_values = [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]
-        complex_values = [x * (1 - 1j) for x in base_values]
-        int_values = [int(x) for x in base_values]
-        argtypes = (types.float64, types.float32, types.int32,
-                    types.complex64, types.complex128)
-        argvalues = [base_values, base_values, int_values,
-                     complex_values, complex_values]
-
-        pyfunc = binary_pyfunc
-        for ty, values in zip(argtypes, argvalues):
-            cres = compile_isolated(pyfunc, (ty, types.int32))
-            cfunc = cres.entry_point
-            for decimals in (1, 0, -1):
-                for v in values:
-                    if decimals > 0:
-                        v *= 10
-                    expected = _fixed_np_round(v, decimals)
-                    got = cfunc(v, decimals)
-                    self.assertPreciseEqual(got, expected)
-
-        pyfunc = unary_pyfunc
-        for ty, values in zip(argtypes, argvalues):
-            cres = compile_isolated(pyfunc, (ty,))
-            cfunc = cres.entry_point
-            for v in values:
-                expected = _fixed_np_round(v)
-                got = cfunc(v)
-                self.assertPreciseEqual(got, expected)
-
-    def test_round_scalar(self):
-        self.check_round_scalar(np_round_unary, np_round_binary)
-
-    def test_around_scalar(self):
-        self.check_round_scalar(np_around_unary, np_around_binary)
 
     def check_layout_dependent_func(self, pyfunc, fac=np.arange):
         def check_arr(arr):
@@ -445,8 +408,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_array_copy(self):
         self.check_layout_dependent_func(array_copy)
 
-    @unittest.skipIf(sys.version_info < (2, 7),
-                     "buffer protocol not supported on Python 2.6")
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
             cres = self.ccache.compile(pyfunc, (typeof(shape),))

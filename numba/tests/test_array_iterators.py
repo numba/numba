@@ -36,6 +36,9 @@ def array_flat_sum(arr):
         s = s + (i + 1) * v
     return s
 
+def array_flat_len(arr):
+    return len(arr.flat)
+
 def array_ndenumerate_sum(arr):
     s = 0
     for (i, j), v in np.ndenumerate(arr):
@@ -62,6 +65,11 @@ def np_ndindex_array(arr):
         for i, j in enumerate(indices):
             s = s + (i + 1) * (j + 1)
     return s
+
+def iter_next(arr):
+    it = iter(arr)
+    it2 = iter(arr)
+    return next(it), next(it), next(it2)
 
 
 class TestArrayIterators(MemoryLeakMixin, TestCase):
@@ -240,6 +248,23 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         for i in range(arr.size):
             check(arr, i)
 
+    def test_array_flat_len(self):
+        # Test len(array.flat)
+        pyfunc = array_flat_len
+        def check(arr):
+            cr = self.ccache.compile(pyfunc, (typeof(arr),))
+            expected = pyfunc(arr)
+            self.assertPreciseEqual(cr.entry_point(arr), expected)
+
+        arr = np.arange(24).reshape(4, 2, 3)
+        check(arr)
+        arr = arr.T
+        check(arr)
+        arr = arr[::2]
+        check(arr)
+        arr = np.array([42]).reshape(())
+        check(arr)
+
     @tag('important')
     def test_array_ndenumerate_2d(self):
         arr = np.arange(12).reshape(4, 3)
@@ -296,7 +321,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     @tag('important')
     def test_np_ndindex_array(self):
         func = np_ndindex_array
-        arr = np.arange(12, dtype=np.int32)
+        arr = np.arange(12, dtype=np.int32) + 10
         self.check_array_unary(arr, typeof(arr), func)
         arr = arr.reshape((4, 3))
         self.check_array_unary(arr, typeof(arr), func)
@@ -308,6 +333,13 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         cres = compile_isolated(func, [])
         cfunc = cres.entry_point
         self.assertPreciseEqual(cfunc(), func())
+
+    @tag('important')
+    def test_iter_next(self):
+        # This also checks memory management with iter() and next()
+        func = iter_next
+        arr = np.arange(12, dtype=np.int32) + 10
+        self.check_array_unary(arr, typeof(arr), func)
 
 
 if __name__ == '__main__':

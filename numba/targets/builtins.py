@@ -10,7 +10,7 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
-                       lower_cast, iternext_impl,
+                       lower_cast, iternext_impl, call_getiter, call_iternext,
                        impl_ret_borrowed, impl_ret_untracked)
 from . import optional
 from .. import typing, types, cgutils, utils
@@ -486,7 +486,7 @@ def optional_is_none(context, builder, sig, args):
 
     del lty, rty, lval, rval
 
-    opt = context.make_optional(opt_type)(context, builder, opt_val)
+    opt = context.make_helper(builder, opt_type, opt_val)
     res = builder.not_(cgutils.as_bool_bit(builder, opt.valid))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -573,7 +573,7 @@ def real_divmod(context, builder, x, y):
 
     if fn.is_declaration:
         fn.linkage = lc.LINKAGE_LINKONCE_ODR
-        fnbuilder = lc.Builder.new(fn.append_basic_block('entry'))
+        fnbuilder = lc.Builder(fn.append_basic_block('entry'))
         fx, fy, pmod = fn.args
         div, mod = real_divmod_func_body(context, fnbuilder, fx, fy)
         fnbuilder.store(mod, pmod)
@@ -850,46 +850,22 @@ lower_builtin('+', ty)(real_positive_impl)
 del ty
 
 
-class Complex64(cgutils.Structure):
-    _fields = [('real', types.float32),
-               ('imag', types.float32)]
-
-
-class Complex128(cgutils.Structure):
-    _fields = [('real', types.float64),
-               ('imag', types.float64)]
-
-
-def get_complex_info(ty):
-    if ty == types.complex64:
-        cmplxcls = Complex64
-    elif ty == types.complex128:
-        cmplxcls = Complex128
-    else:
-        raise TypeError(ty)
-
-    return cmplxcls, ty.underlying_float
-
-
 @lower_getattr(types.Complex, "real")
 def complex_real_impl(context, builder, typ, value):
-    cplx_cls = context.make_complex(typ)
-    cplx = cplx_cls(context, builder, value=value)
+    cplx = context.make_complex(builder, typ, value=value)
     res = cplx.real
     return impl_ret_untracked(context, builder, typ, res)
 
 @lower_getattr(types.Complex, "imag")
 def complex_imag_impl(context, builder, typ, value):
-    cplx_cls = context.make_complex(typ)
-    cplx = cplx_cls(context, builder, value=value)
+    cplx = context.make_complex(builder, typ, value=value)
     res = cplx.imag
     return impl_ret_untracked(context, builder, typ, res)
 
 @lower_builtin("complex.conjugate", types.Complex)
 def complex_conjugate_impl(context, builder, sig, args):
     from . import mathimpl
-    cplx_cls = context.make_complex(sig.args[0])
-    z = cplx_cls(context, builder, args[0])
+    z = context.make_complex(builder, sig.args[0], args[0])
     z.imag = mathimpl.negate_real(builder, z.imag)
     res = z._getvalue()
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -910,21 +886,23 @@ for cls in (types.Float, types.Integer):
     lower_builtin("complex.conjugate", cls)(real_conjugate_impl)
 
 
-@lower_builtin("**", types.complex128, types.complex128)
-@lower_builtin(pow, types.complex128, types.complex128)
+@lower_builtin("**", types.Complex, types.Complex)
+@lower_builtin(pow, types.Complex, types.Complex)
 def complex128_power_impl(context, builder, sig, args):
     [ca, cb] = args
-    a = Complex128(context, builder, value=ca)
-    b = Complex128(context, builder, value=cb)
-    c = Complex128(context, builder)
+    ty = sig.args[0]
+    fty = ty.underlying_float
+    a = context.make_helper(builder, ty, value=ca)
+    b = context.make_helper(builder, ty, value=cb)
+    c = context.make_helper(builder, ty)
     module = builder.module
     pa = a._getpointer()
     pb = b._getpointer()
     pc = c._getpointer()
 
     # Optimize for square because cpow looses a lot of precsiion
-    TWO = context.get_constant(types.float64, 2)
-    ZERO = context.get_constant(types.float64, 0)
+    TWO = context.get_constant(fty, 2)
+    ZERO = context.get_constant(fty, 0)
 
     b_real_is_two = builder.fcmp(lc.FCMP_OEQ, b.real, TWO)
     b_imag_is_zero = builder.fcmp(lc.FCMP_OEQ, b.imag, ZERO)
@@ -934,7 +912,7 @@ def complex128_power_impl(context, builder, sig, args):
         with then:
             # Lower as multiplication
             res = complex_mul_impl(context, builder, sig, (ca, ca))
-            cres = Complex128(context, builder, value=res)
+            cres = context.make_helper(builder, ty, value=res)
             c.real = cres.real
             c.imag = cres.imag
 
@@ -949,10 +927,10 @@ def complex128_power_impl(context, builder, sig, args):
 
 def complex_add_impl(context, builder, sig, args):
     [cx, cy] = args
-    complexClass = context.make_complex(sig.args[0])
-    x = complexClass(context, builder, value=cx)
-    y = complexClass(context, builder, value=cy)
-    z = complexClass(context, builder)
+    ty = sig.args[0]
+    x = context.make_complex(builder, ty, value=cx)
+    y = context.make_complex(builder, ty, value=cy)
+    z = context.make_complex(builder, ty)
     a = x.real
     b = x.imag
     c = y.real
@@ -965,10 +943,10 @@ def complex_add_impl(context, builder, sig, args):
 
 def complex_sub_impl(context, builder, sig, args):
     [cx, cy] = args
-    complexClass = context.make_complex(sig.args[0])
-    x = complexClass(context, builder, value=cx)
-    y = complexClass(context, builder, value=cy)
-    z = complexClass(context, builder)
+    ty = sig.args[0]
+    x = context.make_complex(builder, ty, value=cx)
+    y = context.make_complex(builder, ty, value=cy)
+    z = context.make_complex(builder, ty)
     a = x.real
     b = x.imag
     c = y.real
@@ -984,10 +962,10 @@ def complex_mul_impl(context, builder, sig, args):
     (a+bi)(c+di)=(ac-bd)+i(ad+bc)
     """
     [cx, cy] = args
-    complexClass = context.make_complex(sig.args[0])
-    x = complexClass(context, builder, value=cx)
-    y = complexClass(context, builder, value=cy)
-    z = complexClass(context, builder)
+    ty = sig.args[0]
+    x = context.make_complex(builder, ty, value=cx)
+    y = context.make_complex(builder, ty, value=cy)
+    z = context.make_complex(builder, ty)
     a = x.real
     b = x.imag
     c = y.real
@@ -1040,9 +1018,8 @@ def complex_negate_impl(context, builder, sig, args):
     from . import mathimpl
     [typ] = sig.args
     [val] = args
-    cmplxcls = context.make_complex(typ)
-    cmplx = cmplxcls(context, builder, value=val)
-    res = cmplxcls(context, builder)
+    cmplx = context.make_complex(builder, typ, value=val)
+    res = context.make_complex(builder, typ)
     res.real = mathimpl.negate_real(builder, cmplx.real)
     res.imag = mathimpl.negate_real(builder, cmplx.imag)
     res = res._getvalue()
@@ -1056,9 +1033,9 @@ def complex_positive_impl(context, builder, sig, args):
 
 def complex_eq_impl(context, builder, sig, args):
     [cx, cy] = args
-    complexClass = context.make_complex(sig.args[0])
-    x = complexClass(context, builder, value=cx)
-    y = complexClass(context, builder, value=cy)
+    typ = sig.args[0]
+    x = context.make_complex(builder, typ, value=cx)
+    y = context.make_complex(builder, typ, value=cy)
 
     reals_are_eq = builder.fcmp(lc.FCMP_OEQ, x.real, y.real)
     imags_are_eq = builder.fcmp(lc.FCMP_OEQ, x.imag, y.imag)
@@ -1068,9 +1045,9 @@ def complex_eq_impl(context, builder, sig, args):
 
 def complex_ne_impl(context, builder, sig, args):
     [cx, cy] = args
-    complexClass = context.make_complex(sig.args[0])
-    x = complexClass(context, builder, value=cx)
-    y = complexClass(context, builder, value=cy)
+    typ = sig.args[0]
+    x = context.make_complex(builder, typ, value=cx)
+    y = context.make_complex(builder, typ, value=cy)
 
     reals_are_ne = builder.fcmp(lc.FCMP_UNE, x.real, y.real)
     imags_are_ne = builder.fcmp(lc.FCMP_UNE, x.imag, y.imag)
@@ -1138,7 +1115,7 @@ def float_as_bool(context, builder, sig, args):
 def complex_as_bool(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
-    cmplx = context.make_complex(typ)(context, builder, val)
+    cmplx = context.make_complex(builder, typ, val)
     real, imag = cmplx.real, cmplx.imag
     zero = ir.Constant(real.type, 0.0)
     real_istrue = builder.fcmp(lc.FCMP_UNE, real, zero)
@@ -1151,11 +1128,76 @@ for ty in (types.Integer, types.Float, types.Complex):
 
 lower_builtin('not', types.boolean)(number_not_impl)
 
+
 #------------------------------------------------------------------------------
+# Hashing numbers
 
-def make_pair(first_type, second_type):
-    return cgutils.create_struct_proxy(types.Pair(first_type, second_type))
+@lower_builtin(hash, types.Integer)
+@lower_builtin(hash, types.Boolean)
+def hash_int(context, builder, sig, args):
+    ty, = sig.args
+    retty = sig.return_type
+    val, = args
 
+    if isinstance(ty, types.Integer) and ty.bitwidth > retty.bitwidth:
+        # Value is wider than hash => fold MSB into LSB
+        nbits = ty.bitwidth - retty.bitwidth
+        val = builder.add(val,
+                          builder.lshr(val, ir.Constant(val.type, nbits)))
+
+    return context.cast(builder, val, ty, retty)
+
+@lower_builtin(hash, types.Float)
+def hash_float(context, builder, sig, args):
+    ty, = sig.args
+    retty = sig.return_type
+    val, = args
+
+    # NOTE: CPython's algorithm is more involved as it seeks to maintain
+    # the invariant that hash(float(x)) == hash(x) for every integer x
+    # exactly representable as a float.
+    # Numba doesn't care as it doesn't support heterogenous associative
+    # containers.
+
+    intty = types.Integer("int%d" % ty.bitwidth)
+    ll_intty = ir.IntType(ty.bitwidth)
+
+    # XXX Disabled as llvm.canonicalize doesn't work:
+    # http://lists.llvm.org/pipermail/llvm-dev/2016-February/095746.html
+    #func_name = "llvm.canonicalize.f%d" % (ty.bitwidth,)
+    #fnty = ir.FunctionType(val.type, (val.type,))
+    #fn = builder.module.get_or_insert_function(fnty, func_name)
+    #val = builder.call(fn, (val,))
+
+    # Take the float's binary representation as an int
+    val_p = cgutils.alloca_once_value(builder, val)
+    # y = *(int *)(&val)
+    y = builder.load(builder.bitcast(val_p, ll_intty.as_pointer()))
+
+    if intty.bitwidth > retty.bitwidth:
+        # Value is wider than hash => fold MSB into LSB
+        nbits = intty.bitwidth - retty.bitwidth
+        y = builder.add(y,
+                        builder.lshr(y, ir.Constant(y.type, nbits)))
+
+    return context.cast(builder, y, intty, retty)
+
+@lower_builtin(hash, types.Complex)
+def hash_complex(context, builder, sig, args):
+    ty, = sig.args
+    val, = args
+    fltty = ty.underlying_float
+
+    z = context.make_complex(builder, ty, val)
+    float_hash_sig = typing.signature(sig.return_type, fltty)
+    h_real = hash_float(context, builder, float_hash_sig, (z.real,))
+    h_imag = hash_float(context, builder, float_hash_sig, (z.imag,))
+    mult = ir.Constant(h_imag.type, 1000003)
+
+    return builder.add(h_real, builder.mul(h_imag, mult))
+
+
+#------------------------------------------------------------------------------
 
 @lower_builtin('getitem', types.CPointer, types.Integer)
 def getitem_cpointer(context, builder, sig, args):
@@ -1186,6 +1228,7 @@ def max_impl(context, builder, sig, args):
         at, av = a
         bt, bv = b
         ty = context.typing_context.unify_types(at, bt)
+        assert ty is not None
         cav = context.cast(builder, av, at, ty)
         cbv = context.cast(builder, bv, bt, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)
@@ -1210,6 +1253,7 @@ def min_impl(context, builder, sig, args):
         at, av = a
         bt, bv = b
         ty = context.typing_context.unify_types(at, bt)
+        assert ty is not None
         cav = context.cast(builder, av, at, ty)
         cbv = context.cast(builder, bv, bt, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)
@@ -1301,7 +1345,6 @@ def float_impl(context, builder, sig, args):
 def complex_impl(context, builder, sig, args):
     complex_type = sig.return_type
     float_type = complex_type.underlying_float
-    complex_cls = context.make_complex(complex_type)
     if len(sig.args) == 1:
         [argty] = sig.args
         [arg] = args
@@ -1319,7 +1362,7 @@ def complex_impl(context, builder, sig, args):
         real = context.cast(builder, real, realty, float_type)
         imag = context.cast(builder, imag, imagty, float_type)
 
-    cmplx = complex_cls(context, builder)
+    cmplx = context.make_complex(builder, complex_type)
     cmplx.real = real
     cmplx.imag = imag
     res = cmplx._getvalue()
@@ -1394,18 +1437,18 @@ def non_complex_to_complex(context, builder, fromty, toty, val):
     real = context.cast(builder, val, fromty, toty.underlying_float)
     imag = context.get_constant(toty.underlying_float, 0)
 
-    cmplx = context.make_complex(toty)(context, builder)
+    cmplx = context.make_complex(builder, toty)
     cmplx.real = real
     cmplx.imag = imag
     return cmplx._getvalue()
 
 @lower_cast(types.Complex, types.Complex)
 def complex_to_complex(context, builder, fromty, toty, val):
-    srccls, srcty = get_complex_info(fromty)
-    dstcls, dstty = get_complex_info(toty)
+    srcty = fromty.underlying_float
+    dstty = toty.underlying_float
 
-    src = srccls(context, builder, value=val)
-    dst = dstcls(context, builder)
+    src = context.make_complex(builder, fromty, value=val)
+    dst = context.make_complex(builder, toty)
     dst.real = context.cast(builder, src.real, srcty, dstty)
     dst.imag = context.cast(builder, src.imag, srcty, dstty)
     return dst._getvalue()
@@ -1428,3 +1471,35 @@ def type_impl(context, builder, sig, args):
     One-argument type() builtin.
     """
     return context.get_dummy_value()
+
+
+@lower_builtin(iter, types.IterableType)
+def iter_impl(context, builder, sig, args):
+    ty, = sig.args
+    val, = args
+    iterval = call_getiter(context, builder, ty, val)
+    return iterval
+
+
+@lower_builtin(next, types.IteratorType)
+def next_impl(context, builder, sig, args):
+    iterty, = sig.args
+    iterval, = args
+
+    res = call_iternext(context, builder, iterty, iterval)
+
+    with builder.if_then(builder.not_(res.is_valid()), likely=False):
+        context.call_conv.return_user_exc(builder, StopIteration, ())
+
+    return res.yielded_value()
+
+
+# -----------------------------------------------------------------------------
+
+@lower_builtin("not in", types.Any, types.Any)
+def not_in(context, builder, sig, args):
+    def in_impl(a, b):
+        return a in b
+
+    res = context.compile_internal(builder, in_impl, sig, args)
+    return builder.not_(res)

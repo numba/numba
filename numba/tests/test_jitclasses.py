@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function
 
+from collections import OrderedDict
 import ctypes
 
 import numpy as np
@@ -9,7 +10,6 @@ from numba import (float32, float64, int16, int32, boolean, deferred_type,
 from numba import njit, typeof
 from numba import unittest_support as unittest
 from numba import jitclass
-from numba.utils import OrderedDict
 from .support import TestCase, MemoryLeakMixin, tag
 
 
@@ -39,6 +39,23 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [('x', int32),
                 ('y', float32)]
         self._check_spec(spec)
+
+    def test_spec_errors(self):
+        spec1 = [('x', int), ('y', float32[:])]
+        spec2 = [(1, int32), ('y', float32[:])]
+
+        class Test(object):
+            def __init__(self):
+                pass
+
+        with self.assertRaises(TypeError) as raises:
+            jitclass(spec1)(Test)
+        self.assertIn("spec values should be Numba type instances",
+                      str(raises.exception))
+        with self.assertRaises(TypeError) as raises:
+            jitclass(spec2)(Test)
+        self.assertEqual(str(raises.exception),
+                         "spec keys should be strings, got 1")
 
     def _make_Float2AndArray(self):
         spec = OrderedDict()

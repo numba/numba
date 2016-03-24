@@ -6,19 +6,6 @@ import sys
 import subprocess
 
 
-def check_output(*popenargs, **kwargs):
-    # Provide this for backward-compatibility until we drop Python 2.6 support.
-    process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
-    output, unused_err = process.communicate()
-    retcode = process.poll()
-    if retcode:
-        cmd = kwargs.get("args")
-        if cmd is None:
-            cmd = popenargs[0]
-        raise subprocess.CalledProcessError(retcode, cmd)
-    return output
-
-
 class TestCase(unittest.TestCase):
     """These test cases are meant to test the Numba test infrastructure itself.
     Therefore, the logic used here shouldn't use numba.testing, but only the upstream
@@ -30,7 +17,7 @@ class TestCase(unittest.TestCase):
         (minsize, maxsize) range, or are equal to minsize if maxsize is None.
         """
         cmd = ['python', '-m', 'numba.runtests', '-l'] + list(args)
-        lines = check_output(cmd).decode().splitlines()
+        lines = subprocess.check_output(cmd).decode().splitlines()
         lines = [line for line in lines if line.strip()]
         last_line = lines[-1]
         self.assertTrue(last_line.endswith('tests found'))

@@ -130,7 +130,7 @@ class TestUnify(unittest.TestCase):
                              msg=template.format(bty, aty, unified, expected))
 
     def assert_unify_failure(self, aty, bty):
-        self.assert_unify(aty, bty, types.pyobject)
+        self.assert_unify(aty, bty, None)
 
     @tag('important')
     def test_integer(self):
@@ -312,6 +312,17 @@ class TestUnify(unittest.TestCase):
         # Incompatible dtypes
         aty = types.List(i16)
         bty = types.List(types.Tuple([i16]))
+        self.assert_unify_failure(aty, bty)
+
+    def test_set(self):
+        # Different reflections
+        aty = types.Set(i16, reflected=True)
+        bty = types.Set(i32)
+        cty = types.Set(i32, reflected=True)
+        self.assert_unify(aty, bty, cty)
+        # Incompatible dtypes
+        aty = types.Set(i16)
+        bty = types.Set(types.Tuple([i16]))
         self.assert_unify_failure(aty, bty)
 
     @tag('important')

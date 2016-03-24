@@ -116,6 +116,8 @@ Calculation
 The following methods of Numpy arrays are supported in their basic form
 (without any optional arguments):
 
+* :meth:`~numpy.ndarray.all`
+* :meth:`~numpy.ndarray.any`
 * :meth:`~numpy.ndarray.argmax`
 * :meth:`~numpy.ndarray.argmin`
 * :meth:`~numpy.ndarray.cumprod`
@@ -137,6 +139,7 @@ Other methods
 
 The following methods of Numpy arrays are supported:
 
+* :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
@@ -249,8 +252,7 @@ random module <pysupported-random>` (and therefore the same notes apply),
 but with an independent internal state: seeding or drawing numbers from
 one generator won't affect the other.
 
-The following functions are supported, but only with scalar output: you can't
-pass a *size* argument.
+The following functions are supported.
 
 Initialization
 ''''''''''''''
@@ -270,6 +272,9 @@ Simple random data
 
 Permutations
 ''''''''''''
+
+* :func:`numpy.random.choice`: the optional *p* argument (probabilities
+  array) is not supported
 
 * :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
   Numpy array or buffer-providing object (such as a :class:`bytearray`
@@ -291,6 +296,7 @@ Distributions
 * :func:`numpy.random.logistic`
 * :func:`numpy.random.lognormal`
 * :func:`numpy.random.logseries`
+* :func:`numpy.random.multibinomial`
 * :func:`numpy.random.negative_binomial`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`

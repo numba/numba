@@ -98,6 +98,30 @@ def tuple_ge(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, '>=', sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+@lower_builtin(hash, types.BaseTuple)
+def hash_tuple(context, builder, sig, args):
+    tupty, = sig.args
+    tup, = args
+    lty = context.get_value_type(sig.return_type)
+
+    h = ir.Constant(lty, 0x345678)
+    mult = ir.Constant(lty, 1000003)
+    n = ir.Constant(lty, len(tupty))
+
+    for i, ty in enumerate(tupty.types):
+        # h = h * mult
+        h = builder.mul(h, mult)
+        val = builder.extract_value(tup, i)
+        hash_impl = context.get_function(hash,
+                                         typing.signature(sig.return_type, ty))
+        h_val = hash_impl(builder, (val,))
+        # h = h ^ hash(val)
+        h = builder.xor(h, h_val)
+        # Perturb: mult = mult + len(tup)
+        mult = builder.add(mult, n)
+
+    return h
+
 
 @lower_getattr_generic(types.BaseNamedTuple)
 def namedtuple_getattr(context, builder, typ, value, attr):
@@ -112,22 +136,13 @@ def namedtuple_getattr(context, builder, typ, value, attr):
 #------------------------------------------------------------------------------
 # Tuple iterators
 
-def make_unituple_iter(tupiter):
-    """
-    Return the Structure representation of the given *tupiter* (an
-    instance of types.UniTupleIter).
-    """
-    return cgutils.create_struct_proxy(tupiter)
-
-
 @lower_builtin('getiter', types.UniTuple)
 @lower_builtin('getiter', types.NamedUniTuple)
 def getiter_unituple(context, builder, sig, args):
     [tupty] = sig.args
     [tup] = args
 
-    tupitercls = make_unituple_iter(types.UniTupleIter(tupty))
-    iterval = tupitercls(context, builder)
+    iterval = context.make_helper(builder, types.UniTupleIter(tupty))
 
     index0 = context.get_constant(types.intp, 0)
     indexptr = cgutils.alloca_once(builder, index0.type)
@@ -146,19 +161,19 @@ def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
     [tupiter] = args
 
-    tupitercls = make_unituple_iter(tupiterty)
-    iterval = tupitercls(context, builder, value=tupiter)
+    iterval = context.make_helper(builder, tupiterty, value=tupiter)
+
     tup = iterval.tuple
     idxptr = iterval.index
     idx = builder.load(idxptr)
-    count = context.get_constant(types.intp, tupiterty.unituple.count)
+    count = context.get_constant(types.intp, tupiterty.container.count)
 
     is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
     result.set_valid(is_valid)
 
     with builder.if_then(is_valid):
-        getitem_sig = typing.signature(tupiterty.unituple.dtype,
-                                       tupiterty.unituple,
+        getitem_sig = typing.signature(tupiterty.container.dtype,
+                                       tupiterty.container,
                                        types.intp)
         getitem_out = getitem_unituple(context, builder, getitem_sig,
                                        [tup, idx])
@@ -175,7 +190,7 @@ def getitem_unituple(context, builder, sig, args):
 
     bbelse = builder.append_basic_block("switch.else")
     bbend = builder.append_basic_block("switch.end")
-    switch = builder.switch(idx, bbelse, n=tupty.count)
+    switch = builder.switch(idx, bbelse)
 
     with builder.goto_block(bbelse):
         context.call_conv.return_user_exc(builder, IndexError,
@@ -205,6 +220,10 @@ def static_getitem_tuple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
     if isinstance(idx, int):
+        if idx < 0:
+            idx += len(tupty)
+        if not 0 <= idx < len(tupty):
+            raise IndexError("cannot index at %d in %s" % (idx, tupty))
         res = builder.extract_value(tup, idx)
     elif isinstance(idx, slice):
         items = cgutils.unpack_tuple(builder, tup)[idx]

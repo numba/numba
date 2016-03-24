@@ -209,9 +209,7 @@ class TestGUfuncBuildingJitDisabled(TestGUfuncBuilding):
 
 class TestVectorizeDecor(unittest.TestCase):
 
-    _supported_identities = [0, 1, None]
-    if numpy.__version__ >= '1.7':
-        _supported_identities.append("reorderable")
+    _supported_identities = [0, 1, None, "reorderable"]
 
     def test_vectorize(self):
         ufunc = vectorize(['int32(int32, int32)'])(add)

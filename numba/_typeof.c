@@ -170,6 +170,8 @@ enum opcode {
     OP_BYTEARRAY = 'a',
     OP_BYTES = 'b',
     OP_NONE = 'n',
+    OP_LIST = '[',
+    OP_SET = '{',
 
     OP_BUFFER = 'B',
     OP_NP_SCALAR = 'S',
@@ -281,6 +283,34 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         else
             TRY(string_writer_put_char, w, 'R');
         return compute_dtype_fingerprint(w, PyArray_DESCR(ary));
+    }
+    if (PyList_Check(val)) {
+        Py_ssize_t n = PyList_GET_SIZE(val);
+        if (n == 0) {
+            PyErr_SetString(PyExc_ValueError,
+                            "cannot compute fingerprint of empty list");
+            return -1;
+        }
+        /* Only the first item is considered, as in typeof.py */
+        TRY(string_writer_put_char, w, OP_LIST);
+        TRY(compute_fingerprint, w, PyList_GET_ITEM(val, 0));
+        return 0;
+    }
+    /* Note we only accept sets, not frozensets */
+    if (Py_TYPE(val) == &PySet_Type) {
+        Py_hash_t h;
+        PyObject *item;
+        Py_ssize_t pos = 0;
+        /* Only one item is considered, as in typeof.py */
+        if (!_PySet_NextEntry(val, &pos, &item, &h)) {
+            /* Empty set */
+            PyErr_SetString(PyExc_ValueError,
+                            "cannot compute fingerprint of empty set");
+            return -1;
+        }
+        TRY(string_writer_put_char, w, OP_SET);
+        TRY(compute_fingerprint, w, item);
+        return 0;
     }
     if (PyObject_CheckBuffer(val)) {
         Py_buffer buf;

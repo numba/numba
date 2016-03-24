@@ -495,6 +495,16 @@ class StaticGetItemTuple(AbstractTemplate):
             return types.BaseTuple.from_types(tup.types[idx])
 
 
+# Generic implementation for "not in"
+
+@infer
+class GenericNotIn(AbstractTemplate):
+    key = "not in"
+
+    def generic(self, args, kws):
+        return self.context.resolve_function_type("in", args, kws)
+
+
 #-------------------------------------------------------------------------------
 
 @infer_getattr
@@ -669,6 +679,16 @@ class Round(ConcreteTemplate):
     ]
 
 
+@infer_global(hash)
+class Hash(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        arg, = args
+        if isinstance(arg, types.Hashable):
+            return signature(types.intp, *args)
+
+
 #------------------------------------------------------------------------------
 
 
@@ -775,6 +795,29 @@ class Zip(AbstractTemplate):
         if all(isinstance(it, types.IterableType) for it in args):
             zip_type = types.ZipType(args)
             return signature(zip_type, *args)
+
+
+@infer_global(iter)
+class Iter(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1:
+            it = args[0]
+            if isinstance(it, types.IterableType):
+                return signature(it.iterator_type, *args)
+
+
+@infer_global(next)
+class Next(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1:
+            it = args[0]
+            if isinstance(it, types.IteratorType):
+                return signature(it.yield_type, *args)
+
 
 #------------------------------------------------------------------------------
 

@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import numba.unittest_support as unittest
+
 import collections
 import contextlib
 import cProfile
@@ -11,8 +13,8 @@ import sys
 import time
 import warnings
 
-import numba.unittest_support as unittest
 from unittest import result, runner, signals, suite, loader, case
+
 from .loader import TestLoader
 from numba.utils import PYVERSION, StringIO
 from numba import config
@@ -158,6 +160,7 @@ class NumbaTestProgram(unittest.main):
             argv.remove('-m')
             self.multiprocess = True
         super(NumbaTestProgram, self).parseArgs(argv)
+
         # If at this point self.test doesn't exist, it is because
         # no test ID was given in argv. Use the default instead.
         if not hasattr(self, 'test') or not self.test.countTestCases():
@@ -539,9 +542,17 @@ class ParallelTestRunner(runner.TextTestRunner):
 
         try:
             self._run_parallel_tests(result, pool, child_runner)
-        finally:
-            # Kill the still active workers
+        except:
+            # On exception, kill still active workers immediately
             pool.terminate()
+        else:
+            # Close the pool cleanly unless asked to early out
+            if result.shouldStop:
+                pool.terminate()
+            else:
+                pool.close()
+        finally:
+            # Always join the pool (this is necessary for coverage.py)
             pool.join()
         if not result.shouldStop:
             stests = SerialSuite(self._stests)
