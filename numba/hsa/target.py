@@ -8,7 +8,6 @@ from numba.utils import cached_property
 from numba import datamodel
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
-from numba.llvmutils import _parse_assembly_threadsafe, _link_module_threadsafe
 from . import codegen
 from .hlc import DATALAYOUT
 
@@ -159,8 +158,7 @@ class HSATargetContext(BaseContext):
         set_hsa_kernel(wrapper)
 
         # Link
-        _link_module_threadsafe(module,
-                                _parse_assembly_threadsafe(str(wrapper_module)))
+        module.link_in(ll.parse_assembly(str(wrapper_module)))
         # To enable inlining which is essential because addrspacecast 1->0 is
         # illegal.  Inlining will optimize the addrspacecast out.
         func.linkage = 'internal'

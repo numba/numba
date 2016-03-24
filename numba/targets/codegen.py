@@ -8,8 +8,6 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
-from numba.llvmutils import (_parse_assembly_threadsafe,
-                             _link_module_threadsafe, _llvm_lock)
 
 from numba import config, utils
 from numba.runtime.atomicops import remove_redundant_nrt_refct
@@ -42,7 +40,7 @@ class CodeLibrary(object):
         self._codegen = codegen
         self._name = name
         self._linking_libraries = set()
-        self._final_module = _parse_assembly_threadsafe(
+        self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
         self._final_module.name = self._name
         # Remember this on the module, for the object cache hooks
@@ -77,18 +75,16 @@ class CodeLibrary(object):
         with self._codegen._function_pass_manager(ll_module) as fpm:
             # Run function-level optimizations to reduce memory usage and improve
             # module-level optimization.
-            with _llvm_lock:
-                for func in ll_module.functions:
-                    fpm.initialize()
-                    fpm.run(func)
-                    fpm.finalize()
+            for func in ll_module.functions:
+                fpm.initialize()
+                fpm.run(func)
+                fpm.finalize()
 
     def _optimize_final_module(self):
         """
         Internal: optimize this library's final module.
         """
-        with _llvm_lock:
-            self._codegen._mpm.run(self._final_module)
+        self._codegen._mpm.run(self._final_module)
 
     def _get_module_for_linking(self):
         """
@@ -147,7 +143,7 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
-        ll_module = _parse_assembly_threadsafe(str(ir_module))
+        ll_module = ll.parse_assembly(str(ir_module))
         ll_module.name = ir_module.name
         ll_module.verify()
         self.add_llvm_module(ll_module)
@@ -156,7 +152,7 @@ class CodeLibrary(object):
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
         ll_module = remove_redundant_nrt_refct(ll_module)
-        _link_module_threadsafe(self._final_module, ll_module)
+        self._final_module.link_in(ll_module)
 
     def finalize(self):
         """
@@ -174,13 +170,11 @@ class CodeLibrary(object):
 
         # Link libraries for shared code
         for library in self._linking_libraries:
-            _link_module_threadsafe(self._final_module,
-                                    library._get_module_for_linking(),
-                                    preserve=True)
+            self._final_module.link_in(
+                library._get_module_for_linking(), preserve=True)
         for library in self._codegen._libraries:
-            _link_module_threadsafe(self._final_module,
-                                    library._get_module_for_linking(),
-                                    preserve=True)
+            self._final_module.link_in(
+                library._get_module_for_linking(), preserve=True)
 
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.
@@ -400,7 +394,7 @@ class BaseCPUCodegen(object):
     def __init__(self, module_name):
         self._libraries = set()
         self._data_layout = None
-        self._llvm_module = _parse_assembly_threadsafe(
+        self._llvm_module = ll.parse_assembly(
             str(self._create_empty_module(module_name)))
         self._llvm_module.name = "global_codegen_module"
         self._init(self._llvm_module)
@@ -501,7 +495,7 @@ class BaseCPUCodegen(object):
                 ret double 1.23e+01
             }
             """
-        mod = _parse_assembly_threadsafe(ir)
+        mod = ll.parse_assembly(ir)
         ir_out = str(mod)
         if "12.3" in ir_out or "1.23" in ir_out:
             # Everything ok

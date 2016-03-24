@@ -5,7 +5,6 @@ from collections import defaultdict, deque
 
 from numba.config import MACHINE_BITS
 from numba import cgutils
-from numba.llvmutils import _parse_assembly_threadsafe
 from llvmlite import ir, binding as llvm
 
 # Flag to enable debug print in NRT_incref and NRT_decref
@@ -195,11 +194,12 @@ def remove_redundant_nrt_refct(ll_module):
     Decref calls are moved after the last incref call in the block to avoid
     temporarily decref'ing to zero (which can happen due to hidden decref from
     alias).
+
+    Note: non-threadsafe due to usage of global LLVMcontext
     """
     # Note: As soon as we have better utility in analyzing materialized LLVM
     #       module in llvmlite, we can redo this without so much string
     #       processing.
-
     def _extract_functions(module):
         cur = []
         for line in str(module).splitlines():
@@ -328,4 +328,4 @@ def remove_redundant_nrt_refct(ll_module):
         processed += lines
 
     newll = '\n'.join(processed)
-    return _parse_assembly_threadsafe(newll)
+    return llvm.parse_assembly(newll)
