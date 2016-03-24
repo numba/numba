@@ -170,10 +170,13 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     Compile the function in an isolated environment (typing and target context).
     Good for testing.
     """
+    from .targets.registry import cpu_target
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)
-    return compile_extra(typingctx, targetctx, func, args, return_type, flags,
-                         locals)
+    # Register the contexts in case for nested @jit or @overload calls
+    with cpu_target.nested_context(typingctx, targetctx):
+        return compile_extra(typingctx, targetctx, func, args, return_type,
+                             flags, locals)
 
 
 class _CompileStatus(object):
