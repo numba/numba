@@ -37,6 +37,9 @@ def bincount1(a):
 def bincount2(a, w):
     return np.bincount(a, weights=w)
 
+def searchsorted(a, v):
+    return np.searchsorted(a, v)
+
 
 class TestNPFunctions(TestCase):
     """
@@ -284,3 +287,40 @@ class TestNPFunctions(TestCase):
             cfunc([2, -1], [0])
         self.assertIn("weights and list don't have the same length",
                       str(raises.exception))
+
+    def test_searchsorted(self):
+        pyfunc = searchsorted
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, v):
+            expected = pyfunc(a, v)
+            got = cfunc(a, v)
+            self.assertPreciseEqual(expected, got)
+
+        # First with integer values (no NaNs)
+        bins = np.arange(5) ** 2
+        values = np.arange(20) - 1
+
+        for a in (bins, list(bins)):
+            # Scalar values
+            for v in values:
+                check(a, v)
+            # Array values
+            for v in (values, values.reshape((4, 5))):
+                check(a, v)
+            # Sequence values
+            check(a, list(values))
+
+        # Second with float values (including NaNs)
+        bins = np.float64(list(bins) + [float('nan')] * 7) / 2.0
+        values = np.arange(20) - 0.5
+
+        for a in (bins, list(bins)):
+            # Scalar values
+            for v in values:
+                check(a, v)
+            # Array values
+            for v in (values, values.reshape((4, 5))):
+                check(a, v)
+            # Sequence values
+            check(a, list(values))

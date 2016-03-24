@@ -696,23 +696,26 @@ def np_diff_impl(a, n=1):
     return diff_impl
 
 
+def validate_1d_array_like(func_name, seq):
+    if isinstance(seq, types.Array):
+        if seq.ndim != 1:
+            raise TypeError("{0}(): input should have dimension 1"
+                            .format(func_name))
+    elif not isinstance(seq, types.Sequence):
+        raise TypeError("{0}(): input should be an array or sequence"
+                        .format(func_name))
+
+
 @overload(numpy.bincount)
 def np_bincount(a, weights=None):
     from numba import jit
 
-    def validate_sequence(seq):
-        if isinstance(seq, types.Array):
-            if seq.ndim != 1:
-                raise TypeError("bincount(): input should have dimension 1")
-        elif not isinstance(seq, types.Sequence):
-            raise TypeError("bincount(): input should be an array or sequence")
-
-    validate_sequence(a)
+    validate_1d_array_like("bincount", a)
     if not isinstance(a.dtype, types.Integer):
         return
 
     if weights not in (None, types.none):
-        validate_sequence(weights)
+        validate_1d_array_like("bincount", weights)
         out_dtype = weights.dtype
 
         @jit(nopython=True)
@@ -751,3 +754,56 @@ def np_bincount(a, weights=None):
         return out
 
     return bincount_impl
+
+
+@overload(numpy.searchsorted)
+def searchsorted(a, v):
+    if isinstance(v, types.Array):
+        # N-d array and output
+
+        def searchsorted_impl(a, v):
+            out = numpy.empty(v.shape, numpy.intp)
+            for view, outview in numpy.nditer((v, out)):
+                index = numpy.searchsorted(a, view.item())
+                outview.itemset(index)
+            return out
+
+        return searchsorted_impl
+
+    elif isinstance(v, types.Sequence):
+        # 1-d sequence and output
+
+        def searchsorted_impl(a, v):
+            out = numpy.empty(len(v), numpy.intp)
+            for i in range(len(v)):
+                out[i] = numpy.searchsorted(a, v[i])
+            return out
+
+        return searchsorted_impl
+
+    else:
+        # Scalar value and output
+        # Note: NaNs come last in Numpy-sorted arrays
+
+        def searchsorted_impl(a, v):
+            n = len(a)
+            if numpy.isnan(v):
+                # Find the first nan (i.e. the last from the end of a,
+                # since there shouldn't be many of them in practice)
+                for i in range(n, 0, -1):
+                    if not numpy.isnan(a[i - 1]):
+                        return i
+                return 0
+            lo = 0
+            hi = n
+            while hi > lo:
+                mid = (lo + hi) >> 1
+                if a[mid] < v:
+                    # mid is too low => go up
+                    lo = mid + 1
+                else:
+                    # mid is too high, or is a NaN => go down
+                    hi = mid
+            return lo
+
+        return searchsorted_impl
