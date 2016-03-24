@@ -808,6 +808,29 @@ class Zip(AbstractTemplate):
             zip_type = types.ZipType(args)
             return signature(zip_type, *args)
 
+
+@infer_global(iter)
+class Iter(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1:
+            it = args[0]
+            if isinstance(it, types.IterableType):
+                return signature(it.iterator_type, *args)
+
+
+@infer_global(next)
+class Next(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1:
+            it = args[0]
+            if isinstance(it, types.IteratorType):
+                return signature(it.yield_type, *args)
+
+
 #------------------------------------------------------------------------------
 
 @infer_global(type)

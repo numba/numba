@@ -86,6 +86,11 @@ def np_nditer3(a, b, c):
         res.append((u.item(), v.item(), w.item()))
     return res
 
+def iter_next(arr):
+    it = iter(arr)
+    it2 = iter(arr)
+    return next(it), next(it), next(it2)
+
 
 class TestArrayIterators(MemoryLeakMixin, TestCase):
     """
@@ -336,7 +341,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     @tag('important')
     def test_np_ndindex_array(self):
         func = np_ndindex_array
-        arr = np.arange(12, dtype=np.int32)
+        arr = np.arange(12, dtype=np.int32) + 10
         self.check_array_unary(arr, typeof(arr), func)
         arr = arr.reshape((4, 3))
         self.check_array_unary(arr, typeof(arr), func)
@@ -348,6 +353,13 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         cres = compile_isolated(func, [])
         cfunc = cres.entry_point
         self.assertPreciseEqual(cfunc(), func())
+
+    @tag('important')
+    def test_iter_next(self):
+        # This also checks memory management with iter() and next()
+        func = iter_next
+        arr = np.arange(12, dtype=np.int32) + 10
+        self.check_array_unary(arr, typeof(arr), func)
 
 
 class TestNdIter(MemoryLeakMixin, TestCase):
