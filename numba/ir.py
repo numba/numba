@@ -673,7 +673,9 @@ class Block(object):
     def clear(self):
         del self.body[:]
 
-    def dump(self, file=sys.stdout):
+    def dump(self, file=None):
+        # Avoid early bind of sys.stdout as default value
+        file = file or sys.stdout
         for inst in self.body:
             inst_vars = sorted(str(v) for v in inst.list_vars())
             print('    %-40s %s' % (inst, inst_vars), file=file)
