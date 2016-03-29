@@ -271,11 +271,14 @@ def array_argmax(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.median, types.Array)
-def array_median(context, builder, sig, args):
-    flattened = sig.args[0].copy(layout="C", ndim=1)
-    dtype = sig.args[0].dtype
+@overload(numpy.median)
+def np_median(a):
+    from numba import jit
 
+    if not isinstance(a, types.Array):
+        return
+
+    @jit(nopython=True)
     def partition(A, low, high):
         mid = (low + high) >> 1
         # NOTE: the pattern of swaps below for the pivot choice and the
@@ -303,28 +306,22 @@ def array_median(context, builder, sig, args):
         A[i], A[high] = A[high], A[i]
         return i
 
-    sig_partition = typing.signature(types.intp,
-                                     *(flattened, types.intp, types.intp))
-    _partition = context.compile_subroutine(builder, partition, sig_partition)
-
+    @jit(nopython=True)
     def select(arry, k, low, high):
         """
         Select the k'th smallest element in array[low:high + 1].
         """
-        i = _partition(arry, low, high)
+        i = partition(arry, low, high)
         while i != k:
             if i < k:
                 low = i + 1
-                i = _partition(arry, low, high)
+                i = partition(arry, low, high)
             else:
                 high = i - 1
-                i = _partition(arry, low, high)
+                i = partition(arry, low, high)
         return arry[k]
 
-    sig_select_args = flattened, types.intp, types.intp, types.intp
-    sig_select = typing.signature(dtype, *sig_select_args)
-    _select = context.compile_subroutine(builder, select, sig_select)
-
+    @jit(nopython=True)
     def select_two(arry, k, low, high):
         """
         Select the k'th and k+1'th smallest elements in array[low:high + 1].
@@ -334,24 +331,21 @@ def array_median(context, builder, sig, args):
         """
         while True:
             assert high > low  # by construction
-            i = _partition(arry, low, high)
+            i = partition(arry, low, high)
             if i < k:
                 low = i + 1
             elif i > k + 1:
                 high = i - 1
             elif i == k:
-                _select(arry, k + 1, i + 1, high)
+                select(arry, k + 1, i + 1, high)
                 break
             else:  # i == k + 1
-                _select(arry, k, low, i - 1)
+                select(arry, k, low, i - 1)
                 break
 
         return arry[k], arry[k + 1]
 
-    sig_select_two = typing.signature(types.UniTuple(dtype, 2), *sig_select_args)
-    _select_two = context.compile_subroutine(builder, select_two, sig_select_two)
-
-    def median(arry):
+    def median_impl(arry):
         # np.median() works on the flattened array, and we need a temporary
         # workspace anyway
         temp_arry = arry.flatten()
@@ -360,13 +354,12 @@ def array_median(context, builder, sig, args):
         high = n - 1
         half = n >> 1
         if n & 1 == 0:
-            a, b = _select_two(temp_arry, half - 1, low, high)
+            a, b = select_two(temp_arry, half - 1, low, high)
             return (a + b) / 2
         else:
-            return _select(temp_arry, half, low, high)
+            return select(temp_arry, half, low, high)
 
-    res = context.compile_internal(builder, median, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    return median_impl
 
 
 @overload(numpy.all)

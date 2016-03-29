@@ -527,7 +527,7 @@ for fname in ["cumsum", "cumprod"]:
     install_array_method(fname, generic_expand_cumulative)
 
 # Functions that require integer arrays get promoted to float64 return
-for fName in ["mean", "median", "var", "std"]:
+for fName in ["mean", "var", "std"]:
     install_array_method(fName, generic_hetero_real)
 
 # Functions that return an index (intp)
