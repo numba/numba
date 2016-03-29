@@ -351,19 +351,23 @@ class TestNPFunctions(TestCase):
         bins3 = np.float64([1, 3, 4.5, 8, float('inf'), float('-inf')]
                            + [float('nan')] * 10)
         if np_version >= (1, 10):
+            all_bins = [bins1, bins2, bins3]
             xs = [values, values.reshape((3, 4))]
         else:
+            # Numpy < 1.10 had trouble with NaNs and N-d arrays
+            all_bins = [bins1, bins2]
             xs = [values]
 
+
         # 2-ary digitize()
-        for bins in (bins1, bins2, bins3):
+        for bins in all_bins:
             bins.sort()
             for x in xs:
                 check(x, bins)
                 check(x, bins[::-1])
 
         # 3-ary digitize()
-        for bins in (bins1, bins2, bins3):
+        for bins in all_bins:
             bins.sort()
             for right in (True, False):
                 check(values, bins, right)
