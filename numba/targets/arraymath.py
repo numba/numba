@@ -298,14 +298,13 @@ def get_isnan(dtype):
     """
     A generic isnan() function
     """
-    if isinstance(dtype, types.Number):
+    if isinstance(dtype, (types.Float, types.Complex)):
         return numpy.isnan
     else:
         @jit(nopython=True)
-        def isnan(x):
+        def _trivial_isnan(x):
             return False
-
-        return isnan
+        return _trivial_isnan
 
 
 @overload(numpy.nanmin)
