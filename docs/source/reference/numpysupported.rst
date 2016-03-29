@@ -180,7 +180,10 @@ The following top-level functions are supported:
 
 * :func:`numpy.arange`
 * :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.bincount` (only the 2 first arguments)
 * :func:`numpy.diag`
+* :func:`numpy.diff` (only the 2 first arguments)
+* :func:`numpy.digitize`
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.eye`
@@ -188,6 +191,7 @@ The following top-level functions are supported:
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full`
 * :func:`numpy.full_like`
+* :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.identity`
 * :func:`numpy.linspace` (only the 3-argument form)
 * :func:`numpy.median` (only the first argument)
@@ -198,6 +202,7 @@ The following top-level functions are supported:
 * :func:`numpy.ones_like`
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.round_`
+* :func:`numpy.searchsorted` (only the 2 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.where`
