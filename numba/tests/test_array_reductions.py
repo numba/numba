@@ -91,6 +91,24 @@ def array_argmax_global(arr):
 def array_median_global(arr):
     return np.median(arr)
 
+def array_nanmin(arr):
+    return np.nanmin(arr)
+
+def array_nanmax(arr):
+    return np.nanmax(arr)
+
+def array_nanmean(arr):
+    return np.nanmean(arr)
+
+def array_nansum(arr):
+    return np.nansum(arr)
+
+def array_nanstd(arr):
+    return np.nanstd(arr)
+
+def array_nanvar(arr):
+    return np.nanvar(arr)
+
 
 def base_test_arrays(dtype):
     if dtype == np.bool_:
@@ -138,6 +156,30 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         super(TestArrayReductions, self).setUp()
         np.random.seed(42)
 
+    def check_reduction_basic(self, pyfunc):
+        # Basic reduction checks on 1-d float64 arrays
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+        arr = np.float64([1.0, 2.0, 0.0, -0.0, 1.0, -1.5])
+        check(arr)
+        arr = np.float64([-0.0, -1.5])
+        check(arr)
+        arr = np.float64([-1.5, 2.5, 'inf'])
+        check(arr)
+        arr = np.float64([-1.5, 2.5, '-inf'])
+        check(arr)
+        arr = np.float64([-1.5, 2.5, 'inf', '-inf'])
+        check(arr)
+        arr = np.float64(['nan', -1.5, 2.5, 'nan', 3.0])
+        check(arr)
+        arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
+        check(arr)
+        # Only NaNs
+        arr = np.float64(['nan', 'nan'])
+        check(arr)
+
     @tag('important')
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
@@ -174,51 +216,59 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     @tag('important')
     def test_sum_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_sum, arr)
-        self.assertPreciseEqual(npr, nbr)
+        self.check_reduction_basic(array_sum)
 
     @tag('important')
     def test_mean_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_mean, arr)
-        self.assertPreciseEqual(npr, nbr, prec="double")
+        self.check_reduction_basic(array_mean)
 
     @tag('important')
     def test_var_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_var, arr)
-        self.assertPreciseEqual(npr, nbr, prec="double")
+        self.check_reduction_basic(array_var)
 
     @tag('important')
     def test_std_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_std, arr)
-        self.assertPreciseEqual(npr, nbr, prec="double")
+        self.check_reduction_basic(array_std)
 
     @tag('important')
     def test_min_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_min, arr)
-        self.assertPreciseEqual(npr, nbr)
+        self.check_reduction_basic(array_min)
 
     @tag('important')
     def test_max_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_max, arr)
-        self.assertPreciseEqual(npr, nbr)
+        self.check_reduction_basic(array_max)
 
     @tag('important')
     def test_argmin_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_argmin, arr)
-        self.assertPreciseEqual(npr, nbr)
+        self.check_reduction_basic(array_argmin)
 
     @tag('important')
     def test_argmax_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_argmax, arr)
-        self.assertPreciseEqual(npr, nbr)
+        self.check_reduction_basic(array_argmax)
+
+    @tag('important')
+    def test_nanmin_basic(self):
+        self.check_reduction_basic(array_nanmin)
+
+    @tag('important')
+    def test_nanmax_basic(self):
+        self.check_reduction_basic(array_nanmax)
+
+    @tag('important')
+    def test_nanmean_basic(self):
+        self.check_reduction_basic(array_nanmean)
+
+    @tag('important')
+    def test_nansum_basic(self):
+        self.check_reduction_basic(array_nansum)
+
+    @tag('important')
+    def test_nanstd_basic(self):
+        self.check_reduction_basic(array_nanstd)
+
+    @tag('important')
+    def test_nanvar_basic(self):
+        self.check_reduction_basic(array_nanvar)
 
     @tag('important')
     def test_median_basic(self):
@@ -444,6 +494,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_argmax, array_argmax_global,
                            array_all, array_all_global,
                            array_any, array_any_global,
+                           array_nanmax,
+                           array_nanmin,
+                           array_nanmean,
+                           array_nansum,
+                           array_nanstd,
+                           array_nanvar,
                            ]
         dtypes_to_test = [np.int32, np.float32, np.bool_]
 

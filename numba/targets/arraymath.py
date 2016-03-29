@@ -6,11 +6,12 @@ from __future__ import print_function, absolute_import, division
 
 import math
 
+import numpy
+
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant, Type
 
-import numpy
 from numba import types, cgutils, typing
 from numba.extending import overload, overload_method
 from numba.numpy_support import as_dtype
@@ -389,6 +390,136 @@ def np_any(a):
         return False
 
     return flat_any
+
+
+def get_isnan(dtype):
+    """
+    A generic isnan() function
+    """
+    from numba import jit
+
+    if isinstance(dtype, types.Number):
+        return numpy.isnan
+    else:
+        @jit(nopython=True)
+        def isnan(x):
+            return False
+
+        return isnan
+
+
+@overload(numpy.nanmin)
+def np_nanmin(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
+
+    def nanmin_impl(a):
+        if a.size == 0:
+            raise ValueError("nanmin(): empty array")
+        for view in numpy.nditer(a):
+            minval = view.item()
+            break
+        for view in numpy.nditer(a):
+            v = view.item()
+            if not minval < v and not isnan(v):
+                minval = v
+        return minval
+
+    return nanmin_impl
+
+@overload(numpy.nanmax)
+def np_nanmax(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
+
+    def nanmax_impl(a):
+        if a.size == 0:
+            raise ValueError("nanmin(): empty array")
+        for view in numpy.nditer(a):
+            maxval = view.item()
+            break
+        for view in numpy.nditer(a):
+            v = view.item()
+            if not maxval > v and not isnan(v):
+                maxval = v
+        return maxval
+
+    return nanmax_impl
+
+@overload(numpy.nanmean)
+def np_nanmean(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
+
+    def nanmean_impl(arr):
+        c = 0.0
+        count = 0
+        for view in numpy.nditer(arr):
+            v = view.item()
+            if not isnan(v):
+                c += v.item()
+                count += 1
+        # np.divide() doesn't raise ZeroDivisionError
+        return numpy.divide(c, count)
+
+    return nanmean_impl
+
+@overload(numpy.nanvar)
+def np_nanvar(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
+
+    def nanvar_impl(arr):
+        # Compute the mean
+        m = numpy.nanmean(arr)
+
+        # Compute the sum of square diffs
+        ssd = 0.0
+        count = 0
+        for view in numpy.nditer(arr):
+            v = view.item()
+            if not isnan(v):
+                ssd += (v.item() - m) ** 2
+                count += 1
+        # np.divide() doesn't raise ZeroDivisionError
+        return numpy.divide(ssd, count)
+
+    return nanvar_impl
+
+@overload(numpy.nanstd)
+def np_nanstd(a):
+    if not isinstance(a, types.Array):
+        return
+
+    def nanstd_impl(arr):
+        return numpy.nanvar(arr) ** 0.5
+
+    return nanstd_impl
+
+@overload(numpy.nansum)
+def np_nansum(a):
+    if not isinstance(a, types.Array):
+        return
+    if isinstance(a.dtype, types.Integer):
+        retty = types.intp
+    else:
+        retty = a.dtype
+    zero = retty(0)
+    isnan = get_isnan(a.dtype)
+
+    def nansum_impl(arr):
+        c = zero
+        for view in numpy.nditer(arr):
+            v = view.item()
+            if not isnan(v):
+                c += v
+        return c
+
+    return nansum_impl
 
 
 #----------------------------------------------------------------------------
