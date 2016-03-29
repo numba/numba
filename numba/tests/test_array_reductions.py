@@ -109,6 +109,9 @@ def array_nanstd(arr):
 def array_nanvar(arr):
     return np.nanvar(arr)
 
+def array_nanmedian_global(arr):
+    return np.nanmedian(arr)
+
 
 def base_test_arrays(dtype):
     if dtype == np.bool_:
@@ -270,24 +273,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar)
 
-    @tag('important')
-    def test_median_basic(self):
-        pyfunc = array_median_global
+    def check_median_basic(self, pyfunc, array_variations):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
             expected = pyfunc(arr)
             got = cfunc(arr)
             self.assertPreciseEqual(got, expected)
-
-        def variations(a):
-            # Sorted, reversed, random, many duplicates
-            yield a
-            a = a[::-1].copy()
-            yield a
-            np.random.shuffle(a)
-            yield a
-            a[a & 3 != 0] = 0
-            yield a
 
         # Odd sizes
         def check_odd(a):
@@ -295,7 +286,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             a = a.reshape((9, 7))
             check(a)
             check(a.T)
-        for a in variations(np.arange(63) + 10):
+        for a in array_variations(np.arange(63) + 10.5):
             check_odd(a)
 
         # Even sizes
@@ -304,8 +295,41 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             a = a.reshape((4, 16))
             check(a)
             check(a.T)
-        for a in variations(np.arange(64) + 10):
+        for a in array_variations(np.arange(64) + 10.5):
             check_even(a)
+
+    @tag('important')
+    def test_median_basic(self):
+        pyfunc = array_median_global
+
+        def variations(a):
+            # Sorted, reversed, random, many duplicates
+            yield a
+            a = a[::-1].copy()
+            yield a
+            np.random.shuffle(a)
+            yield a
+            a[a % 4 >= 1] = 3.5
+            yield a
+
+        self.check_median_basic(pyfunc, variations)
+
+    def test_nanmedian_basic(self):
+        pyfunc = array_nanmedian_global
+
+        def variations(a):
+            # Sorted, reversed, random, many duplicates, many NaNs
+            yield a
+            a = a[::-1].copy()
+            yield a
+            np.random.shuffle(a)
+            yield a
+            a[a % 4 <= 1] = 3.5
+            yield a
+            a[a % 4 >= 2] = float('nan')
+            yield a
+
+        self.check_median_basic(pyfunc, variations)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
@@ -425,9 +449,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def _do_check_nptimedelta(self, pyfunc, arr):
         arrty = typeof(arr)
-
-        cres = compile_isolated(pyfunc, [arrty])
-        cfunc = cres.entry_point
+        cfunc = jit(nopython=True)(pyfunc)
 
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         # Even vs. odd size, for np.median

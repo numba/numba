@@ -12,7 +12,7 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant, Type
 
-from numba import types, cgutils, typing
+from numba import jit, types, cgutils, typing
 from numba.extending import overload, overload_method
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
@@ -271,97 +271,6 @@ def array_argmax(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@overload(numpy.median)
-def np_median(a):
-    from numba import jit
-
-    if not isinstance(a, types.Array):
-        return
-
-    @jit(nopython=True)
-    def partition(A, low, high):
-        mid = (low + high) >> 1
-        # NOTE: the pattern of swaps below for the pivot choice and the
-        # partitioning gives good results (i.e. regular O(n log n))
-        # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
-        # risk breaking this property.
-
-        # Use median of three {low, middle, high} as the pivot
-        if A[mid] < A[low]:
-            A[low], A[mid] = A[mid], A[low]
-        if A[high] < A[mid]:
-            A[high], A[mid] = A[mid], A[high]
-            if A[mid] < A[low]:
-                A[low], A[mid] = A[mid], A[low]
-        pivot = A[mid]
-
-        A[high], A[mid] = A[mid], A[high]
-
-        i = low
-        for j in range(low, high):
-            if A[j] <= pivot:
-                A[i], A[j] = A[j], A[i]
-                i += 1
-
-        A[i], A[high] = A[high], A[i]
-        return i
-
-    @jit(nopython=True)
-    def select(arry, k, low, high):
-        """
-        Select the k'th smallest element in array[low:high + 1].
-        """
-        i = partition(arry, low, high)
-        while i != k:
-            if i < k:
-                low = i + 1
-                i = partition(arry, low, high)
-            else:
-                high = i - 1
-                i = partition(arry, low, high)
-        return arry[k]
-
-    @jit(nopython=True)
-    def select_two(arry, k, low, high):
-        """
-        Select the k'th and k+1'th smallest elements in array[low:high + 1].
-
-        This is significantly faster than doing two independent selections
-        for k and k+1.
-        """
-        while True:
-            assert high > low  # by construction
-            i = partition(arry, low, high)
-            if i < k:
-                low = i + 1
-            elif i > k + 1:
-                high = i - 1
-            elif i == k:
-                select(arry, k + 1, i + 1, high)
-                break
-            else:  # i == k + 1
-                select(arry, k, low, i - 1)
-                break
-
-        return arry[k], arry[k + 1]
-
-    def median_impl(arry):
-        # np.median() works on the flattened array, and we need a temporary
-        # workspace anyway
-        temp_arry = arry.flatten()
-        n = temp_arry.shape[0]
-        low = 0
-        high = n - 1
-        half = n >> 1
-        if n & 1 == 0:
-            a, b = select_two(temp_arry, half - 1, low, high)
-            return (a + b) / 2
-        else:
-            return select(temp_arry, half, low, high)
-
-    return median_impl
-
-
 @overload(numpy.all)
 @overload_method(types.Array, "all")
 def np_all(a):
@@ -389,8 +298,6 @@ def get_isnan(dtype):
     """
     A generic isnan() function
     """
-    from numba import jit
-
     if isinstance(dtype, types.Number):
         return numpy.isnan
     else:
@@ -513,6 +420,125 @@ def np_nansum(a):
         return c
 
     return nansum_impl
+
+
+#----------------------------------------------------------------------------
+# Median and partitioning
+
+@jit(nopython=True)
+def _partition(A, low, high):
+    mid = (low + high) >> 1
+    # NOTE: the pattern of swaps below for the pivot choice and the
+    # partitioning gives good results (i.e. regular O(n log n))
+    # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
+    # risk breaking this property.
+
+    # Use median of three {low, middle, high} as the pivot
+    if A[mid] < A[low]:
+        A[low], A[mid] = A[mid], A[low]
+    if A[high] < A[mid]:
+        A[high], A[mid] = A[mid], A[high]
+        if A[mid] < A[low]:
+            A[low], A[mid] = A[mid], A[low]
+    pivot = A[mid]
+
+    A[high], A[mid] = A[mid], A[high]
+
+    i = low
+    for j in range(low, high):
+        if A[j] <= pivot:
+            A[i], A[j] = A[j], A[i]
+            i += 1
+
+    A[i], A[high] = A[high], A[i]
+    return i
+
+@jit(nopython=True)
+def _select(arry, k, low, high):
+    """
+    Select the k'th smallest element in array[low:high + 1].
+    """
+    i = _partition(arry, low, high)
+    while i != k:
+        if i < k:
+            low = i + 1
+            i = _partition(arry, low, high)
+        else:
+            high = i - 1
+            i = _partition(arry, low, high)
+    return arry[k]
+
+@jit(nopython=True)
+def _select_two(arry, k, low, high):
+    """
+    Select the k'th and k+1'th smallest elements in array[low:high + 1].
+
+    This is significantly faster than doing two independent selections
+    for k and k+1.
+    """
+    while True:
+        assert high > low  # by construction
+        i = _partition(arry, low, high)
+        if i < k:
+            low = i + 1
+        elif i > k + 1:
+            high = i - 1
+        elif i == k:
+            _select(arry, k + 1, i + 1, high)
+            break
+        else:  # i == k + 1
+            _select(arry, k, low, i - 1)
+            break
+
+    return arry[k], arry[k + 1]
+
+@jit(nopython=True)
+def _median_inner(temp_arry, n):
+    """
+    The main logic of the median() call.  *temp_arry* must be disposable,
+    as this function will mutate it.
+    """
+    low = 0
+    high = n - 1
+    half = n >> 1
+    if n & 1 == 0:
+        a, b = _select_two(temp_arry, half - 1, low, high)
+        return (a + b) / 2
+    else:
+        return _select(temp_arry, half, low, high)
+
+@overload(numpy.median)
+def np_median(a):
+    if not isinstance(a, types.Array):
+        return
+
+    def median_impl(arry):
+        # np.median() works on the flattened array, and we need a temporary
+        # workspace anyway
+        temp_arry = arry.flatten()
+        n = temp_arry.shape[0]
+        return _median_inner(temp_arry, n)
+
+    return median_impl
+
+@overload(numpy.nanmedian)
+def np_nanmedian(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
+
+    def nanmedian_impl(arry):
+        # Create a temporary workspace with only non-NaN values
+        temp_arry = numpy.empty(arry.size, arry.dtype)
+        n = 0
+        for view in numpy.nditer(arry):
+            v = view.item()
+            if not isnan(v):
+                temp_arry[n] = v
+                n += 1
+        return _median_inner(temp_arry, n)
+
+    return nanmedian_impl
 
 
 #----------------------------------------------------------------------------
@@ -832,8 +858,6 @@ def validate_1d_array_like(func_name, seq):
 
 @overload(numpy.bincount)
 def np_bincount(a, weights=None):
-    from numba import jit
-
     validate_1d_array_like("bincount", a)
     if not isinstance(a.dtype, types.Integer):
         return
@@ -935,8 +959,6 @@ def searchsorted(a, v):
 
 @overload(numpy.digitize)
 def np_digitize(x, bins, right=False):
-    from numba import jit
-
     @jit(nopython=True)
     def are_bins_increasing(bins):
         n = len(bins)
@@ -1067,8 +1089,6 @@ _range = range
 
 @overload(numpy.histogram)
 def np_histogram(a, bins=10, range=None):
-    from numba import jit
-
     if isinstance(bins, (int, types.Integer)):
         # With a uniform distribution of bins, use a fast algorithm
         # independent of the number of bins
