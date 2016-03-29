@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 import contextlib
+import gc
 import pickle
 import subprocess
 import sys
@@ -132,6 +133,44 @@ class TestDispatcherPickling(TestCase):
             assert res == 8.0, res
             """.format(**locals())
         subprocess.check_call([sys.executable, "-c", code])
+
+    @tag('important')
+    def test_reuse(self):
+        """
+        Check that deserializing the same function multiple times re-uses
+        the same dispatcher object.
+
+        Note that "same function" is intentionally under-specified.
+        """
+        func = closure(5)
+        pickled = pickle.dumps(func)
+        func2 = closure(6)
+        pickled2 = pickle.dumps(func2)
+
+        f = pickle.loads(pickled)
+        g = pickle.loads(pickled)
+        h = pickle.loads(pickled2)
+        self.assertIs(f, g)
+        self.assertEqual(f(2, 3), 10)
+        g.disable_compile()
+        self.assertEqual(g(2, 4), 11)
+
+        self.assertIsNot(f, h)
+        self.assertEqual(h(2, 3), 11)
+
+        # Now make sure the original object doesn't exist when deserializing
+        func = closure(7)
+        func(42, 43)
+        pickled = pickle.dumps(func)
+        del func
+        gc.collect()
+
+        f = pickle.loads(pickled)
+        g = pickle.loads(pickled)
+        self.assertIs(f, g)
+        self.assertEqual(f(2, 3), 12)
+        g.disable_compile()
+        self.assertEqual(g(2, 4), 13)
 
 
 if __name__ == '__main__':

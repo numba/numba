@@ -14,7 +14,9 @@ from .six.moves import cPickle as pickle
 import struct
 import sys
 import tempfile
+import uuid
 import warnings
+import weakref
 
 from .appdirs import AppDirs
 
@@ -377,6 +379,9 @@ class Dispatcher(_DispatcherBase):
         'direct': _FunctionCompiler,
         'generated': _GeneratedFunctionCompiler,
         }
+    # A {uuid -> instance} mapping, for deserialization
+    _memo = weakref.WeakValueDictionary()
+    __uuid = None
 
     def __init__(self, py_func, locals={}, targetoptions={}, impl_kind='direct'):
         """
@@ -433,22 +438,48 @@ class Dispatcher(_DispatcherBase):
             sigs = [cr.signature for cr in self.overloads.values()]
         globs = self._compiler.get_globals_for_reduction()
         return (serialize._rebuild_reduction,
-                (self.__class__, serialize._reduce_function(self.py_func, globs),
+                (self.__class__, str(self._uuid),
+                 serialize._reduce_function(self.py_func, globs),
                  self.locals, self.targetoptions, self._impl_kind,
                  self._can_compile, sigs))
 
     @classmethod
-    def _rebuild(cls, func_reduced, locals, targetoptions, impl_kind,
+    def _rebuild(cls, uuid, func_reduced, locals, targetoptions, impl_kind,
                  can_compile, sigs):
         """
         Rebuild an Dispatcher instance after it was __reduce__'d.
         """
+        try:
+            return cls._memo[uuid]
+        except KeyError:
+            pass
         py_func = serialize._rebuild_function(*func_reduced)
         self = cls(py_func, locals, targetoptions, impl_kind)
+        # Make sure this deserialization will be merged with subsequent ones
+        self._set_uuid(uuid)
         for sig in sigs:
             self.compile(sig)
         self._can_compile = can_compile
         return self
+
+    @property
+    def _uuid(self):
+        """
+        An instance-specific UUID, to avoid multiple deserializations of
+        a given instance.
+
+        Note this is lazily-generated, for performance reasons.
+        """
+        u = self.__uuid
+        if u is None:
+            u = str(uuid.uuid1())
+            self._set_uuid(u)
+        return u
+
+    def _set_uuid(self, u):
+        assert self.__uuid is None
+        self.__uuid = u
+        self._memo[u] = self
 
     def compile(self, sig):
         if not self._can_compile:
