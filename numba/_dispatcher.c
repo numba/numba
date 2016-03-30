@@ -292,14 +292,23 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
          */
         PyCodeObject *code = (PyCodeObject*)PyObject_GetAttrString((PyObject*)self, "__code__");
         PyObject *globals = PyDict_New();
-        PyFrameObject *frame = PyFrame_New(tstate, code, globals, NULL);
-        PyObject *result;
-        if (!code)
-        {
+        PyObject *builtins = PyEval_GetBuiltins();
+        PyFrameObject *frame = NULL;
+        PyObject *result = NULL;
+
+        if (!code) {
             PyErr_Format(PyExc_RuntimeError, "No __code__ attribute found.");
-            return NULL;
+            goto error;
         }
-        /* now populate the 'fast locals' in `frame` */
+        /* Populate builtins, which is required by some JITted functions */
+        if (PyDict_SetItemString(globals, "__builtins__", builtins)) {
+            goto error;
+        }
+        frame = PyFrame_New(tstate, code, globals, NULL);
+        if (frame == NULL) {
+            goto error;
+        }
+        /* Populate the 'fast locals' in `frame` */
         Py_XDECREF(frame->f_locals);
         frame->f_locals = locals;
         Py_XINCREF(frame->f_locals);
@@ -307,6 +316,8 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
         tstate->frame = frame;
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
         tstate->frame = frame->f_back;
+
+    error:
         Py_XDECREF(frame);
         Py_XDECREF(globals);
         Py_XDECREF(code);
