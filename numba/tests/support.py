@@ -9,6 +9,7 @@ import gc
 import math
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -102,7 +103,7 @@ class TestCase(unittest.TestCase):
         """
         A context manager that asserts the given objects have the
         same reference counts before and after executing the
-        enclosed blocks.
+        enclosed block.
         """
         old_refcounts = [sys.getrefcount(x) for x in objects]
         yield
@@ -111,6 +112,25 @@ class TestCase(unittest.TestCase):
             if old != new:
                 self.fail("Refcount changed from %d to %d for object: %r"
                           % (old, new, obj))
+
+    @contextlib.contextmanager
+    def assertNoNRTLeak(self):
+        """
+        A context manager that asserts no NRT leak was created during
+        the execution of the enclosed block.
+        """
+        old = rtsys.get_allocation_stats()
+        yield
+        new = rtsys.get_allocation_stats()
+        total_alloc = new.alloc - old.alloc
+        total_free = new.free - old.free
+        total_mi_alloc = new.mi_alloc - old.mi_alloc
+        total_mi_free = new.mi_free - old.mi_free
+        self.assertEqual(total_alloc, total_free,
+                         "number of data allocs != number of data frees")
+        self.assertEqual(total_mi_alloc, total_mi_free,
+                         "number of meminfo allocs != number of meminfo frees")
+
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
     _approx_typesets = [(float,), (complex,), (np.inexact)]

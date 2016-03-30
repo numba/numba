@@ -839,14 +839,15 @@ numba_attempt_nocopy_reshape(npy_intp nd, const npy_intp *dims, const npy_intp *
 
     return 1;
 }
+
 /*
  * Cython utilities.
  */
 
 /* Fetch the address of the given function, as exposed by
    a cython module */
- static void *
- import_cython_function(const char *module_name, const char *function_name)
+static void *
+import_cython_function(const char *module_name, const char *function_name)
 {
     PyObject *module, *capi, *cobj;
     void *res = NULL;

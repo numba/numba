@@ -54,9 +54,21 @@ call_trace_protected(Py_tracefunc func, PyObject *obj,
     }
 }
 
+/*
+ * The original C_TRACE macro (from ceval.c) would call
+ * PyTrace_C_CALL et al., for which the frame argument wouldn't
+ * be usable. Since we explicitly synthesize a frame using the
+ * original Python code object, we call PyTrace_CALL instead so
+ * the profiler can report the correct source location.
+ *
+ * Likewise, while ceval.c would call PyTrace_C_EXCEPTION in case
+ * of error, the profiler would simply expect a RETURN in case of
+ * a Python function, so we generate that here (making sure the
+ * exception state is preserved correctly).
+ */
 #define C_TRACE(x, call)                                        \
 if (call_trace(tstate->c_profilefunc, tstate->c_profileobj,     \
-               tstate, tstate->frame, PyTrace_C_CALL, cfunc))   \
+               tstate, tstate->frame, PyTrace_CALL, cfunc))	\
     x = NULL;                                                   \
 else                                                            \
 {                                                               \
@@ -68,7 +80,7 @@ else                                                            \
             call_trace_protected(tstate->c_profilefunc,         \
                                  tstate->c_profileobj,          \
                                  tstate, tstate->frame,         \
-                                 PyTrace_C_EXCEPTION, cfunc);   \
+                                 PyTrace_RETURN, cfunc);	\
             /* XXX should pass (type, value, tb) */             \
         }                                                       \
         else                                                    \
@@ -76,7 +88,7 @@ else                                                            \
             if (call_trace(tstate->c_profilefunc,               \
                            tstate->c_profileobj,                \
                            tstate, tstate->frame,               \
-                           PyTrace_C_RETURN, cfunc))            \
+                           PyTrace_RETURN, cfunc))		\
             {                                                   \
                 Py_DECREF(x);                                   \
                 x = NULL;                                       \
@@ -292,14 +304,23 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
          */
         PyCodeObject *code = (PyCodeObject*)PyObject_GetAttrString((PyObject*)self, "__code__");
         PyObject *globals = PyDict_New();
-        PyFrameObject *frame = PyFrame_New(tstate, code, globals, NULL);
-        PyObject *result;
-        if (!code)
-        {
+        PyObject *builtins = PyEval_GetBuiltins();
+        PyFrameObject *frame = NULL;
+        PyObject *result = NULL;
+
+        if (!code) {
             PyErr_Format(PyExc_RuntimeError, "No __code__ attribute found.");
-            return NULL;
+            goto error;
         }
-        /* now populate the 'fast locals' in `frame` */
+        /* Populate builtins, which is required by some JITted functions */
+        if (PyDict_SetItemString(globals, "__builtins__", builtins)) {
+            goto error;
+        }
+        frame = PyFrame_New(tstate, code, globals, NULL);
+        if (frame == NULL) {
+            goto error;
+        }
+        /* Populate the 'fast locals' in `frame` */
         Py_XDECREF(frame->f_locals);
         frame->f_locals = locals;
         Py_XINCREF(frame->f_locals);
@@ -307,6 +328,8 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
         tstate->frame = frame;
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
         tstate->frame = frame->f_back;
+
+    error:
         Py_XDECREF(frame);
         Py_XDECREF(globals);
         Py_XDECREF(code);
