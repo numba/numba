@@ -1794,6 +1794,9 @@ def make_nditer_cls(nditerty):
     nshapes = ndim if nditerty.need_shaped_indexing else 1
 
     class BaseSubIter(object):
+        """
+        Base class for sub-iterators of a nditer() instance.
+        """
 
         def __init__(self, nditer, member_name, start_dim, end_dim):
             self.nditer = nditer
@@ -1820,6 +1823,10 @@ def make_nditer_cls(nditerty):
 
 
     class FlatSubIter(BaseSubIter):
+        """
+        Sub-iterator walking a contiguous array in physical order, with
+        support for broadcasting (the index is reset on the outer dimension).
+        """
 
         def init_specific(self, context, builder):
             zero = context.get_constant(types.intp, 0)
@@ -1849,6 +1856,10 @@ def make_nditer_cls(nditerty):
 
 
     class TrivialFlatSubIter(BaseSubIter):
+        """
+        Sub-iterator walking a contiguous array in physical order,
+        *without* support for broadcasting.
+        """
 
         def init_specific(self, context, builder):
             assert not nditerty.need_shaped_indexing
@@ -1859,6 +1870,9 @@ def make_nditer_cls(nditerty):
 
 
     class IndexedSubIter(BaseSubIter):
+        """
+        Sub-iterator walking an array in logical order.
+        """
 
         def compute_pointer(self, context, builder, indices, arrty, arr):
             assert len(indices) == self.ndim
@@ -1867,12 +1881,18 @@ def make_nditer_cls(nditerty):
 
 
     class ZeroDimSubIter(BaseSubIter):
+        """
+        Sub-iterator "walking" a 0-d array.
+        """
 
         def compute_pointer(self, context, builder, indices, arrty, arr):
             return arr.data
 
 
     class ScalarSubIter(BaseSubIter):
+        """
+        Sub-iterator "walking" a scalar value.
+        """
 
         def compute_pointer(self, context, builder, indices, arrty, arr):
             return arr
@@ -1903,6 +1923,9 @@ def make_nditer_cls(nditerty):
             return l
 
         def init_specific(self, context, builder, arrtys, arrays):
+            """
+            Initialize the nditer() instance for the specific array inputs.
+            """
             zero = context.get_constant(types.intp, 0)
 
             # Store inputs
@@ -1979,6 +2002,9 @@ def make_nditer_cls(nditerty):
                 subiter.init_specific(context, builder)
 
         def iternext_specific(self, context, builder, result):
+            """
+            Compute next iteration of the nditer() instance.
+            """
             zero = context.get_constant(types.intp, 0)
             one = context.get_constant(types.intp, 1)
 
