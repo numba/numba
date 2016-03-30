@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 
 import contextlib
+import gc
 from itertools import product
 import sys
 import warnings
@@ -38,6 +39,10 @@ class TestProduct(TestCase):
 
     dtypes = (np.float64, np.float32, np.complex128, np.complex64)
 
+    def setUp(self):
+        # Collect leftovers from previous test cases before checking for leaks
+        gc.collect()
+
     def sample_vector(self, n, dtype):
         # Be careful to generate only exactly representable float values,
         # to avoid rounding discrepancies between Numpy and Numba
@@ -66,16 +71,20 @@ class TestProduct(TestCase):
         self.assertEqual(w[0].lineno, pyfunc.__code__.co_firstlineno + 1)
 
     def check_func(self, pyfunc, cfunc, args):
-        expected = pyfunc(*args)
-        got = cfunc(*args)
-        self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)
+        with self.assertNoNRTLeak():
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)
+            del got, expected
 
     def check_func_out(self, pyfunc, cfunc, args, out):
-        expected = np.copy(out)
-        got = np.copy(out)
-        self.assertIs(pyfunc(*args, out=expected), expected)
-        self.assertIs(cfunc(*args, out=got), got)
-        self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)
+        with self.assertNoNRTLeak():
+            expected = np.copy(out)
+            got = np.copy(out)
+            self.assertIs(pyfunc(*args, out=expected), expected)
+            self.assertIs(cfunc(*args, out=got), got)
+            self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)
+            del got, expected
 
     def assert_mismatching_sizes(self, cfunc, args, is_out=False):
         with self.assertRaises(ValueError) as raises:
@@ -301,6 +310,10 @@ class TestLinalgInv(TestCase):
 
     dtypes = (np.float64, np.float32, np.complex128, np.complex64)
 
+    def setUp(self):
+        # Collect leftovers from previous test cases before checking for leaks
+        gc.collect()
+
     def sample_vector(self, n, dtype):
         # Be careful to generate only exactly representable float values,
         # to avoid rounding discrepancies between Numpy and Numba
@@ -344,21 +357,23 @@ class TestLinalgInv(TestCase):
         """
         n = 10
         cfunc = jit(nopython=True)(invert_matrix)
+
+        def check(a, **kwargs):
+            with self.assertNoNRTLeak():
+                expected = invert_matrix(a).copy(order='C')
+                got = cfunc(a)
+                # XXX had to use that function otherwise comparison fails
+                # because of +0, -0 discrepancies
+                np.testing.assert_array_almost_equal_nulp(got, expected, **kwargs)
+                del got, expected
+
         for dtype, order in product(self.dtypes, 'CF'):
             a = self.sample_matrix(n, dtype, order)
-            expected = invert_matrix(a).copy(order='C')
-            got = cfunc(a)
-            # XXX add to use that function otherwise comparison fails
-            # because of +0, -0 discrepancies
-            np.testing.assert_array_almost_equal_nulp(got, expected, nulp=3)
+            check(a, nulp=3)
 
         for order in 'CF':
             a = np.array(((2, 1), (2, 3)), dtype=np.float64, order=order)
-            expected = invert_matrix(a).copy(order='C')
-            got = cfunc(a)
-            # XXX add to use that function otherwise comparison fails
-            # because of +0, -0 discrepancies
-            np.testing.assert_array_almost_equal_nulp(got, expected)
+            check(a)
 
         # Non square matrices
         self.assert_non_square(cfunc, (np.ones((2,3)),))
