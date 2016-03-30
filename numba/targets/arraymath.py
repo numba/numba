@@ -6,12 +6,13 @@ from __future__ import print_function, absolute_import, division
 
 import math
 
+import numpy
+
 from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant, Type
 
-import numpy
-from numba import types, cgutils, typing
+from numba import jit, types, cgutils, typing
 from numba.extending import overload, overload_method
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
@@ -22,7 +23,7 @@ from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
 
 
 #----------------------------------------------------------------------------
-# Stats and aggregates
+# Basic stats and aggregates
 
 @lower_builtin(numpy.sum, types.Array)
 @lower_builtin("array.sum", types.Array)
@@ -270,104 +271,6 @@ def array_argmax(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(numpy.median, types.Array)
-def array_median(context, builder, sig, args):
-    flattened = sig.args[0].copy(layout="C", ndim=1)
-    dtype = sig.args[0].dtype
-
-    def partition(A, low, high):
-        mid = (low + high) >> 1
-        # NOTE: the pattern of swaps below for the pivot choice and the
-        # partitioning gives good results (i.e. regular O(n log n))
-        # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
-        # risk breaking this property.
-
-        # Use median of three {low, middle, high} as the pivot
-        if A[mid] < A[low]:
-            A[low], A[mid] = A[mid], A[low]
-        if A[high] < A[mid]:
-            A[high], A[mid] = A[mid], A[high]
-            if A[mid] < A[low]:
-                A[low], A[mid] = A[mid], A[low]
-        pivot = A[mid]
-
-        A[high], A[mid] = A[mid], A[high]
-
-        i = low
-        for j in range(low, high):
-            if A[j] <= pivot:
-                A[i], A[j] = A[j], A[i]
-                i += 1
-
-        A[i], A[high] = A[high], A[i]
-        return i
-
-    sig_partition = typing.signature(types.intp,
-                                     *(flattened, types.intp, types.intp))
-    _partition = context.compile_subroutine(builder, partition, sig_partition)
-
-    def select(arry, k, low, high):
-        """
-        Select the k'th smallest element in array[low:high + 1].
-        """
-        i = _partition(arry, low, high)
-        while i != k:
-            if i < k:
-                low = i + 1
-                i = _partition(arry, low, high)
-            else:
-                high = i - 1
-                i = _partition(arry, low, high)
-        return arry[k]
-
-    sig_select_args = flattened, types.intp, types.intp, types.intp
-    sig_select = typing.signature(dtype, *sig_select_args)
-    _select = context.compile_subroutine(builder, select, sig_select)
-
-    def select_two(arry, k, low, high):
-        """
-        Select the k'th and k+1'th smallest elements in array[low:high + 1].
-
-        This is significantly faster than doing two independent selections
-        for k and k+1.
-        """
-        while True:
-            assert high > low  # by construction
-            i = _partition(arry, low, high)
-            if i < k:
-                low = i + 1
-            elif i > k + 1:
-                high = i - 1
-            elif i == k:
-                _select(arry, k + 1, i + 1, high)
-                break
-            else:  # i == k + 1
-                _select(arry, k, low, i - 1)
-                break
-
-        return arry[k], arry[k + 1]
-
-    sig_select_two = typing.signature(types.UniTuple(dtype, 2), *sig_select_args)
-    _select_two = context.compile_subroutine(builder, select_two, sig_select_two)
-
-    def median(arry):
-        # np.median() works on the flattened array, and we need a temporary
-        # workspace anyway
-        temp_arry = arry.flatten()
-        n = temp_arry.shape[0]
-        low = 0
-        high = n - 1
-        half = n >> 1
-        if n & 1 == 0:
-            a, b = _select_two(temp_arry, half - 1, low, high)
-            return (a + b) / 2
-        else:
-            return _select(temp_arry, half, low, high)
-
-    res = context.compile_internal(builder, median, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
 @overload(numpy.all)
 @overload_method(types.Array, "all")
 def np_all(a):
@@ -389,6 +292,252 @@ def np_any(a):
         return False
 
     return flat_any
+
+
+def get_isnan(dtype):
+    """
+    A generic isnan() function
+    """
+    if isinstance(dtype, (types.Float, types.Complex)):
+        return numpy.isnan
+    else:
+        @jit(nopython=True)
+        def _trivial_isnan(x):
+            return False
+        return _trivial_isnan
+
+
+@overload(numpy.nanmin)
+def np_nanmin(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
+
+    def nanmin_impl(a):
+        if a.size == 0:
+            raise ValueError("nanmin(): empty array")
+        for view in numpy.nditer(a):
+            minval = view.item()
+            break
+        for view in numpy.nditer(a):
+            v = view.item()
+            if not minval < v and not isnan(v):
+                minval = v
+        return minval
+
+    return nanmin_impl
+
+@overload(numpy.nanmax)
+def np_nanmax(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
+
+    def nanmax_impl(a):
+        if a.size == 0:
+            raise ValueError("nanmin(): empty array")
+        for view in numpy.nditer(a):
+            maxval = view.item()
+            break
+        for view in numpy.nditer(a):
+            v = view.item()
+            if not maxval > v and not isnan(v):
+                maxval = v
+        return maxval
+
+    return nanmax_impl
+
+@overload(numpy.nanmean)
+def np_nanmean(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
+
+    def nanmean_impl(arr):
+        c = 0.0
+        count = 0
+        for view in numpy.nditer(arr):
+            v = view.item()
+            if not isnan(v):
+                c += v.item()
+                count += 1
+        # np.divide() doesn't raise ZeroDivisionError
+        return numpy.divide(c, count)
+
+    return nanmean_impl
+
+@overload(numpy.nanvar)
+def np_nanvar(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
+
+    def nanvar_impl(arr):
+        # Compute the mean
+        m = numpy.nanmean(arr)
+
+        # Compute the sum of square diffs
+        ssd = 0.0
+        count = 0
+        for view in numpy.nditer(arr):
+            v = view.item()
+            if not isnan(v):
+                ssd += (v.item() - m) ** 2
+                count += 1
+        # np.divide() doesn't raise ZeroDivisionError
+        return numpy.divide(ssd, count)
+
+    return nanvar_impl
+
+@overload(numpy.nanstd)
+def np_nanstd(a):
+    if not isinstance(a, types.Array):
+        return
+
+    def nanstd_impl(arr):
+        return numpy.nanvar(arr) ** 0.5
+
+    return nanstd_impl
+
+@overload(numpy.nansum)
+def np_nansum(a):
+    if not isinstance(a, types.Array):
+        return
+    if isinstance(a.dtype, types.Integer):
+        retty = types.intp
+    else:
+        retty = a.dtype
+    zero = retty(0)
+    isnan = get_isnan(a.dtype)
+
+    def nansum_impl(arr):
+        c = zero
+        for view in numpy.nditer(arr):
+            v = view.item()
+            if not isnan(v):
+                c += v
+        return c
+
+    return nansum_impl
+
+
+#----------------------------------------------------------------------------
+# Median and partitioning
+
+@jit(nopython=True)
+def _partition(A, low, high):
+    mid = (low + high) >> 1
+    # NOTE: the pattern of swaps below for the pivot choice and the
+    # partitioning gives good results (i.e. regular O(n log n))
+    # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
+    # risk breaking this property.
+
+    # Use median of three {low, middle, high} as the pivot
+    if A[mid] < A[low]:
+        A[low], A[mid] = A[mid], A[low]
+    if A[high] < A[mid]:
+        A[high], A[mid] = A[mid], A[high]
+        if A[mid] < A[low]:
+            A[low], A[mid] = A[mid], A[low]
+    pivot = A[mid]
+
+    A[high], A[mid] = A[mid], A[high]
+
+    i = low
+    for j in range(low, high):
+        if A[j] <= pivot:
+            A[i], A[j] = A[j], A[i]
+            i += 1
+
+    A[i], A[high] = A[high], A[i]
+    return i
+
+@jit(nopython=True)
+def _select(arry, k, low, high):
+    """
+    Select the k'th smallest element in array[low:high + 1].
+    """
+    i = _partition(arry, low, high)
+    while i != k:
+        if i < k:
+            low = i + 1
+            i = _partition(arry, low, high)
+        else:
+            high = i - 1
+            i = _partition(arry, low, high)
+    return arry[k]
+
+@jit(nopython=True)
+def _select_two(arry, k, low, high):
+    """
+    Select the k'th and k+1'th smallest elements in array[low:high + 1].
+
+    This is significantly faster than doing two independent selections
+    for k and k+1.
+    """
+    while True:
+        assert high > low  # by construction
+        i = _partition(arry, low, high)
+        if i < k:
+            low = i + 1
+        elif i > k + 1:
+            high = i - 1
+        elif i == k:
+            _select(arry, k + 1, i + 1, high)
+            break
+        else:  # i == k + 1
+            _select(arry, k, low, i - 1)
+            break
+
+    return arry[k], arry[k + 1]
+
+@jit(nopython=True)
+def _median_inner(temp_arry, n):
+    """
+    The main logic of the median() call.  *temp_arry* must be disposable,
+    as this function will mutate it.
+    """
+    low = 0
+    high = n - 1
+    half = n >> 1
+    if n & 1 == 0:
+        a, b = _select_two(temp_arry, half - 1, low, high)
+        return (a + b) / 2
+    else:
+        return _select(temp_arry, half, low, high)
+
+@overload(numpy.median)
+def np_median(a):
+    if not isinstance(a, types.Array):
+        return
+
+    def median_impl(arry):
+        # np.median() works on the flattened array, and we need a temporary
+        # workspace anyway
+        temp_arry = arry.flatten()
+        n = temp_arry.shape[0]
+        return _median_inner(temp_arry, n)
+
+    return median_impl
+
+@overload(numpy.nanmedian)
+def np_nanmedian(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
+
+    def nanmedian_impl(arry):
+        # Create a temporary workspace with only non-NaN values
+        temp_arry = numpy.empty(arry.size, arry.dtype)
+        n = 0
+        for view in numpy.nditer(arry):
+            v = view.item()
+            if not isnan(v):
+                temp_arry[n] = v
+                n += 1
+        return _median_inner(temp_arry, n)
+
+    return nanmedian_impl
 
 
 #----------------------------------------------------------------------------
@@ -652,3 +801,365 @@ def any_where(context, builder, sig, args):
 
     res = context.compile_internal(builder, scalar_where_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
+#----------------------------------------------------------------------------
+# Misc functions
+
+@overload(numpy.diff)
+def np_diff_impl(a, n=1):
+    if not isinstance(a, types.Array) or a.ndim == 0:
+        return
+
+    def diff_impl(a, n=1):
+        if n == 0:
+            return a.copy()
+        if n < 0:
+            raise ValueError("diff(): order must be non-negative")
+        size = a.shape[-1]
+        out_shape = a.shape[:-1] + (max(size - n, 0),)
+        out = numpy.empty(out_shape, a.dtype)
+        if out.size == 0:
+            return out
+
+        # np.diff() works on each last dimension subarray independently.
+        # To make things easier, normalize input and output into 2d arrays
+        a2 = a.reshape((-1, size))
+        out2 = out.reshape((-1, out.shape[-1]))
+        # A scratchpad for subarrays
+        work = numpy.empty(size, a.dtype)
+
+        for major in range(a2.shape[0]):
+            # First iteration: diff a2 into work
+            for i in range(size - 1):
+                work[i] = a2[major, i + 1] - a2[major, i]
+            # Other iterations: diff work into itself
+            for niter in range(1, n):
+                for i in range(size - niter - 1):
+                    work[i] = work[i + 1] - work[i]
+            # Copy final diff into out2
+            out2[major] = work[:size - n]
+
+        return out
+
+    return diff_impl
+
+
+def validate_1d_array_like(func_name, seq):
+    if isinstance(seq, types.Array):
+        if seq.ndim != 1:
+            raise TypeError("{0}(): input should have dimension 1"
+                            .format(func_name))
+    elif not isinstance(seq, types.Sequence):
+        raise TypeError("{0}(): input should be an array or sequence"
+                        .format(func_name))
+
+
+@overload(numpy.bincount)
+def np_bincount(a, weights=None):
+    validate_1d_array_like("bincount", a)
+    if not isinstance(a.dtype, types.Integer):
+        return
+
+    if weights not in (None, types.none):
+        validate_1d_array_like("bincount", weights)
+        out_dtype = weights.dtype
+
+        @jit(nopython=True)
+        def validate_inputs(a, weights):
+            if len(a) != len(weights):
+                raise ValueError("bincount(): weights and list don't have the same length")
+
+        @jit(nopython=True)
+        def count_item(out, idx, val, weights):
+            out[val] += weights[idx]
+
+    else:
+        out_dtype = types.intp
+
+        @jit(nopython=True)
+        def validate_inputs(a, weights):
+            pass
+
+        @jit(nopython=True)
+        def count_item(out, idx, val, weights):
+            out[val] += 1
+
+    def bincount_impl(a, weights=None):
+        validate_inputs(a, weights)
+        n = len(a)
+
+        a_max = a[0] if n > 0 else -1
+        for i in range(1, n):
+            if a[i] < 0:
+                raise ValueError("bincount(): first argument must be non-negative")
+            a_max = max(a_max, a[i])
+
+        out = numpy.zeros(a_max + 1, out_dtype)
+        for i in range(n):
+            count_item(out, i, a[i], weights)
+        return out
+
+    return bincount_impl
+
+
+@overload(numpy.searchsorted)
+def searchsorted(a, v):
+    if isinstance(v, types.Array):
+        # N-d array and output
+
+        def searchsorted_impl(a, v):
+            out = numpy.empty(v.shape, numpy.intp)
+            for view, outview in numpy.nditer((v, out)):
+                index = numpy.searchsorted(a, view.item())
+                outview.itemset(index)
+            return out
+
+        return searchsorted_impl
+
+    elif isinstance(v, types.Sequence):
+        # 1-d sequence and output
+
+        def searchsorted_impl(a, v):
+            out = numpy.empty(len(v), numpy.intp)
+            for i in range(len(v)):
+                out[i] = numpy.searchsorted(a, v[i])
+            return out
+
+        return searchsorted_impl
+
+    else:
+        # Scalar value and output
+        # Note: NaNs come last in Numpy-sorted arrays
+
+        def searchsorted_impl(a, v):
+            n = len(a)
+            if numpy.isnan(v):
+                # Find the first nan (i.e. the last from the end of a,
+                # since there shouldn't be many of them in practice)
+                for i in range(n, 0, -1):
+                    if not numpy.isnan(a[i - 1]):
+                        return i
+                return 0
+            lo = 0
+            hi = n
+            while hi > lo:
+                mid = (lo + hi) >> 1
+                if a[mid] < v:
+                    # mid is too low => go up
+                    lo = mid + 1
+                else:
+                    # mid is too high, or is a NaN => go down
+                    hi = mid
+            return lo
+
+        return searchsorted_impl
+
+
+@overload(numpy.digitize)
+def np_digitize(x, bins, right=False):
+    @jit(nopython=True)
+    def are_bins_increasing(bins):
+        n = len(bins)
+        is_increasing = True
+        is_decreasing = True
+        if n > 1:
+            prev = bins[0]
+            for i in range(1, n):
+                cur = bins[i]
+                is_increasing = is_increasing and not prev > cur
+                is_decreasing = is_decreasing and not prev < cur
+                if not is_increasing and not is_decreasing:
+                    raise ValueError("bins must be monotonically increasing or decreasing")
+                prev = cur
+        return is_increasing
+
+    # NOTE: the algorithm is slightly different from searchsorted's,
+    # as the edge cases (bin boundaries, NaN) give different results.
+
+    @jit(nopython=True)
+    def digitize_scalar(x, bins, right):
+        # bins are monotonically-increasing
+        n = len(bins)
+        lo = 0
+        hi = n
+
+        if right:
+            if numpy.isnan(x):
+                # Find the first nan (i.e. the last from the end of bins,
+                # since there shouldn't be many of them in practice)
+                for i in range(n, 0, -1):
+                    if not numpy.isnan(bins[i - 1]):
+                        return i
+                return 0
+            while hi > lo:
+                mid = (lo + hi) >> 1
+                if bins[mid] < x:
+                    # mid is too low => narrow to upper bins
+                    lo = mid + 1
+                else:
+                    # mid is too high, or is a NaN => narrow to lower bins
+                    hi = mid
+        else:
+            if numpy.isnan(x):
+                # NaNs end up in the last bin
+                return n
+            while hi > lo:
+                mid = (lo + hi) >> 1
+                if bins[mid] <= x:
+                    # mid is too low => narrow to upper bins
+                    lo = mid + 1
+                else:
+                    # mid is too high, or is a NaN => narrow to lower bins
+                    hi = mid
+
+        return lo
+
+    @jit(nopython=True)
+    def digitize_scalar_decreasing(x, bins, right):
+        # bins are monotonically-decreasing
+        n = len(bins)
+        lo = 0
+        hi = n
+
+        if right:
+            if numpy.isnan(x):
+                # Find the last nan
+                for i in range(0, n):
+                    if not numpy.isnan(bins[i]):
+                        return i
+                return n
+            while hi > lo:
+                mid = (lo + hi) >> 1
+                if bins[mid] < x:
+                    # mid is too high => narrow to lower bins
+                    hi = mid
+                else:
+                    # mid is too low, or is a NaN => narrow to upper bins
+                    lo = mid + 1
+        else:
+            if numpy.isnan(x):
+                # NaNs end up in the first bin
+                return 0
+            while hi > lo:
+                mid = (lo + hi) >> 1
+                if bins[mid] <= x:
+                    # mid is too high => narrow to lower bins
+                    hi = mid
+                else:
+                    # mid is too low, or is a NaN => narrow to upper bins
+                    lo = mid + 1
+
+        return lo
+
+    if isinstance(x, types.Array):
+        # N-d array and output
+
+        def digitize_impl(x, bins, right=False):
+            is_increasing = are_bins_increasing(bins)
+            out = numpy.empty(x.shape, numpy.intp)
+            for view, outview in numpy.nditer((x, out)):
+                if is_increasing:
+                    index = digitize_scalar(view.item(), bins, right)
+                else:
+                    index = digitize_scalar_decreasing(view.item(), bins, right)
+                outview.itemset(index)
+            return out
+
+        return digitize_impl
+
+    elif isinstance(x, types.Sequence):
+        # 1-d sequence and output
+
+        def digitize_impl(x, bins, right=False):
+            is_increasing = are_bins_increasing(bins)
+            out = numpy.empty(len(x), numpy.intp)
+            for i in range(len(x)):
+                if is_increasing:
+                    out[i] = digitize_scalar(x[i], bins, right)
+                else:
+                    out[i] = digitize_scalar_decreasing(x[i], bins, right)
+            return out
+
+        return digitize_impl
+
+
+_range = range
+
+@overload(numpy.histogram)
+def np_histogram(a, bins=10, range=None):
+    if isinstance(bins, (int, types.Integer)):
+        # With a uniform distribution of bins, use a fast algorithm
+        # independent of the number of bins
+
+        if range in (None, types.none):
+            inf = float('inf')
+            def histogram_impl(a, bins=10, range=None):
+                bin_min = inf
+                bin_max = -inf
+                for view in numpy.nditer(a):
+                    v = view.item()
+                    if bin_min > v:
+                        bin_min = v
+                    if bin_max < v:
+                        bin_max = v
+                return numpy.histogram(a, bins, (bin_min, bin_max))
+
+        else:
+            def histogram_impl(a, bins=10, range=None):
+                if bins <= 0:
+                    raise ValueError("histogram(): `bins` should be a positive integer")
+                bin_min, bin_max = range
+                if not bin_min <= bin_max:
+                    raise ValueError("histogram(): max must be larger than min in range parameter")
+
+                hist = numpy.zeros(bins, numpy.intp)
+                if bin_max > bin_min:
+                    bin_ratio = bins / (bin_max - bin_min)
+                    for view in numpy.nditer(a):
+                        v = view.item()
+                        b = math.floor((v - bin_min) * bin_ratio)
+                        if 0 <= b < bins:
+                            hist[int(b)] += 1
+                        elif v == bin_max:
+                            hist[bins - 1] += 1
+
+                bins_array = numpy.linspace(bin_min, bin_max, bins + 1)
+                return hist, bins_array
+
+    else:
+        # With a custom bins array, use a bisection search
+
+        def histogram_impl(a, bins, range=None):
+            nbins = len(bins) - 1
+            for i in _range(nbins):
+                # Note this also catches NaNs
+                if not bins[i] <= bins[i + 1]:
+                    raise ValueError("histogram(): bins must increase monotonically")
+
+            bin_min = bins[0]
+            bin_max = bins[nbins]
+            hist = numpy.zeros(nbins, numpy.intp)
+
+            if nbins > 0:
+                for view in numpy.nditer(a):
+                    v = view.item()
+                    if not bin_min <= v <= bin_max:
+                        # Value is out of bounds, ignore (this also catches NaNs)
+                        continue
+                    # Bisect in bins[:-1]
+                    lo = 0
+                    hi = nbins - 1
+                    while lo < hi:
+                        # Note the `+ 1` is necessary to avoid an infinite
+                        # loop where mid = lo => lo = mid
+                        mid = (lo + hi + 1) >> 1
+                        if v < bins[mid]:
+                            hi = mid - 1
+                        else:
+                            lo = mid
+                    hist[lo] += 1
+
+            return hist, bins
+
+    return histogram_impl

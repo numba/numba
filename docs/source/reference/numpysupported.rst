@@ -162,7 +162,7 @@ Linear algebra
 --------------
 
 Basic linear algebra is supported on 1-D and 2-D contiguous arrays of
-floating-point and complex numbers.
+floating-point and complex numbers:
 
 * :func:`numpy.dot`
 * :func:`numpy.vdot`
@@ -173,6 +173,21 @@ floating-point and complex numbers.
 .. note::
    The implementation of these functions needs Scipy 0.16+ to be installed.
 
+Reductions
+----------
+
+The following reduction functions are supported:
+
+* :func:`numpy.diff` (only the 2 first arguments)
+* :func:`numpy.median` (only the first argument)
+* :func:`numpy.nanmax` (only the first argument)
+* :func:`numpy.nanmean` (only the first argument)
+* :func:`numpy.nanmedian` (only the first argument)
+* :func:`numpy.nanmin` (only the first argument)
+* :func:`numpy.nanstd` (only the first argument)
+* :func:`numpy.nansum` (only the first argument)
+* :func:`numpy.nanvar` (only the first argument)
+
 Other functions
 ---------------
 
@@ -180,7 +195,9 @@ The following top-level functions are supported:
 
 * :func:`numpy.arange`
 * :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.bincount` (only the 2 first arguments)
 * :func:`numpy.diag`
+* :func:`numpy.digitize`
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.eye`
@@ -188,9 +205,9 @@ The following top-level functions are supported:
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full`
 * :func:`numpy.full_like`
+* :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.identity`
 * :func:`numpy.linspace` (only the 3-argument form)
-* :func:`numpy.median` (only the first argument)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
@@ -198,6 +215,7 @@ The following top-level functions are supported:
 * :func:`numpy.ones_like`
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.round_`
+* :func:`numpy.searchsorted` (only the 2 first arguments)
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.where`
