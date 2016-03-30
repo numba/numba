@@ -134,6 +134,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     Test array reduction methods and functions such as .sum(), .max(), etc.
     """
 
+    def setUp(self):
+        super(TestArrayReductions, self).setUp()
+        np.random.seed(42)
+
     @tag('important')
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
@@ -216,32 +220,42 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         npr, nbr = run_comparative(array_argmax, arr)
         self.assertPreciseEqual(npr, nbr)
 
-    def test_median_odd(self):
-        arr = np.arange(101)
-        np.random.shuffle(arr)
-        npr, nbr = run_comparative(array_median_global, arr)
-        self.assertPreciseEqual(npr, nbr)
+    @tag('important')
+    def test_median_basic(self):
+        pyfunc = array_median_global
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(got, expected)
 
-    def test_median_even(self):
-        arr = np.arange(100)
-        np.random.shuffle(arr)
-        npr, nbr = run_comparative(array_median_global, arr)
-        self.assertPreciseEqual(npr, nbr)
+        def variations(a):
+            # Sorted, reversed, random, many duplicates
+            yield a
+            a = a[::-1].copy()
+            yield a
+            np.random.shuffle(a)
+            yield a
+            a[a & 3 != 0] = 0
+            yield a
 
-    def test_median_sorted(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_median_global, arr)
-        self.assertPreciseEqual(npr, nbr)
+        # Odd sizes
+        def check_odd(a):
+            check(a)
+            a = a.reshape((9, 7))
+            check(a)
+            check(a.T)
+        for a in variations(np.arange(63) + 10):
+            check_odd(a)
 
-    def test_median_revsorted(self):
-        arr = np.arange(100, 0, -1)
-        npr, nbr = run_comparative(array_median_global, arr)
-        self.assertPreciseEqual(npr, nbr)
-
-    def test_median_duplicate(self):
-        arr = np.ones(100)
-        npr, nbr = run_comparative(array_median_global, arr)
-        self.assertPreciseEqual(npr, nbr)
+        # Even sizes
+        def check_even(a):
+            check(a)
+            a = a.reshape((4, 16))
+            check(a)
+            check(a.T)
+        for a in variations(np.arange(64) + 10):
+            check_even(a)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
