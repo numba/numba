@@ -47,10 +47,6 @@ class TestProfiler(unittest.TestCase):
                         )
         self.assertIn(expected_key, stats.stats)
 
-    # The feature is currently broken.  We merely run the code to check
-    # Numba doesn't crash.
-
-    @unittest.expectedFailure
     def test_profiler(self):
         self.check_profiler_dot(dot)
 
