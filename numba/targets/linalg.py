@@ -4,6 +4,8 @@ Implementation of linear algebra operations.
 
 from __future__ import print_function, absolute_import, division
 
+import contextlib
+
 from llvmlite import ir
 import numpy
 
@@ -45,14 +47,17 @@ def make_constant_slot(context, builder, ty, val):
     const = context.get_constant_generic(builder, ty, val)
     return cgutils.alloca_once_value(builder, const)
 
+
+@contextlib.contextmanager
 def make_contiguous(context, builder, sig, args):
     """
     Ensure that all array arguments are contiguous, if necessary by
     copying them.
-    A new (sig, args) tuple is returned.
+    A new (sig, args) tuple is yielded.
     """
     newtys = []
     newargs = []
+    copies = []
     for ty, val in zip(sig.args, args):
         if not isinstance(ty, types.Array) or ty.layout in 'CF':
             newty, newval = ty, val
@@ -60,9 +65,12 @@ def make_contiguous(context, builder, sig, args):
             newty = ty.copy(layout='C')
             copysig = signature(newty, ty)
             newval = array_copy(context, builder, copysig, (val,))
+            copies.append((newty, newval))
         newtys.append(newty)
         newargs.append(newval)
-    return signature(sig.return_type, *newtys), tuple(newargs)
+    yield signature(sig.return_type, *newtys), tuple(newargs)
+    for ty, val in copies:
+        context.nrt_decref(builder, ty, val)
 
 
 def check_c_int(context, builder, n):
@@ -286,19 +294,19 @@ def dot_2(context, builder, sig, args):
     a @ b
     """
     ensure_blas()
-    sig, args = make_contiguous(context, builder, sig, args)
 
-    ndims = [x.ndim for x in sig.args[:2]]
-    if ndims == [2, 2]:
-        return dot_2_mm(context, builder, sig, args)
-    elif ndims == [2, 1]:
-        return dot_2_mv(context, builder, sig, args)
-    elif ndims == [1, 2]:
-        return dot_2_vm(context, builder, sig, args)
-    elif ndims == [1, 1]:
-        return dot_2_vv(context, builder, sig, args)
-    else:
-        assert 0
+    with make_contiguous(context, builder, sig, args) as (sig, args):
+        ndims = [x.ndim for x in sig.args[:2]]
+        if ndims == [2, 2]:
+            return dot_2_mm(context, builder, sig, args)
+        elif ndims == [2, 1]:
+            return dot_2_mv(context, builder, sig, args)
+        elif ndims == [1, 2]:
+            return dot_2_vm(context, builder, sig, args)
+        elif ndims == [1, 1]:
+            return dot_2_vv(context, builder, sig, args)
+        else:
+            assert 0
 
 @lower_builtin(numpy.vdot, types.Array, types.Array)
 def vdot(context, builder, sig, args):
@@ -306,9 +314,9 @@ def vdot(context, builder, sig, args):
     np.vdot(a, b)
     """
     ensure_blas()
-    sig, args = make_contiguous(context, builder, sig, args)
 
-    return dot_2_vv(context, builder, sig, args, conjugate=True)
+    with make_contiguous(context, builder, sig, args) as (sig, args):
+        return dot_2_vv(context, builder, sig, args, conjugate=True)
 
 
 def dot_3_vm(context, builder, sig, args):
@@ -455,15 +463,15 @@ def dot_3(context, builder, sig, args):
     np.dot(a, b, out)
     """
     ensure_blas()
-    sig, args = make_contiguous(context, builder, sig, args)
 
-    ndims = set(x.ndim for x in sig.args[:2])
-    if ndims == set([2]):
-        return dot_3_mm(context, builder, sig, args)
-    elif ndims == set([1, 2]):
-        return dot_3_vm(context, builder, sig, args)
-    else:
-        assert 0
+    with make_contiguous(context, builder, sig, args) as (sig, args):
+        ndims = set(x.ndim for x in sig.args[:2])
+        if ndims == set([2]):
+            return dot_3_mm(context, builder, sig, args)
+        elif ndims == set([1, 2]):
+            return dot_3_vm(context, builder, sig, args)
+        else:
+            assert 0
 
 
 def call_xxgetrf(context, builder, a_type, a_shapes, a_data, ipiv, info):
@@ -545,7 +553,7 @@ def mat_inv(context, builder, sig, args):
     # Scipy for which one can specify to whether or not to overwrite the
     # input).
     def create_out(a):
-        m, n= a.shape
+        m, n = a.shape
         if m != n:
             raise ValueError("np.linalg.inv can only work on square "
                              "arrays.")
@@ -572,15 +580,14 @@ def mat_inv(context, builder, sig, args):
     invalid_arg = builder.icmp_signed('<', info_val, zero)
 
     with builder.if_then(lapack_error, False):
+        context.nrt_decref(builder, ipiv_t, ipiv)
         with builder.if_else(invalid_arg) as (then, otherwise):
             raise_err = context.call_conv.return_user_exc
             with then:
-                context.nrt_decref(builder, ipiv_t, ipiv)
                 raise_err(builder, ValueError,
                           ('One argument passed to getrf is invalid',)
                           )
             with otherwise:
-                context.nrt_decref(builder, ipiv_t, ipiv)
                 raise_err(builder, ValueError,
                           ('Matrix is singular and cannot be inverted',)
                           )
