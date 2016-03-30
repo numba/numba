@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import locale
-import sys
 import weakref
 
 import llvmlite.llvmpy.core as lc

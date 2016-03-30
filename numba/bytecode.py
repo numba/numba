@@ -341,7 +341,7 @@ class ByteCodeBase(object):
         """
         d = {}
         globs = func.__globals__
-        builtins = globs['__builtins__']
+        builtins = globs.get('__builtins__', utils.builtins)
         if isinstance(builtins, ModuleType):
             builtins = builtins.__dict__
         # Look for LOAD_GLOBALs in the bytecode
@@ -423,4 +423,3 @@ class ByteCode(ByteCodeBase):
                 known = inst.lineno
             else:
                 inst.lineno = known
-
