@@ -352,6 +352,8 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     ``name`` arg set the symbol name inside the llvm IR for debugging.
     If ``zfill`` is set, also filling zeros to the memory.
     """
+    if isinstance(size, utils.INT_TYPES):
+        size = ir.Constant(intp_t, size)
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
         if zfill:

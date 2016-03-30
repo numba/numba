@@ -550,6 +550,12 @@ class BooleanAttribute(AttributeTemplate):
     def resolve___class__(self, ty):
         return types.NumberClass(ty)
 
+    @bound_function("number.item")
+    def resolve_item(self, ty, args, kws):
+        assert not kws
+        if not args:
+            return signature(ty)
+
 
 @infer_getattr
 class NumberAttribute(AttributeTemplate):
@@ -569,6 +575,12 @@ class NumberAttribute(AttributeTemplate):
         assert not args
         assert not kws
         return signature(ty)
+
+    @bound_function("number.item")
+    def resolve_item(self, ty, args, kws):
+        assert not kws
+        if not args:
+            return signature(ty)
 
 
 @infer_getattr

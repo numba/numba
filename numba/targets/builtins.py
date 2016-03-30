@@ -1085,6 +1085,15 @@ lower_builtin(abs, ty)(complex_abs_impl)
 del ty
 
 
+@lower_builtin("number.item", types.Boolean)
+@lower_builtin("number.item", types.Number)
+def number_item_impl(context, builder, sig, args):
+    """
+    The no-op .item() method on booleans and numbers.
+    """
+    return args[0]
+
+
 #------------------------------------------------------------------------------
 
 

@@ -1,9 +1,11 @@
 from __future__ import division
 
+import itertools
+
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import typeof, types
+from numba import jit, typeof, types
 from numba.compiler import compile_isolated
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
 
@@ -65,6 +67,24 @@ def np_ndindex_array(arr):
         for i, j in enumerate(indices):
             s = s + (i + 1) * (j + 1)
     return s
+
+def np_nditer1(a):
+    res = []
+    for u in np.nditer(a):
+        res.append(u.item())
+    return res
+
+def np_nditer2(a, b):
+    res = []
+    for u, v in np.nditer((a, b)):
+        res.append((u.item(), v.item()))
+    return res
+
+def np_nditer3(a, b, c):
+    res = []
+    for u, v, w in np.nditer((a, b, c)):
+        res.append((u.item(), v.item(), w.item()))
+    return res
 
 def iter_next(arr):
     it = iter(arr)
@@ -340,6 +360,87 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         func = iter_next
         arr = np.arange(12, dtype=np.int32) + 10
         self.check_array_unary(arr, typeof(arr), func)
+
+
+class TestNdIter(MemoryLeakMixin, TestCase):
+    """
+    Test np.nditer()
+    """
+
+    def inputs(self):
+        # All those inputs are compatible with a (3, 4) main shape
+
+        # scalars
+        yield np.float32(100)
+
+        # 0-d arrays
+        yield np.array(102, dtype=np.int16)
+
+        # 1-d arrays
+        yield np.arange(4).astype(np.complex64)
+        yield np.arange(8)[::2]
+
+        # 2-d arrays
+        a = np.arange(12).reshape((3, 4))
+        yield a
+        yield a.copy(order='F')
+        a = np.arange(24).reshape((6, 4))[::2]
+        yield a
+
+    def basic_inputs(self):
+        yield np.arange(4).astype(np.complex64)
+        yield np.arange(8)[::2]
+        a = np.arange(12).reshape((3, 4))
+        yield a
+        yield a.copy(order='F')
+
+    def check_result(self, got, expected):
+        self.assertEqual(set(got), set(expected), (got, expected))
+
+    def test_nditer1(self):
+        pyfunc = np_nditer1
+        cfunc = jit(nopython=True)(pyfunc)
+        for a in self.inputs():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.check_result(got, expected)
+
+    @tag('important')
+    def test_nditer2(self):
+        pyfunc = np_nditer2
+        cfunc = jit(nopython=True)(pyfunc)
+        for a, b in itertools.product(self.inputs(), self.inputs()):
+            expected = pyfunc(a, b)
+            got = cfunc(a, b)
+            self.check_result(got, expected)
+
+    def test_nditer3(self):
+        pyfunc = np_nditer3
+        cfunc = jit(nopython=True)(pyfunc)
+        # Use a restricted set of inputs, to shorten test time
+        inputs = self.basic_inputs
+        for a, b, c in itertools.product(inputs(), inputs(), inputs()):
+            expected = pyfunc(a, b, c)
+            got = cfunc(a, b, c)
+            self.check_result(got, expected)
+
+    def test_errors(self):
+        # Incompatible shapes
+        pyfunc = np_nditer2
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.disable_leak_check()
+
+        def check_incompatible(a, b):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(a, b)
+            self.assertIn("operands could not be broadcast together",
+                          str(raises.exception))
+
+        check_incompatible(np.arange(2), np.arange(3))
+        a = np.arange(12).reshape((3, 4))
+        b = np.arange(3)
+        check_incompatible(a, b)
 
 
 if __name__ == '__main__':

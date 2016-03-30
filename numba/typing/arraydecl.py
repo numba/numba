@@ -272,6 +272,24 @@ class ArrayAttribute(AttributeTemplate):
         retty = ary.copy(layout="C")
         return signature(retty)
 
+    @bound_function("array.item")
+    def resolve_item(self, ary, args, kws):
+        assert not kws
+        # We don't support explicit arguments as that's exactly equivalent
+        # to regular indexing.  The no-argument form is interesting to
+        # allow some degree of genericity when writing functions.
+        if not args:
+            return signature(ary.dtype)
+
+    @bound_function("array.itemset")
+    def resolve_itemset(self, ary, args, kws):
+        assert not kws
+        # We don't support explicit arguments as that's exactly equivalent
+        # to regular indexing.  The no-argument form is interesting to
+        # allow some degree of genericity when writing functions.
+        if len(args) == 1:
+            return signature(types.none, ary.dtype)
+
     @bound_function("array.nonzero")
     def resolve_nonzero(self, ary, args, kws):
         assert not args

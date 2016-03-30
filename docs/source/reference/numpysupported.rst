@@ -141,12 +141,14 @@ The following methods of Numpy arrays are supported:
 
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
+* :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
+* :meth:`~numpy.ndarray.item` (without arguments)
+* :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
+* :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
 * :meth:`~numpy.ndarray.transpose` (without arguments, and without copying)
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
-* :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
-* :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
 
 
 .. warning::
@@ -182,6 +184,7 @@ The following top-level functions are supported:
 * :func:`numpy.empty`
 * :func:`numpy.empty_like`
 * :func:`numpy.eye`
+* :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full`
 * :func:`numpy.full_like`
@@ -190,16 +193,16 @@ The following top-level functions are supported:
 * :func:`numpy.median` (only the first argument)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
+* :class:`numpy.nditer` (only the first argument)
 * :func:`numpy.ones`
 * :func:`numpy.ones_like`
+* :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.round_`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.where`
 * :func:`numpy.zeros`
 * :func:`numpy.zeros_like`
-* :func:`numpy.ravel` (no order argument; 'C' order only)
-* :func:`numpy.flatten` (no order argument; 'C' order only)
 
 
 The following constructors are supported, both with a numeric input (to
