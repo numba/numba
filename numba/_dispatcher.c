@@ -54,9 +54,21 @@ call_trace_protected(Py_tracefunc func, PyObject *obj,
     }
 }
 
+/*
+ * The original C_TRACE macro (from ceval.c) would call
+ * PyTrace_C_CALL et al., for which the frame argument wouldn't
+ * be usable. Since we explicitly synthesize a frame using the
+ * original Python code object, we call PyTrace_CALL instead so
+ * the profiler can report the correct source location.
+ *
+ * Likewise, while ceval.c would call PyTrace_C_EXCEPTION in case
+ * of error, the profiler would simply expect a RETURN in case of
+ * a Python function, so we generate that here (making sure the
+ * exception state is preserved correctly).
+ */
 #define C_TRACE(x, call)                                        \
 if (call_trace(tstate->c_profilefunc, tstate->c_profileobj,     \
-               tstate, tstate->frame, PyTrace_C_CALL, cfunc))   \
+               tstate, tstate->frame, PyTrace_CALL, cfunc))	\
     x = NULL;                                                   \
 else                                                            \
 {                                                               \
@@ -68,7 +80,7 @@ else                                                            \
             call_trace_protected(tstate->c_profilefunc,         \
                                  tstate->c_profileobj,          \
                                  tstate, tstate->frame,         \
-                                 PyTrace_C_EXCEPTION, cfunc);   \
+                                 PyTrace_RETURN, cfunc);	\
             /* XXX should pass (type, value, tb) */             \
         }                                                       \
         else                                                    \
@@ -76,7 +88,7 @@ else                                                            \
             if (call_trace(tstate->c_profilefunc,               \
                            tstate->c_profileobj,                \
                            tstate, tstate->frame,               \
-                           PyTrace_C_RETURN, cfunc))            \
+                           PyTrace_RETURN, cfunc))		\
             {                                                   \
                 Py_DECREF(x);                                   \
                 x = NULL;                                       \
