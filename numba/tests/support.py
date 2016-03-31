@@ -568,3 +568,35 @@ class MemoryLeakMixin(MemoryLeak):
     def tearDown(self):
         super(MemoryLeakMixin, self).tearDown()
         self.memory_leak_teardown()
+
+
+@contextlib.contextmanager
+def forbid_codegen():
+    """
+    Forbid LLVM code generation during the execution of the context
+    manager's enclosed block.
+
+    If code generation is invoked, a RuntimeError is raised.
+    """
+    from numba.targets import codegen
+    patchpoints = ['CodeLibrary._finalize_final_module']
+
+    old = {}
+    def fail(*args, **kwargs):
+        raise RuntimeError("codegen forbidden by test case")
+    try:
+        for name in patchpoints:
+            parts = name.split('.')
+            obj = codegen
+            for attrname in parts[:-1]:
+                obj = getattr(obj, attrname)
+            attrname = parts[-1]
+            value = getattr(obj, attrname)
+            assert callable(value), ("%r should be callable" % name)
+            old[obj, attrname] = value
+            setattr(obj, attrname, fail)
+        yield
+    finally:
+        for (obj, attrname), value in old.items():
+            setattr(obj, attrname, value)
+

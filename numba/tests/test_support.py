@@ -4,9 +4,9 @@ import itertools
 
 import numpy as np
 
-from numba import utils
+from numba import jit, utils
 from numba import unittest_support as unittest
-from .support import TestCase
+from .support import TestCase, forbid_codegen
 
 DBL_EPSILON = 2**-52
 FLT_EPSILON = 2**-23
@@ -311,6 +311,19 @@ class TestMisc(TestCase):
             with self.assertRefCount(x, y):
                 l.append(y)
         self.assertIn("66", str(cm.exception))
+
+    def test_forbid_codegen(self):
+        """
+        Test that forbid_codegen() prevents code generation using the @jit
+        decorator.
+        """
+        def f():
+            return 1
+        with forbid_codegen():
+            with self.assertRaises(RuntimeError) as raises:
+                cfunc = jit(nopython=True)(f)
+                cfunc()
+        self.assertIn("codegen forbidden by test case", str(raises.exception))
 
 
 if __name__ == '__main__':
