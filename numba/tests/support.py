@@ -585,6 +585,7 @@ def forbid_codegen():
     def fail(*args, **kwargs):
         raise RuntimeError("codegen forbidden by test case")
     try:
+        # XXX use the mock library instead?
         for name in patchpoints:
             parts = name.split('.')
             obj = codegen
