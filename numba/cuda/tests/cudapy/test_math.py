@@ -87,11 +87,17 @@ def math_expm1(A, B):
     i = cuda.grid(1)
     B[i] = math.expm1(A[i])
 
-
 def math_fabs(A, B):
     i = cuda.grid(1)
     B[i] = math.fabs(A[i])
 
+def math_gamma(A, B):
+    i = cuda.grid(1)
+    B[i] = math.gamma(A[i])
+
+def math_lgamma(A, B):
+    i = cuda.grid(1)
+    B[i] = math.lgamma(A[i])
 
 def math_log(A, B):
     i = cuda.grid(1)
@@ -377,6 +383,25 @@ class TestCudaMath(unittest.TestCase):
         self.unary_template_float32(math_fabs, np.fabs, start=-1)
         self.unary_template_float64(math_fabs, np.fabs, start=-1)
 
+    #------------------------------------------------------------------------------
+    # test_math_gamma
+
+
+    def test_math_gamma(self):
+        def ufunc(x):
+            return self._math_vectorize(math.gamma, x)
+        self.unary_template_float32(math_gamma, ufunc, start=0.1)
+        self.unary_template_float64(math_gamma, ufunc, start=0.1)
+
+    #------------------------------------------------------------------------------
+    # test_math_lgamma
+
+
+    def test_math_lgamma(self):
+        def ufunc(x):
+            return self._math_vectorize(math.lgamma, x)
+        self.unary_template_float32(math_lgamma, ufunc, start=0.1)
+        self.unary_template_float64(math_lgamma, ufunc, start=0.1)
 
     #------------------------------------------------------------------------------
     # test_math_log

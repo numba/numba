@@ -24,6 +24,8 @@ infer_global = registry.register_global
 @infer_global(math.expm1)
 @infer_global(math.fabs)
 @infer_global(math.floor)
+@infer_global(math.gamma)
+@infer_global(math.lgamma)
 @infer_global(math.log)
 @infer_global(math.log10)
 @infer_global(math.log1p)
