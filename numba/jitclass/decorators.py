@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function
-from numba import types
+
+from numba import config, types
 from .base import register_class_type, ClassBuilder
 
 
@@ -20,6 +21,9 @@ def jitclass(spec):
     A callable that takes a class object, which will be compiled.
     """
     def wrap(cls):
-        return register_class_type(cls, spec, types.ClassType, ClassBuilder)
+        if config.DISABLE_JIT:
+            return cls
+        else:
+            return register_class_type(cls, spec, types.ClassType, ClassBuilder)
 
     return wrap
