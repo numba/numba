@@ -230,9 +230,6 @@ class TestCudaMath(unittest.TestCase):
             ret[k] = mathfunc(x[k])
         return ret
 
-
-
-
     #------------------------------------------------------------------------------
     # test_math_acos
 
@@ -339,6 +336,7 @@ class TestCudaMath(unittest.TestCase):
 
     #------------------------------------------------------------------------------
     # test_math_erf
+
 
     def test_math_erf(self):
         def ufunc(x):
