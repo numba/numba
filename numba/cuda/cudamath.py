@@ -18,6 +18,8 @@ infer_global = registry.register_global
 @infer_global(math.cos)
 @infer_global(math.cosh)
 @infer_global(math.degrees)
+@infer_global(math.erf)
+@infer_global(math.erfc)
 @infer_global(math.exp)
 @infer_global(math.expm1)
 @infer_global(math.fabs)

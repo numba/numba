@@ -5,6 +5,16 @@ from numba.cuda.testing import unittest
 from numba import cuda, float32, float64, int32
 import math
 
+# if scipy is available, then special functions like erf can be tested.
+try:
+    from scipy import special as sp_special
+    has_scipy= True
+except ImportError:
+    has_scipy = False
+
+needs_scipy = unittest.skipUnless(has_scipy,
+                                  "Scipy is needed to test special functions.")
+
 
 def math_acos(A, B):
     i = cuda.grid(1)
@@ -75,6 +85,13 @@ def math_exp(A, B):
     i = cuda.grid(1)
     B[i] = math.exp(A[i])
 
+def math_erf(A, B):
+    i = cuda.grid(1)
+    B[i] = math.erf(A[i])
+
+def math_erfc(A, B):
+    i = cuda.grid(1)
+    B[i] = math.erfc(A[i])
 
 def math_expm1(A, B):
     i = cuda.grid(1)
@@ -320,6 +337,23 @@ class TestCudaMath(unittest.TestCase):
         self.binary_template_float32(math_atan2, np.arctan2)
         self.binary_template_float64(math_atan2, np.arctan2)
 
+    #------------------------------------------------------------------------------
+    # test_math_erf
+
+
+    @needs_scipy
+    def test_math_erf(self):
+        self.unary_template_float32(math_erf, sp_special.erf)
+        self.unary_template_float64(math_erf, sp_special.erf)
+
+    #------------------------------------------------------------------------------
+    # test_math_erfc
+
+
+    @needs_scipy
+    def test_math_erfc(self):
+        self.unary_template_float32(math_erfc, sp_special.erfc)
+        self.unary_template_float64(math_erfc, sp_special.erfc)
 
     #------------------------------------------------------------------------------
     # test_math_exp

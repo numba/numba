@@ -123,6 +123,8 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.sinh`
 * :func:`math.tanh`
 * :func:`math.atan2`
+* :func:`math.erf`
+* :func:`math.erfc`
 * :func:`math.exp`
 * :func:`math.expm1`
 * :func:`math.fabs`
