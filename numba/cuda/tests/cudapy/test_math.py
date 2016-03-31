@@ -5,16 +5,6 @@ from numba.cuda.testing import unittest
 from numba import cuda, float32, float64, int32
 import math
 
-# if scipy is available, then special functions like erf can be tested.
-try:
-    from scipy import special as sp_special
-    has_scipy= True
-except ImportError:
-    has_scipy = False
-
-needs_scipy = unittest.skipUnless(has_scipy,
-                                  "Scipy is needed to test special functions.")
-
 
 def math_acos(A, B):
     i = cuda.grid(1)
@@ -232,6 +222,16 @@ class TestCudaMath(unittest.TestCase):
         cfunc[1, nelem](A, A, B)
         self.assertTrue(np.allclose(npfunc(A, A), B))
 
+    # Test helper for math functions when no ufunc exists
+    # and dtype specificity is required.
+    def _math_vectorize(self, mathfunc, x):
+        ret = np.zeros_like(x)
+        for k in range(len(x)):
+            ret[k] = mathfunc(x[k])
+        return ret
+
+
+
 
     #------------------------------------------------------------------------------
     # test_math_acos
@@ -340,20 +340,21 @@ class TestCudaMath(unittest.TestCase):
     #------------------------------------------------------------------------------
     # test_math_erf
 
-
-    @needs_scipy
     def test_math_erf(self):
-        self.unary_template_float32(math_erf, sp_special.erf)
-        self.unary_template_float64(math_erf, sp_special.erf)
+        def ufunc(x):
+            return self._math_vectorize(math.erf, x)
+        self.unary_template_float32(math_erf, ufunc)
+        self.unary_template_float64(math_erf, ufunc)
 
     #------------------------------------------------------------------------------
     # test_math_erfc
 
 
-    @needs_scipy
     def test_math_erfc(self):
-        self.unary_template_float32(math_erfc, sp_special.erfc)
-        self.unary_template_float64(math_erfc, sp_special.erfc)
+        def ufunc(x):
+            return self._math_vectorize(math.erfc, x)
+        self.unary_template_float32(math_erfc, ufunc)
+        self.unary_template_float64(math_erfc, ufunc)
 
     #------------------------------------------------------------------------------
     # test_math_exp
