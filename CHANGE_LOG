@@ -1,4 +1,58 @@
 
+Version 0.25.0
+--------------
+
+This release adds support for ``set`` objects in nopython mode.  It also
+adds support for many missing Numpy features and functions.  It improves
+Numba's compatibility and performance when using a distributed execution
+framework such as dask, distributed or Spark.  Finally, it removes
+compatibility with Python 2.6, Python 3.3 and Numpy 1.6.
+
+Improvements:
+
+* Issue #1800: Add erf(), erfc(), gamma() and lgamma() to CUDA targets.
+* PR #1793: Implement more Numpy functions: np.bincount(), np.diff(),
+  np.digitize(), np.histogram(), np.searchsorted() as well as NaN-aware
+  reduction functions (np.nansum(), np.nanmedian(), etc.)
+* PR #1789: Optimize some reduction functions such as np.sum(), np.prod(),
+  np.median(), etc.
+* PR #1752: Make CUDA features work in dask, distributed and Spark.
+* PR #1787: Support np.nditer() for fast multi-array indexing with
+  broadcasting.
+* PR #1799: Report JIT-compiled functions as regular Python functions
+  when profiling (allowing to see the filename and line number where a
+  function is defined).
+* PR #1782: Support np.any() and np.all().
+* Issue #1788: Support the iter() and next() built-in functions.
+* PR #1778: Support array.astype().
+* Issue #1775: Allow the user to set the target CPU model for AOT compilation.
+* PR #1758: Support creating random arrays using the ``size`` parameter
+  to the np.random APIs.
+* PR #1757: Support len() on array.flat objects.
+* PR #1749: Remove Numpy 1.6 compatibility.
+* PR #1748: Remove Python 2.6 and 3.3 compatibility.
+* PR #1735: Support the ``not in`` operator as well as operator.contains().
+* PR #1724: Support homogenous sets in nopython mode.
+* Issue #875: make compilation of array constants faster.
+
+Fixes:
+
+* PR #1795: Fix a massive performance issue when calling Numba functions
+  with distributed, Spark or a similar mechanism using serialization.
+* Issue #1784: Make jitclasses usable with NUMBA_DISABLE_JIT=1.
+* Issue #1786: Allow using linear algebra functions when profiling.
+* Issue #1796: Fix np.dot() memory leak on non-contiguous inputs.
+* PR #1792: Fix static negative indexing of tuples.
+* Issue #1771: Use fallback cache directory when __pycache__ isn't writable,
+  such as when user code is installed in a system location.
+* Issue #1223: Use Numpy error model in array expressions (e.g. division
+  by zero returns ``inf`` or ``nan`` instead of raising an error).
+* Issue #1640: Fix np.random.binomial() for large n values.
+* Issue #1643: Improve error reporting when passing an invalid spec to
+  ``@jitclass``.
+* PR #1756: Fix slicing with a negative step and an omitted start.
+
+
 Version 0.24.0
 --------------
 
