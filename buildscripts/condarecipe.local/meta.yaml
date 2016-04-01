@@ -19,14 +19,14 @@ requirements:
     - python
     - numpy x.x
     # On channel https://anaconda.org/numba/
-    - llvmlite 0.9.*
+    - llvmlite 0.10.*
     - funcsigs       [py27]
     - singledispatch [py27]
   run:
     - python
     - numpy x.x
     # On channel https://anaconda.org/numba/
-    - llvmlite 0.9.*
+    - llvmlite 0.10.*
     - funcsigs       [py27]
     - singledispatch [py27]
 test:
