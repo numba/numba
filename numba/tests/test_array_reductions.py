@@ -7,6 +7,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, typeof
 from numba.compiler import compile_isolated
+from numba.numpy_support import version as np_version
 from .support import TestCase, MemoryLeakMixin, tag
 
 
@@ -159,7 +160,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         super(TestArrayReductions, self).setUp()
         np.random.seed(42)
 
-    def check_reduction_basic(self, pyfunc):
+    def check_reduction_basic(self, pyfunc, all_nans=True):
         # Basic reduction checks on 1-d float64 arrays
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -179,9 +180,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
         check(arr)
-        # Only NaNs
-        arr = np.float64(['nan', 'nan'])
-        check(arr)
+        if all_nans:
+            # Only NaNs
+            arr = np.float64(['nan', 'nan'])
+            check(arr)
 
     @tag('important')
     def test_all_basic(self, pyfunc=array_all):
@@ -258,18 +260,24 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_reduction_basic(array_nanmax)
 
     @tag('important')
+    @unittest.skipUnless(np_version >= (1, 8), "nanmean needs Numpy 1.8+")
     def test_nanmean_basic(self):
         self.check_reduction_basic(array_nanmean)
 
     @tag('important')
     def test_nansum_basic(self):
-        self.check_reduction_basic(array_nansum)
+        # Note Numpy < 1.9 has different behaviour for all NaNs:
+        # it returns Nan while later Numpy returns 0.
+        self.check_reduction_basic(array_nansum,
+                                   all_nans=np_version >= (1, 9))
 
     @tag('important')
+    @unittest.skipUnless(np_version >= (1, 8), "nanstd needs Numpy 1.8+")
     def test_nanstd_basic(self):
         self.check_reduction_basic(array_nanstd)
 
     @tag('important')
+    @unittest.skipUnless(np_version >= (1, 8), "nanvar needs Numpy 1.8+")
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar)
 
@@ -314,6 +322,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
+    @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):
         pyfunc = array_nanmedian_global
 
@@ -518,11 +527,11 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_any, array_any_global,
                            array_nanmax,
                            array_nanmin,
-                           array_nanmean,
                            array_nansum,
-                           array_nanstd,
-                           array_nanvar,
                            ]
+        if np_version >= (1, 8):
+            reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
+
         dtypes_to_test = [np.int32, np.float32, np.bool_]
 
         # Install tests on class
