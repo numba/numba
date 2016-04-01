@@ -347,57 +347,58 @@ def np_nanmax(a):
 
     return nanmax_impl
 
-@overload(numpy.nanmean)
-def np_nanmean(a):
-    if not isinstance(a, types.Array):
-        return
-    isnan = get_isnan(a.dtype)
+if numpy_version >= (1, 8):
+    @overload(numpy.nanmean)
+    def np_nanmean(a):
+        if not isinstance(a, types.Array):
+            return
+        isnan = get_isnan(a.dtype)
 
-    def nanmean_impl(arr):
-        c = 0.0
-        count = 0
-        for view in numpy.nditer(arr):
-            v = view.item()
-            if not isnan(v):
-                c += v.item()
-                count += 1
-        # np.divide() doesn't raise ZeroDivisionError
-        return numpy.divide(c, count)
+        def nanmean_impl(arr):
+            c = 0.0
+            count = 0
+            for view in numpy.nditer(arr):
+                v = view.item()
+                if not isnan(v):
+                    c += v.item()
+                    count += 1
+            # np.divide() doesn't raise ZeroDivisionError
+            return numpy.divide(c, count)
 
-    return nanmean_impl
+        return nanmean_impl
 
-@overload(numpy.nanvar)
-def np_nanvar(a):
-    if not isinstance(a, types.Array):
-        return
-    isnan = get_isnan(a.dtype)
+    @overload(numpy.nanvar)
+    def np_nanvar(a):
+        if not isinstance(a, types.Array):
+            return
+        isnan = get_isnan(a.dtype)
 
-    def nanvar_impl(arr):
-        # Compute the mean
-        m = numpy.nanmean(arr)
+        def nanvar_impl(arr):
+            # Compute the mean
+            m = numpy.nanmean(arr)
 
-        # Compute the sum of square diffs
-        ssd = 0.0
-        count = 0
-        for view in numpy.nditer(arr):
-            v = view.item()
-            if not isnan(v):
-                ssd += (v.item() - m) ** 2
-                count += 1
-        # np.divide() doesn't raise ZeroDivisionError
-        return numpy.divide(ssd, count)
+            # Compute the sum of square diffs
+            ssd = 0.0
+            count = 0
+            for view in numpy.nditer(arr):
+                v = view.item()
+                if not isnan(v):
+                    ssd += (v.item() - m) ** 2
+                    count += 1
+            # np.divide() doesn't raise ZeroDivisionError
+            return numpy.divide(ssd, count)
 
-    return nanvar_impl
+        return nanvar_impl
 
-@overload(numpy.nanstd)
-def np_nanstd(a):
-    if not isinstance(a, types.Array):
-        return
+    @overload(numpy.nanstd)
+    def np_nanstd(a):
+        if not isinstance(a, types.Array):
+            return
 
-    def nanstd_impl(arr):
-        return numpy.nanvar(arr) ** 0.5
+        def nanstd_impl(arr):
+            return numpy.nanvar(arr) ** 0.5
 
-    return nanstd_impl
+        return nanstd_impl
 
 @overload(numpy.nansum)
 def np_nansum(a):
@@ -520,24 +521,25 @@ def np_median(a):
 
     return median_impl
 
-@overload(numpy.nanmedian)
-def np_nanmedian(a):
-    if not isinstance(a, types.Array):
-        return
-    isnan = get_isnan(a.dtype)
+if numpy_version >= (1, 9):
+    @overload(numpy.nanmedian)
+    def np_nanmedian(a):
+        if not isinstance(a, types.Array):
+            return
+        isnan = get_isnan(a.dtype)
 
-    def nanmedian_impl(arry):
-        # Create a temporary workspace with only non-NaN values
-        temp_arry = numpy.empty(arry.size, arry.dtype)
-        n = 0
-        for view in numpy.nditer(arry):
-            v = view.item()
-            if not isnan(v):
-                temp_arry[n] = v
-                n += 1
-        return _median_inner(temp_arry, n)
+        def nanmedian_impl(arry):
+            # Create a temporary workspace with only non-NaN values
+            temp_arry = numpy.empty(arry.size, arry.dtype)
+            n = 0
+            for view in numpy.nditer(arry):
+                v = view.item()
+                if not isnan(v):
+                    temp_arry[n] = v
+                    n += 1
+            return _median_inner(temp_arry, n)
 
-    return nanmedian_impl
+        return nanmedian_impl
 
 
 #----------------------------------------------------------------------------
