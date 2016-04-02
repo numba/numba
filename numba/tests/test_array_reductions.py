@@ -160,11 +160,11 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         super(TestArrayReductions, self).setUp()
         np.random.seed(42)
 
-    def check_reduction_basic(self, pyfunc, all_nans=True):
+    def check_reduction_basic(self, pyfunc, all_nans=True, **kwargs):
         # Basic reduction checks on 1-d float64 arrays
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
-            self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
 
         arr = np.float64([1.0, 2.0, 0.0, -0.0, 1.0, -1.5])
         check(arr)
@@ -229,7 +229,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     @tag('important')
     def test_var_basic(self):
-        self.check_reduction_basic(array_var)
+        self.check_reduction_basic(array_var, prec='double')
 
     @tag('important')
     def test_std_basic(self):
@@ -279,7 +279,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     @tag('important')
     @unittest.skipUnless(np_version >= (1, 8), "nanvar needs Numpy 1.8+")
     def test_nanvar_basic(self):
-        self.check_reduction_basic(array_nanvar)
+        self.check_reduction_basic(array_nanvar, prec='double')
 
     def check_median_basic(self, pyfunc, array_variations):
         cfunc = jit(nopython=True)(pyfunc)
