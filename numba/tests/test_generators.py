@@ -77,6 +77,12 @@ def gen7(arr):
         yield arr[i]
 
 
+# Optional argument
+def gen8(x, y=1):
+    yield x
+    yield y
+
+
 def genobj(x):
     object()
     yield x
@@ -212,6 +218,19 @@ class TestGenerators(MemoryLeakMixin, TestCase):
 
     def test_gen7_objmode(self):
         self.check_gen7(flags=forceobj_flags)
+
+    def check_gen8(self, **jit_args):
+        pyfunc = gen8
+        cfunc = jit(**jit_args)(pyfunc)
+        self.check_generator(pyfunc(2, 3), cfunc(2, 3))
+        self.check_generator(pyfunc(2), cfunc(2))
+
+    @tag('important')
+    def test_gen8(self):
+        self.check_gen8(nopython=True)
+
+    def test_gen8_objmode(self):
+        self.check_gen8(forceobj=True)
 
     def check_consume_generator(self, gen_func):
         cgen = jit(nopython=True)(gen_func)

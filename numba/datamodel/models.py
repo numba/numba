@@ -132,6 +132,25 @@ class DataModel(object):
         return not self.__eq__(other)
 
 
+@register_default(types.Omitted)
+class OmittedArgDataModel(DataModel):
+    """
+    A data model for omitted arguments.  Only the "argument" representation
+    is defined, other representations raise a NotImplementedError.
+    """
+    # Omitted arguments don't produce any LLVM function argument.
+
+    def get_argument_type(self):
+        return ()
+
+    def as_argument(self, builder, val):
+        return ()
+
+    def from_argument(self, builder, val):
+        assert val == (), val
+        return None
+
+
 @register_default(types.Boolean)
 class BooleanModel(DataModel):
     _bit_type = ir.IntType(1)
@@ -1005,7 +1024,8 @@ class RangeIteratorType(StructModel):
 class GeneratorModel(CompositeModel):
     def __init__(self, dmm, fe_type):
         super(GeneratorModel, self).__init__(dmm, fe_type)
-        self._arg_models = [self._dmm.lookup(t) for t in fe_type.arg_types]
+        self._arg_models = [self._dmm.lookup(t) for t in fe_type.arg_types
+                            if not isinstance(t, types.Omitted)]
         self._state_models = [self._dmm.lookup(t) for t in fe_type.state_types]
 
         self._args_be_type = ir.LiteralStructType(

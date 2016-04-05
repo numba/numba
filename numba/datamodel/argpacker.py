@@ -5,24 +5,6 @@ from collections import deque
 from numba import types
 
 
-class _OmittedArgDataModel(object):
-    """
-    A fake data model for omitted arguments.
-    Only used in this module.
-    """
-    # Omitted arguments don't produce any LLVM function argument
-
-    def get_argument_type(self):
-        return ()
-
-    def as_argument(self, builder, val):
-        return ()
-
-    def from_argument(self, builder, val):
-        assert val == (), val
-        return None
-
-
 class ArgPacker(object):
     """
     Compute the position for each high-level typed argument.
@@ -44,10 +26,7 @@ class ArgPacker(object):
         self._dm_args = []
         argtys = []
         for ty in fe_args:
-            if not isinstance(ty, types.Omitted):
-                dm = self._dmm.lookup(ty)
-            else:
-                dm = _OmittedArgDataModel()
+            dm = self._dmm.lookup(ty)
             self._dm_args.append(dm)
             argtys.append(dm.get_argument_type())
         self._unflattener = _Unflattener(argtys)
