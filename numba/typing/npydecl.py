@@ -775,21 +775,36 @@ class MatMul(MatMulTyperMixin, AbstractTemplate):
             return signature(restype, *args)
 
 
+def _check_linalg_matrix(a):
+    if not isinstance(a, types.Array):
+        return
+    if not a.ndim == 2:
+        raise TypingError("np.linalg.inv() only supported on 2-D arrays")
+    if not isinstance(a.dtype, (types.Float, types.Complex)):
+        raise TypingError("np.linalg.inv() only supported on "
+                          "float and complex arrays")
+
+
 @infer_global(numpy.linalg.inv)
 class LinalgInv(CallableTemplate):
 
     def generic(self):
         def typer(a):
-            if not isinstance(a, types.Array):
-                return
-            if not a.ndim == 2:
-                raise TypingError("np.linalg.inv() only supported on 2-D arrays")
-            if not isinstance(a.dtype, (types.Float, types.Complex)):
-                raise TypingError("np.linalg.inv() only supported on "
-                                  "float and complex arrays")
+            _check_linalg_matrix(a)
             return a.copy(layout='C')
 
         return typer
+
+
+if numpy_version >= (1, 8):
+    @infer_global(numpy.linalg.cholesky)
+    class LinalgCholesky(CallableTemplate):
+        def generic(self):
+            def typer(a):
+                _check_linalg_matrix(a)
+                return a.copy(layout='C')
+
+            return typer
 
 
 # -----------------------------------------------------------------------------
