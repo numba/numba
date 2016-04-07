@@ -938,6 +938,10 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
 class TestArrayOperators(BaseUFuncTest, TestCase):
 
+    def _check_results(self, expected, got):
+        self.assertEqual(expected.dtype.kind, got.dtype.kind)
+        np.testing.assert_array_almost_equal(expected, got)
+
     def unary_op_test(self, operator, flags=enable_nrt_flags,
                       skip_inputs=[], additional_inputs=[],
                       int_output_type=None, float_output_type=None):
@@ -956,8 +960,8 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
                                     flags=flags)
             cfunc = cr.entry_point
             expected = pyfunc(input_operand)
-            result = cfunc(input_operand)
-            np.testing.assert_array_almost_equal(expected, result)
+            got = cfunc(input_operand)
+            self._check_results(expected, got)
 
     def binary_op_test(self, operator, flags=enable_nrt_flags,
                        skip_inputs=[], additional_inputs=[],
@@ -996,22 +1000,31 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
                                     flags=flags)
             cfunc = cr.entry_point
             expected = pyfunc(input_operand0, input_operand1)
-            result = cfunc(input_operand0, input_operand1)
-            np.testing.assert_array_almost_equal(expected, result)
+            got = cfunc(input_operand0, input_operand1)
+            self._check_results(expected, got)
+
+    def bitwise_additional_inputs(self):
+        # For bitwise operators, we want to check the results for boolean
+        # arrays (see #1813).
+        return [
+            (True, types.boolean),
+            (False, types.boolean),
+            (np.array([True, False]), types.Array(types.boolean, 1, 'C')),
+            ]
 
     def binary_int_op_test(self, *args, **kws):
-        if 'skip_inputs' not in kws:
-            kws['skip_inputs'] = []
-        kws['skip_inputs'].extend([
+        skip_inputs = kws.setdefault('skip_inputs', [])
+        skip_inputs += [
             types.float32, types.float64,
             types.Array(types.float32, 1, 'C'),
-            types.Array(types.float64, 1, 'C')])
+            types.Array(types.float64, 1, 'C'),
+            ]
         return self.binary_op_test(*args, **kws)
 
-    def _make_arrays(self, dtypes):
-        for dtype in dtypes:
-            yield np.linspace(0, 5, 3).astype(dtype)
-            yield np.linspace(1, 6, 3).astype(dtype)
+    def binary_bitwise_op_test(self, *args, **kws):
+        additional_inputs = kws.setdefault('additional_inputs', [])
+        additional_inputs += self.bitwise_additional_inputs()
+        return self.binary_int_op_test(*args, **kws)
 
     def inplace_op_test(self, operator, lhs_values, rhs_values,
                         lhs_dtypes, rhs_dtypes):
@@ -1048,9 +1061,14 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
                                     (np.float32, np.float64, np.int64))
 
     def inplace_int_op_test(self, operator, lhs_values, rhs_values):
-        return self.inplace_op_test(operator, lhs_values, rhs_values,
-                                    (np.int16, np.int32, np.int64),
-                                    (np.int16, np.uint32))
+        self.inplace_op_test(operator, lhs_values, rhs_values,
+                             (np.int16, np.int32, np.int64),
+                             (np.int16, np.uint32))
+
+    def inplace_bitwise_op_test(self, operator, lhs_values, rhs_values):
+        self.inplace_int_op_test(operator, lhs_values, rhs_values)
+        self.inplace_op_test(operator, lhs_values, rhs_values,
+                             (np.bool_,), (np.bool_, np.bool_))
 
     # ____________________________________________________________
     # Unary operators
@@ -1063,10 +1081,11 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         self.unary_op_test('-')
 
     def test_unary_invert_array_op(self):
-        self.unary_op_test('~', skip_inputs=[
-            types.float32, types.float64,
-            types.Array(types.float32, 1, 'C'),
-            types.Array(types.float64, 1, 'C')])
+        self.unary_op_test('~',
+                           skip_inputs=[types.float32, types.float64,
+                                        types.Array(types.float32, 1, 'C'),
+                                        types.Array(types.float64, 1, 'C')],
+                           additional_inputs=self.bitwise_additional_inputs())
 
     # ____________________________________________________________
     # Inplace operators
@@ -1097,13 +1116,13 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         self.inplace_float_op_test('**=', [-1, 1.5, 3], [-5, 2, 2.5])
 
     def test_inplace_and(self):
-        self.inplace_int_op_test('&=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test('&=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
 
     def test_inplace_or(self):
-        self.inplace_int_op_test('|=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test('|=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
 
     def test_inplace_xor(self):
-        self.inplace_int_op_test('^=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test('^=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
 
     @tag('important')
     def test_inplace_lshift(self):
@@ -1178,15 +1197,15 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
 
     @tag('important')
     def test_bitwise_and_array_op(self):
-        self.binary_int_op_test('&')
+        self.binary_bitwise_op_test('&')
 
     @tag('important')
     def test_bitwise_or_array_op(self):
-        self.binary_int_op_test('|')
+        self.binary_bitwise_op_test('|')
 
     @tag('important')
     def test_bitwise_xor_array_op(self):
-        self.binary_int_op_test('^')
+        self.binary_bitwise_op_test('^')
 
     @tag('important')
     def test_equal_array_op(self):

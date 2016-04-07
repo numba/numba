@@ -368,13 +368,6 @@ def int_invert_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def bool_invert_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [val] = args
-    res = builder.sub(Constant.int(val.type, 1), val)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
 def int_sign_impl(context, builder, sig, args):
     """
     np.sign(int)
@@ -423,7 +416,6 @@ lower_builtin('<', types.boolean, types.boolean)(int_ult_impl)
 lower_builtin('<=', types.boolean, types.boolean)(int_ule_impl)
 lower_builtin('>', types.boolean, types.boolean)(int_ugt_impl)
 lower_builtin('>=', types.boolean, types.boolean)(int_uge_impl)
-lower_builtin('~', types.boolean)(bool_invert_impl)
 
 
 def _implement_integer_operators():
@@ -438,13 +430,8 @@ def _implement_integer_operators():
     lower_builtin('<<', ty, ty)(int_shl_impl)
     lower_builtin('>>', ty, ty)(int_shr_impl)
 
-    lower_builtin('&', ty, ty)(int_and_impl)
-    lower_builtin('|', ty, ty)(int_or_impl)
-    lower_builtin('^', ty, ty)(int_xor_impl)
-
     lower_builtin('-', ty)(int_negate_impl)
     lower_builtin('+', ty)(int_positive_impl)
-    lower_builtin('~', ty)(int_invert_impl)
 
     lower_builtin('**', ty, ty)(int_power_impl)
     lower_builtin(pow, ty, ty)(int_power_impl)
@@ -467,7 +454,17 @@ def _implement_integer_operators():
         lower_builtin(pow, types.float64, ty)(int_power_impl)
         lower_builtin(abs, ty)(int_abs_impl)
 
+def _implement_bitwise_operators():
+    for ty in (types.Boolean, types.Integer):
+        lower_builtin('&', ty, ty)(int_and_impl)
+        lower_builtin('|', ty, ty)(int_or_impl)
+        lower_builtin('^', ty, ty)(int_xor_impl)
+
+        lower_builtin('~', ty)(int_invert_impl)
+
 _implement_integer_operators()
+
+_implement_bitwise_operators()
 
 
 def optional_is_none(context, builder, sig, args):

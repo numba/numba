@@ -27,6 +27,7 @@ class TestAssertPreciseEqual(TestCase):
     float_types = [float] + np_float_types
     np_complex_types = [np.complex64, np.complex128]
     complex_types = [complex] + np_complex_types
+    bool_types = [bool, np.bool_]
 
     def eq(self, left, right, **kwargs):
         def assert_succeed(left, right):
@@ -62,6 +63,9 @@ class TestAssertPreciseEqual(TestCase):
         # int and long are compatible between each other
         for u, v in itertools.product(self.int_types, self.int_types):
             self.eq(u(1), v(1))
+        # int and bool are not compatible between each other
+        for u, v in itertools.product(self.int_types, self.bool_types):
+            self.ne(u(1), v(1))
         # NumPy float types are not compatible between each other
         for u, v in itertools.product(self.np_float_types, self.np_float_types):
             if u is v:
@@ -82,6 +86,12 @@ class TestAssertPreciseEqual(TestCase):
                 self.ne(tp(0), tp(1), prec=prec)
                 self.ne(tp(-1), tp(1), prec=prec)
                 self.ne(tp(2**80), tp(1+2**80), prec=prec)
+
+    def test_bool_values(self):
+        for tpa, tpb in itertools.product(self.bool_types, self.bool_types):
+            self.eq(tpa(True), tpb(True))
+            self.eq(tpa(False), tpb(False))
+            self.ne(tpa(True), tpb(False))
 
     def test_abs_tol_parse(self):
         # check invalid values in abs_tol kwarg raises
@@ -165,7 +175,6 @@ class TestAssertPreciseEqual(TestCase):
         # test absolute tolerance based on value
         self.eq(tp(1e-7), tp(1e-8), prec='single', abs_tol=1e-7)
         self.ne(tp(1e-7), tp(3e-7), prec='single', abs_tol=1e-7)
-
 
     def test_complex_values(self):
         # Complex literals with signed zeros are confusing, better use

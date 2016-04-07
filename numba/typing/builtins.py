@@ -246,7 +246,8 @@ class BitwiseRightShift(BitwiseShiftOperation):
 
 
 class BitwiseLogicOperation(BinOp):
-    cases = list(integer_binop_cases)
+    cases = [signature(types.boolean, types.boolean, types.boolean)]
+    cases += list(integer_binop_cases)
 
 
 @infer
@@ -272,7 +273,10 @@ class BitwiseXor(BitwiseLogicOperation):
 class BitwiseInvert(ConcreteTemplate):
     key = "~"
 
-    cases = [signature(types.int8, types.boolean)]
+    # Note Numba follows the Numpy semantics of returning a bool,
+    # while Python returns an int.  This makes it consistent with
+    # np.invert() and makes array expressions correct.
+    cases = [signature(types.boolean, types.boolean)]
     cases += [signature(choose_result_int(op), op) for op in types.unsigned_domain]
     cases += [signature(choose_result_int(op), op) for op in types.signed_domain]
 
