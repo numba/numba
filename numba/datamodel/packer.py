@@ -12,6 +12,7 @@ class DataPacker(object):
     Omitted arguments (i.e. values with the type `Omitted`) are automatically
     skipped.
     """
+    # XXX should DataPacker be a model for a dedicated type?
 
     def __init__(self, dmm, fe_types):
         self._dmm = dmm

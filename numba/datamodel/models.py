@@ -1024,6 +1024,7 @@ class RangeIteratorType(StructModel):
 class GeneratorModel(CompositeModel):
     def __init__(self, dmm, fe_type):
         super(GeneratorModel, self).__init__(dmm, fe_type)
+        # XXX Fold this in DataPacker?
         self._arg_models = [self._dmm.lookup(t) for t in fe_type.arg_types
                             if not isinstance(t, types.Omitted)]
         self._state_models = [self._dmm.lookup(t) for t in fe_type.state_types]
