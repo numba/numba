@@ -1512,31 +1512,39 @@ def array_readonly(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 
+# array.ctypes
+
 @lower_getattr(types.Array, "ctypes")
 def array_ctypes(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
-    # Cast void* data to uintp
-    addr = builder.ptrtoint(array.data, context.get_value_type(types.uintp))
     # Create new ArrayCType structure
     ctinfo = context.make_helper(builder, types.ArrayCTypes(typ))
-    ctinfo.data = addr
+    ctinfo.data = array.data
     res = ctinfo._getvalue()
     return impl_ret_untracked(context, builder, typ, res)
-
-
-@lower_getattr(types.Array, "flags")
-def array_flags(context, builder, typ, value):
-    res = context.get_dummy_value()
-    return impl_ret_untracked(context, builder, typ, res)
-
 
 @lower_getattr(types.ArrayCTypes, "data")
 def array_ctypes_data(context, builder, typ, value):
     ctinfo = context.make_helper(builder, typ, value=value)
     res = ctinfo.data
+    # Convert it to an integer
+    res = builder.ptrtoint(res, context.get_value_type(types.intp))
     return impl_ret_untracked(context, builder, typ, res)
 
+@lower_cast(types.ArrayCTypes, types.CPointer)
+def array_ctypes_to_pointer(context, builder, fromty, toty, val):
+    ctinfo = context.make_helper(builder, fromty, value=val)
+    res = ctinfo.data
+    return impl_ret_untracked(context, builder, toty, res)
+
+
+# array.flags
+
+@lower_getattr(types.Array, "flags")
+def array_flags(context, builder, typ, value):
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, typ, res)
 
 @lower_getattr(types.ArrayFlags, "contiguous")
 @lower_getattr(types.ArrayFlags, "c_contiguous")

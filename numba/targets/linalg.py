@@ -696,10 +696,6 @@ if numpy_version >= (1, 8):
         UP = ord('U')
         LO = ord('L')
 
-        # XXX use ndarray.ctypes instead?
-        import cffi
-        ffi = cffi.FFI()
-
         def cho_impl(a):
             n = a.shape[-1]
             if a.shape[-2] != n:
@@ -714,7 +710,7 @@ if numpy_version >= (1, 8):
             # (out is really its Hermitian in F order, but UP instructs
             #  xxpotrf to compute the Hermitian of the upper triangle
             #  => they cancel each other)
-            r = xxpotrf(kind, UP, n, ffi.from_buffer(out), n, ffi.from_buffer(info))
+            r = xxpotrf(kind, UP, n, out.ctypes, n, info.ctypes)
             if r != 0:
                 # XXX Py_FatalError()?
                 raise RuntimeError("unable to execute xxpotrf()")
