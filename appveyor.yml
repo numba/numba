@@ -16,7 +16,7 @@ environment:
       PYTHON_VERSION: "3.5"
       PYTHON_ARCH: "64"
       CONDA_PY: "3.5"
-      CONDA_NPY: "1.10"
+      CONDA_NPY: "1.11"
 
 install:
   # This installs the appropriate Miniconda (Py2/Py3, 32/64 bit)
