@@ -83,6 +83,7 @@ build_c_helpers_dict(void)
     declmethod(xxdot);
     declmethod(xxgetrf);
     declmethod(xxgetri);
+    declmethod(xxpotrf);
 
     declpointer(py_random_state);
     declpointer(np_random_state);

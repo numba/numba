@@ -671,6 +671,29 @@ class NdSort(CallableTemplate):
         return typer
 
 
+@infer_global(numpy.asfortranarray)
+class AsFortranArray(CallableTemplate):
+
+    def generic(self):
+        def typer(a):
+            if isinstance(a, types.Array):
+                return a.copy(layout='F')
+
+        return typer
+
+
+@infer_global(numpy.copy)
+class NdCopy(CallableTemplate):
+
+    def generic(self):
+        def typer(a):
+            if isinstance(a, types.Array):
+                layout = 'F' if a.layout == 'F' else 'C'
+                return a.copy(layout=layout, readonly=False)
+
+        return typer
+
+
 # -----------------------------------------------------------------------------
 # Linear algebra
 
@@ -798,14 +821,6 @@ class LinalgInv(CallableTemplate):
 
 
 if numpy_version >= (1, 8):
-    @infer_global(numpy.linalg.cholesky)
-    class LinalgCholesky(CallableTemplate):
-        def generic(self):
-            def typer(a):
-                _check_linalg_matrix(a, "cholesky")
-                return a.copy(layout='C')
-
-            return typer
 
     @infer_global(numpy.linalg.svd)
     class LinalgSVD(CallableTemplate):

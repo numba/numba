@@ -2996,8 +2996,10 @@ def numpy_linspace_3(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin("array.copy", types.Array)
-def array_copy(context, builder, sig, args):
+def _array_copy(context, builder, sig, args):
+    """
+    Array copy.
+    """
     arytype = sig.args[0]
     ary = make_array(arytype)(context, builder, value=args[0])
     shapes = cgutils.unpack_tuple(builder, ary.shape)
@@ -3008,8 +3010,8 @@ def array_copy(context, builder, sig, args):
     src_data = ary.data
     dest_data = ret.data
 
-    assert rettype.layout == "C"
-    if arytype.layout == "C":
+    assert rettype.layout in "CF"
+    if arytype.layout == rettype.layout:
         # Fast path: memcpy
         cgutils.raw_memcpy(builder, dest_data, src_data, ary.nitems,
                            ary.itemsize, align=1)
@@ -3029,6 +3031,25 @@ def array_copy(context, builder, sig, args):
             builder.store(builder.load(src_ptr), dest_ptr)
 
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
+
+
+@lower_builtin("array.copy", types.Array)
+def array_copy(context, builder, sig, args):
+    return _array_copy(context, builder, sig, args)
+
+@lower_builtin(numpy.copy, types.Array)
+def numpy_copy(context, builder, sig, args):
+    return _array_copy(context, builder, sig, args)
+
+@lower_builtin(numpy.asfortranarray, types.Array)
+def array_asfortranarray(context, builder, sig, args):
+    retty = sig.return_type
+    assert retty.layout == 'F'
+
+    if retty.layout == sig.args[0].layout:
+        return impl_ret_borrowed(context, builder, sig.return_type, args[0])
+    else:
+        return _array_copy(context, builder, sig, args)
 
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)

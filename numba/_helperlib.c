@@ -1104,12 +1104,18 @@ EMIT_GET_CLAPACK_FUNC(dgetri)
 EMIT_GET_CLAPACK_FUNC(cgetri)
 EMIT_GET_CLAPACK_FUNC(zgetri)
 
+EMIT_GET_CLAPACK_FUNC(spotrf)
+EMIT_GET_CLAPACK_FUNC(dpotrf)
+EMIT_GET_CLAPACK_FUNC(cpotrf)
+EMIT_GET_CLAPACK_FUNC(zpotrf)
 
 #undef EMIT_GET_CLAPACK_FUNC
 
 typedef void (*xxgetrf_t)(int *m, int *n, void *a, int *lda, int *ipiv, int *info);
 
-typedef void (*xxgetri_t)(int *n, void *a, int *lda, int *ipiv, void *work, int *lwork, int*info);
+typedef void (*xxgetri_t)(int *n, void *a, int *lda, int *ipiv, void *work, int *lwork, int* info);
+
+typedef void (*xxpotrf_t)(char *uplo, int *n, void *a, int *lda, int *info);
 
 /* Compute LU decomposition of a*/
 NUMBA_EXPORT_FUNC(int)
@@ -1188,6 +1194,45 @@ numba_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda, int *ipiv, void 
     _lda = (int) lda;
 
     (*(xxgetri_t) raw_func)(&_n, a, &_lda, ipiv, work, lwork, info);
+    return 0;
+}
+
+/* Compute the Cholesky factorization of a matrix */
+NUMBA_EXPORT_FUNC(int)
+numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda, int *info)
+{
+    void *raw_func = NULL;
+    int _n, _lda;
+
+    switch (kind) {
+        case 's':
+            raw_func = get_clapack_spotrf();
+            break;
+        case 'd':
+            raw_func = get_clapack_dpotrf();
+            break;
+        case 'c':
+            raw_func = get_clapack_cpotrf();
+            break;
+        case 'z':
+            raw_func = get_clapack_zpotrf();
+            break;
+        default:
+            {
+                PyGILState_STATE st = PyGILState_Ensure();
+                PyErr_SetString(PyExc_ValueError,
+                                "invalid kind of Cholesky factorization function");
+                PyGILState_Release(st);
+            }
+            return -1;
+    }
+    if (raw_func == NULL)
+        return -1;
+
+    _n = (int) n;
+    _lda = (int) lda;
+
+    (*(xxpotrf_t) raw_func)(&uplo, &_n, a, &_lda, info);
     return 0;
 }
 

@@ -9,10 +9,12 @@ import contextlib
 from llvmlite import ir
 import numpy
 
-from numba import types, cgutils
+from numba import jit, types, cgutils
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
+from numba.extending import overload
+from numba.numpy_support import version as numpy_version
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 
 
@@ -23,13 +25,19 @@ ll_intc = ir.IntType(32)
 ll_intc_p = ll_intc.as_pointer()
 intp_t = cgutils.intp_t
 
-def get_blas_kind(dtype):
-    return {
-        types.float32: 's',
-        types.float64: 'd',
-        types.complex64: 'c',
-        types.complex128: 'z',
-        }[dtype]
+
+_blas_kinds = {
+    types.float32: 's',
+    types.float64: 'd',
+    types.complex64: 'c',
+    types.complex128: 'z',
+    }
+
+def get_blas_kind(dtype, func_name="<BLAS function>"):
+    kind = _blas_kinds.get(dtype)
+    if kind is None:
+        raise TypeError("unsupported dtype for %s()" % (func_name,))
+    return kind
 
 def ensure_blas():
     try:
@@ -667,3 +675,57 @@ def inv(context, builder, sig, args):
         return mat_inv(context, builder, sig, args)
     else:
         assert 0
+
+
+if numpy_version >= (1, 8):
+
+    @overload(numpy.linalg.cholesky)
+    def cho_impl(a):
+        ensure_lapack()
+
+        if not isinstance(a, types.Array) or a.ndim != 2:
+            raise TypeError("cholesky() argument should be a 2-dimension array, "
+                            "got %s" % (a,))
+
+        xxpotrf_sig = types.intc(types.int8, types.int8, types.intp,
+                                 types.CPointer(a.dtype), types.intp,
+                                 types.CPointer(types.intc))
+        xxpotrf = types.ExternalFunction("numba_xxpotrf", xxpotrf_sig)
+
+        kind = ord(get_blas_kind(a.dtype, "cholesky"))
+        UP = ord('U')
+        LO = ord('L')
+
+        # XXX use ndarray.ctypes instead?
+        import cffi
+        ffi = cffi.FFI()
+
+        def cho_impl(a):
+            n = a.shape[-1]
+            if a.shape[-2] != n:
+                raise numpy.linalg.LinAlgError("Last 2 dimensions of the array must be square")
+
+            # The output is allocated in C order
+            out = a.copy()
+            # XXX spurious heap allocation
+            info = numpy.zeros(1, dtype=numpy.intc)
+            # Pass UP since xxpotrf() operates in F order
+            # The semantics ensure this works fine
+            # (out is really its Hermitian in F order, but UP instructs
+            #  xxpotrf to compute the Hermitian of the upper triangle
+            #  => they cancel each other)
+            r = xxpotrf(kind, UP, n, ffi.from_buffer(out), n, ffi.from_buffer(info))
+            if r != 0:
+                # XXX Py_FatalError()?
+                raise RuntimeError("unable to execute xxpotrf()")
+            if info[0] > 0:
+                raise numpy.linalg.LinAlgError("Matrix is not positive definite")
+            elif info[0] < 0:
+                # Invalid parameter
+                raise RuntimeError("cholesky(): Internal error: please report an issue")
+            # Zero out upper triangle, in F order
+            for col in range(n):
+                out[:col, col] = 0
+            return out
+
+        return cho_impl

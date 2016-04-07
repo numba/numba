@@ -269,7 +269,7 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_copy(self, ary, args, kws):
         assert not args
         assert not kws
-        retty = ary.copy(layout="C")
+        retty = ary.copy(layout="C", readonly=False)
         return signature(retty)
 
     @bound_function("array.item")
