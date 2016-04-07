@@ -198,6 +198,9 @@ class BaseContext(object):
     def get_arg_packer(self, fe_args):
         return datamodel.ArgPacker(self.data_model_manager, fe_args)
 
+    def get_data_packer(self, fe_types):
+        return datamodel.DataPacker(self.data_model_manager, fe_types)
+
     @property
     def target_data(self):
         raise NotImplementedError

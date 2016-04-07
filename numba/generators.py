@@ -58,11 +58,13 @@ class BaseGeneratorLower(object):
         self.gentype = self.get_generator_type()
         self.gendesc = GeneratorDescriptor.from_generator_fndesc(
             lower.interp, self.fndesc, self.gentype, self.context.mangler)
+        # Helps packing non-omitted arguments into a structure
+        self.arg_packer = self.context.get_data_packer(self.fndesc.argtypes)
 
         self.resume_blocks = {}
 
-    def get_arg_ptr(self, builder, genptr, arg_index):
-        return cgutils.gep_inbounds(builder, genptr, 0, 1, arg_index)
+    def get_args_ptr(self, builder, genptr):
+        return cgutils.gep_inbounds(builder, genptr, 0, 1)
 
     def get_resume_index_ptr(self, builder, genptr):
         return cgutils.gep_inbounds(builder, genptr, 0, 0,
@@ -71,14 +73,6 @@ class BaseGeneratorLower(object):
     def get_state_ptr(self, builder, genptr):
         return cgutils.gep_inbounds(builder, genptr, 0, 2,
                                     name='gen.state')
-
-    def get_actual_argtypes(self):
-        """
-        Get the types of non-omitted arguments.
-        Returns a list of (formal index, type) tuples.
-        """
-        return [(i, ty) for i, ty in enumerate(self.fndesc.argtypes)
-                if not isinstance(ty, types.Omitted)]
 
     def lower_init_func(self, lower):
         """
@@ -113,8 +107,7 @@ class BaseGeneratorLower(object):
                 self.context.nrt_incref(builder, argty, argval)
 
         # Filter out omitted arguments
-        real_vals = [lower.fnargs[i] for i, _ in self.get_actual_argtypes()]
-        argsval = cgutils.make_anonymous_struct(builder, real_vals, argsty)
+        argsval = self.arg_packer.as_data(builder, lower.fnargs)
 
         # Zero initialize states
         statesval = Constant.null(statesty)
@@ -143,9 +136,9 @@ class BaseGeneratorLower(object):
 
         # Extract argument values and other information from generator struct
         genptr, = self.call_conv.get_arguments(function)
-        for elem_idx, (formal_idx, ty) in enumerate(self.get_actual_argtypes()):
-            argptr = self.get_arg_ptr(builder, genptr, elem_idx)
-            lower.fnargs[formal_idx] = self.context.unpack_value(builder, ty, argptr)
+        self.arg_packer.load_into(builder,
+                                  self.get_args_ptr(builder, genptr),
+                                  lower.fnargs)
 
         self.resume_index_ptr = self.get_resume_index_ptr(builder, genptr)
         self.gen_state_ptr = self.get_state_ptr(builder, genptr)
@@ -229,10 +222,9 @@ class GeneratorLower(BaseGeneratorLower):
 
             # Always dereference all arguments
             # self.debug_print(builder, "# generator: clear args")
-            for elem_idx, (_, argty) in enumerate(self.get_actual_argtypes()):
-                argptr = self.get_arg_ptr(builder, genptr, elem_idx)
-                argval = builder.load(argptr)
-                self.context.nrt_decref(builder, argty, argval)
+            args_ptr = self.get_args_ptr(builder, genptr)
+            for ty, val in self.arg_packer.load(builder, args_ptr):
+                self.context.nrt_decref(builder, ty, val)
 
         self.debug_print(builder, "# generator: finalize end")
         builder.ret_void()

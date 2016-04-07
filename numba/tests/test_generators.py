@@ -77,10 +77,14 @@ def gen7(arr):
         yield arr[i]
 
 
-# Optional argument
-def gen8(x, y=1):
+# Optional arguments and boolean state members
+def gen8(x=1, y=2, b=False):
+    bb = not b
     yield x
-    yield y
+    if bb:
+        yield y
+    if b:
+        yield x + y
 
 
 def genobj(x):
@@ -222,8 +226,15 @@ class TestGenerators(MemoryLeakMixin, TestCase):
     def check_gen8(self, **jit_args):
         pyfunc = gen8
         cfunc = jit(**jit_args)(pyfunc)
-        self.check_generator(pyfunc(2, 3), cfunc(2, 3))
-        self.check_generator(pyfunc(2), cfunc(2))
+
+        def check(*args, **kwargs):
+            self.check_generator(pyfunc(*args, **kwargs),
+                                 cfunc(*args, **kwargs))
+
+        check(2, 3)
+        check(4)
+        check(y=5)
+        check(x=6, b=True)
 
     @tag('important')
     def test_gen8(self):
