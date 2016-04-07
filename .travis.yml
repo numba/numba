@@ -7,7 +7,7 @@ matrix:
     include:
         - env: PYTHON=2.7 NUMPY="numpy=1.7"
         - env: PYTHON=3.4 NUMPY="numpy=1.9" BUILD_DOC=yes
-        - env: PYTHON=3.5 NUMPY="numpy=1.10" RUN_COVERAGE=yes
+        - env: PYTHON=3.5 NUMPY="numpy=1.11" RUN_COVERAGE=yes
 
 branches:
     only:
