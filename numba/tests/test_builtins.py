@@ -4,10 +4,13 @@ import itertools
 import functools
 import sys
 
+import numpy as np
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import jit, typeof, errors, types, utils
 from .support import TestCase, tag
+
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -84,6 +87,10 @@ def hex_usecase(x):
 
 def int_usecase(x, base):
     return int(x, base=base)
+
+def iter_next_usecase(x):
+    it = iter(x)
+    return next(it), next(it)
 
 def locals_usecase(x):
     y = 5
@@ -444,6 +451,23 @@ class TestBuiltins(TestCase):
     def test_int_npm(self):
         with self.assertTypingError():
             self.test_int(flags=no_pyobj_flags)
+
+    def test_iter_next(self, flags=enable_pyobj_flags):
+        pyfunc = iter_next_usecase
+        cr = compile_isolated(pyfunc, (types.UniTuple(types.int32, 3),),
+                              flags=flags)
+        cfunc = cr.entry_point
+        self.assertPreciseEqual(cfunc((1, 42, 5)), (1, 42))
+
+        cr = compile_isolated(pyfunc, (types.UniTuple(types.int32, 1),),
+                              flags=flags)
+        cfunc = cr.entry_point
+        with self.assertRaises(StopIteration):
+            cfunc((1,))
+
+    @tag('important')
+    def test_iter_next_npm(self):
+        self.test_iter_next(flags=no_pyobj_flags)
 
     def test_locals(self, flags=enable_pyobj_flags):
         pyfunc = locals_usecase

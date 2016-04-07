@@ -1075,14 +1075,14 @@ class RangeModel(StructModel):
 # =============================================================================
 
 @register_default(types.NumpyNdIndexType)
-class NdIndexType(StructModel):
+class NdIndexModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
         members = [('shape', types.UniTuple(types.intp, ndim)),
                    ('indices', types.EphemeralArray(types.intp, ndim)),
                    ('exhausted', types.EphemeralPointer(types.boolean)),
                    ]
-        super(NdIndexType, self).__init__(dmm, fe_type, members)
+        super(NdIndexModel, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.NumpyFlatType)
@@ -1103,6 +1103,41 @@ def handle_numpy_ndenumerate_type(dmm, ty):
 def handle_bound_function(dmm, ty):
     # The same as the underlying type
     return dmm[ty.this]
+
+
+@register_default(types.NumpyNdIterType)
+class NdIter(StructModel):
+    def __init__(self, dmm, fe_type):
+        array_types = fe_type.arrays
+        ndim = fe_type.ndim
+        shape_len = ndim if fe_type.need_shaped_indexing else 1
+        members = [('exhausted', types.EphemeralPointer(types.boolean)),
+                   ('arrays', types.Tuple(array_types)),
+                   # The iterator's main shape and indices
+                   ('shape', types.UniTuple(types.intp, shape_len)),
+                   ('indices', types.EphemeralArray(types.intp, shape_len)),
+                   ]
+        # Indexing state for the various sub-iterators
+        # XXX use a tuple instead?
+        for i, sub in enumerate(fe_type.indexers):
+            kind, start_dim, end_dim, _ = sub
+            member_name = 'index%d' % i
+            if kind == 'flat':
+                # A single index into the flattened array
+                members.append((member_name, types.EphemeralPointer(types.intp)))
+            elif kind in ('scalar', 'indexed', '0d'):
+                # Nothing required
+                pass
+            else:
+                assert 0
+        # Slots holding values of the scalar args
+        # XXX use a tuple instead?
+        for i, ty in enumerate(fe_type.arrays):
+            if not isinstance(ty, types.Array):
+                member_name = 'scalar%d' % i
+                members.append((member_name, types.EphemeralPointer(ty)))
+
+        super(NdIter, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.DeferredType)

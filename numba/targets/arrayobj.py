@@ -5,13 +5,15 @@ the buffer protocol.
 
 from __future__ import print_function, absolute_import, division
 
+import functools
 import math
 
+from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Constant
 
 import numpy
-from numba import types, cgutils, typing
+from numba import types, cgutils, typing, utils
 from numba.numpy_support import as_dtype
 from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, lower_getattr,
@@ -22,17 +24,6 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
 from . import quicksort, slicing
-
-
-def increment_index(builder, val):
-    """
-    Increment an index *val*.
-    """
-    one = Constant.int(val.type, 1)
-    # We pass the "nsw" flag in the hope that LLVM understands the index
-    # never changes sign.  Unfortunately this doesn't always work
-    # (e.g. ndindex()).
-    return builder.add(val, one, flags=['nsw'])
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -171,6 +162,8 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
         shape = cgutils.pack_array(builder, shape, intp_t)
     if isinstance(strides, (tuple, list)):
         strides = cgutils.pack_array(builder, strides, intp_t)
+    if isinstance(itemsize, utils.INT_TYPES):
+        itemsize = intp_t(itemsize)
 
     attrs = dict(shape=shape,
                  strides=strides,
@@ -187,13 +180,9 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     # Calc num of items from shape
     nitems = context.get_constant(types.intp, 1)
     unpacked_shape = cgutils.unpack_tuple(builder, shape, shape.type.count)
-    if unpacked_shape:
-        # Shape is not empty
-        for axlen in unpacked_shape:
-            nitems = builder.mul(nitems, axlen)
-    else:
-        # Shape is empty
-        nitems = context.get_constant(types.intp, 1)
+    # (note empty shape => 0d array therefore nitems = 1)
+    for axlen in unpacked_shape:
+        nitems = builder.mul(nitems, axlen, flags=['nsw'])
     attrs['nitems'] = nitems
 
     # Make sure that we have all the fields
@@ -220,7 +209,7 @@ def update_array_info(aryty, array):
     nitems = context.get_constant(types.intp, 1)
     unpacked_shape = cgutils.unpack_tuple(builder, array.shape, aryty.ndim)
     for axlen in unpacked_shape:
-        nitems = builder.mul(nitems, axlen)
+        nitems = builder.mul(nitems, axlen, flags=['nsw'])
     array.nitems = nitems
 
     array.itemsize = context.get_constant(types.intp,
@@ -283,7 +272,7 @@ def iternext_array(context, builder, sig, args, result):
         value = _getitem_array1d(context, builder, arrayty, ary, index,
                                  wraparound=False)
         result.yield_(value)
-        nindex = builder.add(index, context.get_constant(types.intp, 1))
+        nindex = cgutils.increment_index(builder, index)
         builder.store(nindex, iterobj.index)
 
 
@@ -495,6 +484,38 @@ def array_len(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+@lower_builtin("array.item", types.Array)
+def array_item(context, builder, sig, args):
+    aryty, = sig.args
+    ary, = args
+    ary = make_array(aryty)(context, builder, ary)
+
+    nitems = ary.nitems
+    with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
+                         likely=False):
+        msg = "item(): can only convert an array of size 1 to a Python scalar"
+        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+    return load_item(context, builder, aryty, ary.data)
+
+
+@lower_builtin("array.itemset", types.Array, types.Any)
+def array_itemset(context, builder, sig, args):
+    aryty, valty = sig.args
+    ary, val = args
+    assert valty == aryty.dtype
+    ary = make_array(aryty)(context, builder, ary)
+
+    nitems = ary.nitems
+    with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
+                         likely=False):
+        msg = "itemset(): can only write to an array of size 1"
+        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+    store_item(context, builder, aryty, val, ary.data)
+    return context.get_dummy_value()
+
+
 #-------------------------------------------------------------------------------
 # Advanced / fancy indexing
 
@@ -582,8 +603,7 @@ class EntireIndexer(Indexer):
 
     def loop_tail(self):
         builder = self.builder
-        next_index = builder.add(builder.load(self.index),
-                                 self.context.get_constant(types.intp, 1))
+        next_index = cgutils.increment_index(builder, builder.load(self.index))
         builder.store(next_index, self.index)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
@@ -663,8 +683,8 @@ class IntegerArrayIndexer(Indexer):
 
     def loop_tail(self):
         builder = self.builder
-        next_index = builder.add(builder.load(self.idx_index),
-                                 Constant.int(self.ll_intp, 1))
+        next_index = cgutils.increment_index(builder,
+                                             builder.load(self.idx_index))
         builder.store(next_index, self.idx_index)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
@@ -683,7 +703,6 @@ class BooleanArrayIndexer(Indexer):
         assert idxty.ndim == 1
         self.ll_intp = self.context.get_value_type(types.intp)
         self.zero = Constant.int(self.ll_intp, 0)
-        self.one = Constant.int(self.ll_intp, 1)
 
     def prepare(self):
         builder = self.builder
@@ -730,7 +749,7 @@ class BooleanArrayIndexer(Indexer):
         with builder.if_then(builder.not_(pred)):
             builder.branch(self.bb_tail)
         # Increment the count for next iteration
-        next_count = builder.add(cur_count, self.one)
+        next_count = cgutils.increment_index(builder, cur_count)
         builder.store(next_count, self.count)
         return cur_index, cur_count
 
@@ -738,7 +757,8 @@ class BooleanArrayIndexer(Indexer):
         builder = self.builder
         builder.branch(self.bb_tail)
         builder.position_at_end(self.bb_tail)
-        next_index = builder.add(builder.load(self.idx_index), self.one)
+        next_index = cgutils.increment_index(builder,
+                                             builder.load(self.idx_index))
         builder.store(next_index, self.idx_index)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
@@ -759,7 +779,6 @@ class SliceIndexer(Indexer):
         self.slice = slice
         self.ll_intp = self.context.get_value_type(types.intp)
         self.zero = Constant.int(self.ll_intp, 0)
-        self.one = Constant.int(self.ll_intp, 1)
 
     def prepare(self):
         builder = self.builder
@@ -803,7 +822,7 @@ class SliceIndexer(Indexer):
         builder = self.builder
         next_index = builder.add(builder.load(self.index), self.slice.step)
         builder.store(next_index, self.index)
-        next_count = builder.add(builder.load(self.count), self.one)
+        next_count = cgutils.increment_index(builder, builder.load(self.count))
         builder.store(next_count, self.count)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
@@ -924,7 +943,7 @@ def fancy_getitem(context, builder, sig, args,
     cur = builder.load(out_idx)
     ptr = builder.gep(out_data, [cur])
     store_item(context, builder, out_ty, val, ptr)
-    next_idx = builder.add(cur, context.get_constant(types.intp, 1))
+    next_idx = cgutils.increment_index(builder, cur)
     builder.store(next_idx, out_idx)
 
     indexer.end_loops()
@@ -1160,9 +1179,7 @@ def array_reshape(context, builder, sig, args):
                    meminfo=None)
 
     # Compute the original array size
-    size = lc.Constant.int(ll_intp, 1)
-    for s in cgutils.unpack_tuple(builder, ary.shape):
-        size = builder.mul(size, s)
+    size = ary.nitems
 
     # Call our normalizer which will fix the shape array in case of negative
     # shape value
@@ -1250,12 +1267,7 @@ def np_ravel(context, builder, sig, args):
 def array_flatten(context, builder, sig, args):
     # Only support flattening to C layout currently.
     def imp(ary):
-        # Allocate new array and walk the input array in with array.flat in
-        # C order to populate the output.
-        out = numpy.empty(ary.size, dtype=ary.dtype)
-        for i, v in enumerate(ary.flat):
-            out[i] = v
-        return out
+        return ary.copy().reshape(ary.size)
 
     res = context.compile_internal(builder, imp, sig, args)
     res = impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -1708,9 +1720,9 @@ def make_array_ndenumerate_cls(nditerty):
     return _make_flattening_iter_cls(nditerty, 'ndenumerate')
 
 
-def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
+def _increment_indices(context, builder, ndim, shape, indices, end_flag=None,
+                       loop_continue=None, loop_break=None):
     zero = context.get_constant(types.intp, 0)
-    one = context.get_constant(types.intp, 1)
 
     bbend = builder.append_basic_block('end_increment')
 
@@ -1719,14 +1731,20 @@ def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
 
     for dim in reversed(range(ndim)):
         idxptr = cgutils.gep_inbounds(builder, indices, dim)
-        idx = increment_index(builder, builder.load(idxptr))
+        idx = cgutils.increment_index(builder, builder.load(idxptr))
 
         count = shape[dim]
-        in_bounds = builder.icmp(lc.ICMP_SLT, idx, count)
+        in_bounds = builder.icmp_signed('<', idx, count)
         with cgutils.if_likely(builder, in_bounds):
+            # New index is still in bounds
             builder.store(idx, idxptr)
+            if loop_continue is not None:
+                loop_continue(dim)
             builder.branch(bbend)
+        # Index out of bounds => reset it and proceed it to outer index
         builder.store(zero, idxptr)
+        if loop_break is not None:
+            loop_break(dim)
 
     if end_flag is not None:
         builder.store(cgutils.true_byte, end_flag)
@@ -1737,6 +1755,329 @@ def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
 def _increment_indices_array(context, builder, arrty, arr, indices, end_flag=None):
     shape = cgutils.unpack_tuple(builder, arr.shape, arrty.ndim)
     _increment_indices(context, builder, arrty.ndim, shape, indices, end_flag)
+
+
+def make_nditer_cls(nditerty):
+    """
+    Return the Structure representation of the given *nditerty* (an
+    instance of types.NumpyNdIterType).
+    """
+    ndim = nditerty.ndim
+    layout = nditerty.layout
+    narrays = len(nditerty.arrays)
+    nshapes = ndim if nditerty.need_shaped_indexing else 1
+
+    class BaseSubIter(object):
+        """
+        Base class for sub-iterators of a nditer() instance.
+        """
+
+        def __init__(self, nditer, member_name, start_dim, end_dim):
+            self.nditer = nditer
+            self.member_name = member_name
+            self.start_dim = start_dim
+            self.end_dim = end_dim
+            self.ndim = end_dim - start_dim
+
+        def set_member_ptr(self, ptr):
+            setattr(self.nditer, self.member_name, ptr)
+
+        @utils.cached_property
+        def member_ptr(self):
+            return getattr(self.nditer, self.member_name)
+
+        def init_specific(self, context, builder):
+            pass
+
+        def loop_continue(self, context, builder, logical_dim):
+            pass
+
+        def loop_break(self, context, builder, logical_dim):
+            pass
+
+
+    class FlatSubIter(BaseSubIter):
+        """
+        Sub-iterator walking a contiguous array in physical order, with
+        support for broadcasting (the index is reset on the outer dimension).
+        """
+
+        def init_specific(self, context, builder):
+            zero = context.get_constant(types.intp, 0)
+            self.set_member_ptr(cgutils.alloca_once_value(builder, zero))
+
+        def compute_pointer(self, context, builder, indices, arrty, arr):
+            index = builder.load(self.member_ptr)
+            return builder.gep(arr.data, [index])
+
+        def loop_continue(self, context, builder, logical_dim):
+            if logical_dim == self.ndim - 1:
+                # Only increment index inside innermost logical dimension
+                index = builder.load(self.member_ptr)
+                index = cgutils.increment_index(builder, index)
+                builder.store(index, self.member_ptr)
+
+        def loop_break(self, context, builder, logical_dim):
+            if logical_dim == 0:
+                # At the exit of outermost logical dimension, reset index
+                zero = context.get_constant(types.intp, 0)
+                builder.store(zero, self.member_ptr)
+            elif logical_dim == self.ndim - 1:
+                # Inside innermost logical dimension, increment index
+                index = builder.load(self.member_ptr)
+                index = cgutils.increment_index(builder, index)
+                builder.store(index, self.member_ptr)
+
+
+    class TrivialFlatSubIter(BaseSubIter):
+        """
+        Sub-iterator walking a contiguous array in physical order,
+        *without* support for broadcasting.
+        """
+
+        def init_specific(self, context, builder):
+            assert not nditerty.need_shaped_indexing
+
+        def compute_pointer(self, context, builder, indices, arrty, arr):
+            assert len(indices) <= 1, len(indices)
+            return builder.gep(arr.data, indices)
+
+
+    class IndexedSubIter(BaseSubIter):
+        """
+        Sub-iterator walking an array in logical order.
+        """
+
+        def compute_pointer(self, context, builder, indices, arrty, arr):
+            assert len(indices) == self.ndim
+            return cgutils.get_item_pointer(builder, arrty, arr,
+                                            indices, wraparound=False)
+
+
+    class ZeroDimSubIter(BaseSubIter):
+        """
+        Sub-iterator "walking" a 0-d array.
+        """
+
+        def compute_pointer(self, context, builder, indices, arrty, arr):
+            return arr.data
+
+
+    class ScalarSubIter(BaseSubIter):
+        """
+        Sub-iterator "walking" a scalar value.
+        """
+
+        def compute_pointer(self, context, builder, indices, arrty, arr):
+            return arr
+
+
+    class NdIter(cgutils.create_struct_proxy(nditerty)):
+        """
+        .nditer() implementation.
+
+        Note: 'F' layout means the shape is iterated in reverse logical order,
+        so indices and shapes arrays have to be reversed as well.
+        """
+
+        @utils.cached_property
+        def subiters(self):
+            l = []
+            factories = {'flat': FlatSubIter if nditerty.need_shaped_indexing
+                                 else TrivialFlatSubIter,
+                         'indexed': IndexedSubIter,
+                         '0d': ZeroDimSubIter,
+                         'scalar': ScalarSubIter,
+                         }
+            for i, sub in enumerate(nditerty.indexers):
+                kind, start_dim, end_dim, _ = sub
+                member_name = 'index%d' % i
+                factory = factories[kind]
+                l.append(factory(self, member_name, start_dim, end_dim))
+            return l
+
+        def init_specific(self, context, builder, arrtys, arrays):
+            """
+            Initialize the nditer() instance for the specific array inputs.
+            """
+            zero = context.get_constant(types.intp, 0)
+
+            # Store inputs
+            self.arrays = context.make_tuple(builder, types.Tuple(arrtys),
+                                             arrays)
+            # Create slots for scalars
+            for i, ty in enumerate(arrtys):
+                if not isinstance(ty, types.Array):
+                    member_name = 'scalar%d' % i
+                    # XXX as_data()?
+                    slot = cgutils.alloca_once_value(builder, arrays[i])
+                    setattr(self, member_name, slot)
+
+            arrays = self._arrays_or_scalars(context, builder, arrtys, arrays)
+
+            # Extract iterator shape (the shape of the most-dimensional input)
+            main_shape_ty = types.UniTuple(types.intp, ndim)
+            main_shape = None
+            main_nitems = None
+            for i, arrty in enumerate(arrtys):
+                if isinstance(arrty, types.Array) and arrty.ndim == ndim:
+                    main_shape = arrays[i].shape
+                    main_nitems = arrays[i].nitems
+                    break
+            else:
+                # Only scalar inputs => synthesize a dummy shape
+                assert ndim == 0
+                main_shape = context.make_tuple(builder, main_shape_ty, ())
+                main_nitems = context.get_constant(types.intp, 1)
+
+            # Validate shapes of array inputs
+            def check_shape(shape, main_shape):
+                n = len(shape)
+                for i in range(n):
+                    if shape[i] != main_shape[len(main_shape) - n + i]:
+                        raise ValueError("nditer(): operands could not be broadcast together")
+
+            for arrty, arr in zip(arrtys, arrays):
+                if isinstance(arrty, types.Array) and arrty.ndim > 0:
+                    context.compile_internal(builder, check_shape,
+                                             signature(types.none,
+                                                       types.UniTuple(types.intp, arrty.ndim),
+                                                       main_shape_ty),
+                                             (arr.shape, main_shape))
+
+            # Compute shape and size
+            shapes = cgutils.unpack_tuple(builder, main_shape)
+            if layout == 'F':
+                shapes = shapes[::-1]
+
+            # If shape is empty, mark iterator exhausted
+            shape_is_empty = builder.icmp_signed('==', main_nitems, zero)
+            exhausted = builder.select(shape_is_empty, cgutils.true_byte,
+                                       cgutils.false_byte)
+
+            if not nditerty.need_shaped_indexing:
+                # Flatten shape to make iteration faster on small innermost
+                # dimensions (e.g. a (100000, 3) shape)
+                shapes = (main_nitems,)
+            assert len(shapes) == nshapes
+
+            indices = cgutils.alloca_once(builder, zero.type, size=nshapes)
+            for dim in range(nshapes):
+                idxptr = cgutils.gep_inbounds(builder, indices, dim)
+                builder.store(zero, idxptr)
+
+            self.indices = indices
+            self.shape = cgutils.pack_array(builder, shapes, zero.type)
+            self.exhausted = cgutils.alloca_once_value(builder, exhausted)
+
+            # Initialize subiterators
+            for subiter in self.subiters:
+                subiter.init_specific(context, builder)
+
+        def iternext_specific(self, context, builder, result):
+            """
+            Compute next iteration of the nditer() instance.
+            """
+            bbend = builder.append_basic_block('end')
+
+            # Branch early if exhausted
+            exhausted = cgutils.as_bool_bit(builder, builder.load(self.exhausted))
+            with cgutils.if_unlikely(builder, exhausted):
+                result.set_valid(False)
+                builder.branch(bbend)
+
+            arrtys = nditerty.arrays
+            arrays = cgutils.unpack_tuple(builder, self.arrays)
+            arrays = self._arrays_or_scalars(context, builder, arrtys, arrays)
+            indices = self.indices
+
+            # Compute iterated results
+            result.set_valid(True)
+            views = self._make_views(context, builder, indices, arrtys, arrays)
+            views = [v._getvalue() for v in views]
+            if len(views) == 1:
+                result.yield_(views[0])
+            else:
+                result.yield_(context.make_tuple(builder, nditerty.yield_type,
+                                                 views))
+
+            shape = cgutils.unpack_tuple(builder, self.shape)
+            _increment_indices(context, builder, len(shape), shape,
+                               indices, self.exhausted,
+                               functools.partial(self._loop_continue, context, builder),
+                               functools.partial(self._loop_break, context, builder),
+                               )
+
+            builder.branch(bbend)
+            builder.position_at_end(bbend)
+
+        def _loop_continue(self, context, builder, dim):
+            for sub in self.subiters:
+                if sub.start_dim <= dim < sub.end_dim:
+                    sub.loop_continue(context, builder, dim - sub.start_dim)
+
+        def _loop_break(self, context, builder, dim):
+            for sub in self.subiters:
+                if sub.start_dim <= dim < sub.end_dim:
+                    sub.loop_break(context, builder, dim - sub.start_dim)
+
+        def _make_views(self, context, builder, indices, arrtys, arrays):
+            """
+            Compute the views to be yielded.
+            """
+            views = [None] * narrays
+            indexers = nditerty.indexers
+            subiters = self.subiters
+            rettys = nditerty.yield_type
+            if isinstance(rettys, types.BaseTuple):
+                rettys = list(rettys)
+            else:
+                rettys = [rettys]
+            indices = [builder.load(cgutils.gep_inbounds(builder, indices, i))
+                       for i in range(nshapes)]
+
+            for sub, subiter in zip(indexers, subiters):
+                _, _, _, array_indices = sub
+                sub_indices = indices[subiter.start_dim:subiter.end_dim]
+                if layout == 'F':
+                    sub_indices = sub_indices[::-1]
+                for i in array_indices:
+                    assert views[i] is None
+                    views[i] = self._make_view(context, builder, sub_indices,
+                                               rettys[i],
+                                               arrtys[i], arrays[i], subiter)
+            assert all(v for v in views)
+            return views
+
+        def _make_view(self, context, builder, indices, retty, arrty, arr, subiter):
+            """
+            Compute a 0d view for a given input array.
+            """
+            assert isinstance(retty, types.Array) and retty.ndim == 0
+
+            ptr = subiter.compute_pointer(context, builder, indices, arrty, arr)
+            view = context.make_array(retty)(context, builder)
+
+            itemsize = get_itemsize(context, retty)
+            shape = context.make_tuple(builder, types.UniTuple(types.intp, 0), ())
+            strides = context.make_tuple(builder, types.UniTuple(types.intp, 0), ())
+            # HACK: meminfo=None avoids expensive refcounting operations
+            # on ephemeral views
+            populate_array(view, ptr, shape, strides, itemsize, meminfo=None)
+            return view
+
+        def _arrays_or_scalars(self, context, builder, arrtys, arrays):
+            # Return a list of either array structures or pointers to
+            # scalar slots
+            l = []
+            for i, (arrty, arr) in enumerate(zip(arrtys, arrays)):
+                if isinstance(arrty, types.Array):
+                    l.append(context.make_array(arrty)(context, builder, value=arr))
+                else:
+                    l.append(getattr(self, "scalar%d" % i))
+            return l
+
+    return NdIter
 
 
 def make_ndindex_cls(nditerty):
@@ -1775,7 +2116,6 @@ def make_ndindex_cls(nditerty):
 
         def iternext_specific(self, context, builder, result):
             zero = context.get_constant(types.intp, 0)
-            one = context.get_constant(types.intp, 1)
 
             bbend = builder.append_basic_block('end')
 
@@ -1841,7 +2181,6 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
             def iternext_specific(self, context, builder, arrty, arr, result):
                 zero = context.get_constant(types.intp, 0)
-                one = context.get_constant(types.intp, 1)
 
                 ndim = arrty.ndim
                 nitems = arr.nitems
@@ -1865,7 +2204,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                             cgutils.make_anonymous_struct(builder, [idxtuple, value]))
                         _increment_indices_array(context, builder, arrty, arr, indices)
 
-                    index = builder.add(index, one)
+                    index = cgutils.increment_index(builder, index)
                     builder.store(index, self.index)
 
             def getitem(self, context, builder, arrty, arr, index):
@@ -1899,7 +2238,6 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 pointers = cgutils.alloca_once(builder, data.type,
                                                size=context.get_constant(types.intp,
                                                                          arrty.ndim))
-                strides = cgutils.unpack_tuple(builder, arr.strides, ndim)
                 exhausted = cgutils.alloca_once_value(builder, cgutils.false_byte)
 
                 # Initialize indices and pointers with their start values.
@@ -1929,7 +2267,6 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 pointers = self.pointers
 
                 zero = context.get_constant(types.intp, 0)
-                one = context.get_constant(types.intp, 1)
 
                 bbend = builder.append_basic_block('end')
 
@@ -1959,7 +2296,8 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 # dimension to outer.
                 for dim in reversed(range(ndim)):
                     idxptr = cgutils.gep_inbounds(builder, indices, dim)
-                    idx = builder.add(builder.load(idxptr), one)
+                    idx = cgutils.increment_index(builder,
+                                                  builder.load(idxptr))
 
                     count = shapes[dim]
                     stride = strides[dim]
@@ -2170,6 +2508,35 @@ def iternext_numpy_ndindex(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
+@lower_builtin(numpy.nditer, types.Any)
+def make_array_nditer(context, builder, sig, args):
+    """
+    nditer(...)
+    """
+    nditerty = sig.return_type
+    arrtys = nditerty.arrays
+
+    if isinstance(sig.args[0], types.BaseTuple):
+        arrays = cgutils.unpack_tuple(builder, args[0])
+    else:
+        arrays = [args[0]]
+
+    nditer = make_nditer_cls(nditerty)(context, builder)
+    nditer.init_specific(context, builder, arrtys, arrays)
+
+    res = nditer._getvalue()
+    return impl_ret_borrowed(context, builder, nditerty, res)
+
+@lower_builtin('iternext', types.NumpyNdIterType)
+@iternext_impl
+def iternext_numpy_ndindex(context, builder, sig, args, result):
+    [nditerty] = sig.args
+    [nditer] = args
+
+    nditer = make_nditer_cls(nditerty)(context, builder, value=nditer)
+    nditer.iternext_specific(context, builder, result)
+
+
 # -----------------------------------------------------------------------------
 # Numpy array constructors
 
@@ -2183,8 +2550,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     ary = arycls(context, builder)
 
     datatype = context.get_data_type(arrtype.dtype)
-    itemsize = context.get_constant(types.intp,
-                                    context.get_abi_sizeof(datatype))
+    itemsize = context.get_constant(types.intp, get_itemsize(context, arrtype))
 
     # compute array length
     arrlen = context.get_constant(types.intp, 1)
@@ -2645,22 +3011,8 @@ def array_copy(context, builder, sig, args):
     assert rettype.layout == "C"
     if arytype.layout == "C":
         # Fast path: memcpy
-        # Compute array length
-        arrlen = context.get_constant(types.intp, 1)
-        for s in shapes:
-            arrlen = builder.mul(arrlen, s)
-        arrlen = builder.mul(arrlen, ary.itemsize)
-
-        pchar = lc.Type.int(8).as_pointer()
-        memcpy = builder.module.declare_intrinsic(
-            'llvm.memcpy', [pchar, pchar, arrlen.type])
-        builder.call(memcpy,
-                     (builder.bitcast(dest_data, pchar),
-                      builder.bitcast(src_data, pchar),
-                      arrlen,
-                      lc.Constant.int(lc.Type.int(32), 0),
-                      lc.Constant.int(lc.Type.int(1), 0),
-                      ))
+        cgutils.raw_memcpy(builder, dest_data, src_data, ary.nitems,
+                           ary.itemsize, align=1)
 
     else:
         src_strides = cgutils.unpack_tuple(builder, ary.strides)
@@ -2675,6 +3027,36 @@ def array_copy(context, builder, sig, args):
                                                  shapes, dest_strides,
                                                  rettype.layout, indices)
             builder.store(builder.load(src_ptr), dest_ptr)
+
+    return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
+
+
+@lower_builtin("array.astype", types.Array, types.DTypeSpec)
+def array_astype(context, builder, sig, args):
+    arytype = sig.args[0]
+    ary = make_array(arytype)(context, builder, value=args[0])
+    shapes = cgutils.unpack_tuple(builder, ary.shape)
+
+    rettype = sig.return_type
+    ret = _empty_nd_impl(context, builder, rettype, shapes)
+
+    src_data = ary.data
+    dest_data = ret.data
+
+    src_strides = cgutils.unpack_tuple(builder, ary.strides)
+    dest_strides = cgutils.unpack_tuple(builder, ret.strides)
+    intp_t = context.get_value_type(types.intp)
+
+    with cgutils.loop_nest(builder, shapes, intp_t) as indices:
+        src_ptr = cgutils.get_item_pointer2(builder, src_data,
+                                            shapes, src_strides,
+                                            arytype.layout, indices)
+        dest_ptr = cgutils.get_item_pointer2(builder, dest_data,
+                                             shapes, dest_strides,
+                                             rettype.layout, indices)
+        item = load_item(context, builder, arytype, src_ptr)
+        item = context.cast(builder, item, arytype.dtype, rettype.dtype)
+        store_item(context, builder, rettype, item, dest_ptr)
 
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
 

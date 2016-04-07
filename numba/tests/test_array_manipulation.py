@@ -1,11 +1,13 @@
 from __future__ import print_function
-import numpy as np
+
 from functools import partial
+import numba.unittest_support as unittest
+
+import numpy as np
 
 from numba.compiler import compile_isolated, Flags
 from numba import types, from_dtype, errors, typeof
-import numba.unittest_support as unittest
-from numba.tests.support import TestCase, MemoryLeakMixin
+from .support import TestCase, MemoryLeakMixin, CompilationCache, tag
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -14,12 +16,8 @@ no_pyobj_flags = Flags()
 no_pyobj_flags.set('nrt')
 
 
-def reshape_array(a):
-    return a.reshape(3, 3)
-
-
-def reshape_array_to_1d(a):
-    return a.reshape(a.size)
+def array_reshape(arr, newshape):
+    return arr.reshape(newshape)
 
 
 def flatten_array(a):
@@ -46,16 +44,6 @@ def squeeze_array(a):
     return a.squeeze()
 
 
-def convert_array_str(a):
-    # astype takes no kws argument in numpy1.6
-    return a.astype('f4')
-
-
-def convert_array_dtype(a):
-    # astype takes no kws argument in numpy1.6
-    return a.astype(np.float32)
-
-
 def add_axis1(a):
     return np.expand_dims(a, axis=0)
 
@@ -78,71 +66,86 @@ def bad_float_index(arr):
 
 
 class TestArrayManipulation(MemoryLeakMixin, TestCase):
-    def test_reshape_array(self, flags=enable_pyobj_flags):
-        a = np.arange(9)
+    """
+    Check shape-changing operations on arrays.
+    """
 
-        pyfunc = reshape_array
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+    def setUp(self):
+        super(TestArrayManipulation, self).setUp()
+        self.ccache = CompilationCache()
 
-        expected = pyfunc(a)
-        got = cfunc(a)
-        np.testing.assert_equal(expected, got)
+    @tag('important')
+    def test_array_reshape(self):
+        pyfunc = array_reshape
+        def run(arr, shape):
+            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(shape)))
+            return cres.entry_point(arr, shape)
+        def check(arr, shape):
+            expected = pyfunc(arr, shape)
+            self.memory_leak_setup()
+            got = run(arr, shape)
+            self.assertPreciseEqual(got, expected)
+            del got
+            self.memory_leak_teardown()
+        def check_err_shape(arr, shape):
+            with self.assertRaises(NotImplementedError) as raises:
+                run(arr, shape)
+            self.assertEqual(str(raises.exception),
+                             "incompatible shape for array")
+        def check_err_size(arr, shape):
+            with self.assertRaises(ValueError) as raises:
+                run(arr, shape)
+            self.assertEqual(str(raises.exception),
+                             "total size of new array must be unchanged")
 
-    def test_reshape_array_npm(self):
-        self.test_reshape_array(flags=no_pyobj_flags)
+        def check_err_multiple_negative(arr, shape):
+            with self.assertRaises(ValueError) as raises:
+                run(arr, shape)
+            self.assertEqual(str(raises.exception),
+                             "multiple negative shape value")
 
-    def test_reshape_array_to_1d(self, flags=enable_pyobj_flags,
-                                 layout='C'):
-        a = np.arange(9).reshape(3, 3)
-        if layout == 'F':
-            a = a.T
+        # C-contiguous
+        arr = np.arange(24)
+        check(arr, (24,))
+        check(arr, (4, 6))
+        check(arr, (8, 3))
+        check(arr, (8, 1, 3))
+        check(arr, (1, 8, 1, 1, 3, 1))
+        arr = np.arange(24).reshape((2, 3, 4))
+        check(arr, (24,))
+        check(arr, (4, 6))
+        check(arr, (8, 3))
+        check(arr, (8, 1, 3))
+        check(arr, (1, 8, 1, 1, 3, 1))
+        check_err_size(arr, (25,))
+        check_err_size(arr, (8, 4))
+        arr = np.arange(24).reshape((1, 8, 1, 1, 3, 1))
+        check(arr, (24,))
+        check(arr, (4, 6))
+        check(arr, (8, 3))
+        check(arr, (8, 1, 3))
 
-        pyfunc = reshape_array_to_1d
-        arraytype1 = typeof(a)
-        if layout == 'A':
-            # Force A layout
-            arraytype1 = arraytype1.copy(layout='A')
+        # F-contiguous
+        arr = np.arange(24).reshape((2, 3, 4)).T
+        check(arr, (4, 3, 2))
+        check(arr, (1, 4, 1, 3, 1, 2, 1))
+        check_err_shape(arr, (2, 3, 4))
+        check_err_shape(arr, (6, 4))
+        check_err_shape(arr, (2, 12))
 
-        self.assertEqual(arraytype1.layout, layout)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+        # Test negative shape value
+        arr = np.arange(25).reshape(5,5)
+        check(arr, -1)
+        check(arr, (-1,))
+        check(arr, (-1, 5))
+        check(arr, (5, -1, 5))
+        check(arr, (5, 5, -1))
+        check_err_size(arr, (-1, 4))
+        check_err_multiple_negative(arr, (-1, -2, 5, 5))
+        check_err_multiple_negative(arr, (5, 5, -1, -1))
 
-        expected = pyfunc(a)
-        got = cfunc(a)
-        self.assertEqual(got.ndim, 1)
-        np.testing.assert_equal(expected, got)
-
-    def test_reshape_array_to_1d_npm(self):
-        self.test_reshape_array_to_1d(flags=no_pyobj_flags)
-        with self.assertRaises(NotImplementedError) as raises:
-            self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='F')
-        self.assertIn("incompatible shape for array", str(raises.exception))
-        with self.assertTypingError() as raises:
-            # The following will leak due to lack of post exception cleanup
-            self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='A')
-        self.assertIn("reshape() supports contiguous array only",
-                      str(raises.exception))
-        # Disable leak check for the last `test_reshape_array_to_1d` call.
+        # Exceptions leak references
         self.disable_leak_check()
-
-    @unittest.expectedFailure
-    def test_reshape_array_to_1d_leak_error_npm(self):
-        """
-        Rerun the test in ``test_reshape_array_to_1d_npm`` that will cause
-        a leak error.
-        """
-        with self.assertRaises(NotImplementedError) as raises:
-            self.test_reshape_array_to_1d(flags=no_pyobj_flags, layout='F')
-        self.assertIn("incompatible shape for array", str(raises.exception))
-        # The leak check is not captured by the expectedFailure.
-        # We need to disable it because `test_reshape_array_to_1d` will leak
-        # due to the lack of post exception cleanup
-        self.disable_leak_check()
-        # The following checks for memory leak and it will fail.
-        # This will trigger the expectedFailure
-        self.assert_no_memory_leak()
 
     def test_flatten_array(self, flags=enable_pyobj_flags, layout='C'):
         a = np.arange(9).reshape(3, 3)
@@ -253,42 +256,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.test_squeeze_array(flags=no_pyobj_flags)
 
         self.assertIn("squeeze", str(raises.exception))
-
-    def test_convert_array_str(self, flags=enable_pyobj_flags):
-        a = np.arange(9, dtype='i4')
-
-        pyfunc = convert_array_str
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
-
-        expected = pyfunc(a)
-        got = cfunc(a)
-        self.assertPreciseEqual(expected, got)
-
-    def test_convert_array_str_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_convert_array_str(flags=no_pyobj_flags)
-
-        self.assertIn("astype", str(raises.exception))
-
-    def test_convert_array(self, flags=enable_pyobj_flags):
-        a = np.arange(9, dtype='i4')
-
-        pyfunc = convert_array_dtype
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
-
-        expected = pyfunc(a)
-        got = cfunc(a)
-        np.testing.assert_equal(expected, got)
-
-    def test_convert_array_npm(self):
-        with self.assertRaises(errors.UntypedAttributeError) as raises:
-            self.test_convert_array(flags=no_pyobj_flags)
-
-        self.assertIn("astype", str(raises.exception))
 
     def test_add_axis1(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)

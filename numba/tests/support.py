@@ -9,6 +9,7 @@ import gc
 import math
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -102,7 +103,7 @@ class TestCase(unittest.TestCase):
         """
         A context manager that asserts the given objects have the
         same reference counts before and after executing the
-        enclosed blocks.
+        enclosed block.
         """
         old_refcounts = [sys.getrefcount(x) for x in objects]
         yield
@@ -111,6 +112,25 @@ class TestCase(unittest.TestCase):
             if old != new:
                 self.fail("Refcount changed from %d to %d for object: %r"
                           % (old, new, obj))
+
+    @contextlib.contextmanager
+    def assertNoNRTLeak(self):
+        """
+        A context manager that asserts no NRT leak was created during
+        the execution of the enclosed block.
+        """
+        old = rtsys.get_allocation_stats()
+        yield
+        new = rtsys.get_allocation_stats()
+        total_alloc = new.alloc - old.alloc
+        total_free = new.free - old.free
+        total_mi_alloc = new.mi_alloc - old.mi_alloc
+        total_mi_free = new.mi_free - old.mi_free
+        self.assertEqual(total_alloc, total_free,
+                         "number of data allocs != number of data frees")
+        self.assertEqual(total_mi_alloc, total_mi_free,
+                         "number of meminfo allocs != number of meminfo frees")
+
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
@@ -548,3 +568,36 @@ class MemoryLeakMixin(MemoryLeak):
     def tearDown(self):
         super(MemoryLeakMixin, self).tearDown()
         self.memory_leak_teardown()
+
+
+@contextlib.contextmanager
+def forbid_codegen():
+    """
+    Forbid LLVM code generation during the execution of the context
+    manager's enclosed block.
+
+    If code generation is invoked, a RuntimeError is raised.
+    """
+    from numba.targets import codegen
+    patchpoints = ['CodeLibrary._finalize_final_module']
+
+    old = {}
+    def fail(*args, **kwargs):
+        raise RuntimeError("codegen forbidden by test case")
+    try:
+        # XXX use the mock library instead?
+        for name in patchpoints:
+            parts = name.split('.')
+            obj = codegen
+            for attrname in parts[:-1]:
+                obj = getattr(obj, attrname)
+            attrname = parts[-1]
+            value = getattr(obj, attrname)
+            assert callable(value), ("%r should be callable" % name)
+            old[obj, attrname] = value
+            setattr(obj, attrname, fail)
+        yield
+    finally:
+        for (obj, attrname), value in old.items():
+            setattr(obj, attrname, value)
+

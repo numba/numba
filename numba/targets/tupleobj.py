@@ -220,6 +220,10 @@ def static_getitem_tuple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
     if isinstance(idx, int):
+        if idx < 0:
+            idx += len(tupty)
+        if not 0 <= idx < len(tupty):
+            raise IndexError("cannot index at %d in %s" % (idx, tupty))
         res = builder.extract_value(tup, idx)
     elif isinstance(idx, slice):
         items = cgutils.unpack_tuple(builder, tup)[idx]

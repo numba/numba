@@ -272,6 +272,24 @@ class ArrayAttribute(AttributeTemplate):
         retty = ary.copy(layout="C")
         return signature(retty)
 
+    @bound_function("array.item")
+    def resolve_item(self, ary, args, kws):
+        assert not kws
+        # We don't support explicit arguments as that's exactly equivalent
+        # to regular indexing.  The no-argument form is interesting to
+        # allow some degree of genericity when writing functions.
+        if not args:
+            return signature(ary.dtype)
+
+    @bound_function("array.itemset")
+    def resolve_itemset(self, ary, args, kws):
+        assert not kws
+        # We don't support explicit arguments as that's exactly equivalent
+        # to regular indexing.  The no-argument form is interesting to
+        # allow some degree of genericity when writing functions.
+        if len(args) == 1:
+            return signature(types.none, ary.dtype)
+
     @bound_function("array.nonzero")
     def resolve_nonzero(self, ary, args, kws):
         assert not args
@@ -337,7 +355,25 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         dtype, = args
         dtype = _parse_dtype(dtype)
+        if dtype is None:
+            return
         retty = ary.copy(dtype=dtype)
+        return signature(retty, *args)
+
+    @bound_function("array.astype")
+    def resolve_astype(self, ary, args, kws):
+        from .npydecl import _parse_dtype
+        assert not kws
+        dtype, = args
+        dtype = _parse_dtype(dtype)
+        if dtype is None:
+            return
+        if not self.context.can_convert(ary.dtype, dtype):
+            raise TypeError("astype(%s) not supported on %s: "
+                            "cannot convert from %s to %s"
+                            % (dtype, ary, ary.dtype, dtype))
+        layout = ary.layout if ary.layout in 'CF' else 'C'
+        retty = ary.copy(dtype=dtype, layout=layout)
         return signature(retty, *args)
 
     @bound_function("array.ravel")
@@ -497,7 +533,7 @@ for fname in ["cumsum", "cumprod"]:
     install_array_method(fname, generic_expand_cumulative)
 
 # Functions that require integer arrays get promoted to float64 return
-for fName in ["mean", "median", "var", "std"]:
+for fName in ["mean", "var", "std"]:
     install_array_method(fName, generic_hetero_real)
 
 # Functions that return an index (intp)

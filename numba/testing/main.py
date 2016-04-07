@@ -504,13 +504,24 @@ def _split_nonparallel_tests(test):
     """
     ptests = []
     stests = []
+
+    def is_parallelizable_test_case(test):
+        # Guard for the fake test case created by unittest when test
+        # discovery fails, as it isn't picklable (e.g. "LoadTestsFailure")
+        method_name = test._testMethodName
+        method = getattr(test, method_name)
+        if method.__name__ != method_name and method.__name__ == "testFailure":
+            return False
+        # Was parallel execution explicitly disabled?
+        return getattr(test, "_numba_parallel_test_", True)
+
     if isinstance(test, unittest.TestSuite):
         # It's a sub-suite, recurse
         for t in test:
             p, s = _split_nonparallel_tests(t)
             ptests.extend(p)
             stests.extend(s)
-    elif getattr(test, "_numba_parallel_test_", True):
+    elif is_parallelizable_test_case(test):
         # Test case is suitable for parallel execution (default)
         ptests = [test]
     else:
@@ -546,8 +557,11 @@ class ParallelTestRunner(runner.TextTestRunner):
             # On exception, kill still active workers immediately
             pool.terminate()
         else:
-            # On success, close the pool cleanly
-            pool.close()
+            # Close the pool cleanly unless asked to early out
+            if result.shouldStop:
+                pool.terminate()
+            else:
+                pool.close()
         finally:
             # Always join the pool (this is necessary for coverage.py)
             pool.join()

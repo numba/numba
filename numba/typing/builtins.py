@@ -550,6 +550,12 @@ class BooleanAttribute(AttributeTemplate):
     def resolve___class__(self, ty):
         return types.NumberClass(ty)
 
+    @bound_function("number.item")
+    def resolve_item(self, ty, args, kws):
+        assert not kws
+        if not args:
+            return signature(ty)
+
 
 @infer_getattr
 class NumberAttribute(AttributeTemplate):
@@ -569,6 +575,12 @@ class NumberAttribute(AttributeTemplate):
         assert not args
         assert not kws
         return signature(ty)
+
+    @bound_function("number.item")
+    def resolve_item(self, ty, args, kws):
+        assert not kws
+        if not args:
+            return signature(ty)
 
 
 @infer_getattr
@@ -795,6 +807,29 @@ class Zip(AbstractTemplate):
         if all(isinstance(it, types.IterableType) for it in args):
             zip_type = types.ZipType(args)
             return signature(zip_type, *args)
+
+
+@infer_global(iter)
+class Iter(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1:
+            it = args[0]
+            if isinstance(it, types.IterableType):
+                return signature(it.iterator_type, *args)
+
+
+@infer_global(next)
+class Next(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) == 1:
+            it = args[0]
+            if isinstance(it, types.IteratorType):
+                return signature(it.yield_type, *args)
+
 
 #------------------------------------------------------------------------------
 

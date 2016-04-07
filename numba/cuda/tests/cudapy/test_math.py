@@ -75,16 +75,29 @@ def math_exp(A, B):
     i = cuda.grid(1)
     B[i] = math.exp(A[i])
 
+def math_erf(A, B):
+    i = cuda.grid(1)
+    B[i] = math.erf(A[i])
+
+def math_erfc(A, B):
+    i = cuda.grid(1)
+    B[i] = math.erfc(A[i])
 
 def math_expm1(A, B):
     i = cuda.grid(1)
     B[i] = math.expm1(A[i])
 
-
 def math_fabs(A, B):
     i = cuda.grid(1)
     B[i] = math.fabs(A[i])
 
+def math_gamma(A, B):
+    i = cuda.grid(1)
+    B[i] = math.gamma(A[i])
+
+def math_lgamma(A, B):
+    i = cuda.grid(1)
+    B[i] = math.lgamma(A[i])
 
 def math_log(A, B):
     i = cuda.grid(1)
@@ -215,6 +228,13 @@ class TestCudaMath(unittest.TestCase):
         cfunc[1, nelem](A, A, B)
         self.assertTrue(np.allclose(npfunc(A, A), B))
 
+    # Test helper for math functions when no ufunc exists
+    # and dtype specificity is required.
+    def _math_vectorize(self, mathfunc, x):
+        ret = np.zeros_like(x)
+        for k in range(len(x)):
+            ret[k] = mathfunc(x[k])
+        return ret
 
     #------------------------------------------------------------------------------
     # test_math_acos
@@ -320,6 +340,25 @@ class TestCudaMath(unittest.TestCase):
         self.binary_template_float32(math_atan2, np.arctan2)
         self.binary_template_float64(math_atan2, np.arctan2)
 
+    #------------------------------------------------------------------------------
+    # test_math_erf
+
+
+    def test_math_erf(self):
+        def ufunc(x):
+            return self._math_vectorize(math.erf, x)
+        self.unary_template_float32(math_erf, ufunc)
+        self.unary_template_float64(math_erf, ufunc)
+
+    #------------------------------------------------------------------------------
+    # test_math_erfc
+
+
+    def test_math_erfc(self):
+        def ufunc(x):
+            return self._math_vectorize(math.erfc, x)
+        self.unary_template_float32(math_erfc, ufunc)
+        self.unary_template_float64(math_erfc, ufunc)
 
     #------------------------------------------------------------------------------
     # test_math_exp
@@ -344,6 +383,25 @@ class TestCudaMath(unittest.TestCase):
         self.unary_template_float32(math_fabs, np.fabs, start=-1)
         self.unary_template_float64(math_fabs, np.fabs, start=-1)
 
+    #------------------------------------------------------------------------------
+    # test_math_gamma
+
+
+    def test_math_gamma(self):
+        def ufunc(x):
+            return self._math_vectorize(math.gamma, x)
+        self.unary_template_float32(math_gamma, ufunc, start=0.1)
+        self.unary_template_float64(math_gamma, ufunc, start=0.1)
+
+    #------------------------------------------------------------------------------
+    # test_math_lgamma
+
+
+    def test_math_lgamma(self):
+        def ufunc(x):
+            return self._math_vectorize(math.lgamma, x)
+        self.unary_template_float32(math_lgamma, ufunc, start=0.1)
+        self.unary_template_float64(math_lgamma, ufunc, start=0.1)
 
     #------------------------------------------------------------------------------
     # test_math_log

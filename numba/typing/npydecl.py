@@ -365,7 +365,7 @@ def _numpy_redirect(fname):
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
 
-for func in ['min', 'max', 'sum', 'prod', 'mean', 'median', 'var', 'std',
+for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
              'cumsum', 'cumprod', 'argmin', 'argmax', 'nonzero', 'ravel']:
     _numpy_redirect(func)
 
@@ -805,6 +805,25 @@ class NdEnumerate(AbstractTemplate):
         if isinstance(arr, types.Array):
             enumerate_type = types.NumpyNdEnumerateType(arr)
             return signature(enumerate_type, *args)
+
+
+@infer_global(numpy.nditer)
+class NdIter(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        if len(args) != 1:
+            return
+        arrays, = args
+
+        if isinstance(arrays, types.BaseTuple):
+            if not arrays:
+                return
+            arrays = list(arrays)
+        else:
+            arrays = [arrays]
+        nditerty = types.NumpyNdIterType(arrays)
+        return signature(nditerty, *args)
 
 
 @infer_global(numpy.ndindex)

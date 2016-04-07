@@ -5,10 +5,23 @@ from itertools import product
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import typeof
+from numba import jit, typeof
 from numba.compiler import compile_isolated
+from numba.numpy_support import version as np_version
 from .support import TestCase, MemoryLeakMixin, tag
 
+
+def array_all(arr):
+    return arr.all()
+
+def array_all_global(arr):
+    return np.all(arr)
+
+def array_any(arr):
+    return arr.any()
+
+def array_any_global(arr):
+    return np.any(arr)
 
 def array_cumprod(arr):
     return arr.cumprod()
@@ -79,6 +92,27 @@ def array_argmax_global(arr):
 def array_median_global(arr):
     return np.median(arr)
 
+def array_nanmin(arr):
+    return np.nanmin(arr)
+
+def array_nanmax(arr):
+    return np.nanmax(arr)
+
+def array_nanmean(arr):
+    return np.nanmean(arr)
+
+def array_nansum(arr):
+    return np.nansum(arr)
+
+def array_nanstd(arr):
+    return np.nanstd(arr)
+
+def array_nanvar(arr):
+    return np.nanvar(arr)
+
+def array_nanmedian_global(arr):
+    return np.nanmedian(arr)
+
 
 def base_test_arrays(dtype):
     if dtype == np.bool_:
@@ -122,80 +156,189 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     Test array reduction methods and functions such as .sum(), .max(), etc.
     """
 
+    def setUp(self):
+        super(TestArrayReductions, self).setUp()
+        np.random.seed(42)
+
+    def check_reduction_basic(self, pyfunc, all_nans=True, **kwargs):
+        # Basic reduction checks on 1-d float64 arrays
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
+
+        arr = np.float64([1.0, 2.0, 0.0, -0.0, 1.0, -1.5])
+        check(arr)
+        arr = np.float64([-0.0, -1.5])
+        check(arr)
+        arr = np.float64([-1.5, 2.5, 'inf'])
+        check(arr)
+        arr = np.float64([-1.5, 2.5, '-inf'])
+        check(arr)
+        arr = np.float64([-1.5, 2.5, 'inf', '-inf'])
+        check(arr)
+        arr = np.float64(['nan', -1.5, 2.5, 'nan', 3.0])
+        check(arr)
+        arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
+        check(arr)
+        if all_nans:
+            # Only NaNs
+            arr = np.float64(['nan', 'nan'])
+            check(arr)
+
+    @tag('important')
+    def test_all_basic(self, pyfunc=array_all):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+        arr = np.float64([1.0, 0.0, float('inf'), float('nan')])
+        check(arr)
+        arr[1] = -0.0
+        check(arr)
+        arr[1] = 1.5
+        check(arr)
+        arr = arr.reshape((2, 2))
+        check(arr)
+        check(arr[::-1])
+
+    @tag('important')
+    def test_any_basic(self, pyfunc=array_any):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+        arr = np.float64([0.0, -0.0, 0.0, 0.0])
+        check(arr)
+        arr[2] = float('nan')
+        check(arr)
+        arr[2] = float('inf')
+        check(arr)
+        arr[2] = 1.5
+        check(arr)
+        arr = arr.reshape((2, 2))
+        check(arr)
+        check(arr[::-1])
+
     @tag('important')
     def test_sum_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_sum, arr)
-        self.assertPreciseEqual(npr, nbr)
+        self.check_reduction_basic(array_sum)
 
     @tag('important')
     def test_mean_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_mean, arr)
-        self.assertPreciseEqual(npr, nbr, prec="double")
+        self.check_reduction_basic(array_mean)
 
     @tag('important')
     def test_var_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_var, arr)
-        self.assertPreciseEqual(npr, nbr, prec="double")
+        self.check_reduction_basic(array_var, prec='double')
 
     @tag('important')
     def test_std_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_std, arr)
-        self.assertPreciseEqual(npr, nbr, prec="double")
+        self.check_reduction_basic(array_std)
 
     @tag('important')
     def test_min_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_min, arr)
-        self.assertPreciseEqual(npr, nbr)
+        self.check_reduction_basic(array_min)
 
     @tag('important')
     def test_max_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_max, arr)
-        self.assertPreciseEqual(npr, nbr)
+        self.check_reduction_basic(array_max)
 
     @tag('important')
     def test_argmin_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_argmin, arr)
-        self.assertPreciseEqual(npr, nbr)
+        self.check_reduction_basic(array_argmin)
 
     @tag('important')
     def test_argmax_basic(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_argmax, arr)
-        self.assertPreciseEqual(npr, nbr)
+        self.check_reduction_basic(array_argmax)
 
-    def test_median_odd(self):
-        arr = np.arange(101)
-        np.random.shuffle(arr)
-        npr, nbr = run_comparative(array_median_global, arr)
-        self.assertPreciseEqual(npr, nbr)
+    @tag('important')
+    def test_nanmin_basic(self):
+        self.check_reduction_basic(array_nanmin)
 
-    def test_median_even(self):
-        arr = np.arange(100)
-        np.random.shuffle(arr)
-        npr, nbr = run_comparative(array_median_global, arr)
-        self.assertPreciseEqual(npr, nbr)
+    @tag('important')
+    def test_nanmax_basic(self):
+        self.check_reduction_basic(array_nanmax)
 
-    def test_median_sorted(self):
-        arr = np.arange(100)
-        npr, nbr = run_comparative(array_median_global, arr)
-        self.assertPreciseEqual(npr, nbr)
+    @tag('important')
+    @unittest.skipUnless(np_version >= (1, 8), "nanmean needs Numpy 1.8+")
+    def test_nanmean_basic(self):
+        self.check_reduction_basic(array_nanmean)
 
-    def test_median_revsorted(self):
-        arr = np.arange(100, 0, -1)
-        npr, nbr = run_comparative(array_median_global, arr)
-        self.assertPreciseEqual(npr, nbr)
+    @tag('important')
+    def test_nansum_basic(self):
+        # Note Numpy < 1.9 has different behaviour for all NaNs:
+        # it returns Nan while later Numpy returns 0.
+        self.check_reduction_basic(array_nansum,
+                                   all_nans=np_version >= (1, 9))
 
-    def test_median_duplicate(self):
-        arr = np.ones(100)
-        npr, nbr = run_comparative(array_median_global, arr)
-        self.assertPreciseEqual(npr, nbr)
+    @tag('important')
+    @unittest.skipUnless(np_version >= (1, 8), "nanstd needs Numpy 1.8+")
+    def test_nanstd_basic(self):
+        self.check_reduction_basic(array_nanstd)
+
+    @tag('important')
+    @unittest.skipUnless(np_version >= (1, 8), "nanvar needs Numpy 1.8+")
+    def test_nanvar_basic(self):
+        self.check_reduction_basic(array_nanvar, prec='double')
+
+    def check_median_basic(self, pyfunc, array_variations):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(got, expected)
+
+        # Odd sizes
+        def check_odd(a):
+            check(a)
+            a = a.reshape((9, 7))
+            check(a)
+            check(a.T)
+        for a in array_variations(np.arange(63) + 10.5):
+            check_odd(a)
+
+        # Even sizes
+        def check_even(a):
+            check(a)
+            a = a.reshape((4, 16))
+            check(a)
+            check(a.T)
+        for a in array_variations(np.arange(64) + 10.5):
+            check_even(a)
+
+    @tag('important')
+    def test_median_basic(self):
+        pyfunc = array_median_global
+
+        def variations(a):
+            # Sorted, reversed, random, many duplicates
+            yield a
+            a = a[::-1].copy()
+            yield a
+            np.random.shuffle(a)
+            yield a
+            a[a % 4 >= 1] = 3.5
+            yield a
+
+        self.check_median_basic(pyfunc, variations)
+
+    @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
+    def test_nanmedian_basic(self):
+        pyfunc = array_nanmedian_global
+
+        def variations(a):
+            # Sorted, reversed, random, many duplicates, many NaNs
+            yield a
+            a = a[::-1].copy()
+            yield a
+            np.random.shuffle(a)
+            yield a
+            a[a % 4 <= 1] = 3.5
+            yield a
+            a[a % 4 >= 2] = float('nan')
+            yield a
+
+        self.check_median_basic(pyfunc, variations)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
@@ -315,9 +458,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def _do_check_nptimedelta(self, pyfunc, arr):
         arrty = typeof(arr)
-
-        cres = compile_isolated(pyfunc, [arrty])
-        cfunc = cres.entry_point
+        cfunc = jit(nopython=True)(pyfunc)
 
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         # Even vs. odd size, for np.median
@@ -381,7 +522,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_min, array_min_global,
                            array_max, array_max_global,
                            array_argmin, array_argmin_global,
-                           array_argmax, array_argmax_global]
+                           array_argmax, array_argmax_global,
+                           array_all, array_all_global,
+                           array_any, array_any_global,
+                           array_nanmax,
+                           array_nanmin,
+                           array_nansum,
+                           ]
+        if np_version >= (1, 8):
+            reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
+
         dtypes_to_test = [np.int32, np.float32, np.bool_]
 
         # Install tests on class

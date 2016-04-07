@@ -5,6 +5,7 @@ from __future__ import print_function, absolute_import, division
 import sys, logging, re
 from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
                     c_char)
+import threading
 from numba import config
 from .error import NvvmError, NvvmSupportError
 from .libs import open_libdevice, open_cudalib
@@ -52,6 +53,8 @@ def is_available():
         return True
 
 
+_nvvm_lock = threading.Lock()
+
 class NVVM(object):
     '''Process-wide singleton.
     '''
@@ -96,22 +99,23 @@ class NVVM(object):
     __INSTANCE = None
 
     def __new__(cls):
-        if not cls.__INSTANCE:
-            cls.__INSTANCE = inst = object.__new__(cls)
-            try:
-                inst.driver = open_cudalib('nvvm', ccc=True)
-            except OSError as e:
-                cls.__INSTANCE = None
-                errmsg = ("libNVVM cannot be found. Do `conda install "
-                          "cudatoolkit`:\n%s")
-                raise NvvmSupportError(errmsg % e)
+        with _nvvm_lock:
+            if cls.__INSTANCE is None:
+                cls.__INSTANCE = inst = object.__new__(cls)
+                try:
+                    inst.driver = open_cudalib('nvvm', ccc=True)
+                except OSError as e:
+                    cls.__INSTANCE = None
+                    errmsg = ("libNVVM cannot be found. Do `conda install "
+                              "cudatoolkit`:\n%s")
+                    raise NvvmSupportError(errmsg % e)
 
-            # Find & populate functions
-            for name, proto in inst._PROTOTYPES.items():
-                func = getattr(inst.driver, name)
-                func.restype = proto[0]
-                func.argtypes = proto[1:]
-                setattr(inst, name, func)
+                # Find & populate functions
+                for name, proto in inst._PROTOTYPES.items():
+                    func = getattr(inst.driver, name)
+                    func.restype = proto[0]
+                    func.argtypes = proto[1:]
+                    setattr(inst, name, func)
 
         return cls.__INSTANCE
 

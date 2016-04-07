@@ -194,11 +194,12 @@ def remove_redundant_nrt_refct(ll_module):
     Decref calls are moved after the last incref call in the block to avoid
     temporarily decref'ing to zero (which can happen due to hidden decref from
     alias).
+
+    Note: non-threadsafe due to usage of global LLVMcontext
     """
     # Note: As soon as we have better utility in analyzing materialized LLVM
     #       module in llvmlite, we can redo this without so much string
     #       processing.
-
     def _extract_functions(module):
         cur = []
         for line in str(module).splitlines():

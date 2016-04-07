@@ -58,6 +58,8 @@ script:
     # directive in .coveragerc
     - if [ "$RUN_COVERAGE" == "yes" ]; then cd $TRAVIS_BUILD_DIR; coverage erase; coverage run runtests.py -b -m numba.tests; fi
     - if [ "$RUN_COVERAGE" != "yes" ]; then NUMBA_ENABLE_CUDASIM=1 python -m numba.runtests -b -m numba.tests; fi
+    # Also run test_runtests individually, to make sure test discovery didn't break
+    - python -m numba.tests.test_runtests
 
 after_success:
     - if [ "$RUN_COVERAGE" == "yes" ]; then coverage combine; codecov; fi

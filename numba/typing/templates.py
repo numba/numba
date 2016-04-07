@@ -327,16 +327,24 @@ class AttributeTemplate(object):
     _initialized = False
 
     def __init__(self, context):
+        self._lazy_class_init()
         self.context = context
 
     def resolve(self, value, attr):
-        if not self._initialized:
-            self._do_init()
-            self._initialized = True
         return self._resolve(value, attr)
 
-    def _do_init(self):
-        pass
+    @classmethod
+    def _lazy_class_init(cls):
+        if not cls._initialized:
+            cls.do_class_init()
+            cls._initialized = True
+
+    @classmethod
+    def do_class_init(cls):
+        """
+        Class-wide initialization.  Can be overriden by subclasses to
+        register permanent typing or target hooks.
+        """
 
     def _resolve(self, value, attr):
         fn = getattr(self, "resolve_%s" % attr, None)
@@ -357,48 +365,55 @@ class _OverloadAttributeTemplate(AttributeTemplate):
     A base class of templates for @overload_attribute functions.
     """
 
-    def _do_init(self):
+    def __init__(self, context):
+        super(_OverloadAttributeTemplate, self).__init__(context)
+        self.context = context
+
+    @classmethod
+    def do_class_init(cls):
         """
         Register attribute implementation.
         """
         from numba.targets.imputils import lower_getattr
-        attr = self._attr
+        attr = cls._attr
 
-        @lower_getattr(self.key, attr)
+        @lower_getattr(cls.key, attr)
         def getattr_impl(context, builder, typ, value):
             sig_args = (typ,)
             sig_kws = {}
-            disp = self._get_dispatcher(typ, attr, sig_args, sig_kws)
+            typing_context = context.typing_context
+            disp = cls._get_dispatcher(typing_context, typ, attr, sig_args, sig_kws)
             disp_type = types.Dispatcher(disp)
-            sig = disp_type.get_call_type(self.context, sig_args, sig_kws)
+            sig = disp_type.get_call_type(typing_context, sig_args, sig_kws)
             call = context.get_function(disp_type, sig)
             return call(builder, (value,))
 
-    def _get_dispatcher(self, typ, attr, sig_args, sig_kws):
+    @classmethod
+    def _get_dispatcher(cls, context, typ, attr, sig_args, sig_kws):
         """
         Get the compiled dispatcher implementing the attribute for
         the given formal signature.
         """
-        cache_key = self.context, typ, attr
+        cache_key = context, typ, attr
         try:
-            disp = self._impl_cache[cache_key]
+            disp = cls._impl_cache[cache_key]
         except KeyError:
             # Get the overload implementation for the given type
-            pyfunc = self._overload_func(*sig_args, **sig_kws)
+            pyfunc = cls._overload_func(*sig_args, **sig_kws)
             if pyfunc is None:
                 # No implementation => fail typing
-                self._impl_cache[cache_key] = None
+                cls._impl_cache[cache_key] = None
                 return
 
             from numba import jit
-            disp = self._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
+            disp = cls._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
         return disp
 
     def _resolve_impl_sig(self, typ, attr, sig_args, sig_kws):
         """
         Compute the actual implementation sig for the given formal argument types.
         """
-        disp = self._get_dispatcher(typ, attr, sig_args, sig_kws)
+        disp = self._get_dispatcher(self.context, typ, attr, sig_args, sig_kws)
         if disp is None:
             return None
 
@@ -420,19 +435,21 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
     A base class of templates for @overload_method functions.
     """
 
-    def _do_init(self):
+    @classmethod
+    def do_class_init(cls):
         """
         Register generic method implementation.
         """
         from numba.targets.imputils import lower_builtin
-        attr = self._attr
+        attr = cls._attr
 
-        @lower_builtin((self.key, attr), self.key, types.VarArg(types.Any))
+        @lower_builtin((cls.key, attr), cls.key, types.VarArg(types.Any))
         def method_impl(context, builder, sig, args):
             typ = sig.args[0]
-            disp = self._get_dispatcher(typ, attr, sig.args, {})
+            typing_context = context.typing_context
+            disp = cls._get_dispatcher(typing_context, typ, attr, sig.args, {})
             disp_type = types.Dispatcher(disp)
-            sig = disp_type.get_call_type(self.context, sig.args, {})
+            sig = disp_type.get_call_type(typing_context, sig.args, {})
             call = context.get_function(disp_type, sig)
             return call(builder, args)
 
@@ -461,6 +478,7 @@ def make_overload_attribute_template(typ, attr, overload_func,
     """
     assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
     name = "OverloadTemplate_%s_%s" % (typ, attr)
+    # Note the implementation cache is subclass-specific
     dct = dict(key=typ, _attr=attr, _impl_cache={},
                _overload_func=staticmethod(overload_func),
                )

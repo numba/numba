@@ -6,6 +6,7 @@ from numba import utils
 from .cudadrv import nvvm
 
 
+
 CUDA_TRIPLE = {32: 'nvptx-nvidia-cuda',
                64: 'nvptx64-nvidia-cuda'}
 
