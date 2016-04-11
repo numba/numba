@@ -117,6 +117,7 @@ static PyMethodDef ext_methods[] = {
 PyAPI_FUNC(double) _numba_test_sin(double x);
 PyAPI_FUNC(double) _numba_test_cos(double x);
 PyAPI_FUNC(double) _numba_test_exp(double x);
+PyAPI_FUNC(void) _numba_test_vsquare(int n, double *x, double *out);
 
 double _numba_test_sin(double x)
 {
@@ -131,6 +132,20 @@ double _numba_test_cos(double x)
 double _numba_test_exp(double x)
 {
     return exp(x);
+}
+
+void _numba_test_vsquare(int n, double *x, double *out)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        out[i] = pow(x[i], 2.0);
+}
+
+void _numba_test_vcube(int n, double *x, double *out)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        out[i] = pow(x[i], 3.0);
 }
 
 

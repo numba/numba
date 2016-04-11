@@ -1533,10 +1533,17 @@ def array_ctypes_data(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 @lower_cast(types.ArrayCTypes, types.CPointer)
+@lower_cast(types.ArrayCTypes, types.voidptr)
 def array_ctypes_to_pointer(context, builder, fromty, toty, val):
     ctinfo = context.make_helper(builder, fromty, value=val)
     res = ctinfo.data
+    res = builder.bitcast(res, context.get_value_type(toty))
     return impl_ret_untracked(context, builder, toty, res)
+
+#def array_ctypes_to_pointer(context, builder, fromty, toty, val):
+    #ctinfo = context.make_helper(builder, fromty, value=val)
+    #res = ctinfo.data
+    #return impl_ret_untracked(context, builder, toty, res)
 
 
 # array.flags

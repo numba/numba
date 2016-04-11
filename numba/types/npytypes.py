@@ -362,11 +362,17 @@ class ArrayCTypes(Type):
         """
         Convert this type to the corresponding pointer type.
         This allows passing a array.ctypes object to a C function taking
-        a raw pointer to the right dtype.
+        a raw pointer.
+
+        Note that in pure Python, the array.ctypes object can only be
+        passed to a ctypes function accepting a c_void_p, not a typed
+        pointer.
         """
-        from . import CPointer
+        from . import CPointer, voidptr
         # XXX what about readonly
         if isinstance(other, CPointer) and other.dtype == self.dtype:
+            return Conversion.safe
+        elif other == voidptr:
             return Conversion.safe
 
 
