@@ -316,6 +316,7 @@ class LibDevice(object):
         "compute_20",
         "compute_30",
         "compute_35",
+        "compute_50",
     ]
 
     def __init__(self, arch):
