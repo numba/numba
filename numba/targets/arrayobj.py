@@ -145,6 +145,7 @@ def normalize_index(context, builder, idxty, idx):
     Normalize the index type and value.  0-d arrays are converted to scalars.
     """
     if isinstance(idxty, types.Array) and idxty.ndim == 0:
+        assert isinstance(idxty.dtype, types.Integer)
         idxary = make_array(idxty)(context, builder, idx)
         idxval = load_item(context, builder, idxty, idxary.data)
         return idxty.dtype, idxval
