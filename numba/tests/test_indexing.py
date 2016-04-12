@@ -528,6 +528,18 @@ class TestGetItem(TestCase):
         self.assertEqual(pyfunc(a, 2), cfunc(a, 2))
         self.assertEqual(pyfunc(a, -1), cfunc(a, -1))
 
+        # Using a 0-d array as integer index
+        arraytype = types.Array(types.int32, 1, 'C')
+        indextype = types.Array(types.int16, 0, 'C')
+        cr = compile_isolated(pyfunc, (arraytype, indextype), flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(3, 13, dtype=np.int32)
+        for i in (0, 9, -2):
+            idx = np.array(i).astype(np.int16)
+            assert idx.ndim == 0
+            self.assertEqual(pyfunc(a, idx), cfunc(a, idx))
+
     def test_1d_integer_indexing_npm(self):
         self.test_1d_integer_indexing(flags=Noflags)
 
@@ -563,9 +575,9 @@ class TestGetItem(TestCase):
                               flags=flags)
         cfunc = cr.entry_point
 
-        self.assertEqual(pyfunc(a, 0, 0), cfunc(a, 0, 0))
+        self.assertEqual(pyfunc(a, 0, 3), cfunc(a, 0, 3))
         self.assertEqual(pyfunc(a, 9, 9), cfunc(a, 9, 9))
-        self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
+        self.assertEqual(pyfunc(a, -2, -1), cfunc(a, -2, -1))
 
         # Any layout
         a = np.arange(100, dtype='i4').reshape(10, 10)[::2, ::2]
@@ -577,9 +589,22 @@ class TestGetItem(TestCase):
                               flags=flags)
         cfunc = cr.entry_point
 
-        self.assertEqual(pyfunc(a, 0, 0), cfunc(a, 0, 0))
+        self.assertEqual(pyfunc(a, 0, 1), cfunc(a, 0, 1))
         self.assertEqual(pyfunc(a, 2, 2), cfunc(a, 2, 2))
-        self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
+        self.assertEqual(pyfunc(a, -2, -1), cfunc(a, -2, -1))
+
+        # With 0-d arrays as integer indices
+        a = np.arange(100, dtype='i4').reshape(10, 10)
+        arraytype = types.Array(types.int32, 2, 'C')
+        indextype = types.Array(types.int32, 0, 'C')
+        cr = compile_isolated(pyfunc, (arraytype, indextype, indextype),
+                              flags=flags)
+        cfunc = cr.entry_point
+
+        for i, j in [(0, 3), (8, 9), (-2, -1)]:
+            i = np.array(i).astype(np.int32)
+            j = np.array(j).astype(np.int32)
+            self.assertEqual(pyfunc(a, i, j), cfunc(a, i, j))
 
     @tag('important')
     def test_2d_integer_indexing_npm(self):
@@ -934,9 +959,15 @@ class TestSetItem(TestCase):
         self.test_2d_slicing_broadcast(flags=Noflags)
 
     def test_setitem(self):
+        """
+        scalar indexed assignment
+        """
         arr = np.arange(5)
         setitem_usecase(arr, 1, 42)
         self.assertEqual(arr.tolist(), [0, 42, 2, 3, 4])
+        # Using a 0-d array as scalar index
+        setitem_usecase(arr, np.array(3).astype(np.uint16), 8)
+        self.assertEqual(arr.tolist(), [0, 42, 2, 8, 4])
         # Broadcasting
         arr = np.arange(9).reshape(3, 3)
         setitem_usecase(arr, 1, 42)

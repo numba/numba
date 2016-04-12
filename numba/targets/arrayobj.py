@@ -140,6 +140,30 @@ def fix_integer_index(context, builder, idxty, idx, size):
     return ind
 
 
+def normalize_index(context, builder, idxty, idx):
+    """
+    Normalize the index type and value.  0-d arrays are converted to scalars.
+    """
+    if isinstance(idxty, types.Array) and idxty.ndim == 0:
+        assert isinstance(idxty.dtype, types.Integer)
+        idxary = make_array(idxty)(context, builder, idx)
+        idxval = load_item(context, builder, idxty, idxary.data)
+        return idxty.dtype, idxval
+    else:
+        return idxty, idx
+
+
+def normalize_indices(context, builder, index_types, indices):
+    """
+    Same as normalize_index(), but operating on sequences of
+    index types and values.
+    """
+    if len(indices):
+        index_types, indices = zip(*[normalize_index(context, builder, idxty, idx)
+                                     for idxty, idx in zip(index_types, indices)])
+    return index_types, indices
+
+
 def populate_array(array, data, shape, strides, itemsize, meminfo,
                    parent=None):
     """
@@ -357,48 +381,34 @@ def make_view(context, builder, aryty, ary, return_type,
 def _getitem_array_generic(context, builder, return_type, aryty, ary,
                            index_types, indices):
     """
-    Return the result of indexing *ary* with the given *indices*.
+    Return the result of indexing *ary* with the given *indices*,
+    returning either a scalar or a view.
     """
-    assert isinstance(return_type, types.Buffer)
     dataptr, view_shapes, view_strides = \
         basic_indexing(context, builder, aryty, ary, index_types, indices)
 
-    # Build array view
-    retary = make_view(context, builder, aryty, ary, return_type,
-                       dataptr, view_shapes, view_strides)
-    return retary._getvalue()
+    if isinstance(return_type, types.Buffer):
+        # Build array view
+        retary = make_view(context, builder, aryty, ary, return_type,
+                           dataptr, view_shapes, view_strides)
+        return retary._getvalue()
+    else:
+        # Load scalar from 0-d result
+        assert not view_shapes
+        return load_item(context, builder, aryty, dataptr)
 
 
 @lower_builtin('getitem', types.Buffer, types.Integer)
-def getitem_arraynd_intp(context, builder, sig, args):
-    aryty, idxty = sig.args
-    ary, idx = args
-    ary = make_array(aryty)(context, builder, ary)
-
-    dataptr, shapes, strides = \
-        basic_indexing(context, builder, aryty, ary, (idxty,), (idx,))
-
-    ndim = aryty.ndim
-    if ndim == 1:
-        # Return a value
-        assert not shapes
-        result = load_item(context, builder, aryty, dataptr)
-    elif ndim > 1:
-        # Return a subview over the array
-        out_ary = make_view(context, builder, aryty, ary, sig.return_type,
-                            dataptr, shapes, strides)
-        result = out_ary._getvalue()
-    else:
-        raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
-    return impl_ret_borrowed(context, builder, sig.return_type, result)
-
-
 @lower_builtin('getitem', types.Buffer, types.SliceType)
-def getitem_array1d_slice(context, builder, sig, args):
+def getitem_arraynd_intp(context, builder, sig, args):
+    """
+    Basic indexing with an integer or a slice.
+    """
     aryty, idxty = sig.args
     ary, idx = args
 
-    ary = make_array(aryty)(context, builder, value=ary)
+    assert aryty.ndim >= 1
+    ary = make_array(aryty)(context, builder, ary)
 
     res = _getitem_array_generic(context, builder, sig.return_type,
                                  aryty, ary, (idxty,), (idx,))
@@ -407,6 +417,9 @@ def getitem_array1d_slice(context, builder, sig, args):
 
 @lower_builtin('getitem', types.Buffer, types.BaseTuple)
 def getitem_array_tuple(context, builder, sig, args):
+    """
+    Basic or advanced indexing with a tuple.
+    """
     aryty, tupty = sig.args
     ary, tup = args
     ary = make_array(aryty)(context, builder, ary)
@@ -414,25 +427,17 @@ def getitem_array_tuple(context, builder, sig, args):
     index_types = tupty.types
     indices = cgutils.unpack_tuple(builder, tup, count=len(tupty))
 
+    index_types, indices = normalize_indices(context, builder,
+                                             index_types, indices)
+
     if any(isinstance(ty, types.Array) for ty in index_types):
+        # Advanced indexing
         return fancy_getitem(context, builder, sig, args,
                              aryty, ary, index_types, indices)
 
-    dataptr, shapes, strides = \
-        basic_indexing(context, builder, aryty, ary, index_types, indices)
-
-    ndim = aryty.ndim
-    if isinstance(sig.return_type, types.Array):
-        # Generic array slicing
-        res = make_view(context, builder, aryty, ary, sig.return_type,
-                        dataptr, shapes, strides)
-        res = res._getvalue()
-    else:
-        # Plain indexing (returning a scalar)
-        assert not shapes
-        res = load_item(context, builder, aryty, dataptr)
-
-    return impl_ret_borrowed(context, builder ,sig.return_type, res)
+    res = _getitem_array_generic(context, builder, sig.return_type,
+                                 aryty, ary, index_types, indices)
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
 @lower_builtin('setitem', types.Buffer, types.Any, types.Any)
@@ -454,6 +459,8 @@ def setitem_array(context, builder, sig, args):
     ary = make_array(aryty)(context, builder, ary)
 
     # First try basic indexing to see if a single array location is denoted.
+    index_types, indices = normalize_indices(context, builder,
+                                             index_types, indices)
     try:
         dataptr, shapes, strides = \
             basic_indexing(context, builder, aryty, ary, index_types, indices)
@@ -953,13 +960,22 @@ def fancy_getitem(context, builder, sig, args,
 
 @lower_builtin('getitem', types.Buffer, types.Array)
 def fancy_getitem_array(context, builder, sig, args):
+    """
+    Advanced or basic indexing with an array.
+    """
     aryty, idxty = sig.args
     ary, idx = args
     ary = make_array(aryty)(context, builder, ary)
-    out_ty = sig.return_type
-
-    return fancy_getitem(context, builder, sig, args,
-                         aryty, ary, (idxty,), (idx,))
+    if idxty.ndim == 0:
+        # 0-d array index acts as a basic integer index
+        idxty, idx = normalize_index(context, builder, idxty, idx)
+        res = _getitem_array_generic(context, builder, sig.return_type,
+                                     aryty, ary, (idxty,), (idx,))
+        return impl_ret_borrowed(context, builder, sig.return_type, res)
+    else:
+        # Advanced indexing
+        return fancy_getitem(context, builder, sig, args,
+                             aryty, ary, (idxty,), (idx,))
 
 
 def fancy_setslice(context, builder, sig, args, index_types, indices):
