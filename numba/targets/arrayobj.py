@@ -1540,11 +1540,6 @@ def array_ctypes_to_pointer(context, builder, fromty, toty, val):
     res = builder.bitcast(res, context.get_value_type(toty))
     return impl_ret_untracked(context, builder, toty, res)
 
-#def array_ctypes_to_pointer(context, builder, fromty, toty, val):
-    #ctinfo = context.make_helper(builder, fromty, value=val)
-    #res = ctinfo.data
-    #return impl_ret_untracked(context, builder, toty, res)
-
 
 # array.flags
 
@@ -3059,11 +3054,30 @@ def numpy_copy(context, builder, sig, args):
 @lower_builtin(numpy.asfortranarray, types.Array)
 def array_asfortranarray(context, builder, sig, args):
     retty = sig.return_type
+    aryty = sig.args[0]
     assert retty.layout == 'F'
 
-    if retty.layout == sig.args[0].layout:
-        return impl_ret_borrowed(context, builder, sig.return_type, args[0])
+    if aryty.ndim == 0:
+        # 0-dim input => asfortranarray() returns a 1-dim array
+        assert retty.ndim == 1
+        ary = make_array(aryty)(context, builder, value=args[0])
+        ret = make_array(retty)(context, builder)
+
+        shape = context.get_constant(types.UniTuple(types.intp, 1), (1,))
+        strides = context.make_tuple(builder,
+                                     types.UniTuple(types.intp, 1),
+                                     (ary.itemsize,))
+        populate_array(ret, ary.data, shape, strides, ary.itemsize,
+                       ary.meminfo, ary.parent)
+        return impl_ret_borrowed(context, builder, retty, ret._getvalue())
+
+    elif (retty.layout == aryty.layout
+        or (aryty.ndim == 1 and aryty.layout in 'CF')):
+        # 1-dim contiguous input => return the same array
+        return impl_ret_borrowed(context, builder, retty, args[0])
+
     else:
+        # Return a copy with the right layout
         return _array_copy(context, builder, sig, args)
 
 

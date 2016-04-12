@@ -677,7 +677,7 @@ class AsFortranArray(CallableTemplate):
     def generic(self):
         def typer(a):
             if isinstance(a, types.Array):
-                return a.copy(layout='F')
+                return a.copy(layout='F', ndim=max(a.ndim, 1))
 
         return typer
 
