@@ -49,6 +49,11 @@ def get_array_index_type(ary, idx):
             # Integer indexing removes the given dimension
             ndim -= 1
             has_integer = True
+        elif (isinstance(ty, types.Array) and ty.ndim == 0
+              and isinstance(ty.dtype, types.Integer)):
+            # 0-d array used as integer index
+            ndim -= 1
+            has_integer = True
         elif (isinstance(ty, types.Array)
               and ty.ndim == 1
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
@@ -77,9 +82,7 @@ def get_array_index_type(ary, idx):
     if n_indices > ary.ndim:
         raise TypeError("cannot index %s with %d indices: %s"
                         % (ary, n_indices, idx))
-    if (n_indices == ary.ndim
-        and all(isinstance(ty, types.Integer) for ty in all_indices)
-        and not ellipsis_met):
+    if n_indices == ary.ndim and ndim == 0 and not ellipsis_met:
         # Full integer indexing => scalar result
         # (note if ellipsis is present, a 0-d view is returned instead)
         res = ary.dtype
