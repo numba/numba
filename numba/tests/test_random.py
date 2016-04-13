@@ -57,6 +57,20 @@ def numpy_multinomial2(n, pvals):
 def numpy_multinomial3(n, pvals, size):
     return np.random.multinomial(n, pvals=pvals, size=size)
 
+def numpy_check_rand(seed, a, b):
+    np.random.seed(seed)
+    expected = np.random.random((a, b))
+    np.random.seed(seed)
+    got = np.random.rand(a, b)
+    return expected, got
+
+def numpy_check_randn(seed, a, b):
+    np.random.seed(seed)
+    expected = np.random.standard_normal((a, b))
+    np.random.seed(seed)
+    got = np.random.randn(a, b)
+    return expected, got
+
 
 def jit_with_args(name, argstring):
     code = """def func(%(argstring)s):
@@ -981,6 +995,20 @@ class TestRandomArrays(BaseTest):
 
     def test_numpy_power(self):
         self._check_array_dist("power", (0.8,))
+
+    @tag('important')
+    def test_numpy_rand(self):
+        cfunc = jit(nopython=True)(numpy_check_rand)
+        expected, got = cfunc(42, 2, 3)
+        self.assertEqual(got.shape, (2, 3))
+        self.assertPreciseEqual(expected, got)
+
+    @tag('important')
+    def test_numpy_randn(self):
+        cfunc = jit(nopython=True)(numpy_check_randn)
+        expected, got = cfunc(42, 2, 3)
+        self.assertEqual(got.shape, (2, 3))
+        self.assertPreciseEqual(expected, got)
 
     def test_numpy_rayleigh(self):
         self._check_array_dist("rayleigh", (0.8,))
