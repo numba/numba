@@ -132,7 +132,8 @@ class TestCase(unittest.TestCase):
                          "number of meminfo allocs != number of meminfo frees")
 
 
-    _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
+    _bool_types = (bool, np.bool_)
+    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
@@ -325,6 +326,15 @@ class TestCase(unittest.TestCase):
         # (required for datetime64 and timedelta64).
         if hasattr(first, 'dtype') and hasattr(second, 'dtype'):
             self.assertEqual(first.dtype, second.dtype)
+
+        # Mixing bools and non-bools should always fail
+        if (isinstance(first, self._bool_types) !=
+            isinstance(second, self._bool_types)):
+            assertion_message = ("Mismatching return types (%s vs. %s)"
+                                 % (first.__class__, second.__class__))
+            if msg:
+                assertion_message += ': %s' % (msg,)
+            self.fail(assertion_message)
 
         try:
             if cmath.isnan(first) and cmath.isnan(second):

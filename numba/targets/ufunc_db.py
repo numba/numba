@@ -53,7 +53,7 @@ def _fill_ufunc_db(ufunc_db):
     v = numpy_support.version
 
     ufunc_db[np.negative] = {
-        '?->?': builtins.bool_invert_impl,
+        '?->?': builtins.int_invert_impl,
         'b->b': builtins.int_negate_impl,
         'B->B': builtins.int_negate_impl,
         'h->h': builtins.int_negate_impl,
@@ -866,7 +866,7 @@ def _fill_ufunc_db(ufunc_db):
     }
 
     ufunc_db[np.invert] = { # aka np.bitwise_not
-        '?->?': builtins.bool_invert_impl,
+        '?->?': builtins.int_invert_impl,
         'b->b': builtins.int_invert_impl,
         'B->B': builtins.int_invert_impl,
         'h->h': builtins.int_invert_impl,

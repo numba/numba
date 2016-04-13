@@ -8,7 +8,7 @@ from numba import unittest_support as unittest
 from numba import compiler, typing, typeof, ir
 from numba.compiler import Pipeline, _PipelineManager, Flags
 from numba.targets import cpu
-from .support import MemoryLeakMixin
+from .support import MemoryLeakMixin, TestCase
 
 
 class Namespace(dict):
@@ -84,7 +84,7 @@ class RewritesTester(Pipeline):
         return cls.mk_pipeline(args, return_type, flags, locals, library, **kws)
 
 
-class TestArrayExpressions(MemoryLeakMixin, unittest.TestCase):
+class TestArrayExpressions(MemoryLeakMixin, TestCase):
 
     def test_simple_expr(self):
         '''
@@ -265,7 +265,7 @@ class TestArrayExpressions(MemoryLeakMixin, unittest.TestCase):
                                    ns.test_pipeline.interp.blocks)
 
 
-class TestRewriteIssues(MemoryLeakMixin, unittest.TestCase):
+class TestRewriteIssues(MemoryLeakMixin, TestCase):
 
     def test_issue_1184(self):
         from numba import jit
@@ -321,9 +321,23 @@ class TestRewriteIssues(MemoryLeakMixin, unittest.TestCase):
 
         expect = foo.py_func(a, b)
         got = foo(a, b)
+        self.assertPreciseEqual(got, expect)
 
-        self.assertEqual(got.dtype, np.float64)
-        np.testing.assert_allclose(got, expect)
+    def test_bitwise_arrayexpr(self):
+        """
+        Typing of bitwise boolean array expression can be incorrect
+        (issue #1813).
+        """
+        @njit
+        def foo(a, b):
+            return ~(a & (~b))
+
+        a = np.array([True, True, False, False])
+        b = np.array([False, True, False, True])
+
+        expect = foo.py_func(a, b)
+        got = foo(a, b)
+        self.assertPreciseEqual(got, expect)
 
 
 class TestSemantics(MemoryLeakMixin, unittest.TestCase):

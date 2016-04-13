@@ -19,9 +19,6 @@ from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,
 Noflags = Flags()
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("enable_pyobject")
-
-force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
 
 
@@ -388,12 +385,14 @@ class TestOperators(TestCase):
                 x_expected = copy.copy(x)
                 got = cfunc(x_got, y)
                 expected = pyfunc(x_expected, y)
-                self.assertTrue(np.all(got == expected),
-                                "mismatch for (%r, %r) with types %s: %r != %r"
-                                % (x, y, arg_types, got, expected))
-                self.assertTrue(np.all(x_got == x_expected),
-                                "mismatch for (%r, %r) with types %s: %r != %r"
-                                % (x, y, arg_types, x_got, x_expected))
+                self.assertPreciseEqual(
+                    got, expected,
+                    msg="mismatch for (%r, %r) with types %s: %r != %r"
+                        % (x, y, arg_types, got, expected))
+                self.assertPreciseEqual(
+                    x_got, x_expected,
+                    msg="mismatch for (%r, %r) with types %s: %r != %r"
+                        % (x, y, arg_types, x_got, x_expected))
 
     def run_test_floats(self, pyfunc, x_operands, y_operands, types_list,
                         flags=force_pyobj_flags):
@@ -501,6 +500,15 @@ class TestOperators(TestCase):
     #
     # Arithmetic operators
     #
+
+    def run_binop_bools(self, pyfunc, flags=force_pyobj_flags):
+        x_operands = [False, False, True, True]
+        y_operands = [False, True, False, True]
+
+        types_list = [(types.boolean, types.boolean)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
+                           flags=flags)
 
     def run_binop_ints(self, pyfunc, flags=force_pyobj_flags):
         x_operands = [-5, 0, 1, 2]
@@ -945,6 +953,7 @@ class TestOperators(TestCase):
                           'bitwise_or', 'bitwise_ior',
                           'bitwise_xor', 'bitwise_ixor'),
                          {'ints': 'run_logical',
+                          'bools': 'run_binop_bools',
                           })
 
     #
@@ -952,7 +961,6 @@ class TestOperators(TestCase):
     #
 
     def test_bitwise_not(self, flags=force_pyobj_flags):
-
         pyfunc = self.op.bitwise_not_usecase_binary
 
         x_operands = list(range(0, 8)) + [2**32 - 1]
@@ -988,6 +996,17 @@ class TestOperators(TestCase):
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
+
+        # For booleans, we follow Numpy semantics (i.e. ~True == False,
+        # not ~True == -2)
+        values = [False, False, True, True]
+        values = list(map(np.bool_, values))
+
+        pyfunc = self.op.bitwise_not_usecase
+        cres = compile_isolated(pyfunc, (types.boolean,), flags=flags)
+        cfunc = cres.entry_point
+        for val in values:
+            self.assertPreciseEqual(pyfunc(val), cfunc(val))
 
     @tag('important')
     def test_bitwise_not_npm(self):
