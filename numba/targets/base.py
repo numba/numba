@@ -178,8 +178,8 @@ class BaseContext(object):
         Useful for third-party extensions.
         """
         # Populate built-in registry
-        from . import (arraymath, iterators, linalg, rangeobj, slicing,
-                       smartarray, tupleobj)
+        from . import (arraymath, enumimpl, iterators, linalg, rangeobj,
+                       slicing, smartarray, tupleobj)
         try:
             from . import npdatetime
         except NotImplementedError:

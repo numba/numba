@@ -199,6 +199,52 @@ class PrimitiveModel(DataModel):
         return value
 
 
+class ProxyModel(DataModel):
+    """
+    Helper class for models which delegate to another model.
+    """
+
+    def get_value_type(self):
+        return self._proxied_model.get_value_type()
+
+    def get_data_type(self):
+        return self._proxied_model.get_data_type()
+
+    def get_return_type(self):
+        return self._proxied_model.get_return_type()
+
+    def get_argument_type(self):
+        return self._proxied_model.get_argument_type()
+
+    def as_data(self, builder, value):
+        return self._proxied_model.as_data(builder, value)
+
+    def as_argument(self, builder, value):
+        return self._proxied_model.as_argument(builder, value)
+
+    def as_return(self, builder, value):
+        return self._proxied_model.as_return(builder, value)
+
+    def from_data(self, builder, value):
+        return self._proxied_model.from_data(builder, value)
+
+    def from_argument(self, builder, value):
+        return self._proxied_model.from_argument(builder, value)
+
+    def from_return(self, builder, value):
+        return self._proxied_model.from_return(builder, value)
+
+
+@register_default(types.EnumMember)
+class EnumModel(ProxyModel):
+    """
+    Enum members are represented exactly like their values.
+    """
+    def __init__(self, dmm, fe_type):
+        super(EnumModel, self).__init__(dmm, fe_type)
+        self._proxied_model = dmm.lookup(fe_type.dtype)
+
+
 @register_default(types.Opaque)
 @register_default(types.PyObject)
 @register_default(types.RawPointer)
@@ -216,6 +262,7 @@ class PrimitiveModel(DataModel):
 @register_default(types.ExternalFunction)
 @register_default(types.NumbaFunction)
 @register_default(types.Macro)
+@register_default(types.EnumClass)
 @register_default(types.NumberClass)
 @register_default(types.NamedTupleClass)
 @register_default(types.DType)

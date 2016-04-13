@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import enum
+
 import numpy
 
 from .abstract import *
@@ -110,3 +112,53 @@ class NPTimedelta(_NPDatetimeBase):
 @utils.total_ordering
 class NPDatetime(_NPDatetimeBase):
     type_name = 'datetime64'
+
+
+class EnumClass(Dummy):
+    """
+    Type class for enum classes.
+    """
+
+    def __init__(self, cls, dtype):
+        assert isinstance(cls, type)
+        assert isinstance(dtype, Type)
+        self.instance_class = cls
+        self.dtype = dtype
+        name = "enum class<%s>(%s)" % (self.dtype, self.instance_class.__name__)
+        super(EnumClass, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.instance_class, self.dtype
+
+    @utils.cached_property
+    def member_type(self):
+        """
+        The type of this class' members.
+        """
+        return EnumMember(self.instance_class, self.dtype)
+
+
+class EnumMember(Type):
+    """
+    Type class for enum members.
+    """
+
+    def __init__(self, cls, dtype):
+        assert isinstance(cls, type)
+        assert isinstance(dtype, Type)
+        self.instance_class = cls
+        self.dtype = dtype
+        name = "enum<%s>(%s)" % (self.dtype, self.instance_class.__name__)
+        super(EnumMember, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.instance_class, self.dtype
+
+    @property
+    def class_type(self):
+        """
+        The type of this member's class.
+        """
+        return EnumClass(self.instance_class, self.dtype)

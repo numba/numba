@@ -145,6 +145,24 @@ def _typeof_set(val, c):
 def _typeof_slice(val, c):
     return types.slice2_type if val.step in (None, 1) else types.slice3_type
 
+@typeof_impl.register(enum.Enum)
+def _typeof_enum(val, c):
+    clsty = typeof_impl(type(val), c)
+    return clsty.member_type
+
+@typeof_impl.register(enum.EnumMeta)
+def _typeof_enum_class(val, c):
+    cls = val
+    members = list(cls.__members__.values())
+    if len(members) == 0:
+        raise ValueError("Cannot type enum with no members")
+    dtypes = {typeof_impl(mem.value, c) for mem in members}
+    if len(dtypes) > 1:
+        raise ValueError("Cannot type heterogenous enum: "
+                         "got value types %s"
+                         % ", ".join(sorted(str(ty) for ty in dtypes)))
+    return types.EnumClass(cls, dtypes.pop())
+
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):
     tp = numpy_support.from_dtype(val)

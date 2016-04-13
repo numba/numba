@@ -6,6 +6,7 @@ from __future__ import print_function
 
 import array
 from collections import namedtuple
+import enum
 import mmap
 import sys
 
@@ -19,6 +20,7 @@ from numba._dispatcher import compute_fingerprint
 from .support import TestCase, tag
 from .test_numpy_support import ValueTypingTestBase
 from .ctypes_usecases import *
+from .enum_usecases import *
 
 
 recordtype = np.dtype([('a', np.float64),
@@ -211,6 +213,34 @@ class TestTypeof(ValueTypingTestBase, TestCase):
                          types.NamedUniTuple(types.intp, 2, Rect))
         self.assertNotEqual(tp_rect, tp_point)
         self.assertNotEqual(tp_rect, types.UniTuple(tp_rect.dtype, tp_rect.count))
+
+    @tag('important')
+    def test_enum(self):
+        tp_red = typeof(Color.red)
+        self.assertEqual(tp_red, types.EnumMember(Color, types.intp))
+        self.assertEqual(tp_red, typeof(Color.blue))
+        tp_choc = typeof(Shake.chocolate)
+        self.assertEqual(tp_choc, types.EnumMember(Shake, types.intp))
+        self.assertEqual(tp_choc, typeof(Shake.mint))
+        self.assertNotEqual(tp_choc, tp_red)
+
+        with self.assertRaises(ValueError) as raises:
+            typeof(HeterogenousEnum.red)
+        self.assertEqual(str(raises.exception),
+                         "Cannot type heterogenous enum: got value types complex128, int64")
+
+    @tag('important')
+    def test_enum_class(self):
+        tp_color = typeof(Color)
+        self.assertEqual(tp_color, types.EnumClass(Color, types.intp))
+        tp_shake = typeof(Shake)
+        self.assertEqual(tp_shake, types.EnumClass(Shake, types.intp))
+        self.assertNotEqual(tp_shake, tp_color)
+
+        with self.assertRaises(ValueError) as raises:
+            typeof(HeterogenousEnum)
+        self.assertEqual(str(raises.exception),
+                         "Cannot type heterogenous enum: got value types complex128, int64")
 
     @tag('important')
     def test_dtype(self):

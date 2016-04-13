@@ -4,6 +4,7 @@ Tests for numba.types.
 
 from __future__ import print_function, absolute_import
 
+from collections import namedtuple
 import gc
 try:
     import cPickle as pickle
@@ -19,11 +20,15 @@ from numba.types.abstract import _typecache
 from numba import jit, numpy_support
 from numba import unittest_support as unittest
 from .support import TestCase, tag
+from .enum_usecases import *
 
+
+Point = namedtuple('Point', ('x', 'y'))
+
+Rect = namedtuple('Rect', ('width', 'height'))
 
 def gen(x):
     yield x + 1
-
 
 class Dummy(object):
     pass
@@ -401,6 +406,18 @@ class TestPickling(TestCase):
         ty1 = types.UniTuple(types.int32, 3)
         self.check_pickling(ty1)
         ty2 = types.Tuple((types.int32, ty1))
+        self.check_pickling(ty2)
+
+    def test_namedtuples(self):
+        ty1 = types.NamedUniTuple(types.intp, 2, Point)
+        self.check_pickling(ty1)
+        ty2 = types.NamedTuple((types.intp, types.float64), Point)
+        self.check_pickling(ty2)
+
+    def test_enums(self):
+        ty1 = types.EnumMember(Color, types.int32)
+        self.check_pickling(ty1)
+        ty2 = types.EnumMember(Shake, types.int64)
         self.check_pickling(ty2)
 
     def test_lists(self):
