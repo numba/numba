@@ -16,7 +16,7 @@ from numba.extending import overload
 from numba.targets.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
 from numba.typing import signature
-from numba import _helperlib, cgutils, types
+from numba import _helperlib, cgutils, types, jit
 
 
 registry = Registry()
@@ -196,7 +196,6 @@ def random_impl(context, builder, sig, args):
     res = get_next_double(context, builder, state_ptr)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower("np.random.rand")
 @lower("np.random.random")
 def random_impl(context, builder, sig, args):
     state_ptr = get_state_ptr(context, builder, "np")
@@ -211,7 +210,6 @@ def gauss_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower("np.random.randn")
 @lower("np.random.standard_normal")
 @lower("np.random.normal")
 @lower("np.random.normal", types.Float)
@@ -1221,11 +1219,42 @@ for typing_key, arity in [
 
 
 # ------------------------------------------------------------------------
+# Irregular aliases: np.random.rand, np.random.randn
+
+@overload(np.random.rand)
+def rand(*size):
+    if len(size) == 0:
+        # Scalar output
+        def rand_impl():
+            return np.random.random()
+
+    else:
+        # Array output
+        def rand_impl(*size):
+            return np.random.random(size)
+
+    return rand_impl
+
+@overload(np.random.randn)
+def randn(*size):
+    if len(size) == 0:
+        # Scalar output
+        def randn_impl():
+            return np.random.standard_normal()
+
+    else:
+        # Array output
+        def randn_impl(*size):
+            return np.random.standard_normal(size)
+
+    return randn_impl
+
+
+# ------------------------------------------------------------------------
 # np.random.choice
 
 @overload(np.random.choice)
 def choice(a, size=None, replace=True):
-    from numba import jit  # Avoid circular imports
 
     if isinstance(a, types.Array):
         # choice() over an array population
@@ -1312,7 +1341,6 @@ def choice(a, size=None, replace=True):
 
 @overload(np.random.multinomial)
 def multinomial(n, pvals, size=None):
-    from numba import jit  # Avoid circular imports
 
     dtype = np.intp
 

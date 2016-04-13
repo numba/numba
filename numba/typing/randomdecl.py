@@ -279,13 +279,6 @@ class Random_nullary_distribution(ConcreteRandomTemplate):
         return typer
 
 
-# These ones have a different (unsupported) way of passing the size
-@infer_global(np.random.rand, typing_key="np.random.rand")
-@infer_global(np.random.randn, typing_key="np.random.randn")
-class Random_nullary_distribution(ConcreteTemplate):
-    cases = [signature(tp) for tp in _float_types]
-
-
 @infer_global(random.triangular, typing_key="random.triangular")
 class Random_triangular(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
