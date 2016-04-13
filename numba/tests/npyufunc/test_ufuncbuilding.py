@@ -55,6 +55,13 @@ def guadd_obj(a, b, c):
         for j in range(y):
             c[i, j] = a[i, j] + b[i, j]
 
+def guadd_scalar_obj(a, b, c):
+    Dummy()  # to force object mode
+    x, y = c.shape
+    for i in range(x):
+        for j in range(y):
+            c[i, j] = a[i, j] + b
+
 
 class MyException(Exception):
     pass
@@ -289,6 +296,16 @@ class TestVectorizeDecor(unittest.TestCase):
         a = numpy.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
+
+    def test_guvectorize_scalar_objectmode(self):
+        """
+        Test passing of scalars to object mode gufuncs.
+        """
+        ufunc = guvectorize(['(int32[:,:], int32, int32[:,:])'],
+                            "(x,y),()->(x,y)")(guadd_scalar_obj)
+        a = numpy.arange(10, dtype='int32').reshape(2, 5)
+        b = ufunc(a, 3)
+        self.assertTrue(numpy.all(a + 3 == b))
 
     def test_guvectorize_error_in_objectmode(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
