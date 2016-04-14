@@ -19,7 +19,7 @@ from numba.numpy_support import version as numpy_version
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
                                     lower_setattr_generic,
-                                    lower_cast,
+                                    lower_cast, lower_constant,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
@@ -1698,6 +1698,27 @@ def record_setitem(context, builder, sig, args):
     impl = context.get_setattr(idx, getattr_sig)
     assert impl is not None
     return impl(builder, (rec, val))
+
+
+#-------------------------------------------------------------------------------
+# Constant arrays and records
+
+
+@lower_constant(types.Array)
+def constant_record(context, builder, ty, pyval):
+    """
+    Create a constant array (mechanism is target-dependent).
+    """
+    return context.make_constant_array(builder, ty, pyval)
+
+@lower_constant(types.Record)
+def constant_record(context, builder, ty, pyval):
+    """
+    Create a record constant as a stack-allocated array of bytes.
+    """
+    lty = ir.ArrayType(ir.IntType(8), pyval.nbytes)
+    val = lty(bytearray(pyval.tostring()))
+    return cgutils.alloca_once_value(builder, val)
 
 
 #-------------------------------------------------------------------------------

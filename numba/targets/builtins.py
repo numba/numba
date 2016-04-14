@@ -10,7 +10,8 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
-                       lower_cast, iternext_impl, call_getiter, call_iternext,
+                       lower_cast, lower_constant, iternext_impl,
+                       call_getiter, call_iternext,
                        impl_ret_borrowed, impl_ret_untracked)
 from . import optional
 from .. import typing, types, cgutils, utils
@@ -1468,6 +1469,37 @@ def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, Type.int())
     return context.cast(builder, asint, types.int32, toty)
+
+
+#-------------------------------------------------------------------------------
+# Constants
+
+@lower_constant(types.Complex)
+def constant_complex(context, builder, ty, pyval):
+    fty = ty.underlying_float
+    real = context.get_constant_generic(builder, fty, pyval.real)
+    imag = context.get_constant_generic(builder, fty, pyval.imag)
+    return ir.Constant.literal_struct((real, imag))
+
+@lower_constant(types.Integer)
+@lower_constant(types.Float)
+@lower_constant(types.Boolean)
+def constant_integer(context, builder, ty, pyval):
+    lty = context.get_value_type(ty)
+    return lty(pyval)
+
+@lower_constant(types.Dummy)
+def constant_dummy(context, builder, ty, pyval):
+    # This handles None, etc.
+    return context.get_dummy_value()
+
+@lower_constant(types.ExternalFunctionPointer)
+def constant_function_pointer(context, builder, ty, pyval):
+    ptrty = context.get_function_pointer_type(ty)
+    ptrval = context.get_constant_generic(builder, types.intp,
+                                          ty.get_pointer(pyval))
+    return builder.inttoptr(ptrval, ptrty)
+
 
 # -----------------------------------------------------------------------------
 
