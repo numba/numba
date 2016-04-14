@@ -392,12 +392,3 @@ unary_math_int_impl(math.degrees, degrees_float_impl)
 def pow_impl(context, builder, sig, args):
     impl = context.get_function("**", sig)
     return impl(builder, args)
-
-#for ty in types.unsigned_domain:
-    #lower(math.pow, types.float64, ty)(builtins.int_power_impl)
-#for ty in types.signed_domain:
-    #lower(math.pow, types.float64, ty)(builtins.int_power_impl)
-
-#ty = types.Float
-#lower(math.pow, ty, ty)(builtins.real_power_impl)
-
