@@ -194,4 +194,5 @@ class IntEnumMember(EnumMember):
         Convert IntEnum members to plain integers.
         """
         if issubclass(self.instance_class, enum.IntEnum):
-            return typingctx.can_convert(self.dtype, other)
+            conv = typingctx.can_convert(self.dtype, other)
+            return max(conv, Conversion.safe)

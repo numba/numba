@@ -13,6 +13,7 @@ class Shake(Enum):
     vanilla = 7
     chocolate = 4
     cookies = 9
+    # Same as Color.blue
     mint = 3
 
 
@@ -34,11 +35,14 @@ class HeterogenousEnum(Enum):
 
 
 class Shape(IntEnum):
-    circle = 10
-    square = 20
+    # Same as Color.green
+    circle = 2
+    # Same as RequestError.internal_error
+    square = 500
 
 
 class RequestError(IntEnum):
+    dummy = 2
     not_found = 404
     internal_error = 500
 

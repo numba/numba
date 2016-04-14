@@ -10,12 +10,22 @@ from .. import typing, types, cgutils
 
 
 @lower_builtin('==', types.EnumMember, types.EnumMember)
-@lower_builtin('is', types.EnumMember, types.EnumMember)
 def enum_eq(context, builder, sig, args):
     tu, tv = sig.args
     u, v = args
     res = context.generic_compare(builder, "==",
                                   (tu.dtype, tv.dtype), (u, v))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@lower_builtin('is', types.EnumMember, types.EnumMember)
+def enum_is(context, builder, sig, args):
+    tu, tv = sig.args
+    u, v = args
+    if tu == tv:
+        res = context.generic_compare(builder, "==",
+                                      (tu.dtype, tv.dtype), (u, v))
+    else:
+        res = context.get_constant(sig.return_type, False)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 

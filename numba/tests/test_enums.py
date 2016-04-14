@@ -20,6 +20,12 @@ def global_usecase(a):
     # Lookup of a enum member on its class
     return a is Color.red
 
+def identity_usecase(a, b, c):
+    return (a is Shake.mint,
+            b is Shape.circle,
+            c is RequestError.internal_error,
+            )
+
 def make_constant_usecase(const):
     def constant_usecase(a):
         return a is const
@@ -36,16 +42,7 @@ def int_coerce_usecase(x):
         return x + Shape.circle
 
 
-class TestEnum(TestCase):
-    values = [Color.red, Color.green]
-
-    pairs = [
-        (Color.red, Color.red),
-        (Color.red, Color.green),
-        (Shake.mint, Shake.vanilla),
-        (Planet.VENUS, Planet.MARS),
-        (Planet.EARTH, Planet.EARTH),
-        ]
+class BaseEnumTest(object):
 
     def test_compare(self):
         pyfunc = compare_usecase
@@ -77,7 +74,34 @@ class TestEnum(TestCase):
         self.check_constant_usecase(make_constant_usecase(self.values[0]))
 
 
-class TestIntEnum(TestEnum):
+class TestEnum(BaseEnumTest, TestCase):
+    """
+    Tests for Enum classes and members.
+    """
+    values = [Color.red, Color.green]
+
+    pairs = [
+        (Color.red, Color.red),
+        (Color.red, Color.green),
+        (Shake.mint, Shake.vanilla),
+        (Planet.VENUS, Planet.MARS),
+        (Planet.EARTH, Planet.EARTH),
+        ]
+
+    def test_identity(self):
+        """
+        Enum with equal values should not compare identical
+        """
+        pyfunc = identity_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        args = (Color.blue, Color.green, Shape.square)
+        self.assertPreciseEqual(pyfunc(*args), cfunc(*args))
+
+
+class TestIntEnum(BaseEnumTest, TestCase):
+    """
+    Tests for IntEnum classes and members.
+    """
     values = [Shape.circle, Shape.square]
 
     pairs = [
