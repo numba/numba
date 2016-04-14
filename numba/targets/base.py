@@ -15,10 +15,10 @@ import llvmlite.binding as ll
 from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
-from . import arrayobj, builtins, optional, imputils
+from . import arrayobj, builtins, imputils
 from .imputils import (user_function, user_generator,
-                                    builtin_registry, impl_ret_borrowed,
-                                    RegistryLoader)
+                       builtin_registry, impl_ret_borrowed,
+                       RegistryLoader)
 from numba import datamodel
 
 
@@ -179,8 +179,8 @@ class BaseContext(object):
         Useful for third-party extensions.
         """
         # Populate built-in registry
-        from . import (arraymath, enumimpl, iterators, linalg, rangeobj,
-                       slicing, smartarray, tupleobj)
+        from . import (arraymath, enumimpl, iterators, linalg, numbers,
+                       optional, rangeobj, slicing, smartarray, tupleobj)
         try:
             from . import npdatetime
         except NotImplementedError:
