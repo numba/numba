@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-from enum import Enum
+from enum import Enum, IntEnum
 
 
 class Color(Enum):
@@ -28,6 +28,17 @@ class Planet(Enum):
 
 
 class HeterogenousEnum(Enum):
-    red = 1
-    green = 2
+    red = 1.0
+    green = 2.0
     blue = 3j
+
+
+class Shape(IntEnum):
+    circle = 10
+    square = 20
+
+
+class RequestError(IntEnum):
+    not_found = 404
+    internal_error = 500
+

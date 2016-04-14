@@ -146,6 +146,7 @@ def _typeof_slice(val, c):
     return types.slice2_type if val.step in (None, 1) else types.slice3_type
 
 @typeof_impl.register(enum.Enum)
+@typeof_impl.register(enum.IntEnum)
 def _typeof_enum(val, c):
     clsty = typeof_impl(type(val), c)
     return clsty.member_type
@@ -161,7 +162,11 @@ def _typeof_enum_class(val, c):
         raise ValueError("Cannot type heterogenous enum: "
                          "got value types %s"
                          % ", ".join(sorted(str(ty) for ty in dtypes)))
-    return types.EnumClass(cls, dtypes.pop())
+    if issubclass(val, enum.IntEnum):
+        typecls = types.IntEnumClass
+    else:
+        typecls = types.EnumClass
+    return typecls(cls, dtypes.pop())
 
 @typeof_impl.register(np.dtype)
 def _typeof_dtype(val, c):

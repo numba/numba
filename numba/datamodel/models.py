@@ -236,6 +236,7 @@ class ProxyModel(DataModel):
 
 
 @register_default(types.EnumMember)
+@register_default(types.IntEnumMember)
 class EnumModel(ProxyModel):
     """
     Enum members are represented exactly like their values.
@@ -263,6 +264,7 @@ class EnumModel(ProxyModel):
 @register_default(types.NumbaFunction)
 @register_default(types.Macro)
 @register_default(types.EnumClass)
+@register_default(types.IntEnumClass)
 @register_default(types.NumberClass)
 @register_default(types.NamedTupleClass)
 @register_default(types.DType)

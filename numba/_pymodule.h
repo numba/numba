@@ -33,6 +33,7 @@
     #define PyString_InternFromString PyUnicode_InternFromString
     #define PyInt_Type PyLong_Type
     #define PyInt_Check PyLong_Check
+    #define PyInt_CheckExact PyLong_CheckExact
 #else
     #define Py_hash_t long
     #define Py_uhash_t unsigned long

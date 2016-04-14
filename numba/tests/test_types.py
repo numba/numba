@@ -419,6 +419,8 @@ class TestPickling(TestCase):
         self.check_pickling(ty1)
         ty2 = types.EnumMember(Shake, types.int64)
         self.check_pickling(ty2)
+        ty3 = types.IntEnumMember(Shape, types.int64)
+        self.check_pickling(ty3)
 
     def test_lists(self):
         ty = types.List(types.int32)

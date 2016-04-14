@@ -223,11 +223,14 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(tp_choc, types.EnumMember(Shake, types.intp))
         self.assertEqual(tp_choc, typeof(Shake.mint))
         self.assertNotEqual(tp_choc, tp_red)
+        tp_404 = typeof(RequestError.not_found)
+        self.assertEqual(tp_404, types.IntEnumMember(RequestError, types.intp))
+        self.assertEqual(tp_404, typeof(RequestError.internal_error))
 
         with self.assertRaises(ValueError) as raises:
             typeof(HeterogenousEnum.red)
         self.assertEqual(str(raises.exception),
-                         "Cannot type heterogenous enum: got value types complex128, int64")
+                         "Cannot type heterogenous enum: got value types complex128, float64")
 
     @tag('important')
     def test_enum_class(self):
@@ -236,11 +239,17 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         tp_shake = typeof(Shake)
         self.assertEqual(tp_shake, types.EnumClass(Shake, types.intp))
         self.assertNotEqual(tp_shake, tp_color)
+        tp_shape = typeof(Shape)
+        self.assertEqual(tp_shape, types.IntEnumClass(Shape, types.intp))
+        tp_error = typeof(RequestError)
+        self.assertEqual(tp_error,
+                         types.IntEnumClass(RequestError, types.intp))
+        self.assertNotEqual(tp_error, tp_shape)
 
         with self.assertRaises(ValueError) as raises:
             typeof(HeterogenousEnum)
         self.assertEqual(str(raises.exception),
-                         "Cannot type heterogenous enum: got value types complex128, int64")
+                         "Cannot type heterogenous enum: got value types complex128, float64")
 
     @tag('important')
     def test_dtype(self):
@@ -339,6 +348,13 @@ class TestFingerprint(TestCase):
 
     def test_none(self):
         compute_fingerprint(None)
+
+    def test_enums(self):
+        # Enums should fail fingerprinting, even IntEnums
+        with self.assertRaises(NotImplementedError):
+            compute_fingerprint(Color.red)
+        with self.assertRaises(NotImplementedError):
+            compute_fingerprint(RequestError.not_found)
 
     def test_records(self):
         d1 = np.dtype([('m', np.int32), ('n', np.int64)])

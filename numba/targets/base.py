@@ -353,6 +353,8 @@ class BaseContext(object):
     def is_struct_type(self, ty):
         return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
 
+    # XXX we need an extensible API for this
+
     def get_constant_generic(self, builder, ty, val):
         """
         Return a LLVM constant representing value *val* of Numba type *ty*.
@@ -437,6 +439,9 @@ class BaseContext(object):
         elif isinstance(ty, (types.UniTuple, types.NamedUniTuple)):
             consts = [self.get_constant(ty.dtype, v) for v in val]
             return Constant.array(consts[0].type, consts)
+
+        elif isinstance(ty, types.EnumMember):
+            return self.get_constant(ty.dtype, val.value)
 
         raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
 
@@ -612,8 +617,8 @@ class BaseContext(object):
             impl = self._casts.find((fromty, toty))
             return impl(self, builder, fromty, toty, val)
         except NotImplementedError:
-            # Re-raise below
-            raise NotImplementedError("cast", val, fromty, toty)
+            raise NotImplementedError(
+                "Cannot cast %s to %s: %s" % (fromty, toty, val))
 
     def generic_compare(self, builder, key, argtypes, args):
         """
