@@ -3,14 +3,16 @@ Implement logic relating to wrapping (box) and unwrapping (unbox) instances
 of jitclasses for use inside the python interpreter.
 """
 from __future__ import print_function, absolute_import
-from numba import types, cgutils
-from numba.pythonapi import box, unbox, NativeValue
-from numba.runtime.nrt import MemInfo
-from numba import njit
-from numba.six import exec_
-from llvmlite import ir
+
 import inspect
 from functools import wraps, partial
+
+from numba import types, cgutils
+from numba.pythonapi import box, unbox, NativeValue
+from numba import njit
+from numba.six import exec_
+from ._box import Box
+
 
 _getter_code_template = """
 def accessor(__numba_self_):
@@ -109,20 +111,6 @@ def _specialize_box(typ):
     return subcls
 
 
-class Box(object):
-    """
-    A box for numba created jit-class instance
-    """
-    __slots__ = '_meminfo', '_meminfoptr', '_dataptr'
-
-    def __init__(self, meminfoptr, dataptr):
-        # MemInfo is used to acquire a reference to `meminfoptr`.
-        # When the MemInfo is destroyed, the reference is released.
-        self._meminfo = MemInfo(meminfoptr)
-        self._meminfoptr = meminfoptr
-        self._dataptr = dataptr
-
-
 ###############################################################################
 # Implement box/unbox for call wrapper
 
@@ -177,4 +165,3 @@ def _unbox_class_instance(typ, val, c):
     c.context.nrt_incref(c.builder, typ, ret)
 
     return NativeValue(ret, is_error=c.pyapi.c_api_error())
-
