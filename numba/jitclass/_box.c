@@ -2,54 +2,37 @@
 
 typedef struct {
     PyObject_HEAD
-    PyObject *meminfo;
-    PyObject *meminfoptr;
-    PyObject *dataptr;
+    void *meminfoptr, *dataptr;
 } BoxObject;
 
 
 static PyMemberDef box_members[] = {
-    {"_meminfo",    T_OBJECT, offsetof(BoxObject, meminfo), READONLY},
-    {"_meminfoptr", T_OBJECT, offsetof(BoxObject, meminfoptr), READONLY},
-    {"_dataptr",    T_OBJECT, offsetof(BoxObject, dataptr), READONLY},
     {NULL}  /* Sentinel */
 };
 
-static PyObject *MemInfoClass = NULL;
+
+static void (*MemInfo_release)(void*) = NULL;
+
 
 static
 int Box_init(BoxObject *self, PyObject *args, PyObject *kwds) {
-    static char *keywords[] = {"meminfoptr", "dataptr", NULL};
-    PyObject *meminfo;
-    PyObject *meminfoptr;
-    PyObject *dataptr;
+    static char *keywords[] = {NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "OO", keywords,
-                                     &meminfoptr, &dataptr))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "", keywords))
     {
         return -1;
     }
 
-    /* MemInfo(meminfoptr) */
-    meminfo = PyObject_CallFunctionObjArgs(MemInfoClass, meminfoptr, NULL);
-    if (!meminfo) return -1;
-
-    /* Set attributes */
-    Py_INCREF(meminfoptr);
-    Py_INCREF(dataptr);
-    self->meminfo = meminfo;
-    self->meminfoptr = meminfoptr;
-    self->dataptr = dataptr;
+    /* Initialize attributes to NULL */
+    self->meminfoptr = NULL;
+    self->dataptr = NULL;
     return 0;
 }
 
-
-static void
-box_dealloc(BoxObject *box)
+static
+void box_dealloc(BoxObject *box)
 {
-    Py_DECREF(box->meminfo);
-    Py_DECREF(box->meminfoptr);
-    Py_DECREF(box->dataptr);
+    if (box->meminfoptr) MemInfo_release((void*)box->meminfoptr);
     Py_TYPE(box)->tp_free((PyObject *) box);
 }
 
@@ -105,18 +88,26 @@ static PyTypeObject BoxType = {
 
 
 static
-PyObject * import_meminfo_class() {
-    PyObject *nrtmod;
-    PyObject *meminfocls;
-    /* from numba.runtime.nrt import MemInfo */
-    nrtmod = PyImport_ImportModule("numba.runtime.nrt");
-    if (!nrtmod) return NULL;
-    meminfocls = PyObject_GetAttrString(nrtmod, "MemInfo");
-    if (!meminfocls) {
-        Py_DECREF(nrtmod);
-        return NULL;
-    }
-    return meminfocls;
+void* import_meminfo_release() {
+    PyObject *nrtmod = NULL;
+    PyObject *helperdct = NULL;
+    PyObject *mi_rel_fn = NULL;;
+    void *fnptr = NULL;;
+    /* from numba.runtime import _nrt_python */
+    nrtmod = PyImport_ImportModule("numba.runtime._nrt_python");
+    if (!nrtmod) goto cleanup;
+    /* helperdct = _nrt_python.c_helpers */
+    helperdct = PyObject_GetAttrString(nrtmod, "c_helpers");
+    if (!helperdct) goto cleanup;
+    /* helperdct['MemInfo_release'] */
+    mi_rel_fn = PyDict_GetItemString(helperdct, "MemInfo_release");
+    if (!mi_rel_fn) goto cleanup;
+    fnptr = PyLong_AsVoidPtr(mi_rel_fn);
+
+cleanup:
+    Py_XDECREF(nrtmod);
+    Py_XDECREF(helperdct);
+    return fnptr;
 }
 
 MOD_INIT(_box) {
@@ -131,16 +122,19 @@ MOD_INIT(_box) {
     if (PyType_Ready(&BoxType))
         return MOD_ERROR_VAL;
 
-    /* import and cache numba.runtime.nrt.MemInfo
-       and keep it in the module */
-    MemInfoClass = import_meminfo_class();
-    if (!MemInfoClass) return MOD_ERROR_VAL;
-    Py_INCREF(MemInfoClass);
-    PyModule_AddObject(m, "_MemInfo", MemInfoClass);
+    /* import and cache NRT_MemInfo_release function pointer */
+    MemInfo_release = import_meminfo_release();
+    if (!MemInfo_release) return MOD_ERROR_VAL;
 
     /* bind BoxType */
     Py_INCREF(&BoxType);
     PyModule_AddObject(m, "Box", (PyObject *) (&BoxType));
+
+    /* bind address to direct access utils */;
+    PyModule_AddObject(m, "box_meminfoptr_offset",
+                       PyLong_FromLong(offsetof(BoxObject, meminfoptr)));
+    PyModule_AddObject(m, "box_dataptr_offset",
+                       PyLong_FromLong(offsetof(BoxObject, dataptr)));
 
     return MOD_SUCCESS_VAL(m);
 }

@@ -7,11 +7,13 @@ from __future__ import print_function, absolute_import
 import inspect
 from functools import wraps, partial
 
+from llvmlite import ir
+
 from numba import types, cgutils
 from numba.pythonapi import box, unbox, NativeValue
 from numba import njit
 from numba.six import exec_
-from ._box import Box
+from ._box import Box, box_meminfoptr_offset, box_dataptr_offset
 
 
 _getter_code_template = """
@@ -118,45 +120,49 @@ def _specialize_box(typ):
 def _box_class_instance(typ, val, c):
     meminfo, dataptr = cgutils.unpack_tuple(c.builder, val)
 
-    lluintp = c.context.get_data_type(types.uintp)
-
-    addr_meminfo = c.pyapi.from_native_value(types.uintp,
-                                             c.builder.ptrtoint(meminfo,
-                                                                lluintp))
-    addr_dataptr = c.pyapi.from_native_value(types.uintp,
-                                             c.builder.ptrtoint(dataptr,
-                                                                lluintp))
-
+    # Create Box instance
     box_subclassed = _specialize_box(typ)
     # Note: the ``box_subclassed`` is kept alive by the cache
     int_addr_boxcls = c.context.get_constant(types.uintp, id(box_subclassed))
 
     box_cls = c.builder.inttoptr(int_addr_boxcls, c.pyapi.pyobj)
+    box = c.pyapi.call_function_objargs(box_cls, ())
 
-    args = [addr_meminfo, addr_dataptr]
-    res = c.pyapi.call_function_objargs(box_cls, args)
+    # Initialize Box instance
+    llvoidptr = ir.IntType(8).as_pointer()
+    addr_meminfo = c.builder.bitcast(meminfo, llvoidptr)
+    addr_data = c.builder.bitcast(dataptr, llvoidptr)
 
-    # Clean up
-    c.pyapi.decref(addr_meminfo)
-    c.pyapi.decref(addr_dataptr)
+    def set_member(member_offset, value):
+        offset = c.context.get_constant(types.uint32, member_offset)
+        byte_ptr = c.builder.bitcast(box, llvoidptr)
+        ptr = c.builder.gep(byte_ptr, [offset])
+        casted = c.builder.bitcast(ptr, llvoidptr.as_pointer())
+        c.builder.store(value, casted)
 
-    return res
+    set_member(box_meminfoptr_offset, addr_meminfo)
+    set_member(box_dataptr_offset, addr_data)
+    return box
 
 
 @unbox(types.ClassInstanceType)
 def _unbox_class_instance(typ, val, c):
+    def access_member(member_offset):
+        offset = c.context.get_constant(types.uint32, member_offset)
+        llvoidptr = ir.IntType(8).as_pointer()
+        byte_ptr = c.builder.bitcast(val, llvoidptr)
+        ptr = c.builder.gep(byte_ptr, [offset])
+        casted = c.builder.bitcast(ptr, llvoidptr.as_pointer())
+        return c.builder.load(casted)
+
     struct_cls = cgutils.create_struct_proxy(typ)
     inst = struct_cls(c.context, c.builder)
 
-    int_meminfo = c.pyapi.object_getattr_string(val, "_meminfoptr")
-    int_dataptr = c.pyapi.object_getattr_string(val, "_dataptr")
+    # load from Python object
+    ptr_meminfo = access_member(box_meminfoptr_offset)
+    ptr_dataptr = access_member(box_dataptr_offset)
 
-    ptr_meminfo = c.pyapi.long_as_voidptr(int_meminfo)
-    ptr_dataptr = c.pyapi.long_as_voidptr(int_dataptr)
-
-    c.pyapi.decref(int_meminfo)
-    c.pyapi.decref(int_dataptr)
-
+    # store to native structure
     inst.meminfo = c.builder.bitcast(ptr_meminfo, inst.meminfo.type)
     inst.data = c.builder.bitcast(ptr_dataptr, inst.data.type)
 
