@@ -110,6 +110,19 @@ def _specialize_box(typ):
     # Store to cache
     _cache_specialized_box[typ] = subcls
 
+    # Pre-compile attribute getter.
+    # Note: This must be done after the "box" class is created because
+    #       compiling the getter requires the "box" class to be defined.
+    for k, v in dct.items():
+        if isinstance(v, property):
+            prop = getattr(subcls, k)
+            if prop.fget is not None:
+                fget = prop.fget
+                fast_fget = fget.compile((typ,))
+                fget.disable_compile()
+                setattr(subcls, k,
+                        property(fast_fget, prop.fset, prop.fdel))
+
     return subcls
 
 
