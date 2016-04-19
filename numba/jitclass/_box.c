@@ -6,23 +6,16 @@ typedef struct {
 } BoxObject;
 
 
-static PyMemberDef box_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-
 static void (*MemInfo_release)(void*) = NULL;
 
 
 static
 int Box_init(BoxObject *self, PyObject *args, PyObject *kwds) {
     static char *keywords[] = {NULL};
-
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "", keywords))
     {
         return -1;
     }
-
     /* Initialize attributes to NULL */
     self->meminfoptr = NULL;
     self->dataptr = NULL;
@@ -74,7 +67,7 @@ static PyTypeObject BoxType = {
     0,                         /* tp_iter */
     0,                         /* tp_iternext */
     0,                         /* tp_methods */
-    box_members,               /* tp_members */
+    0,                         /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
@@ -83,7 +76,7 @@ static PyTypeObject BoxType = {
     0,                         /* tp_dictoffset */
     (initproc)Box_init,        /* tp_init */
     0,                         /* tp_alloc */
-    0,                         /* tp_new */
+    PyType_GenericNew,         /* tp_new */
 };
 
 
@@ -110,15 +103,42 @@ cleanup:
     return fnptr;
 }
 
+static
+PyObject* box_get_dataptr(PyObject *self, PyObject *args) {
+    BoxObject *box;
+    /* no type checking */
+    if (!PyArg_ParseTuple(args, "O", (PyObject*)&box))
+        return NULL;
+    return PyLong_FromVoidPtr(box->dataptr);
+}
+
+static
+PyObject* box_get_meminfoptr(PyObject *self, PyObject *args) {
+    BoxObject *box;
+    /* no type checking */
+    if (!PyArg_ParseTuple(args, "O", (PyObject*)&box))
+        return NULL;
+    return PyLong_FromVoidPtr(box->meminfoptr);
+}
+
+
+static PyMethodDef ext_methods[] = {
+#define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
+    declmethod(box_get_dataptr),
+    declmethod(box_get_meminfoptr),
+    { NULL },
+#undef declmethod
+};
+
+
 MOD_INIT(_box) {
     PyObject *m;
 
-    MOD_DEF(m, "_box", "No docs", NULL)
+    MOD_DEF(m, "_box", "No docs", ext_methods)
     if (m == NULL)
         return MOD_ERROR_VAL;
 
     /* init BoxType */
-    BoxType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&BoxType))
         return MOD_ERROR_VAL;
 
