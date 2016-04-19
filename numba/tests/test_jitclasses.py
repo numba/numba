@@ -11,6 +11,13 @@ from numba import njit, typeof
 from numba import unittest_support as unittest
 from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
+from numba.jitclass import _box
+from numba.runtime.nrt import MemInfo
+
+
+def _get_meminfo(box):
+    ptr = _box.box_get_meminfoptr(box)
+    return MemInfo(ptr)
 
 
 class TestJitClass(TestCase, MemoryLeakMixin):
@@ -127,20 +134,22 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         arr = np.arange(10, dtype=np.float32)
         obj = Float2AndArray(1, 2, arr)
-        self.assertEqual(obj._meminfo.refcount, 1)
-        self.assertEqual(obj._meminfo.data, obj._dataptr)
+        obj_meminfo = _get_meminfo(obj)
+        self.assertEqual(obj_meminfo.refcount, 1)
+        self.assertEqual(obj_meminfo.data, _box.box_get_dataptr(obj))
         self.assertEqual(obj._numba_type_.class_type,
                          Float2AndArray.class_type)
         # Use jit class instance in numba
         other = identity(obj)
-        self.assertEqual(obj._meminfo.refcount, 2)
-        self.assertEqual(other._meminfo.refcount, 2)
-        self.assertEqual(other._meminfo.data, other._dataptr)
-        self.assertEqual(other._meminfo.data, obj._meminfo.data)
+        other_meminfo = _get_meminfo(other)
+        self.assertEqual(obj_meminfo.refcount, 2)
+        self.assertEqual(other_meminfo.refcount, 2)
+        self.assertEqual(other_meminfo.data, _box.box_get_dataptr(other))
+        self.assertEqual(other_meminfo.data, obj_meminfo.data)
 
         # Check dtor
         del other
-        self.assertEqual(obj._meminfo.refcount, 1)
+        self.assertEqual(obj_meminfo.refcount, 1)
 
         # Check attributes
         out_x, out_y, out_arr = retrieve_attributes(obj)
@@ -208,19 +217,22 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertIsNone(first.next)
 
         second = LinkedNode(321, first)
-        self.assertEqual(first._meminfo.refcount, 2)
+
+        first_meminfo = _get_meminfo(first)
+        second_meminfo = _get_meminfo(second)
+        self.assertEqual(first_meminfo.refcount, 2)
         self.assertEqual(second.next.data, first.data)
-        self.assertEqual(first._meminfo.refcount, 2)
-        self.assertEqual(second._meminfo.refcount, 1)
+        self.assertEqual(first_meminfo.refcount, 2)
+        self.assertEqual(second_meminfo.refcount, 1)
 
         # Test using deferred type as argument
         first_val = second.get_next_data()
         self.assertEqual(first_val, first.data)
 
         # Check ownership
-        self.assertEqual(first._meminfo.refcount, 2)
+        self.assertEqual(first_meminfo.refcount, 2)
         del second
-        self.assertEqual(first._meminfo.refcount, 1)
+        self.assertEqual(first_meminfo.refcount, 1)
 
     def test_c_structure(self):
         spec = OrderedDict()
@@ -244,7 +256,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 ('c', ctypes.c_double),
             ]
 
-        ptr = ctypes.c_void_p(st._dataptr)
+        ptr = ctypes.c_void_p(_box.box_get_dataptr(st))
         cstruct = ctypes.cast(ptr, ctypes.POINTER(CStruct))[0]
         self.assertEqual(cstruct.a, st.a)
         self.assertEqual(cstruct.b, st.b)
