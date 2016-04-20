@@ -65,6 +65,7 @@ build_c_helpers_dict(void)
     declmethod(fptouif);
     declmethod(gil_ensure);
     declmethod(gil_release);
+    declmethod(fatal_error);
     declmethod(py_type);
     declmethod(unpack_slice);
     declmethod(do_raise);

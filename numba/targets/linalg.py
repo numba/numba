@@ -689,6 +689,11 @@ def inv(context, builder, sig, args):
     else:
         assert 0
 
+
+fatal_error_sig = types.intc()
+fatal_error_func = types.ExternalFunction("numba_fatal_error", fatal_error_sig)
+
+
 if numpy_version >= (1, 8):
 
     def _check_linalg_matrix(a, func_name):
@@ -735,7 +740,7 @@ if numpy_version >= (1, 8):
             r = xxpotrf(kind, UP, n, out.ctypes, n, info.ctypes)
             if r != 0:
                 # XXX Py_FatalError()?
-                raise RuntimeError("unable to execute xxpotrf()")
+                fatal_error_func()
             if info[0] > 0:
                 raise numpy.linalg.LinAlgError(
                     "Matrix is not positive definite.")

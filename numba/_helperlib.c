@@ -1103,6 +1103,20 @@ numba_unpack_slice(PyObject *obj,
 #undef FETCH_MEMBER
 }
 
+NUMBA_EXPORT_FUNC(int)
+numba_fatal_error(void)
+{
+    PyGILState_Ensure();
+#if PY_MAJOR_VERSION < 3
+    /* Py_FatalError doesn't print the current error on Python 2, do it
+       ourselves. */
+    if (PyErr_Occurred())
+        PyErr_Print();
+#endif
+    Py_FatalError("in Numba-compiled function");
+    return 0; /* unreachable */
+}
+
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
    This *consumes* a reference count to its argument. */
 NUMBA_EXPORT_FUNC(int)

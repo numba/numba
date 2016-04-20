@@ -298,6 +298,7 @@ class TestProduct(TestCase):
         with self.check_contiguity_warning(cfunc.py_func):
             cfunc(a, b)
 
+
 # Implementation definitions for the purpose of jitting.
 
 def invert_matrix(a):
@@ -311,6 +312,7 @@ def eig_matrix(a):
 
 def svd_matrix(a, full_matrices=1):
     return np.linalg.svd(a, full_matrices)  
+
 
 class TestLinalgBase(TestCase):
     """
@@ -407,6 +409,7 @@ class TestLinalgInv(TestLinalgBase):
         # Singular matrix
         self.assert_singular_matrix(cfunc, (np.zeros((2, 2)),))
 
+
 class TestLinalgCholesky(TestLinalgBase):
     """
     Tests for np.linalg.cholesky.
@@ -484,6 +487,7 @@ class TestLinalgCholesky(TestLinalgBase):
         # not pd
         self.assert_not_pd(cfunc, (
                                 np.ones(4, dtype=np.float64).reshape(2, 2),))
+
 
 class TestLinalgEig(TestLinalgBase):
     """
@@ -603,6 +607,7 @@ class TestLinalgEig(TestLinalgBase):
         for ty in [np.float32, np.float64]:
             self.assert_no_domain_change(cfunc, (A.astype(ty),))
          
+
 class TestLinalgSvd(TestLinalgBase):
     """
     Tests for np.linalg.svd.
