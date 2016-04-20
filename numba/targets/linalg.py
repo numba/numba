@@ -691,6 +691,14 @@ def inv(context, builder, sig, args):
 
 if numpy_version >= (1, 8):
 
+    @jit
+    def _check_finite_matrix(a):  
+        for v in numpy.nditer(a):
+            if not numpy.isfinite(v.item()):
+                raise numpy.linalg.LinAlgError(
+                    "Array must not contain infs or NaNs.")
+
+    
     def _check_linalg_matrix(a, func_name):
         if not isinstance(a, types.Array):
             raise TypingError("np.linalg.%s() only supported for array types"
@@ -802,9 +810,7 @@ if numpy_version >= (1, 8):
                 msg = "Last 2 dimensions of the array must be square."
                 raise numpy.linalg.LinAlgError(msg)
 
-            if not numpy.isfinite(a).all():
-                raise numpy.linalg.LinAlgError(
-                    "Array must not contain infs or NaNs.")
+            _check_finite_matrix(a)
 
             if F_layout:
                 acpy = numpy.copy(a)
@@ -813,10 +819,10 @@ if numpy_version >= (1, 8):
 
             ldvl = 1
             ldvr = n
-            wr = numpy.zeros(n, dtype=a.dtype)
-            wi = numpy.zeros(n, dtype=a.dtype)
-            vl = numpy.zeros((ldvl, n), dtype=a.dtype)
-            vr = numpy.zeros((ldvr, n), dtype=a.dtype)
+            wr = numpy.empty(n, dtype=a.dtype)
+            wi = numpy.empty(n, dtype=a.dtype)
+            vl = numpy.empty((ldvl, n), dtype=a.dtype)
+            vr = numpy.empty((ldvr, n), dtype=a.dtype)
 
             r = numba_ez_rgeev(kind,
                                JOBVL,
@@ -831,6 +837,16 @@ if numpy_version >= (1, 8):
                                vr.ctypes,
                                ldvr)
 
+            # By design numba does not support dynamic return types, however, 
+            # Numpy does. Numpy uses this ability in the case of returning 
+            # eigenvalues/vectors of a real matrix. The return type of 
+            # np.linalg.eig(), when operating on a matrix in real space 
+            # depends on the values present in the matrix itself (recalling 
+            # that eigenvalues are the roots of the characteristic polynomial 
+            # of the system matrix, which will by construction depend on the 
+            # values present in the system matrix). As numba cannot handle 
+            # the case of a runtime decision based domain change relative to 
+            # the input type, if it is required numba raises as below.
             if numpy.any(wi):
                 raise ValueError(
                     "eig() argument must not cause a domain change.")
@@ -850,9 +866,7 @@ if numpy_version >= (1, 8):
                 msg = "Last 2 dimensions of the array must be square."
                 raise numpy.linalg.LinAlgError(msg)
 
-            if not numpy.isfinite(a).all():
-                raise numpy.linalg.LinAlgError(
-                    "Array must not contain infs or NaNs.")
+            _check_finite_matrix(a)
 
             if F_layout:
                 acpy = numpy.copy(a)
@@ -861,9 +875,9 @@ if numpy_version >= (1, 8):
 
             ldvl = 1
             ldvr = n
-            w = numpy.zeros(n, dtype=a.dtype)
-            vl = numpy.zeros((ldvl, n), dtype=a.dtype)
-            vr = numpy.zeros((ldvr, n), dtype=a.dtype)
+            w = numpy.empty(n, dtype=a.dtype)
+            vl = numpy.empty((ldvl, n), dtype=a.dtype)
+            vr = numpy.empty((ldvr, n), dtype=a.dtype)
 
             r = numba_ez_cgeev(kind,
                                JOBVL,
@@ -931,9 +945,7 @@ if numpy_version >= (1, 8):
             n = a.shape[-1]
             m = a.shape[-2]
 
-            if not numpy.isfinite(a).all():
-                raise numpy.linalg.LinAlgError(
-                    "Array must not contain infs or NaNs.")
+            _check_finite_matrix(a)
 
             if F_layout:
                 acpy = numpy.copy(a)
@@ -952,9 +964,9 @@ if numpy_version >= (1, 8):
                 ucol = minmn
                 ldvt = minmn
 
-            u = numpy.zeros((ucol, ldu), dtype=a.dtype)
-            s = numpy.zeros(minmn, dtype=s_dtype)
-            vt = numpy.zeros((n, ldvt), dtype=a.dtype)
+            u = numpy.empty((ucol, ldu), dtype=a.dtype)
+            s = numpy.empty(minmn, dtype=s_dtype)
+            vt = numpy.empty((n, ldvt), dtype=a.dtype)
 
             r = numba_ez_gesdd(
                 kind,  # kind
