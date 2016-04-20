@@ -1,3 +1,6 @@
+/*
+Implements jitclass Box type in python c-api level.
+*/
 #include "_pymodule.h"
 
 typedef struct {
@@ -6,9 +9,18 @@ typedef struct {
 } BoxObject;
 
 
+/* Store function defined in numba.runtime._nrt_python for use in box_dealloc.
+ * It points to a function is code segment that does not need user deallocation
+ * and does not disappear while the process is stil running.
+ */
 static void (*MemInfo_release)(void*) = NULL;
 
 
+/*
+ * Box.__init__()
+ * Takes no arguments.
+ * meminfoptr and dataptr are set to NULL.
+ */
 static
 int Box_init(BoxObject *self, PyObject *args, PyObject *kwds) {
     static char *keywords[] = {NULL};
@@ -22,6 +34,11 @@ int Box_init(BoxObject *self, PyObject *args, PyObject *kwds) {
     return 0;
 }
 
+/*
+ * Box destructor
+ * Release MemInfo pointed by meminfoptr.
+ * Free the instance.
+ */
 static
 void box_dealloc(BoxObject *box)
 {
@@ -80,6 +97,9 @@ static PyTypeObject BoxType = {
 };
 
 
+/* Import MemInfo_Release from numba.runtime._nrt_python once for use in
+ * Box_dealloc.
+ */
 static
 void* import_meminfo_release() {
     PyObject *nrtmod = NULL;
@@ -103,6 +123,9 @@ cleanup:
     return fnptr;
 }
 
+/* Debug utils.
+ * Get internal dataptr field from Box.
+ */
 static
 PyObject* box_get_dataptr(PyObject *self, PyObject *args) {
     BoxObject *box;
@@ -112,6 +135,9 @@ PyObject* box_get_dataptr(PyObject *self, PyObject *args) {
     return PyLong_FromVoidPtr(box->dataptr);
 }
 
+/* Debug utils.
+ * Get internal meminfoptr field from Box.
+ */
 static
 PyObject* box_get_meminfoptr(PyObject *self, PyObject *args) {
     BoxObject *box;
