@@ -41,12 +41,50 @@ EMIT_GET_CBLAS_FUNC(zdotc)
 #undef EMIT_GET_CBLAS_FUNC
 
 /*
+ * A union of all the types accepted by BLAS/LAPACK for use in cases where
+ * stack based allocation is needed (typically for work space query args length
+ * 1).
+ */
+typedef union all_dtypes_
+{
+    float  s;
+    double d;
+    npy_complex64 c;
+    npy_complex128 z;
+} all_dtypes;
+
+/*
+ * A checked PyMem_RawMalloc, ensures that the var is either NULL
+ * and an exception is raised, or that the allocation was successful.
+ * Returns zero on success for status checking.
+ */
+static int checked_PyMem_RawMalloc(void** var, size_t bytes)
+{
+    *var = NULL;
+    *var = PyMem_RawMalloc(bytes);
+    if (!(*var))
+    {
+        {
+            PyGILState_STATE st = PyGILState_Ensure();
+
+            PyErr_SetString(PyExc_MemoryError,
+                            "Insufficient memory for buffer allocation\
+                             required by LAPACK.");
+            PyGILState_Release(st);
+        }
+        return 1;
+    }
+    return 0;
+}
+
+/*
  * Define what a Fortran "int" is, some LAPACKs have 64 bit integer support
  * numba presently opts for a 32 bit C int.
  * This definition allows scope for later configuration time magic to adjust
  * the size of int at all the call sites.
  */
 #define F_INT int
+
 
 typedef float (*sdot_t)(F_INT *n, void *dx, F_INT *incx, void *dy, F_INT *incy);
 typedef double (*ddot_t)(F_INT *n, void *dx, F_INT *incx, void *dy, F_INT
@@ -68,8 +106,8 @@ typedef void (*xxgemm_t)(char *transa, char *transb,
                          void *c, F_INT *ldc);
 
 /* Vector * vector: result = dx * dy */
-NUMBA_EXPORT_FUNC(F_INT)
-numba_xxdot(char kind, char conjugate, F_INT n, void *dx, void *dy,
+NUMBA_EXPORT_FUNC(int)
+numba_xxdot(char kind, char conjugate, Py_ssize_t n, void *dx, void *dy,
             void *result)
 {
     void *raw_func = NULL;
@@ -78,11 +116,11 @@ numba_xxdot(char kind, char conjugate, F_INT n, void *dx, void *dy,
 
     switch (kind)
     {
-        case 'd':
-            raw_func = get_cblas_ddot();
-            break;
         case 's':
             raw_func = get_cblas_sdot();
+            break;
+        case 'd':
+            raw_func = get_cblas_ddot();
             break;
         case 'c':
             raw_func = conjugate ? get_cblas_cdotc() : get_cblas_cdotu();
@@ -106,11 +144,11 @@ numba_xxdot(char kind, char conjugate, F_INT n, void *dx, void *dy,
 
     switch (kind)
     {
-        case 'd':
-            *(double *) result = (*(ddot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
-            break;
         case 's':
             *(float *) result = (*(sdot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
+            break;
+        case 'd':
+            *(double *) result = (*(ddot_t) raw_func)(&_n, dx, &inc, dy, &inc);;
             break;
         case 'c':
             *(npy_complex64 *) result = (*(cdot_t) raw_func)(&_n, dx, &inc, dy,\
@@ -126,9 +164,9 @@ numba_xxdot(char kind, char conjugate, F_INT n, void *dx, void *dy,
 }
 
 /* Matrix * vector: y = alpha * a * x + beta * y */
-NUMBA_EXPORT_FUNC(F_INT)
-numba_xxgemv(char kind, char *trans, F_INT m, F_INT n,
-             void *alpha, void *a, F_INT lda,
+NUMBA_EXPORT_FUNC(int)
+numba_xxgemv(char kind, char *trans, Py_ssize_t m, Py_ssize_t n,
+             void *alpha, void *a, Py_ssize_t lda,
              void *x, void *beta, void *y)
 {
     void *raw_func = NULL;
@@ -138,11 +176,11 @@ numba_xxgemv(char kind, char *trans, F_INT m, F_INT n,
 
     switch (kind)
     {
-        case 'd':
-            raw_func = get_cblas_dgemv();
-            break;
         case 's':
             raw_func = get_cblas_sgemv();
+            break;
+        case 'd':
+            raw_func = get_cblas_dgemv();
             break;
         case 'c':
             raw_func = get_cblas_cgemv();
@@ -172,12 +210,12 @@ numba_xxgemv(char kind, char *trans, F_INT m, F_INT n,
 }
 
 /* Matrix * matrix: c = alpha * a * b + beta * c */
-NUMBA_EXPORT_FUNC(F_INT)
+NUMBA_EXPORT_FUNC(int)
 numba_xxgemm(char kind, char *transa, char *transb,
-             F_INT m, F_INT n, F_INT k,
-             void *alpha, void *a, F_INT lda,
-             void *b, F_INT ldb, void *beta,
-             void *c, F_INT ldc)
+             Py_ssize_t m, Py_ssize_t n, Py_ssize_t k,
+             void *alpha, void *a, Py_ssize_t lda,
+             void *b, Py_ssize_t ldb, void *beta,
+             void *c, Py_ssize_t ldc)
 {
     void *raw_func = NULL;
     F_INT _m, _n, _k;
@@ -185,11 +223,11 @@ numba_xxgemm(char kind, char *transa, char *transb,
 
     switch (kind)
     {
-        case 'd':
-            raw_func = get_cblas_dgemm();
-            break;
         case 's':
             raw_func = get_cblas_sgemm();
+            break;
+        case 'd':
+            raw_func = get_cblas_dgemm();
             break;
         case 'c':
             raw_func = get_cblas_cgemm();
@@ -305,12 +343,13 @@ typedef void (*cgesdd_t)(char *jobz, F_INT *m, F_INT *n, void *a, F_INT *lda,
                          F_INT *info);
 
 /* Compute LU decomposition of A */
-NUMBA_EXPORT_FUNC(F_INT)
-numba_xxgetrf(char kind, F_INT m, F_INT n, void *a, F_INT lda,
-              F_INT *ipiv, F_INT *info)
+NUMBA_EXPORT_FUNC(int)
+numba_xxgetrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t lda,
+              Py_ssize_t *ipiv, Py_ssize_t *info)
 {
     void *raw_func = NULL;
     F_INT _m, _n, _lda;
+    F_INT * _ipiv, * _info;
 
     switch (kind)
     {
@@ -341,19 +380,23 @@ numba_xxgetrf(char kind, F_INT m, F_INT n, void *a, F_INT lda,
     _m = (F_INT) m;
     _n = (F_INT) n;
     _lda = (F_INT) lda;
+    _ipiv = (F_INT *) ipiv;
+    _info = (F_INT *) info;
 
-    (*(xxgetrf_t) raw_func)(&_m, &_n, a, &_lda, ipiv, info);
+    (*(xxgetrf_t) raw_func)(&_m, &_n, a, &_lda, _ipiv, _info);
     return 0;
 }
 
 
 /* Compute the inverse of a matrix given its LU decomposition*/
-NUMBA_EXPORT_FUNC(F_INT)
-numba_xxgetri(char kind, F_INT n, void *a, F_INT lda, F_INT *ipiv, \
-              void *work, F_INT *lwork, F_INT *info)
+NUMBA_EXPORT_FUNC(int)
+numba_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda,
+              Py_ssize_t *ipiv, void *work, Py_ssize_t * lwork,
+              Py_ssize_t *info)
 {
     void *raw_func = NULL;
-    F_INT _n, _lda;
+    F_INT _n, _lda, _lwork;
+    F_INT * _ipiv, * _info;
 
     switch (kind)
     {
@@ -374,7 +417,7 @@ numba_xxgetri(char kind, F_INT n, void *a, F_INT lda, F_INT *ipiv, \
             PyGILState_STATE st = PyGILState_Ensure();
             PyErr_SetString(PyExc_ValueError,\
                             "invalid kind of *inversion from LU factorization \
-            function");
+        function");
             PyGILState_Release(st);
         }
         return -1;
@@ -384,18 +427,23 @@ numba_xxgetri(char kind, F_INT n, void *a, F_INT lda, F_INT *ipiv, \
 
     _n = (F_INT) n;
     _lda = (F_INT) lda;
+    _lwork = (F_INT) lwork[0]; // why is this a ptr?
+    _ipiv = (F_INT *) ipiv;
+    _info = (F_INT *) info;
 
-    (*(xxgetri_t) raw_func)(&_n, a, &_lda, ipiv, work, lwork, info);
+    (*(xxgetri_t) raw_func)(&_n, a, &_lda, _ipiv, work, &_lwork, _info);
+
     return 0;
 }
 
 /* Compute the Cholesky factorization of a matrix */
 NUMBA_EXPORT_FUNC(int)
-numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda, int
-              *info)
+numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda,
+              Py_ssize_t *info)
 {
     void *raw_func = NULL;
-    int _n, _lda;
+    F_INT _n, _lda;
+    F_INT * _info;
 
     switch (kind)
     {
@@ -423,10 +471,11 @@ numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda, int
     if (raw_func == NULL)
         return -1;
 
-    _n = (int) n;
-    _lda = (int) lda;
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _info = (F_INT *) info;
 
-    (*(xxpotrf_t) raw_func)(&uplo, &_n, a, &_lda, info);
+    (*(xxpotrf_t) raw_func)(&uplo, &_n, a, &_lda, _info);
     return 0;
 }
 
@@ -446,7 +495,7 @@ numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda, int
  */
 // a template would be nice
 // struct access via non c99 (python only) cmplx types, used for compatibility
-F_INT cast_from_X(char kind, void *val)
+static F_INT cast_from_X(char kind, void *val)
 {
     switch(kind)
     {
@@ -470,13 +519,15 @@ F_INT cast_from_X(char kind, void *val)
 }
 
 // real space eigen systems info from dgeev/sgeev
-NUMBA_EXPORT_FUNC(F_INT)
+NUMBA_EXPORT_FUNC(int)
 numba_raw_rgeev(char kind, char jobvl, char jobvr,
-                F_INT n, void *a, F_INT lda, void *wr, void *wi, void *vl,
-                F_INT ldvl, void *vr, F_INT ldvr, void *work, F_INT lwork,
-                F_INT * info)
+                Py_ssize_t n, void *a, Py_ssize_t lda, void *wr, void *wi,
+                void *vl, Py_ssize_t ldvl, void *vr, Py_ssize_t ldvr,
+                void *work, Py_ssize_t lwork, Py_ssize_t * info)
 {
     void *raw_func = NULL;
+    F_INT _n, _lda, _ldvl, _ldvr, _lwork;
+    F_INT * _info;
 
     switch (kind)
     {
@@ -498,21 +549,38 @@ numba_raw_rgeev(char kind, char jobvl, char jobvr,
     if (raw_func == NULL)
         return -1;
 
-    (*(rgeev_t) raw_func)(&jobvl, &jobvr, &n, a, &lda, wr, wi, vl, &ldvl, vr,
-                          &ldvr, work, &lwork, info);
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _ldvl = (F_INT) ldvl;
+    _ldvr = (F_INT) ldvr;
+    _lwork = (F_INT) lwork;
+    _info = (F_INT *) info;
+
+    (*(rgeev_t) raw_func)(&jobvl, &jobvr, &_n, a, &_lda, wr, wi, vl, &_ldvl, vr,
+                          &_ldvr, work, &_lwork, _info);
     return 0;
 }
 
 // real space eigen systems info from dgeev/sgeev
 // as numba_raw_rgeev but the allocation and error handling is done for the user
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(F_INT)
-numba_ez_rgeev(char kind, char jobvl, char jobvr,
-               F_INT n, void *a, F_INT lda, void *wr, void *wi, void *vl,
-               F_INT ldvl, void *vr, F_INT ldvr)
+NUMBA_EXPORT_FUNC(int)
+numba_ez_rgeev(char kind, char jobvl, char jobvr, Py_ssize_t n, void *a,
+               Py_ssize_t lda, void *wr, void *wi, void *vl, Py_ssize_t ldvl,
+               void *vr, Py_ssize_t ldvr)
 {
-    F_INT info = 0;
+    Py_ssize_t info = 0;
+    F_INT lwork = -1;
+    F_INT _n, _lda, _ldvl, _ldvr;
     size_t base_size = -1;
+    void * work = NULL;
+    all_dtypes stack_slot;
+
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _ldvl = (F_INT) ldvl;
+    _ldvr = (F_INT) ldvr;
+
     // find the function to call, decide on a base type size
     switch (kind)
     {
@@ -531,12 +599,12 @@ numba_ez_rgeev(char kind, char jobvl, char jobvr,
         }
         return -1;
     }
-    F_INT lwork = -1;
-    void * work = malloc(base_size);
-    numba_raw_rgeev(kind, jobvl, jobvr, n, a, lda, wr, wi, vl, ldvl,
-                    vr, ldvr, work, lwork, &info);
+
+    work = &stack_slot;
+    numba_raw_rgeev(kind, jobvl, jobvr, _n, a, _lda, wr, wi, vl, _ldvl,
+                    vr, _ldvr, work, lwork, &info);
     lwork = cast_from_X(kind, work);
-    free(work);
+
     if(info < 0)
     {
         {
@@ -547,10 +615,16 @@ numba_ez_rgeev(char kind, char jobvl, char jobvr,
         }
         return -1;
     }
-    work = malloc(base_size * lwork);
-    numba_raw_rgeev(kind, jobvl, jobvr, n, a, lda, wr, wi, vl, ldvl,
-                    vr, ldvr, work, lwork, &info);
-    free(work);
+
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
+    {
+
+        return -1;
+    }
+
+    numba_raw_rgeev(kind, jobvl, jobvr, _n, a, _lda, wr, wi, vl, _ldvl,
+                    vr, _ldvr, work, lwork, &info);
+    PyMem_RawFree(work);
 
     if(info)
     {
@@ -578,13 +652,23 @@ numba_ez_rgeev(char kind, char jobvl, char jobvr,
 
 // complex space eigen systems info from cgeev/zgeev
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(F_INT)
+NUMBA_EXPORT_FUNC(int)
 numba_raw_cgeev(char kind, char jobvl, char jobvr,
-                F_INT n, void *a, F_INT lda, void *w, void *vl, F_INT ldvl,
-                void *vr, F_INT ldvr, void *work, F_INT lwork, double *rwork,
-                F_INT * info)
+                Py_ssize_t n, void *a, Py_ssize_t lda, void *w, void *vl,
+                Py_ssize_t ldvl, void *vr, Py_ssize_t ldvr, void *work,
+                Py_ssize_t lwork, double *rwork, Py_ssize_t * info)
 {
     void *raw_func = NULL;
+    F_INT _n, _lda, _ldvl, _ldvr, _lwork;
+    F_INT *_info;
+
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _ldvl = (F_INT) ldvl;
+    _ldvr = (F_INT) ldvr;
+    _lwork = (F_INT) lwork;
+    _info = (F_INT *)info;
+
 
     switch (kind)
     {
@@ -606,8 +690,8 @@ numba_raw_cgeev(char kind, char jobvl, char jobvr,
     if (raw_func == NULL)
         return -1;
 
-    (*(cgeev_t) raw_func)(&jobvl, &jobvr, &n, a, &lda, w, vl, &ldvl, vr, &ldvr,
-                          work, &lwork, rwork, info);
+    (*(cgeev_t) raw_func)(&jobvl, &jobvr, &_n, a, &_lda, w, vl, &_ldvl, vr,
+                          &_ldvr, work, &_lwork, rwork, _info);
     return 0;
 }
 
@@ -615,13 +699,24 @@ numba_raw_cgeev(char kind, char jobvl, char jobvr,
 // complex space eigen systems info from cgeev/zgeev
 // as numba_raw_cgeev but the allocation and error handling is done for the user
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(F_INT)
-numba_ez_cgeev(char kind, char jobvl, char jobvr,
-               F_INT n, void *a, F_INT lda, void *w, void *vl, F_INT ldvl,
-               void *vr, F_INT ldvr)
+NUMBA_EXPORT_FUNC(int)
+numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
+               Py_ssize_t lda, void *w, void *vl, Py_ssize_t ldvl, void *vr,
+               Py_ssize_t ldvr)
 {
-    F_INT info = 0;
+    Py_ssize_t info = 0;
+    F_INT lwork = -1;
+    F_INT _n, _lda, _ldvl, _ldvr;
     size_t base_size = -1;
+    all_dtypes stack_slot;
+    void * work = NULL;
+    double * rwork = NULL;
+
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _ldvl = (F_INT) ldvl;
+    _ldvr = (F_INT) ldvr;
+
     // find the function to call, decide on a base type size
     switch (kind)
     {
@@ -640,16 +735,13 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,
         }
         return -1;
     }
-    F_INT lwork = -1;
-    void * work = malloc(base_size);
-    double * rwork = malloc(2*n*base_size);
+    work = &stack_slot;
     numba_raw_cgeev(kind, jobvl, jobvr, n, a, lda, w, vl, ldvl,
                     vr, ldvr, work, lwork, rwork, &info);
     lwork = cast_from_X(kind, work);
-    free(work);
+
     if(info < 0)
     {
-        free(rwork);
         {
             PyGILState_STATE st = PyGILState_Ensure();
             PyErr_Format(PyExc_ValueError,\
@@ -658,11 +750,19 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,
         }
         return -1;
     }
-    work = malloc(base_size * lwork);
-    numba_raw_cgeev(kind, jobvl, jobvr, n, a, lda, w, vl, ldvl,
-                    vr, ldvr, work, lwork, rwork, &info);
-    free(work);
-    free(rwork);
+    if(checked_PyMem_RawMalloc((void**)&rwork, 2*n*base_size))
+    {
+        return -1;
+    }
+    if(checked_PyMem_RawMalloc(&work, base_size * lwork))
+    {
+        PyMem_RawFree(rwork);
+        return -1;
+    }
+    numba_raw_cgeev(kind, jobvl, jobvr, _n, a, _lda, w, vl, _ldvl,
+                    vr, _ldvr, work, lwork, rwork, &info);
+    PyMem_RawFree(work);
+    PyMem_RawFree(rwork);
 
     if(info)
     {
@@ -697,14 +797,18 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,
 // separate real variables, this is hidden below by packing them into a complex
 // variable. The work space computation and error handling etc is also hidden.
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(F_INT)
-numba_ez_geev(char kind, char jobvl, char jobvr,
-              F_INT n, void *a, F_INT lda, void *w, void *vl, F_INT ldvl, void
-              *vr, F_INT ldvr)
+NUMBA_EXPORT_FUNC(int)
+numba_ez_geev(char kind, char jobvl, char jobvr, Py_ssize_t n, void *a,
+              Py_ssize_t lda, void *w, void *vl, Py_ssize_t ldvl, void *vr,
+              Py_ssize_t ldvr)
 {
     // real space, will need packing into `w` for return
-    void * wr = NULL, * wi = NULL;
     size_t base_size;
+    void * wr = NULL, * wi = NULL;
+    F_INT k;
+    npy_complex64 * c64_ptr;
+    npy_complex128 * c128_ptr;
+
     switch (kind)
     {
         case 's':
@@ -712,9 +816,12 @@ numba_ez_geev(char kind, char jobvl, char jobvr,
         case 'd':
             base_size = sizeof(double);
 
-            wi = malloc(n*base_size);
-            wr = malloc(n*base_size);
-
+            if(checked_PyMem_RawMalloc(&wi, n * base_size)) return -1;
+            if(checked_PyMem_RawMalloc(&wr, n * base_size))
+            {
+                PyMem_RawFree(wi);
+                return -1;
+            }
             numba_ez_rgeev(kind, jobvl, jobvr, n, a, lda, wr, wi, vl, ldvl,
                            vr, ldvr);
             break;
@@ -733,9 +840,6 @@ numba_ez_geev(char kind, char jobvl, char jobvr,
         return -1;
     }
 
-    F_INT k;
-    npy_complex64 * c64_ptr;
-    npy_complex128 * c128_ptr;
     switch (kind)
     {
         case 's':
@@ -755,17 +859,33 @@ numba_ez_geev(char kind, char jobvl, char jobvr,
             }
             break;
     }
+    // either frees the malloc above or NOPs if NULL
+    PyMem_RawFree(wr);
+    PyMem_RawFree(wi);
+
     return 0;
 }
 
 // real space svd systems info from dgesdd/sgesdd
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(F_INT)
-numba_raw_rgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
-                 void *s,  void *u, F_INT ldu, void *vt,  F_INT ldvt,
-                 void *work, F_INT lwork, F_INT *iwork, F_INT *info)
+NUMBA_EXPORT_FUNC(int)
+numba_raw_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
+                 Py_ssize_t lda, void *s,  void *u, Py_ssize_t ldu, void *vt,
+                 Py_ssize_t ldvt, void *work, Py_ssize_t lwork,
+                 Py_ssize_t *iwork, Py_ssize_t *info)
 {
     void *raw_func = NULL;
+    F_INT _m, _n, _lda, _ldu, _ldvt, _lwork;
+    F_INT *_iwork, *_info;
+
+    _m = (F_INT) m;
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _ldu = (F_INT) ldu;
+    _ldvt = (F_INT) ldvt;
+    _lwork = (F_INT) lwork;
+    _iwork = (F_INT *) iwork;
+    _info = (F_INT *) info;
 
     switch (kind)
     {
@@ -787,8 +907,8 @@ numba_raw_rgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
     if (raw_func == NULL)
         return -1;
 
-    (*(rgesdd_t) raw_func)(&jobz, &m, &n, a, &lda, s, u, &ldu, vt, &ldvt, work,
-                           &lwork, iwork, info);
+    (*(rgesdd_t) raw_func)(&jobz, &_m, &_n, a, &_lda, s, u, &_ldu, vt, &_ldvt,
+                           work, &_lwork, _iwork, _info);
     return 0;
 }
 
@@ -796,12 +916,26 @@ numba_raw_rgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
 // As numba_raw_rgesdd but the allocation and error handling is done for the
 // user
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(F_INT)
-numba_ez_rgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
-                void *s, void *u, F_INT ldu, void *vt,  F_INT ldvt)
+NUMBA_EXPORT_FUNC(int)
+numba_ez_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
+                Py_ssize_t lda, void *s, void *u, Py_ssize_t ldu, void *vt,
+                Py_ssize_t ldvt)
 {
-    F_INT info = 0;
+    Py_ssize_t info = 0;
+    F_INT minmn = -1;
+    Py_ssize_t lwork = -1;
+    Py_ssize_t *iwork = NULL;
+    all_dtypes stack_slot;
     size_t base_size = -1;
+    void *work = NULL;
+    F_INT _m, _n, _lda, _ldu, _ldvt;
+
+    _m = (F_INT) m;
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _ldu = (F_INT) ldu;
+    _ldvt = (F_INT) ldvt;
+
     // find the function to call, decide on a base type size
     switch (kind)
     {
@@ -821,13 +955,12 @@ numba_ez_rgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
         return -1;
     }
 
-    F_INT lwork = -1;
-    void *work = malloc(base_size);
-    void *iwork = NULL;
-    numba_raw_rgesdd(kind, jobz, m, n, a, lda, s, u ,ldu, vt, ldvt, work, lwork,
-                     iwork, &info);
+    work = &stack_slot;
+
+    numba_raw_rgesdd(kind, jobz, _m, _n, a, _lda, s, u ,_ldu, vt, _ldvt, work,
+                     lwork, iwork, &info);
+
     lwork = cast_from_X(kind, work);
-    free(work);
 
     if(info < 0)
     {
@@ -839,15 +972,21 @@ numba_ez_rgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
         }
         return -1;
     }
-    work = malloc(base_size * lwork);
-    F_INT minmn = m > n ? n : m;
-    iwork = malloc(8 * minmn * sizeof(F_INT));
+
+    if(checked_PyMem_RawMalloc(&work, base_size * lwork)) return -1;
+
+    minmn = m > n ? n : m;
+    if(checked_PyMem_RawMalloc((void**)&iwork, 8 * minmn * sizeof(F_INT)))
+    {
+        PyMem_RawFree(work);
+        return -1;
+    }
 
     numba_raw_rgesdd(kind, jobz, m, n, a, lda, s, u ,ldu, vt, ldvt, work, lwork,
                      iwork, &info);
 
-    free(work);
-    free(iwork);
+    PyMem_RawFree(work);
+    PyMem_RawFree(iwork);
 
     if(info)
     {
@@ -875,12 +1014,24 @@ numba_ez_rgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
 
 // complex space svd systems info from cgesdd/zgesdd
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(F_INT)
-numba_raw_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
-                 void *s, void *u, F_INT ldu, void *vt, F_INT ldvt, void *work,
-                 F_INT lwork, void *rwork, F_INT *iwork, F_INT *info)
+NUMBA_EXPORT_FUNC(int)
+numba_raw_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
+                 Py_ssize_t lda, void *s, void *u, Py_ssize_t ldu, void *vt,
+                 Py_ssize_t ldvt, void *work, Py_ssize_t lwork, void *rwork,
+                 Py_ssize_t *iwork, Py_ssize_t *info)
 {
     void *raw_func = NULL;
+    F_INT _m, _n, _lda, _ldu, _ldvt, _lwork;
+    F_INT *_iwork, *_info;
+
+    _m = (F_INT) m;
+    _n = (F_INT) n;
+    _lda = (F_INT) lda;
+    _ldu = (F_INT) ldu;
+    _ldvt = (F_INT) ldvt;
+    _lwork = (F_INT) lwork;
+    _iwork = (F_INT *) iwork;
+    _info = (F_INT *) info;
 
     switch (kind)
     {
@@ -902,8 +1053,8 @@ numba_raw_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
     if (raw_func == NULL)
         return -1;
 
-    (*(cgesdd_t) raw_func)(&jobz, &m, &n, a, &lda, s, u, &ldu, vt, &ldvt, work,
-                           &lwork, rwork, iwork, info);
+    (*(cgesdd_t) raw_func)(&jobz, &_m, &_n, a, &_lda, s, u, &_ldu, vt, &_ldvt,
+                           work, &_lwork, rwork, _iwork, _info);
     return 0;
 }
 
@@ -911,13 +1062,23 @@ numba_raw_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
 // As numba_raw_cgesdd but the allocation and error handling is done for the
 // user
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(F_INT)
+NUMBA_EXPORT_FUNC(int)
 numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
                 void *s, void *u, F_INT ldu, void *vt,  F_INT ldvt)
 {
-    F_INT info = 0;
+    Py_ssize_t info = 0;
+    F_INT lwork = -1;
+    F_INT lrwork = -1;
+    F_INT minmn = -1;
+    F_INT tmp1, tmp2;
+    F_INT maxmn = -1;
     size_t real_base_size = -1;
     size_t complex_base_size = -1;
+    all_dtypes stack_slot;
+    void *work = NULL;
+    void *rwork = NULL;
+    Py_ssize_t *iwork = NULL;
+
     // find the function to call, decide on a base type size
     switch (kind)
     {
@@ -939,14 +1100,11 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
         return -1;
     }
 
-    F_INT lwork = -1;
-    void *work = malloc(complex_base_size);
-    void *rwork = NULL;
-    void *iwork = NULL;
+    work = &stack_slot;
     numba_raw_cgesdd(kind, jobz, m, n, a, lda, s, u ,ldu, vt, ldvt, work, lwork,
                      rwork, iwork, &info);
     lwork = cast_from_X(kind, work);
-    free(work);
+
     if(info < 0)
     {
         {
@@ -957,28 +1115,42 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
         }
         return -1;
     }
-    work = malloc(complex_base_size * lwork);
+    if(checked_PyMem_RawMalloc(&work, complex_base_size * lwork)) return -1;
 
-    F_INT lrwork;
-    F_INT minmn = m > n ? n : m;
+    minmn = m > n ? n : m;
     if (jobz == 'n')
     {
         lrwork = 7 * minmn;
     }
     else
     {
-        F_INT maxmn = m > n ? m : n;
-        F_INT tmp1 = 5 * minmn + 7;
-        F_INT tmp2 = 2 * maxmn + 2 * minmn + 1;
+        maxmn = m > n ? m : n;
+        tmp1 = 5 * minmn + 7;
+        tmp2 = 2 * maxmn + 2 * minmn + 1;
         lrwork = minmn * (tmp1 > tmp2 ? tmp1: tmp2);
     }
-    rwork = malloc(real_base_size * (lrwork > 1 ? lrwork : 1));
+
+    if(checked_PyMem_RawMalloc(&rwork,
+                               real_base_size * (lrwork > 1 ? lrwork : 1)))
+    {
+        PyMem_RawFree(work);
+        return -1;
+    }
+
+    if(checked_PyMem_RawMalloc((void**)&iwork, 8*minmn*sizeof(F_INT)))
+    {
+        PyMem_RawFree(work);
+        PyMem_RawFree(rwork);
+        return -1;
+    }
+
 
     numba_raw_cgesdd(kind, jobz, m, n, a, lda, s, u ,ldu, vt, ldvt, work, lwork,
                      rwork, iwork, &info);
 
-    free(work);
-    free(rwork);
+    PyMem_RawFree(work);
+    PyMem_RawFree(rwork);
+    PyMem_RawFree(iwork);
 
     if(info)
     {
@@ -1008,9 +1180,10 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
 // This routine hides the type and general complexity involved with making the
 // calls to *gesdd. The work space computation and error handling etc is hidden.
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(F_INT)
-numba_ez_gesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
-               void *s, void *u, F_INT ldu, void *vt,  F_INT ldvt)
+NUMBA_EXPORT_FUNC(int)
+numba_ez_gesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
+               Py_ssize_t lda, void *s, void *u, Py_ssize_t ldu, void *vt,
+               Py_ssize_t ldvt)
 {
     switch (kind)
     {
