@@ -13,7 +13,7 @@ from numba import types, cgutils
 from numba.pythonapi import box, unbox, NativeValue
 from numba import njit
 from numba.six import exec_
-from ._box import Box, box_meminfoptr_offset, box_dataptr_offset
+from . import _box
 
 
 _getter_code_template = """
@@ -106,7 +106,7 @@ def _specialize_box(typ):
             getter = _generate_method(name, func)
             dct[name] = getter
     # Create subclass
-    subcls = type(typ.classname, (Box,), dct)
+    subcls = type(typ.classname, (_box.Box,), dct)
     # Store to cache
     _cache_specialized_box[typ] = subcls
 
@@ -147,20 +147,22 @@ def _box_class_instance(typ, val, c):
     addr_data = c.builder.bitcast(dataptr, llvoidptr)
 
     def set_member(member_offset, value):
+        # Access member by byte offset
         offset = c.context.get_constant(types.uint32, member_offset)
         byte_ptr = c.builder.bitcast(box, llvoidptr)
         ptr = c.builder.gep(byte_ptr, [offset])
         casted = c.builder.bitcast(ptr, llvoidptr.as_pointer())
         c.builder.store(value, casted)
 
-    set_member(box_meminfoptr_offset, addr_meminfo)
-    set_member(box_dataptr_offset, addr_data)
+    set_member(_box.box_meminfoptr_offset, addr_meminfo)
+    set_member(_box.box_dataptr_offset, addr_data)
     return box
 
 
 @unbox(types.ClassInstanceType)
 def _unbox_class_instance(typ, val, c):
     def access_member(member_offset):
+        # Access member by byte offset
         offset = c.context.get_constant(types.uint32, member_offset)
         llvoidptr = ir.IntType(8).as_pointer()
         byte_ptr = c.builder.bitcast(val, llvoidptr)
@@ -172,8 +174,8 @@ def _unbox_class_instance(typ, val, c):
     inst = struct_cls(c.context, c.builder)
 
     # load from Python object
-    ptr_meminfo = access_member(box_meminfoptr_offset)
-    ptr_dataptr = access_member(box_dataptr_offset)
+    ptr_meminfo = access_member(_box.box_meminfoptr_offset)
+    ptr_dataptr = access_member(_box.box_dataptr_offset)
 
     # store to native structure
     inst.meminfo = c.builder.bitcast(ptr_meminfo, inst.meminfo.type)
