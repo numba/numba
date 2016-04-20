@@ -65,6 +65,12 @@ def array_transpose(arr):
 def array_copy(arr):
     return arr.copy()
 
+def np_copy(arr):
+    return np.copy(arr)
+
+def np_asfortranarray(arr):
+    return np.asfortranarray(arr)
+
 def array_view(arr, newtype):
     return arr.view(newtype)
 
@@ -389,9 +395,14 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.check_np_frombuffer(np_frombuffer_dtype)
 
     def check_layout_dependent_func(self, pyfunc, fac=np.arange):
+        def is_same(a, b):
+            return a.ctypes.data == b.ctypes.data
         def check_arr(arr):
             cres = compile_isolated(pyfunc, (typeof(arr),))
-            self.assertPreciseEqual(cres.entry_point(arr), pyfunc(arr))
+            expected = pyfunc(arr)
+            got = cres.entry_point(arr)
+            self.assertPreciseEqual(expected, got)
+            self.assertEqual(is_same(expected, arr), is_same(got, arr))
         arr = fac(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
@@ -413,6 +424,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     @tag('important')
     def test_array_copy(self):
         self.check_layout_dependent_func(array_copy)
+
+    def test_np_copy(self):
+        self.check_layout_dependent_func(np_copy)
+
+    def test_np_asfortranarray(self):
+        self.check_layout_dependent_func(np_asfortranarray)
 
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):

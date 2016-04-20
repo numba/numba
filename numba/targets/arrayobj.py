@@ -1528,31 +1528,41 @@ def array_readonly(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 
+# array.ctypes
+
 @lower_getattr(types.Array, "ctypes")
 def array_ctypes(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
-    # Cast void* data to uintp
-    addr = builder.ptrtoint(array.data, context.get_value_type(types.uintp))
     # Create new ArrayCType structure
     ctinfo = context.make_helper(builder, types.ArrayCTypes(typ))
-    ctinfo.data = addr
+    ctinfo.data = array.data
     res = ctinfo._getvalue()
     return impl_ret_untracked(context, builder, typ, res)
-
-
-@lower_getattr(types.Array, "flags")
-def array_flags(context, builder, typ, value):
-    res = context.get_dummy_value()
-    return impl_ret_untracked(context, builder, typ, res)
-
 
 @lower_getattr(types.ArrayCTypes, "data")
 def array_ctypes_data(context, builder, typ, value):
     ctinfo = context.make_helper(builder, typ, value=value)
     res = ctinfo.data
+    # Convert it to an integer
+    res = builder.ptrtoint(res, context.get_value_type(types.intp))
     return impl_ret_untracked(context, builder, typ, res)
 
+@lower_cast(types.ArrayCTypes, types.CPointer)
+@lower_cast(types.ArrayCTypes, types.voidptr)
+def array_ctypes_to_pointer(context, builder, fromty, toty, val):
+    ctinfo = context.make_helper(builder, fromty, value=val)
+    res = ctinfo.data
+    res = builder.bitcast(res, context.get_value_type(toty))
+    return impl_ret_untracked(context, builder, toty, res)
+
+
+# array.flags
+
+@lower_getattr(types.Array, "flags")
+def array_flags(context, builder, typ, value):
+    res = context.get_dummy_value()
+    return impl_ret_untracked(context, builder, typ, res)
 
 @lower_getattr(types.ArrayFlags, "contiguous")
 @lower_getattr(types.ArrayFlags, "c_contiguous")
@@ -3012,8 +3022,10 @@ def numpy_linspace_3(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin("array.copy", types.Array)
-def array_copy(context, builder, sig, args):
+def _array_copy(context, builder, sig, args):
+    """
+    Array copy.
+    """
     arytype = sig.args[0]
     ary = make_array(arytype)(context, builder, value=args[0])
     shapes = cgutils.unpack_tuple(builder, ary.shape)
@@ -3024,8 +3036,8 @@ def array_copy(context, builder, sig, args):
     src_data = ary.data
     dest_data = ret.data
 
-    assert rettype.layout == "C"
-    if arytype.layout == "C":
+    assert rettype.layout in "CF"
+    if arytype.layout == rettype.layout:
         # Fast path: memcpy
         cgutils.raw_memcpy(builder, dest_data, src_data, ary.nitems,
                            ary.itemsize, align=1)
@@ -3045,6 +3057,44 @@ def array_copy(context, builder, sig, args):
             builder.store(builder.load(src_ptr), dest_ptr)
 
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
+
+
+@lower_builtin("array.copy", types.Array)
+def array_copy(context, builder, sig, args):
+    return _array_copy(context, builder, sig, args)
+
+@lower_builtin(numpy.copy, types.Array)
+def numpy_copy(context, builder, sig, args):
+    return _array_copy(context, builder, sig, args)
+
+@lower_builtin(numpy.asfortranarray, types.Array)
+def array_asfortranarray(context, builder, sig, args):
+    retty = sig.return_type
+    aryty = sig.args[0]
+    assert retty.layout == 'F'
+
+    if aryty.ndim == 0:
+        # 0-dim input => asfortranarray() returns a 1-dim array
+        assert retty.ndim == 1
+        ary = make_array(aryty)(context, builder, value=args[0])
+        ret = make_array(retty)(context, builder)
+
+        shape = context.get_constant(types.UniTuple(types.intp, 1), (1,))
+        strides = context.make_tuple(builder,
+                                     types.UniTuple(types.intp, 1),
+                                     (ary.itemsize,))
+        populate_array(ret, ary.data, shape, strides, ary.itemsize,
+                       ary.meminfo, ary.parent)
+        return impl_ret_borrowed(context, builder, retty, ret._getvalue())
+
+    elif (retty.layout == aryty.layout
+        or (aryty.ndim == 1 and aryty.layout in 'CF')):
+        # 1-dim contiguous input => return the same array
+        return impl_ret_borrowed(context, builder, retty, args[0])
+
+    else:
+        # Return a copy with the right layout
+        return _array_copy(context, builder, sig, args)
 
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)

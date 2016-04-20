@@ -9,6 +9,7 @@ Expose all functions as pointers in a dedicated C extension.
 #include "_pymodule.h"
 #include <math.h>
 #include "_helperlib.c"
+#include "_lapack.c"
 
 static PyObject *
 build_c_helpers_dict(void)
@@ -83,6 +84,13 @@ build_c_helpers_dict(void)
     declmethod(xxdot);
     declmethod(xxgetrf);
     declmethod(xxgetri);
+    declmethod(xxpotrf);
+    declmethod(ez_geev);
+    declmethod(ez_rgeev);
+    declmethod(ez_cgeev);
+    declmethod(ez_gesdd);
+    declmethod(ez_rgesdd);
+    declmethod(ez_cgesdd);
 
     declpointer(py_random_state);
     declpointer(np_random_state);
@@ -116,6 +124,7 @@ static PyMethodDef ext_methods[] = {
 PyAPI_FUNC(double) _numba_test_sin(double x);
 PyAPI_FUNC(double) _numba_test_cos(double x);
 PyAPI_FUNC(double) _numba_test_exp(double x);
+PyAPI_FUNC(void) _numba_test_vsquare(int n, double *x, double *out);
 
 double _numba_test_sin(double x)
 {
@@ -130,6 +139,20 @@ double _numba_test_cos(double x)
 double _numba_test_exp(double x)
 {
     return exp(x);
+}
+
+void _numba_test_vsquare(int n, double *x, double *out)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        out[i] = pow(x[i], 2.0);
+}
+
+void _numba_test_vcube(int n, double *x, double *out)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        out[i] = pow(x[i], 3.0);
 }
 
 

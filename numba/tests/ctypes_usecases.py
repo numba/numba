@@ -3,6 +3,8 @@ from __future__ import print_function, absolute_import, division
 from ctypes import *
 import sys
 
+import numpy as np
+
 
 is_windows = sys.platform.startswith('win32')
 
@@ -28,6 +30,25 @@ c_cos.restype = c_double
 
 def use_two_funcs(x):
     return c_sin(x) - c_cos(x)
+
+# Typed C functions accepting an array pointer
+# (either as a "void *" or as a typed pointer)
+
+c_vsquare = libnumba._numba_test_vsquare
+c_vsquare.argtypes = [c_int, c_void_p, c_void_p]
+
+c_vcube = libnumba._numba_test_vsquare
+c_vcube.argtypes = [c_int, POINTER(c_double), POINTER(c_double)]
+
+def use_c_vsquare(x):
+    out = np.empty_like(x)
+    c_vsquare(x.size, x.ctypes, out.ctypes)
+    return out
+
+def use_c_vcube(x):
+    out = np.empty_like(x)
+    c_vcube(x.size, x.ctypes, out.ctypes)
+    return out
 
 # An untyped C function
 
