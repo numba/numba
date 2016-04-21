@@ -820,16 +820,6 @@ class LinalgInv(CallableTemplate):
         return typer
 
 
-@infer_global(numpy.linalg.qr)
-class LinalgQR(CallableTemplate):
-    def generic(self):
-        def typer(a):
-            _check_linalg_matrix(a, "qr")
-            return types.UniTuple(a.copy(layout='C'), 2)
-
-        return typer
-
-
 # -----------------------------------------------------------------------------
 # Miscellaneous functions
 
