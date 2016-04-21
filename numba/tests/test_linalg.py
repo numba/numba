@@ -416,22 +416,21 @@ class TestLinalgCholesky(TestLinalgBase):
     """
 
     def sample_matrix(self, m, dtype, order):
-        # pd. matrix has eigenvalues in Z+
+        # pd. (positive definite) matrix has eigenvalues in Z+
         np.random.seed(0) # repeatable seed
         A = np.random.rand(m, m)
         # orthonormal q needed to form up q^{-1}*D*q
         # no "orth()" in numpy
-        [q, _]=np.linalg.qr(A)
+        q, _ = np.linalg.qr(A)
         L = np.arange(1, m+1) # some positive eigenvalues
-        Q=np.dot(np.dot(q.T, np.diag(L)), q) # construct
-        Q=np.array(Q, dtype=dtype, order=order) # sort out order/type
+        Q = np.dot(np.dot(q.T, np.diag(L)), q) # construct
+        Q = np.array(Q, dtype=dtype, order=order) # sort out order/type
         return Q
         
     def assert_not_pd(self, cfunc, args):
         msg = "Matrix is not positive definite."
         self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
 
-    @tag('important')
     @needs_lapack
     def test_linalg_cholesky(self):
         """
@@ -440,7 +439,7 @@ class TestLinalgCholesky(TestLinalgBase):
         n = 10
         cfunc = jit(nopython=True)(cholesky_matrix)
 
-        def check(a, **kwargs):
+        def check(a):
             with self.assertNoNRTLeak():
                 expected = cholesky_matrix(a)
                 got = cfunc(a)
@@ -448,15 +447,15 @@ class TestLinalgCholesky(TestLinalgBase):
                 # try strict
                 try:
                     np.testing.assert_array_almost_equal_nulp(got, expected,
-                                                                  nulps=10)
-                except:
+                                                              nulp=10)
+                except AssertionError:
                     # fall back to reconstruction
                     use_reconstruction=True
                 
                 # try via reconstruction
                 if use_reconstruction:
                     rec = np.dot(got, np.conj(got.T))
-                    resolution = 5*np.finfo(a.dtype).resolution
+                    resolution = 5 * np.finfo(a.dtype).resolution
                     np.testing.assert_allclose(
                         a,
                         rec,
@@ -466,7 +465,6 @@ class TestLinalgCholesky(TestLinalgBase):
                     del rec
                     
                 del got, expected
-                
 
         for dtype, order in product(self.dtypes, 'FC'):
             a = self.sample_matrix(n, dtype, order)
@@ -474,7 +472,7 @@ class TestLinalgCholesky(TestLinalgBase):
 
         rn = "cholesky"
         # Non square matrices
-        self.assert_non_square(cfunc, (np.ones((2,3), dtype=np.float64),))
+        self.assert_non_square(cfunc, (np.ones((2, 3), dtype=np.float64),))
 
         # Wrong dtype
         self.assert_wrong_dtype(rn, cfunc,
@@ -485,8 +483,8 @@ class TestLinalgCholesky(TestLinalgBase):
                                      (np.ones(10, dtype=np.float64),))
         
         # not pd
-        self.assert_not_pd(cfunc, (
-                                np.ones(4, dtype=np.float64).reshape(2, 2),))
+        self.assert_not_pd(cfunc,
+                           (np.ones(4, dtype=np.float64).reshape(2, 2),))
 
 
 class TestLinalgEig(TestLinalgBase):
@@ -497,19 +495,18 @@ class TestLinalgEig(TestLinalgBase):
     def sample_matrix(self, m, dtype, order):
         # This is a tridiag with the same but skewed values on the diagonals
         v = self.sample_vector(m, dtype)
-        Q=np.diag(v)
-        idx = np.nonzero(np.eye(Q.shape[0],Q.shape[1],1))
-        Q[idx]=v[1:]
-        idx = np.nonzero(np.eye(Q.shape[0],Q.shape[1],-1))
-        Q[idx]=v[:-1]
-        Q=np.array(Q, dtype=dtype, order=order)
+        Q = np.diag(v)
+        idx = np.nonzero(np.eye(Q.shape[0], Q.shape[1], 1))
+        Q[idx] = v[1:]
+        idx = np.nonzero(np.eye(Q.shape[0], Q.shape[1], -1))
+        Q[idx] = v[:-1]
+        Q = np.array(Q, dtype=dtype, order=order)
         return Q
         
     def assert_no_domain_change(self, cfunc, args):
         msg = "eig() argument must not cause a domain change."
         self.assert_error(cfunc, args, msg)
 
-    @tag('important')
     @needs_lapack
     def test_linalg_eig(self):
         """
@@ -523,9 +520,9 @@ class TestLinalgEig(TestLinalgBase):
                 expected = eig_matrix(a)
                 got = cfunc(a)
                 # check that the returned tuple is same length
-                self.assertTrue(len(expected) == len(got))
+                self.assertEqual(len(expected), len(got))
                 # and that length is 2
-                self.assertTrue(len(got) == 2)
+                self.assertEqual(len(got), 2)
                 
                 use_reconstruction=False
                 # try plain match of each array to np first
@@ -546,10 +543,10 @@ class TestLinalgEig(TestLinalgBase):
                 # sometimes comes out with a different (but entirely 
                 # valid) answer (eigenvectors are not unique etc.).
                 if use_reconstruction:
-                    w=got[0]
-                    v=got[1]
-                    lhs=np.dot(a, v)
-                    rhs=np.dot(v, np.diag(w))
+                    w = got[0]
+                    v = got[1]
+                    lhs = np.dot(a, v)
+                    rhs = np.dot(v, np.diag(w))
                     resolution = 5*np.finfo(a.dtype).resolution
                     np.testing.assert_allclose(
                         lhs,
@@ -597,10 +594,10 @@ class TestLinalgEig(TestLinalgBase):
         # follows numpy and fits in with numba.
         
         # First check that the computation is valid (i.e. in complex space)
-        A = np.array([[1,-2],[2,1]])
+        A = np.array([[1, -2], [2, 1]])
         check(A.astype(np.complex128))
         # and that the imaginary part is nonzero
-        [l,_] = eig_matrix(A)
+        l, _ = eig_matrix(A)
         self.assertTrue(np.any(l.imag))
               
         # Now check that the computation fails in real space
@@ -618,18 +615,17 @@ class TestLinalgSvd(TestLinalgBase):
         jmp = 0
         # have a few attempts at shuffling to get the condition number down
         # else not worry about it
-        mn = size[0]*size[1]
-        np.random.seed(0) # repeatable seed
+        mn = size[0] * size[1]
+        np.random.seed(0)  # repeatable seed
         while jmp < break_at :
             v = self.sample_vector(mn, dtype)
             # shuffle to improve conditioning
             np.random.shuffle(v)
-            A=np.reshape(v, size)
+            A = np.reshape(v, size)
             if np.linalg.cond(A) < mn:
                 return np.array(A, order=order, dtype=dtype)
-            jmp+=1
+            jmp += 1
 
-    @tag('important')
     @needs_lapack
     def test_linalg_svd(self):
         """
@@ -639,12 +635,12 @@ class TestLinalgSvd(TestLinalgBase):
 
         def check(a, **kwargs):
             with self.assertNoNRTLeak():
-                expected = svd_matrix(a, full_matrices=fmat)
-                got = cfunc(a, full_matrices=fmat)
+                expected = svd_matrix(a, **kwargs)
+                got = cfunc(a, **kwargs)
                 # check that the returned tuple is same length
-                self.assertTrue(len(expected) == len(got))
+                self.assertEqual(len(expected), len(got))
                 # and that length is 3
-                self.assertTrue(len(got) == 3)
+                self.assertEqual(len(got), 3)
                 
                 use_reconstruction=False
                 # try plain match of each array to np first
@@ -694,12 +690,12 @@ class TestLinalgSvd(TestLinalgBase):
         sizes = [(7, 1), (7, 5), (5, 7), (3, 3), (1, 7)]
         
         # flip on reduced or full matrices
-        full_matrices=(True, False)
+        full_matrices= (True, False)
 
         # test loop
-        for size, dtype, fmat, order  in\
-                product(sizes, self.dtypes, full_matrices, 'FC'):
-            
+        for size, dtype, fmat, order in \
+            product(sizes, self.dtypes, full_matrices, 'FC'):
+
             a = self.sample_matrix(size, dtype, order)
             check(a, full_matrices=fmat)
 
@@ -715,7 +711,7 @@ class TestLinalgSvd(TestLinalgBase):
 
         ## no nans or infs
         self.assert_no_nan_or_inf(cfunc, 
-                                (np.array([[1., 2.,],[np.inf, np.nan]],
+                                  (np.array([[1., 2.,], [np.inf, np.nan]],
                                             dtype=np.float64),))
         
 if __name__ == '__main__':
