@@ -134,6 +134,19 @@ Native operations
    must return a value compatible with the type ``toty``.
 
 
+Constants
+'''''''''
+
+.. decorator:: lower_constant(typespec)
+
+   Register the decorated function as implementing the creation of
+   constants for the Numba *typespec*.  The decorated function
+   is called with four arguments ``(context, builder, ty, pyval)``.
+   *ty* is the concrete type to create a constant for.  *pyval*
+   is the Python value to convert into a LLVM constant.
+   The function must return a value compatible with the type ``ty``.
+
+
 Boxing and unboxing
 '''''''''''''''''''
 

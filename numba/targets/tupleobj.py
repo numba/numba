@@ -6,6 +6,7 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 
 from .imputils import (lower_builtin, lower_getattr_generic, lower_cast,
+                       lower_constant,
                        iternext_impl, impl_ret_borrowed, impl_ret_untracked)
 from .. import typing, types, cgutils
 
@@ -131,6 +132,27 @@ def namedtuple_getattr(context, builder, typ, value, attr):
     index = typ.fields.index(attr)
     res = builder.extract_value(value, index)
     return impl_ret_borrowed(context, builder, typ[index], res)
+
+
+@lower_constant(types.UniTuple)
+@lower_constant(types.NamedUniTuple)
+def unituple_constant(context, builder, ty, pyval):
+    """
+    Create a homogenous tuple constant.
+    """
+    consts = [context.get_constant_generic(builder, ty.dtype, v)
+              for v in pyval]
+    return ir.ArrayType(consts[0].type, len(consts))(consts)
+
+@lower_constant(types.Tuple)
+@lower_constant(types.NamedTuple)
+def unituple_constant(context, builder, ty, pyval):
+    """
+    Create a heterogenous tuple constant.
+    """
+    consts = [context.get_constant_generic(builder, ty.types[i], v)
+              for i, v in enumerate(pyval)]
+    return ir.Constant.literal_struct(consts)
 
 
 #------------------------------------------------------------------------------
