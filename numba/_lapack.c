@@ -538,7 +538,7 @@ ez_geev_return(int info)
         PyGILState_STATE st = PyGILState_Ensure();
         PyErr_Format(PyExc_ValueError,
                      "LAPACK Error: Failed to compute all "
-                     "eigenvalues, no eigenvectors have been computed. "
+                     "eigenvalues, no eigenvectors have been computed.\n "
                      "i+1:n of wr/wi contains converged eigenvalues. "
                      "i = %d (Fortran indexing)\n", (int) info);
         PyGILState_Release(st);
@@ -751,17 +751,32 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
     return ez_geev_return(info);
 }
 
+
+static int
+ez_gesdd_return(int info)
+{
+    if (info > 0) {
+        PyGILState_STATE st = PyGILState_Ensure();
+        PyErr_Format(PyExc_ValueError,
+                     "LAPACK Error: Convergence of internal algorithm "
+                     "reported failure. \nThere were %d superdiagonal "
+                     "elements that failed to converge.", (int) info);
+        PyGILState_Release(st);
+        return -1;
+    }
+    return info;
+}
+
 // real space svd systems info from dgesdd/sgesdd
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(int)
+static int
 numba_raw_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
-                 Py_ssize_t lda, void *s,  void *u, Py_ssize_t ldu, void *vt,
+                 Py_ssize_t lda, void *s, void *u, Py_ssize_t ldu, void *vt,
                  Py_ssize_t ldvt, void *work, Py_ssize_t lwork,
-                 Py_ssize_t *iwork, Py_ssize_t *info)
+                 F_INT *iwork, Py_ssize_t *info)
 {
     void *raw_func = NULL;
-    F_INT _m, _n, _lda, _ldu, _ldvt, _lwork;
-    F_INT *_iwork, *_info;
+    F_INT _m, _n, _lda, _ldu, _ldvt, _lwork, _info;
 
     _m = (F_INT) m;
     _n = (F_INT) n;
@@ -769,8 +784,6 @@ numba_raw_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
     _ldu = (F_INT) ldu;
     _ldvt = (F_INT) ldvt;
     _lwork = (F_INT) lwork;
-    _iwork = (F_INT *) iwork;
-    _info = (F_INT *) info;
 
     switch (kind)
     {
@@ -793,7 +806,8 @@ numba_raw_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
         return -1;
 
     (*(rgesdd_t) raw_func)(&jobz, &_m, &_n, a, &_lda, s, u, &_ldu, vt, &_ldvt,
-                           work, &_lwork, _iwork, _info);
+                           work, &_lwork, iwork, &_info);
+    *info = (Py_ssize_t) _info;
     return 0;
 }
 
@@ -801,25 +815,18 @@ numba_raw_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
 // As numba_raw_rgesdd but the allocation and error handling is done for the
 // user
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(int)
+static int
 numba_ez_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
                 Py_ssize_t lda, void *s, void *u, Py_ssize_t ldu, void *vt,
                 Py_ssize_t ldvt)
 {
     Py_ssize_t info = 0;
-    F_INT minmn = -1;
+    Py_ssize_t minmn = -1;
     Py_ssize_t lwork = -1;
-    Py_ssize_t *iwork = NULL;
+    F_INT *iwork = NULL;
     all_dtypes stack_slot;
     size_t base_size = -1;
     void *work = NULL;
-    F_INT _m, _n, _lda, _ldu, _ldvt;
-
-    _m = (F_INT) m;
-    _n = (F_INT) n;
-    _lda = (F_INT) lda;
-    _ldu = (F_INT) ldu;
-    _ldvt = (F_INT) ldvt;
 
     // find the function to call, decide on a base type size
     switch (kind)
@@ -842,72 +849,39 @@ numba_ez_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
 
     work = &stack_slot;
 
-    numba_raw_rgesdd(kind, jobz, _m, _n, a, _lda, s, u ,_ldu, vt, _ldvt, work,
+    /* Compute optimal work size (lwork) */
+    numba_raw_rgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt, work,
                      lwork, iwork, &info);
+    CATCH_LAPACK_INVALID_ARG(info);
 
+    /* Allocate work array */
     lwork = cast_from_X(kind, work);
-
-    if(info < 0)
-    {
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_Format(PyExc_ValueError,\
-                         "LAPACK Error: on input %d\n", -info);
-            PyGILState_Release(st);
-        }
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
         return -1;
-    }
-
-    if(checked_PyMem_RawMalloc(&work, base_size * lwork)) return -1;
-
     minmn = m > n ? n : m;
-    if(checked_PyMem_RawMalloc((void**)&iwork, 8 * minmn * sizeof(F_INT)))
-    {
+    if (checked_PyMem_RawMalloc((void**) &iwork, 8 * minmn * sizeof(F_INT))) {
         PyMem_RawFree(work);
         return -1;
     }
-
     numba_raw_rgesdd(kind, jobz, m, n, a, lda, s, u ,ldu, vt, ldvt, work, lwork,
                      iwork, &info);
-
     PyMem_RawFree(work);
     PyMem_RawFree(iwork);
+    CATCH_LAPACK_INVALID_ARG(info);
 
-    if(info)
-    {
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            if(info < 0)
-            {
-                PyErr_Format(PyExc_ValueError,\
-                             "LAPACK Error: on input %d\n", -info);
-            }
-            else
-            {
-                PyErr_Format(PyExc_ValueError,\
-                             "LAPACK Error: Convergence of internal algorithm \
-                             reported failure. There were %d superdiagonal \
-                             elements that failed to converge.\n", info);
-            }
-            PyGILState_Release(st);
-        }
-        return -1;
-    }
-    return 0;
+    return ez_gesdd_return(info);
 }
-
 
 // complex space svd systems info from cgesdd/zgesdd
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(int)
+static int
 numba_raw_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
                  Py_ssize_t lda, void *s, void *u, Py_ssize_t ldu, void *vt,
                  Py_ssize_t ldvt, void *work, Py_ssize_t lwork, void *rwork,
-                 Py_ssize_t *iwork, Py_ssize_t *info)
+                 F_INT *iwork, Py_ssize_t *info)
 {
     void *raw_func = NULL;
-    F_INT _m, _n, _lda, _ldu, _ldvt, _lwork;
-    F_INT *_iwork, *_info;
+    F_INT _m, _n, _lda, _ldu, _ldvt, _lwork, _info;
 
     _m = (F_INT) m;
     _n = (F_INT) n;
@@ -915,8 +889,6 @@ numba_raw_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
     _ldu = (F_INT) ldu;
     _ldvt = (F_INT) ldvt;
     _lwork = (F_INT) lwork;
-    _iwork = (F_INT *) iwork;
-    _info = (F_INT *) info;
 
     switch (kind)
     {
@@ -939,7 +911,8 @@ numba_raw_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
         return -1;
 
     (*(cgesdd_t) raw_func)(&jobz, &_m, &_n, a, &_lda, s, u, &_ldu, vt, &_ldvt,
-                           work, &_lwork, rwork, _iwork, _info);
+                           work, &_lwork, rwork, iwork, &_info);
+    *info = (Py_ssize_t) _info;
     return 0;
 }
 
@@ -947,22 +920,22 @@ numba_raw_cgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
 // As numba_raw_cgesdd but the allocation and error handling is done for the
 // user
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(int)
+static int
 numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
                 void *s, void *u, F_INT ldu, void *vt,  F_INT ldvt)
 {
     Py_ssize_t info = 0;
-    F_INT lwork = -1;
-    F_INT lrwork = -1;
-    F_INT minmn = -1;
-    F_INT tmp1, tmp2;
-    F_INT maxmn = -1;
+    Py_ssize_t lwork = -1;
+    Py_ssize_t lrwork = -1;
+    Py_ssize_t minmn = -1;
+    Py_ssize_t tmp1, tmp2;
+    Py_ssize_t maxmn = -1;
     size_t real_base_size = -1;
     size_t complex_base_size = -1;
     all_dtypes stack_slot;
     void *work = NULL;
     void *rwork = NULL;
-    Py_ssize_t *iwork = NULL;
+    F_INT *iwork = NULL;
 
     // find the function to call, decide on a base type size
     switch (kind)
@@ -986,21 +959,16 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
     }
 
     work = &stack_slot;
+
+    /* Compute optimal work size (lwork) */
     numba_raw_cgesdd(kind, jobz, m, n, a, lda, s, u ,ldu, vt, ldvt, work, lwork,
                      rwork, iwork, &info);
-    lwork = cast_from_X(kind, work);
+    CATCH_LAPACK_INVALID_ARG(info);
 
-    if(info < 0)
-    {
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_Format(PyExc_ValueError,\
-                         "LAPACK Error: on input %d\n", -info);
-            PyGILState_Release(st);
-        }
+    /* Allocate work array */
+    lwork = cast_from_X(kind, work);
+    if (checked_PyMem_RawMalloc(&work, complex_base_size * lwork))
         return -1;
-    }
-    if(checked_PyMem_RawMalloc(&work, complex_base_size * lwork)) return -1;
 
     minmn = m > n ? n : m;
     if (jobz == 'n')
@@ -1015,49 +983,25 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
         lrwork = minmn * (tmp1 > tmp2 ? tmp1: tmp2);
     }
 
-    if(checked_PyMem_RawMalloc(&rwork,
-                               real_base_size * (lrwork > 1 ? lrwork : 1)))
-    {
+    if (checked_PyMem_RawMalloc(&rwork,
+                                real_base_size * (lrwork > 1 ? lrwork : 1))) {
         PyMem_RawFree(work);
         return -1;
     }
-
-    if(checked_PyMem_RawMalloc((void**)&iwork, 8*minmn*sizeof(F_INT)))
-    {
+    if (checked_PyMem_RawMalloc((void **) &iwork,
+                                8 * minmn * sizeof(F_INT))) {
         PyMem_RawFree(work);
         PyMem_RawFree(rwork);
         return -1;
     }
-
-
     numba_raw_cgesdd(kind, jobz, m, n, a, lda, s, u ,ldu, vt, ldvt, work, lwork,
                      rwork, iwork, &info);
-
     PyMem_RawFree(work);
     PyMem_RawFree(rwork);
     PyMem_RawFree(iwork);
+    CATCH_LAPACK_INVALID_ARG(info);
 
-    if(info)
-    {
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            if(info < 0)
-            {
-                PyErr_Format(PyExc_ValueError,\
-                             "LAPACK Error: on input %d\n", -info);
-            }
-            else
-            {
-                PyErr_Format(PyExc_ValueError,\
-                             "LAPACK Error: Convergence of internal algorithm \
-                             reported failure. There were %d superdiagonal \
-                             elements that failed to converge.\n", info);
-            }
-            PyGILState_Release(st);
-        }
-        return -1;
-    }
-    return 0;
+    return ez_gesdd_return(info);
 }
 
 
@@ -1074,12 +1018,10 @@ numba_ez_gesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
     {
         case 's':
         case 'd':
-            numba_ez_rgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt);
-            break;
+            return numba_ez_rgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt);
         case 'c':
         case 'z':
-            numba_ez_cgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt);
-            break;
+            return numba_ez_cgesdd(kind, jobz, m, n, a, lda, s, u, ldu, vt, ldvt);
         default:
         {
             PyGILState_STATE st = PyGILState_Ensure();
@@ -1089,5 +1031,4 @@ numba_ez_gesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
         }
         return -1;
     }
-    return 0;
 }

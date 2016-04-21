@@ -991,6 +991,9 @@ if numpy_version >= (1, 8):
                 vt.ctypes,  # vt
                 ldvt          # ldvt
             )
+            if r < 0:
+                fatal_error_func()
+                assert 0   # unreachable
 
             # help liveness analysis
             acpy.size
