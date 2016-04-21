@@ -7,6 +7,7 @@ import numpy as np
 from numba import jit, utils
 from numba import unittest_support as unittest
 from .support import TestCase, forbid_codegen
+from .enum_usecases import *
 
 DBL_EPSILON = 2**-52
 FLT_EPSILON = 2**-23
@@ -257,6 +258,15 @@ class TestAssertPreciseEqual(TestCase):
             self.eq(tp(aa), tp(ac), prec='single', ulps=2)
             self.eq(tp(ac), tp(cc), prec='single', ulps=2)
             self.eq(tp(aa), tp(cc), prec='single', ulps=2)
+
+    def test_enums(self):
+        values = [Color.red, Color.green, Color.blue, Shake.mint,
+                  Shape.circle, Shape.square, Planet.EARTH, Planet.MERCURY]
+        for val in values:
+            self.eq(val, val)
+            self.ne(val, val.value)
+        for a, b in itertools.combinations(values, 2):
+            self.ne(a, b)
 
     def test_arrays(self):
         a = np.arange(1, 7, dtype=np.int16).reshape((2, 3))
