@@ -200,7 +200,9 @@ The following top-level functions are supported:
 
 * :func:`numpy.arange`
 * :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.copy` (only the first argument)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
 * :func:`numpy.empty`
