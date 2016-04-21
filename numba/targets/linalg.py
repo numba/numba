@@ -803,6 +803,9 @@ if numpy_version >= (1, 8):
         F_layout = a.layout == 'F'
 
         def real_eig_impl(a):
+            """
+            eig() implementation for real arrays.
+            """
             n = a.shape[-1]
             if a.shape[-2] != n:
                 msg = "Last 2 dimensions of the array must be square."
@@ -834,6 +837,9 @@ if numpy_version >= (1, 8):
                                ldvl,
                                vr.ctypes,
                                ldvr)
+            if r < 0:
+                fatal_error_func()
+                assert 0   # unreachable
 
             # By design numba does not support dynamic return types, however, 
             # Numpy does. Numpy uses this ability in the case of returning 
@@ -859,6 +865,9 @@ if numpy_version >= (1, 8):
             return (wr, vr.T)
 
         def cmplx_eig_impl(a):
+            """
+            eig() implementation for complex arrays.
+            """
             n = a.shape[-1]
             if a.shape[-2] != n:
                 msg = "Last 2 dimensions of the array must be square."
@@ -888,6 +897,9 @@ if numpy_version >= (1, 8):
                                ldvl,
                                vr.ctypes,
                                ldvr)
+            if r < 0:
+                fatal_error_func()
+                assert 0   # unreachable
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive

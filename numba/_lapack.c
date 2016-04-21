@@ -427,9 +427,9 @@ numba_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda,
         default:
         {
             PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "invalid kind of *inversion from LU factorization \
-        function");
+            PyErr_SetString(PyExc_ValueError,
+                            "invalid kind of *inversion from LU "
+                            "factorization function");
             PyGILState_Release(st);
         }
         return -1;
@@ -507,7 +507,8 @@ numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda)
  */
 // a template would be nice
 // struct access via non c99 (python only) cmplx types, used for compatibility
-static F_INT cast_from_X(char kind, void *val)
+static F_INT
+cast_from_X(char kind, void *val)
 {
     switch(kind)
     {
@@ -522,7 +523,7 @@ static F_INT cast_from_X(char kind, void *val)
         default:
         {
             PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
+            PyErr_SetString(PyExc_ValueError,
                             "invalid kind in cast");
             PyGILState_Release(st);
         }
@@ -530,16 +531,31 @@ static F_INT cast_from_X(char kind, void *val)
     return -1;
 }
 
+static int
+ez_geev_return(int info)
+{
+    if (info > 0) {
+        PyGILState_STATE st = PyGILState_Ensure();
+        PyErr_Format(PyExc_ValueError,
+                     "LAPACK Error: Failed to compute all "
+                     "eigenvalues, no eigenvectors have been computed. "
+                     "i+1:n of wr/wi contains converged eigenvalues. "
+                     "i = %d (Fortran indexing)\n", (int) info);
+        PyGILState_Release(st);
+        return -1;
+    }
+    return info;
+}
+
 // real space eigen systems info from dgeev/sgeev
-NUMBA_EXPORT_FUNC(int)
+static int
 numba_raw_rgeev(char kind, char jobvl, char jobvr,
                 Py_ssize_t n, void *a, Py_ssize_t lda, void *wr, void *wi,
                 void *vl, Py_ssize_t ldvl, void *vr, Py_ssize_t ldvr,
-                void *work, Py_ssize_t lwork, Py_ssize_t * info)
+                void *work, Py_ssize_t lwork, Py_ssize_t *info)
 {
     void *raw_func = NULL;
-    F_INT _n, _lda, _ldvl, _ldvr, _lwork;
-    F_INT * _info;
+    F_INT _n, _lda, _ldvl, _ldvr, _lwork, _info;
 
     switch (kind)
     {
@@ -552,7 +568,7 @@ numba_raw_rgeev(char kind, char jobvl, char jobvr,
         default:
         {
             PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
+            PyErr_SetString(PyExc_ValueError,
                             "invalid kind of real space *geev call");
             PyGILState_Release(st);
         }
@@ -566,10 +582,10 @@ numba_raw_rgeev(char kind, char jobvl, char jobvr,
     _ldvl = (F_INT) ldvl;
     _ldvr = (F_INT) ldvr;
     _lwork = (F_INT) lwork;
-    _info = (F_INT *) info;
 
     (*(rgeev_t) raw_func)(&jobvl, &jobvr, &_n, a, &_lda, wr, wi, vl, &_ldvl, vr,
-                          &_ldvr, work, &_lwork, _info);
+                          &_ldvr, work, &_lwork, &_info);
+    *info = (Py_ssize_t) _info;
     return 0;
 }
 
@@ -605,7 +621,7 @@ numba_ez_rgeev(char kind, char jobvl, char jobvr, Py_ssize_t n, void *a,
         default:
         {
             PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
+            PyErr_SetString(PyExc_ValueError,
                             "Invalid kind in numba_ez_rgeev");
             PyGILState_Release(st);
         }
@@ -615,72 +631,37 @@ numba_ez_rgeev(char kind, char jobvl, char jobvr, Py_ssize_t n, void *a,
     work = &stack_slot;
     numba_raw_rgeev(kind, jobvl, jobvr, _n, a, _lda, wr, wi, vl, _ldvl,
                     vr, _ldvr, work, lwork, &info);
+    CATCH_LAPACK_INVALID_ARG(info);
+
     lwork = cast_from_X(kind, work);
-
-    if(info < 0)
-    {
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_Format(PyExc_ValueError,\
-                         "LAPACK Error: on input %d\n", -info);
-            PyGILState_Release(st);
-        }
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork)) {
         return -1;
     }
-
-    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
-    {
-
-        return -1;
-    }
-
     numba_raw_rgeev(kind, jobvl, jobvr, _n, a, _lda, wr, wi, vl, _ldvl,
                     vr, _ldvr, work, lwork, &info);
     PyMem_RawFree(work);
 
-    if(info)
-    {
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            if(info < 0)
-            {
-                PyErr_Format(PyExc_ValueError,\
-                             "LAPACK Error: on input %d\n", -info);
-            }
-            else
-            {
-                PyErr_Format(PyExc_ValueError,\
-                             "LAPACK Error: Failed to compute all \
-                             eigenvalues, no eigenvectors have been computed.\
-                             i+1:n of wr/wi contains converged eigenvalues. \
-                             i = %d (Fortran indexing)\n", info);
-            }
-            PyGILState_Release(st);
-        }
-        return -1;
-    }
-    return 0;
+    CATCH_LAPACK_INVALID_ARG(info);
+
+    return ez_geev_return(info);
 }
 
 // complex space eigen systems info from cgeev/zgeev
 // Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(int)
+static int
 numba_raw_cgeev(char kind, char jobvl, char jobvr,
                 Py_ssize_t n, void *a, Py_ssize_t lda, void *w, void *vl,
                 Py_ssize_t ldvl, void *vr, Py_ssize_t ldvr, void *work,
-                Py_ssize_t lwork, double *rwork, Py_ssize_t * info)
+                Py_ssize_t lwork, double *rwork, Py_ssize_t *info)
 {
     void *raw_func = NULL;
-    F_INT _n, _lda, _ldvl, _ldvr, _lwork;
-    F_INT *_info;
+    F_INT _n, _lda, _ldvl, _ldvr, _lwork, _info;
 
     _n = (F_INT) n;
     _lda = (F_INT) lda;
     _ldvl = (F_INT) ldvl;
     _ldvr = (F_INT) ldvr;
     _lwork = (F_INT) lwork;
-    _info = (F_INT *)info;
-
 
     switch (kind)
     {
@@ -703,7 +684,8 @@ numba_raw_cgeev(char kind, char jobvl, char jobvr,
         return -1;
 
     (*(cgeev_t) raw_func)(&jobvl, &jobvr, &_n, a, &_lda, w, vl, &_ldvl, vr,
-                          &_ldvr, work, &_lwork, rwork, _info);
+                          &_ldvr, work, &_lwork, rwork, &_info);
+    *info = (Py_ssize_t) _info;
     return 0;
 }
 
@@ -750,24 +732,13 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
     work = &stack_slot;
     numba_raw_cgeev(kind, jobvl, jobvr, n, a, lda, w, vl, ldvl,
                     vr, ldvr, work, lwork, rwork, &info);
-    lwork = cast_from_X(kind, work);
+    CATCH_LAPACK_INVALID_ARG(info);
 
-    if(info < 0)
-    {
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_Format(PyExc_ValueError,\
-                         "LAPACK Error: on input %d\n", -info);
-            PyGILState_Release(st);
-        }
+    lwork = cast_from_X(kind, work);
+    if (checked_PyMem_RawMalloc((void**)&rwork, 2*n*base_size)) {
         return -1;
     }
-    if(checked_PyMem_RawMalloc((void**)&rwork, 2*n*base_size))
-    {
-        return -1;
-    }
-    if(checked_PyMem_RawMalloc(&work, base_size * lwork))
-    {
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork)) {
         PyMem_RawFree(rwork);
         return -1;
     }
@@ -775,107 +746,9 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
                     vr, _ldvr, work, lwork, rwork, &info);
     PyMem_RawFree(work);
     PyMem_RawFree(rwork);
+    CATCH_LAPACK_INVALID_ARG(info);
 
-    if(info)
-    {
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            if(info < 0)
-            {
-                PyErr_Format(PyExc_ValueError,\
-                             "LAPACK Error: on input %d\n", -info);
-            }
-            else
-            {
-                PyErr_Format(PyExc_ValueError,\
-                             "LAPACK Error: Failed to compute all \
-                             eigenvalues, no eigenvectors have been computed.\
-                             i+1:n of wr/wi contains converged eigenvalues. \
-                             i = %d (Fortran indexing)\n", info);
-            }
-            PyGILState_Release(st);
-        }
-        return -1;
-    }
-    return 0;
-}
-
-
-
-// Eigen systems info from *geev.
-// This routine hides the type and general complexity involved with making the
-// calls to *geev. The signatures for the real/complex space routines differ
-// in that the real space routines return real and complex eigenvalues in
-// separate real variables, this is hidden below by packing them into a complex
-// variable. The work space computation and error handling etc is also hidden.
-// Args are as per LAPACK.
-NUMBA_EXPORT_FUNC(int)
-numba_ez_geev(char kind, char jobvl, char jobvr, Py_ssize_t n, void *a,
-              Py_ssize_t lda, void *w, void *vl, Py_ssize_t ldvl, void *vr,
-              Py_ssize_t ldvr)
-{
-    // real space, will need packing into `w` for return
-    size_t base_size;
-    void * wr = NULL, * wi = NULL;
-    F_INT k;
-    npy_complex64 * c64_ptr;
-    npy_complex128 * c128_ptr;
-
-    switch (kind)
-    {
-        case 's':
-            base_size = sizeof(float);
-        case 'd':
-            base_size = sizeof(double);
-
-            if(checked_PyMem_RawMalloc(&wi, n * base_size)) return -1;
-            if(checked_PyMem_RawMalloc(&wr, n * base_size))
-            {
-                PyMem_RawFree(wi);
-                return -1;
-            }
-            numba_ez_rgeev(kind, jobvl, jobvr, n, a, lda, wr, wi, vl, ldvl,
-                           vr, ldvr);
-            break;
-        case 'c':
-        case 'z':
-            numba_ez_cgeev(kind, jobvl, jobvr, n, a, lda, w, vl, ldvl,
-                           vr, ldvr);
-            break;
-        default:
-        {
-            PyGILState_STATE st = PyGILState_Ensure();
-            PyErr_SetString(PyExc_ValueError,\
-                            "invalid kind in numba_ez_geev call");
-            PyGILState_Release(st);
-        }
-        return -1;
-    }
-
-    switch (kind)
-    {
-        case 's':
-            c64_ptr = (npy_complex64 *)w;
-            for(k = 0; k < n; k++)
-            {
-                c64_ptr[k].real = ((float *)wr)[k];
-                c64_ptr[k].imag = ((float *)wi)[k];
-            }
-            break;
-        case 'd':
-            c128_ptr = (npy_complex128 *)w;
-            for(k = 0; k < n; k++)
-            {
-                c128_ptr[k].real = ((double *)wr)[k];
-                c128_ptr[k].imag = ((double *)wi)[k];
-            }
-            break;
-    }
-    // either frees the malloc above or NOPs if NULL
-    PyMem_RawFree(wr);
-    PyMem_RawFree(wi);
-
-    return 0;
+    return ez_geev_return(info);
 }
 
 // real space svd systems info from dgesdd/sgesdd
