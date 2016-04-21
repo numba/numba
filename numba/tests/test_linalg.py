@@ -443,14 +443,14 @@ class TestLinalgCholesky(TestLinalgBase):
             with self.assertNoNRTLeak():
                 expected = cholesky_matrix(a)
                 got = cfunc(a)
-                use_reconstruction=False
+                use_reconstruction = False
                 # try strict
                 try:
                     np.testing.assert_array_almost_equal_nulp(got, expected,
                                                               nulp=10)
                 except AssertionError:
                     # fall back to reconstruction
-                    use_reconstruction=True
+                    use_reconstruction = True
                 
                 # try via reconstruction
                 if use_reconstruction:
@@ -524,7 +524,7 @@ class TestLinalgEig(TestLinalgBase):
                 # and that length is 2
                 self.assertEqual(len(got), 2)
                 
-                use_reconstruction=False
+                use_reconstruction = False
                 # try plain match of each array to np first
                 for k in range(len(expected)):
                     try:
@@ -532,7 +532,7 @@ class TestLinalgEig(TestLinalgBase):
                             got[k], expected[k], nulp=10)
                     except AssertionError:
                         # plain match failed, test by reconstruction
-                        use_reconstruction=True
+                        use_reconstruction = True
                         
                 # if plain match fails then reconstruction is used.
                 # this checks that A*V ~== V*W
@@ -543,11 +543,10 @@ class TestLinalgEig(TestLinalgBase):
                 # sometimes comes out with a different (but entirely 
                 # valid) answer (eigenvectors are not unique etc.).
                 if use_reconstruction:
-                    w = got[0]
-                    v = got[1]
+                    w, v = got
                     lhs = np.dot(a, v)
                     rhs = np.dot(v, np.diag(w))
-                    resolution = 5*np.finfo(a.dtype).resolution
+                    resolution = 5 * np.finfo(a.dtype).resolution
                     np.testing.assert_allclose(
                         lhs,
                         rhs,
@@ -642,7 +641,7 @@ class TestLinalgSvd(TestLinalgBase):
                 # and that length is 3
                 self.assertEqual(len(got), 3)
                 
-                use_reconstruction=False
+                use_reconstruction = False
                 # try plain match of each array to np first
                 for k in range(len(expected)):
                     try:
@@ -650,7 +649,7 @@ class TestLinalgSvd(TestLinalgBase):
                             got[k], expected[k], nulp=10)
                     except AssertionError:
                         # plain match failed, test by reconstruction
-                        use_reconstruction=True
+                        use_reconstruction = True
                         
                 # if plain match fails then reconstruction is used.
                 # this checks that A ~= U*S*V**H
@@ -661,13 +660,11 @@ class TestLinalgSvd(TestLinalgBase):
                 # sometimes comes out with a different answer (orthonormal bases
                 # are not unique etc.).
                 if use_reconstruction:
-                    u=got[0]
-                    sv=got[1]
-                    vt=got[2]
+                    u, sv, vt = got
                     
                     # check they are dimensionally correct
                     for k in range(len(expected)):
-                        self.assertTrue(got[k].shape == expected[k].shape)
+                        self.assertEqual(got[k].shape, expected[k].shape)
 
                     # regardless of full_matrices cols in u and rows in vt
                     # dictates the working size of s
@@ -679,8 +676,8 @@ class TestLinalgSvd(TestLinalgBase):
                     np.testing.assert_allclose(
                         a,
                         rec,
-                        rtol=10*resolution,
-                        atol=100*resolution # zeros tend to be fuzzy
+                        rtol=10 * resolution,
+                        atol=100 * resolution # zeros tend to be fuzzy
                     )
                     del u, sv, vt, rec, s
                 del got, expected
