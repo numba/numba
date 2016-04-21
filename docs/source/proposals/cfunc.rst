@@ -66,6 +66,14 @@ We are expecting that the standard ``@jit`` options (``nopython``,
 ``forceobj``, ``cache``) can be made to work with ``@cfunc``.
 
 
+Calling from Numba-compiled functions
+-------------------------------------
+
+While the intended use is to pass a callback's address to foreign C
+code expecting a function pointer, it should be made possible to call
+the C callback from a Numba-compiled function.
+
+
 Passing array data
 ==================
 
@@ -115,3 +123,26 @@ of the error.
 Based on user feedback, we can later add support for some error reporting
 schemes, such as returning an integer error code depending on whether an
 exception was raised, or setting ``errno``.
+
+
+Deferred topics
+===============
+
+Ahead-of-Time compilation
+-------------------------
+
+This proposal doesn't make any provision for AOT compilation of C callbacks.
+It would probably necessitate a separate API (a new method on the
+``numba.pycc.CC`` object), and the implementation would require exposing
+a subset of the C function object's functionality from the compiled C
+extension module.
+
+Opaque data pointers
+--------------------
+
+Some libraries allow passing an opaque data pointer (``void *``) to a
+user-provided callback, to provide any required context for execution
+of the callback.  Taking advantage of this functionality would require
+adding specific support in Numba, for example the ability to do generic
+conversion from ``types.voidptr`` and to take the address of a
+Python-facing ``jitclass`` instance.
