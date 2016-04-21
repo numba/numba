@@ -531,7 +531,7 @@ cast_from_X(char kind, void *val)
 }
 
 static int
-ez_geev_return(int info)
+ez_geev_return(Py_ssize_t info)
 {
     if (info > 0) {
         PyGILState_STATE st = PyGILState_Ensure();
@@ -543,7 +543,7 @@ ez_geev_return(int info)
         PyGILState_Release(st);
         return -1;
     }
-    return info;
+    return (int) info;
 }
 
 // real space eigen systems info from dgeev/sgeev
@@ -752,7 +752,7 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
 
 
 static int
-ez_gesdd_return(int info)
+ez_gesdd_return(Py_ssize_t info)
 {
     if (info > 0) {
         PyGILState_STATE st = PyGILState_Ensure();
@@ -763,7 +763,7 @@ ez_gesdd_return(int info)
         PyGILState_Release(st);
         return -1;
     }
-    return info;
+    return (int) info;
 }
 
 // real space svd systems info from dgesdd/sgesdd
