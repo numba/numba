@@ -27,6 +27,7 @@ ll_void_p = ll_char_p
 ll_intc = ir.IntType(32)
 ll_intc_p = ll_intc.as_pointer()
 intp_t = cgutils.intp_t
+ll_intp_p = intp_t.as_pointer()
 
 
 _blas_kinds = {
@@ -501,13 +502,14 @@ def call_xxgetrf(context, builder, a_type, a_shapes, a_data, ipiv, info):
     Call the LAPACK gettrf function for the given argument.
 
     This function computes the LU decomposition of a matrix.
-
     """
+    # XXX for ipiv, we are assuming a Fortran (LAPACK) int is the same size
+    # as a C int.
     fnty = ir.FunctionType(ll_intc,
                            [ll_char,                       # kind
                             intp_t, intp_t,                # m, n
                             ll_void_p, intp_t,             # a, lda
-                            ll_intc_p, ll_intc_p           # ipiv, info
+                            ll_intc_p, ll_intp_p,          # ipiv, info
                             ])
 
     fn = builder.module.get_or_insert_function(fnty, name="numba_xxgetrf")
@@ -535,13 +537,12 @@ def call_xxgetri(context, builder, a_type, a_shapes, a_data, ipiv, work,
     Call the LAPACK gettri function for the given argument.
 
     This function computes the inverse of a matrix given its LU decomposition.
-
     """
     fnty = ir.FunctionType(ll_intc,
                            [ll_char,                       # kind
                             intp_t, ll_void_p, intp_t,     # n, a, lda
                             ll_intc_p, ll_void_p,          # ipiv, work
-                            ll_intc_p, ll_intc_p           # lwork, info
+                            ll_intc_p, ll_intp_p,          # lwork, info
                             ])
     fn = builder.module.get_or_insert_function(fnty, name="numba_xxgetri")
 
@@ -590,14 +591,14 @@ def mat_inv(context, builder, sig, args):
     i = _empty_nd_impl(context, builder, ipiv_t, (m,))
     ipiv = i._getvalue()
 
-    info = cgutils.alloca_once(builder, ll_intc)
+    info = cgutils.alloca_once(builder, intp_t)
 
     # Compute the LU decomposition of the matrix.
     call_xxgetrf(context, builder, xty, x_shapes, o.data, i.data,
                  info)
 
-    zero = ir.Constant(ll_intc, 0)
     info_val = builder.load(info)
+    zero = info_val.type(0)
     lapack_error = builder.icmp_signed('!=', info_val, zero)
     invalid_arg = builder.icmp_signed('<', info_val, zero)
 

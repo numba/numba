@@ -354,14 +354,16 @@ typedef void (*cgesdd_t)(char *jobz, F_INT *m, F_INT *n, void *a, F_INT *lda,
         }                                                       \
     } while(0)
 
-/* Compute LU decomposition of A */
+/* Compute LU decomposition of A
+ * NOTE: ipiv is an array of Fortran integers allocated by the caller,
+ * which is therefore expected to use the right dtype.
+ */
 NUMBA_EXPORT_FUNC(int)
 numba_xxgetrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t lda,
-              Py_ssize_t *ipiv, Py_ssize_t *info)
+              F_INT *ipiv, Py_ssize_t *info)
 {
     void *raw_func = NULL;
-    F_INT _m, _n, _lda;
-    F_INT * _ipiv, * _info;
+    F_INT _m, _n, _lda, _info;
 
     switch (kind)
     {
@@ -392,23 +394,22 @@ numba_xxgetrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t lda,
     _m = (F_INT) m;
     _n = (F_INT) n;
     _lda = (F_INT) lda;
-    _ipiv = (F_INT *) ipiv;
-    _info = (F_INT *) info;
 
-    (*(xxgetrf_t) raw_func)(&_m, &_n, a, &_lda, _ipiv, _info);
+    (*(xxgetrf_t) raw_func)(&_m, &_n, a, &_lda, ipiv, &_info);
+    *info = (Py_ssize_t) _info;
     return 0;
 }
 
-
-/* Compute the inverse of a matrix given its LU decomposition*/
+/* Compute the inverse of a matrix given its LU decomposition
+ * (about ipiv, see numba_xxgetrf() above)
+ */
 NUMBA_EXPORT_FUNC(int)
 numba_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda,
-              Py_ssize_t *ipiv, void *work, Py_ssize_t * lwork,
+              F_INT *ipiv, void *work, Py_ssize_t *lwork,
               Py_ssize_t *info)
 {
     void *raw_func = NULL;
-    F_INT _n, _lda, _lwork;
-    F_INT * _ipiv, * _info;
+    F_INT _n, _lda, _lwork, _info;
 
     switch (kind)
     {
@@ -440,11 +441,9 @@ numba_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda,
     _n = (F_INT) n;
     _lda = (F_INT) lda;
     _lwork = (F_INT) lwork[0]; // why is this a ptr?
-    _ipiv = (F_INT *) ipiv;
-    _info = (F_INT *) info;
 
-    (*(xxgetri_t) raw_func)(&_n, a, &_lda, _ipiv, work, &_lwork, _info);
-
+    (*(xxgetri_t) raw_func)(&_n, a, &_lda, ipiv, work, &_lwork, &_info);
+    *info = (Py_ssize_t) _info;
     return 0;
 }
 
