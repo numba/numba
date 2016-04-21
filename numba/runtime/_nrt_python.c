@@ -41,20 +41,24 @@ meminfo_new_from_pyobject(void *data, PyObject *ownerobj) {
 typedef struct {
     PyObject_HEAD
     NRT_MemInfo *meminfo;
+    int owned;  /* if true (default) the release the memory at destruction */
 } MemInfoObject;
 
 static
 int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
-    static char *keywords[] = {"ptr", NULL};
+    static char *keywords[] = {"ptr", "owned", NULL};
     PyObject *raw_ptr_obj;
+    int raw_owned = 1;
     void *raw_ptr;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", keywords, &raw_ptr_obj)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|i", keywords, &raw_ptr_obj,
+                                     &raw_owned)) {
         return -1;
     }
     raw_ptr = PyLong_AsVoidPtr(raw_ptr_obj);
     if(PyErr_Occurred()) return -1;
     self->meminfo = (NRT_MemInfo *)raw_ptr;
     assert (NRT_MemInfo_refcount(self->meminfo) > 0 && "0 refcount");
+    self->owned = (raw_owned? 1 : 0);
     return 0;
 }
 
@@ -143,7 +147,7 @@ MemInfo_get_refcount(MemInfoObject *self, void *closure) {
 static void
 MemInfo_dealloc(MemInfoObject *self)
 {
-    NRT_MemInfo_release(self->meminfo);
+    if (self->owned) NRT_MemInfo_release(self->meminfo);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 

@@ -17,7 +17,7 @@ from numba.runtime.nrt import MemInfo
 
 def _get_meminfo(box):
     ptr = _box.box_get_meminfoptr(box)
-    return MemInfo(ptr)
+    return MemInfo(ptr, owned=0)  # borrow ownership
 
 
 class TestJitClass(TestCase, MemoryLeakMixin):
