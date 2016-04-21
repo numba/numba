@@ -1002,12 +1002,6 @@ if numpy_version >= (1, 8):
             u.size
             s.size
 
-            # TODO: this logic, no point in churning out a copy if no need
-            # if not issymmetrical(u):
-            # u = u.T
-            # if not issymmetrical(v):
-            # vt = vt.T
-
             return (u.T, s, vt.T)
 
         return svd_impl
