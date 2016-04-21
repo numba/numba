@@ -698,13 +698,12 @@ fatal_error_func = types.ExternalFunction("numba_fatal_error", fatal_error_sig)
 if numpy_version >= (1, 8):
 
     @jit(nopython=True)
-    def _check_finite_matrix(a):  
+    def _check_finite_matrix(a):
         for v in numpy.nditer(a):
             if not numpy.isfinite(v.item()):
                 raise numpy.linalg.LinAlgError(
                     "Array must not contain infs or NaNs.")
 
-    
     def _check_linalg_matrix(a, func_name):
         if not isinstance(a, types.Array):
             raise TypingError("np.linalg.%s() only supported for array types"
@@ -842,15 +841,15 @@ if numpy_version >= (1, 8):
                 fatal_error_func()
                 assert 0   # unreachable
 
-            # By design numba does not support dynamic return types, however, 
-            # Numpy does. Numpy uses this ability in the case of returning 
-            # eigenvalues/vectors of a real matrix. The return type of 
-            # np.linalg.eig(), when operating on a matrix in real space 
-            # depends on the values present in the matrix itself (recalling 
-            # that eigenvalues are the roots of the characteristic polynomial 
-            # of the system matrix, which will by construction depend on the 
-            # values present in the system matrix). As numba cannot handle 
-            # the case of a runtime decision based domain change relative to 
+            # By design numba does not support dynamic return types, however,
+            # Numpy does. Numpy uses this ability in the case of returning
+            # eigenvalues/vectors of a real matrix. The return type of
+            # np.linalg.eig(), when operating on a matrix in real space
+            # depends on the values present in the matrix itself (recalling
+            # that eigenvalues are the roots of the characteristic polynomial
+            # of the system matrix, which will by construction depend on the
+            # values present in the system matrix). As numba cannot handle
+            # the case of a runtime decision based domain change relative to
             # the input type, if it is required numba raises as below.
             if numpy.any(wi):
                 raise ValueError(
@@ -1001,12 +1000,6 @@ if numpy_version >= (1, 8):
             vt.size
             u.size
             s.size
-
-            # TODO: this logic, no point in churning out a copy if no need
-            # if not issymmetrical(u):
-            # u = u.T
-            # if not issymmetrical(v):
-            # vt = vt.T
 
             return (u.T, s, vt.T)
 

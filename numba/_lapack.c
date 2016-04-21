@@ -533,7 +533,8 @@ cast_from_X(char kind, void *val)
 static int
 ez_geev_return(Py_ssize_t info)
 {
-    if (info > 0) {
+    if (info > 0)
+    {
         PyGILState_STATE st = PyGILState_Ensure();
         PyErr_Format(PyExc_ValueError,
                      "LAPACK Error: Failed to compute all "
@@ -633,7 +634,8 @@ numba_ez_rgeev(char kind, char jobvl, char jobvr, Py_ssize_t n, void *a,
     CATCH_LAPACK_INVALID_ARG(info);
 
     lwork = cast_from_X(kind, work);
-    if (checked_PyMem_RawMalloc(&work, base_size * lwork)) {
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
+    {
         return -1;
     }
     numba_raw_rgeev(kind, jobvl, jobvr, _n, a, _lda, wr, wi, vl, _ldvl,
@@ -734,10 +736,12 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
     CATCH_LAPACK_INVALID_ARG(info);
 
     lwork = cast_from_X(kind, work);
-    if (checked_PyMem_RawMalloc((void**)&rwork, 2*n*base_size)) {
+    if (checked_PyMem_RawMalloc((void**)&rwork, 2*n*base_size))
+    {
         return -1;
     }
-    if (checked_PyMem_RawMalloc(&work, base_size * lwork)) {
+    if (checked_PyMem_RawMalloc(&work, base_size * lwork))
+    {
         PyMem_RawFree(rwork);
         return -1;
     }
@@ -754,7 +758,8 @@ numba_ez_cgeev(char kind, char jobvl, char jobvr,  Py_ssize_t n, void *a,
 static int
 ez_gesdd_return(Py_ssize_t info)
 {
-    if (info > 0) {
+    if (info > 0)
+    {
         PyGILState_STATE st = PyGILState_Ensure();
         PyErr_Format(PyExc_ValueError,
                      "LAPACK Error: Convergence of internal algorithm "
@@ -858,7 +863,8 @@ numba_ez_rgesdd(char kind, char jobz, Py_ssize_t m, Py_ssize_t n, void *a,
     if (checked_PyMem_RawMalloc(&work, base_size * lwork))
         return -1;
     minmn = m > n ? n : m;
-    if (checked_PyMem_RawMalloc((void**) &iwork, 8 * minmn * sizeof(F_INT))) {
+    if (checked_PyMem_RawMalloc((void**) &iwork, 8 * minmn * sizeof(F_INT)))
+    {
         PyMem_RawFree(work);
         return -1;
     }
@@ -983,12 +989,14 @@ numba_ez_cgesdd(char kind, char jobz, F_INT m, F_INT n, void *a, F_INT lda,
     }
 
     if (checked_PyMem_RawMalloc(&rwork,
-                                real_base_size * (lrwork > 1 ? lrwork : 1))) {
+                                real_base_size * (lrwork > 1 ? lrwork : 1)))
+    {
         PyMem_RawFree(work);
         return -1;
     }
     if (checked_PyMem_RawMalloc((void **) &iwork,
-                                8 * minmn * sizeof(F_INT))) {
+                                8 * minmn * sizeof(F_INT)))
+    {
         PyMem_RawFree(work);
         PyMem_RawFree(rwork);
         return -1;

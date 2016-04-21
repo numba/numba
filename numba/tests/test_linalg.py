@@ -22,11 +22,14 @@ except ImportError:
 needs_lapack = unittest.skipUnless(has_lapack,
                                    "LAPACK needs Scipy 0.16+")
 
+
 def dot2(a, b):
     return np.dot(a, b)
 
+
 def dot3(a, b, out):
     return np.dot(a, b, out=out)
+
 
 def vdot(a, b):
     return np.vdot(a, b)
@@ -304,21 +307,24 @@ class TestProduct(TestCase):
 def invert_matrix(a):
     return np.linalg.inv(a)
 
+
 def cholesky_matrix(a):
     return np.linalg.cholesky(a)
+
 
 def eig_matrix(a):
     return np.linalg.eig(a)
 
+
 def svd_matrix(a, full_matrices=1):
-    return np.linalg.svd(a, full_matrices)  
+    return np.linalg.svd(a, full_matrices)
 
 
 class TestLinalgBase(TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
     """
-    
+
     def setUp(self):
         self.dtypes = (np.float64, np.float32, np.complex128, np.complex64)
 
@@ -344,11 +350,11 @@ class TestLinalgBase(TestCase):
         self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
 
     def assert_wrong_dtype(self, name, cfunc, args):
-        msg = "np.linalg.%s() only supported on float and complex arrays"%name
+        msg = "np.linalg.%s() only supported on float and complex arrays" % name
         self.assert_error(cfunc, args, msg, errors.TypingError)
 
     def assert_wrong_dimensions(self, name, cfunc, args):
-        msg = "np.linalg.%s() only supported on 2-D arrays"%name
+        msg = "np.linalg.%s() only supported on 2-D arrays" % name
         self.assert_error(cfunc, args, msg, errors.TypingError)
 
     def assert_no_nan_or_inf(self, cfunc, args):
@@ -385,7 +391,8 @@ class TestLinalgInv(TestLinalgBase):
                 got = cfunc(a)
                 # XXX had to use that function otherwise comparison fails
                 # because of +0, -0 discrepancies
-                np.testing.assert_array_almost_equal_nulp(got, expected, **kwargs)
+                np.testing.assert_array_almost_equal_nulp(
+                    got, expected, **kwargs)
                 del got, expected
 
         for dtype, order in product(self.dtypes, 'CF'):
@@ -397,7 +404,7 @@ class TestLinalgInv(TestLinalgBase):
             check(a)
 
         # Non square matrices
-        self.assert_non_square(cfunc, (np.ones((2,3)),))
+        self.assert_non_square(cfunc, (np.ones((2, 3)),))
 
         # Wrong dtype
         self.assert_wrong_dtype("inv", cfunc,
@@ -417,16 +424,16 @@ class TestLinalgCholesky(TestLinalgBase):
 
     def sample_matrix(self, m, dtype, order):
         # pd. (positive definite) matrix has eigenvalues in Z+
-        np.random.seed(0) # repeatable seed
+        np.random.seed(0)  # repeatable seed
         A = np.random.rand(m, m)
         # orthonormal q needed to form up q^{-1}*D*q
         # no "orth()" in numpy
         q, _ = np.linalg.qr(A)
-        L = np.arange(1, m+1) # some positive eigenvalues
-        Q = np.dot(np.dot(q.T, np.diag(L)), q) # construct
-        Q = np.array(Q, dtype=dtype, order=order) # sort out order/type
+        L = np.arange(1, m + 1)  # some positive eigenvalues
+        Q = np.dot(np.dot(q.T, np.diag(L)), q)  # construct
+        Q = np.array(Q, dtype=dtype, order=order)  # sort out order/type
         return Q
-        
+
     def assert_not_pd(self, cfunc, args):
         msg = "Matrix is not positive definite."
         self.assert_error(cfunc, args, msg, np.linalg.LinAlgError)
@@ -451,7 +458,7 @@ class TestLinalgCholesky(TestLinalgBase):
                 except AssertionError:
                     # fall back to reconstruction
                     use_reconstruction = True
-                
+
                 # try via reconstruction
                 if use_reconstruction:
                     rec = np.dot(got, np.conj(got.T))
@@ -463,7 +470,7 @@ class TestLinalgCholesky(TestLinalgBase):
                         atol=resolution
                     )
                     del rec
-                    
+
                 del got, expected
 
         for dtype, order in product(self.dtypes, 'FC'):
@@ -479,9 +486,9 @@ class TestLinalgCholesky(TestLinalgBase):
                                 (np.ones((2, 2), dtype=np.int32),))
 
         # Dimension issue
-        self.assert_wrong_dimensions(rn, cfunc, 
+        self.assert_wrong_dimensions(rn, cfunc,
                                      (np.ones(10, dtype=np.float64),))
-        
+
         # not pd
         self.assert_not_pd(cfunc,
                            (np.ones(4, dtype=np.float64).reshape(2, 2),))
@@ -502,7 +509,7 @@ class TestLinalgEig(TestLinalgBase):
         Q[idx] = v[:-1]
         Q = np.array(Q, dtype=dtype, order=order)
         return Q
-        
+
     def assert_no_domain_change(self, cfunc, args):
         msg = "eig() argument must not cause a domain change."
         self.assert_error(cfunc, args, msg)
@@ -523,7 +530,7 @@ class TestLinalgEig(TestLinalgBase):
                 self.assertEqual(len(expected), len(got))
                 # and that length is 2
                 self.assertEqual(len(got), 2)
-                
+
                 use_reconstruction = False
                 # try plain match of each array to np first
                 for k in range(len(expected)):
@@ -533,14 +540,14 @@ class TestLinalgEig(TestLinalgBase):
                     except AssertionError:
                         # plain match failed, test by reconstruction
                         use_reconstruction = True
-                        
+
                 # if plain match fails then reconstruction is used.
                 # this checks that A*V ~== V*W
                 # i.e. eigensystem ties out
                 # this is required as numpy uses only double precision lapack
                 # routines and computation of eigenvectors is numerically
                 # sensitive, numba using the type specific routines therefore
-                # sometimes comes out with a different (but entirely 
+                # sometimes comes out with a different (but entirely
                 # valid) answer (eigenvectors are not unique etc.).
                 if use_reconstruction:
                     w, v = got
@@ -565,7 +572,7 @@ class TestLinalgEig(TestLinalgBase):
         # test both a real and complex type as the impls are different
         for ty in [np.float32, np.complex64]:
             # Non square matrices
-            self.assert_non_square(cfunc, (np.ones((2,3), dtype=ty),))
+            self.assert_non_square(cfunc, (np.ones((2, 3), dtype=ty),))
 
             # Wrong dtype
             self.assert_wrong_dtype(rn, cfunc,
@@ -575,34 +582,34 @@ class TestLinalgEig(TestLinalgBase):
             self.assert_wrong_dimensions(rn, cfunc, (np.ones(10, dtype=ty),))
 
             # no nans or infs
-            self.assert_no_nan_or_inf(cfunc, 
-                                    (np.array([[1., 2.,],[np.inf, np.nan]],
-                                              dtype=ty),))
+            self.assert_no_nan_or_inf(cfunc,
+                                      (np.array([[1., 2., ], [np.inf, np.nan]],
+                                                dtype=ty),))
 
-        # By design numba does not support dynamic return types, numpy does 
-        # and uses this in the case of returning eigenvalues/vectors of 
-        # a real matrix. The return type of np.linalg.eig(), when 
+        # By design numba does not support dynamic return types, numpy does
+        # and uses this in the case of returning eigenvalues/vectors of
+        # a real matrix. The return type of np.linalg.eig(), when
         # operating on a matrix in real space depends on the values present
         # in the matrix itself (recalling that eigenvalues are the roots of the
-        # characteristic polynomial of the system matrix, which will by 
+        # characteristic polynomial of the system matrix, which will by
         # construction depend on the values present in the system matrix).
-        # This test asserts that if a domain change is required on the return 
+        # This test asserts that if a domain change is required on the return
         # type, i.e. complex eigenvalues from a real input, an error is raised.
         # For complex types, regardless of the value of the imaginary part of
-        # the returned eigenvalues, a complex type will be returned, this 
+        # the returned eigenvalues, a complex type will be returned, this
         # follows numpy and fits in with numba.
-        
+
         # First check that the computation is valid (i.e. in complex space)
         A = np.array([[1, -2], [2, 1]])
         check(A.astype(np.complex128))
         # and that the imaginary part is nonzero
         l, _ = eig_matrix(A)
         self.assertTrue(np.any(l.imag))
-              
+
         # Now check that the computation fails in real space
         for ty in [np.float32, np.float64]:
             self.assert_no_domain_change(cfunc, (A.astype(ty),))
-         
+
 
 class TestLinalgSvd(TestLinalgBase):
     """
@@ -616,7 +623,7 @@ class TestLinalgSvd(TestLinalgBase):
         # else not worry about it
         mn = size[0] * size[1]
         np.random.seed(0)  # repeatable seed
-        while jmp < break_at :
+        while jmp < break_at:
             v = self.sample_vector(mn, dtype)
             # shuffle to improve conditioning
             np.random.shuffle(v)
@@ -640,7 +647,7 @@ class TestLinalgSvd(TestLinalgBase):
                 self.assertEqual(len(expected), len(got))
                 # and that length is 3
                 self.assertEqual(len(got), 3)
-                
+
                 use_reconstruction = False
                 # try plain match of each array to np first
                 for k in range(len(expected)):
@@ -650,7 +657,7 @@ class TestLinalgSvd(TestLinalgBase):
                     except AssertionError:
                         # plain match failed, test by reconstruction
                         use_reconstruction = True
-                        
+
                 # if plain match fails then reconstruction is used.
                 # this checks that A ~= U*S*V**H
                 # i.e. SV decomposition ties out
@@ -661,7 +668,7 @@ class TestLinalgSvd(TestLinalgBase):
                 # are not unique etc.).
                 if use_reconstruction:
                     u, sv, vt = got
-                    
+
                     # check they are dimensionally correct
                     for k in range(len(expected)):
                         self.assertEqual(got[k].shape, expected[k].shape)
@@ -670,28 +677,28 @@ class TestLinalgSvd(TestLinalgBase):
                     # dictates the working size of s
                     s = np.zeros((u.shape[1], vt.shape[0]))
                     np.fill_diagonal(s, sv)
-                    
+
                     rec = np.dot(np.dot(u, s), vt)
                     resolution = np.finfo(a.dtype).resolution
                     np.testing.assert_allclose(
                         a,
                         rec,
                         rtol=10 * resolution,
-                        atol=100 * resolution # zeros tend to be fuzzy
+                        atol=100 * resolution  # zeros tend to be fuzzy
                     )
                     del u, sv, vt, rec, s
                 del got, expected
 
         # test: column vector, tall, wide, square, row vector
-        # prime sizes         
+        # prime sizes
         sizes = [(7, 1), (7, 5), (5, 7), (3, 3), (1, 7)]
-        
+
         # flip on reduced or full matrices
-        full_matrices= (True, False)
+        full_matrices = (True, False)
 
         # test loop
         for size, dtype, fmat, order in \
-            product(sizes, self.dtypes, full_matrices, 'FC'):
+                product(sizes, self.dtypes, full_matrices, 'FC'):
 
             a = self.sample_matrix(size, dtype, order)
             check(a, full_matrices=fmat)
@@ -702,14 +709,14 @@ class TestLinalgSvd(TestLinalgBase):
         self.assert_wrong_dtype(rn, cfunc,
                                 (np.ones((2, 2), dtype=np.int32),))
 
-        ## Dimension issue
-        self.assert_wrong_dimensions(rn, cfunc, 
+        # Dimension issue
+        self.assert_wrong_dimensions(rn, cfunc,
                                      (np.ones(10, dtype=np.float64),))
 
-        ## no nans or infs
-        self.assert_no_nan_or_inf(cfunc, 
-                                  (np.array([[1., 2.,], [np.inf, np.nan]],
+        # no nans or infs
+        self.assert_no_nan_or_inf(cfunc,
+                                  (np.array([[1., 2., ], [np.inf, np.nan]],
                                             dtype=np.float64),))
-        
+
 if __name__ == '__main__':
     unittest.main()
