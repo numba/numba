@@ -696,7 +696,7 @@ fatal_error_func = types.ExternalFunction("numba_fatal_error", fatal_error_sig)
 
 if numpy_version >= (1, 8):
 
-    @jit
+    @jit(nopython=True)
     def _check_finite_matrix(a):  
         for v in numpy.nditer(a):
             if not numpy.isfinite(v.item()):
@@ -722,8 +722,7 @@ if numpy_version >= (1, 8):
         _check_linalg_matrix(a, "cholesky")
 
         xxpotrf_sig = types.intc(types.int8, types.int8, types.intp,
-                                 types.CPointer(a.dtype), types.intp,
-                                 types.CPointer(types.intc))
+                                 types.CPointer(a.dtype), types.intp)
         xxpotrf = types.ExternalFunction("numba_xxpotrf", xxpotrf_sig)
 
         kind = ord(get_blas_kind(a.dtype, "cholesky"))
@@ -738,24 +737,18 @@ if numpy_version >= (1, 8):
 
             # The output is allocated in C order
             out = a.copy()
-            # XXX spurious heap allocation
-            info = numpy.zeros(1, dtype=numpy.intc)
             # Pass UP since xxpotrf() operates in F order
             # The semantics ensure this works fine
             # (out is really its Hermitian in F order, but UP instructs
             #  xxpotrf to compute the Hermitian of the upper triangle
             #  => they cancel each other)
-            r = xxpotrf(kind, UP, n, out.ctypes, n, info.ctypes)
-            if r != 0:
-                # XXX Py_FatalError()?
+            r = xxpotrf(kind, UP, n, out.ctypes, n)
+            if r < 0:
                 fatal_error_func()
-            if info[0] > 0:
+                assert 0   # unreachable
+            if r > 0:
                 raise numpy.linalg.LinAlgError(
                     "Matrix is not positive definite.")
-            elif info[0] < 0:
-                # Invalid parameter
-                raise RuntimeError(
-                    "cholesky(): Internal error: please report an issue")
             # Zero out upper triangle, in F order
             for col in range(n):
                 out[:col, col] = 0

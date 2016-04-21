@@ -342,6 +342,18 @@ typedef void (*cgesdd_t)(char *jobz, F_INT *m, F_INT *n, void *a, F_INT *lda,
                          void *work, F_INT *lwork, void *rwork, F_INT *iwork,
                          F_INT *info);
 
+
+#define CATCH_LAPACK_INVALID_ARG(info)                          \
+    do {                                                        \
+        if (info < 0) {                                         \
+            PyGILState_STATE st = PyGILState_Ensure();          \
+            PyErr_Format(PyExc_RuntimeError,                    \
+                         "LAPACK Error: on input %d\n", -info); \
+            PyGILState_Release(st);                             \
+            return -1;                                          \
+        }                                                       \
+    } while(0)
+
 /* Compute LU decomposition of A */
 NUMBA_EXPORT_FUNC(int)
 numba_xxgetrf(char kind, Py_ssize_t m, Py_ssize_t n, void *a, Py_ssize_t lda,
@@ -436,14 +448,14 @@ numba_xxgetri(char kind, Py_ssize_t n, void *a, Py_ssize_t lda,
     return 0;
 }
 
-/* Compute the Cholesky factorization of a matrix */
+/* Compute the Cholesky factorization of a matrix.
+ * Return -1 on internal error, 0 on success, > 0 on failure.
+ */
 NUMBA_EXPORT_FUNC(int)
-numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda,
-              Py_ssize_t *info)
+numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda)
 {
     void *raw_func = NULL;
-    F_INT _n, _lda;
-    F_INT * _info;
+    F_INT _n, _lda, info;
 
     switch (kind)
     {
@@ -473,10 +485,10 @@ numba_xxpotrf(char kind, char uplo, Py_ssize_t n, void *a, Py_ssize_t lda,
 
     _n = (F_INT) n;
     _lda = (F_INT) lda;
-    _info = (F_INT *) info;
 
-    (*(xxpotrf_t) raw_func)(&uplo, &_n, a, &_lda, _info);
-    return 0;
+    (*(xxpotrf_t) raw_func)(&uplo, &_n, a, &_lda, &info);
+    CATCH_LAPACK_INVALID_ARG(info);
+    return info;
 }
 
 
