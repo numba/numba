@@ -8,7 +8,8 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, typeof, types
 from numba.compiler import compile_isolated
-from numba.numpy_support import as_dtype, strict_ufunc_typing
+from numba.numpy_support import (as_dtype, strict_ufunc_typing,
+                                 version as numpy_version)
 from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin, tag
 
 
@@ -394,7 +395,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_np_frombuffer_dtype(self):
         self.check_np_frombuffer(np_frombuffer_dtype)
 
-    def check_layout_dependent_func(self, pyfunc, fac=np.arange):
+    def check_layout_dependent_func(self, pyfunc, fac=np.arange,
+                                    check_sameness=True):
         def is_same(a, b):
             return a.ctypes.data == b.ctypes.data
         def check_arr(arr):
@@ -402,7 +404,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             expected = pyfunc(arr)
             got = cres.entry_point(arr)
             self.assertPreciseEqual(expected, got)
-            self.assertEqual(is_same(expected, arr), is_same(got, arr))
+            if check_sameness:
+                self.assertEqual(is_same(expected, arr), is_same(got, arr))
         arr = fac(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
@@ -429,7 +432,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.check_layout_dependent_func(np_copy)
 
     def test_np_asfortranarray(self):
-        self.check_layout_dependent_func(np_asfortranarray)
+        self.check_layout_dependent_func(np_asfortranarray,
+                                         check_sameness=numpy_version >= (1, 8))
 
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
