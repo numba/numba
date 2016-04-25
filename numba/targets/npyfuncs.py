@@ -11,7 +11,7 @@ import math
 from llvmlite.llvmpy import core as lc
 
 from .. import cgutils, typing, types, lowering, errors
-from . import builtins, mathimpl
+from . import mathimpl, numbers
 
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to
@@ -794,7 +794,7 @@ def np_real_square_impl(context, builder, sig, args):
 def np_complex_square_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
     binary_sig = typing.signature(*[sig.return_type]*3)
-    return builtins.complex_mul_impl(context, builder, binary_sig,
+    return numbers.complex_mul_impl(context, builder, binary_sig,
                                      [args[0], args[0]])
 
 
@@ -994,7 +994,7 @@ def _complex_expand_series(context, builder, ty, initial, x, coefs):
     ONE = context.get_constant(ty.underlying_float, 1.0)
     for coef in reversed(coefs):
         constant = context.get_constant(ty.underlying_float, coef)
-        value = builtins.complex_mul_impl(context, builder, binary_sig,
+        value = numbers.complex_mul_impl(context, builder, binary_sig,
                                           [x, accum._getvalue()])
         accum._setvalue(value)
         accum.real = builder.fadd(ONE, builder.fmul(accum.real, constant))
@@ -1029,21 +1029,21 @@ def np_complex_asin_impl(context, builder, sig, args):
             ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
             ZERO = context.get_constant_generic(builder, ty, 0.0 + 0.0j)
             xx = np_complex_square_impl(context, builder, sig, args)
-            one_minus_xx = builtins.complex_sub_impl(context, builder,
+            one_minus_xx = numbers.complex_sub_impl(context, builder,
                                                      complex_binary_sig,
                                                      [ONE, xx])
             sqrt_one_minus_xx = np_complex_sqrt_impl(context, builder, sig,
                                                      [one_minus_xx])
-            ix = builtins.complex_mul_impl(context, builder,
+            ix = numbers.complex_mul_impl(context, builder,
                                            complex_binary_sig,
                                            [I, args[0]])
-            log_arg = builtins.complex_add_impl(context, builder, sig,
+            log_arg = numbers.complex_add_impl(context, builder, sig,
                                                 [ix, sqrt_one_minus_xx])
             log = np_complex_log_impl(context, builder, sig, [log_arg])
-            ilog = builtins.complex_mul_impl(context, builder,
+            ilog = numbers.complex_mul_impl(context, builder,
                                              complex_binary_sig,
                                              [I, log])
-            out._setvalue(builtins.complex_sub_impl(context, builder,
+            out._setvalue(numbers.complex_sub_impl(context, builder,
                                                     complex_binary_sig,
                                                     [ZERO, ilog]))
         with otherwise:
@@ -1058,7 +1058,7 @@ def np_complex_asin_impl(context, builder, sig, args):
             ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
             tmp = _complex_expand_series(context, builder, ty,
                                          ONE, xx, coef_dict[ty])
-            out._setvalue(builtins.complex_mul_impl(context, builder,
+            out._setvalue(numbers.complex_mul_impl(context, builder,
                                                     complex_binary_sig,
                                                     [args[0], tmp]))
 
@@ -1119,14 +1119,14 @@ def np_complex_atan_impl(context, builder, sig, args):
             # 0.5j * log((j + x)/(j - x))
             I = context.get_constant_generic(builder, ty, 0.0 + 1.0j)
             I2 = context.get_constant_generic(builder, ty, 0.0 + 0.5j)
-            den = builtins.complex_sub_impl(context, builder, binary_sig,
+            den = numbers.complex_sub_impl(context, builder, binary_sig,
                                             [I, args[0]])
-            num = builtins.complex_add_impl(context, builder, binary_sig,
+            num = numbers.complex_add_impl(context, builder, binary_sig,
                                             [I, args[0]])
             div = np_complex_div_impl(context, builder, binary_sig,
                                       [num, den])
             log = np_complex_log_impl(context, builder, sig, [div])
-            res = builtins.complex_mul_impl(context, builder, binary_sig,
+            res = numbers.complex_mul_impl(context, builder, binary_sig,
                                             [I2, log])
 
             out._setvalue(res)
@@ -1142,7 +1142,7 @@ def np_complex_atan_impl(context, builder, sig, args):
             ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
             tmp = _complex_expand_series(context, builder, ty,
                                          ONE, xx, coef_dict[ty])
-            out._setvalue(builtins.complex_mul_impl(context, builder,
+            out._setvalue(numbers.complex_mul_impl(context, builder,
                                                     binary_sig,
                                                     [args[0], tmp]))
 
@@ -1350,11 +1350,11 @@ def np_complex_asinh_impl(context, builder, sig, args):
             # log(sqrt(1+sqr(x)) + x)
             ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
             xx = np_complex_square_impl(context, builder, sig, args)
-            one_plus_xx = builtins.complex_add_impl(context, builder,
+            one_plus_xx = numbers.complex_add_impl(context, builder,
                                                     binary_sig, [ONE, xx])
             sqrt_res = np_complex_sqrt_impl(context, builder, sig,
                                             [one_plus_xx])
-            log_arg = builtins.complex_add_impl(context, builder,
+            log_arg = numbers.complex_add_impl(context, builder,
                                                 binary_sig, [sqrt_res, args[0]])
             res = np_complex_log_impl(context, builder, sig, [log_arg])
             out._setvalue(res)
@@ -1370,7 +1370,7 @@ def np_complex_asinh_impl(context, builder, sig, args):
             ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
             tmp = _complex_expand_series(context, builder, ty,
                                          ONE, xx, coef_dict[ty])
-            out._setvalue(builtins.complex_mul_impl(context, builder,
+            out._setvalue(numbers.complex_mul_impl(context, builder,
                                                     binary_sig,
                                                     [args[0], tmp]))
 
@@ -1404,16 +1404,16 @@ def np_complex_acosh_impl(context, builder, sig, args):
     ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
     x = args[0]
 
-    x_plus_one = builtins.complex_add_impl(context, builder, csig2, [x,
+    x_plus_one = numbers.complex_add_impl(context, builder, csig2, [x,
                                                                      ONE])
-    x_minus_one = builtins.complex_sub_impl(context, builder, csig2, [x,
+    x_minus_one = numbers.complex_sub_impl(context, builder, csig2, [x,
                                                                       ONE])
     sqrt_x_plus_one = np_complex_sqrt_impl(context, builder, sig, [x_plus_one])
     sqrt_x_minus_one = np_complex_sqrt_impl(context, builder, sig, [x_minus_one])
-    prod_sqrt = builtins.complex_mul_impl(context, builder, csig2,
+    prod_sqrt = numbers.complex_mul_impl(context, builder, csig2,
                                           [sqrt_x_plus_one,
                                            sqrt_x_minus_one])
-    log_arg = builtins.complex_add_impl(context, builder, csig2, [x,
+    log_arg = numbers.complex_add_impl(context, builder, csig2, [x,
                                                                   prod_sqrt])
 
     return np_complex_log_impl(context, builder, sig, [log_arg])
@@ -1458,14 +1458,14 @@ def np_complex_atanh_impl(context, builder, sig, args):
             # 0.5 * log((1 + x)/(1 - x))
             ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
             HALF = context.get_constant_generic(builder, ty, 0.5 + 0.0j)
-            den = builtins.complex_sub_impl(context, builder, binary_sig,
+            den = numbers.complex_sub_impl(context, builder, binary_sig,
                                             [ONE, args[0]])
-            num = builtins.complex_add_impl(context, builder, binary_sig,
+            num = numbers.complex_add_impl(context, builder, binary_sig,
                                             [ONE, args[0]])
             div = np_complex_div_impl(context, builder, binary_sig,
                                       [num, den])
             log = np_complex_log_impl(context, builder, sig, [div])
-            res = builtins.complex_mul_impl(context, builder, binary_sig,
+            res = numbers.complex_mul_impl(context, builder, binary_sig,
                                             [HALF, log])
 
             out._setvalue(res)
@@ -1481,7 +1481,7 @@ def np_complex_atanh_impl(context, builder, sig, args):
             ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
             tmp = _complex_expand_series(context, builder, ty,
                                          ONE, xx, coef_dict[ty])
-            out._setvalue(builtins.complex_mul_impl(context, builder,
+            out._setvalue(numbers.complex_mul_impl(context, builder,
                                                     binary_sig,
                                                     [args[0], tmp]))
 
@@ -1528,7 +1528,7 @@ def np_real_fabs_impl(context, builder, sig, args):
 ########################################################################
 # NumPy style predicates
 
-# For real and integer types rely on builtins... but complex ordering in
+# For real and integer types rely on numbers... but complex ordering in
 # NumPy is lexicographic (while Python does not provide ordering).
 def np_complex_ge_impl(context, builder, sig, args):
     # equivalent to macro CGE in NumPy's loops.c.src
@@ -1922,7 +1922,7 @@ def _real_is_not_finite(context, builder, sig, args):
     x, = args
     ty, = sig.args
     f_ff_sig = typing.signature(*[ty]*3)
-    sub = builtins.real_sub_impl(context, builder, f_ff_sig, [x, x])
+    sub = numbers.real_sub_impl(context, builder, f_ff_sig, [x, x])
 
     return np_real_isnan_impl(context, builder, sig, [sub])
 
