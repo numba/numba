@@ -15,10 +15,10 @@ import llvmlite.binding as ll
 from numba import types, utils, cgutils, typing
 from numba import _dynfunc, _helperlib
 from numba.pythonapi import PythonAPI
-from . import arrayobj, builtins, optional, imputils
+from . import arrayobj, builtins, imputils
 from .imputils import (user_function, user_generator,
-                                    builtin_registry, impl_ret_borrowed,
-                                    RegistryLoader)
+                       builtin_registry, impl_ret_borrowed,
+                       RegistryLoader)
 from numba import datamodel
 
 
@@ -156,6 +156,7 @@ class BaseContext(object):
         self._getattrs = defaultdict(OverloadSelector)
         self._setattrs = defaultdict(OverloadSelector)
         self._casts = OverloadSelector()
+        self._get_constants = OverloadSelector()
         # Other declarations
         self._generators = {}
         self.special_ops = {}
@@ -178,8 +179,8 @@ class BaseContext(object):
         Useful for third-party extensions.
         """
         # Populate built-in registry
-        from . import (arraymath, iterators, linalg, rangeobj, slicing,
-                       smartarray, tupleobj)
+        from . import (arraymath, enumimpl, iterators, linalg, numbers,
+                       optional, rangeobj, slicing, smartarray, tupleobj)
         try:
             from . import npdatetime
         except NotImplementedError:
@@ -227,6 +228,7 @@ class BaseContext(object):
         self._insert_getattr_defn(loader.new_registrations('getattrs'))
         self._insert_setattr_defn(loader.new_registrations('setattrs'))
         self._insert_cast_defn(loader.new_registrations('casts'))
+        self._insert_get_constant_defn(loader.new_registrations('constants'))
 
     def insert_func_defn(self, defns):
         for impl, func, sig in defns:
@@ -243,6 +245,10 @@ class BaseContext(object):
     def _insert_cast_defn(self, defns):
         for impl, sig in defns:
             self._casts.append(impl, sig)
+
+    def _insert_get_constant_defn(self, defns):
+        for impl, sig in defns:
+            self._get_constants.append(impl, sig)
 
     def insert_user_function(self, func, fndesc, libs=()):
         impl = user_function(fndesc, libs)
@@ -350,95 +356,23 @@ class BaseContext(object):
         dm = self.data_model_manager[ty]
         return dm.load_from_data_pointer(builder, ptr, align)
 
-    def is_struct_type(self, ty):
-        return isinstance(self.data_model_manager[ty], datamodel.CompositeModel)
-
     def get_constant_generic(self, builder, ty, val):
         """
         Return a LLVM constant representing value *val* of Numba type *ty*.
         """
-        if isinstance(ty, types.ExternalFunctionPointer):
-            ptrty = self.get_function_pointer_type(ty)
-            ptrval = ty.get_pointer(val)
-            return builder.inttoptr(self.get_constant(types.intp, ptrval),
-                                    ptrty)
-
-        elif isinstance(ty, types.Array):
-            return self.make_constant_array(builder, ty, val)
-
-        elif isinstance(ty, types.Dummy):
-            return self.get_dummy_value()
-
-        elif self.is_struct_type(ty):
-            struct = self.get_constant_struct(builder, ty, val)
-            if isinstance(ty, types.Record):
-                ptrty = self.data_model_manager[ty].get_data_type()
-                ptr = cgutils.alloca_once(builder, ptrty)
-                builder.store(struct, ptr)
-                return ptr
-            return struct
-
-        else:
-            return self.get_constant(ty, val)
-
-    def get_constant_struct(self, builder, ty, val):
-        assert self.is_struct_type(ty)
-
-        if ty in types.complex_domain:
-            if ty == types.complex64:
-                innertype = types.float32
-            elif ty == types.complex128:
-                innertype = types.float64
-            else:
-                raise Exception("unreachable")
-
-            real = self.get_constant(innertype, val.real)
-            imag = self.get_constant(innertype, val.imag)
-            const = Constant.struct([real, imag])
-            return const
-
-        elif isinstance(ty, (types.Tuple, types.NamedTuple)):
-            consts = [self.get_constant_generic(builder, ty.types[i], v)
-                      for i, v in enumerate(val)]
-            return Constant.struct(consts)
-
-        elif isinstance(ty, types.Record):
-            consts = [self.get_constant(types.int8, b)
-                      for b in bytearray(val.tostring())]
-            return Constant.array(consts[0].type, consts)
-
-        else:
-            raise NotImplementedError("%s as constant unsupported" % ty)
+        try:
+            impl = self._get_constants.find((ty,))
+            return impl(self, builder, ty, val)
+        except NotImplementedError:
+            raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
 
     def get_constant(self, ty, val):
-        assert not self.is_struct_type(ty)
-
-        lty = self.get_value_type(ty)
-
-        if ty == types.none:
-            assert val is None
-            return self.get_dummy_value()
-
-        elif ty == types.boolean:
-            return Constant.int(Type.int(1), int(val))
-
-        elif ty in types.signed_domain:
-            return Constant.int_signextend(lty, val)
-
-        elif ty in types.unsigned_domain:
-            return Constant.int(lty, val)
-
-        elif ty in types.real_domain:
-            return Constant.real(lty, val)
-
-        elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
-            return Constant.real(lty, val.astype(numpy.int64))
-
-        elif isinstance(ty, (types.UniTuple, types.NamedUniTuple)):
-            consts = [self.get_constant(ty.dtype, v) for v in val]
-            return Constant.array(consts[0].type, consts)
-
-        raise NotImplementedError("cannot lower constant of type '%s'" % (ty,))
+        """
+        Same as get_constant_generic(), but without specifying *builder*.
+        Works only for simple types.
+        """
+        # HACK: pass builder=None to preserve get_constant() API
+        return self.get_constant_generic(None, ty, val)
 
     def get_constant_undef(self, ty):
         lty = self.get_value_type(ty)
@@ -612,8 +546,8 @@ class BaseContext(object):
             impl = self._casts.find((fromty, toty))
             return impl(self, builder, fromty, toty, val)
         except NotImplementedError:
-            # Re-raise below
-            raise NotImplementedError("cast", val, fromty, toty)
+            raise NotImplementedError(
+                "Cannot cast %s to %s: %s" % (fromty, toty, val))
 
     def generic_compare(self, builder, key, argtypes, args):
         """

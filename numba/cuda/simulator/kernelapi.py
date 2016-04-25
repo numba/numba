@@ -10,7 +10,7 @@ import traceback
 
 import numpy as np
 
-from numba import types, numpy_support
+from numba import numpy_support
 
 
 class Dim3(object):
@@ -207,11 +207,17 @@ class FakeCUDAModule(object):
 
 @contextmanager
 def swapped_cuda_module(fn, fake_cuda_module):
+    from numba import cuda
+
     fn_globs = fn.__globals__
-    original_cuda, fn_globs['cuda'] = fn_globs['cuda'], fake_cuda_module
+    # get all globals that is the "cuda" module
+    orig = dict((k, v) for k, v in fn_globs.items() if v is cuda)
+    # build replacement dict
+    repl = dict((k, fake_cuda_module) for k, v in orig.items())
+    # replace
+    fn_globs.update(repl)
     try:
         yield
     finally:
-        fn_globs['cuda'] = original_cuda
-
-
+        # revert
+        fn_globs.update(orig)

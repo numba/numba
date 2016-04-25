@@ -244,6 +244,11 @@ and return types:
 * :class:`ctypes.c_double`
 * :class:`ctypes.c_void_p`
 
+``enum``
+--------
+
+Both :class:`enum.Enum` and :class:`enum.IntEnum` subclasses are supported.
+
 ``math``
 --------
 

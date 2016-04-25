@@ -4,7 +4,7 @@ from .abstract import *
 from .common import *
 
 
-class Function(Callable, Opaque):
+class BaseFunction(Callable):
     """
     Base type class for some function types.
     """
@@ -22,7 +22,7 @@ class Function(Callable, Opaque):
             self.typing_key = template.key
         self._impl_keys = {}
         name = "%s(%s)" % (self.__class__.__name__, self.typing_key)
-        super(Function, self).__init__(name)
+        super(BaseFunction, self).__init__(name)
 
     @property
     def key(self):
@@ -58,6 +58,12 @@ class Function(Callable, Opaque):
             sigs += getattr(temp, 'cases', [])
             is_param = is_param or hasattr(temp, 'generic')
         return sigs, is_param
+
+
+class Function(BaseFunction, Opaque):
+    """
+    Type class for builtin functions implemented by Numba.
+    """
 
 
 class BoundFunction(Callable, Opaque):
@@ -179,7 +185,7 @@ class Dispatcher(WeakType, Callable, Dummy):
         return self.get_overload(sig)
 
 
-class ExternalFunctionPointer(Function):
+class ExternalFunctionPointer(BaseFunction):
     """
     A pointer to a native function (e.g. exported via ctypes or cffi).
     *get_pointer* is a Python function taking an object

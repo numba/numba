@@ -4,6 +4,7 @@ Assorted utilities for use in tests.
 
 import cmath
 import contextlib
+import enum
 import errno
 import gc
 import math
@@ -147,6 +148,9 @@ class TestCase(unittest.TestCase):
         """
         if isinstance(numeric_object, np.ndarray):
             return "ndarray"
+
+        if isinstance(numeric_object, enum.Enum):
+            return "enum"
 
         for tp in self._sequence_typesets:
             if isinstance(numeric_object, tp):
@@ -303,24 +307,34 @@ class TestCase(unittest.TestCase):
                                          ignore_sign_on_zero, abs_tol)
             return
 
-        if compare_family == "sequence":
+        elif compare_family == "sequence":
             self.assertEqual(len(first), len(second), msg=msg)
             for a, b in zip(first, second):
                 self._assertPreciseEqual(a, b, prec, ulps, msg,
                                          ignore_sign_on_zero, abs_tol)
             return
 
-        if compare_family == "exact":
+        elif compare_family == "exact":
             exact_comparison = True
 
-        if compare_family in ["complex", "approximate"]:
+        elif compare_family in ["complex", "approximate"]:
             exact_comparison = False
 
-        if compare_family == "unknown":
+        elif compare_family == "enum":
+            self.assertIs(first.__class__, second.__class__)
+            self._assertPreciseEqual(first.value, second.value,
+                                     prec, ulps, msg,
+                                     ignore_sign_on_zero, abs_tol)
+            return
+
+        elif compare_family == "unknown":
             # Assume these are non-numeric types: we will fall back
             # on regular unittest comparison.
             self.assertIs(first.__class__, second.__class__)
             exact_comparison = True
+
+        else:
+            assert 0, "unexpected family"
 
         # If a Numpy scalar, check the dtype is exactly the same too
         # (required for datetime64 and timedelta64).

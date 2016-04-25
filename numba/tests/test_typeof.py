@@ -6,6 +6,7 @@ from __future__ import print_function
 
 import array
 from collections import namedtuple
+import enum
 import mmap
 import sys
 
@@ -19,6 +20,7 @@ from numba._dispatcher import compute_fingerprint
 from .support import TestCase, tag
 from .test_numpy_support import ValueTypingTestBase
 from .ctypes_usecases import *
+from .enum_usecases import *
 
 
 recordtype = np.dtype([('a', np.float64),
@@ -213,6 +215,43 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertNotEqual(tp_rect, types.UniTuple(tp_rect.dtype, tp_rect.count))
 
     @tag('important')
+    def test_enum(self):
+        tp_red = typeof(Color.red)
+        self.assertEqual(tp_red, types.EnumMember(Color, types.intp))
+        self.assertEqual(tp_red, typeof(Color.blue))
+        tp_choc = typeof(Shake.chocolate)
+        self.assertEqual(tp_choc, types.EnumMember(Shake, types.intp))
+        self.assertEqual(tp_choc, typeof(Shake.mint))
+        self.assertNotEqual(tp_choc, tp_red)
+        tp_404 = typeof(RequestError.not_found)
+        self.assertEqual(tp_404, types.IntEnumMember(RequestError, types.intp))
+        self.assertEqual(tp_404, typeof(RequestError.internal_error))
+
+        with self.assertRaises(ValueError) as raises:
+            typeof(HeterogenousEnum.red)
+        self.assertEqual(str(raises.exception),
+                         "Cannot type heterogenous enum: got value types complex128, float64")
+
+    @tag('important')
+    def test_enum_class(self):
+        tp_color = typeof(Color)
+        self.assertEqual(tp_color, types.EnumClass(Color, types.intp))
+        tp_shake = typeof(Shake)
+        self.assertEqual(tp_shake, types.EnumClass(Shake, types.intp))
+        self.assertNotEqual(tp_shake, tp_color)
+        tp_shape = typeof(Shape)
+        self.assertEqual(tp_shape, types.IntEnumClass(Shape, types.intp))
+        tp_error = typeof(RequestError)
+        self.assertEqual(tp_error,
+                         types.IntEnumClass(RequestError, types.intp))
+        self.assertNotEqual(tp_error, tp_shape)
+
+        with self.assertRaises(ValueError) as raises:
+            typeof(HeterogenousEnum)
+        self.assertEqual(str(raises.exception),
+                         "Cannot type heterogenous enum: got value types complex128, float64")
+
+    @tag('important')
     def test_dtype(self):
         dtype = np.dtype('int64')
         self.assertEqual(typeof(dtype), types.DType(types.int64))
@@ -309,6 +348,13 @@ class TestFingerprint(TestCase):
 
     def test_none(self):
         compute_fingerprint(None)
+
+    def test_enums(self):
+        # Enums should fail fingerprinting, even IntEnums
+        with self.assertRaises(NotImplementedError):
+            compute_fingerprint(Color.red)
+        with self.assertRaises(NotImplementedError):
+            compute_fingerprint(RequestError.not_found)
 
     def test_records(self):
         d1 = np.dtype([('m', np.int32), ('n', np.int64)])

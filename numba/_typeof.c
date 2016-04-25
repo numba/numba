@@ -236,7 +236,8 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         return string_writer_put_char(w, OP_NONE);
     if (PyBool_Check(val))
         return string_writer_put_char(w, OP_BOOL);
-    if (PyInt_Check(val) || PyLong_Check(val))
+    /* Note we avoid matching int subclasses such as IntEnum */
+    if (PyInt_CheckExact(val) || PyLong_CheckExact(val))
         return string_writer_put_char(w, OP_INT);
     if (PyFloat_Check(val))
         return string_writer_put_char(w, OP_FLOAT);

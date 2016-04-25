@@ -12,7 +12,6 @@ from llvmlite.llvmpy.core import Type
 from numba.targets.imputils import Registry, impl_ret_untracked
 from numba import types, cgutils, utils
 from numba.typing import signature
-from . import builtins
 
 
 registry = Registry()
@@ -388,11 +387,8 @@ unary_math_int_impl(math.degrees, degrees_float_impl)
 
 # -----------------------------------------------------------------------------
 
-for ty in types.unsigned_domain:
-    lower(math.pow, types.float64, ty)(builtins.int_power_impl)
-for ty in types.signed_domain:
-    lower(math.pow, types.float64, ty)(builtins.int_power_impl)
-
-ty = types.Float
-lower(math.pow, ty, ty)(builtins.real_power_impl)
-
+@lower(math.pow, types.Float, types.Float)
+@lower(math.pow, types.Float, types.Integer)
+def pow_impl(context, builder, sig, args):
+    impl = context.get_function("**", sig)
+    return impl(builder, args)
