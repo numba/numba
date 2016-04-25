@@ -447,6 +447,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = {
             'value': int32,
             '_value': float32,
+            '__value': int32,
         }
 
         @jitclass(spec)
@@ -455,11 +456,18 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def __init__(self, value):
                 self.value = value
                 self._value = value / 2
+                self.__value = value * 2
+
+            @property
+            def private_value(self):
+                return self.__value
 
         value = 123
         inst = MyClass(value)
         self.assertEqual(inst.value, value)
         self.assertEqual(inst._value, value / 2)
+        self.assertEqual(inst.private_value, value * 2)
+
 
 
 if __name__ == '__main__':

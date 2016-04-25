@@ -113,6 +113,19 @@ def _validate_spec(spec):
             raise TypeError("spec values should be Numba type instances, got %r"
                             % (v,))
 
+
+def _fix_up_private_attr(clsname, spec):
+    """
+    Apply the same changes to dunder names as CPython would.
+    """
+    out = OrderedDict()
+    for k, v in spec.items():
+        if k.startswith('__'):
+            k = '_' + clsname + k
+        out[k] = v
+    return out
+
+
 def register_class_type(cls, spec, class_ctor, builder):
     """
     Internal function to create a jitclass.
@@ -128,6 +141,9 @@ def register_class_type(cls, spec, class_ctor, builder):
     if isinstance(spec, Sequence):
         spec = OrderedDict(spec)
     _validate_spec(spec)
+
+    # Fix up private attribute names
+    spec = _fix_up_private_attr(cls.__name__, spec)
 
     # Copy methods from base classes
     clsdct = {}
