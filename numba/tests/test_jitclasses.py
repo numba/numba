@@ -511,5 +511,24 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(inst.check_private_method(3), inst.private_value * 3)
 
 
+class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
+
+    @tag('important')
+    def test_hash(self):
+        spec = [('_value', int32)]
+
+        @jitclass(spec)
+        class MyClass(object):
+
+            def __init__(self, value):
+                self._value = value
+
+            def __hash__(self):
+                return self._value
+
+        inst = MyClass(value=123)
+        self.assertEqual(hash(inst), inst._value)
+
+
 if __name__ == '__main__':
     unittest.main()
