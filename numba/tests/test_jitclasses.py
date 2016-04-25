@@ -576,11 +576,24 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
                 if isinstance(other, MyClass):
                     return self._value == other._value
 
+        @jitclass(spec)
+        class MyOtherClass(object):
+
+            def __init__(self, value):
+                self._value = value
+
+            def __eq__(self, other):
+                return self._value == other._value
+
         ai = MyClass(value=123)
         bi = MyClass(value=123)
         ci = MyClass(value=321)
+        di = MyOtherClass(value=ai._value)
         self.assertEqual(ai, bi)
         self.assertNotEqual(ai, ci)
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertNotEqual(ai, di)
+        self.assertEqual(di, ai)
 
 
 if __name__ == '__main__':
