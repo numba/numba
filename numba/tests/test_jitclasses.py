@@ -14,6 +14,7 @@ from numba import jitclass
 from .support import TestCase, MemoryLeakMixin, tag
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
+from numba import errors
 
 
 def _get_meminfo(box):
@@ -532,11 +533,34 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
 
         instty = MyClass.class_type.instance_type
         self.assertIsInstance(instty, types.Hashable)
+        # Checks for bug in the instancecheck that makes this an Integer
         self.assertNotIsInstance(instty, types.Integer)
 
         inst = MyClass(value=123)
         self.assertEqual(hash(inst), inst._value)
         self.assertEqual(inst.call_hash(), hash(inst))
+
+    def test_not_hash(self):
+        spec = [('_value', int32)]
+
+        @jitclass(spec)
+        class MyClass(object):
+
+            def __init__(self, value):
+                self._value = value
+
+            def call_hash(self):
+                return hash(self)
+
+        instty = MyClass.class_type.instance_type
+        self.assertNotIsInstance(instty, types.Hashable)
+
+        inst = MyClass(value=123)
+        with self.assertRaises(errors.TypingError) as raises:
+            inst.call_hash()
+        errmsg = str(raises.exception)
+        regex = r"Invalid usage of Function\(<built-in function hash>\)"
+        self.assertRegex(errmsg, regex)
 
 
 if __name__ == '__main__':
