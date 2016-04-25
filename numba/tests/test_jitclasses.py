@@ -562,6 +562,26 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         regex = r"Invalid usage of Function\(<built-in function hash>\)"
         self.assertRegex(errmsg, regex)
 
+    @tag('important')
+    def test_eq(self):
+        spec = [('_value', int32)]
+
+        @jitclass(spec)
+        class MyClass(object):
+
+            def __init__(self, value):
+                self._value = value
+
+            def __eq__(self, other):
+                # if isinstance(other, MyClass):
+                return self._value == other._value
+
+        ai = MyClass(value=123)
+        bi = MyClass(value=123)
+        ci = MyClass(value=321)
+        self.assertEqual(ai, bi)
+        self.assertNotEqual(ai, ci)
+
 
 if __name__ == '__main__':
     unittest.main()

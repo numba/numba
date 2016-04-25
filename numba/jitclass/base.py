@@ -237,6 +237,10 @@ def _drop_ignored_attrs(dct):
     for k in drop:
         del dct[k]
 
+    # ignore __hash__ if it is None
+    if '__hash__' in dct:
+        dct.pop('__hash__', None)
+
 
 class ClassBuilder(object):
     """
