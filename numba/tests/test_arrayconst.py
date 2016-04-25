@@ -84,6 +84,10 @@ class TestConstantArray(unittest.TestCase):
             compile_isolated(pyfunc, ())
 
     def test_issue_1850(self):
+        """
+        This issue is caused by an unresolved bug in numpy since version 1.6.
+        See numpy GH issue #3147.
+        """
         constarr = np.array([86])
 
         def pyfunc():
