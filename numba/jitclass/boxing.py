@@ -101,9 +101,8 @@ def _specialize_box(typ):
             dct[field] = property(getter, setter)
     # Inject methods as class members
     for name, func in typ.methods.items():
-        if not name.startswith('_'):
-            getter = _generate_method(name, func)
-            dct[name] = getter
+        if not (name.startswith('__') and name.endswith('__')):
+            dct[name] = _generate_method(name, func)
     # Create subclass
     subcls = type(typ.classname, (_box.Box,), dct)
     # Store to cache

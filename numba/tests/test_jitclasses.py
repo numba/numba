@@ -483,6 +483,15 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 self.__private_value = new
                 return old
 
+            def _protected_method(self, factor):
+                return self._value * factor
+
+            def __private_method(self, factor):
+                return self.__value * factor
+
+            def check_private_method(self, factor):
+                return self.__private_method(factor)
+
         value = 123
         inst = MyClass(value)
         # test attributes
@@ -497,6 +506,10 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         self.assertEqual(inst.swap_private_value(321), value * 2)
         self.assertEqual(inst.swap_private_value(value * 2), 321)
+        # test methods
+        self.assertEqual(inst._protected_method(3), inst._value * 3)
+        self.assertEqual(inst.check_private_method(3), inst.private_value * 3)
+
 
 if __name__ == '__main__':
     unittest.main()
