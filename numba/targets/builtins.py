@@ -5,15 +5,12 @@ from functools import reduce
 
 import numpy
 
-from llvmlite import ir
-from llvmlite.llvmpy.core import Type, Constant
-import llvmlite.llvmpy.core as lc
+from llvmlite.llvmpy.core import Type
 
-from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
-                       lower_cast, lower_constant, iternext_impl,
-                       call_getiter, call_iternext,
-                       impl_ret_borrowed, impl_ret_untracked)
-from .. import typing, types, cgutils, utils
+from .imputils import (lower_builtin, lower_getattr_generic,
+                       lower_cast, lower_constant, call_getiter, call_iternext,
+                       impl_ret_borrowed, impl_ret_untracked, impl_ret_new_ref)
+from .. import typing, types, utils
 
 
 @lower_builtin('is not', types.Any, types.Any)
@@ -48,6 +45,20 @@ def deferred_to_any(context, builder, fromty, toty, val):
     model = context.data_model_manager[fromty]
     val = model.get(builder, val)
     return context.cast(builder, val, fromty.get(), toty)
+
+
+#------------------------------------------------------------------------------
+# Hashing User-defined type
+
+
+@lower_builtin(hash, types.UserHashable)
+def hash_user_hashable(context, builder, sig, args):
+    self_type = sig.args[0]
+    call, callsig = self_type.get_user_hash(context, sig)
+    out = call(builder, args)
+    # Cast return value to match the expected return_type
+    out = context.cast(builder, out, callsig.return_type, sig.return_type)
+    return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
 #------------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import ctypes
 
 import numpy as np
 
+from numba import types
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
 from numba import njit, typeof
@@ -526,8 +527,16 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
             def __hash__(self):
                 return self._value
 
+            def call_hash(self):
+                return hash(self)
+
+        instty = MyClass.class_type.instance_type
+        self.assertIsInstance(instty, types.Hashable)
+        self.assertNotIsInstance(instty, types.Integer)
+
         inst = MyClass(value=123)
         self.assertEqual(hash(inst), inst._value)
+        self.assertEqual(inst.call_hash(), hash(inst))
 
 
 if __name__ == '__main__':

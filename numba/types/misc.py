@@ -2,7 +2,10 @@ from __future__ import print_function, division, absolute_import
 
 from .abstract import *
 from .common import *
+from .functions import Dispatcher
 from ..typeconv import Conversion
+
+
 
 
 class PyObject(Dummy):
@@ -303,7 +306,7 @@ class SliceType(Type):
         return self.members
 
 
-class ClassInstanceType(Type):
+class ClassInstanceType(UserHashable):
     """
     The type of a jitted class *instance*.  It will be the return-type
     of the constructor of the class.
@@ -345,6 +348,17 @@ class ClassInstanceType(Type):
     @property
     def methods(self):
         return self.class_type.methods
+
+    def is_hashable(self):
+        return '__hash__' in self.methods
+
+    def get_user_hash(self, context, sig):
+        method = self.jitmethods["__hash__"]
+        disp_type = Dispatcher(method)
+        # Get call signature, which may have different return type
+        callsig = disp_type.get_call_type(context.typing_context, sig.args, {})
+        call = context.get_function(disp_type, callsig)
+        return call, callsig
 
 
 class ClassType(Callable, Opaque):

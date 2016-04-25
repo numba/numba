@@ -60,6 +60,12 @@ class _TypeMetaclass(ABCMeta):
         inst = type.__call__(cls, *args, **kwargs)
         return cls._intern(inst)
 
+    def __instancecheck__(self, other):
+        if hasattr(self, 'instancecheck'):
+            return self.instancecheck(other)
+        else:
+            return issubclass(type(other), self)
+
 
 def _type_reconstructor(reconstructor, reconstructor_args, state):
     """
@@ -209,6 +215,34 @@ class Hashable(Type):
     """
     Base class for hashable types.
     """
+    @classmethod
+    def instancecheck(cls, instance):
+        if cls is Hashable and issubclass(type(instance), UserHashable):
+            return instance.is_hashable()
+        else:
+            return issubclass(type(instance), cls)
+
+
+class UserHashable(Type):
+    """
+    For user-defined types that may define __hash__.
+    """
+    def is_hashable(self):
+        """
+        Returns True if the type is hashable.
+        `isinstance(self, Hasable)` will be True.
+        Must be overriden in subclass
+        """
+        raise NotImplementedError
+
+    def get_user_hash(self, context, sig):
+        """
+        Returns (call, callsig) where
+            * `res = call(builder, args)` emits the hashing operation to
+               `builder` with `args` and returns to `res`;
+            * `callsig` is the signature of `call`.
+        """
+        raise NotImplementedError
 
 
 class Number(Hashable):
