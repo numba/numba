@@ -705,6 +705,17 @@ class Hash(AbstractTemplate):
             return signature(types.intp, *args)
 
 
+@infer_global(isinstance)
+class IsInstance(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+        instance, classtype, = args
+        if isinstance(instance, types.ClassInstanceType):
+            if isinstance(classtype, types.ClassType):
+                return signature(types.bool_, *args)
+
+
 #------------------------------------------------------------------------------
 
 

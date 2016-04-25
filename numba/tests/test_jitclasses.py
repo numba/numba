@@ -573,8 +573,8 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
                 self._value = value
 
             def __eq__(self, other):
-                # if isinstance(other, MyClass):
-                return self._value == other._value
+                if isinstance(other, MyClass):
+                    return self._value == other._value
 
         ai = MyClass(value=123)
         bi = MyClass(value=123)

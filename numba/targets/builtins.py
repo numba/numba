@@ -62,6 +62,17 @@ def hash_user_hashable(context, builder, sig, args):
 
 
 #------------------------------------------------------------------------------
+# isinstance
+
+@lower_builtin(isinstance, types.ClassInstanceType, types.ClassType)
+def isinstance_jitclass(context, builder, sig, args):
+    instance_type, class_type = sig.args
+    # Class inheritance is not supported yet
+    check_res = instance_type.class_type == class_type
+    return context.get_constant(types.bool_, check_res)
+
+
+#------------------------------------------------------------------------------
 
 @lower_builtin('getitem', types.CPointer, types.Integer)
 def getitem_cpointer(context, builder, sig, args):
