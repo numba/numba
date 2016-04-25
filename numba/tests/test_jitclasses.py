@@ -462,13 +462,41 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def private_value(self):
                 return self.__value
 
+            @property
+            def _inner_value(self):
+                return self._value
+
+            @_inner_value.setter
+            def _inner_value(self, v):
+                self._value = v
+
+            @property
+            def __private_value(self):
+                return self.__value
+
+            @__private_value.setter
+            def __private_value(self, v):
+                self.__value = v
+
+            def swap_private_value(self, new):
+                old = self.__private_value
+                self.__private_value = new
+                return old
+
         value = 123
         inst = MyClass(value)
+        # test attributes
         self.assertEqual(inst.value, value)
         self.assertEqual(inst._value, value / 2)
         self.assertEqual(inst.private_value, value * 2)
+        # test properties
+        self.assertEqual(inst._inner_value, inst._value)
+        freeze_inst_value = inst._value
+        inst._inner_value -= 1
+        self.assertEqual(inst._inner_value, freeze_inst_value - 1)
 
-
+        self.assertEqual(inst.swap_private_value(321), value * 2)
+        self.assertEqual(inst.swap_private_value(value * 2), 321)
 
 if __name__ == '__main__':
     unittest.main()

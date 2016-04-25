@@ -91,7 +91,7 @@ def _specialize_box(typ):
         dct[field] = property(getter, setter)
     # Inject properties as class properties
     for field, impdct in typ.jitprops.items():
-        if not field.startswith('_'):
+        if not field.startswith('__'):
             getter = None
             setter = None
             if 'get' in impdct:
