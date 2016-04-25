@@ -38,13 +38,22 @@ class InstanceModel(models.StructModel):
 class InstanceDataModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
         clsty = fe_typ.class_type
-        members = list(clsty.struct.items())
+        members = [(_mangle_attr(k), v) for k, v in clsty.struct.items()]
         super(InstanceDataModel, self).__init__(dmm, fe_typ, members)
 
 
 default_manager.register(types.ClassInstanceType, InstanceModel)
 default_manager.register(types.ClassDataType, InstanceDataModel)
 default_manager.register(types.ClassType, models.OpaqueModel)
+
+
+def _mangle_attr(name):
+    """
+    Mangle attributes.
+    The resulting name does not startswith an underscore '_'.
+    """
+    return 'm_' + name
+
 
 ##############################################################################
 # Class object
@@ -257,7 +266,7 @@ class ClassBuilder(object):
             instance_type = sig.args[0]
             method = instance_type.jitmethods[attr]
             disp_type = types.Dispatcher(method)
-            call = context.get_function(types.Dispatcher(method), sig)
+            call = context.get_function(disp_type, sig)
             out = call(builder, args)
             return imputils.impl_ret_new_ref(context, builder,
                                              sig.return_type, out)
@@ -309,7 +318,7 @@ def attr_impl(context, builder, typ, value, attr):
                                         ref=data_pointer)
         return imputils.impl_ret_borrowed(context, builder,
                                           typ.struct[attr],
-                                          getattr(data, attr))
+                                          getattr(data, _mangle_attr(attr)))
     elif attr in typ.jitprops:
         # It's a jitted property
         getter = typ.jitprops[attr]['get']
@@ -340,10 +349,10 @@ def attr_impl(context, builder, sig, args, attr):
 
         # Get old value
         attr_type = typ.struct[attr]
-        oldvalue = getattr(data, attr)
+        oldvalue = getattr(data, _mangle_attr(attr))
 
         # Store n
-        setattr(data, attr, val)
+        setattr(data, _mangle_attr(attr), val)
         context.nrt_incref(builder, attr_type, val)
 
         # Delete old value

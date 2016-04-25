@@ -86,10 +86,9 @@ def _specialize_box(typ):
            '_numba_type_': typ}
     # Inject attributes as class properties
     for field in typ.struct:
-        if not field.startswith('_'):
-            getter = _generate_getter(field)
-            setter = _generate_setter(field)
-            dct[field] = property(getter, setter)
+        getter = _generate_getter(field)
+        setter = _generate_setter(field)
+        dct[field] = property(getter, setter)
     # Inject properties as class properties
     for field, impdct in typ.jitprops.items():
         if not field.startswith('_'):
