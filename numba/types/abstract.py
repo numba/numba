@@ -245,6 +245,32 @@ class UserHashable(Type):
         raise NotImplementedError
 
 
+class Eq(Type):
+    """
+    Base class for Eq types.
+    """
+    @classmethod
+    def instancecheck(cls, instance):
+        if cls is Eq and issubclass(type(instance), UserEq):
+            return instance.supports_eq()
+        else:
+            return issubclass(type(instance), cls)
+
+
+class UserEq(Type):
+    """
+    For user-defined types that may define __eq__ and __ne__.
+    """
+    def supports_eq(self):
+        raise NotImplementedError
+
+    def get_user_eq(self, context, sig):
+        raise NotImplementedError
+
+    def get_user_ne(self, context, sig):
+        raise NotImplementedError
+
+
 class Number(Hashable):
     """
     Base class for number types.

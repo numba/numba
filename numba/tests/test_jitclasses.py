@@ -595,6 +595,16 @@ class TestJitClassSpecialMethods(TestCase, MemoryLeakMixin):
         self.assertNotEqual(ai, di)
         self.assertEqual(di, ai)
 
+        @njit
+        def check_equality(a, b):
+            return a == b
+
+        self.assertTrue(check_equality(ai, bi))
+        self.assertFalse(check_equality(ai, ci))
+        # notice the asymmetric __eq__ due to the instancecheck in MyClass
+        self.assertFalse(check_equality(ai, di))
+        self.assertTrue(check_equality(di, ai))
+
 
 if __name__ == '__main__':
     unittest.main()

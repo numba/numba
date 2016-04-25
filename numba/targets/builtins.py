@@ -308,3 +308,15 @@ def not_in(context, builder, sig, args):
 
     res = context.compile_internal(builder, in_impl, sig, args)
     return builder.not_(res)
+
+
+# -----------------------------------------------------------------------------
+
+@lower_builtin("==", types.UserEq, types.Any)
+def user_eq(context, builder, sig, args):
+    self_type = sig.args[0]
+    call, callsig = self_type.get_user_eq(context, sig)
+    out = call(builder, args)
+    # Cast return value to match the expected return_type
+    out = context.cast(builder, out, callsig.return_type, sig.return_type)
+    return impl_ret_new_ref(context, builder, sig.return_type, out)

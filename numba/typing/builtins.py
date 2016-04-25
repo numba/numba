@@ -877,3 +877,15 @@ class DeferredAttribute(AttributeTemplate):
 
     def generic_resolve(self, deferred, attr):
         return self.context.resolve_getattr(deferred.get(), attr)
+
+
+#------------------------------------------------------------------------------
+
+@infer
+class UserCmpEq(AbstractTemplate):
+    key = '=='
+
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.Eq):
+            return signature(types.boolean, lhs, rhs)

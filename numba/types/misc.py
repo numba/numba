@@ -306,7 +306,7 @@ class SliceType(Type):
         return self.members
 
 
-class ClassInstanceType(UserHashable):
+class ClassInstanceType(UserHashable, UserEq):
     """
     The type of a jitted class *instance*.  It will be the return-type
     of the constructor of the class.
@@ -354,6 +354,17 @@ class ClassInstanceType(UserHashable):
 
     def get_user_hash(self, context, sig):
         method = self.jitmethods["__hash__"]
+        disp_type = Dispatcher(method)
+        # Get call signature, which may have different return type
+        callsig = disp_type.get_call_type(context.typing_context, sig.args, {})
+        call = context.get_function(disp_type, callsig)
+        return call, callsig
+
+    def supports_eq(self):
+        return '__eq__' in self.methods or '__ne__' in self.methods
+
+    def get_user_eq(self, context, sig):
+        method = self.jitmethods["__eq__"]
         disp_type = Dispatcher(method)
         # Get call signature, which may have different return type
         callsig = disp_type.get_call_type(context.typing_context, sig.args, {})
