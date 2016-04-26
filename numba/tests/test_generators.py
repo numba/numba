@@ -77,6 +77,16 @@ def gen7(arr):
         yield arr[i]
 
 
+# Optional arguments and boolean state members
+def gen8(x=1, y=2, b=False):
+    bb = not b
+    yield x
+    if bb:
+        yield y
+    if b:
+        yield x + y
+
+
 def genobj(x):
     object()
     yield x
@@ -212,6 +222,26 @@ class TestGenerators(MemoryLeakMixin, TestCase):
 
     def test_gen7_objmode(self):
         self.check_gen7(flags=forceobj_flags)
+
+    def check_gen8(self, **jit_args):
+        pyfunc = gen8
+        cfunc = jit(**jit_args)(pyfunc)
+
+        def check(*args, **kwargs):
+            self.check_generator(pyfunc(*args, **kwargs),
+                                 cfunc(*args, **kwargs))
+
+        check(2, 3)
+        check(4)
+        check(y=5)
+        check(x=6, b=True)
+
+    @tag('important')
+    def test_gen8(self):
+        self.check_gen8(nopython=True)
+
+    def test_gen8_objmode(self):
+        self.check_gen8(forceobj=True)
 
     def check_consume_generator(self, gen_func):
         cgen = jit(nopython=True)(gen_func)
