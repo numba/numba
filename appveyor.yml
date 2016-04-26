@@ -26,7 +26,8 @@ install:
   #- powershell .\\buildscripts\\appveyor\\install.ps1
   - set MINICONDA=C:\Miniconda35-x64
   - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
-  - conda update -y -q conda
+  - conda config --set always_yes yes
+  - conda update -q conda
   - conda info
   - conda list
 
