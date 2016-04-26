@@ -522,7 +522,7 @@ class TestLinalgEig(TestLinalgBase):
         n = 10
         cfunc = jit(nopython=True)(eig_matrix)
 
-        def check(a, **kwargs):
+        def check(a):
             expected = eig_matrix(a)
             got = cfunc(a)
             # check that the returned tuple is same length
@@ -689,7 +689,7 @@ class TestLinalgSvd(TestLinalgBase):
 
             # Ensure proper resource management
             with self.assertNoNRTLeak():
-                cfunc(a)
+                cfunc(a, **kwargs)
 
         # test: column vector, tall, wide, square, row vector
         # prime sizes
