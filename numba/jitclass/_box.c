@@ -129,8 +129,7 @@ cleanup:
 static
 PyObject* box_get_dataptr(PyObject *self, PyObject *args) {
     BoxObject *box;
-    /* no type checking */
-    if (!PyArg_ParseTuple(args, "O", (PyObject*)&box))
+    if (!PyArg_ParseTuple(args, "O!", &BoxType, (PyObject*)&box))
         return NULL;
     return PyLong_FromVoidPtr(box->dataptr);
 }
@@ -141,8 +140,7 @@ PyObject* box_get_dataptr(PyObject *self, PyObject *args) {
 static
 PyObject* box_get_meminfoptr(PyObject *self, PyObject *args) {
     BoxObject *box;
-    /* no type checking */
-    if (!PyArg_ParseTuple(args, "O", (PyObject*)&box))
+    if (!PyArg_ParseTuple(args, "O!", &BoxType, (PyObject*)&box))
         return NULL;
     return PyLong_FromVoidPtr(box->meminfoptr);
 }
