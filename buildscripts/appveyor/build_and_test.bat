@@ -10,5 +10,6 @@ python setup.py build_ext -q --inplace
 @rem Run a subset of the test suite, as AppVeyor is quite slow
 @rem (Python 3.4+ only)
 @rem Also, note %CMD_IN_ENV% is needed for distutils/setuptools-based tests
+@rem on Python 2.
 
-python runtests.py -b --tags important
+%CMD_IN_ENV% python runtests.py -b --tags important

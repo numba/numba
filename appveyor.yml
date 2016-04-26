@@ -1,4 +1,4 @@
-# Environment based on https://github.com/rmcgibbo/python-appveyor-conda-example
+# Environment loosely based on https://github.com/conda/conda/blob/master/appveyor.yml
 
 environment:
 
@@ -11,21 +11,18 @@ environment:
   matrix:
     # Since appveyor is quite slow, we only use a single configuration
     # and a subset of the test suite (see build_and_test.bat)
-
-    - PYTHON: "C:\\Python35_64"
-      PYTHON_VERSION: "3.5"
-      PYTHON_ARCH: "64"
+    - ARCH_SUFFIX: "-x64"
       CONDA_PY: "3.5"
       CONDA_NPY: "1.11"
 
 init:
-  - ECHO %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH% %HOME%
+  # Use AppVeyor's provided Miniconda: https://www.appveyor.com/docs/installed-software#python
+  - set MINICONDA=C:\Miniconda35%ARCH_SUFFIX%
+  - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
 
 install:
-  # This installs the appropriate Miniconda (Py2/Py3, 32/64 bit)
+  # Uncomment to download and install the latest Miniconda (XXX flaky)
   #- powershell .\\buildscripts\\appveyor\\install.ps1
-  - set MINICONDA=C:\Miniconda35-x64
-  - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
   - conda config --set always_yes yes
   - conda update -q conda
   - conda info
