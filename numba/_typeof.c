@@ -730,7 +730,7 @@ int typecode_arrayscalar(PyObject *dispatcher, PyObject* aryscalar) {
  */
 static
 int
-typeof_numba_type_shortcuit(PyObject *dispatcher, PyObject *val)
+typeof_numba_type_shortcut(PyObject *dispatcher, PyObject *val)
 {
     int typecode;
     PyObject *numba_type = NULL;
@@ -776,7 +776,7 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
     }
     /* Special case for "_numba_type_" attribute */
     else if (PyObject_HasAttrString(val, "_numba_type_")) {
-        return typeof_numba_type_shortcuit(dispatcher, val);
+        return typeof_numba_type_shortcut(dispatcher, val);
     }
 
     return typecode_using_fingerprint(dispatcher, val);

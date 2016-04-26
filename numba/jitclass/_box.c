@@ -178,9 +178,9 @@ MOD_INIT(_box) {
 
     /* bind address to direct access utils */;
     PyModule_AddObject(m, "box_meminfoptr_offset",
-                       PyLong_FromLong(offsetof(BoxObject, meminfoptr)));
+                       PyLong_FromSsize_t(offsetof(BoxObject, meminfoptr)));
     PyModule_AddObject(m, "box_dataptr_offset",
-                       PyLong_FromLong(offsetof(BoxObject, dataptr)));
+                       PyLong_FromSsize_t(offsetof(BoxObject, dataptr)));
 
     return MOD_SUCCESS_VAL(m);
 }

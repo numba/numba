@@ -148,9 +148,8 @@ def _box_class_instance(typ, val, c):
 
     def set_member(member_offset, value):
         # Access member by byte offset
-        offset = c.context.get_constant(types.uint32, member_offset)
-        byte_ptr = c.builder.bitcast(box, llvoidptr)
-        ptr = c.builder.gep(byte_ptr, [offset])
+        offset = c.context.get_constant(types.uintp, member_offset)
+        ptr = cgutils.pointer_add(c.builder, box, offset)
         casted = c.builder.bitcast(ptr, llvoidptr.as_pointer())
         c.builder.store(value, casted)
 
