@@ -18,10 +18,15 @@ environment:
       CONDA_PY: "3.5"
       CONDA_NPY: "1.11"
 
+init:
+  - ECHO %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH% %HOME%
+
 install:
   # This installs the appropriate Miniconda (Py2/Py3, 32/64 bit)
-  - powershell .\\buildscripts\\appveyor\\install.ps1
-  - set PATH=%HOME%/miniconda;%HOME%/miniconda/Scripts;%HOME%/miniconda/Library/bin;%PATH%
+  #- powershell .\\buildscripts\\appveyor\\install.ps1
+  - set MINICONDA=C:\Miniconda35-x64
+  - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
+  - conda update -y -q conda
   - conda info
   - conda list
 
