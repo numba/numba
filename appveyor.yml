@@ -21,8 +21,9 @@ environment:
 install:
   # This installs the appropriate Miniconda (Py2/Py3, 32/64 bit)
   - powershell .\\buildscripts\\appveyor\\install.ps1
-  - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
-  - conda config --set always_yes true
+  - set PATH=%HOME%/miniconda;%HOME%/miniconda/Scripts;%HOME%/miniconda/Library/bin;%PATH%
+  - conda info
+  - conda list
 
 build: false
 
