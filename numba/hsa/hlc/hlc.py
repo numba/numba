@@ -9,7 +9,7 @@ from collections import namedtuple
 
 from numba import config
 from .utils import adapt_llvm_version
-from .config import BUILTIN_PATH
+from .config import BUILTIN_PATH, WRAPPER_PATH
 from datetime import datetime
 
 _real_check_call = check_call
@@ -29,6 +29,9 @@ class CmdLine(object):
                "-O3 "
                # "-gpu "
                # "-whole "
+               "-mtriple amdgcn--amdhsa "
+               "-mcpu=fiji "
+               "-disable-simplify-libcalls "
                "-verify "
                "-S "
                "-o {fout} "
@@ -36,21 +39,29 @@ class CmdLine(object):
 
     CMD_VERIFY = ("$HSAILBIN/opt "
                   "-verify "
+                  "-mtriple amdgcn--amdhsa "
+                  "-mcpu=fiji "
                   "-S "
                   "-o {fout} "
                   "{fin}")
 
     CMD_GEN_HSAIL = ("$HSAILBIN/llc -O2 "
-                     "-march=hsail64 "
+                     "-mtriple amdgcn--amdhsa "
+                     "-mcpu=fiji "
                      "-filetype=asm "
                      "-o {fout} "
                      "{fin}")
 
     CMD_GEN_BRIG = ("$HSAILBIN/llc -O2 "
-                    "-march=hsail64 "
+                    "-mtriple amdgcn--amdhsa "
+                    "-mcpu=fiji "
                     "-filetype=obj "
                     "-o {fout} "
                     "{fin}")
+
+    CMD_PATCH_BRIG = ("amdphdrs "
+                    "{fin} "
+                    "{fout}")
 
     CMD_LINK_BUILTINS = ("$HSAILBIN/llvm-link "
                          # "-prelink-opt "
@@ -75,11 +86,19 @@ class CmdLine(object):
         check_call(self.CMD_GEN_HSAIL.format(fout=opath, fin=ipath), shell=True)
 
     def generate_brig(self, ipath, opath):
-        check_call(self.CMD_GEN_BRIG.format(fout=opath, fin=ipath), shell=True)
+        tmpfile = "brigtmp"
+        check_call(self.CMD_GEN_BRIG.format(fout=tmpfile, fin=ipath), shell=True)
+        check_call(self.CMD_PATCH_BRIG.format(fin=tmpfile, fout=opath), shell=True)
 
     def link_builtins(self, ipath, opath):
-        cmd = self.CMD_LINK_BUILTINS.format(fout=opath, fin=ipath,
+        inter_opath = "intermediary"
+        cmd = self.CMD_LINK_BUILTINS.format(fout=inter_opath, fin=ipath,
                                             lib=BUILTIN_PATH)
+
+        check_call(cmd, shell=True)
+        cmd = self.CMD_LINK_BUILTINS.format(fout=opath, fin=inter_opath,
+                                            lib=WRAPPER_PATH)
+
         check_call(cmd, shell=True)
 
     def link_libs(self, ipath, libpaths, opath):
@@ -104,11 +123,12 @@ class Module(object):
         self.close()
 
     def close(self):
+        pass
         # Remove all temporary files
-        for afile in self._tempfiles:
-            os.unlink(afile)
+#        for afile in self._tempfiles:
+#            os.unlink(afile)
         # Remove directory
-        os.rmdir(self._tmpdir)
+#        os.rmdir(self._tmpdir)
 
     def _create_temp_file(self, name, mode='wb'):
         path = self._track_temp_file(name)
@@ -180,6 +200,8 @@ class Module(object):
         brig_path = self._track_temp_file("finalized-brig")
         self._cmd.generate_brig(ipath=opt_path, opath=brig_path)
 
+        print("Finaliser done")
+
         self._finalized = True
 
         # Read HSAIL
@@ -193,4 +215,5 @@ class Module(object):
         if config.DUMP_ASSEMBLY:
             print(hsail)
 
+        print("Returning...")
         return namedtuple('FinalizerResult', ['hsail', 'brig'])(hsail, brig)
