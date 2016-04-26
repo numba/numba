@@ -10,9 +10,9 @@ environment:
 
   matrix:
     # Since appveyor is quite slow, we only use a single configuration
-    # and a subset of the test suite (see build_and_test.bat)
+    # and a subset of the test suite (see test_script below)
     - PYTHON_VERSION: "3.5"
-      PYTHON_ARCH: "32"
+      PYTHON_ARCH: "64"
       NUMPY_VERSION: "1.11"
 
 init:
@@ -36,4 +36,8 @@ build: false
 
 test_script:
   # Build and test the package
-  - cmd /C .\\buildscripts\\appveyor\\build_and_test.bat
+  - python setup.py build_ext -q --inplace
+  # Run a subset of the test suite, as AppVeyor is quite slow.
+  # %CMD_IN_ENV% is needed for distutils/setuptools-based tests
+  # on certain build configurations.
+  - %CMD_IN_ENV% python runtests.py -b --tags important
