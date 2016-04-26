@@ -791,7 +791,9 @@ class BaseContext(object):
         # Handle data: reify the flattened array in "C" order as a
         # global array of bytes.
         flat = ary.flatten()
-        consts = Constant.array(Type.int(8), bytearray(flat))
+        # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)` to
+        #       workaround issue #1850 which is due to numpy issue #3147
+        consts = Constant.array(Type.int(8), bytearray(flat.data))
         data = cgutils.global_constant(builder, ".const.array.data", consts)
 
         # Handle shape
