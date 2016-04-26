@@ -29,7 +29,7 @@ install:
   - conda info
   - conda list
   - conda config --add channels numba
-  - conda create -q -n testenv python=%CONDA_PY% numpy=%CONDA_NPY% llvmlite cffi scipy
+  - conda create -q -n testenv python=%PYTHON_VERSION% numpy=%NUMPY_VERSION% llvmlite cffi scipy
   - call activate testenv
 
 build: false
