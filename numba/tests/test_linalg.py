@@ -447,31 +447,31 @@ class TestLinalgCholesky(TestLinalgBase):
         cfunc = jit(nopython=True)(cholesky_matrix)
 
         def check(a):
+            expected = cholesky_matrix(a)
+            got = cfunc(a)
+            use_reconstruction = False
+            # try strict
+            try:
+                np.testing.assert_array_almost_equal_nulp(got, expected,
+                                                          nulp=10)
+            except AssertionError:
+                # fall back to reconstruction
+                use_reconstruction = True
+
+            # try via reconstruction
+            if use_reconstruction:
+                rec = np.dot(got, np.conj(got.T))
+                resolution = 5 * np.finfo(a.dtype).resolution
+                np.testing.assert_allclose(
+                    a,
+                    rec,
+                    rtol=resolution,
+                    atol=resolution
+                )
+
+            # Ensure proper resource management
             with self.assertNoNRTLeak():
-                expected = cholesky_matrix(a)
-                got = cfunc(a)
-                use_reconstruction = False
-                # try strict
-                try:
-                    np.testing.assert_array_almost_equal_nulp(got, expected,
-                                                              nulp=10)
-                except AssertionError:
-                    # fall back to reconstruction
-                    use_reconstruction = True
-
-                # try via reconstruction
-                if use_reconstruction:
-                    rec = np.dot(got, np.conj(got.T))
-                    resolution = 5 * np.finfo(a.dtype).resolution
-                    np.testing.assert_allclose(
-                        a,
-                        rec,
-                        rtol=resolution,
-                        atol=resolution
-                    )
-                    del rec
-
-                del got, expected
+                cfunc(a)
 
         for dtype, order in product(self.dtypes, 'FC'):
             a = self.sample_matrix(n, dtype, order)
@@ -523,45 +523,46 @@ class TestLinalgEig(TestLinalgBase):
         cfunc = jit(nopython=True)(eig_matrix)
 
         def check(a, **kwargs):
+            expected = eig_matrix(a)
+            got = cfunc(a)
+            # check that the returned tuple is same length
+            self.assertEqual(len(expected), len(got))
+            # and that length is 2
+            self.assertEqual(len(got), 2)
+
+            use_reconstruction = False
+            # try plain match of each array to np first
+            for k in range(len(expected)):
+                try:
+                    np.testing.assert_array_almost_equal_nulp(
+                        got[k], expected[k], nulp=10)
+                except AssertionError:
+                    # plain match failed, test by reconstruction
+                    use_reconstruction = True
+
+            # if plain match fails then reconstruction is used.
+            # this checks that A*V ~== V*W
+            # i.e. eigensystem ties out
+            # this is required as numpy uses only double precision lapack
+            # routines and computation of eigenvectors is numerically
+            # sensitive, numba using the type specific routines therefore
+            # sometimes comes out with a different (but entirely
+            # valid) answer (eigenvectors are not unique etc.).
+            if use_reconstruction:
+                w, v = got
+                lhs = np.dot(a, v)
+                rhs = np.dot(v, np.diag(w))
+                resolution = 5 * np.finfo(a.dtype).resolution
+                np.testing.assert_allclose(
+                    lhs,
+                    rhs,
+                    rtol=resolution,
+                    atol=resolution
+                )
+
+            # Ensure proper resource management
             with self.assertNoNRTLeak():
-                expected = eig_matrix(a)
-                got = cfunc(a)
-                # check that the returned tuple is same length
-                self.assertEqual(len(expected), len(got))
-                # and that length is 2
-                self.assertEqual(len(got), 2)
-
-                use_reconstruction = False
-                # try plain match of each array to np first
-                for k in range(len(expected)):
-                    try:
-                        np.testing.assert_array_almost_equal_nulp(
-                            got[k], expected[k], nulp=10)
-                    except AssertionError:
-                        # plain match failed, test by reconstruction
-                        use_reconstruction = True
-
-                # if plain match fails then reconstruction is used.
-                # this checks that A*V ~== V*W
-                # i.e. eigensystem ties out
-                # this is required as numpy uses only double precision lapack
-                # routines and computation of eigenvectors is numerically
-                # sensitive, numba using the type specific routines therefore
-                # sometimes comes out with a different (but entirely
-                # valid) answer (eigenvectors are not unique etc.).
-                if use_reconstruction:
-                    w, v = got
-                    lhs = np.dot(a, v)
-                    rhs = np.dot(v, np.diag(w))
-                    resolution = 5 * np.finfo(a.dtype).resolution
-                    np.testing.assert_allclose(
-                        lhs,
-                        rhs,
-                        rtol=resolution,
-                        atol=resolution
-                    )
-                    del w, v
-                del got, expected
+                cfunc(a)
 
         for dtype, order in product(self.dtypes, 'FC'):
             a = self.sample_matrix(n, dtype, order)
@@ -640,54 +641,55 @@ class TestLinalgSvd(TestLinalgBase):
         cfunc = jit(nopython=True)(svd_matrix)
 
         def check(a, **kwargs):
-            with self.assertNoNRTLeak():
-                expected = svd_matrix(a, **kwargs)
-                got = cfunc(a, **kwargs)
-                # check that the returned tuple is same length
-                self.assertEqual(len(expected), len(got))
-                # and that length is 3
-                self.assertEqual(len(got), 3)
+            expected = svd_matrix(a, **kwargs)
+            got = cfunc(a, **kwargs)
+            # check that the returned tuple is same length
+            self.assertEqual(len(expected), len(got))
+            # and that length is 3
+            self.assertEqual(len(got), 3)
 
-                use_reconstruction = False
-                # try plain match of each array to np first
+            use_reconstruction = False
+            # try plain match of each array to np first
+            for k in range(len(expected)):
+                try:
+                    np.testing.assert_array_almost_equal_nulp(
+                        got[k], expected[k], nulp=10)
+                except AssertionError:
+                    # plain match failed, test by reconstruction
+                    use_reconstruction = True
+
+            # if plain match fails then reconstruction is used.
+            # this checks that A ~= U*S*V**H
+            # i.e. SV decomposition ties out
+            # this is required as numpy uses only double precision lapack
+            # routines and computation of svd is numerically
+            # sensitive, numba using the type specific routines therefore
+            # sometimes comes out with a different answer (orthonormal bases
+            # are not unique etc.).
+            if use_reconstruction:
+                u, sv, vt = got
+
+                # check they are dimensionally correct
                 for k in range(len(expected)):
-                    try:
-                        np.testing.assert_array_almost_equal_nulp(
-                            got[k], expected[k], nulp=10)
-                    except AssertionError:
-                        # plain match failed, test by reconstruction
-                        use_reconstruction = True
+                    self.assertEqual(got[k].shape, expected[k].shape)
 
-                # if plain match fails then reconstruction is used.
-                # this checks that A ~= U*S*V**H
-                # i.e. SV decomposition ties out
-                # this is required as numpy uses only double precision lapack
-                # routines and computation of svd is numerically
-                # sensitive, numba using the type specific routines therefore
-                # sometimes comes out with a different answer (orthonormal bases
-                # are not unique etc.).
-                if use_reconstruction:
-                    u, sv, vt = got
+                # regardless of full_matrices cols in u and rows in vt
+                # dictates the working size of s
+                s = np.zeros((u.shape[1], vt.shape[0]))
+                np.fill_diagonal(s, sv)
 
-                    # check they are dimensionally correct
-                    for k in range(len(expected)):
-                        self.assertEqual(got[k].shape, expected[k].shape)
+                rec = np.dot(np.dot(u, s), vt)
+                resolution = np.finfo(a.dtype).resolution
+                np.testing.assert_allclose(
+                    a,
+                    rec,
+                    rtol=10 * resolution,
+                    atol=100 * resolution  # zeros tend to be fuzzy
+                )
 
-                    # regardless of full_matrices cols in u and rows in vt
-                    # dictates the working size of s
-                    s = np.zeros((u.shape[1], vt.shape[0]))
-                    np.fill_diagonal(s, sv)
-
-                    rec = np.dot(np.dot(u, s), vt)
-                    resolution = np.finfo(a.dtype).resolution
-                    np.testing.assert_allclose(
-                        a,
-                        rec,
-                        rtol=10 * resolution,
-                        atol=100 * resolution  # zeros tend to be fuzzy
-                    )
-                    del u, sv, vt, rec, s
-                del got, expected
+            # Ensure proper resource management
+            with self.assertNoNRTLeak():
+                cfunc(a)
 
         # test: column vector, tall, wide, square, row vector
         # prime sizes

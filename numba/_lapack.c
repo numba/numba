@@ -343,15 +343,15 @@ typedef void (*cgesdd_t)(char *jobz, F_INT *m, F_INT *n, void *a, F_INT *lda,
                          F_INT *info);
 
 
-#define CATCH_LAPACK_INVALID_ARG(info)                          \
-    do {                                                        \
-        if (info < 0) {                                         \
-            PyGILState_STATE st = PyGILState_Ensure();          \
-            PyErr_Format(PyExc_RuntimeError,                    \
-                         "LAPACK Error: on input %d\n", -info); \
-            PyGILState_Release(st);                             \
-            return -1;                                          \
-        }                                                       \
+#define CATCH_LAPACK_INVALID_ARG(info)                                 \
+    do {                                                               \
+        if (info < 0) {                                                \
+            PyGILState_STATE st = PyGILState_Ensure();                 \
+            PyErr_Format(PyExc_RuntimeError,                           \
+                         "LAPACK Error: on input %d\n", -(int) info);  \
+            PyGILState_Release(st);                                    \
+            return -1;                                                 \
+        }                                                              \
     } while(0)
 
 /* Compute LU decomposition of A
