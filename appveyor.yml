@@ -22,8 +22,6 @@ init:
   - set PATH=%MINICONDA%;%MINICONDA%/Scripts;%MINICONDA%/Library/bin;%PATH%
 
 install:
-  # Uncomment to download and install the latest Miniconda (XXX flaky)
-  #- powershell .\\buildscripts\\appveyor\\install.ps1
   - conda config --set always_yes yes
   - conda update -q conda
   - conda info
