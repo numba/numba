@@ -162,10 +162,9 @@ def _box_class_instance(typ, val, c):
 def _unbox_class_instance(typ, val, c):
     def access_member(member_offset):
         # Access member by byte offset
-        offset = c.context.get_constant(types.uint32, member_offset)
+        offset = c.context.get_constant(types.uintp, member_offset)
         llvoidptr = ir.IntType(8).as_pointer()
-        byte_ptr = c.builder.bitcast(val, llvoidptr)
-        ptr = c.builder.gep(byte_ptr, [offset])
+        ptr = cgutils.pointer_add(c.builder, val, offset)
         casted = c.builder.bitcast(ptr, llvoidptr.as_pointer())
         return c.builder.load(casted)
 
