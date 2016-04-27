@@ -9,7 +9,7 @@ import ctypes
 from llvmlite import ir
 
 from . import config, sigutils, utils
-from .dispatcher import _FunctionCompiler
+from .dispatcher import _FunctionCompiler, NullCache, FunctionCache
 from .targets import registry
 from .typing import signature
 from .typing.ctypes_utils import to_ctypes
@@ -22,10 +22,18 @@ class _CFuncCompiler(_FunctionCompiler):
         # Disable compilation of the IR module, because we first want to
         # add the cfunc wrapper.
         flags.set('no_compile', True)
+        # Object mode is not currently supported in C callbacks
+        # (no reliable way to get the environment)
+        flags.set('enable_pyobject', False)
+        if flags.force_pyobject:
+            raise NotImplementedError("object mode not allowed in C callbacks")
         return flags
 
 
 class CFunc(object):
+    """
+    A compiled C callback.
+    """
     _targetdescr = registry.cpu_target
 
     def __init__(self, pyfunc, sig, locals, options):
@@ -34,6 +42,8 @@ class CFunc(object):
             raise TypeError("C callback needs an explicit return type")
         self.__name__ = pyfunc.__name__
         self.__qualname__ = getattr(pyfunc, '__qualname__', self.__name__)
+        self.__wrapped__ = pyfunc
+
         self._pyfunc = pyfunc
         self._sig = signature(return_type, *args)
         self._compiler = _CFuncCompiler(pyfunc, self._targetdescr,
@@ -41,17 +51,28 @@ class CFunc(object):
 
         self._wrapper_name = None
         self._wrapper_address = None
+        self._cache = NullCache()
+
+    def enable_caching(self):
+        self._cache = FunctionCache(self._pyfunc)
 
     def compile(self):
-        self._do_compile()
+        # Try to load from cache
+        cres = self._cache.load_overload(self._sig, self._targetdescr.target_context)
+        if cres is None:
+            cres = self._compile_uncached()
+            self._cache.save_overload(self._sig, cres)
 
-    def _do_compile(self):
+        self._library = cres.library
+        self._wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
+        self._wrapper_address = self._library.get_pointer_to_function(self._wrapper_name)
+
+    def _compile_uncached(self):
         sig = self._sig
 
         # Compile native function
         cres = self._compiler.compile(sig.args, sig.return_type)
-        if cres.objectmode:
-            raise RuntimeError("object mode not allowed in cfuncs")
+        assert not cres.objectmode  # disabled by compiler above
         fndesc = cres.fndesc
 
         # Compile C wrapper
@@ -72,10 +93,7 @@ class CFunc(object):
         library.add_ir_module(module)
         library.finalize()
 
-        # Keep compile result alive
-        self._library = library
-        self._wrapper_name = wrapfn.name
-        self._wrapper_address = library.get_pointer_to_function(self._wrapper_name)
+        return cres
 
     def _build_c_wrapper(self, context, builder, cres, c_args):
         sig = self._sig
@@ -89,6 +107,8 @@ class CFunc(object):
             builder, fn, sig.return_type, sig.args, c_args, env=None)
 
         with builder.if_then(status.is_error, likely=False):
+            # If (and only if) an error occurred, acquire the GIL
+            # and use the interpreter to write out the exception.
             gil_state = pyapi.gil_ensure()
             context.call_conv.raise_error(builder, pyapi, status)
             cstr = context.insert_const_string(builder.module, repr(self))
@@ -127,6 +147,7 @@ class CFunc(object):
 
     def inspect_llvm(self):
         """
+        Return the LLVM IR of the C callback definition.
         """
         return self._library.get_llvm_str()
 
