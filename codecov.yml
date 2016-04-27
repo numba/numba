@@ -1,0 +1,10 @@
+# Configuration for codecov.io
+
+comment:
+    layout: header, changes, diff
+    behavior: default
+
+coverage:
+    ignore:
+        - numba/cuda/.*
+        - numba/hsa/.*
