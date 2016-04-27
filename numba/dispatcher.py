@@ -76,6 +76,7 @@ class _FunctionCompiler(object):
     def compile(self, args, return_type):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
+        flags = self._customize_flags(flags)
 
         impl = self._get_implementation(args, {})
         cres = compiler.compile_extra(self.targetdescr.typing_context,
@@ -93,6 +94,9 @@ class _FunctionCompiler(object):
 
     def _get_implementation(self, args, kws):
         return self.py_func
+
+    def _customize_flags(self, flags):
+        return flags
 
 
 class _GeneratedFunctionCompiler(_FunctionCompiler):

@@ -200,3 +200,19 @@ def njit(*args, **kws):
         warnings.warn('forceobj is set for njit and is ignored', RuntimeWarning)
     kws.update({'nopython': True})
     return jit(*args, **kws)
+
+
+def cfunc(sig, locals={}, cache=False, **options):
+    """
+    """
+    sig = sigutils.normalize_signature(sig)
+
+    def wrapper(func):
+        from .cfunc import CFunc
+        res = CFunc(func, sig, locals=locals, options=options)
+        if cache:
+            res.enable_caching()
+        res.compile()
+        return res
+
+    return wrapper
